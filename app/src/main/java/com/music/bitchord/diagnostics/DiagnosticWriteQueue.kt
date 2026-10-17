@@ -2,7 +2,11 @@ package com.music.bitchord.diagnostics
 
 import java.util.TreeSet
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.FutureTask
 import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.Semaphore
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -13,10 +17,11 @@ import kotlin.concurrent.withLock
 /**
  * Single-writer bounded persistence queue for diagnostics.
  *
- * Producers never wait for queue capacity: a saturated queue rejects the write
- * and counts it as dropped. Flushes do not enqueue a barrier task (which could
- * itself be rejected); instead they wait for the contiguous completion
- * watermark covering every write attempt issued before the flush began.
+ * Producers never wait for queue capacity: a saturated data queue rejects the
+ * write and counts it as dropped. One executor slot is reserved for serialized
+ * control operations so maintenance such as Clear cannot itself be rejected.
+ * Flushes do not enqueue a barrier task; instead they wait for the contiguous
+ * completion watermark covering every write attempt issued before the flush.
  */
 internal class DiagnosticWriteQueue(
     queueCapacity: Int,
@@ -30,12 +35,15 @@ internal class DiagnosticWriteQueue(
 
     private val completion = CompletionTracker()
     private val dropped = AtomicLong(0L)
+    private val dataQueueSlots = Semaphore(queueCapacity)
+    private val submissionLock = ReentrantLock()
+    private val controlLock = ReentrantLock()
     private val executor = ThreadPoolExecutor(
         1,
         1,
         0L,
         TimeUnit.MILLISECONDS,
-        ArrayBlockingQueue(queueCapacity),
+        ArrayBlockingQueue(queueCapacity + 1),
         threadFactory,
         ThreadPoolExecutor.AbortPolicy(),
     )
@@ -44,16 +52,23 @@ internal class DiagnosticWriteQueue(
         get() = dropped.get()
 
     /**
-     * Attempts to enqueue [block] without waiting for capacity.
+     * Attempts to enqueue [block] without waiting for data queue capacity.
      *
-     * A sequence is issued before submission so a concurrent flush cannot skip
-     * an attempt that has started submission but has not yet been accepted or
-     * rejected by the executor.
+     * Normal writes may use only the configured data slots. The extra executor
+     * slot is reserved for a control operation. A data slot is released when
+     * its write starts running, matching the executor's queued-capacity model.
      */
-    fun offer(block: () -> Unit): Boolean {
+    fun offer(block: () -> Unit): Boolean = submissionLock.withLock {
         val sequence = completion.issue()
-        return try {
+        if (!dataQueueSlots.tryAcquire()) {
+            dropped.incrementAndGet()
+            completion.complete(sequence)
+            return@withLock false
+        }
+
+        try {
             executor.execute {
+                dataQueueSlots.release()
                 try {
                     block()
                 } finally {
@@ -62,9 +77,31 @@ internal class DiagnosticWriteQueue(
             }
             true
         } catch (_: RejectedExecutionException) {
+            dataQueueSlots.release()
             dropped.incrementAndGet()
             completion.complete(sequence)
             false
+        }
+    }
+
+    /**
+     * Runs [block] on the single writer after every operation submitted before
+     * this call. Only one control operation can be in flight, and its reserved
+     * queue slot means saturation by normal diagnostic writes cannot reject it.
+     * Normal producers remain non-blocking with respect to queue capacity.
+     */
+    fun <T> runControl(block: () -> T): T = controlLock.withLock {
+        val task = FutureTask(Callable { block() })
+        submissionLock.withLock {
+            executor.execute(task)
+        }
+        try {
+            task.get()
+        } catch (error: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw error
+        } catch (error: ExecutionException) {
+            throw error.cause ?: error
         }
     }
 

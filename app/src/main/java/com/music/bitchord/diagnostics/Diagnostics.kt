@@ -214,7 +214,7 @@ object Diagnostics {
     /** Clears memory, capture segments, exports and retained crash. Capture mode itself stays enabled. */
     fun clear() {
         buffer.clear()
-        writer.offer { fileStore?.clear() }
+        writer.runControl { fileStore?.clear() }
         event(category = DiagnosticCategory.APP, name = "diagnostics_cleared")
     }
 
