@@ -145,10 +145,12 @@ internal object CanonicalLocalLibrary {
                 }
             }
 
-            dao.localRows(
-                localProvider = LOCAL_MEDIASTORE_PROVIDER,
-                youtubeProvider = YOUTUBE_PROVIDER,
-                recordingEntityType = RECORDING_ENTITY_TYPE,
+            orderLocalRows(
+                dao.localRows(
+                    localProvider = LOCAL_MEDIASTORE_PROVIDER,
+                    youtubeProvider = YOUTUBE_PROVIDER,
+                    recordingEntityType = RECORDING_ENTITY_TYPE,
+                ),
             ).map(CanonicalLocalRow::toLegacySong)
         }
     }
@@ -195,6 +197,11 @@ internal object CanonicalLocalLibrary {
         }
         return totalSeconds.takeIf { it >= 0L }?.times(1_000L)
     }
+
+    internal fun orderLocalRows(rows: List<CanonicalLocalRow>): List<CanonicalLocalRow> =
+        rows.sortedWith(
+            compareBy<CanonicalLocalRow, String>(String.CASE_INSENSITIVE_ORDER) { it.title },
+        )
 
     internal fun staleSourceKeys(
         existingSourceKeys: List<String>,
