@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 internal interface CanonicalCatalogDao {
 
+    @Query("SELECT * FROM catalog_media_asset WHERE id = :mediaAssetId LIMIT 1")
+    suspend fun mediaAssetById(mediaAssetId: String): MediaAssetEntity?
+
     @Query(
         """
         SELECT * FROM catalog_media_asset
