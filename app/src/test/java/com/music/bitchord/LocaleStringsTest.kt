@@ -49,6 +49,9 @@ class LocaleStringsTest(private val tag: String) {
             return keys
         }
 
+        private fun translatableKeys(files: Iterable<File>): Set<String> =
+            files.flatMap { translatableKeys(parse(it)) }.toSet()
+
         private val baseKeys: Set<String> by lazy {
             translatableKeys(parse(File(resDir, "values/strings.xml")))
         }
@@ -69,12 +72,18 @@ class LocaleStringsTest(private val tag: String) {
     @Test
     fun strings_containsAllBaseKeys() {
         val qualifier = tagToQualifier(tag)
-        val localeFile = File(resDir, "values-$qualifier/strings.xml")
-        assertTrue("values-$qualifier/strings.xml must exist (for language tag $tag)", localeFile.exists())
+        val localeDir = File(resDir, "values-$qualifier")
+        assertTrue("values-$qualifier must exist (for language tag $tag)", localeDir.isDirectory)
 
-        val missingKeys = baseKeys - translatableKeys(parse(localeFile))
+        val localeFiles = localeDir
+            .listFiles { file -> file.isFile && file.extension == "xml" }
+            ?.toList()
+            .orEmpty()
+        assertTrue("values-$qualifier must contain XML resources (for language tag $tag)", localeFiles.isNotEmpty())
+
+        val missingKeys = baseKeys - translatableKeys(localeFiles)
         assertTrue(
-            "values-$qualifier/strings.xml (language $tag) is missing ${missingKeys.size} keys from values/strings.xml: $missingKeys",
+            "values-$qualifier (language $tag) is missing ${missingKeys.size} keys from values/strings.xml: $missingKeys",
             missingKeys.isEmpty(),
         )
     }

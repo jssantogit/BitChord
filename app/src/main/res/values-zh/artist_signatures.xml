@@ -1,0 +1,9 @@
+<resources>
+    <string name="artist_signatures">艺人签名</string>
+    <string name="artist_signatures_subtitle">当 Apple Music 没有标题标志时显示手写签名</string>
+    <string name="artist_signatures_url">签名 API URL</string>
+    <string name="artist_signatures_url_hint">https://signatures.example.com</string>
+    <string name="artist_signatures_unconfigured">尚未配置 — 点按以设置 API URL</string>
+    <string name="artist_signatures_test_failed">无法连接到该 URL 的 API</string>
+    <string name="signed_by">由 %1$s 签名</string>
+</resources>
