@@ -70,8 +70,8 @@ internal interface CanonicalCatalogDao {
             recording.title AS title,
             recording.artistDisplay AS artistDisplay,
             recording.durationMs AS durationMs,
-            release.title AS albumTitle,
-            COALESCE(release.artworkUri, asset.artworkUri) AS artworkUri,
+            albumRelease.title AS albumTitle,
+            COALESCE(albumRelease.artworkUri, asset.artworkUri) AS artworkUri,
             asset.uri AS uri,
             asset.path AS path,
             asset.dateAddedSeconds AS dateAddedSeconds,
@@ -90,8 +90,8 @@ internal interface CanonicalCatalogDao {
             ON recording.id = asset.recordingId
         LEFT JOIN catalog_release_track AS releaseTrack
             ON releaseTrack.recordingId = recording.id
-        LEFT JOIN catalog_release AS release
-            ON release.id = releaseTrack.releaseId
+        LEFT JOIN catalog_release AS albumRelease
+            ON albumRelease.id = releaseTrack.releaseId
         WHERE asset.provider = :localProvider
         ORDER BY recording.artistDisplay COLLATE NOCASE, recording.title COLLATE NOCASE
         """,
