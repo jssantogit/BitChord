@@ -72,9 +72,21 @@ class CanonicalLocalAdapterTest {
         val stale = CanonicalLocalLibrary.staleSourceKeys(
             existingSourceKeys = existing,
             seenSourceKeys = seen,
+            scanComplete = true,
         )
 
         assertEquals(existing.take(400), stale)
+    }
+
+    @Test
+    fun incompleteScanNeverMarksExistingAssetsStale() {
+        val stale = CanonicalLocalLibrary.staleSourceKeys(
+            existingSourceKeys = listOf("local-a", "local-b"),
+            seenSourceKeys = emptyList(),
+            scanComplete = false,
+        )
+
+        assertEquals(emptyList<String>(), stale)
     }
 
     private fun localRow(youtubeVideoId: String?) = CanonicalLocalRow(
