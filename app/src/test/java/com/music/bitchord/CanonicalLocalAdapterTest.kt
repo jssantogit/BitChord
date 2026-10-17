@@ -77,6 +77,30 @@ class CanonicalLocalAdapterTest {
         assertEquals(existing.take(400), stale)
     }
 
+    @Test
+    fun knownProviderIdentityReusesCanonicalRecordingForAnotherLocalAsset() {
+        val recordingId = CanonicalLocalLibrary.chooseRecordingId(
+            existingAssetRecordingId = null,
+            rememberedLocalRecordingId = null,
+            rememberedProviderRecordingId = "recording-from-youtube",
+            newId = { "new-recording" },
+        )
+
+        assertEquals("recording-from-youtube", recordingId)
+    }
+
+    @Test
+    fun existingLocalEvidenceWinsBeforeProviderAlias() {
+        val recordingId = CanonicalLocalLibrary.chooseRecordingId(
+            existingAssetRecordingId = "recording-from-local-asset",
+            rememberedLocalRecordingId = "recording-from-local-identity",
+            rememberedProviderRecordingId = "recording-from-youtube",
+            newId = { "new-recording" },
+        )
+
+        assertEquals("recording-from-local-asset", recordingId)
+    }
+
     private fun localRow(youtubeVideoId: String?) = CanonicalLocalRow(
         recordingId = "recording-uuid",
         mediaAssetId = "asset-uuid",
