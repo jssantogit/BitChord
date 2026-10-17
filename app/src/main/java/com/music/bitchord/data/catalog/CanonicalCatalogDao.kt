@@ -3,6 +3,7 @@ package com.music.bitchord.data.catalog
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 internal interface CanonicalCatalogDao {
@@ -84,6 +85,76 @@ internal interface CanonicalCatalogDao {
         """,
     )
     suspend fun providerRows(provider: String): List<CanonicalProviderRow>
+
+    /**
+     * Provider-neutral browse projection. It intentionally omits sourceKey and
+     * URI so a provider-native track id cannot leak into UI identity/playback.
+     */
+    @Query(
+        """
+        SELECT
+            recording.id AS recordingId,
+            asset.id AS mediaAssetId,
+            asset.provider AS providerKey,
+            recording.title AS title,
+            recording.artistDisplay AS artistDisplay,
+            recording.durationMs AS durationMs,
+            asset.artworkUri AS artworkUri
+        FROM catalog_media_asset AS asset
+        INNER JOIN catalog_recording AS recording
+            ON recording.id = asset.recordingId
+        WHERE asset.provider = :providerKey
+        ORDER BY
+            recording.artistDisplay COLLATE NOCASE,
+            recording.title COLLATE NOCASE,
+            recording.id,
+            asset.id
+        """,
+    )
+    fun observeProviderBrowseAssets(providerKey: String): Flow<List<CanonicalBrowseAssetRow>>
+
+    /**
+     * Release membership for recordings currently available from this provider.
+     * The ExternalIdentity EXISTS clause scopes releases to provider evidence;
+     * otherwise a Recording shared with another provider could make an unrelated
+     * canonical release appear in this provider-specific browse view.
+     */
+    @Query(
+        """
+        SELECT
+            albumRelease.id AS releaseId,
+            albumRelease.title AS releaseTitle,
+            albumRelease.artistDisplay AS releaseArtistDisplay,
+            albumRelease.artworkUri AS releaseArtworkUri,
+            releaseTrack.recordingId AS recordingId,
+            releaseTrack.trackNumber AS trackNumber
+        FROM catalog_release AS albumRelease
+        INNER JOIN catalog_release_track AS releaseTrack
+            ON releaseTrack.releaseId = albumRelease.id
+        WHERE EXISTS (
+            SELECT 1
+            FROM catalog_external_identity AS releaseIdentity
+            WHERE releaseIdentity.provider = :providerKey
+              AND releaseIdentity.entityType = 'release'
+              AND releaseIdentity.entityId = albumRelease.id
+        )
+          AND EXISTS (
+            SELECT 1
+            FROM catalog_media_asset AS asset
+            WHERE asset.provider = :providerKey
+              AND asset.recordingId = releaseTrack.recordingId
+        )
+        ORDER BY
+            albumRelease.artistDisplay COLLATE NOCASE,
+            albumRelease.title COLLATE NOCASE,
+            CASE WHEN releaseTrack.trackNumber IS NULL THEN 1 ELSE 0 END,
+            releaseTrack.trackNumber,
+            releaseTrack.recordingId
+        """,
+    )
+    fun observeProviderBrowseReleaseTracks(
+        providerKey: String,
+    ): Flow<List<CanonicalBrowseReleaseTrackRow>>
 
     @Query(
         """
