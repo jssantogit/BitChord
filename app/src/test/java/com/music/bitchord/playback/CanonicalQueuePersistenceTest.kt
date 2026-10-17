@@ -145,6 +145,60 @@ class CanonicalQueuePersistenceTest {
         )
     }
 
+    @Test
+    fun `restored media item carries recording identity without replacing transport media id`() {
+        val source = QueueSource("Local album", PlaybackSourceType.BROWSE, "local-album")
+        val identity = CanonicalQueueIdentity("recording-uuid")
+        val assetUri = "content://media/external/audio/media/84"
+        val song = Song(
+            videoId = assetUri,
+            title = "Track",
+            artist = "Artist",
+            thumbnailUrl = null,
+            localUri = assetUri,
+            localPath = "/storage/emulated/0/Music/Track.flac",
+            queueTier = QueueTier.CONTEXT,
+            queueEntryId = "queue-entry",
+            playbackSource = source.title,
+            playbackSourceType = source.type,
+            playbackSourceId = source.id,
+        )
+        val state = BoundedContextPersistence.State(
+            context = ContextSnapshot(
+                contextToken = "context-token",
+                sourceKey = "${source.type.name}:${source.id}",
+                browseId = source.id,
+                songs = listOf(song.copy(queueEntryId = null)),
+                version = 0L,
+                continuationToken = null,
+                continuationState = ContinuationState.EXHAUSTED,
+            ),
+            source = source,
+            window = QueueWindow(1).startAt(0).snapshot(),
+            entries = listOf(
+                BoundedContextPersistence.Entry(
+                    song = song,
+                    canonicalIndex = 0,
+                    cycleId = 0L,
+                    canonicalIdentity = identity,
+                ),
+            ),
+            currentIndex = 0,
+            positionMs = 0L,
+            contextIdentities = listOf(identity),
+        )
+        val projected = requireNotNull(BoundedContextPersistence.restoreProjection(state))
+        val restoredItem = QueueShuffle.withQueueMetadata(
+            projected.entries.single().song.toMediaItem(),
+            newCanonicalIndex = 0,
+            newTier = QueueTier.CONTEXT,
+        )
+
+        assertEquals(assetUri, restoredItem.mediaId)
+        assertEquals(identity, restoredItem.canonicalQueueIdentity)
+        assertNotEquals(identity.recordingId, restoredItem.mediaId)
+    }
+
     private fun resolver(asset: PlayableMediaAsset): PlaybackResolver =
         CanonicalPlaybackResolver(PlaybackCatalog { listOf(asset) })
 }
