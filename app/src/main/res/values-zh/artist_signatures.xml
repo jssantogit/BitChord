@@ -1,0 +1,9 @@
+<resources>
+    <string name="artist_signatures">艺人署名</string>
+    <string name="artist_signatures_description">查看所有参与创作此曲目的艺人</string>
+    <string name="artist_signatures_none">尚未找到艺人署名</string>
+    <string name="artist_signatures_single">%1$d 位艺人署名</string>
+    <string name="artist_signatures_multiple">%1$d 位艺人署名</string>
+    <string name="artist_signatures_view_list">点按曲目以查看艺人署名</string>
+    <string name="signed_by">艺人署名</string>
+</resources>
