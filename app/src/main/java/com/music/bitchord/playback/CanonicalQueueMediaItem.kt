@@ -6,48 +6,57 @@ import androidx.media3.common.MediaItem
  * Playback-owned sidecar for canonical identity on a live Media3 queue item.
  *
  * MediaItem.mediaId deliberately remains the compatibility/transport id. The
- * canonical recording id is looked up through the immutable queue-entry id,
- * which already survives MediaSession bundling and queue reordering.
+ * preferred lookup is the immutable queue-entry id. A freshly restored item can
+ * also recover the identity through the concrete local MediaAsset URI selected
+ * by PlaybackResolver; that URI is a rendition bridge, never the identity itself.
  */
 internal val MediaItem.canonicalQueueIdentity: CanonicalQueueIdentity?
     get() = queueEntryId?.let(CanonicalQueueIdentityHints::identityForEntry)
+        ?: CanonicalQueueIdentityHints.identityForAssetUri(mediaId)
 
 /**
- * Process-local bridge from a restored durable canonical snapshot to Media3.
- *
- * The map is replaced atomically for each bounded restore. Keys are queue-entry
- * ids, never provider ids or rendition URIs, so changing the playable MediaAsset
- * does not change the identity lookup. Canonical-context keys mirror the ids the
- * service creates while rebuilding QueueShuffle's logical context.
+ * Process-local bridge between the canonical resolver and the legacy MediaItem
+ * envelope. Nothing here invents identity: every association originates from a
+ * Recording/MediaAsset pair already read from the canonical catalog.
  */
 internal object CanonicalQueueIdentityHints {
     @Volatile
     private var byEntryId: Map<String, CanonicalQueueIdentity> = emptyMap()
 
-    fun replace(
-        contextToken: String,
-        contextIdentities: List<CanonicalQueueIdentity?>,
-        entries: List<BoundedContextPersistence.Entry>,
+    @Volatile
+    private var byAssetUri: Map<String, CanonicalQueueIdentity> = emptyMap()
+
+    @Synchronized
+    fun rememberEntry(entryId: String?, identity: CanonicalQueueIdentity?) {
+        val key = entryId?.takeIf(String::isNotBlank) ?: return
+        val value = identity ?: return
+        byEntryId = byEntryId + (key to value)
+    }
+
+    @Synchronized
+    fun rememberResolved(
+        identities: List<CanonicalQueueIdentity?>,
+        assets: List<PlayableMediaAsset?>,
     ) {
-        val next = LinkedHashMap<String, CanonicalQueueIdentity>(
-            contextIdentities.size + entries.size,
-        )
-        contextIdentities.forEachIndexed { index, identity ->
-            if (identity != null) {
-                next["context:$contextToken:$index"] = identity
+        if (identities.isEmpty() || assets.isEmpty()) return
+        val next = LinkedHashMap(byAssetUri)
+        identities.indices.forEach { index ->
+            val identity = identities[index] ?: return@forEach
+            val asset = assets.getOrNull(index) ?: return@forEach
+            if (asset.recordingId == identity.recordingId && asset.uri.isNotBlank()) {
+                next[asset.uri] = identity
             }
         }
-        entries.forEach { entry ->
-            val identity = entry.canonicalIdentity ?: return@forEach
-            val entryId = entry.song.queueEntryId?.takeIf(String::isNotBlank) ?: return@forEach
-            next[entryId] = identity
-        }
-        byEntryId = next
+        byAssetUri = next
     }
 
     fun identityForEntry(entryId: String): CanonicalQueueIdentity? = byEntryId[entryId]
 
+    fun identityForAssetUri(uri: String): CanonicalQueueIdentity? = byAssetUri[uri]
+
+    @Synchronized
     fun clear() {
         byEntryId = emptyMap()
+        byAssetUri = emptyMap()
     }
 }
