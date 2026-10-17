@@ -6,6 +6,8 @@ import com.music.bitchord.data.model.ArtistRef
 import com.music.bitchord.data.model.PlaybackSourceType
 import com.music.bitchord.data.model.QueueTier
 import com.music.bitchord.data.model.Song
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -16,11 +18,18 @@ import java.util.concurrent.Executors
 /**
  * Durable state for the logical bounded CONTEXT queue.
  *
- * This is deliberately separate from [LastPlayed].  LastPlayed's JSON is an
+ * This is deliberately separate from [LastPlayed]. LastPlayed's JSON is an
  * established physical-queue compatibility format and must remain readable by
- * older builds.  This store owns the canonical context and logical window; its
+ * older builds. This store owns the canonical context and logical window; its
  * physical entries are only the bounded projection needed to restore USER_QUEUE,
  * AUTOPLAY, history, and the exact current item without rebuilding a full list.
+ *
+ * Slice 2 additionally carries [CanonicalQueueIdentity] beside the legacy Song
+ * envelope. The Song is still useful for metadata and compatibility, but local
+ * canonical entries are persisted with their local rendition as the transport
+ * alias instead of a provider-specific videoId. On load the recording identity
+ * is resolved again so a changed local rendition can be adopted before Media3
+ * sees the queue.
  */
 object BoundedContextPersistence {
 
@@ -28,6 +37,7 @@ object BoundedContextPersistence {
         val song: Song,
         val canonicalIndex: Int? = null,
         val cycleId: Long? = null,
+        val canonicalIdentity: CanonicalQueueIdentity? = null,
     )
 
     data class State(
@@ -37,9 +47,11 @@ object BoundedContextPersistence {
         val entries: List<Entry>,
         val currentIndex: Int,
         val positionMs: Long,
+        val contextIdentities: List<CanonicalQueueIdentity?> = emptyList(),
     )
 
     private lateinit var prefs: SharedPreferences
+    private var playbackResolver: PlaybackResolver? = null
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
@@ -48,22 +60,28 @@ object BoundedContextPersistence {
 
     @Synchronized
     fun init(context: Context) {
-        prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val appContext = context.applicationContext
+        prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        playbackResolver = CanonicalPlaybackResolver(RoomPlaybackCatalog(appContext))
     }
 
     /** Test-only dependency injection; production uses [init]. */
     @Synchronized
-    internal fun initForTesting(testPrefs: SharedPreferences) {
+    internal fun initForTesting(
+        testPrefs: SharedPreferences,
+        testResolver: PlaybackResolver? = null,
+    ) {
         prefs = testPrefs
+        playbackResolver = testResolver
         writer = Executor { it.run() }
     }
 
     /**
      * Encoding the canonical list is O(collection) and the service saves on
      * every track change and queue edit, so [save] only records the newest
-     * state on the caller's (main) thread. One background writer encodes and
-     * stores whatever is newest when it gets there; a burst of saves costs one
-     * encode.
+     * state on the caller's (main) thread. One background writer canonicalizes,
+     * encodes and stores whatever is newest when it gets there; a burst of saves
+     * costs one catalog read and one encode.
      */
     private var writer: Executor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "bounded-context-save").apply { isDaemon = true }
@@ -83,11 +101,12 @@ object BoundedContextPersistence {
     }
 
     private fun flushPending() {
-        val (state, startedAt) = synchronized(this) {
+        val (rawState, startedAt) = synchronized(this) {
             val next = pending ?: return
             pending = null
             next to generation
         }
+        val state = canonicalizeForPersistence(rawState)
         val encoded = encode(state) ?: return
         synchronized(this) {
             if (startedAt != generation) return
@@ -95,11 +114,12 @@ object BoundedContextPersistence {
         }
     }
 
-    fun saveImmediately(state: State) {
+    fun saveImmediately(rawState: State) {
         synchronized(this) {
             generation += 1
             pending = null
         }
+        val state = canonicalizeForPersistence(rawState)
         val encoded = encode(state) ?: return
         synchronized(this) { write(state, encoded).commit() }
     }
@@ -113,9 +133,9 @@ object BoundedContextPersistence {
     /**
      * Update only the cheap progress scalars for the entry that was persisted.
      *
-     * A progress callback can race a queue replacement.  Comparing the callback's
+     * A progress callback can race a queue replacement. Comparing the callback's
      * entry id with the id written beside the last snapshot prevents an old player
-     * from moving the new queue's position.  Deliberately no state decoding or JSON
+     * from moving the new queue's position. Deliberately no state decoding or JSON
      * encoding happens here.
      */
     @Synchronized
@@ -131,7 +151,8 @@ object BoundedContextPersistence {
     @Synchronized
     fun load(): State? {
         val raw = runCatching { prefs.getString(KEY_STATE, null) }.getOrNull() ?: return null
-        val state = decode(raw) ?: return null
+        val decoded = decode(raw) ?: return null
+        val state = rehydrateAfterLoad(decoded)
         val currentEntryId = state.entries[state.currentIndex].song.queueEntryId
         val scalarEntryId = runCatching { prefs.getString(KEY_CURRENT_ENTRY_ID, null) }.getOrNull()
         if (currentEntryId != scalarEntryId) return state
@@ -154,6 +175,126 @@ object BoundedContextPersistence {
         prefs.edit().clear().commit()
     }
 
+    private fun canonicalizeForPersistence(state: State): State {
+        val resolver = playbackResolver ?: return state
+        return runCatching {
+            runBlocking(Dispatchers.IO) { canonicalize(state, resolver) }
+        }.getOrDefault(state)
+    }
+
+    private fun rehydrateAfterLoad(state: State): State {
+        val resolver = playbackResolver ?: return state
+        return runCatching {
+            runBlocking(Dispatchers.IO) { rehydrate(state, resolver) }
+        }.getOrDefault(state)
+    }
+
+    /**
+     * Adds canonical recording identity without changing Song's shared contract.
+     * Local provider aliases are replaced only in the persisted envelope: the
+     * live Song/MediaItem continues to use the legacy compatibility path until
+     * it crosses this durable playback seam.
+     */
+    internal suspend fun canonicalize(state: State, resolver: PlaybackResolver): State {
+        val contextSongs = state.context.songs
+        val detectedContext = resolver.identifyAll(contextSongs)
+        val existingContext = state.contextIdentities
+            .takeIf { it.size == contextSongs.size }
+        val identities = contextSongs.indices.map { index ->
+            existingContext?.get(index) ?: detectedContext[index]
+        }
+        val contextAssets = resolver.resolveAll(identities)
+        val canonicalContextSongs = contextSongs.mapIndexed { index, song ->
+            song.withCanonicalAsset(identities[index], contextAssets[index])
+        }
+
+        val entryDetected = resolver.identifyAll(
+            state.entries.mapIndexed { index, entry ->
+                if (entry.canonicalIdentity != null ||
+                    entry.canonicalIndex?.let(identities::getOrNull) != null
+                ) {
+                    NON_LOCAL_SENTINEL
+                } else {
+                    entry.song
+                }
+            },
+        )
+        val entryIdentities = state.entries.mapIndexed { index, entry ->
+            entry.canonicalIdentity
+                ?: entry.canonicalIndex?.let(identities::getOrNull)
+                ?: entryDetected[index]
+        }
+        val entryAssets = resolver.resolveAll(entryIdentities)
+        val canonicalEntries = state.entries.mapIndexed { index, entry ->
+            entry.copy(
+                song = entry.song.withCanonicalAsset(entryIdentities[index], entryAssets[index]),
+                canonicalIdentity = entryIdentities[index],
+            )
+        }
+
+        return state.copy(
+            context = state.context.copy(songs = canonicalContextSongs),
+            entries = canonicalEntries,
+            contextIdentities = identities,
+        )
+    }
+
+    /** Re-resolve stored recording ids to the currently playable local asset. */
+    internal suspend fun rehydrate(state: State, resolver: PlaybackResolver): State {
+        val contextIdentities = state.contextIdentities
+            .takeIf { it.size == state.context.songs.size }
+            ?: emptyList()
+        val contextAssets = if (contextIdentities.isEmpty()) {
+            emptyList()
+        } else {
+            resolver.resolveAll(contextIdentities)
+        }
+        val restoredContextSongs = state.context.songs.mapIndexed { index, song ->
+            if (contextIdentities.isEmpty()) song
+            else song.withCanonicalAsset(contextIdentities[index], contextAssets[index])
+        }
+
+        val entryIdentities = state.entries.map { entry ->
+            entry.canonicalIdentity
+                ?: entry.canonicalIndex?.let { index -> contextIdentities.getOrNull(index) }
+        }
+        val entryAssets = resolver.resolveAll(entryIdentities)
+        val restoredEntries = state.entries.mapIndexed { index, entry ->
+            entry.copy(
+                song = entry.song.withCanonicalAsset(entryIdentities[index], entryAssets[index]),
+                canonicalIdentity = entryIdentities[index],
+            )
+        }
+        return state.copy(
+            context = state.context.copy(songs = restoredContextSongs),
+            entries = restoredEntries,
+            contextIdentities = contextIdentities,
+        )
+    }
+
+    private fun Song.withCanonicalAsset(
+        identity: CanonicalQueueIdentity?,
+        asset: PlayableMediaAsset?,
+    ): Song {
+        if (identity == null || asset == null) return this
+        // The canonical id remains beside Song. The legacy id becomes a local
+        // transport alias rather than a YouTube/provider identity, so a cold
+        // restore of this migrated path no longer needs that provider id.
+        return copy(
+            videoId = asset.uri,
+            localUri = asset.uri,
+            localPath = asset.path,
+        )
+    }
+
+    /** Sentinel skips redundant catalog matching for entries whose id is already known. */
+    private val NON_LOCAL_SENTINEL = Song(
+        videoId = "canonical-identity-known",
+        title = "",
+        artist = "",
+        thumbnailUrl = null,
+    )
+
     /** Visible to JVM tests; the Android wrapper above remains the only writer. */
     internal fun encode(state: State): String? = runCatching {
         require(validateState(state) != null) { "invalid bounded context state" }
@@ -175,7 +316,7 @@ object BoundedContextPersistence {
      * Build the bounded physical queue that a player may restore.
      *
      * The canonical context remains in [State.context] and the logical cursor
-     * remains in [State.window].  Only physical history/current, the actual user
+     * remains in [State.window]. Only physical history/current, the actual user
      * and autoplay tails, and a fresh bounded context look-ahead are returned.
      * Context entries are matched by their logical `(canonicalIndex, cycleId)`
      * anchor so their existing physical entry ids survive a restart.
@@ -235,6 +376,8 @@ object BoundedContextPersistence {
                     ),
                     canonicalIndex = logicalEntry.canonicalIndex,
                     cycleId = logicalEntry.cycleId,
+                    canonicalIdentity = matching?.canonicalIdentity
+                        ?: state.contextIdentities.getOrNull(logicalEntry.canonicalIndex),
                 )
             }
 
@@ -255,6 +398,7 @@ object BoundedContextPersistence {
         entries = entries.map(StoredEntry::from),
         currentIndex = currentIndex,
         positionMs = positionMs.coerceAtLeast(0L),
+        contextRecordingIds = contextIdentities.map { it?.recordingId },
     )
 
     @Serializable
@@ -265,12 +409,15 @@ object BoundedContextPersistence {
         val entries: List<StoredEntry>,
         val currentIndex: Int,
         val positionMs: Long,
+        val contextRecordingIds: List<String?> = emptyList(),
     ) {
         fun toState(): State? {
             if (schemaVersion != SCHEMA_VERSION) return null
             if (context.contextToken.isBlank() || context.sourceKey.isBlank()) return null
 
             val contextSongs = context.songs.map { it.toSong() ?: return null }
+            val identities = contextRecordingIds.map { it.toCanonicalIdentity() }
+            if (identities.isNotEmpty() && identities.size != contextSongs.size) return null
 
             val continuationState = context.continuationState.toContinuationState() ?: return null
             val diagnostic = context.diagnostic?.toContinuationDiagnostic() ?:
@@ -296,7 +443,7 @@ object BoundedContextPersistence {
 
             val restoredWindow = window.toSnapshot() ?: return null
             if (entries.isEmpty() || currentIndex !in entries.indices || positionMs < 0L) return null
-            val restoredEntries = entries.map { it.toEntry(contextSongs) ?: return null }
+            val restoredEntries = entries.map { it.toEntry(contextSongs, identities) ?: return null }
             val restored = State(
                 context = restoredContext,
                 source = source,
@@ -304,6 +451,7 @@ object BoundedContextPersistence {
                 entries = restoredEntries,
                 currentIndex = currentIndex,
                 positionMs = positionMs,
+                contextIdentities = identities,
             )
             return restored.takeIf { validateState(it) != null }
         }
@@ -406,18 +554,25 @@ object BoundedContextPersistence {
         val song: StoredSong,
         val canonicalIndex: Int?,
         val cycleId: Long?,
+        val recordingId: String? = null,
     ) {
-        fun toEntry(contextSongs: List<Song>): Entry? {
+        fun toEntry(
+            contextSongs: List<Song>,
+            contextIdentities: List<CanonicalQueueIdentity?>,
+        ): Entry? {
             val resolvedSong = song.toSong() ?: return null
+            val identity = recordingId.toCanonicalIdentity()
             val index = canonicalIndex
             if (index != null) {
                 if (index !in contextSongs.indices) return null
                 if (resolvedSong.contextEntryKey() != contextSongs[index].contextEntryKey()) return null
                 if (cycleId == null || cycleId < 0L) return null
+                val contextIdentity = contextIdentities.getOrNull(index)
+                if (identity != null && contextIdentity != null && identity != contextIdentity) return null
             } else if (cycleId != null) {
                 return null
             }
-            return Entry(resolvedSong, canonicalIndex, cycleId)
+            return Entry(resolvedSong, canonicalIndex, cycleId, identity)
         }
 
         companion object {
@@ -425,6 +580,7 @@ object BoundedContextPersistence {
                 song = StoredSong.from(entry.song),
                 canonicalIndex = entry.canonicalIndex,
                 cycleId = entry.cycleId,
+                recordingId = entry.canonicalIdentity?.recordingId,
             )
         }
     }
@@ -556,6 +712,7 @@ object BoundedContextPersistence {
         if (canonical.any { it.videoId.isBlank() || it.queueTier != QueueTier.CONTEXT }) return null
         if (canonical.map { it.contextEntryKey() }.toSet().size != canonical.size) return null
         if (canonical.any { !it.matchesSource(source) }) return null
+        if (state.contextIdentities.isNotEmpty() && state.contextIdentities.size != canonical.size) return null
 
         val window = runCatching { QueueWindow.restore(state.window) }.getOrNull() ?: return null
         if (state.window.canonicalSize != canonical.size) return null
@@ -596,6 +753,10 @@ object BoundedContextPersistence {
                 if (!anchors.add(canonicalIndex to cycleId)) return null
                 val expected = canonical[canonicalIndex]
                 if (entry.song.contextEntryKey() != expected.contextEntryKey()) return null
+                val expectedIdentity = state.contextIdentities.getOrNull(canonicalIndex)
+                if (entry.canonicalIdentity != null && expectedIdentity != null &&
+                    entry.canonicalIdentity != expectedIdentity
+                ) return null
             }
         }
 
@@ -618,6 +779,12 @@ object BoundedContextPersistence {
     private fun sourceKey(source: QueueSource): String =
         "${source.type.name}:${source.id.orEmpty()}"
 
+    private fun String?.toCanonicalIdentity(): CanonicalQueueIdentity? {
+        if (this == null) return null
+        require(isNotBlank()) { "blank canonical recording id" }
+        return CanonicalQueueIdentity(this)
+    }
+
     private fun String.toContinuationState(): ContinuationState? =
         runCatching { ContinuationState.valueOf(this) }.getOrNull()
 
@@ -629,7 +796,7 @@ object BoundedContextPersistence {
 
     private const val SCHEMA_VERSION = 1
     // A complete 10k-song canonical context plus all physical tails can exceed
-    // the old 4 MiB cutoff.  This remains a bounded prefs record while leaving
+    // the old 4 MiB cutoff. This remains a bounded prefs record while leaving
     // enough room for real metadata and long user/autoplay tails.
     // Past this the snapshot is skipped and LastPlayed restores instead. A
     // SharedPreferences value stays resident for the life of the process, and
