@@ -74,11 +74,15 @@ data class CaptureWindow(
 }
 
 /**
- * Best-effort redaction before an event reaches memory, disk or logcat.
- * This deliberately errs on the side of hiding values whose key sounds secret.
+ * Best-effort redaction and payload bounding before an event reaches memory,
+ * disk or logcat. This deliberately errs on the side of hiding values whose
+ * key sounds secret.
  */
 object DiagnosticSanitizer {
     const val REDACTED = "<redacted>"
+    const val MAX_TEXT_CHARS = 8_192
+    const val MAX_METADATA_VALUE_CHARS = 4_096
+    const val MAX_METADATA_ENTRIES = 32
 
     private val authorizationHeader = Regex(
         pattern = "(?i)(\\bauthorization\\s*[:=]\\s*)(?:bearer\\s+)?[^\\s,;]+",
@@ -98,18 +102,25 @@ object DiagnosticSanitizer {
     private val keySeparators = Regex("[_\\-.]")
 
     fun metadata(values: Map<String, String>): Map<String, String> =
-        values.mapValues { (key, value) ->
-            if (isSensitiveKey(key)) REDACTED else text(value)
-        }
+        values.entries
+            .take(MAX_METADATA_ENTRIES)
+            .associate { (key, value) ->
+                key.take(128) to if (isSensitiveKey(key)) {
+                    REDACTED
+                } else {
+                    text(value, MAX_METADATA_VALUE_CHARS)
+                }
+            }
 
-    fun text(value: String): String {
+    fun text(value: String, maxChars: Int = MAX_TEXT_CHARS): String {
+        require(maxChars > 0) { "maxChars must be greater than zero" }
         var sanitized = value
         sanitized = authorizationHeader.replace(sanitized) { "${it.groupValues[1]}$REDACTED" }
         sanitized = cookieHeader.replace(sanitized) { "${it.groupValues[1]}$REDACTED" }
         sanitized = standaloneBearer.replace(sanitized) { "${it.groupValues[1]}$REDACTED" }
         sanitized = knownCookieValue.replace(sanitized) { "${it.groupValues[1]}$REDACTED" }
         sanitized = sensitiveQueryValue.replace(sanitized) { "${it.groupValues[1]}$REDACTED" }
-        return sanitized
+        return sanitized.take(maxChars)
     }
 
     private fun isSensitiveKey(key: String): Boolean {
@@ -153,12 +164,12 @@ object DiagnosticFormatter {
             append(' ')
             append(event.category.name)
             append(' ')
-            append(event.name)
+            append(DiagnosticSanitizer.text(event.name, 256))
             append(duration)
             append(" session=")
-            append(event.sessionId)
+            append(event.sessionId.take(64))
             append(" thread=")
-            append(event.threadName)
+            append(DiagnosticSanitizer.text(event.threadName, 128))
             append(message)
             append(metadata)
             append(error)
