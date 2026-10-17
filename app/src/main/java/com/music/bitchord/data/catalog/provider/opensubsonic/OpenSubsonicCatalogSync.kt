@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.withTransaction
 import com.music.bitchord.data.catalog.CanonicalCatalogDao
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.CanonicalProviderRow
 import com.music.bitchord.data.catalog.ExternalIdentityEntity
 import com.music.bitchord.data.catalog.MediaAssetEntity
 import com.music.bitchord.data.catalog.RecordingEntity
@@ -54,6 +55,15 @@ internal object OpenSubsonicCatalogSync {
             ProviderSyncResult.Failure("OpenSubsonic catalog transaction failed")
         }
     }
+
+    /** Reads the last successful Room snapshot without contacting the server. */
+    suspend fun cachedTracks(
+        context: Context,
+        provider: OpenSubsonicProvider,
+    ): List<CanonicalProviderRow> = CanonicalCatalogDatabase
+        .get(context)
+        .catalogDao()
+        .providerRows(provider.providerKey)
 }
 
 private class RoomCanonicalCatalogSyncStore(
