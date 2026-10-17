@@ -1,0 +1,347 @@
+package com.music.bitchord.data.catalog.provider
+
+import com.music.bitchord.data.catalog.ExternalIdentityEntity
+import com.music.bitchord.data.catalog.MediaAssetEntity
+import com.music.bitchord.data.catalog.RecordingEntity
+import com.music.bitchord.data.catalog.ReleaseEntity
+import com.music.bitchord.data.catalog.ReleaseTrackEntity
+import java.util.UUID
+import kotlinx.coroutines.CancellationException
+
+internal data class ProviderCapabilities(
+    val librarySync: Boolean,
+    val healthCheck: Boolean,
+    val directPlay: Boolean,
+    val serverTranscoding: Boolean,
+    val apiKeyAuthentication: Boolean,
+)
+
+internal data class ProviderHealth(
+    val reachable: Boolean,
+    val serverType: String? = null,
+    val serverVersion: String? = null,
+    val protocolVersion: String? = null,
+    val openSubsonic: Boolean = false,
+    val detail: String? = null,
+)
+
+internal data class ProviderAlbum(
+    val externalAlbumId: String,
+    val title: String,
+    val artistDisplay: String?,
+    val externalArtistId: String?,
+    val musicBrainzReleaseId: String?,
+    val artworkUri: String?,
+)
+
+internal data class ProviderTrack(
+    val externalTrackId: String,
+    val title: String,
+    val artistDisplay: String,
+    val externalArtistId: String?,
+    val durationMs: Long?,
+    val trackNumber: Int?,
+    val musicBrainzRecordingId: String?,
+    val album: ProviderAlbum?,
+    val assetUri: String,
+    val artworkUri: String?,
+    val dateAddedSeconds: Long?,
+    val contentType: String?,
+    val suffix: String?,
+    val bitRateKbps: Int?,
+    val bitDepth: Int?,
+    val samplingRateHz: Int?,
+)
+
+internal data class ProviderLibrarySnapshot(
+    val tracks: List<ProviderTrack>,
+    val complete: Boolean,
+)
+
+internal interface RemoteCatalogProvider {
+    /** Account-scoped key, e.g. `opensubsonic:home`; never a canonical music ID. */
+    val providerKey: String
+
+    suspend fun health(): ProviderHealth
+
+    suspend fun capabilities(): ProviderCapabilities
+
+    /**
+     * Returns a complete provider-side library snapshot or throws. Implementations
+     * must not turn a partial/network-failed read into a complete empty snapshot.
+     */
+    suspend fun librarySnapshot(): ProviderLibrarySnapshot
+}
+
+/** Small persistence seam so provider mapping/sync stays unit-testable without Room. */
+internal interface CanonicalCatalogSyncStore {
+    suspend fun mediaAsset(provider: String, sourceKey: String): MediaAssetEntity?
+
+    suspend fun entityIdForExternalIdentity(
+        provider: String,
+        entityType: String,
+        externalId: String,
+    ): String?
+
+    suspend fun upsertRecording(recording: RecordingEntity)
+
+    suspend fun upsertRelease(release: ReleaseEntity)
+
+    suspend fun upsertReleaseTrack(releaseTrack: ReleaseTrackEntity)
+
+    suspend fun upsertMediaAsset(mediaAsset: MediaAssetEntity)
+
+    suspend fun upsertExternalIdentity(identity: ExternalIdentityEntity)
+
+    suspend fun mediaAssetSourceKeys(provider: String): List<String>
+
+    suspend fun deleteMediaAsset(provider: String, sourceKey: String)
+}
+
+internal sealed interface ProviderSyncResult {
+    data class Success(
+        val syncedAssets: Int,
+        val removedAssets: Int,
+        val identityConflicts: Int,
+    ) : ProviderSyncResult
+
+    data class Failure(
+        val reason: String,
+    ) : ProviderSyncResult
+}
+
+/**
+ * Provider-agnostic canonical sync rules.
+ *
+ * A provider source ID is persisted only as ExternalIdentity/MediaAsset.sourceKey.
+ * Canonical Recording/Release IDs are generated locally unless an already-known
+ * canonical mapping (including MusicBrainz evidence) can be reused.
+ */
+internal object CanonicalRemoteCatalogSync {
+    private const val RECORDING_ENTITY_TYPE = "recording"
+    private const val RELEASE_ENTITY_TYPE = "release"
+    private const val MUSICBRAINZ_PROVIDER = "musicbrainz"
+
+    suspend fun sync(
+        provider: RemoteCatalogProvider,
+        store: CanonicalCatalogSyncStore,
+        idFactory: () -> String = { UUID.randomUUID().toString() },
+    ): ProviderSyncResult {
+        val snapshot = try {
+            provider.librarySnapshot()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            // The store has not been touched yet. A transient provider outage must
+            // therefore leave the previously synced offline catalog unchanged.
+            return ProviderSyncResult.Failure("Provider library snapshot failed")
+        }
+
+        return try {
+            applySnapshot(
+                providerKey = provider.providerKey,
+                snapshot = snapshot,
+                store = store,
+                idFactory = idFactory,
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            ProviderSyncResult.Failure("Canonical catalog apply failed")
+        }
+    }
+
+    suspend fun applySnapshot(
+        providerKey: String,
+        snapshot: ProviderLibrarySnapshot,
+        store: CanonicalCatalogSyncStore,
+        idFactory: () -> String = { UUID.randomUUID().toString() },
+    ): ProviderSyncResult.Success {
+        var identityConflicts = 0
+        val seenSourceKeys = LinkedHashSet<String>(snapshot.tracks.size)
+
+        for (track in snapshot.tracks) {
+            val sourceKey = track.externalTrackId.trim()
+            if (sourceKey.isEmpty()) continue
+            seenSourceKeys += sourceKey
+
+            val existingAsset = store.mediaAsset(providerKey, sourceKey)
+            val providerRecordingId = store.entityIdForExternalIdentity(
+                provider = providerKey,
+                entityType = RECORDING_ENTITY_TYPE,
+                externalId = sourceKey,
+            )
+            val musicBrainzRecordingId = track.musicBrainzRecordingId.cleanId()
+            val musicBrainzRecordingEntityId = musicBrainzRecordingId?.let { mbid ->
+                store.entityIdForExternalIdentity(
+                    provider = MUSICBRAINZ_PROVIDER,
+                    entityType = RECORDING_ENTITY_TYPE,
+                    externalId = mbid,
+                )
+            }
+            val recordingId = providerRecordingId
+                ?: existingAsset?.recordingId
+                ?: musicBrainzRecordingEntityId
+                ?: idFactory()
+
+            store.upsertRecording(
+                RecordingEntity(
+                    id = recordingId,
+                    title = track.title.ifBlank { sourceKey },
+                    artistDisplay = track.artistDisplay.ifBlank { "Unknown Artist" },
+                    durationMs = track.durationMs,
+                ),
+            )
+            store.upsertExternalIdentity(
+                ExternalIdentityEntity(
+                    provider = providerKey,
+                    entityType = RECORDING_ENTITY_TYPE,
+                    externalId = sourceKey,
+                    entityId = recordingId,
+                ),
+            )
+            identityConflicts += persistMusicBrainzEvidenceIfUnclaimed(
+                store = store,
+                entityType = RECORDING_ENTITY_TYPE,
+                musicBrainzId = musicBrainzRecordingId,
+                canonicalEntityId = recordingId,
+            )
+
+            val album = track.album
+            if (album != null && album.externalAlbumId.isNotBlank()) {
+                val externalAlbumId = album.externalAlbumId.trim()
+                val providerReleaseId = store.entityIdForExternalIdentity(
+                    provider = providerKey,
+                    entityType = RELEASE_ENTITY_TYPE,
+                    externalId = externalAlbumId,
+                )
+                val musicBrainzReleaseId = album.musicBrainzReleaseId.cleanId()
+                val musicBrainzReleaseEntityId = musicBrainzReleaseId?.let { mbid ->
+                    store.entityIdForExternalIdentity(
+                        provider = MUSICBRAINZ_PROVIDER,
+                        entityType = RELEASE_ENTITY_TYPE,
+                        externalId = mbid,
+                    )
+                }
+                val releaseId = providerReleaseId
+                    ?: musicBrainzReleaseEntityId
+                    ?: idFactory()
+
+                store.upsertRelease(
+                    ReleaseEntity(
+                        id = releaseId,
+                        title = album.title.ifBlank { externalAlbumId },
+                        artistDisplay = album.artistDisplay,
+                        artworkUri = album.artworkUri ?: track.artworkUri,
+                    ),
+                )
+                store.upsertExternalIdentity(
+                    ExternalIdentityEntity(
+                        provider = providerKey,
+                        entityType = RELEASE_ENTITY_TYPE,
+                        externalId = externalAlbumId,
+                        entityId = releaseId,
+                    ),
+                )
+                identityConflicts += persistMusicBrainzEvidenceIfUnclaimed(
+                    store = store,
+                    entityType = RELEASE_ENTITY_TYPE,
+                    musicBrainzId = musicBrainzReleaseId,
+                    canonicalEntityId = releaseId,
+                )
+                // Do not delete other ReleaseTrack rows here. A Recording may be
+                // present on multiple canonical releases and those associations
+                // can come from other providers/local evidence.
+                store.upsertReleaseTrack(
+                    ReleaseTrackEntity(
+                        releaseId = releaseId,
+                        recordingId = recordingId,
+                        trackNumber = track.trackNumber,
+                    ),
+                )
+            }
+
+            val mediaAssetId = existingAsset?.id ?: idFactory()
+            store.upsertMediaAsset(
+                MediaAssetEntity(
+                    id = mediaAssetId,
+                    recordingId = recordingId,
+                    provider = providerKey,
+                    sourceKey = sourceKey,
+                    uri = track.assetUri,
+                    path = null,
+                    dateAddedSeconds = track.dateAddedSeconds,
+                    dateModifiedSeconds = null,
+                    artworkUri = track.artworkUri ?: track.album?.artworkUri,
+                ),
+            )
+        }
+
+        var removedAssets = 0
+        if (snapshot.complete) {
+            val existingSourceKeys = store.mediaAssetSourceKeys(providerKey)
+            for (existingSourceKey in existingSourceKeys) {
+                if (existingSourceKey !in seenSourceKeys) {
+                    // Availability disappeared. Keep the provider/native alias as
+                    // identity evidence even if this row predates ExternalIdentity
+                    // persistence for the provider; remove only the MediaAsset.
+                    val staleAsset = store.mediaAsset(providerKey, existingSourceKey)
+                    val existingAlias = store.entityIdForExternalIdentity(
+                        provider = providerKey,
+                        entityType = RECORDING_ENTITY_TYPE,
+                        externalId = existingSourceKey,
+                    )
+                    if (existingAlias == null && staleAsset != null) {
+                        store.upsertExternalIdentity(
+                            ExternalIdentityEntity(
+                                provider = providerKey,
+                                entityType = RECORDING_ENTITY_TYPE,
+                                externalId = existingSourceKey,
+                                entityId = staleAsset.recordingId,
+                            ),
+                        )
+                    }
+                    store.deleteMediaAsset(providerKey, existingSourceKey)
+                    removedAssets += 1
+                }
+            }
+        }
+
+        return ProviderSyncResult.Success(
+            syncedAssets = seenSourceKeys.size,
+            removedAssets = removedAssets,
+            identityConflicts = identityConflicts,
+        )
+    }
+
+    private suspend fun persistMusicBrainzEvidenceIfUnclaimed(
+        store: CanonicalCatalogSyncStore,
+        entityType: String,
+        musicBrainzId: String?,
+        canonicalEntityId: String,
+    ): Int {
+        val mbid = musicBrainzId ?: return 0
+        val existingEntityId = store.entityIdForExternalIdentity(
+            provider = MUSICBRAINZ_PROVIDER,
+            entityType = entityType,
+            externalId = mbid,
+        )
+        return when {
+            existingEntityId == null -> {
+                store.upsertExternalIdentity(
+                    ExternalIdentityEntity(
+                        provider = MUSICBRAINZ_PROVIDER,
+                        entityType = entityType,
+                        externalId = mbid,
+                        entityId = canonicalEntityId,
+                    ),
+                )
+                0
+            }
+            existingEntityId == canonicalEntityId -> 0
+            else -> 1 // evidence conflict: reconciliation belongs to a later slice
+        }
+    }
+
+    private fun String?.cleanId(): String? = this?.trim()?.takeIf(String::isNotEmpty)
+}
