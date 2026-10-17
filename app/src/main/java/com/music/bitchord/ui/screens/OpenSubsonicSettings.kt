@@ -27,7 +27,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.R
-import com.music.bitchord.data.catalog.provider.ProviderSyncResult
 import com.music.bitchord.data.catalog.provider.opensubsonic.AndroidOpenSubsonicAccountSession
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountDraft
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountRecord
@@ -54,7 +53,7 @@ internal fun OpenSubsonicRemoteLibrarySection() {
     var confirmForget by remember { mutableStateOf(false) }
     var testing by remember { mutableStateOf(false) }
     var syncing by remember { mutableStateOf(false) }
-    var actionStatus by remember { mutableStateOf<String?>(null) }
+    var connectionStatus by remember { mutableStateOf<String?>(null) }
 
     SettingsGroup(
         header = stringResource(R.string.opensubsonic_title),
@@ -76,8 +75,8 @@ internal fun OpenSubsonicRemoteLibrarySection() {
                 title = stringResource(if (testing) R.string.testing else R.string.opensubsonic_test_connection),
                 subtitle = when {
                     !hasCredential -> stringResource(R.string.opensubsonic_credential_missing)
-                    actionStatus != null -> actionStatus
-                    account?.lastHealthReachable == true -> account?.healthSubtitle()
+                    connectionStatus != null -> connectionStatus
+                    account?.lastHealthReachable == true -> account?.healthSubtitle(context)
                     account?.lastHealthReachable == false -> stringResource(R.string.opensubsonic_connection_failed)
                     else -> stringResource(R.string.opensubsonic_test_connection_subtitle)
                 },
@@ -88,11 +87,11 @@ internal fun OpenSubsonicRemoteLibrarySection() {
                         return@SettingsRow
                     }
                     testing = true
-                    actionStatus = null
+                    connectionStatus = null
                     scope.launch {
                         session.testSavedConnection().fold(
-                            onSuccess = { report -> actionStatus = report.connectedLabel(context) },
-                            onFailure = { actionStatus = context.getString(R.string.opensubsonic_connection_failed) },
+                            onSuccess = { report -> connectionStatus = report.connectedLabel(context) },
+                            onFailure = { connectionStatus = context.getString(R.string.opensubsonic_connection_failed) },
                         )
                         testing = false
                     }
@@ -112,12 +111,11 @@ internal fun OpenSubsonicRemoteLibrarySection() {
                         return@SettingsRow
                     }
                     syncing = true
-                    actionStatus = null
                     scope.launch {
-                        actionStatus = when (session.syncNow()) {
-                            is ProviderSyncResult.Success -> context.getString(R.string.opensubsonic_sync_complete)
-                            is ProviderSyncResult.Failure -> context.getString(R.string.opensubsonic_sync_failed)
-                        }
+                        // The session persists and refreshes a safe sync summary.
+                        // Keep that state on the sync row instead of overwriting
+                        // the connection-test row with an unrelated message.
+                        session.syncNow()
                         syncing = false
                     }
                 },
@@ -152,7 +150,7 @@ internal fun OpenSubsonicRemoteLibrarySection() {
                 TextButton(
                     onClick = {
                         session.forget()
-                        actionStatus = null
+                        connectionStatus = null
                         confirmForget = false
                     },
                 ) {
@@ -195,7 +193,9 @@ private fun OpenSubsonicAccountEditor(
     )
 
     val modeChanged = account != null && authMode != account.authMode
-    val credentialCanBeKept = hasCredential && !modeChanged
+    val serverChanged = account != null &&
+        serverUrl.trim().trimEnd('/') != account.serverUrl
+    val credentialCanBeKept = hasCredential && !modeChanged && !serverChanged
 
     AlertDialog(
         onDismissRequest = { if (!testing) onDismiss() },
@@ -346,11 +346,11 @@ private fun OpenSubsonicAccountRecord.displaySubtitle(): String = when {
     else -> serverUrl
 }
 
-private fun OpenSubsonicAccountRecord.healthSubtitle(): String =
+private fun OpenSubsonicAccountRecord.healthSubtitle(context: android.content.Context): String =
     listOfNotNull(
         lastServerType?.takeIf(String::isNotBlank),
         lastServerVersion?.takeIf(String::isNotBlank),
-    ).joinToString(" · ").ifBlank { "Connected" }
+    ).joinToString(" · ").ifBlank { context.getString(R.string.connected) }
 
 private fun OpenSubsonicConnectionReport.connectedLabel(context: android.content.Context): String =
     listOfNotNull(
