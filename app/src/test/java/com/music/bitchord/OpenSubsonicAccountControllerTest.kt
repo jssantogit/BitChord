@@ -42,7 +42,7 @@ class OpenSubsonicAccountControllerTest {
         )
         val edited = repository.save(
             OpenSubsonicAccountDraft(
-                serverUrl = "https://navidrome.example.test",
+                serverUrl = "https://music.example.test",
                 authMode = OpenSubsonicAuthMode.API_KEY,
                 secretReplacement = null,
             ),
@@ -50,7 +50,7 @@ class OpenSubsonicAccountControllerTest {
 
         assertEquals("account-one", first.accountId)
         assertEquals(first.accountId, edited.accountId)
-        assertEquals("https://navidrome.example.test", edited.serverUrl)
+        assertEquals("https://music.example.test", edited.serverUrl)
         assertEquals("first-key", secrets.read(first.accountId))
     }
 
@@ -102,6 +102,44 @@ class OpenSubsonicAccountControllerTest {
         } catch (expected: IllegalArgumentException) {
             assertFalse(expected.message.orEmpty().contains("api-key"))
         }
+    }
+
+    @Test
+    fun `changing server requires replacement credential but preserves account id`() {
+        val plain = FakeAccountPersistence()
+        val secrets = FakeCredentialStore()
+        val repository = OpenSubsonicAccountRepository(plain, secrets) { "home" }
+        val first = repository.save(
+            OpenSubsonicAccountDraft(
+                serverUrl = "https://music.example.test",
+                authMode = OpenSubsonicAuthMode.API_KEY,
+                secretReplacement = "old-key",
+            ),
+        )
+
+        try {
+            repository.save(
+                OpenSubsonicAccountDraft(
+                    serverUrl = "https://other.example.test",
+                    authMode = OpenSubsonicAuthMode.API_KEY,
+                    secretReplacement = null,
+                ),
+            )
+            fail("Expected server change without a new secret to be rejected")
+        } catch (expected: IllegalArgumentException) {
+            assertFalse(expected.message.orEmpty().contains("old-key"))
+        }
+
+        val moved = repository.save(
+            OpenSubsonicAccountDraft(
+                serverUrl = "https://other.example.test/",
+                authMode = OpenSubsonicAuthMode.API_KEY,
+                secretReplacement = "new-key",
+            ),
+        )
+        assertEquals(first.accountId, moved.accountId)
+        assertEquals("https://other.example.test", moved.serverUrl)
+        assertEquals("new-key", secrets.read(first.accountId))
     }
 
     @Test
