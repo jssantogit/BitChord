@@ -158,12 +158,15 @@ internal object CanonicalLocalLibrary {
         "${normalizeEvidence(albumTitle)}|${normalizeEvidence(artistDisplay)}"
 
     internal fun parseDurationMillis(durationText: String?): Long? {
-        val parts = durationText
-            ?.trim()
-            ?.split(':')
-            ?.mapNotNull(String::toLongOrNull)
-            ?: return null
-        if (parts.size !in 2..3) return null
+        val rawParts = durationText?.trim()?.split(':') ?: return null
+        if (rawParts.size !in 2..3) return null
+
+        val parts = rawParts.map { part ->
+            part.toLongOrNull()?.takeIf { it >= 0L } ?: return null
+        }
+        if (parts.last() !in 0L..59L) return null
+        if (parts.size == 3 && parts[1] !in 0L..59L) return null
+
         val totalSeconds = when (parts.size) {
             2 -> parts[0] * 60L + parts[1]
             3 -> parts[0] * 3_600L + parts[1] * 60L + parts[2]
