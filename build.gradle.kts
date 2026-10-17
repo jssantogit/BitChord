@@ -69,9 +69,27 @@ plugins {
     id("com.android.application") version "8.10.1" apply false
     id("com.android.library") version "8.10.1" apply false
     id("org.jetbrains.kotlin.android") version "2.3.20" apply false
+    id("com.google.devtools.ksp") version "2.3.11" apply false
     id("org.jetbrains.kotlin.multiplatform") version "2.3.20" apply false
     id("org.jetbrains.kotlin.jvm") version "2.3.20" apply false
     id("org.jetbrains.kotlin.plugin.compose") version "2.3.20" apply false
     id("org.jetbrains.kotlin.plugin.serialization") version "2.3.20" apply false
     id("org.jetbrains.compose") version "1.10.3" apply false
+}
+
+/*
+ * Room's Kotlin code generation uses KSP. KSP 2.3.11 is intentionally pinned:
+ * it supports AGP 8.10.0+, so it fits this project's AGP 8.10.1 baseline,
+ * while KSP 2.3.12 raised its minimum supported AGP to 8.12.0.
+ *
+ * Keep the dependency injection here bounded to :app and migrate it into the
+ * module build when the project deliberately revisits build-logic structure.
+ */
+project(":app") {
+    pluginManager.withPlugin("org.jetbrains.kotlin.android") {
+        pluginManager.apply("com.google.devtools.ksp")
+        dependencies.add("implementation", "androidx.room:room-runtime:2.8.5")
+        dependencies.add("implementation", "androidx.room:room-ktx:2.8.5")
+        dependencies.add("ksp", "androidx.room:room-compiler:2.8.5")
+    }
 }

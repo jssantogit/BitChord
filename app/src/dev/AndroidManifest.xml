@@ -5,5 +5,10 @@
     <application
         android:label="BitChord Dev"
         android:usesCleartextTraffic="true"
-        tools:replace="android:label,android:usesCleartextTraffic" />
+        tools:replace="android:label,android:usesCleartextTraffic">
+        <provider
+            android:name="com.music.bitchord.data.catalog.CanonicalCatalogInitializerProvider"
+            android:authorities="${applicationId}.canonical-catalog-init"
+            android:exported="false" />
+    </application>
 </manifest>
