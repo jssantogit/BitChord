@@ -13,6 +13,8 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicMediaAc
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicMediaAccessResult
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicMediaAssetStore
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicProvider
+import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicRuntimeProbeResult
+import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicRuntimeProbeTransport
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URLEncoder
@@ -91,20 +93,18 @@ class OpenSubsonicManualSmokeTest {
         assertEquals("raw", parameters["format"])
         assertEquals(trackId, parameters["id"])
 
-        val status = executeOneByteRangeRequest(
-            endpointUrl = ready.request.endpointUrl,
-            parameters = parameters,
+        val result = ready.request.probe(
+            OpenSubsonicRuntimeProbeTransport { endpointUrl, runtimeParameters ->
+                executeOneByteRangeRequest(endpointUrl, runtimeParameters)
+            },
         )
-        assertTrue(
-            "OpenSubsonic raw direct-audio request was rejected (HTTP $status)",
-            status in 200..299,
-        )
+        assertEquals(OpenSubsonicRuntimeProbeResult.AVAILABLE, result)
     }
 
     private fun executeOneByteRangeRequest(
         endpointUrl: String,
         parameters: Map<String, String>,
-    ): Int {
+    ): OpenSubsonicRuntimeProbeResult {
         val query = parameters.entries.joinToString("&") { (name, value) ->
             "${encode(name)}=${encode(value)}"
         }
@@ -118,12 +118,21 @@ class OpenSubsonicManualSmokeTest {
             connection.setRequestProperty("Range", "bytes=0-0")
             connection.requestMethod = "GET"
             val status = connection.responseCode
-            if (status in 200..299) {
-                connection.inputStream.use { stream -> stream.read() }
-            } else {
-                connection.errorStream?.close()
+            when {
+                status in 200..299 -> {
+                    connection.inputStream.use { stream -> stream.read() }
+                    OpenSubsonicRuntimeProbeResult.AVAILABLE
+                }
+                status == HttpURLConnection.HTTP_UNAUTHORIZED ||
+                    status == HttpURLConnection.HTTP_FORBIDDEN -> {
+                    connection.errorStream?.close()
+                    OpenSubsonicRuntimeProbeResult.AUTHENTICATION_REJECTED
+                }
+                else -> {
+                    connection.errorStream?.close()
+                    OpenSubsonicRuntimeProbeResult.REQUEST_REJECTED
+                }
             }
-            status
         } finally {
             connection.disconnect()
         }
