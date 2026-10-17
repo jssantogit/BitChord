@@ -8,9 +8,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Before
 import org.junit.Test
 
 class CanonicalQueuePersistenceTest {
+
+    @Before
+    fun resetCanonicalIdentityHints() {
+        CanonicalQueueIdentityHints.clear()
+    }
 
     @Test
     fun `bounded local queue persists recording identity and re-resolves rendition`() = runBlocking {
@@ -146,17 +152,23 @@ class CanonicalQueuePersistenceTest {
     }
 
     @Test
-    fun `restored media item carries recording identity without replacing transport media id`() {
+    fun `restored media item carries recording identity without replacing transport media id`() = runBlocking {
         val source = QueueSource("Local album", PlaybackSourceType.BROWSE, "local-album")
         val identity = CanonicalQueueIdentity("recording-uuid")
         val assetUri = "content://media/external/audio/media/84"
+        val asset = PlayableMediaAsset(
+            recordingId = identity.recordingId,
+            mediaAssetId = "asset-uuid",
+            uri = assetUri,
+            path = "/storage/emulated/0/Music/Track.flac",
+        )
         val song = Song(
             videoId = assetUri,
             title = "Track",
             artist = "Artist",
             thumbnailUrl = null,
             localUri = assetUri,
-            localPath = "/storage/emulated/0/Music/Track.flac",
+            localPath = asset.path,
             queueTier = QueueTier.CONTEXT,
             queueEntryId = "queue-entry",
             playbackSource = source.title,
@@ -187,7 +199,8 @@ class CanonicalQueuePersistenceTest {
             positionMs = 0L,
             contextIdentities = listOf(identity),
         )
-        val projected = requireNotNull(BoundedContextPersistence.restoreProjection(state))
+        val rehydrated = requireNotNull(BoundedContextPersistence.rehydrate(state, resolver(asset)))
+        val projected = requireNotNull(BoundedContextPersistence.restoreProjection(rehydrated))
         val restoredItem = QueueShuffle.withQueueMetadata(
             projected.entries.single().song.toMediaItem(),
             newCanonicalIndex = 0,
