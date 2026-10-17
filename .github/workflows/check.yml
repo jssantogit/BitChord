@@ -40,10 +40,10 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run Android unit tests
-        run: ./gradlew :app:testDevDebugUnitTest
+        run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
 
       - name: Build dev APK
-        run: ./gradlew :app:assembleDevDebug
+        run: ./gradlew -Pbitchord.bundleWear=false :app:assembleDevDebug
 
       - name: Upload dev APK
         uses: actions/upload-artifact@v4
