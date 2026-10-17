@@ -12,10 +12,8 @@ import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
 import java.net.URI
-import java.security.MessageDigest
 import java.time.OffsetDateTime
 import java.util.Base64
-import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -95,9 +93,7 @@ internal class OpenSubsonicProvider(
     private val config: OpenSubsonicAccountConfig,
     private val transport: OpenSubsonicTransport = KtorOpenSubsonicTransport(config.normalizedServerUrl),
     private val pageSize: Int = 500,
-    private val saltFactory: () -> String = {
-        UUID.randomUUID().toString().replace("-", "").take(16)
-    },
+    private val saltFactory: () -> String = ::defaultOpenSubsonicSalt,
 ) : RemoteCatalogProvider {
     init {
         require(pageSize in 1..500) { "OpenSubsonic pageSize must be between 1 and 500" }
@@ -273,11 +269,13 @@ internal class OpenSubsonicProvider(
         authenticated: Boolean = true,
     ): SubsonicResponse {
         val parameters = linkedMapOf(
-            "v" to API_VERSION,
-            "c" to CLIENT_NAME,
+            "v" to OPEN_SUBSONIC_API_VERSION,
+            "c" to OPEN_SUBSONIC_CLIENT_NAME,
             "f" to "json",
         )
-        if (authenticated) parameters.putAll(authenticationParameters())
+        if (authenticated) {
+            parameters.putAll(openSubsonicAuthenticationParameters(config.auth, saltFactory))
+        }
         parameters.putAll(extraParameters)
 
         val raw = transport.get(endpoint, parameters)
@@ -293,19 +291,6 @@ internal class OpenSubsonicProvider(
         return response
     }
 
-    private fun authenticationParameters(): Map<String, String> = when (val auth = config.auth) {
-        is OpenSubsonicAuth.ApiKey -> mapOf("apiKey" to auth.value)
-        is OpenSubsonicAuth.Password -> {
-            val salt = saltFactory().trim()
-            require(salt.length >= 6) { "OpenSubsonic auth salt must be at least 6 characters" }
-            mapOf(
-                "u" to auth.username,
-                "s" to salt,
-                "t" to md5(auth.password + salt),
-            )
-        }
-    }
-
     private fun providerUri(kind: String, providerId: String): String =
         "opensubsonic://$kind/${encode(config.accountId)}/${encode(providerId)}"
 
@@ -313,21 +298,12 @@ internal class OpenSubsonicProvider(
         .withoutPadding()
         .encodeToString(value.toByteArray(Charsets.UTF_8))
 
-    private fun md5(value: String): String = MessageDigest.getInstance("MD5")
-        .digest(value.toByteArray(Charsets.UTF_8))
-        .joinToString("") { byte -> "%02x".format(byte) }
-
     private fun parseCreatedEpochSeconds(raw: String?): Long? {
         val value = raw.clean() ?: return null
         return runCatching { OffsetDateTime.parse(value).toInstant().epochSecond }.getOrNull()
     }
 
     private fun String?.clean(): String? = this?.trim()?.takeIf(String::isNotEmpty)
-
-    private companion object {
-        const val API_VERSION = "1.16.1"
-        const val CLIENT_NAME = "BitChord"
-    }
 }
 
 private class OpenSubsonicProtocolException(message: String) : IllegalStateException(message)
