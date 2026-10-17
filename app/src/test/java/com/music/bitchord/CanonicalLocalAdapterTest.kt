@@ -84,6 +84,25 @@ class CanonicalLocalAdapterTest {
     }
 
     @Test
+    fun deletedMediaStoreItemIsVerifiedThroughItsCollectionAndId() {
+        val lookup = CanonicalLocalLibrary.mediaStoreLookupForSourceKey(
+            "content://media/external/audio/media/42",
+        )
+
+        assertEquals("content://media/external/audio/media", lookup?.collectionUri)
+        assertEquals(42L, lookup?.mediaId)
+    }
+
+    @Test
+    fun nonMediaStoreSourceCannotBeTreatedAsAuthoritativelyAbsent() {
+        assertNull(
+            CanonicalLocalLibrary.mediaStoreLookupForSourceKey(
+                "file:///storage/emulated/0/Music/local.flac",
+            ),
+        )
+    }
+
+    @Test
     fun staleSourceKeySelectionHandlesLibrariesBeyondSqliteBindLimits() {
         val existing = (0 until 2_500).map { index ->
             "content://media/external/audio/media/$index"
