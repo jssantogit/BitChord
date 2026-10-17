@@ -50,6 +50,15 @@ class CanonicalLocalAdapterTest {
     }
 
     @Test
+    fun legacyAdapterKeepsLongDurationsAsTotalMinutes() {
+        val song = localRow(youtubeVideoId = null)
+            .copy(durationMs = 3_723_000L)
+            .toLegacySong()
+
+        assertEquals("62:03", song.durationText)
+    }
+
+    @Test
     fun durationParserKeepsValidMinuteAndHourFormats() {
         assertEquals(383_000L, CanonicalLocalLibrary.parseDurationMillis("6:23"))
         assertEquals(3_723_000L, CanonicalLocalLibrary.parseDurationMillis("1:02:03"))
