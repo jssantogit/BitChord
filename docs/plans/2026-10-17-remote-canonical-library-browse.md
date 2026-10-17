@@ -24,29 +24,31 @@ The OpenSubsonic API remains a sync concern only.
 
 ## Read model
 
-Add a provider-neutral browse boundary over Room with two projections:
-
-1. available canonical Recordings + their canonical MediaAsset references;
-2. canonical Releases + ReleaseTrack membership for recordings available through the selected provider.
+Add the smallest provider-neutral browse boundary over Room: canonical Recordings currently available through the selected provider plus their canonical MediaAsset references.
 
 The UI model exposes:
 
 - `recordingId` as musical row identity;
 - `mediaAssetId` + provider key as availability references;
-- title, `artistDisplay`, duration and stored artwork reference;
-- `releaseId`, release metadata and ordered release membership where available.
+- title, `artistDisplay`, duration and stored artwork reference.
 
 It deliberately does not expose provider `sourceKey`, server track IDs, stream URIs or `videoId`.
 
-Room queries return `Flow`s. Grouping/sorting is performed once per database emission in the repository, not during Compose recomposition. No polling or network dependency is introduced.
+Room returns a `Flow`. Grouping/sorting is performed once per database emission in the repository, not during Compose recomposition. No polling or network dependency is introduced.
+
+## Why Songs only in Slice 4
+
+The canonical catalog already has `Release` + `ReleaseTrack`, but `MediaAsset` does not identify which Release occurrence produced that provider asset, and provider release identities intentionally survive availability loss. A provider-specific album surface could therefore infer availability through the Recording and show a stale/ambiguous Release after later syncs.
+
+Albums/Releases remain canonical catalog data, but this checkpoint does not expose them in remote browse. Adding that surface later should follow a domain decision that can associate availability with release membership without guessing. No shared schema change is introduced here.
 
 ## Library integration
 
-When the OpenSubsonic account metadata exists, Library exposes an OpenSubsonic/Navidrome entry. Opening it renders a canonical browse screen backed only by `canonical-catalog.db`.
+When the OpenSubsonic account metadata exists, Library exposes an OpenSubsonic/Navidrome row beside the other Library sources. Its display `ShelfItem` has both `browseId = null` and `videoId = null`; a small optional `LibraryLink.onClick` callback opens the canonical screen directly instead of routing through the legacy browse/detail domain.
 
-The screen prioritizes Songs and also exposes Releases because the existing schema already has canonical `Release` + `ReleaseTrack` relationships. Song rows are intentionally non-playable in this slice.
+Opening the entry renders a Songs-only canonical browse screen backed only by `canonical-catalog.db`. Track rows are intentionally non-clickable because remote playback belongs to Playback & Queue.
 
-Remote logical artwork references remain data/provenance. The browse must not turn opening Library into an authenticated artwork/network fetch; unsupported remote artwork schemes fall back to a placeholder until a later cache/artwork-resolver slice exists.
+Remote logical artwork references remain data/provenance. The browse does not turn opening Library into an authenticated artwork/network fetch; logical remote artwork uses a bounded placeholder until a later cache/artwork-resolver boundary exists.
 
 ## Offline behavior
 
@@ -54,15 +56,16 @@ A successful sync persists the complete snapshot before browse. Opening/reopenin
 
 ## TDD gates
 
-Write regressions before production implementation for:
+Regressions written before production implementation cover:
 
 1. synchronized tracks appear in the read model;
 2. final row identity is canonical and exposes no `sourceKey`/`videoId` field;
 3. browse remains readable after provider/network failure following a successful sync;
 4. a provider with no assets yields an empty library;
 5. a later resync updates the browse model while preserving canonical IDs;
-6. forgetting account configuration leaves canonical Recording/Release data intact;
-7. Release grouping contains the correct tracks in track-number order.
+6. forgetting account configuration leaves canonical Recording/Release data intact.
+
+Release grouping is intentionally not implemented in this slice, so the conditional grouping gate does not apply.
 
 ## Verification
 
