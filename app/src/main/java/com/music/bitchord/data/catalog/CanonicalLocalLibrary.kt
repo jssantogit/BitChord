@@ -213,15 +213,41 @@ internal object CanonicalLocalLibrary {
         return existingSourceKeys.filterNot(seen::contains)
     }
 
+    internal fun mediaStoreLookupForSourceKey(sourceKey: String): MediaStoreSourceLookup? {
+        val parsed = runCatching { java.net.URI(sourceKey) }.getOrNull() ?: return null
+        if (!parsed.scheme.equals("content", ignoreCase = true)) return null
+        if (!parsed.authority.equals("media", ignoreCase = true)) return null
+
+        val segments = parsed.path
+            ?.trim('/')
+            ?.split('/')
+            ?.filter(String::isNotBlank)
+            ?: return null
+        if (segments.size < 4) return null
+        if (!segments[segments.lastIndex - 2].equals("audio", ignoreCase = true)) return null
+        if (!segments[segments.lastIndex - 1].equals("media", ignoreCase = true)) return null
+
+        val mediaId = segments.last().toLongOrNull() ?: return null
+        val collectionPath = segments.dropLast(1).joinToString("/")
+        return MediaStoreSourceLookup(
+            collectionUri = "content://${parsed.authority}/$collectionPath",
+            mediaId = mediaId,
+        )
+    }
+
     /**
      * An unseen persisted asset is only safe to prune when MediaStore can
      * authoritatively show that its source row is gone or no longer belongs in
      * the current Local Music view. A null/failed query is deliberately treated
      * as unknown so a transient scanner failure cannot wipe the canonical DB.
+     *
+     * Query the collection by `_ID` rather than the stale item URI itself. Some
+     * MediaStore implementations return null/fail for a deleted item URI, while
+     * the collection query can authoritatively return an empty cursor.
      */
     private fun canConfirmSourceIsAbsentOrExcluded(context: Context, sourceKey: String): Boolean {
-        val uri = runCatching { Uri.parse(sourceKey) }.getOrNull() ?: return false
-        if (!uri.scheme.equals("content", ignoreCase = true)) return false
+        val lookup = mediaStoreLookupForSourceKey(sourceKey) ?: return false
+        val collectionUri = runCatching { Uri.parse(lookup.collectionUri) }.getOrNull() ?: return false
 
         val projection = buildList {
             add(MediaStore.Audio.Media.DISPLAY_NAME)
@@ -237,7 +263,13 @@ internal object CanonicalLocalLibrary {
         }.toTypedArray()
 
         return runCatching {
-            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+            context.contentResolver.query(
+                collectionUri,
+                projection,
+                "${MediaStore.Audio.Media._ID} = ?",
+                arrayOf(lookup.mediaId.toString()),
+                null,
+            )?.use { cursor ->
                 if (!cursor.moveToFirst()) return@use true
 
                 val displayName = cursor.getString(
@@ -302,4 +334,9 @@ internal data class LocalMediaCandidate(
     val dateModifiedSeconds: Long?,
     val trackNumber: Int?,
     val youtubeVideoId: String?,
+)
+
+internal data class MediaStoreSourceLookup(
+    val collectionUri: String,
+    val mediaId: Long,
 )
