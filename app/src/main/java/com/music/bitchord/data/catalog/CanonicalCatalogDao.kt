@@ -52,14 +52,16 @@ internal interface CanonicalCatalogDao {
     @Query("DELETE FROM catalog_media_asset WHERE provider = :provider")
     suspend fun deleteAllMediaAssets(provider: String)
 
+    @Query("SELECT sourceKey FROM catalog_media_asset WHERE provider = :provider")
+    suspend fun mediaAssetSourceKeys(provider: String): List<String>
+
     @Query(
         """
         DELETE FROM catalog_media_asset
-        WHERE provider = :provider
-          AND sourceKey NOT IN (:sourceKeys)
+        WHERE provider = :provider AND sourceKey = :sourceKey
         """,
     )
-    suspend fun deleteMediaAssetsMissingFromScan(provider: String, sourceKeys: List<String>)
+    suspend fun deleteMediaAsset(provider: String, sourceKey: String)
 
     @Query(
         """
