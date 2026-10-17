@@ -10,18 +10,26 @@ import androidx.compose.material.icons.rounded.Lan
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.R
-import com.music.bitchord.sharedui.resources.Res
-import com.music.bitchord.sharedui.resources.spotify_logo
+import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.download.Downloads
 import com.music.bitchord.download.SavedCollection
+import com.music.bitchord.sharedui.resources.Res
+import com.music.bitchord.sharedui.resources.spotify_logo
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.ReplayCardRowSkeleton
 import com.music.bitchord.ui.replay.ReplayCardRow
@@ -32,18 +40,51 @@ import com.music.bitchord.ui.replay.ReplayStoryPage
 // sits on its "On device" shelf, and the way in to Replay at its head.
 
 /**
- * The phone's folders, drawn as a list under the Replay cards: Downloads and
- * Local Music, the song cache when Settings has it shown, and the two remote
- * libraries it can reach.
+ * The phone's Library links. Legacy folders still carry a ShelfItem browse id;
+ * the canonical OpenSubsonic entry uses LibraryLink.onClick instead, so it can
+ * enter the Room-backed browse without manufacturing a browse/video id.
  */
 @Composable
 fun libraryLinks(): List<LibraryLink> {
+    val context = LocalContext.current
     val webdavConfigured by AppSettings.webdavUrl.collectAsStateWithLifecycle()
     val smbHost by AppSettings.smbHost.collectAsStateWithLifecycle()
     val smbShare by AppSettings.smbShare.collectAsStateWithLifecycle()
     val showCacheFolder by AppSettings.showCacheFolder.collectAsStateWithLifecycle()
     val spotifyConnected by AppSettings.spotifySpdcToken.collectAsStateWithLifecycle()
-    fun link(title: String, subtitle: String, browseId: String, icon: ImageVector = deviceFolderIcon(browseId) ?: Icons.Rounded.Cloud) = LibraryLink(
+
+    val openSubsonicPersistence = remember(context.applicationContext) {
+        SharedPrefsOpenSubsonicAccountPersistence(context.applicationContext)
+    }
+    val openSubsonicAccountFlow = remember(openSubsonicPersistence) {
+        openSubsonicPersistence.observe()
+    }
+    val openSubsonicAccount by openSubsonicAccountFlow.collectAsStateWithLifecycle(
+        initialValue = openSubsonicPersistence.read(),
+    )
+    var remoteBrowseOpen by rememberSaveable { mutableStateOf(false) }
+
+    val openSubsonicTitle = stringResource(R.string.opensubsonic_title)
+    val configuredOpenSubsonic = openSubsonicAccount
+    if (remoteBrowseOpen && configuredOpenSubsonic != null) {
+        Dialog(
+            onDismissRequest = { remoteBrowseOpen = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            CanonicalRemoteLibraryScreen(
+                providerKey = "opensubsonic:${configuredOpenSubsonic.accountId}",
+                title = openSubsonicTitle,
+                onClose = { remoteBrowseOpen = false },
+            )
+        }
+    }
+
+    fun link(
+        title: String,
+        subtitle: String,
+        browseId: String,
+        icon: ImageVector = deviceFolderIcon(browseId) ?: Icons.Rounded.Cloud,
+    ) = LibraryLink(
         item = ShelfItem(
             title = title,
             subtitle = subtitle,
@@ -53,6 +94,7 @@ fun libraryLinks(): List<LibraryLink> {
         ),
         icon = icon,
     )
+
     return listOfNotNull(
         link(
             stringResource(R.string.downloads),
@@ -71,6 +113,22 @@ fun libraryLinks(): List<LibraryLink> {
             stringResource(R.string.cached_songs_subtitle),
             CACHE_FOLDER_BROWSE_ID,
         ).takeIf { showCacheFolder },
+        // The canonical remote library has no legacy browseId/videoId at all.
+        // Its callback opens a Room-only browse screen directly.
+        configuredOpenSubsonic?.let { account ->
+            LibraryLink(
+                item = ShelfItem(
+                    title = openSubsonicTitle,
+                    subtitle = account.lastSyncSummary?.takeIf(String::isNotBlank)
+                        ?: stringResource(R.string.remote_library_browse_subtitle),
+                    thumbnailUrl = null,
+                    videoId = null,
+                    browseId = null,
+                ),
+                icon = Icons.Rounded.Cloud,
+                onClick = { remoteBrowseOpen = true },
+            )
+        },
         // Only once set up in Sources; unconfigured, they'd just be dead ends.
         link(
             stringResource(R.string.webdav),
@@ -140,7 +198,7 @@ const val CACHE_FOLDER_BROWSE_ID = "local:cache"
 
 /**
  * The phone's way in to Replay: its row of headline cards, placeholders for
- * them while the history is read, and nothing at all while there is not yet
+ * them while the history is read, or nothing at all while there is not yet
  * enough listening to deal them — Settings still opens Replay either way.
  */
 @Composable
