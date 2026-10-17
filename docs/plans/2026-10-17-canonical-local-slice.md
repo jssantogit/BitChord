@@ -26,6 +26,7 @@ Out of scope:
 - Library redesign (Slice 4).
 - Remote providers, MusicBrainz reconciliation, recommendations, slskd, or YouTube removal.
 - Full Artist canonicalization. The first slice stores the artist byline as recording/release display metadata.
+- Upgrading AGP/Gradle solely to adopt the newest KSP plugin.
 
 ## Data model
 
@@ -57,13 +58,13 @@ Out of scope:
 ### ExternalIdentity
 - `(provider, entityType, externalId)` unique identity mapping.
 - `entityId` points at our canonical id.
-- In this slice it is used only when an existing BitChord download lets MediaStore URI -> YouTube video id be proven.
+- In this slice it is used when an existing BitChord download lets MediaStore URI -> YouTube video id be proven, and for provisional local release evidence.
 
 ## Identity rule
 
 For an already-known `(provider, sourceKey)`, reuse the existing MediaAsset and Recording ids. For a new local source key, allocate new UUIDs. A re-scan updates metadata but does not mint a new canonical Recording id.
 
-A release uses the MediaStore album id as local evidence when available. If no reliable album key/title exists, no ReleaseTrack is fabricated merely to fill the table.
+The current legacy `Song` edge no longer exposes MediaStore album id, so the first slice may use a clearly provider-local release evidence key derived from album title + artist byline. It is stored as an external/local identity, not treated as universal musical identity. A later scanner DTO can replace that evidence with MediaStore album id without changing canonical ids.
 
 ## Compatibility rule
 
@@ -73,17 +74,21 @@ Room-backed local rows are converted back to `Song` only at the edge. The adapte
 
 No caller is allowed to treat `videoId` as the canonical Recording id.
 
+## Build-tool rule
+
+Room stable `2.8.5` is used. The current BitChord baseline is AGP `8.10.1` + Gradle `8.11.1`; current KSP `2.3.x` requires a newer AGP/Gradle floor. To keep Slice 1 bounded, Room code generation therefore uses Kotlin `kapt` with the existing Kotlin `2.3.20` toolchain. This is a compatibility choice, not a long-term preference: migrate Room processing to KSP when the project deliberately upgrades AGP/Gradle.
+
 ## Implementation steps
 
-1. Add Room/KSP build support and schema export. Use stable Room 2.8.5 and KSP plugin 2.3.10.
+1. Add Room 2.8.5 + kapt build support without upgrading AGP/Gradle.
 2. Add failing unit tests for the pure local canonical adapter/identity boundary before implementation.
 3. Add Room entities, DAO and `CanonicalCatalogDatabase` version 1.
-4. Add `CanonicalLocalLibrary` sync/import boundary with a small `LocalMediaCandidate` DTO and compatibility mapper.
-5. Refactor only `LocalMediaRepository.getLocalMusic()` so the MediaStore cursor produces candidates, syncs them into Room, then returns Room-backed `Song` rows. Leave downloaded-list code and all remote paths untouched.
+4. Add `CanonicalLocalLibrary` sync/import boundary with a small local candidate/compatibility mapper.
+5. Keep the current MediaStore scanner working and insert canonicalization at its existing local-library seam: scanner rows sync into Room, then Local Music returns Room-backed `Song` rows. Leave downloaded-list code and all remote paths untouched.
 6. Initialize/open the canonical DB lazily; do not add startup work unrelated to Local Music.
-7. Keep `extraLocalMusic` behavior after the phone's canonical local list so inactive TV scaffolding is not broken by this slice.
+7. Preserve `extraLocalMusic` composition semantics so inactive TV scaffolding is not silently broken by the phone slice.
 8. Ensure CI invokes phone builds with `-Pbitchord.bundleWear=false`; the app Gradle file otherwise generates a bundled Wear APK even though Wear is no longer an active target.
-9. Open a draft PR. Let GitHub Actions run `:app:testDevDebugUnitTest` and `:app:assembleDevDebug`; do not run heavy builds locally.
+9. Keep PR #2 draft while GitHub Actions runs `:app:testDevDebugUnitTest` and `:app:assembleDevDebug`; do not run heavy builds locally.
 10. After green CI, install the artifact on a real Android device and verify scan -> show -> play, restart -> show -> play, and deletion/rescan behavior.
 
 ## Tests
@@ -95,7 +100,7 @@ Pure unit tests must prove:
 - MediaStore source identity is distinct from canonical Recording/MediaAsset ids;
 - duration/album/track metadata survives the adapter.
 
-Room compiler/schema generation plus the Android build verify DAO/query shape. Real-device acceptance verifies framework MediaStore + Room + Media3 integration.
+Room compiler/schema checks plus the Android build verify DAO/query shape. Real-device acceptance verifies framework MediaStore + Room + Media3 integration.
 
 ## Acceptance
 
