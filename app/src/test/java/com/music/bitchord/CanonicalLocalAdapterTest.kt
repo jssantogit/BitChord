@@ -1,5 +1,6 @@
 package com.music.bitchord
 
+import com.music.bitchord.data.catalog.CanonicalLocalLibrary
 import com.music.bitchord.data.catalog.CanonicalLocalRow
 import com.music.bitchord.data.catalog.toLegacySong
 import org.junit.Assert.assertEquals
@@ -46,6 +47,19 @@ class CanonicalLocalAdapterTest {
         assertEquals(1_700_000_000L, song.localDateAddedSeconds)
         assertEquals(1_700_000_100L, song.localDateModifiedSeconds)
         assertNull(song.albumId)
+    }
+
+    @Test
+    fun durationParserKeepsValidMinuteAndHourFormats() {
+        assertEquals(383_000L, CanonicalLocalLibrary.parseDurationMillis("6:23"))
+        assertEquals(3_723_000L, CanonicalLocalLibrary.parseDurationMillis("1:02:03"))
+    }
+
+    @Test
+    fun durationParserRejectsMalformedSegments() {
+        assertNull(CanonicalLocalLibrary.parseDurationMillis("1:x:30"))
+        assertNull(CanonicalLocalLibrary.parseDurationMillis("1:70"))
+        assertNull(CanonicalLocalLibrary.parseDurationMillis("1:-1"))
     }
 
     private fun localRow(youtubeVideoId: String?) = CanonicalLocalRow(
