@@ -216,9 +216,9 @@ fun SourcesScreen(
         ) {
             // The addons are split out from the rest because they are the only
             // rows whose order is the *user's*. Everything else ranks by kind,
-            // which is fixed in [SourceKind] and not something a drag should be
-            // able to argue with — a gesture that let JioSaavn be dragged above
-            // an addon would be offering a choice the resolver does not
+            // which is fixed in [SourceKind] and not something a drag should
+            // be able to argue with — a gesture that let JioSaavn be dragged
+            // above an addon would be offering a choice the resolver does not
             // actually honour.
             //
             // They are still one continuously numbered list. The numbers say
@@ -351,6 +351,11 @@ fun SourcesScreen(
             },
             onDisconnect = { AppSettings.clearSmb() },
         )
+
+        // OpenSubsonic/Navidrome is another remote library. It deliberately
+        // stays outside the ordered playback-source list above until the
+        // PlaybackResolver learns how to resolve its logical MediaAssets.
+        OpenSubsonicRemoteLibrarySection()
 
         SettingsGroup(
             header = stringResource(R.string.source_matching),
