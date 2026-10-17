@@ -121,7 +121,13 @@ internal object CanonicalLocalLibrary {
             if (seenSourceKeys.isEmpty()) {
                 dao.deleteAllMediaAssets(LOCAL_MEDIASTORE_PROVIDER)
             } else {
-                dao.deleteMediaAssetsMissingFromScan(LOCAL_MEDIASTORE_PROVIDER, seenSourceKeys)
+                val staleSourceKeys = staleSourceKeys(
+                    existingSourceKeys = dao.mediaAssetSourceKeys(LOCAL_MEDIASTORE_PROVIDER),
+                    seenSourceKeys = seenSourceKeys,
+                )
+                for (sourceKey in staleSourceKeys) {
+                    dao.deleteMediaAsset(LOCAL_MEDIASTORE_PROVIDER, sourceKey)
+                }
             }
 
             dao.localRows(
@@ -173,6 +179,14 @@ internal object CanonicalLocalLibrary {
             else -> return null
         }
         return totalSeconds.takeIf { it >= 0L }?.times(1_000L)
+    }
+
+    internal fun staleSourceKeys(
+        existingSourceKeys: List<String>,
+        seenSourceKeys: Collection<String>,
+    ): List<String> {
+        val seen = seenSourceKeys.toHashSet()
+        return existingSourceKeys.filterNot(seen::contains)
     }
 
     private fun normalizeEvidence(value: String): String =
