@@ -119,10 +119,12 @@ class OpenSubsonicAccountControllerTest {
             ),
         )
 
-        val config = assertNotNull(repository.savedConfig())
-        assertEquals("home", config.accountId)
-        assertEquals("https://music.example.test", config.normalizedServerUrl)
-        val auth = config.auth as OpenSubsonicAuth.Password
+        val config = repository.savedConfig()
+        assertNotNull(config)
+        val resolved = config!!
+        assertEquals("home", resolved.accountId)
+        assertEquals("https://music.example.test", resolved.normalizedServerUrl)
+        val auth = resolved.auth as OpenSubsonicAuth.Password
         assertEquals("listener", auth.username)
         assertEquals("password with spaces ", auth.password)
         assertFalse(repository.current()!!.toString().contains(auth.password))
