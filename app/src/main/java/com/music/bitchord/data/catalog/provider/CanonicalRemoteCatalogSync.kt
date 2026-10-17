@@ -282,8 +282,25 @@ internal object CanonicalRemoteCatalogSync {
             val existingSourceKeys = store.mediaAssetSourceKeys(providerKey)
             for (existingSourceKey in existingSourceKeys) {
                 if (existingSourceKey !in seenSourceKeys) {
-                    // Availability disappeared. Canonical entities and external
-                    // identity evidence intentionally survive this reconciliation.
+                    // Availability disappeared. Keep the provider/native alias as
+                    // identity evidence even if this row predates ExternalIdentity
+                    // persistence for the provider; remove only the MediaAsset.
+                    val staleAsset = store.mediaAsset(providerKey, existingSourceKey)
+                    val existingAlias = store.entityIdForExternalIdentity(
+                        provider = providerKey,
+                        entityType = RECORDING_ENTITY_TYPE,
+                        externalId = existingSourceKey,
+                    )
+                    if (existingAlias == null && staleAsset != null) {
+                        store.upsertExternalIdentity(
+                            ExternalIdentityEntity(
+                                provider = providerKey,
+                                entityType = RECORDING_ENTITY_TYPE,
+                                externalId = existingSourceKey,
+                                entityId = staleAsset.recordingId,
+                            ),
+                        )
+                    }
                     store.deleteMediaAsset(providerKey, existingSourceKey)
                     removedAssets += 1
                 }
