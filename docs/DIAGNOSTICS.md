@@ -15,17 +15,17 @@ A diagnostic event carries:
 - sanitized key/value metadata;
 - sanitized error text.
 
-The in-memory ring buffer retains at most 1,000 events. Debug builds also emit the formatted event to logcat under `BitChordDiag`.
+The in-memory ring buffer retains at most 1,000 events. Event text, metadata count, metadata values, thread names, and formatted names are individually bounded so a single oversized log entry cannot defeat the ring-buffer limit. Debug builds also emit the formatted event to logcat under `BitChordDiag`.
 
 The existing shared `DebugLog` API is unchanged. On Android debug builds its sink is routed into Diagnostics, so shared code gets the same sanitization and bounded event model without a cross-platform contract migration.
 
 ## Persistent capture
 
-Persistent capture is opt-in and expires automatically after one hour. The active expiry is stored so a capture survives a force-stop and can include the next cold launch.
+Persistent capture is opt-in and expires automatically after one hour. Starting or stopping capture commits the expiry state synchronously because this is an explicit, rare user action and the next operation may be an ADB force-stop. That guarantees an active capture can include the next cold launch instead of depending on an asynchronous preferences flush.
 
 Capture writes happen on a single bounded background queue. Disk data is bounded to two capture segments of at most 2 MiB each (`capture.log` and `capture.previous.log`). If the writer queue is saturated, new persistence writes are dropped rather than blocking the caller; the dropped count is included in exports.
 
-The latest uncaught crash is retained separately as a bounded snapshot of the most recent events, then the previous Android crash handler is invoked normally.
+The latest uncaught crash is retained separately as a bounded snapshot of the most recent events, then the previous Android crash handler is invoked normally. Exported reports are also bounded by count: only the three newest reports are retained.
 
 `Clear` removes the in-memory buffer, persisted capture segments, exports, and retained crash. It does not turn off an active capture window.
 
@@ -33,13 +33,13 @@ The latest uncaught crash is retained separately as a bounded snapshot of the mo
 
 Diagnostics redact sensitive metadata keys and common inline credential forms before an event reaches the buffer, logcat, disk, or an exported report. This includes authorization headers, cookies, bearer credentials, token/secret/password/API-key/session-key metadata, and sensitive URL query parameters.
 
-Reports are stored in the app-private files directory. The dev-only share action uses a non-exported `FileProvider` and grants read access only to the chosen Android share target.
+Reports are stored in the app-private files directory. The share action uses a non-exported, dev-only `FileProvider` and grants read access only to the chosen Android share target.
 
 ## Dev control panel
 
-The control Activity is registered only by the `dev` flavor. It is therefore present in `devDebug` and `devBenchmark`, but not in `prod` builds.
+The control Activity, share helper, and diagnostics `FileProvider` live physically under the `dev` source set. They are therefore present in `devDebug` and `devBenchmark`, but are not compiled into `prod` variants. The process-wide diagnostics core remains in the main source set so production builds can retain bounded crash diagnostics and accept future low-overhead probes without exposing a developer UI.
 
-Open it on a debug install:
+Open the panel on a debug install:
 
 ```powershell
 adb shell am start -n com.dev.bitchord/com.music.bitchord.diagnostics.DiagnosticsActivity
