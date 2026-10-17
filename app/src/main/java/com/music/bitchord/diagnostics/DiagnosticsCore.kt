@@ -80,23 +80,22 @@ data class CaptureWindow(
 object DiagnosticSanitizer {
     const val REDACTED = "<redacted>"
 
-    private val sensitiveKey = Regex(
-        pattern = "(?:^|[_\\-.])(authorization|cookie|token|secret|password|passwd|api[_-]?key|session)(?:$|[_\\-.])",
-        option = RegexOption.IGNORE_CASE,
-    )
-    private val compactSensitiveKey = Regex(
-        pattern = "^(authorization|cookie|access_?token|refresh_?token|id_?token|password|passwd|secret|api_?key|session(?:id)?)$",
-        option = RegexOption.IGNORE_CASE,
-    )
     private val authorizationHeader = Regex(
         pattern = "(?i)(\\bauthorization\\s*[:=]\\s*)(?:bearer\\s+)?[^\\s,;]+",
     )
     private val cookieHeader = Regex(
         pattern = "(?i)(\\bcookie\\s*[:=]\\s*)[^\\s]+",
     )
-    private val sensitiveQueryValue = Regex(
-        pattern = "(?i)([?&](?:access_?token|refresh_?token|id_?token|token|secret|password|passwd|api_?key|session(?:id)?)=)[^&#\\s]+",
+    private val standaloneBearer = Regex(
+        pattern = "(?i)(\\bbearer\\s+)[A-Za-z0-9._~+/=-]+",
     )
+    private val knownCookieValue = Regex(
+        pattern = "(?i)(\\b(?:SID|HSID|SSID|APISID|SAPISID|__Secure-[A-Za-z0-9_-]+)\\s*=\\s*)[^\\s;,&]+",
+    )
+    private val sensitiveQueryValue = Regex(
+        pattern = "(?i)([?&](?:access_?token|refresh_?token|id_?token|token|secret|password|passwd|api_?key|session(?:id|key)?)=)[^&#\\s]+",
+    )
+    private val keySeparators = Regex("[_\\-.]")
 
     fun metadata(values: Map<String, String>): Map<String, String> =
         values.mapValues { (key, value) ->
@@ -107,13 +106,24 @@ object DiagnosticSanitizer {
         var sanitized = value
         sanitized = authorizationHeader.replace(sanitized) { "${it.groupValues[1]}$REDACTED" }
         sanitized = cookieHeader.replace(sanitized) { "${it.groupValues[1]}$REDACTED" }
+        sanitized = standaloneBearer.replace(sanitized) { "${it.groupValues[1]}$REDACTED" }
+        sanitized = knownCookieValue.replace(sanitized) { "${it.groupValues[1]}$REDACTED" }
         sanitized = sensitiveQueryValue.replace(sanitized) { "${it.groupValues[1]}$REDACTED" }
         return sanitized
     }
 
     private fun isSensitiveKey(key: String): Boolean {
-        val normalized = key.trim().lowercase(Locale.ROOT)
-        return compactSensitiveKey.matches(normalized) || sensitiveKey.containsMatchIn(normalized)
+        val compact = key.trim().lowercase(Locale.ROOT).replace(keySeparators, "")
+        return compact == "authorization" ||
+            compact == "cookie" ||
+            compact == "session" ||
+            compact.endsWith("token") ||
+            compact.endsWith("secret") ||
+            compact.endsWith("password") ||
+            compact.endsWith("passwd") ||
+            compact.endsWith("apikey") ||
+            compact.endsWith("sessionid") ||
+            compact.endsWith("sessionkey")
     }
 }
 
