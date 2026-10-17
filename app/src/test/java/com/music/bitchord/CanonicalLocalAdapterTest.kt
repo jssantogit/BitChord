@@ -59,6 +59,18 @@ class CanonicalLocalAdapterTest {
     }
 
     @Test
+    fun roomBackedRowsKeepLegacyTitleOrdering() {
+        val rows = listOf(
+            localRow(youtubeVideoId = null).copy(title = "Zebra", artistDisplay = "A Artist"),
+            localRow(youtubeVideoId = null).copy(title = "Alpha", artistDisplay = "Z Artist"),
+        )
+
+        val ordered = CanonicalLocalLibrary.orderLocalRows(rows)
+
+        assertEquals(listOf("Alpha", "Zebra"), ordered.map(CanonicalLocalRow::title))
+    }
+
+    @Test
     fun durationParserKeepsValidMinuteAndHourFormats() {
         assertEquals(383_000L, CanonicalLocalLibrary.parseDurationMillis("6:23"))
         assertEquals(3_723_000L, CanonicalLocalLibrary.parseDurationMillis("1:02:03"))
