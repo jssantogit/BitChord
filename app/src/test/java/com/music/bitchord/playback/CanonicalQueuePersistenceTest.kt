@@ -7,6 +7,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class CanonicalQueuePersistenceTest {
@@ -82,7 +83,7 @@ class CanonicalQueuePersistenceTest {
                 path = "/storage/emulated/0/Music/Moved Track.flac",
             ),
         )
-        val restored = BoundedContextPersistence.rehydrate(decoded, restoreResolver)
+        val restored = requireNotNull(BoundedContextPersistence.rehydrate(decoded, restoreResolver))
         val projected = requireNotNull(BoundedContextPersistence.restoreProjection(restored))
 
         assertEquals(listOf(identity), restored.contextIdentities)
@@ -91,6 +92,57 @@ class CanonicalQueuePersistenceTest {
         assertEquals(replacementUri, projected.entries.single().song.localUri)
         assertEquals("/storage/emulated/0/Music/Moved Track.flac", projected.entries.single().song.localPath)
         assertEquals(12_345L, projected.positionMs)
+    }
+
+    @Test
+    fun `canonical restore is rejected when recording no longer has a playable asset`() = runBlocking {
+        val source = QueueSource("Local album", PlaybackSourceType.BROWSE, "local-album")
+        val identity = CanonicalQueueIdentity("recording-uuid")
+        val staleUri = "content://media/external/audio/media/42"
+        val song = Song(
+            videoId = staleUri,
+            title = "Track",
+            artist = "Artist",
+            thumbnailUrl = null,
+            localUri = staleUri,
+            localPath = "/storage/emulated/0/Music/Removed Track.flac",
+            queueTier = QueueTier.CONTEXT,
+            queueEntryId = "queue-entry",
+            playbackSource = source.title,
+            playbackSourceType = source.type,
+            playbackSourceId = source.id,
+        )
+        val state = BoundedContextPersistence.State(
+            context = ContextSnapshot(
+                contextToken = "context-token",
+                sourceKey = "${source.type.name}:${source.id}",
+                browseId = source.id,
+                songs = listOf(song.copy(queueEntryId = null)),
+                version = 0L,
+                continuationToken = null,
+                continuationState = ContinuationState.EXHAUSTED,
+            ),
+            source = source,
+            window = QueueWindow(1).startAt(0).snapshot(),
+            entries = listOf(
+                BoundedContextPersistence.Entry(
+                    song = song,
+                    canonicalIndex = 0,
+                    cycleId = 0L,
+                    canonicalIdentity = identity,
+                ),
+            ),
+            currentIndex = 0,
+            positionMs = 12_345L,
+            contextIdentities = listOf(identity),
+        )
+
+        assertNull(
+            BoundedContextPersistence.rehydrate(
+                state,
+                CanonicalPlaybackResolver(PlaybackCatalog { emptyList() }),
+            ),
+        )
     }
 
     private fun resolver(asset: PlayableMediaAsset): PlaybackResolver =
