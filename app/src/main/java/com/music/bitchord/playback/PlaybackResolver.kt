@@ -40,26 +40,59 @@ fun interface PlaybackCatalog {
 interface PlaybackResolver {
     suspend fun identify(song: Song): CanonicalQueueIdentity?
     suspend fun resolve(identity: CanonicalQueueIdentity): PlayableMediaAsset?
+
+    suspend fun identifyAll(songs: List<Song>): List<CanonicalQueueIdentity?> =
+        songs.map { identify(it) }
+
+    suspend fun resolveAll(
+        identities: List<CanonicalQueueIdentity?>,
+    ): List<PlayableMediaAsset?> = identities.map { identity ->
+        identity?.let { resolve(it) }
+    }
 }
 
 class CanonicalPlaybackResolver(
     private val catalog: PlaybackCatalog,
 ) : PlaybackResolver {
 
-    override suspend fun identify(song: Song): CanonicalQueueIdentity? {
+    override suspend fun identify(song: Song): CanonicalQueueIdentity? =
+        identify(song, catalog.playableAssets())
+
+    override suspend fun resolve(identity: CanonicalQueueIdentity): PlayableMediaAsset? =
+        resolve(identity, catalog.playableAssets())
+
+    override suspend fun identifyAll(songs: List<Song>): List<CanonicalQueueIdentity?> {
+        val assets = catalog.playableAssets()
+        return songs.map { identify(it, assets) }
+    }
+
+    override suspend fun resolveAll(
+        identities: List<CanonicalQueueIdentity?>,
+    ): List<PlayableMediaAsset?> {
+        val assets = catalog.playableAssets()
+        val byRecording = assets.associateBy(PlayableMediaAsset::recordingId)
+        return identities.map { identity -> identity?.let { byRecording[it.recordingId] } }
+    }
+
+    private fun identify(
+        song: Song,
+        assets: List<PlayableMediaAsset>,
+    ): CanonicalQueueIdentity? {
         val localUri = song.localUri?.takeIf(String::isNotBlank)
         val localPath = song.localPath?.takeIf(String::isNotBlank)
         if (localUri == null && localPath == null) return null
 
-        val asset = catalog.playableAssets().firstOrNull { candidate ->
+        val asset = assets.firstOrNull { candidate ->
             (localUri != null && candidate.uri == localUri) ||
                 (localPath != null && candidate.path == localPath)
         } ?: return null
         return CanonicalQueueIdentity(asset.recordingId)
     }
 
-    override suspend fun resolve(identity: CanonicalQueueIdentity): PlayableMediaAsset? =
-        catalog.playableAssets().firstOrNull { it.recordingId == identity.recordingId }
+    private fun resolve(
+        identity: CanonicalQueueIdentity,
+        assets: List<PlayableMediaAsset>,
+    ): PlayableMediaAsset? = assets.firstOrNull { it.recordingId == identity.recordingId }
 }
 
 /**
