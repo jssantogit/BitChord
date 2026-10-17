@@ -38,6 +38,9 @@ class DiagnosticsCoreTest {
                 "Authorization" to "Bearer very-secret",
                 "cookie" to "SID=secret-cookie",
                 "access_token" to "secret-token",
+                "accessToken" to "secret-camel-token",
+                "apiKey" to "secret-api-key",
+                "sessionKey" to "secret-session-key",
                 "password" to "secret-password",
             ),
         )
@@ -46,6 +49,9 @@ class DiagnosticsCoreTest {
         assertEquals(DiagnosticSanitizer.REDACTED, sanitized["Authorization"])
         assertEquals(DiagnosticSanitizer.REDACTED, sanitized["cookie"])
         assertEquals(DiagnosticSanitizer.REDACTED, sanitized["access_token"])
+        assertEquals(DiagnosticSanitizer.REDACTED, sanitized["accessToken"])
+        assertEquals(DiagnosticSanitizer.REDACTED, sanitized["apiKey"])
+        assertEquals(DiagnosticSanitizer.REDACTED, sanitized["sessionKey"])
         assertEquals(DiagnosticSanitizer.REDACTED, sanitized["password"])
     }
 
@@ -61,6 +67,15 @@ class DiagnosticsCoreTest {
         assertTrue(sanitized.contains("id=42"))
         assertTrue(sanitized.contains("safe=yes"))
         assertTrue(sanitized.contains(DiagnosticSanitizer.REDACTED))
+    }
+
+    @Test
+    fun `standalone bearer credentials and known cookie values are redacted`() {
+        val sanitized = DiagnosticSanitizer.text("request failed Bearer abc.def SID=qwerty safe=value")
+
+        assertFalse(sanitized.contains("abc.def"))
+        assertFalse(sanitized.contains("qwerty"))
+        assertTrue(sanitized.contains("safe=value"))
     }
 
     @Test
