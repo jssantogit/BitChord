@@ -69,9 +69,26 @@ plugins {
     id("com.android.application") version "8.10.1" apply false
     id("com.android.library") version "8.10.1" apply false
     id("org.jetbrains.kotlin.android") version "2.3.20" apply false
+    id("org.jetbrains.kotlin.kapt") version "2.3.20" apply false
     id("org.jetbrains.kotlin.multiplatform") version "2.3.20" apply false
     id("org.jetbrains.kotlin.jvm") version "2.3.20" apply false
     id("org.jetbrains.kotlin.plugin.compose") version "2.3.20" apply false
     id("org.jetbrains.kotlin.plugin.serialization") version "2.3.20" apply false
     id("org.jetbrains.compose") version "1.10.3" apply false
+}
+
+/*
+ * Slice 1 keeps the existing AGP/Gradle baseline intact. Current KSP releases
+ * require a newer AGP/Gradle floor, so Room uses kapt temporarily rather than
+ * turning the canonical-local slice into an unrelated toolchain migration.
+ * Keep the dependency injection here bounded to :app and migrate it into the
+ * module build when the project deliberately upgrades its Android toolchain.
+ */
+project(":app") {
+    pluginManager.withPlugin("org.jetbrains.kotlin.android") {
+        pluginManager.apply("org.jetbrains.kotlin.kapt")
+        dependencies.add("implementation", "androidx.room:room-runtime:2.8.5")
+        dependencies.add("implementation", "androidx.room:room-ktx:2.8.5")
+        dependencies.add("kapt", "androidx.room:room-compiler:2.8.5")
+    }
 }
