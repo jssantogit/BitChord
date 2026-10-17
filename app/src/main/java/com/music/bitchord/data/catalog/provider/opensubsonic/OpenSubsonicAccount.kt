@@ -29,7 +29,8 @@ internal data class OpenSubsonicAccountRecord(
 
 /**
  * Editor state. `secretReplacement == null` means "keep the stored credential"
- * when one exists; a stored secret is never copied back into this object.
+ * when the server and authentication mode are unchanged; a stored secret is
+ * never copied back into this object.
  */
 internal data class OpenSubsonicAccountDraft(
     val serverUrl: String,
@@ -178,11 +179,15 @@ internal class OpenSubsonicAccountRepository(
         draft: OpenSubsonicAccountDraft,
     ): String {
         val changedMode = existing != null && existing.authMode != draft.authMode
-        if (changedMode && draft.secretReplacement == null) {
-            throw IllegalArgumentException("Enter a new credential when changing authentication mode")
+        val changedServer = existing != null && existing.serverUrl != normalizedServerUrl(draft.serverUrl)
+        val credentialContextChanged = changedMode || changedServer
+        if (credentialContextChanged && draft.secretReplacement == null) {
+            throw IllegalArgumentException(
+                "Enter a new credential when changing the server or authentication mode",
+            )
         }
         val raw = draft.secretReplacement
-            ?: existing?.takeIf { !changedMode }?.let { credentials.read(it.accountId) }
+            ?: existing?.takeIf { !credentialContextChanged }?.let { credentials.read(it.accountId) }
             ?: throw IllegalArgumentException("OpenSubsonic credential is required")
         return when (draft.authMode) {
             OpenSubsonicAuthMode.API_KEY -> raw.trim().also {
@@ -217,6 +222,8 @@ internal class OpenSubsonicAccountRepository(
         is OpenSubsonicAuth.ApiKey -> auth.value
         is OpenSubsonicAuth.Password -> auth.password
     }
+
+    private fun normalizedServerUrl(value: String): String = value.trim().trimEnd('/')
 
     private companion object {
         const val PREVIEW_ACCOUNT_ID = "preview"
