@@ -73,6 +73,22 @@ class DiagnosticFileStoreTest {
     }
 
     @Test
+    fun `exports keep only the three newest reports`() {
+        val root = temporaryFolder.newFolder("diagnostics")
+        val store = DiagnosticFileStore(rootDir = root, maxCaptureBytes = 256L)
+
+        repeat(5) { index ->
+            val report = store.createExport(emptyList(), emptyList(), "report-$index.txt")
+            report.setLastModified(1_000L + index)
+        }
+
+        assertEquals(
+            listOf("report-2.txt", "report-3.txt", "report-4.txt"),
+            store.exportFiles().map { it.name },
+        )
+    }
+
+    @Test
     fun `clear removes persisted diagnostics and exports`() {
         val root = temporaryFolder.newFolder("diagnostics")
         val store = DiagnosticFileStore(rootDir = root, maxCaptureBytes = 256L)
