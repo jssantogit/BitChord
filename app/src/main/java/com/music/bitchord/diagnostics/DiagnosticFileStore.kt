@@ -84,6 +84,7 @@ class DiagnosticFileStore(
                 writer.appendLine("<none>")
             }
         }
+        pruneExportsLocked()
         export
     }
 
@@ -128,6 +129,14 @@ class DiagnosticFileStore(
     private fun captureFilesLocked(): List<File> =
         listOf(previousCaptureFile(), currentCaptureFile()).filter(File::isFile)
 
+    private fun pruneExportsLocked() {
+        val reports = exportsDir().listFiles()?.filter(File::isFile).orEmpty()
+        reports
+            .sortedWith(compareBy<File> { it.lastModified() }.thenBy { it.name })
+            .dropLast(MAX_EXPORT_FILES)
+            .forEach(File::delete)
+    }
+
     private fun boundedLineBytes(line: String): ByteArray {
         val terminated = if (line.endsWith('\n')) line else "$line\n"
         val bytes = terminated.toByteArray(Charsets.UTF_8)
@@ -140,5 +149,9 @@ class DiagnosticFileStore(
             .replace(Regex("[^A-Za-z0-9._-]"), "_")
             .trim('.')
         return sanitized.ifBlank { "diagnostics.txt" }
+    }
+
+    private companion object {
+        const val MAX_EXPORT_FILES = 3
     }
 }
