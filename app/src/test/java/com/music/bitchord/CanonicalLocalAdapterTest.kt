@@ -62,6 +62,21 @@ class CanonicalLocalAdapterTest {
         assertNull(CanonicalLocalLibrary.parseDurationMillis("1:-1"))
     }
 
+    @Test
+    fun staleSourceKeySelectionHandlesLibrariesBeyondSqliteBindLimits() {
+        val existing = (0 until 2_500).map { index ->
+            "content://media/external/audio/media/$index"
+        }
+        val seen = existing.drop(400)
+
+        val stale = CanonicalLocalLibrary.staleSourceKeys(
+            existingSourceKeys = existing,
+            seenSourceKeys = seen,
+        )
+
+        assertEquals(existing.take(400), stale)
+    }
+
     private fun localRow(youtubeVideoId: String?) = CanonicalLocalRow(
         recordingId = "recording-uuid",
         mediaAssetId = "asset-uuid",
