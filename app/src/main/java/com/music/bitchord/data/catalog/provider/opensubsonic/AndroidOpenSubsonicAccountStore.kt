@@ -11,8 +11,12 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 internal class SharedPrefsOpenSubsonicAccountPersistence(
     context: Context,
@@ -42,6 +46,20 @@ internal class SharedPrefsOpenSubsonicAccountPersistence(
             lastSyncSummary = prefs.getString(KEY_LAST_SYNC_SUMMARY, null),
         )
     }
+
+    /**
+     * Account metadata is also Library navigation state. Observe the same plain
+     * preference boundary so configuring/forgetting a connection updates Library
+     * without touching the credential store or polling.
+     */
+    fun observe(): Flow<OpenSubsonicAccountRecord?> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            trySend(read())
+        }
+        trySend(read())
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
 
     override fun write(record: OpenSubsonicAccountRecord) {
         prefs.edit().clear()

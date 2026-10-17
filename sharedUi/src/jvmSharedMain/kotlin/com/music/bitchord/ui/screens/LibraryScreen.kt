@@ -229,9 +229,18 @@ fun LibraryScreen(
     }
 }
 
-/** One of the Library's folder rows: the page [item] opens, behind [icon]. */
+/**
+ * One of the Library's folder rows. [item] remains the legacy browse payload
+ * for existing links; [onClick] lets a platform-owned library route without
+ * inventing a ShelfItem browse/video id merely to enter a non-legacy screen.
+ */
 /** [logo], when set, is drawn in place of [icon] — a service's own mark. */
-data class LibraryLink(val item: ShelfItem, val icon: ImageVector, val logo: DrawableResource? = null)
+data class LibraryLink(
+    val item: ShelfItem,
+    val icon: ImageVector,
+    val logo: DrawableResource? = null,
+    val onClick: (() -> Unit)? = null,
+)
 
 /**
  * The folders as a plain list — icon, name, chevron, hairlines between — the
@@ -247,7 +256,7 @@ private fun LibraryLinkList(links: List<LibraryLink>, onClick: (ShelfItem) -> Un
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 54.dp)
-                    .clickable { onClick(link.item) }
+                    .clickable { link.onClick?.invoke() ?: onClick(link.item) }
                     .padding(horizontal = PAGE_GUTTER),
             ) {
                 if (link.logo != null) {
