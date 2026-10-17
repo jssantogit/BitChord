@@ -55,15 +55,25 @@ class CanonicalPlaybackResolver(
     private val catalog: PlaybackCatalog,
 ) : PlaybackResolver {
 
-    override suspend fun identify(song: Song): CanonicalQueueIdentity? =
-        identify(song, catalog.playableAssets())
+    override suspend fun identify(song: Song): CanonicalQueueIdentity? {
+        val identity = identify(song, catalog.playableAssets())
+        CanonicalQueueIdentityHints.rememberEntry(song.queueEntryId, identity)
+        return identity
+    }
 
-    override suspend fun resolve(identity: CanonicalQueueIdentity): PlayableMediaAsset? =
-        resolve(identity, catalog.playableAssets())
+    override suspend fun resolve(identity: CanonicalQueueIdentity): PlayableMediaAsset? {
+        val asset = resolve(identity, catalog.playableAssets())
+        CanonicalQueueIdentityHints.rememberResolved(listOf(identity), listOf(asset))
+        return asset
+    }
 
     override suspend fun identifyAll(songs: List<Song>): List<CanonicalQueueIdentity?> {
         val assets = catalog.playableAssets()
-        return songs.map { identify(it, assets) }
+        val identities = songs.map { identify(it, assets) }
+        songs.indices.forEach { index ->
+            CanonicalQueueIdentityHints.rememberEntry(songs[index].queueEntryId, identities[index])
+        }
+        return identities
     }
 
     override suspend fun resolveAll(
@@ -71,7 +81,9 @@ class CanonicalPlaybackResolver(
     ): List<PlayableMediaAsset?> {
         val assets = catalog.playableAssets()
         val byRecording = assets.associateBy(PlayableMediaAsset::recordingId)
-        return identities.map { identity -> identity?.let { byRecording[it.recordingId] } }
+        val resolved = identities.map { identity -> identity?.let { byRecording[it.recordingId] } }
+        CanonicalQueueIdentityHints.rememberResolved(identities, resolved)
+        return resolved
     }
 
     private fun identify(
