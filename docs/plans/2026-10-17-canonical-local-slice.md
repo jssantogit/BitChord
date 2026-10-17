@@ -26,7 +26,7 @@ Out of scope:
 - Library redesign (Slice 4).
 - Remote providers, MusicBrainz reconciliation, recommendations, slskd, or YouTube removal.
 - Full Artist canonicalization. The first slice stores the artist byline as recording/release display metadata.
-- Upgrading AGP/Gradle solely to adopt the newest KSP plugin.
+- AGP/Gradle upgrades unrelated to this slice.
 
 ## Data model
 
@@ -76,11 +76,13 @@ No caller is allowed to treat `videoId` as the canonical Recording id.
 
 ## Build-tool rule
 
-Room stable `2.8.5` is used. The current BitChord baseline is AGP `8.10.1` + Gradle `8.11.1`; current KSP `2.3.x` requires a newer AGP/Gradle floor. To keep Slice 1 bounded, Room code generation therefore uses Kotlin `kapt` with the existing Kotlin `2.3.20` toolchain. This is a compatibility choice, not a long-term preference: migrate Room processing to KSP when the project deliberately upgrades AGP/Gradle.
+Room stable `2.8.5` uses Kotlin Symbol Processing for this Kotlin module. KSP is pinned to `2.3.11`: that release supports AGP `8.10.0+`, so it is compatible with the current BitChord baseline of AGP `8.10.1` + Gradle `8.11.1` + Kotlin `2.3.20`. KSP `2.3.12` raised its minimum supported AGP to `8.12.0`, so it must not be selected accidentally while this baseline remains unchanged.
+
+The earlier kapt fallback was removed after CI failed in `:app:kaptDevDebugKotlin`; it also contradicted Room's current Kotlin guidance, which uses KSP for Kotlin sources. This correction stays bounded to Room code generation and does not upgrade AGP/Gradle.
 
 ## Implementation steps
 
-1. Add Room 2.8.5 + kapt build support without upgrading AGP/Gradle.
+1. Add Room 2.8.5 + KSP 2.3.11 build support without upgrading AGP/Gradle.
 2. Add failing unit tests for the pure local canonical adapter/identity boundary before implementation.
 3. Add Room entities, DAO and `CanonicalCatalogDatabase` version 1.
 4. Add `CanonicalLocalLibrary` sync/import boundary with a small local candidate/compatibility mapper.
