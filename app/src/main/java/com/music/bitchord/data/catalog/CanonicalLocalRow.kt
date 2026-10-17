@@ -1,6 +1,7 @@
 package com.music.bitchord.data.catalog
 
 import com.music.bitchord.data.model.Song
+import java.util.Locale
 
 /**
  * Read model for one playable local asset joined to its canonical recording.
@@ -49,15 +50,10 @@ internal fun CanonicalLocalRow.toLegacySong(): Song = Song(
     trackNumber = trackNumber,
 )
 
+/** Keep the pre-Room Local Music display contract: total minutes + seconds. */
 private fun Long.toDurationText(): String {
     val totalSeconds = this / 1_000L
+    val minutes = totalSeconds / 60L
     val seconds = totalSeconds % 60L
-    val totalMinutes = totalSeconds / 60L
-    return if (totalMinutes >= 60L) {
-        val hours = totalMinutes / 60L
-        val minutes = totalMinutes % 60L
-        "%d:%02d:%02d".format(hours, minutes, seconds)
-    } else {
-        "%d:%02d".format(totalMinutes, seconds)
-    }
+    return String.format(Locale.ROOT, "%d:%02d", minutes, seconds)
 }
