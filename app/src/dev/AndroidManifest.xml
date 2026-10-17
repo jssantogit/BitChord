@@ -10,5 +10,21 @@
             android:name="com.music.bitchord.data.catalog.CanonicalCatalogInitializerProvider"
             android:authorities="${applicationId}.canonical-catalog-init"
             android:exported="false" />
+
+        <activity
+            android:name="com.music.bitchord.diagnostics.DiagnosticsActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="BitChord Diagnostics" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.diagnostics-files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/diagnostics_file_paths" />
+        </provider>
     </application>
 </manifest>
