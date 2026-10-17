@@ -26,4 +26,15 @@
     <string name="opensubsonic_credential_kept">Leave blank to keep the credential already stored on this device.</string>
     <string name="opensubsonic_credential_change_only">Enter a credential. Stored credentials are never displayed again.</string>
     <string name="opensubsonic_save_failed">Could not save this connection.</string>
+
+    <string name="remote_library_browse_subtitle">Synced canonical library · available offline</string>
+    <string name="remote_library_songs">Songs</string>
+    <string name="remote_library_albums">Albums</string>
+    <string name="remote_library_album">Album</string>
+    <string name="remote_library_counts">%1$d songs · %2$d albums</string>
+    <string name="remote_library_offline_hint">This view reads the local canonical catalog. Opening it does not contact the server.</string>
+    <string name="remote_library_empty">No synchronized songs yet. Use Sync now in Sources.</string>
+    <string name="remote_library_playback_deferred">Remote playback is not connected in this slice. These rows are intentionally browse-only.</string>
+    <string name="remote_library_track_count">%1$d tracks</string>
+    <string name="remote_library_back">Back</string>
 </resources>
