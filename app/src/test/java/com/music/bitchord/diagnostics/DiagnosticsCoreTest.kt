@@ -56,6 +56,20 @@ class DiagnosticsCoreTest {
     }
 
     @Test
+    fun `diagnostic text and metadata are size bounded`() {
+        val longText = "x".repeat(DiagnosticSanitizer.MAX_TEXT_CHARS + 100)
+        val metadata = (0 until DiagnosticSanitizer.MAX_METADATA_ENTRIES + 5)
+            .associate { index -> "key$index" to longText }
+
+        val sanitizedText = DiagnosticSanitizer.text(longText)
+        val sanitizedMetadata = DiagnosticSanitizer.metadata(metadata)
+
+        assertEquals(DiagnosticSanitizer.MAX_TEXT_CHARS, sanitizedText.length)
+        assertEquals(DiagnosticSanitizer.MAX_METADATA_ENTRIES, sanitizedMetadata.size)
+        assertTrue(sanitizedMetadata.values.all { it.length <= DiagnosticSanitizer.MAX_METADATA_VALUE_CHARS })
+    }
+
+    @Test
     fun `sensitive inline values and url query parameters are redacted`() {
         val message = "Authorization: Bearer abc Cookie: SID=qwerty https://example.test/play?id=42&token=hunter2&safe=yes"
 
