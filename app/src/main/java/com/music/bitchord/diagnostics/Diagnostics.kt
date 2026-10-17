@@ -12,12 +12,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
-import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.RejectedExecutionHandler
-import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
 
 /**
@@ -49,18 +43,8 @@ object Diagnostics {
 
     private val sessionId: String = UUID.randomUUID().toString().substring(0, 8)
     private val buffer = DiagnosticBuffer(BUFFER_CAPACITY)
-    private val droppedWrites = AtomicLong(0L)
     private val installLock = Any()
-    private val rejectionHandler = RejectedExecutionHandler { _, _ -> droppedWrites.incrementAndGet() }
-    private val writer = ThreadPoolExecutor(
-        1,
-        1,
-        0L,
-        TimeUnit.MILLISECONDS,
-        ArrayBlockingQueue(WRITER_QUEUE_CAPACITY),
-        { runnable -> Thread(runnable, "diagnostics-writer").apply { isDaemon = true } },
-        rejectionHandler,
-    )
+    private val writer = DiagnosticWriteQueue(WRITER_QUEUE_CAPACITY)
 
     @Volatile
     private var application: Application? = null
@@ -230,7 +214,7 @@ object Diagnostics {
     /** Clears memory, capture segments, exports and retained crash. Capture mode itself stays enabled. */
     fun clear() {
         buffer.clear()
-        writer.execute { fileStore?.clear() }
+        writer.offer { fileStore?.clear() }
         event(category = DiagnosticCategory.APP, name = "diagnostics_cleared")
     }
 
@@ -240,11 +224,11 @@ object Diagnostics {
 
     /**
      * Creates a stable report file. Call from a background dispatcher when used
-     * by UI; this waits briefly for already queued capture writes to drain.
+     * by UI; this waits briefly for already issued capture writes to resolve.
      */
     fun createExport(): File {
         val store = checkNotNull(fileStore) { "Diagnostics.install must be called first" }
-        flushWriter(timeoutMillis = 2_000L)
+        writer.awaitWritesIssuedBeforeCall(timeoutMillis = 2_000L)
         val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
         return store.createExport(
             metadataLines = reportMetadataLines(),
@@ -258,7 +242,7 @@ object Diagnostics {
         val line = DiagnosticFormatter.format(event)
         if (BuildConfig.DEBUG) logcat(event.level, line)
         if (isCaptureActive(event.epochMillis)) {
-            writer.execute { fileStore?.appendCapture(line) }
+            writer.offer { fileStore?.appendCapture(line) }
         }
     }
 
@@ -327,16 +311,6 @@ object Diagnostics {
         }
     }
 
-    private fun flushWriter(timeoutMillis: Long) {
-        val latch = CountDownLatch(1)
-        try {
-            writer.execute { latch.countDown() }
-            latch.await(timeoutMillis, TimeUnit.MILLISECONDS)
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-        }
-    }
-
     private fun reportMetadataLines(): List<String> {
         val status = captureStatus()
         return listOf(
@@ -350,7 +324,7 @@ object Diagnostics {
             "session=$sessionId",
             "captureActive=${status.active}",
             "captureExpiresAt=${status.expiresAtEpochMillis ?: 0L}",
-            "droppedPersistenceWrites=${droppedWrites.get()}",
+            "droppedPersistenceWrites=${writer.droppedWrites}",
         )
     }
 
