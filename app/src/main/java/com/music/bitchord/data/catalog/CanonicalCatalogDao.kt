@@ -68,6 +68,28 @@ internal interface CanonicalCatalogDao {
         SELECT
             recording.id AS recordingId,
             asset.id AS mediaAssetId,
+            asset.provider AS provider,
+            asset.sourceKey AS sourceKey,
+            recording.title AS title,
+            recording.artistDisplay AS artistDisplay,
+            recording.durationMs AS durationMs,
+            asset.artworkUri AS artworkUri,
+            asset.uri AS uri,
+            asset.dateAddedSeconds AS dateAddedSeconds
+        FROM catalog_media_asset AS asset
+        INNER JOIN catalog_recording AS recording
+            ON recording.id = asset.recordingId
+        WHERE asset.provider = :provider
+        ORDER BY recording.artistDisplay COLLATE NOCASE, recording.title COLLATE NOCASE
+        """,
+    )
+    suspend fun providerRows(provider: String): List<CanonicalProviderRow>
+
+    @Query(
+        """
+        SELECT
+            recording.id AS recordingId,
+            asset.id AS mediaAssetId,
             asset.sourceKey AS sourceKey,
             recording.title AS title,
             recording.artistDisplay AS artistDisplay,
