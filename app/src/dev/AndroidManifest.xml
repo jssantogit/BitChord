@@ -18,7 +18,7 @@
             android:label="BitChord Diagnostics" />
 
         <provider
-            android:name="androidx.core.content.FileProvider"
+            android:name="com.music.bitchord.diagnostics.DiagnosticsFileProvider"
             android:authorities="${applicationId}.diagnostics-files"
             android:exported="false"
             android:grantUriPermissions="true">
