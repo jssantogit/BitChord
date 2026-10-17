@@ -36,8 +36,9 @@ object Diagnostics {
     private const val BUFFER_CAPACITY = 1_000
     private const val WRITER_QUEUE_CAPACITY = 512
     private const val MAX_CAPTURE_BYTES = 2L * 1024L * 1024L
-    private const val MAX_ERROR_CHARS = 32_000
+    private const val MAX_ERROR_CHARS = DiagnosticSanitizer.MAX_TEXT_CHARS
     private const val MAX_CRASH_EVENTS = 200
+    private const val MAX_CRASH_CHARS = 512_000
     private const val DEFAULT_CAPTURE_MILLIS = 60L * 60L * 1_000L
 
     data class CaptureStatus(
@@ -72,9 +73,6 @@ object Diagnostics {
 
     @Volatile
     private var installed = false
-
-    @Volatile
-    private var previousCrashHandler: Thread.UncaughtExceptionHandler? = null
 
     fun install(app: Application) {
         if (installed) return
@@ -113,9 +111,9 @@ object Diagnostics {
             sessionId = sessionId,
             level = level,
             category = category,
-            name = DiagnosticSanitizer.text(name),
+            name = DiagnosticSanitizer.text(name, 256),
             message = message?.let(DiagnosticSanitizer::text),
-            threadName = Thread.currentThread().name,
+            threadName = DiagnosticSanitizer.text(Thread.currentThread().name, 128),
             durationNanos = durationNanos,
             metadata = DiagnosticSanitizer.metadata(metadata),
             error = error?.let(::safeThrowableText),
@@ -172,11 +170,20 @@ object Diagnostics {
         require(durationMillis > 0L) { "durationMillis must be greater than zero" }
         val app = checkNotNull(application) { "Diagnostics.install must be called first" }
         val expiresAt = System.currentTimeMillis() + durationMillis
-        captureWindow = CaptureWindow(expiresAt)
-        app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val persisted = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putLong(KEY_CAPTURE_EXPIRES_AT, expiresAt)
-            .apply()
+            .commit()
+        if (!persisted) {
+            event(
+                category = DiagnosticCategory.APP,
+                name = "capture_start_failed",
+                level = DiagnosticLevel.WARN,
+                message = "Could not persist capture expiry",
+            )
+            return CaptureStatus(active = false, expiresAtEpochMillis = null, remainingMillis = 0L)
+        }
+        captureWindow = CaptureWindow(expiresAt)
         event(
             category = DiagnosticCategory.APP,
             name = "capture_started",
@@ -191,10 +198,18 @@ object Diagnostics {
             event(category = DiagnosticCategory.APP, name = "capture_stopped")
         }
         captureWindow = null
-        app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val removed = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .remove(KEY_CAPTURE_EXPIRES_AT)
-            .apply()
+            .commit()
+        if (!removed) {
+            event(
+                category = DiagnosticCategory.APP,
+                name = "capture_stop_persist_failed",
+                level = DiagnosticLevel.WARN,
+                message = "Could not remove persisted capture expiry",
+            )
+        }
         return captureStatus()
     }
 
@@ -275,7 +290,6 @@ object Diagnostics {
 
     private fun installCrashHandler() {
         val previous = Thread.getDefaultUncaughtExceptionHandler()
-        previousCrashHandler = previous
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
                 val crashEvent = DiagnosticEvent(
@@ -286,7 +300,7 @@ object Diagnostics {
                     category = DiagnosticCategory.APP,
                     name = "uncaught_exception",
                     message = null,
-                    threadName = thread.name,
+                    threadName = DiagnosticSanitizer.text(thread.name, 128),
                     durationNanos = null,
                     metadata = emptyMap(),
                     error = safeThrowableText(throwable),
@@ -299,7 +313,7 @@ object Diagnostics {
                     appendLine()
                     appendLine("[events]")
                     snapshot.forEach { appendLine(DiagnosticFormatter.format(it)) }
-                }
+                }.take(MAX_CRASH_CHARS)
                 fileStore?.writeLastCrash(crashText)
             } catch (diagnosticsFailure: Throwable) {
                 Log.e(LOG_TAG, "Failed to retain crash diagnostics", diagnosticsFailure)
@@ -341,7 +355,7 @@ object Diagnostics {
     }
 
     private fun safeThrowableText(error: Throwable): String =
-        DiagnosticSanitizer.text(error.stackTraceToString().take(MAX_ERROR_CHARS))
+        DiagnosticSanitizer.text(error.stackTraceToString(), MAX_ERROR_CHARS)
 
     private fun categoryForTag(tag: String): DiagnosticCategory {
         val normalized = tag.lowercase(Locale.ROOT)
