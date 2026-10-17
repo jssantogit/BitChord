@@ -1,29 +1,51 @@
 package com.music.bitchord.ui.screens
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Lan
 import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.R
-import com.music.bitchord.sharedui.resources.Res
-import com.music.bitchord.sharedui.resources.spotify_logo
+import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.download.Downloads
 import com.music.bitchord.download.SavedCollection
+import com.music.bitchord.sharedui.resources.Res
+import com.music.bitchord.sharedui.resources.spotify_logo
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.ReplayCardRowSkeleton
+import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.replay.ReplayCardRow
 import com.music.bitchord.ui.replay.ReplayHeroCard
 import com.music.bitchord.ui.replay.ReplayStoryPage
@@ -33,8 +55,11 @@ import com.music.bitchord.ui.replay.ReplayStoryPage
 
 /**
  * The phone's folders, drawn as a list under the Replay cards: Downloads and
- * Local Music, the song cache when Settings has it shown, and the two remote
- * libraries it can reach.
+ * Local Music, the song cache when Settings has it shown, and the two legacy
+ * file-server libraries it can reach. OpenSubsonic's canonical browse entry is
+ * hosted by [LibraryReplayEntry] instead because sending it through ShelfItem
+ * would route it into the legacy browse/detail domain that this slice is
+ * explicitly replacing rather than extending.
  */
 @Composable
 fun libraryLinks(): List<LibraryLink> {
@@ -139,9 +164,12 @@ const val SPOTIFY_BROWSE_ID = "app:spotify"
 const val CACHE_FOLDER_BROWSE_ID = "local:cache"
 
 /**
- * The phone's way in to Replay: its row of headline cards, placeholders for
- * them while the history is read, and nothing at all while there is not yet
- * enough listening to deal them — Settings still opens Replay either way.
+ * The phone's way in to Replay plus Android-owned canonical library entries.
+ *
+ * OpenSubsonic lives here rather than in the shared [LibraryLink] route because
+ * that route carries a legacy ShelfItem into MainActivity/openDetail. This
+ * keeps the new browse independent of ShelfItem.videoId while placing the entry
+ * directly beside the Library's existing folders on screen.
  */
 @Composable
 fun LibraryReplayEntry(
@@ -151,16 +179,94 @@ fun LibraryReplayEntry(
     memberSince: String?,
     onOpenReplay: (ReplayStoryPage) -> Unit,
 ) {
-    if (loading) {
-        ReplayCardRowSkeleton()
-    } else if (cards.isNotEmpty()) {
-        ReplayCardRow(
-            cards = cards,
-            holder = holder,
-            memberSince = memberSince,
-            onCardClick = onOpenReplay,
-            modifier = Modifier.padding(vertical = 6.dp),
-            contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
+    Column {
+        if (loading) {
+            ReplayCardRowSkeleton()
+        } else if (cards.isNotEmpty()) {
+            ReplayCardRow(
+                cards = cards,
+                holder = holder,
+                memberSince = memberSince,
+                onCardClick = onOpenReplay,
+                modifier = Modifier.padding(vertical = 6.dp),
+                contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
+            )
+        }
+        OpenSubsonicCanonicalLibraryEntry()
+    }
+}
+
+@Composable
+private fun OpenSubsonicCanonicalLibraryEntry() {
+    val context = LocalContext.current
+    val persistence = remember(context.applicationContext) {
+        SharedPrefsOpenSubsonicAccountPersistence(context.applicationContext)
+    }
+    val accountFlow = remember(persistence) { persistence.observe() }
+    val account by accountFlow.collectAsStateWithLifecycle(initialValue = persistence.read())
+    var browseOpen by rememberSaveable { mutableStateOf(false) }
+
+    val configured = account ?: return
+    val title = stringResource(R.string.opensubsonic_title)
+    val subtitle = configured.lastSyncSummary?.takeIf(String::isNotBlank)
+        ?: stringResource(R.string.remote_library_browse_subtitle)
+
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 62.dp)
+                .clickable { browseOpen = true }
+                .padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Cloud,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp),
+            )
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Icon(
+                imageVector = BitChordIcons.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .6f),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        HorizontalDivider(
+            modifier = Modifier.padding(start = PAGE_GUTTER + 40.dp),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline,
         )
+    }
+
+    if (browseOpen) {
+        Dialog(
+            onDismissRequest = { browseOpen = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            CanonicalRemoteLibraryScreen(
+                providerKey = "opensubsonic:${configured.accountId}",
+                title = title,
+                onClose = { browseOpen = false },
+            )
+        }
     }
 }
