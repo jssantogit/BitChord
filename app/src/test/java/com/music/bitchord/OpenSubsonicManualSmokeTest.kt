@@ -110,7 +110,9 @@ class OpenSubsonicManualSmokeTest {
         }
         val connection = URI("$endpointUrl?$query").toURL().openConnection() as HttpURLConnection
         return try {
-            connection.instanceFollowRedirects = true
+            // Auth lives in the query. Never follow a redirect with these
+            // parameters; a configured endpoint should be the final trusted host.
+            connection.instanceFollowRedirects = false
             connection.connectTimeout = 10_000
             connection.readTimeout = 10_000
             connection.setRequestProperty("Range", "bytes=0-0")
