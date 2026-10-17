@@ -1,0 +1,67 @@
+package com.music.bitchord
+
+import com.music.bitchord.data.catalog.CanonicalLocalRow
+import com.music.bitchord.data.catalog.toLegacySong
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+class CanonicalLocalAdapterTest {
+
+    @Test
+    fun localRowWithoutExternalIdentityUsesUriAsLegacyVideoId() {
+        val row = localRow(youtubeVideoId = null)
+
+        val song = row.toLegacySong()
+
+        assertEquals("content://media/external/audio/media/42", song.videoId)
+        assertNotEquals(row.recordingId, song.videoId)
+        assertNotEquals(row.mediaAssetId, song.videoId)
+        assertEquals(row.uri, song.localUri)
+    }
+
+    @Test
+    fun knownYouTubeIdentityIsCompatibilityAliasNotCanonicalId() {
+        val row = localRow(youtubeVideoId = "yt-video-123")
+
+        val song = row.toLegacySong()
+
+        assertEquals("yt-video-123", song.videoId)
+        assertNotEquals(row.recordingId, song.videoId)
+        assertEquals("content://media/external/audio/media/42", song.localUri)
+    }
+
+    @Test
+    fun canonicalMetadataSurvivesLegacyAdapter() {
+        val song = localRow(youtubeVideoId = null).toLegacySong()
+
+        assertEquals("Paranoid Android", song.title)
+        assertEquals("Radiohead", song.artist)
+        assertEquals("OK Computer", song.albumName)
+        assertEquals("content://media/external/audio/albumart/7", song.thumbnailUrl)
+        assertEquals("6:23", song.durationText)
+        assertEquals("/storage/emulated/0/Music/Radiohead/03 Paranoid Android.flac", song.localPath)
+        assertEquals(3, song.trackNumber)
+        assertEquals(1_700_000_000L, song.localDateAddedSeconds)
+        assertEquals(1_700_000_100L, song.localDateModifiedSeconds)
+        assertNull(song.albumId)
+    }
+
+    private fun localRow(youtubeVideoId: String?) = CanonicalLocalRow(
+        recordingId = "recording-uuid",
+        mediaAssetId = "asset-uuid",
+        sourceKey = "content://media/external/audio/media/42",
+        title = "Paranoid Android",
+        artistDisplay = "Radiohead",
+        durationMs = 383_000L,
+        albumTitle = "OK Computer",
+        artworkUri = "content://media/external/audio/albumart/7",
+        uri = "content://media/external/audio/media/42",
+        path = "/storage/emulated/0/Music/Radiohead/03 Paranoid Android.flac",
+        dateAddedSeconds = 1_700_000_000L,
+        dateModifiedSeconds = 1_700_000_100L,
+        trackNumber = 3,
+        youtubeVideoId = youtubeVideoId,
+    )
+}
