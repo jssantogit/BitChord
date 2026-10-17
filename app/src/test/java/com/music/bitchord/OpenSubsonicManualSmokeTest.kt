@@ -163,13 +163,16 @@ class OpenSubsonicManualSmokeTest {
         }
     }
 
-    private data class RealServerEnvironment(
+    private class RealServerEnvironment(
         val serverUrl: String,
         val auth: OpenSubsonicAuth,
         val authMode: OpenSubsonicAuthMode,
         val username: String?,
         val secret: String,
-    )
+    ) {
+        override fun toString(): String =
+            "RealServerEnvironment(serverUrl=$serverUrl, auth=$auth, authMode=$authMode, username=$username, secret=<redacted>)"
+    }
 
     private class SmokeAccountPersistence : OpenSubsonicAccountPersistence {
         private var record: OpenSubsonicAccountRecord? = null
