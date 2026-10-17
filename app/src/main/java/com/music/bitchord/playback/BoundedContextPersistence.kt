@@ -147,12 +147,12 @@ object BoundedContextPersistence {
             .apply()
     }
 
-    /** A malformed snapshot is treated as absent by design. */
+    /** A malformed or no-longer-resolvable canonical snapshot is treated as absent by design. */
     @Synchronized
     fun load(): State? {
         val raw = runCatching { prefs.getString(KEY_STATE, null) }.getOrNull() ?: return null
         val decoded = decode(raw) ?: return null
-        val state = rehydrateAfterLoad(decoded)
+        val state = rehydrateAfterLoad(decoded) ?: return null
         val currentEntryId = state.entries[state.currentIndex].song.queueEntryId
         val scalarEntryId = runCatching { prefs.getString(KEY_CURRENT_ENTRY_ID, null) }.getOrNull()
         if (currentEntryId != scalarEntryId) return state
@@ -182,11 +182,11 @@ object BoundedContextPersistence {
         }.getOrDefault(state)
     }
 
-    private fun rehydrateAfterLoad(state: State): State {
+    private fun rehydrateAfterLoad(state: State): State? {
         val resolver = playbackResolver ?: return state
         return runCatching {
             runBlocking(Dispatchers.IO) { rehydrate(state, resolver) }
-        }.getOrDefault(state)
+        }.getOrNull()
     }
 
     /**
@@ -239,26 +239,52 @@ object BoundedContextPersistence {
         )
     }
 
-    /** Re-resolve stored recording ids to the currently playable local asset. */
-    internal suspend fun rehydrate(state: State, resolver: PlaybackResolver): State {
+    /**
+     * Re-resolve stored recording ids to the currently playable local asset.
+     *
+     * Once a snapshot carries a canonical identity, its old URI is no longer a
+     * valid fallback. If that recording has no current playable asset, reject the
+     * canonical snapshot so the service can use its existing compatibility path
+     * rather than resurrecting a stale file reference as though it were current.
+     */
+    internal suspend fun rehydrate(state: State, resolver: PlaybackResolver): State? {
         val contextIdentities = state.contextIdentities
             .takeIf { it.size == state.context.songs.size }
             ?: emptyList()
+        val entryIdentities = state.entries.map { entry ->
+            entry.canonicalIdentity
+                ?: entry.canonicalIndex?.let { index -> contextIdentities.getOrNull(index) }
+        }
+
+        // Legacy/provider-only snapshots have no canonical local identity and
+        // must remain readable without consulting Room at all.
+        if (contextIdentities.none { it != null } && entryIdentities.none { it != null }) {
+            return state
+        }
+
         val contextAssets = if (contextIdentities.isEmpty()) {
             emptyList()
         } else {
             resolver.resolveAll(contextIdentities)
+        }
+        if (contextIdentities.indices.any { index ->
+                contextIdentities[index] != null && contextAssets.getOrNull(index) == null
+            }
+        ) {
+            return null
         }
         val restoredContextSongs = state.context.songs.mapIndexed { index, song ->
             if (contextIdentities.isEmpty()) song
             else song.withCanonicalAsset(contextIdentities[index], contextAssets[index])
         }
 
-        val entryIdentities = state.entries.map { entry ->
-            entry.canonicalIdentity
-                ?: entry.canonicalIndex?.let { index -> contextIdentities.getOrNull(index) }
-        }
         val entryAssets = resolver.resolveAll(entryIdentities)
+        if (entryIdentities.indices.any { index ->
+                entryIdentities[index] != null && entryAssets.getOrNull(index) == null
+            }
+        ) {
+            return null
+        }
         val restoredEntries = state.entries.mapIndexed { index, entry ->
             entry.copy(
                 song = entry.song.withCanonicalAsset(entryIdentities[index], entryAssets[index]),
