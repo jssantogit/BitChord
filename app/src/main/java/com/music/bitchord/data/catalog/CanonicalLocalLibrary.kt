@@ -1,8 +1,13 @@
 package com.music.bitchord.data.catalog
 
 import android.content.Context
+import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import androidx.room.withTransaction
+import com.music.bitchord.data.LocalMediaRepository
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.settings.AppSettings
 import java.util.Locale
 import java.util.UUID
 
@@ -118,12 +123,22 @@ internal object CanonicalLocalLibrary {
                 }
             }
 
-            if (seenSourceKeys.isEmpty()) {
+            val existingSourceKeys = dao.mediaAssetSourceKeys(LOCAL_MEDIASTORE_PROVIDER)
+            val seenSourceKeySet = seenSourceKeys.toHashSet()
+            val scanComplete = existingSourceKeys
+                .asSequence()
+                .filterNot(seenSourceKeySet::contains)
+                .all { sourceKey ->
+                    canConfirmSourceIsAbsentOrExcluded(context, sourceKey)
+                }
+
+            if (scanComplete && seenSourceKeys.isEmpty()) {
                 dao.deleteAllMediaAssets(LOCAL_MEDIASTORE_PROVIDER)
             } else {
                 val staleSourceKeys = staleSourceKeys(
-                    existingSourceKeys = dao.mediaAssetSourceKeys(LOCAL_MEDIASTORE_PROVIDER),
+                    existingSourceKeys = existingSourceKeys,
                     seenSourceKeys = seenSourceKeys,
+                    scanComplete = scanComplete,
                 )
                 for (sourceKey in staleSourceKeys) {
                     dao.deleteMediaAsset(LOCAL_MEDIASTORE_PROVIDER, sourceKey)
@@ -184,9 +199,80 @@ internal object CanonicalLocalLibrary {
     internal fun staleSourceKeys(
         existingSourceKeys: List<String>,
         seenSourceKeys: Collection<String>,
+        scanComplete: Boolean,
     ): List<String> {
+        if (!scanComplete) return emptyList()
         val seen = seenSourceKeys.toHashSet()
         return existingSourceKeys.filterNot(seen::contains)
+    }
+
+    /**
+     * An unseen persisted asset is only safe to prune when MediaStore can
+     * authoritatively show that its source row is gone or no longer belongs in
+     * the current Local Music view. A null/failed query is deliberately treated
+     * as unknown so a transient scanner failure cannot wipe the canonical DB.
+     */
+    private fun canConfirmSourceIsAbsentOrExcluded(context: Context, sourceKey: String): Boolean {
+        val uri = runCatching { Uri.parse(sourceKey) }.getOrNull() ?: return false
+        if (!uri.scheme.equals("content", ignoreCase = true)) return false
+
+        val projection = buildList {
+            add(MediaStore.Audio.Media.DISPLAY_NAME)
+            add(MediaStore.Audio.Media.DURATION)
+            add(MediaStore.Audio.Media.DATA)
+            add(MediaStore.Audio.Media.IS_MUSIC)
+            add(MediaStore.Audio.Media.IS_ALARM)
+            add(MediaStore.Audio.Media.IS_NOTIFICATION)
+            add(MediaStore.Audio.Media.IS_RINGTONE)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                add(MediaStore.Audio.Media.IS_PODCAST)
+            }
+        }.toTypedArray()
+
+        return runCatching {
+            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (!cursor.moveToFirst()) return@use true
+
+                val displayName = cursor.getString(
+                    cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME),
+                ).orEmpty()
+                val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                val durationMs = if (cursor.isNull(durationColumn)) 0L else cursor.getLong(durationColumn)
+                val path = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA))
+                val isMusic = cursor.getInt(
+                    cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.IS_MUSIC),
+                ) != 0
+
+                if (!isMusic) return@use true
+
+                if (AppSettings.filterNonMusicAudio.value) {
+                    val isAlarm = cursor.getInt(
+                        cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.IS_ALARM),
+                    ) != 0
+                    val isNotification = cursor.getInt(
+                        cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.IS_NOTIFICATION),
+                    ) != 0
+                    val isRingtone = cursor.getInt(
+                        cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.IS_RINGTONE),
+                    ) != 0
+                    val isPodcast = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        cursor.getInt(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.IS_PODCAST)) != 0
+                    } else {
+                        false
+                    }
+
+                    if (isAlarm || isNotification || isRingtone || isPodcast) return@use true
+                    if (!LocalMediaRepository.isEligibleLocalMusic(durationMs, displayName, path)) {
+                        return@use true
+                    }
+                }
+
+                !LocalMediaRepository.isInSelectedFolder(
+                    path,
+                    AppSettings.localMusicFolderUri.value,
+                )
+            } ?: false
+        }.getOrDefault(false)
     }
 
     private fun normalizeEvidence(value: String): String =
