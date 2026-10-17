@@ -2,7 +2,6 @@ package com.music.bitchord
 
 import com.music.bitchord.data.catalog.CanonicalBrowseAssetRow
 import com.music.bitchord.data.catalog.CanonicalBrowseMediaAsset
-import com.music.bitchord.data.catalog.CanonicalBrowseReleaseTrackRow
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalLibraryBrowseRepository
 import com.music.bitchord.data.catalog.CanonicalLibraryBrowseStore
@@ -121,7 +120,6 @@ class CanonicalLibraryBrowseTest {
             .first()
 
         assertTrue(library.tracks.isEmpty())
-        assertTrue(library.releases.isEmpty())
     }
 
     @Test
@@ -191,51 +189,6 @@ class CanonicalLibraryBrowseTest {
         assertTrue(store.releases.containsKey("release-1"))
         val cached = CanonicalLibraryBrowseRepository(store).observe(providerKey).first()
         assertEquals("Persistent Song", cached.tracks.single().title)
-    }
-
-    @Test
-    fun `release grouping uses canonical release membership and track order`() = runTest {
-        val store = InMemoryCatalogStore()
-        val album = ProviderAlbum(
-            externalAlbumId = "server-album",
-            title = "Kid A",
-            artistDisplay = "Radiohead",
-            externalArtistId = "server-artist",
-            musicBrainzReleaseId = null,
-            artworkUri = "opensubsonic://artwork/album",
-        )
-        val provider = MutableSnapshotProvider(
-            providerKey = "opensubsonic:home",
-            snapshot = snapshot(
-                track("server-track-2", "Kid A", trackNumber = 2, album = album),
-                track("server-track-1", "Everything In Its Right Place", trackNumber = 1, album = album),
-            ),
-        )
-        val ids = ArrayDeque(
-            listOf(
-                "recording-2",
-                "release-1",
-                "asset-2",
-                "recording-1",
-                "asset-1",
-            ),
-        )
-        CanonicalRemoteCatalogSync.sync(provider, store) { ids.removeFirst() }
-
-        val release = CanonicalLibraryBrowseRepository(store)
-            .observe(provider.providerKey)
-            .first()
-            .releases
-            .single()
-
-        assertEquals("release-1", release.releaseId)
-        assertEquals("Kid A", release.title)
-        assertEquals(
-            listOf("Everything In Its Right Place", "Kid A"),
-            release.tracks.map { it.track.title },
-        )
-        assertEquals(listOf(1, 2), release.tracks.map { it.trackNumber })
-        assertTrue(release.tracks.all { it.track.recordingId.startsWith("recording-") })
     }
 
     private fun snapshot(vararg tracks: ProviderTrack) = ProviderLibrarySnapshot(
@@ -312,9 +265,6 @@ class CanonicalLibraryBrowseTest {
         override fun observeTrackAssets(providerKey: String): Flow<List<CanonicalBrowseAssetRow>> =
             revision.map { buildTrackRows(providerKey) }
 
-        override fun observeReleaseTracks(providerKey: String): Flow<List<CanonicalBrowseReleaseTrackRow>> =
-            revision.map { buildReleaseRows(providerKey) }
-
         override suspend fun mediaAsset(provider: String, sourceKey: String): MediaAssetEntity? =
             assets[assetKey(provider, sourceKey)]
 
@@ -374,33 +324,6 @@ class CanonicalLibraryBrowseTest {
                 )
             }
             .toList()
-
-        private fun buildReleaseRows(providerKey: String): List<CanonicalBrowseReleaseTrackRow> {
-            val providerReleaseIds = identities.values
-                .asSequence()
-                .filter { it.provider == providerKey && it.entityType == "release" }
-                .map { it.entityId }
-                .toSet()
-            val availableRecordingIds = assets.values
-                .asSequence()
-                .filter { it.provider == providerKey }
-                .map { it.recordingId }
-                .toSet()
-            return releaseTracks.values.mapNotNull { membership ->
-                if (membership.releaseId !in providerReleaseIds || membership.recordingId !in availableRecordingIds) {
-                    return@mapNotNull null
-                }
-                val release = releases[membership.releaseId] ?: return@mapNotNull null
-                CanonicalBrowseReleaseTrackRow(
-                    releaseId = release.id,
-                    releaseTitle = release.title,
-                    releaseArtistDisplay = release.artistDisplay,
-                    releaseArtworkUri = release.artworkUri,
-                    recordingId = membership.recordingId,
-                    trackNumber = membership.trackNumber,
-                )
-            }
-        }
 
         private fun touch() {
             revision.value = revision.value + 1L
