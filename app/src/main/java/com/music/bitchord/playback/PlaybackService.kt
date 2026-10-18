@@ -672,7 +672,7 @@ class PlaybackService : MediaLibraryService() {
     private val failureCascade = PlaybackFailureCascade()
 
     /** Logical queue entry that most recently produced audible playback. */
-    private var audibleFailureEntryKey: String? = null
+    private var audibleFailureOccurrenceKey: String? = null
 
     private var scrobbleManager: ScrobbleManager? = null
     private var listenBrainzSong: Song? = null
@@ -883,7 +883,7 @@ class PlaybackService : MediaLibraryService() {
                 // say the queue is not simply unplayable end to end.
                 audibleMediaId = exoPlayer.currentMediaItem?.mediaId
                 consecutiveErrorSkips = 0
-                audibleFailureEntryKey = failureEntryKeyOrNull(
+                audibleFailureOccurrenceKey = failureOccurrenceKeyOrNull(
                     exoPlayer,
                     exoPlayer.currentMediaItemIndex,
                 )
@@ -3703,11 +3703,12 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun recoverFrom(error: PlaybackException, player: ExoPlayer) {
         val item = player.currentMediaItem ?: return
-        val currentFailureKey = failureEntryKeyOrNull(player, player.currentMediaItemIndex)
+        val currentFailureOccurrence = failureOccurrenceKeyOrNull(player, player.currentMediaItemIndex)
         val handling = failureCascade.handlePlaybackFailure(
             error = error,
             player = player,
-            neverStarted = currentFailureKey == null || currentFailureKey != audibleFailureEntryKey,
+            neverStarted = currentFailureOccurrence == null ||
+                currentFailureOccurrence != audibleFailureOccurrenceKey,
         )
         if (handling != PlaybackFailureHandling.NOT_HANDLED) return
         val mediaId = item.mediaId
