@@ -11,12 +11,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     entities = [
         ListeningSessionEntity::class,
         ListeningEventEntity::class,
+        RecordingRatingCurrentEntity::class,
+        RecordingRatingHistoryEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 internal abstract class ListeningEventDatabase : RoomDatabase() {
     abstract fun listeningEventDao(): ListeningEventDao
+    abstract fun recordingRatingDao(): RecordingRatingDao
 
     internal companion object {
         const val DATABASE_NAME = "listening-events.db"
@@ -40,6 +43,36 @@ internal abstract class ListeningEventDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS recording_rating_current (
+                        recordingId TEXT NOT NULL,
+                        ratingValue REAL NOT NULL,
+                        ratedAtEpochMs INTEGER NOT NULL,
+                        PRIMARY KEY(recordingId)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS recording_rating_history (
+                        sequence INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        recordingId TEXT NOT NULL,
+                        previousRatingValue REAL,
+                        newRatingValue REAL,
+                        changedAtEpochMs INTEGER NOT NULL,
+                        operation TEXT NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_recording_rating_history_recordingId ON recording_rating_history(recordingId)",
+                )
+            }
+        }
+
         @Volatile
         private var instance: ListeningEventDatabase? = null
 
@@ -49,7 +82,7 @@ internal abstract class ListeningEventDatabase : RoomDatabase() {
                     context.applicationContext,
                     ListeningEventDatabase::class.java,
                     DATABASE_NAME,
-                ).addMigrations(MIGRATION_1_2)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { instance = it }
             }
