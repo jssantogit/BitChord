@@ -109,16 +109,14 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
     override fun rememberCanonicalPlaybackArtworkModel(song: Song?): Any? {
         val selected = remember(song?.localUri) {
             CanonicalPlaybackArtworkIdentity.fromSong(song)
-        }
+        } ?: return null // No provider/database work for ordinary local or legacy rows.
         val image by produceState<Any?>(
             initialValue = null,
-            key1 = selected?.key,
-            key2 = canonicalArtworkLoader,
+            key1 = selected.key,
+            key2 = selected.providerKey, // Routing may change without changing artwork identity.
+            key3 = canonicalArtworkLoader,
         ) {
-            value = if (selected == null) {
-                null
-            } else {
-                try {
+            value = try {
                     when (val loaded = canonicalArtworkLoader.load(
                         mediaAssetId = selected.mediaAssetId,
                         expectedRecordingId = selected.recordingId,
@@ -138,7 +136,6 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
                     // never log exception messages (which might contain auth URLs).
                     null
                 }
-            }
         }
         return image
     }

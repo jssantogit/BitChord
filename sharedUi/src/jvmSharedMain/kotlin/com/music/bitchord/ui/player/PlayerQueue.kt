@@ -773,8 +773,7 @@ private fun InlineQueueRow(
         // The host returns an in-memory image, never a credential-bearing URL.
         // Local/WebDAV/SMB and other legacy entries keep their existing URL path.
         AsyncImage(
-            model = PlayerPlatform.host.rememberCanonicalPlaybackArtworkModel(song)
-                ?: rememberRemoteArtworkUrl(song),
+            model = rememberPlaybackArtworkImageModel(song, com.music.bitchord.data.model.ROW_ART_PX),
             contentDescription = null,
             modifier = Modifier
                 .size(44.dp)

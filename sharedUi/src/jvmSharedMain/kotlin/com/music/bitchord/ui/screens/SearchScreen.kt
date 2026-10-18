@@ -81,6 +81,7 @@ import com.music.bitchord.ui.components.PlayingAccent
 import com.music.bitchord.ui.components.ROW_DIVIDER_INSET
 import com.music.bitchord.ui.components.SearchField
 import com.music.bitchord.ui.components.SongRow
+import com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel
 import com.music.bitchord.ui.components.SearchPlayingBars
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.components.songListSkeleton
@@ -493,7 +494,7 @@ private fun TopResultCard(
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
-                model = song.thumbnailUrl?.artworkAt(ROW_ART_PX),
+                model = rememberPlaybackArtworkImageModel(song, ROW_ART_PX),
                 contentDescription = null,
                 modifier = Modifier.size(72.dp).clip(RoundedCornerShape(10.dp)),
             )
@@ -718,7 +719,7 @@ private fun TypeaheadSongRow(
     ) {
         Box(Modifier.size(52.dp)) {
             AsyncImage(
-                model = song.artworkAt(ROW_ART_PX),
+                model = rememberPlaybackArtworkImageModel(song, ROW_ART_PX),
                 contentDescription = null,
                 modifier = Modifier
                     .size(52.dp)

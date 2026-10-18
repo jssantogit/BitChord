@@ -9,6 +9,7 @@ import com.music.bitchord.data.listentogether.PartyMember
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsSource
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.data.settings.AudioQuality
 import com.music.bitchord.data.settings.LastPlayerScreen
 import com.music.bitchord.data.settings.SmartAnalysis
@@ -353,6 +354,20 @@ internal fun rememberOutputPicker(onOpen: () -> Unit): () -> Unit =
 @Composable
 internal fun rememberRemoteArtworkUrl(song: Song?): String? =
     PlayerPlatform.host.rememberRemoteArtworkUrl(song)
+
+/**
+ * One image-model policy for all Song thumbnails: canonical selected-asset
+ * artwork takes precedence; local, WebDAV/SMB and legacy songs retain their
+ * existing thumbnail/extraction path. No authenticated locator crosses UI.
+ */
+fun preferredPlaybackArtworkModel(canonical: Any?, legacy: Any?): Any? = canonical ?: legacy
+
+@Composable
+fun rememberPlaybackArtworkImageModel(song: Song?, artPx: Int): Any? {
+    val canonical = PlayerPlatform.host.rememberCanonicalPlaybackArtworkModel(song)
+    val legacy = rememberRemoteArtworkUrl(song)?.artworkAt(artPx)
+    return preferredPlaybackArtworkModel(canonical, legacy)
+}
 
 @Composable
 internal fun AudioPipelineDialog(hazeState: HazeState, isPlaying: Boolean, onDismiss: () -> Unit) =

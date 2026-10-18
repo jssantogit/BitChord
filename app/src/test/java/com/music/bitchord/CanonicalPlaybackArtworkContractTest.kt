@@ -4,6 +4,7 @@ import com.music.bitchord.ui.player.CanonicalPlaybackArtworkIdentity
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.playback.CanonicalRemotePlaybackRequest
 import com.music.bitchord.playback.CanonicalRemotePlaybackUri
+import com.music.bitchord.ui.player.preferredPlaybackArtworkModel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -102,6 +103,18 @@ class CanonicalPlaybackArtworkContractTest {
         )
         assertNull(CanonicalPlaybackArtworkIdentity.fromSong(local))
         assertEquals("content://media/audio/albumart/1", local.thumbnailUrl)
+    }
+
+    @Test
+    fun `all song artwork surfaces prefer canonical model and retain local fallback`() {
+        val canonicalDrawable = Any()
+        val legacyLocalThumbnail = "content://media/audio/albumart/1"
+        val legacyRemoteThumbnail = "https://example.test/legacy.jpg"
+        assertEquals(canonicalDrawable, preferredPlaybackArtworkModel(canonicalDrawable, null))
+        assertEquals(canonicalDrawable, preferredPlaybackArtworkModel(canonicalDrawable, legacyRemoteThumbnail))
+        assertEquals(legacyLocalThumbnail, preferredPlaybackArtworkModel(null, legacyLocalThumbnail))
+        assertEquals(legacyRemoteThumbnail, preferredPlaybackArtworkModel(null, legacyRemoteThumbnail))
+        assertNull(preferredPlaybackArtworkModel(null, null))
     }
 
     @Test
