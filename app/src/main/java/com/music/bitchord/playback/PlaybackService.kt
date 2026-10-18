@@ -1,7 +1,6 @@
 package com.music.bitchord.playback
 
-import com.music.bitchord.data.catalog.provider.opensubsonic.androidOpenSubsonicMediaAccess
-import com.music.bitchord.data.catalog.provider.opensubsonic.materializeDataSpec
+import com.music.bitchord.data.catalog.provider.opensubsonic.androidOpenSubsonicMediaDataSourceFactory
 
 import android.app.PendingIntent
 import android.content.Context
@@ -1348,23 +1347,7 @@ class PlaybackService : MediaLibraryService() {
             }
         }
 
-        val canonicalRemoteResolver = CanonicalRemotePlaybackResolver(
-            openSubsonicResolve = androidOpenSubsonicMediaAccess(this)::resolve,
-        )
-
         val streamResolver = ResolvingDataSource.Resolver { dataSpec ->
-            if (CanonicalRemotePlaybackUri.isCanonical(dataSpec.uri.toString())) {
-                val runtimeRequest = try {
-                    runBlocking {
-                        withTimeout(RESOLVE_TIMEOUT_MS) {
-                            canonicalRemoteResolver.resolve(dataSpec.uri.toString())
-                        }
-                    }
-                } catch (e: TimeoutCancellationException) {
-                    throw java.io.IOException("Canonical remote playback resolution timed out", e)
-                }
-                return@Resolver runtimeRequest.materializeDataSpec(dataSpec)
-            }
             // Which track everything below is for, said once, because none of
             // it would otherwise know: this runs on ExoPlayer's loader thread
             // with a DataSpec and nothing else, and the work it starts — the
@@ -1654,26 +1637,28 @@ class PlaybackService : MediaLibraryService() {
             // end of a `bitchord://` URI and nothing below it knows which
             // track's bytes it is fetching; this is the seam where both are in
             // hand. See [StreamContainer].
-            if (CanonicalRemotePlaybackUri.isCanonical(dataSpec.uri.toString())) {
-                // The resolved URI contains ephemeral provider auth. Never hand it
-                // to legacy stream telemetry/cache bookkeeping.
-                streamResolver.resolveDataSpec(dataSpec)
-            } else {
-                streamResolver.resolveDataSpec(dataSpec).also { resolved ->
-                    mediaIdIn(dataSpec.uri)?.let { StreamContainer.served(it, resolved.uri.toString()) }
-                    // The same seam tells the cache whose file it is writing, which
-                    // decides whether the entry outlives the track — see
-                    // [AudioCache.Origin].
-                    AudioCache.recordServed(dataSpec, resolved.uri.toString())
-                }
+            streamResolver.resolveDataSpec(dataSpec).also { resolved ->
+                mediaIdIn(dataSpec.uri)?.let { StreamContainer.served(it, resolved.uri.toString()) }
+                // The same seam tells the cache whose file it is writing, which
+                // decides whether the entry outlives the track — see
+                // [AudioCache.Origin].
+                AudioCache.recordServed(dataSpec, resolved.uri.toString())
             }
         }
         // Read-ahead resolves streams through the same chain the player does.
         // smb:// tracks read straight off the share below the cache (so they
         // cache and seek like HTTP); everything else flows as before, and the
         // YouTube resolver never sees a scheme it cannot answer.
+        // Canonical remote traffic is intercepted before the generic resolver/chunker.
+        // The provider-owned DataSource is the only component that ever sees the
+        // authenticated OpenSubsonic request.
+        val openSubsonicDataSourceFactory = androidOpenSubsonicMediaDataSourceFactory(this)
+        val canonicalRemoteDataSourceFactory = CanonicalRemoteDataSource.Factory(
+            fallbackFactory = resolvingFactory,
+            openSubsonicFactory = openSubsonicDataSourceFactory::create,
+        )
         val defaultDataSourceFactory = SmbDataSource.RoutingFactory(
-            DefaultDataSource.Factory(this, resolvingFactory),
+            DefaultDataSource.Factory(this, canonicalRemoteDataSourceFactory),
         )
         AudioCache.setUpstream(defaultDataSourceFactory)
         // DsdExtractorsFactory: the stock extractors plus DSF/DFF, which Media3
