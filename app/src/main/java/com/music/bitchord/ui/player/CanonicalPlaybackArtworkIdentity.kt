@@ -31,9 +31,10 @@ internal data class CanonicalPlaybackArtworkIdentity(
         fun fromSong(song: Song?): CanonicalPlaybackArtworkIdentity? {
             val selected = song?.localUri?.let(CanonicalRemotePlaybackUri::decode)
                 ?: return null
-            if (song.videoId != selected.recordingId ||
-                !selected.providerKey.startsWith("opensubsonic:")
-            ) return null
+            // Direct-play MediaItems may expose recordingId as mediaId, while
+            // restored queue Song adapters use the logical URI as videoId.
+            // Neither variant is identity evidence; the safe selected URI is.
+            if (!selected.providerKey.startsWith("opensubsonic:")) return null
             return CanonicalPlaybackArtworkIdentity(
                 recordingId = selected.recordingId,
                 mediaAssetId = selected.mediaAssetId,

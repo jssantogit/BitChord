@@ -107,7 +107,7 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
 
     @Composable
     override fun rememberCanonicalPlaybackArtworkModel(song: Song?): Any? {
-        val selected = remember(song?.videoId, song?.localUri) {
+        val selected = remember(song?.localUri) {
             CanonicalPlaybackArtworkIdentity.fromSong(song)
         }
         val image by produceState<Any?>(

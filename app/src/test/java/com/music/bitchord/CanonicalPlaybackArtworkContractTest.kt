@@ -43,9 +43,12 @@ class CanonicalPlaybackArtworkContractTest {
         assertNull(CanonicalPlaybackArtworkIdentity.fromSong(
             remote.copy(localUri = "content://media/audio/1"),
         ))
-        assertNull(CanonicalPlaybackArtworkIdentity.fromSong(
-            remote.copy(videoId = "some-other-recording"),
-        ))
+        val restoredQueueAdapter = remote.copy(videoId = remote.localUri.orEmpty())
+        assertEquals(identity?.key, CanonicalPlaybackArtworkIdentity.fromSong(restoredQueueAdapter)?.key)
+        // The legacy Song videoId is never trusted as artwork identity.
+        assertEquals(identity?.key, CanonicalPlaybackArtworkIdentity.fromSong(
+            remote.copy(videoId = "compatibility-queue-id"),
+        )?.key)
         assertNull(CanonicalPlaybackArtworkIdentity.fromSong(
             remote.copy(localUri = null),
         ))
