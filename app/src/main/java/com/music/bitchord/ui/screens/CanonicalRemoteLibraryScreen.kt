@@ -1,6 +1,8 @@
 package com.music.bitchord.ui.screens
 
+import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,9 +32,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -45,17 +52,23 @@ import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLibraryBrowseRepository
 import com.music.bitchord.data.catalog.RoomCanonicalLibraryBrowseStore
+import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoadResult
+import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoader
+import com.music.bitchord.data.catalog.provider.opensubsonic.androidOpenSubsonicArtworkLoader
 import com.music.bitchord.playback.CanonicalRemotePlaybackMetadata
 import com.music.bitchord.playback.CanonicalRemotePlaybackRequest
 import com.music.bitchord.playback.playCanonicalRemote
 import com.music.bitchord.playback.rememberMediaController
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Offline-first browse for a provider's persisted canonical availability.
  *
- * The provider key is only a Room availability filter. This screen never
- * constructs a legacy Song, never reads OpenSubsonic credentials and never
- * contacts the provider. Visible row identity is the canonical recording id.
+ * Metadata remains Room-only. Artwork is the one bounded exception: rows hand
+ * only their canonical mediaAssetId to a provider-owned loader which may serve
+ * a credential-free disk cache or authenticate a cover-art request at runtime.
+ * Authenticated URLs and provider cover IDs never enter Compose state.
  */
 @Composable
 internal fun CanonicalRemoteLibraryScreen(
@@ -71,6 +84,9 @@ internal fun CanonicalRemoteLibraryScreen(
                 CanonicalCatalogDatabase.get(context.applicationContext).catalogDao(),
             ),
         )
+    }
+    val artworkLoader = remember(context.applicationContext) {
+        androidOpenSubsonicArtworkLoader(context.applicationContext)
     }
     val libraryFlow = remember(repository, providerKey) { repository.observe(providerKey) }
     val library by libraryFlow.collectAsStateWithLifecycle(initialValue = CanonicalBrowseLibrary.EMPTY)
@@ -91,6 +107,7 @@ internal fun CanonicalRemoteLibraryScreen(
             RemoteBrowseSummary(songCount = library.tracks.size)
             TrackList(
                 tracks = library.tracks,
+                artworkLoader = artworkLoader,
                 onTrackPlay = { track ->
                     track.availableAssets.firstOrNull()?.let { asset ->
                         controller?.playCanonicalRemote(
@@ -181,6 +198,7 @@ private fun RemoteBrowseSummary(songCount: Int) {
 @Composable
 private fun TrackList(
     tracks: List<CanonicalBrowseTrack>,
+    artworkLoader: OpenSubsonicArtworkLoader,
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -196,7 +214,11 @@ private fun TrackList(
             items = tracks,
             key = CanonicalBrowseTrack::recordingId,
         ) { track ->
-            CanonicalTrackRow(track = track, onClick = { onTrackPlay(track) })
+            CanonicalTrackRow(
+                track = track,
+                artworkLoader = artworkLoader,
+                onClick = { onTrackPlay(track) },
+            )
             HorizontalDivider(
                 modifier = Modifier.padding(start = 84.dp),
                 thickness = 0.5.dp,
@@ -209,6 +231,7 @@ private fun TrackList(
 @Composable
 private fun CanonicalTrackRow(
     track: CanonicalBrowseTrack,
+    artworkLoader: OpenSubsonicArtworkLoader,
     onClick: () -> Unit,
 ) {
     Row(
@@ -219,8 +242,11 @@ private fun CanonicalTrackRow(
             .heightIn(min = 68.dp)
             .padding(horizontal = 20.dp, vertical = 8.dp),
     ) {
-        ArtworkPlaceholder(
-            hasArtworkReference = !track.artworkUri.isNullOrBlank(),
+        RemoteTrackArtwork(
+            mediaAssetId = track.availableAssets.firstOrNull()?.mediaAssetId,
+            artworkRevision = track.artworkUri,
+            title = track.title,
+            artworkLoader = artworkLoader,
             modifier = Modifier.size(48.dp),
         )
         Spacer(Modifier.width(16.dp))
@@ -252,14 +278,52 @@ private fun CanonicalTrackRow(
 }
 
 @Composable
+private fun RemoteTrackArtwork(
+    mediaAssetId: String?,
+    artworkRevision: String?,
+    title: String,
+    artworkLoader: OpenSubsonicArtworkLoader,
+    modifier: Modifier = Modifier,
+) {
+    val bitmap by produceState<ImageBitmap?>(
+        initialValue = null,
+        key1 = mediaAssetId,
+        key2 = artworkRevision,
+        key3 = artworkLoader,
+    ) {
+        value = if (mediaAssetId == null || artworkRevision.isNullOrBlank()) {
+            null
+        } else {
+            when (val result = artworkLoader.load(mediaAssetId)) {
+                is OpenSubsonicArtworkLoadResult.Ready -> withContext(Dispatchers.Default) {
+                    BitmapFactory.decodeByteArray(result.bytes, 0, result.bytes.size)?.asImageBitmap()
+                }
+                is OpenSubsonicArtworkLoadResult.Placeholder -> null
+            }
+        }
+    }
+
+    val loaded = bitmap
+    if (loaded != null) {
+        Image(
+            bitmap = loaded,
+            contentDescription = title,
+            contentScale = ContentScale.Crop,
+            modifier = modifier.clip(RoundedCornerShape(8.dp)),
+        )
+    } else {
+        ArtworkPlaceholder(
+            hasArtworkReference = !artworkRevision.isNullOrBlank(),
+            modifier = modifier,
+        )
+    }
+}
+
+@Composable
 private fun ArtworkPlaceholder(
     hasArtworkReference: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    // OpenSubsonic artwork is currently a logical credential-free reference,
-    // not an offline cached bitmap. Resolving it here would make simple browse
-    // a network/auth operation, so this slice intentionally renders a bounded
-    // placeholder while preserving the reference in the read model.
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(8.dp),
