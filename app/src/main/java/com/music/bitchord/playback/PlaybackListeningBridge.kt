@@ -27,13 +27,12 @@ import kotlinx.coroutines.SupervisorJob
 /**
  * Playback-facing adapter for the first-party Listening Event Store.
  *
- * The Media3 service remains the owner of playback facts. This bridge observes
- * those callbacks, resolves the legacy MediaItem/Song to an already-existing
- * canonical catalog identity, and emits facts through [ListeningEventIngestor].
- * It never creates or transports a ListeningSession id.
+ * Playback remains the owner of live Media3 facts. Listening owns analytical
+ * sessions and classification. This bridge never creates or transports a
+ * ListeningSession id and never resolves provider-owned transport/auth data.
  *
  * Attachment is lazy: [observeSample] is called by the existing playback
- * sampler only while audio is actually playing. That means telemetry cannot
+ * sampler only while audio is actually playing. Telemetry therefore cannot
  * start PlaybackService merely because the app process opened.
  */
 internal object PlaybackListeningBridge {
@@ -58,6 +57,9 @@ internal object PlaybackListeningBridge {
     private var ingestor: ListeningEventIngestor? = null
 
     /** Accessed only from [commands]. */
+    private var resolver: PlaybackListeningIdentityResolver? = null
+
+    /** Accessed only from [commands]. */
     private var active: ActivePlayback? = null
 
     fun init(context: Context) {
@@ -66,13 +68,8 @@ internal object PlaybackListeningBridge {
 
     /**
      * Feeds the same wall-clock listening evidence already measured by
-     * ListeningRecorder. [listenedDeltaMs] is the actual audio time since the
+     * ListeningRecorder. [listenedDeltaMs] is actual audio time since the
      * previous sampler tick, not player position and not a per-resume total.
-     * This keeps pause/resume additive while seeks cannot inflate listening.
-     *
-     * Each real audio sample also refreshes the store-owned session heartbeat,
-     * so a long song never looks like thirty minutes of inactivity merely
-     * because no track boundary occurred.
      */
     fun observeSample(song: Song, recordingDurationMs: Long?, listenedDeltaMs: Long) {
         require(listenedDeltaMs >= 0L)
@@ -121,9 +118,6 @@ internal object PlaybackListeningBridge {
                     }
                     controller = connected
                     connected.addListener(listener)
-                    // The first sample may have arrived while the controller
-                    // connection was being established. Bootstrap from the real
-                    // current item instead of waiting for another transition.
                     if (connected.isPlaying) {
                         connected.currentMediaItem?.let { mediaItem ->
                             startFromMediaItem(
@@ -181,7 +175,10 @@ internal object PlaybackListeningBridge {
         transitionReason: Int?,
     ) {
         commands.submit {
-            val identity = resolve(mediaItem.toSong()) ?: return@submit
+            // Canonical remote identity is read directly from the live logical
+            // MediaItem before any Song/legacy conversion. No provider lookup is
+            // involved and provider-owned transport never reaches Listening.
+            val identity = resolve(mediaItem) ?: return@submit
             val current = active
             if (current != null) {
                 val sameRecording = current.identity.recordingId == identity.recordingId
@@ -191,13 +188,12 @@ internal object PlaybackListeningBridge {
                         sameRecording = sameRecording,
                     )
                 ) {
+                    // A rendition swap may update which asset/provenance is live
+                    // without constituting another listen of the Recording.
+                    current.identity = identity
                     return@submit
                 }
 
-                // Ordinarily the preceding discontinuity callback has already
-                // ended the old item and [active] is null here. These fallbacks
-                // cover Media3 transitions that arrive without that callback,
-                // while keeping repeat/automatic completion semantically exact.
                 val fallbackCause = when (transitionReason) {
                     Player.MEDIA_ITEM_TRANSITION_REASON_AUTO,
                     Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT -> PlaybackEndCause.ENDED
@@ -246,31 +242,52 @@ internal object PlaybackListeningBridge {
         if (active === playback) active = null
     }
 
-    private suspend fun resolve(song: Song): CanonicalPlaybackIdentity? {
-        val context = appContext ?: return null
-        val dao = CanonicalCatalogDatabase.get(context).catalogDao()
-
-        song.localUri?.takeIf(String::isNotBlank)?.let { sourceKey ->
-            dao.mediaAsset(LOCAL_PROVIDER, sourceKey)?.let { asset ->
-                return CanonicalPlaybackIdentity(
-                    recordingId = asset.recordingId,
-                    mediaAssetId = asset.id,
-                    provider = asset.provider,
-                )
-            }
-        }
-
-        val externalId = song.videoId.takeIf(String::isNotBlank) ?: return null
-        val recordingId = dao.entityIdForExternalIdentity(
-            provider = YOUTUBE_PROVIDER,
-            entityType = RECORDING_ENTITY_TYPE,
-            externalId = externalId,
-        ) ?: return null
-        return CanonicalPlaybackIdentity(
-            recordingId = recordingId,
-            mediaAssetId = null,
-            provider = YOUTUBE_PROVIDER,
+    private suspend fun resolve(mediaItem: MediaItem): CanonicalPlaybackIdentity? {
+        val liveLogicalUri = mediaItem.localConfiguration?.uri?.toString()
+            ?: mediaItem.mediaMetadata.extras?.getString(EXTRA_LOCAL_URI)
+        val song = mediaItem.toSong()
+        return identityResolver().resolve(
+            canonicalUri = liveLogicalUri,
+            localSourceKey = song.localUri,
+            legacyYoutubeId = song.videoId,
         )
+    }
+
+    private suspend fun resolve(song: Song): CanonicalPlaybackIdentity? =
+        identityResolver().resolve(
+            canonicalUri = song.localUri,
+            localSourceKey = song.localUri,
+            legacyYoutubeId = song.videoId,
+        )
+
+    private fun identityResolver(): PlaybackListeningIdentityResolver {
+        resolver?.let { return it }
+        val context = checkNotNull(appContext) { "PlaybackListeningBridge.init must run first" }
+        val dao = CanonicalCatalogDatabase.get(context).catalogDao()
+        return PlaybackListeningIdentityResolver(
+            resolveLocalAsset = { sourceKey ->
+                dao.mediaAsset(LOCAL_PROVIDER, sourceKey)?.let { asset ->
+                    CanonicalPlaybackIdentity(
+                        recordingId = asset.recordingId,
+                        mediaAssetId = asset.id,
+                        provider = asset.provider,
+                    )
+                }
+            },
+            resolveLegacyYoutubeAlias = { externalId ->
+                dao.entityIdForExternalIdentity(
+                    provider = YOUTUBE_PROVIDER,
+                    entityType = RECORDING_ENTITY_TYPE,
+                    externalId = externalId,
+                )?.let { recordingId ->
+                    CanonicalPlaybackIdentity(
+                        recordingId = recordingId,
+                        mediaAssetId = null,
+                        provider = YOUTUBE_PROVIDER,
+                    )
+                }
+            },
+        ).also { resolver = it }
     }
 
     private fun eventIngestor(): ListeningEventIngestor {
@@ -279,14 +296,8 @@ internal object PlaybackListeningBridge {
         return ListeningEventStores.persistent(context).also { ingestor = it }
     }
 
-    private data class CanonicalPlaybackIdentity(
-        val recordingId: String,
-        val mediaAssetId: String?,
-        val provider: String,
-    )
-
     private data class ActivePlayback(
-        val identity: CanonicalPlaybackIdentity,
+        var identity: CanonicalPlaybackIdentity,
         var listenedDurationMs: Long = 0L,
         var recordingDurationMs: Long? = null,
     )
