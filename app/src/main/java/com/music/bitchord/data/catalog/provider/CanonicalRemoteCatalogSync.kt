@@ -103,14 +103,10 @@ internal interface CanonicalCatalogSyncStore {
      * Strong Recording MBIDs are exclusive, unlike multi-valued ISRCs.
      * Implementations must read the actual claims; silently assuming none is unsafe.
      */
-    suspend fun musicBrainzRecordingIdsForEntity(recordingId: String): List<String> {
-        error("Strong MusicBrainz Recording identity read is not implemented")
-    }
+    suspend fun musicBrainzRecordingIdsForEntity(recordingId: String): List<String>
 
     /** Atomic, insert-only claim. False means conflicting MBID or Recording owner. */
-    suspend fun claimMusicBrainzRecordingIdentity(mbid: String, recordingId: String): Boolean {
-        error("Exclusive MusicBrainz Recording identity claim is not implemented")
-    }
+    suspend fun claimMusicBrainzRecordingIdentity(mbid: String, recordingId: String): Boolean
 
     suspend fun upsertRecording(recording: RecordingEntity)
 
