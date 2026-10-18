@@ -209,12 +209,18 @@ object BoundedContextPersistence {
     internal fun encode(state: State): String? = runCatching {
         require(validateState(state) != null) { "invalid bounded context state" }
         CanonicalQueueSnapshotCodec.encode(state)
-            ?: json.encodeToString(StoredState.serializer(), state.toStored())
+            ?: error("canonical queue v2 encoding failed")
     }.getOrNull()?.takeIf {
         it.toByteArray(StandardCharsets.UTF_8).size <= MAX_SERIALIZED_BYTES
     }
 
     /** Visible to JVM tests and used by [load] for defensive validation. */
+    /** Historical v1 fixture writer for compatibility tests only. Production never calls this. */
+internal fun encodeLegacySnapshotForTesting(state: State): String? = runCatching {
+    require(validateState(state) != null) { "invalid bounded context state" }
+    json.encodeToString(StoredState.serializer(), state.toStored())
+}.getOrNull()
+
     internal fun decode(raw: String): State? {
         if (raw.length > MAX_SERIALIZED_BYTES) return null
         if (raw.toByteArray(StandardCharsets.UTF_8).size > MAX_SERIALIZED_BYTES) return null

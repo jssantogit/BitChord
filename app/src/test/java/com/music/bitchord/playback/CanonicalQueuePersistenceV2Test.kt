@@ -292,25 +292,51 @@ class CanonicalQueuePersistenceV2Test {
     }
 
     @Test
-    fun `pure legacy snapshot remains schema one and readable`() {
-        val source = QueueSource("Legacy", PlaybackSourceType.BROWSE, "legacy")
-        val legacy = song(id = "legacy-video-id", source = source, entryId = "legacy-entry")
-        val state = state(
-            source = source,
-            contextSongs = listOf(legacy.copy(queueEntryId = null)),
-            entries = listOf(BoundedContextPersistence.Entry(legacy, 0, 0L)),
-            currentIndex = 0,
-            positionMs = 222L,
-            identities = emptyList(),
-        )
+fun `new unmapped legacy snapshot still writes schema two without sourceKey`() {
+    val source = QueueSource("Legacy", PlaybackSourceType.BROWSE, "legacy")
+    val legacy = song(id = "legacy-video-id", source = source, entryId = "legacy-entry")
+    val state = state(
+        source = source,
+        contextSongs = listOf(legacy.copy(queueEntryId = null)),
+        entries = listOf(BoundedContextPersistence.Entry(legacy, 0, 0L)),
+        currentIndex = 0,
+        positionMs = 222L,
+        identities = emptyList(),
+    )
 
-        val raw = requireNotNull(BoundedContextPersistence.encode(state))
-        val decoded = requireNotNull(BoundedContextPersistence.decode(raw))
+    val raw = requireNotNull(BoundedContextPersistence.encode(state))
+    val decoded = requireNotNull(BoundedContextPersistence.decode(raw))
 
-        assertTrue(raw.contains("\"schemaVersion\":1"))
-        assertEquals("legacy-video-id", decoded.entries.single().song.videoId)
-        assertEquals(222L, decoded.positionMs)
-    }
+    assertTrue(raw.contains("\"schemaVersion\":2"))
+    assertFalse(raw.contains("sourceKey"))
+    assertTrue(raw.contains("legacy-video-id"))
+    assertEquals("legacy-video-id", decoded.entries.single().song.videoId)
+    assertEquals(222L, decoded.positionMs)
+}
+
+@Test
+fun `historical schema one snapshot remains readable`() {
+    val source = QueueSource("Legacy", PlaybackSourceType.BROWSE, "legacy")
+    val legacy = song(id = "legacy-video-id", source = source, entryId = "legacy-entry")
+    val state = state(
+        source = source,
+        contextSongs = listOf(legacy.copy(queueEntryId = null)),
+        entries = listOf(BoundedContextPersistence.Entry(legacy, 0, 0L)),
+        currentIndex = 0,
+        positionMs = 333L,
+        identities = emptyList(),
+    )
+
+    val historical = requireNotNull(
+        BoundedContextPersistence.encodeLegacySnapshotForTesting(state),
+    )
+    val decoded = requireNotNull(BoundedContextPersistence.decode(historical))
+
+    assertTrue(historical.contains("\"schemaVersion\":1"))
+    assertTrue(historical.contains("sourceKey"))
+    assertEquals("legacy-video-id", decoded.entries.single().song.videoId)
+    assertEquals(333L, decoded.positionMs)
+}
 
     private fun state(
         source: QueueSource,
