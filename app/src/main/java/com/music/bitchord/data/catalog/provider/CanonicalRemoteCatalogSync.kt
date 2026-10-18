@@ -98,6 +98,20 @@ internal interface CanonicalCatalogSyncStore {
         externalId: String,
     ): String?
 
+
+    /**
+     * Strong Recording MBIDs are exclusive, unlike multi-valued ISRCs.
+     * Implementations must read the actual claims; silently assuming none is unsafe.
+     */
+    suspend fun musicBrainzRecordingIdsForEntity(recordingId: String): List<String> {
+        error("Strong MusicBrainz Recording identity read is not implemented")
+    }
+
+    /** Atomic, insert-only claim. False means conflicting MBID or Recording owner. */
+    suspend fun claimMusicBrainzRecordingIdentity(mbid: String, recordingId: String): Boolean {
+        error("Exclusive MusicBrainz Recording identity claim is not implemented")
+    }
+
     suspend fun upsertRecording(recording: RecordingEntity)
 
     suspend fun upsertRelease(release: ReleaseEntity)
@@ -228,13 +242,26 @@ internal object CanonicalRemoteCatalogSync {
                 )
             }.distinct()
             val unambiguousIsrcRecordingId = isrcRecordingEntityIds.singleOrNull()
+            // A new, unclaimed MBID cannot inherit an ISRC owner's different
+            // trusted MBID. Existing provider aliases/assets are still stable.
+            val compatibleIsrcRecordingId = if (
+                musicBrainzRecordingId != null &&
+                musicBrainzRecordingEntityId == null &&
+                unambiguousIsrcRecordingId != null
+            ) {
+                unambiguousIsrcRecordingId.takeIf { candidate ->
+                    store.musicBrainzRecordingIdsForEntity(candidate).all { it == musicBrainzRecordingId }
+                }
+            } else {
+                unambiguousIsrcRecordingId
+            }
 
             // Existing provider/asset state keeps resync stable. A trusted MBID is
             // stronger than ISRC. ISRC is consulted only when its known claims agree.
             val recordingId = providerRecordingId
                 ?: existingAsset?.recordingId
                 ?: musicBrainzRecordingEntityId
-                ?: unambiguousIsrcRecordingId
+                ?: compatibleIsrcRecordingId
                 ?: idFactory()
 
             store.upsertRecording(
@@ -253,13 +280,13 @@ internal object CanonicalRemoteCatalogSync {
                     entityId = recordingId,
                 ),
             )
-            identityConflicts += persistExternalEvidenceIfUnclaimed(
-                store = store,
-                provider = MUSICBRAINZ_PROVIDER,
-                entityType = RECORDING_ENTITY_TYPE,
-                externalId = musicBrainzRecordingId,
-                canonicalEntityId = recordingId,
-            )
+            // Never use the generic upsert for a trusted Recording MBID:
+            // it can create a second MBID on this Recording or transfer a key.
+            if (musicBrainzRecordingId != null &&
+                !store.claimMusicBrainzRecordingIdentity(musicBrainzRecordingId, recordingId)
+            ) {
+                identityConflicts += 1
+            }
             for (isrc in normalizedIsrcs) {
                 // Never transfer an existing ISRC claim. Conflict evidence is
                 // counted while the historical mapping remains untouched.
