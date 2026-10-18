@@ -24,25 +24,7 @@ class CanonicalQueueMigrationTest {
             mediaAssetId = "asset-user",
             providerKey = RoomCanonicalQueueResolver.LOCAL_PROVIDER,
         )
-        val state = BoundedContextPersistence.State(
-            context = ContextSnapshot(
-                contextToken = "context-token",
-                sourceKey = "${source.type.name}:${source.id}",
-                browseId = source.id,
-                songs = listOf(contextSong.copy(queueEntryId = null)),
-                version = 0L,
-                continuationToken = null,
-                continuationState = ContinuationState.EXHAUSTED,
-            ),
-            source = source,
-            window = QueueWindow(1).startAt(0).snapshot(),
-            entries = listOf(
-                BoundedContextPersistence.Entry(contextSong, canonicalIndex = 0, cycleId = 0L),
-                BoundedContextPersistence.Entry(userSong),
-            ),
-            currentIndex = 0,
-            positionMs = 0L,
-        )
+        val state = state(source, contextSong, userSong)
         var calls = 0
         val resolver = object : CanonicalQueueResolver {
             override suspend fun identifyAll(songs: List<Song>): List<CanonicalQueueIdentity?> {
@@ -63,6 +45,68 @@ class CanonicalQueueMigrationTest {
         assertEquals(contextIdentity, canonicalized.entries[0].canonicalIdentity)
         assertEquals(userIdentity, canonicalized.entries[1].canonicalIdentity)
     }
+
+    @Test
+    fun `anchored entry identity seeds context without rediscovery`() = runBlocking {
+        val source = QueueSource("Remote", PlaybackSourceType.BROWSE, "remote")
+        val contextSong = song("legacy-envelope", source, QueueTier.CONTEXT, "context-entry")
+        val identity = CanonicalQueueIdentity(
+            recordingId = "recording-remote",
+            mediaAssetId = "asset-remote",
+            providerKey = "opensubsonic:account",
+        )
+        val base = state(source, contextSong, null).copy(
+            entries = listOf(
+                BoundedContextPersistence.Entry(
+                    song = contextSong,
+                    canonicalIndex = 0,
+                    cycleId = 0L,
+                    canonicalIdentity = identity,
+                ),
+            ),
+        )
+        var identified = 0
+        val resolver = object : CanonicalQueueResolver {
+            override suspend fun identifyAll(songs: List<Song>): List<CanonicalQueueIdentity?> {
+                identified += songs.size
+                return songs.map { null }
+            }
+
+            override suspend fun resolveAll(
+                identities: List<CanonicalQueueIdentity?>,
+            ): List<CanonicalPlayableAsset?> = error("not part of canonicalize")
+        }
+
+        val canonicalized = CanonicalQueueMigration.canonicalize(base, resolver)
+
+        assertEquals(0, identified)
+        assertEquals(listOf(identity), canonicalized.contextIdentities)
+        assertEquals(identity, canonicalized.entries.single().canonicalIdentity)
+    }
+
+    private fun state(
+        source: QueueSource,
+        contextSong: Song,
+        userSong: Song?,
+    ) = BoundedContextPersistence.State(
+        context = ContextSnapshot(
+            contextToken = "context-token",
+            sourceKey = "${source.type.name}:${source.id}",
+            browseId = source.id,
+            songs = listOf(contextSong.copy(queueEntryId = null)),
+            version = 0L,
+            continuationToken = null,
+            continuationState = ContinuationState.EXHAUSTED,
+        ),
+        source = source,
+        window = QueueWindow(1).startAt(0).snapshot(),
+        entries = buildList {
+            add(BoundedContextPersistence.Entry(contextSong, canonicalIndex = 0, cycleId = 0L))
+            userSong?.let { add(BoundedContextPersistence.Entry(it)) }
+        },
+        currentIndex = 0,
+        positionMs = 0L,
+    )
 
     private fun song(
         id: String,
