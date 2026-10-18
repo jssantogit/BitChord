@@ -31,6 +31,7 @@ import com.music.bitchord.playback.AudioCache
 import com.music.bitchord.playback.LastPlayed
 import com.music.bitchord.playback.BoundedContextPersistence
 import com.music.bitchord.playback.OriginalVersion
+import com.music.bitchord.playback.PlaybackListeningBridge
 import com.music.bitchord.data.innertube.Innertube
 import com.music.bitchord.data.innertube.AndroidStreamHooks
 import com.music.bitchord.data.listentogether.ListenTogether
@@ -181,6 +182,12 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         // both live in this process — one owner, one directory.
         Diagnostics.span(DiagnosticCategory.STARTUP, "listening_stats_init") {
             ListeningStats.init(this)
+        }
+        // Listening telemetry only stores application context here. The Media3
+        // controller remains lazy and is attached by the sampler once real audio
+        // activity is observed, so this does not start PlaybackService.
+        Diagnostics.span(DiagnosticCategory.STARTUP, "listening_event_bridge_init") {
+            PlaybackListeningBridge.init(this)
         }
         // After AppSettings, whose switch decides whether half of it runs.
         Diagnostics.span(DiagnosticCategory.STARTUP, "artist_facts_init") {
