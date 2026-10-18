@@ -28,14 +28,14 @@ internal object CanonicalQueueMigration {
         if (identificationInput.isNotEmpty()) {
             val detected = resolver.identifyAll(identificationInput)
             if (detected.size == identificationInput.size) {
-                var cursor = 0
-                contextPending.forEach { index ->
-                    contextIdentities[index] = detected[cursor++]
+                contextPending.forEachIndexed { ordinal, index ->
+                    contextIdentities[index] = detected[ordinal]
                 }
-                entryPending.forEach { index ->
+                val entryOffset = contextPending.size
+                entryPending.forEachIndexed { ordinal, index ->
                     val anchored = state.entries[index].canonicalIndex
                         ?.let(contextIdentities::getOrNull)
-                    entryIdentities[index] = anchored ?: detected[cursor++]
+                    entryIdentities[index] = anchored ?: detected[entryOffset + ordinal]
                 }
             }
         }
