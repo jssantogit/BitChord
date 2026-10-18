@@ -25,16 +25,18 @@ internal class LibraryRecommendationCandidateSource(
 }
 
 /**
- * Library Mode composition: availability -> candidates -> existing PersonalRanker.
- * No second scoring algorithm or persistence is introduced here.
+ * Library Mode composition: availability -> candidates -> PersonalRanker -> session context.
+ * Limit is deliberately applied only after both ranking stages.
  */
 internal class LibraryRecommendationPipeline(
     private val candidateSource: LibraryRecommendationCandidateSource,
     private val personalRanker: PersonalRanker,
+    private val sessionContextReranker: SessionContextReranker,
 ) {
-    suspend fun rank(limit: Int? = null): List<RankedRecordingCandidate> {
+    suspend fun rank(limit: Int? = null): List<SessionContextRankedCandidate> {
         require(limit == null || limit > 0) { "Recommendation limit must be positive" }
-        val ranked = personalRanker.rank(candidateSource.candidates())
-        return limit?.let(ranked::take) ?: ranked
+        val baseRanking = personalRanker.rank(candidateSource.candidates())
+        val contextualRanking = sessionContextReranker.rerank(baseRanking)
+        return limit?.let(contextualRanking::take) ?: contextualRanking
     }
 }

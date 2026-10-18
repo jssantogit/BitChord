@@ -121,7 +121,11 @@ class LibraryRecommendationPipelineIntegrationTest {
             ratingReader = ratingStore,
             nowEpochMs = { clock.now },
         )
-        val pipeline = LibraryRecommendationPipeline(candidateSource, ranker)
+        val pipeline = LibraryRecommendationPipeline(
+            candidateSource = candidateSource,
+            personalRanker = ranker,
+            sessionContextReranker = SessionContextReranker(eventStore, nowEpochMs = { clock.now }),
+        )
 
         val localBehaviorBefore = eventStore.behaviorSummary(COMPLETED_LOCAL)
         val favoriteHistoryBefore = ratingStore.ratingHistory(FAVORITE_REMOTE)
@@ -138,11 +142,12 @@ class LibraryRecommendationPipelineIntegrationTest {
             listOf(COMPLETED_LOCAL, FAVORITE_REMOTE).sorted(),
             candidates.map { it.recordingId },
         )
-        assertEquals(listOf(FAVORITE_REMOTE, COMPLETED_LOCAL), ranked.map { it.recordingId })
-        assertTrue(RecommendationReason.EXPLICIT_FAVORITE in ranked.first().reasons)
-        assertTrue(RecommendationReason.COMPLETION_HEAVY in ranked[1].reasons)
-        assertFalse(ranked.any { it.recordingId == INACTIVE_REMOTE })
-        assertFalse(ranked.any { it.recordingId == HISTORY_ONLY })
+        assertEquals(listOf(FAVORITE_REMOTE, COMPLETED_LOCAL), ranked.map { it.base.recordingId })
+        assertTrue(RecommendationReason.EXPLICIT_FAVORITE in ranked.first().base.reasons)
+        assertTrue(RecommendationReason.COMPLETION_HEAVY in ranked[1].base.reasons)
+        assertTrue(ranked.all { it.sessionAdjustment == 0.0 && it.finalScore == it.base.score })
+        assertFalse(ranked.any { it.base.recordingId == INACTIVE_REMOTE })
+        assertFalse(ranked.any { it.base.recordingId == HISTORY_ONLY })
 
         assertEquals(localBehaviorBefore, eventStore.behaviorSummary(COMPLETED_LOCAL))
         assertEquals(favoriteHistoryBefore, ratingStore.ratingHistory(FAVORITE_REMOTE))
