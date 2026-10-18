@@ -2,8 +2,10 @@ name: Perf UI activity wiring helper
 
 on:
   push:
-    branches: [perf/runtime-performance-probes]
-    paths: [.github/workflows/_perf-ui-activity-wire.yml]
+    branches:
+      - perf/runtime-performance-probes
+    paths:
+      - .github/workflows/_perf-ui-activity-wire.yml
 
 permissions:
   contents: write
@@ -31,113 +33,16 @@ jobs:
               p.write_text(text.replace(old, new, 1))
 
           artwork = "sharedUi/src/jvmSharedMain/kotlin/com/music/bitchord/ui/player/ArtworkMeshBackdrop.kt"
-          replace_once(
-              artwork,
-              "import androidx.compose.runtime.LaunchedEffect\nimport androidx.compose.runtime.getValue\n",
-              "import androidx.compose.runtime.LaunchedEffect\nimport androidx.compose.runtime.SideEffect\nimport androidx.compose.runtime.getValue\n",
-          )
-          replace_once(
-              artwork,
-              "import com.music.bitchord.data.model.artworkAt\n",
-              "import com.music.bitchord.data.model.artworkAt\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiContext\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiSignal\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiStateKey\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiStateValue\n",
-          )
-          replace_once(
-              artwork,
-              """        mesh = withContext(Dispatchers.Default) { meshOf(frame, imageUrl?.hashCode() ?: 0) } ?: mesh
-        meshUrl = imageUrl
-""",
-              """        val updated = withContext(Dispatchers.Default) { meshOf(frame, imageUrl?.hashCode() ?: 0) }
-        if (updated != null) {
-            mesh = updated
-            RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.CANVAS_FRAME_MESH_UPDATE)
-        }
-        meshUrl = imageUrl
-""",
-          )
-          replace_once(
-              artwork,
-              """    val canBlur = !reduceDynamicBlur && renderEffectBlurSupported
-
-    // The mesh on screen, and the one fading in over it. Two states rather than
-""",
-              """    val canBlur = !reduceDynamicBlur && renderEffectBlurSupported
-
-    SideEffect {
-        RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.ARTWORK_BACKDROP_RECOMPOSITION)
-    }
-    LaunchedEffect(canBlur) {
-        RuntimePerformanceUiContext.setState(
-            RuntimePerformanceUiStateKey.DYNAMIC_BLUR,
-            if (canBlur) RuntimePerformanceUiStateValue.ENABLED else RuntimePerformanceUiStateValue.REDUCED,
-        )
-    }
-
-    // The mesh on screen, and the one fading in over it. Two states rather than
-""",
-          )
-          replace_once(
-              artwork,
-              """        val current = shown
-        if (next === current) return@LaunchedEffect
-
-        // Nothing to fade *from* on the first read, and nothing to fade at all
-""",
-              """        val current = shown
-        if (next === current) return@LaunchedEffect
-        RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.ARTWORK_MESH_UPDATE)
-
-        // Nothing to fade *from* on the first read, and nothing to fade at all
-""",
-          )
+          replace_once(artwork, "import androidx.compose.runtime.LaunchedEffect\nimport androidx.compose.runtime.getValue\n", "import androidx.compose.runtime.LaunchedEffect\nimport androidx.compose.runtime.SideEffect\nimport androidx.compose.runtime.getValue\n")
+          replace_once(artwork, "import com.music.bitchord.data.model.artworkAt\n", "import com.music.bitchord.data.model.artworkAt\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiContext\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiSignal\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiStateKey\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiStateValue\n")
+          replace_once(artwork, "        mesh = withContext(Dispatchers.Default) { meshOf(frame, imageUrl?.hashCode() ?: 0) } ?: mesh\n        meshUrl = imageUrl\n", "        val updated = withContext(Dispatchers.Default) { meshOf(frame, imageUrl?.hashCode() ?: 0) }\n        if (updated != null) {\n            mesh = updated\n            RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.CANVAS_FRAME_MESH_UPDATE)\n        }\n        meshUrl = imageUrl\n")
+          replace_once(artwork, "    val canBlur = !reduceDynamicBlur && renderEffectBlurSupported\n\n    // The mesh on screen, and the one fading in over it. Two states rather than\n", "    val canBlur = !reduceDynamicBlur && renderEffectBlurSupported\n\n    SideEffect {\n        RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.ARTWORK_BACKDROP_RECOMPOSITION)\n    }\n    LaunchedEffect(canBlur) {\n        RuntimePerformanceUiContext.setState(\n            RuntimePerformanceUiStateKey.DYNAMIC_BLUR,\n            if (canBlur) RuntimePerformanceUiStateValue.ENABLED else RuntimePerformanceUiStateValue.REDUCED,\n        )\n    }\n\n    // The mesh on screen, and the one fading in over it. Two states rather than\n")
+          replace_once(artwork, "        val current = shown\n        if (next === current) return@LaunchedEffect\n\n        // Nothing to fade *from* on the first read, and nothing to fade at all\n", "        val current = shown\n        if (next === current) return@LaunchedEffect\n        RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.ARTWORK_MESH_UPDATE)\n\n        // Nothing to fade *from* on the first read, and nothing to fade at all\n")
 
           now_playing = "sharedUi/src/jvmSharedMain/kotlin/com/music/bitchord/ui/player/NowPlayingScreen.kt"
-          replace_once(
-              now_playing,
-              "import androidx.compose.runtime.SideEffect\n",
-              "import androidx.compose.runtime.SideEffect\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiContext\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiSignal\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiStateKey\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiStateValue\n",
-          )
-          replace_once(
-              now_playing,
-              """    modifier: Modifier = Modifier,
-) {
-    val density = LocalDensity.current
-""",
-              """    modifier: Modifier = Modifier,
-) {
-    SideEffect {
-        RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.NOW_PLAYING_RECOMPOSITION)
-    }
-
-    val density = LocalDensity.current
-""",
-          )
-          replace_once(
-              now_playing,
-              """    val canvasRenderedState = remember(canvas?.url) { mutableStateOf(false) }
-    var canvasRendered by canvasRenderedState
-    var canvasFrame by remember(canvas?.url) { mutableStateOf<ImageBitmap?>(null) }
-    // Spotify's phone presentation starts with the full control deck over its
-""",
-              """    val canvasRenderedState = remember(canvas?.url) { mutableStateOf(false) }
-    var canvasRendered by canvasRenderedState
-    var canvasFrame by remember(canvas?.url) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(canvasRendered) {
-        RuntimePerformanceUiContext.setState(
-            RuntimePerformanceUiStateKey.CANVAS_MODE,
-            if (canvasRendered) RuntimePerformanceUiStateValue.ACTIVE else RuntimePerformanceUiStateValue.INACTIVE,
-        )
-    }
-    DisposableEffect(Unit) {
-        onDispose {
-            RuntimePerformanceUiContext.setState(
-                RuntimePerformanceUiStateKey.CANVAS_MODE,
-                RuntimePerformanceUiStateValue.INACTIVE,
-            )
-        }
-    }
-    // Spotify's phone presentation starts with the full control deck over its
-""",
-          )
+          replace_once(now_playing, "import androidx.compose.runtime.SideEffect\n", "import androidx.compose.runtime.SideEffect\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiContext\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiSignal\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiStateKey\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiStateValue\n")
+          replace_once(now_playing, "    modifier: Modifier = Modifier,\n) {\n    val density = LocalDensity.current\n", "    modifier: Modifier = Modifier,\n) {\n    SideEffect {\n        RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.NOW_PLAYING_RECOMPOSITION)\n    }\n\n    val density = LocalDensity.current\n")
+          replace_once(now_playing, "    val canvasRenderedState = remember(canvas?.url) { mutableStateOf(false) }\n    var canvasRendered by canvasRenderedState\n    var canvasFrame by remember(canvas?.url) { mutableStateOf<ImageBitmap?>(null) }\n    // Spotify's phone presentation starts with the full control deck over its\n", "    val canvasRenderedState = remember(canvas?.url) { mutableStateOf(false) }\n    var canvasRendered by canvasRenderedState\n    var canvasFrame by remember(canvas?.url) { mutableStateOf<ImageBitmap?>(null) }\n    LaunchedEffect(canvasRendered) {\n        RuntimePerformanceUiContext.setState(\n            RuntimePerformanceUiStateKey.CANVAS_MODE,\n            if (canvasRendered) RuntimePerformanceUiStateValue.ACTIVE else RuntimePerformanceUiStateValue.INACTIVE,\n        )\n    }\n    DisposableEffect(Unit) {\n        onDispose {\n            RuntimePerformanceUiContext.setState(\n                RuntimePerformanceUiStateKey.CANVAS_MODE,\n                RuntimePerformanceUiStateValue.INACTIVE,\n            )\n        }\n    }\n    // Spotify's phone presentation starts with the full control deck over its\n")
 
           Path(".github/workflows/_perf-ui-activity-wire.yml").unlink()
           PY
