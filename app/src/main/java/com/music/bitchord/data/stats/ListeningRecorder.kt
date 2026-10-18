@@ -3,6 +3,7 @@ package com.music.bitchord.data.stats
 import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.durationMillis
+import com.music.bitchord.playback.PlaybackListeningBridge
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -59,6 +60,8 @@ object ListeningRecorder {
     @Synchronized
     fun onSample(song: Song, durationMs: Long) {
         val now = System.currentTimeMillis()
+        val knownLength = (durationMs.takeIf { it > 0 } ?: song.durationMillis())
+            .takeIf { it > 0 }
         if (song.videoId != currentId) {
             // A new track anchors the clock and contributes nothing yet — see
             // the class note on undercounting.
@@ -66,6 +69,10 @@ object ListeningRecorder {
             lastSampleAt = now
             playedThisTrack = 0L
             playCounted = false
+            // First-party history reuses the exact same wall-clock evidence.
+            // The bridge itself stays provider-neutral and Media3 callbacks
+            // provide the eventual end cause.
+            PlaybackListeningBridge.observeSample(song, knownLength, listenedDeltaMs = 0L)
             return
         }
         val step = (now - lastSampleAt).coerceIn(0L, MAX_STEP_MS)
@@ -73,7 +80,15 @@ object ListeningRecorder {
         if (step <= 0L) return
         playedThisTrack += step
 
-        val length = durationMs.takeIf { it > 0 } ?: song.durationMillis()
+        val length = knownLength ?: 0L
+        // Feed only the actual increment. Position is never used, so seeks
+        // cannot inflate listening; the sampler resets across pause/resume and
+        // each resumed segment remains additive.
+        PlaybackListeningBridge.observeSample(
+            song = song,
+            recordingDurationMs = knownLength,
+            listenedDeltaMs = step,
+        )
         val threshold = if (length > 0) {
             min(length / 2, PLAY_CEILING_MS).coerceAtLeast(PLAY_FLOOR_MS)
         } else {
