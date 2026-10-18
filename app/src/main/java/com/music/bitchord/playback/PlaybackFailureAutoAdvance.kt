@@ -209,7 +209,7 @@ internal fun failureOccurrenceKey(
 ): String = when {
     tier == QueueTier.CONTEXT && canonicalIndex != null && canonicalIndex >= 0 && contextCycleId != null ->
         "context:$canonicalIndex:cycle:$contextCycleId"
-    !queueEntryId.isNullOrBlank() -> "entry:$queueEntryId"
+    !queueEntryId.isNullOrBlank() -> "entry:$queueEntryId:slot:$physicalIndex"
     else -> "slot:$physicalIndex"
 }
 
