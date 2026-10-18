@@ -26,8 +26,8 @@ internal class LibraryRecommendationCandidateSource(
 }
 
 /**
- * Library Mode composition: availability -> candidates -> PersonalRanker -> session context.
- * Limit is deliberately applied only after both ranking stages.
+ * Library Mode composition: availability -> candidates -> PersonalRanker -> session
+ * context -> artist diversity. Limit is applied only after all ranking stages.
  *
  * Observability is read-only and defaults to a no-op reporter. The reporter consumes the
  * rankers' existing explanations; it never participates in scoring or ordering.
@@ -36,9 +36,10 @@ internal class LibraryRecommendationPipeline(
     private val candidateSource: LibraryRecommendationCandidateSource,
     private val personalRanker: PersonalRanker,
     private val sessionContextReranker: SessionContextReranker,
+    private val artistAwareDiversityReranker: ArtistAwareDiversityReranker,
     private val traceReporter: RecommendationTraceReporter = RecommendationTraceReporter.NO_OP,
 ) {
-    suspend fun rank(limit: Int? = null): List<SessionContextRankedCandidate> {
+    suspend fun rank(limit: Int? = null): List<DiversityRankedCandidate> {
         require(limit == null || limit > 0) { "Recommendation limit must be positive" }
         val trace = traceReporter.startLibraryRank(limit)
         return try {
@@ -63,10 +64,19 @@ internal class LibraryRecommendationPipeline(
             }
             trace.stageResult(RecommendationTraceStage.SESSION_RERANK, contextualRanking.size)
 
-            val finalOutput = limit?.let(contextualRanking::take) ?: contextualRanking
+            val diversifiedRanking = trace.span(
+                stage = RecommendationTraceStage.ARTIST_DIVERSITY,
+                attributes = mapOf("inputCount" to contextualRanking.size.toString()),
+            ) {
+                artistAwareDiversityReranker.rerank(contextualRanking)
+            }
+            trace.stageResult(RecommendationTraceStage.ARTIST_DIVERSITY, diversifiedRanking.size)
+
+            val finalOutput = limit?.let(diversifiedRanking::take) ?: diversifiedRanking
             trace.complete(
                 baseRanking = baseRanking,
                 contextualRanking = contextualRanking,
+                diversifiedRanking = diversifiedRanking,
                 finalOutput = finalOutput,
             )
             finalOutput

@@ -1,5 +1,6 @@
 package com.music.bitchord.data.catalog.provider.opensubsonic
 
+import com.music.bitchord.data.catalog.identity.IsrcNormalizer
 import com.music.bitchord.data.catalog.provider.ProviderAlbum
 import com.music.bitchord.data.catalog.provider.ProviderArtist
 import com.music.bitchord.data.catalog.provider.ProviderCapabilities
@@ -273,6 +274,7 @@ internal class OpenSubsonicProvider(
             bitDepth = song.bitDepth,
             samplingRateHz = song.samplingRate,
             artists = trackArtists,
+            isrcs = IsrcNormalizer.normalizeDistinct(song.isrc.orEmpty()),
         )
     }
 
@@ -445,4 +447,5 @@ private data class SubsonicSong(
     val samplingRate: Int? = null,
     val created: String? = null,
     val musicBrainzId: String? = null,
+    val isrc: List<String>? = null,
 )

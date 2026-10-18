@@ -13,6 +13,7 @@ internal enum class RecommendationTraceStage(val key: String) {
     CANDIDATE_GENERATION("candidate_generation"),
     PERSONAL_RANK("personal_rank"),
     SESSION_RERANK("session_rerank"),
+    ARTIST_DIVERSITY("artist_diversity"),
 }
 
 /** Bounded detail policy. These limits are diagnostics policy, never ranking policy. */
@@ -52,7 +53,8 @@ internal interface RecommendationRunTrace {
     fun complete(
         baseRanking: List<RankedRecordingCandidate>,
         contextualRanking: List<SessionContextRankedCandidate>,
-        finalOutput: List<SessionContextRankedCandidate>,
+        diversifiedRanking: List<DiversityRankedCandidate>,
+        finalOutput: List<DiversityRankedCandidate>,
     )
 
     fun fail(error: Throwable)
@@ -71,7 +73,8 @@ private object NoOpRecommendationRunTrace : RecommendationRunTrace {
     override fun complete(
         baseRanking: List<RankedRecordingCandidate>,
         contextualRanking: List<SessionContextRankedCandidate>,
-        finalOutput: List<SessionContextRankedCandidate>,
+        diversifiedRanking: List<DiversityRankedCandidate>,
+        finalOutput: List<DiversityRankedCandidate>,
     ) = Unit
 
     override fun fail(error: Throwable) = Unit
@@ -118,18 +121,23 @@ private class StructuredRecommendationRunTrace(
     override fun complete(
         baseRanking: List<RankedRecordingCandidate>,
         contextualRanking: List<SessionContextRankedCandidate>,
-        finalOutput: List<SessionContextRankedCandidate>,
+        diversifiedRanking: List<DiversityRankedCandidate>,
+        finalOutput: List<DiversityRankedCandidate>,
     ) {
         val baseRanks = baseRanking.mapIndexed { index, candidate -> candidate.recordingId to index + 1 }.toMap()
         val contextualRanks = contextualRanking
             .mapIndexed { index, candidate -> candidate.base.recordingId to index + 1 }
             .toMap()
         val contextualById = contextualRanking.associateBy { it.base.recordingId }
-        val outputIds = finalOutput.mapTo(LinkedHashSet()) { it.base.recordingId }
+        val diversifiedById = diversifiedRanking.associateBy { it.base.base.recordingId }
+        val diversityRanks = diversifiedRanking
+            .mapIndexed { index, candidate -> candidate.base.base.recordingId to index + 1 }
+            .toMap()
+        val outputIds = finalOutput.mapTo(LinkedHashSet()) { it.base.base.recordingId }
 
         val topIds = finalOutput
             .take(policy.standardTopResults)
-            .mapTo(LinkedHashSet()) { it.base.recordingId }
+            .mapTo(LinkedHashSet()) { it.base.base.recordingId }
         val moverIds = contextualRanking
             .mapNotNull { candidate ->
                 val id = candidate.base.recordingId
@@ -175,6 +183,8 @@ private class StructuredRecommendationRunTrace(
                     contextual = contextual,
                     baseRank = baseRank,
                     contextualRank = contextualRank,
+                    diversified = diversifiedById[id],
+                    diversityRank = diversityRanks[id],
                     inFinalOutput = id in outputIds,
                     selection = when {
                         inTop && inMovers -> "top_and_mover"
@@ -192,6 +202,7 @@ private class StructuredRecommendationRunTrace(
             attributes = mapOf(
                 "candidateCount" to baseRanking.size.toString(),
                 "contextualCount" to contextualRanking.size.toString(),
+                "diversifiedCount" to diversifiedRanking.size.toString(),
                 "outputCount" to finalOutput.size.toString(),
                 "requestedLimit" to (requestedLimit?.toString() ?: "all"),
                 "detailCount" to selectedIds.take(policy.verboseMaxCandidates).size.toString(),
@@ -221,6 +232,8 @@ private class StructuredRecommendationRunTrace(
         contextual: SessionContextRankedCandidate,
         baseRank: Int,
         contextualRank: Int,
+        diversified: DiversityRankedCandidate?,
+        diversityRank: Int?,
         inFinalOutput: Boolean,
         selection: String,
     ): Map<String, String> {
@@ -232,6 +245,10 @@ private class StructuredRecommendationRunTrace(
             "inFinalOutput" to inFinalOutput.toString(),
             "baseRank" to baseRank.toString(),
             "contextualRank" to contextualRank.toString(),
+            "diversityRank" to (diversityRank?.toString() ?: "unavailable"),
+            "diversityAdjustment" to (diversified?.diversityAdjustment?.toString() ?: "unavailable"),
+            "diversityFinalScore" to (diversified?.finalScore?.toString() ?: "unavailable"),
+            "diversityReasons" to (diversified?.diversityReasons?.map(Enum<*>::name)?.sorted()?.joinToString(",") ?: ""),
             "rankDelta" to (baseRank - contextualRank).toString(),
             "baseScore" to base.score.toString(),
             "sessionAdjustment" to contextual.sessionAdjustment.toString(),

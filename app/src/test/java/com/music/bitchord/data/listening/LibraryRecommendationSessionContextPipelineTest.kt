@@ -1,6 +1,7 @@
 package com.music.bitchord.data.listening
 
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReader
+import com.music.bitchord.data.catalog.CanonicalRecordingArtistGroupingReader
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -11,7 +12,7 @@ import org.junit.Test
 class LibraryRecommendationSessionContextPipelineTest {
 
     @Test
-    fun `pipeline applies session context before limit so base outsider can become top result`() = runTest {
+    fun `pipeline applies session context before diversity and limit so base outsider can become top result`() = runTest {
         val now = 30L * 24L * 60L * 60L * 1000L
         val source = LibraryRecommendationCandidateSource(
             CanonicalLibraryAvailabilityReader { listOf("recording-a", "recording-b", "recording-c") },
@@ -29,20 +30,27 @@ class LibraryRecommendationSessionContextPipelineTest {
             ),
         )
         val reranker = SessionContextReranker(contextReader, nowEpochMs = { now })
-        val pipeline = LibraryRecommendationPipeline(source, ranker, reranker)
+        val pipeline = LibraryRecommendationPipeline(
+            source,
+            ranker,
+            reranker,
+            ArtistAwareDiversityReranker(NoArtistGroupingReader),
+        )
 
         val base = ranker.rank(source.candidates())
         val limited = pipeline.rank(limit = 1)
 
         assertEquals(listOf("recording-a", "recording-b", "recording-c"), base.map { it.recordingId })
-        assertEquals(listOf("recording-c"), limited.map { it.base.recordingId })
+        assertEquals(listOf("recording-c"), limited.map { it.base.base.recordingId })
         assertEquals(1, contextReader.currentReads)
         assertEquals(1, contextReader.eventReads)
+        assertEquals(0.0, limited.single().diversityAdjustment, 0.000001)
     }
 
     @Test
-    fun `pipeline rejects invalid limit before reading candidates or session`() = runTest {
+    fun `pipeline rejects invalid limit before reading candidates session or diversity`() = runTest {
         var availabilityReads = 0
+        var groupingReads = 0
         val source = LibraryRecommendationCandidateSource(
             CanonicalLibraryAvailabilityReader {
                 availabilityReads += 1
@@ -54,6 +62,12 @@ class LibraryRecommendationSessionContextPipelineTest {
             source,
             PersonalRanker(NeutralBehaviorReader, Ratings(emptyMap()), nowEpochMs = { 1_000L }),
             SessionContextReranker(contextReader, nowEpochMs = { 1_000L }),
+            ArtistAwareDiversityReranker(
+                CanonicalRecordingArtistGroupingReader { ids ->
+                    groupingReads += 1
+                    ids.associateWith { emptyList() }
+                },
+            ),
         )
 
         val failure = runCatching { pipeline.rank(limit = 0) }.exceptionOrNull()
@@ -61,6 +75,12 @@ class LibraryRecommendationSessionContextPipelineTest {
         assertTrue(failure is IllegalArgumentException)
         assertEquals(0, availabilityReads)
         assertEquals(0, contextReader.currentReads)
+        assertEquals(0, groupingReads)
+    }
+
+    private object NoArtistGroupingReader : CanonicalRecordingArtistGroupingReader {
+        override suspend fun artistIdsByRecording(recordingIds: List<String>): Map<String, List<String>> =
+            recordingIds.associateWith { emptyList() }
     }
 
     private object NeutralBehaviorReader : ListeningBehaviorReader {

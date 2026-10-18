@@ -132,6 +132,22 @@ class OpenSubsonicCatalogUpdateTest {
             externalId: String,
         ): String? = identities[key(provider, entityType, externalId)]
 
+
+        override suspend fun musicBrainzRecordingIdsForEntity(recordingId: String): List<String> =
+            identities.entries
+                .filter { (key, owner) -> key.startsWith("musicbrainz|recording|") && owner == recordingId }
+                .map { (key, _) -> key.removePrefix("musicbrainz|recording|") }
+
+        override suspend fun claimMusicBrainzRecordingIdentity(mbid: String, recordingId: String): Boolean {
+            val identityKey = "musicbrainz|recording|$mbid"
+            val owner = identities[identityKey]
+            if (musicBrainzRecordingIdsForEntity(recordingId).any { it != mbid } ||
+                (owner != null && owner != recordingId)
+            ) return false
+            if (owner == null) identities[identityKey] = recordingId
+            return true
+        }
+
         override suspend fun upsertRecording(recording: RecordingEntity) {
             recordings[recording.id] = recording
         }

@@ -6,10 +6,12 @@ import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityRepository
 import com.music.bitchord.data.catalog.CanonicalLocalLibrary
+import com.music.bitchord.data.catalog.CanonicalRecordingArtistGroupingRepository
 import com.music.bitchord.data.catalog.MediaAssetEntity
 import com.music.bitchord.data.catalog.OpenSubsonicLibraryProviderConfigurationReader
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.RoomCanonicalLibraryAvailabilityStore
+import com.music.bitchord.data.catalog.RoomCanonicalRecordingArtistGroupingStore
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountDraft
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountPersistence
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountRecord
@@ -51,7 +53,7 @@ class LibraryRecommendationPipelineIntegrationTest {
     }
 
     @Test
-    fun `real Room catalog flows through candidates and first-party stores into PersonalRanker`() = runTest {
+    fun `real Room catalog flows through candidates and first-party stores into ranking pipeline`() = runTest {
         catalogDatabase = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
             .allowMainThreadQueries()
             .build()
@@ -125,6 +127,11 @@ class LibraryRecommendationPipelineIntegrationTest {
             candidateSource = candidateSource,
             personalRanker = ranker,
             sessionContextReranker = SessionContextReranker(eventStore, nowEpochMs = { clock.now }),
+            artistAwareDiversityReranker = ArtistAwareDiversityReranker(
+                CanonicalRecordingArtistGroupingRepository(
+                    RoomCanonicalRecordingArtistGroupingStore(catalogDao),
+                ),
+            ),
         )
 
         val localBehaviorBefore = eventStore.behaviorSummary(COMPLETED_LOCAL)
@@ -142,12 +149,17 @@ class LibraryRecommendationPipelineIntegrationTest {
             listOf(COMPLETED_LOCAL, FAVORITE_REMOTE).sorted(),
             candidates.map { it.recordingId },
         )
-        assertEquals(listOf(FAVORITE_REMOTE, COMPLETED_LOCAL), ranked.map { it.base.recordingId })
-        assertTrue(RecommendationReason.EXPLICIT_FAVORITE in ranked.first().base.reasons)
-        assertTrue(RecommendationReason.COMPLETION_HEAVY in ranked[1].base.reasons)
-        assertTrue(ranked.all { it.sessionAdjustment == 0.0 && it.finalScore == it.base.score })
-        assertFalse(ranked.any { it.base.recordingId == INACTIVE_REMOTE })
-        assertFalse(ranked.any { it.base.recordingId == HISTORY_ONLY })
+        assertEquals(listOf(FAVORITE_REMOTE, COMPLETED_LOCAL), ranked.map { it.base.base.recordingId })
+        assertTrue(RecommendationReason.EXPLICIT_FAVORITE in ranked.first().base.base.reasons)
+        assertTrue(RecommendationReason.COMPLETION_HEAVY in ranked[1].base.base.reasons)
+        assertTrue(ranked.all {
+            it.base.sessionAdjustment == 0.0 &&
+                it.base.finalScore == it.base.base.score &&
+                it.diversityAdjustment == 0.0 &&
+                it.finalScore == it.base.finalScore
+        })
+        assertFalse(ranked.any { it.base.base.recordingId == INACTIVE_REMOTE })
+        assertFalse(ranked.any { it.base.base.recordingId == HISTORY_ONLY })
 
         assertEquals(localBehaviorBefore, eventStore.behaviorSummary(COMPLETED_LOCAL))
         assertEquals(favoriteHistoryBefore, ratingStore.ratingHistory(FAVORITE_REMOTE))
