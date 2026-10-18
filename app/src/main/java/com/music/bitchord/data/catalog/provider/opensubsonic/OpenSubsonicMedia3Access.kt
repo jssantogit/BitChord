@@ -10,6 +10,8 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import com.music.bitchord.data.Http
+import com.music.bitchord.diagnostics.BoundedPerformanceProbe
+import com.music.bitchord.diagnostics.DiagnosticCategory
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.util.concurrent.CopyOnWriteArrayList
@@ -21,6 +23,7 @@ import kotlinx.coroutines.runBlocking
  * runtime request. Playback never receives [OpenSubsonicRuntimeAudioRequest].
  */
 internal class OpenSubsonicRuntimeTransport(
+    private val performanceProbe: BoundedPerformanceProbe = BoundedPerformanceProbe(),
     private val resolve: suspend (mediaAssetId: String) -> OpenSubsonicMediaAccessResult,
 ) {
     suspend fun resolveRuntime(
@@ -29,7 +32,13 @@ internal class OpenSubsonicRuntimeTransport(
         providerKey: String,
     ): OpenSubsonicRuntimeAudioRequest {
         val result = try {
-            resolve(mediaAssetId)
+            performanceProbe.measureSuspend(
+                category = DiagnosticCategory.NETWORK,
+                name = "runtime_stream_resolution",
+                metadata = mapOf("provider" to "opensubsonic"),
+            ) {
+                resolve(mediaAssetId)
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Throwable) {
@@ -234,7 +243,7 @@ internal fun androidOpenSubsonicMediaDataSourceFactory(
 ): OpenSubsonicMediaDataSourceFactory {
     val access = androidOpenSubsonicMediaAccess(context.applicationContext)
     return OpenSubsonicMediaDataSourceFactory(
-        transport = OpenSubsonicRuntimeTransport(access::resolve),
+        transport = OpenSubsonicRuntimeTransport(resolve = access::resolve),
         upstreamFactory = OkHttpDataSource.Factory(Http.client),
     )
 }

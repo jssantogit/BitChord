@@ -64,9 +64,10 @@ class LibraryRecommendationPipelineTest {
 
         val ranked = pipeline.rank()
 
-        assertEquals(listOf("recording-favorite", "recording-neutral"), ranked.map { it.recordingId })
-        assertTrue(RecommendationReason.EXPLICIT_FAVORITE in ranked.first().reasons)
+        assertEquals(listOf("recording-favorite", "recording-neutral"), ranked.map { it.base.recordingId })
+        assertTrue(RecommendationReason.EXPLICIT_FAVORITE in ranked.first().base.reasons)
         assertTrue(ratingReader.explicitSignalReads > 0)
+        assertTrue(ranked.all { it.sessionAdjustment == 0.0 && it.finalScore == it.base.score })
     }
 
     @Test
@@ -82,7 +83,7 @@ class LibraryRecommendationPipelineTest {
             ),
         ).rank()
 
-        assertEquals(listOf("recording-5", "recording-4", "recording-3"), ranked.map { it.recordingId })
+        assertEquals(listOf("recording-5", "recording-4", "recording-3"), ranked.map { it.base.recordingId })
     }
 
     @Test
@@ -92,12 +93,12 @@ class LibraryRecommendationPipelineTest {
             ratingReader = FakeRatingReader(emptyMap()),
         ).rank()
 
-        assertEquals(listOf("recording-a", "recording-m", "recording-z"), ranked.map { it.recordingId })
-        assertEquals(listOf(0.0, 0.0, 0.0), ranked.map { it.score })
+        assertEquals(listOf("recording-a", "recording-m", "recording-z"), ranked.map { it.base.recordingId })
+        assertEquals(listOf(0.0, 0.0, 0.0), ranked.map { it.finalScore })
     }
 
     @Test
-    fun `limit is applied after ranking so true top N is preserved`() = runTest {
+    fun `limit is applied after ranking so true top N is preserved without session context`() = runTest {
         val pipeline = pipeline(
             availableIds = listOf("recording-neutral", "recording-good", "recording-favorite"),
             ratingReader = FakeRatingReader(
@@ -111,7 +112,7 @@ class LibraryRecommendationPipelineTest {
 
         val ranked = pipeline.rank(limit = 1)
 
-        assertEquals(listOf("recording-favorite"), ranked.map { it.recordingId })
+        assertEquals(listOf("recording-favorite"), ranked.map { it.base.recordingId })
     }
 
     @Test
@@ -136,13 +137,22 @@ class LibraryRecommendationPipelineTest {
             ratingReader = ratingReader,
             nowEpochMs = { THIRTY_DAYS_MS },
         )
-        return LibraryRecommendationPipeline(candidateSource, ranker)
+        val sessionReranker = SessionContextReranker(
+            contextReader = NoSessionContextReader,
+            nowEpochMs = { THIRTY_DAYS_MS },
+        )
+        return LibraryRecommendationPipeline(candidateSource, ranker, sessionReranker)
     }
 
     private class FakeAvailabilityReader(
         private val ids: List<String>,
     ) : CanonicalLibraryAvailabilityReader {
         override suspend fun availableRecordingIds(): List<String> = ids
+    }
+
+    private object NoSessionContextReader : ListeningSessionContextReader {
+        override suspend fun currentSession(atEpochMs: Long): ListeningSession? = null
+        override suspend fun eventsForSession(sessionId: String): List<ListeningEvent> = emptyList()
     }
 
     private object NeutralBehaviorReader : ListeningBehaviorReader {

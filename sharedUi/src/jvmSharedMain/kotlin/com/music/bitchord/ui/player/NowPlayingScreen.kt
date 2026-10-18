@@ -74,6 +74,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import com.music.bitchord.ui.performance.RuntimePerformanceUiContext
+import com.music.bitchord.ui.performance.RuntimePerformanceUiSignal
+import com.music.bitchord.ui.performance.RuntimePerformanceUiStateKey
+import com.music.bitchord.ui.performance.RuntimePerformanceUiStateValue
 import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -743,6 +747,12 @@ fun NowPlayingScreen(
     windowHeight: Dp,
     modifier: Modifier = Modifier,
 ) {
+    if (RuntimePerformanceUiContext.enabled) {
+        SideEffect {
+            RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.NOW_PLAYING_RECOMPOSITION)
+        }
+    }
+
     val density = LocalDensity.current
     val haptics = rememberHaptics()
 
@@ -821,6 +831,22 @@ fun NowPlayingScreen(
     val canvasRenderedState = remember(canvas?.url) { mutableStateOf(false) }
     var canvasRendered by canvasRenderedState
     var canvasFrame by remember(canvas?.url) { mutableStateOf<ImageBitmap?>(null) }
+    if (RuntimePerformanceUiContext.enabled) {
+        LaunchedEffect(canvasRendered) {
+            RuntimePerformanceUiContext.setState(
+                RuntimePerformanceUiStateKey.CANVAS_MODE,
+                if (canvasRendered) RuntimePerformanceUiStateValue.ACTIVE else RuntimePerformanceUiStateValue.INACTIVE,
+            )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                RuntimePerformanceUiContext.setState(
+                    RuntimePerformanceUiStateKey.CANVAS_MODE,
+                    RuntimePerformanceUiStateValue.INACTIVE,
+                )
+            }
+        }
+    }
     // Spotify's phone presentation starts with the full control deck over its
     // video. It leaves on a Canvas tap, or after the optional idle timeout.
     var spotifyCanvasControlsOpen by remember(canvas?.url) { mutableStateOf(true) }
