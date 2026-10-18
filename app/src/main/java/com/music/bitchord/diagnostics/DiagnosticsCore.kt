@@ -104,6 +104,12 @@ object DiagnosticSanitizer {
     // structured identity and correlation; arbitrary messages never publish raw URIs/UUIDs.
     private val freeTextUri = Regex("""(?i)\b(?:https?://|bitchord://|content://|file://)[^\s\[\]<>"']+""")
     private val freeTextUuid = Regex("""(?i)\b[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\b""")
+    // Legacy provider messages include opaque third-party IDs outside URI contexts.
+    // Mask only known provider patterns; preserve ordinary text and typed trace metadata.
+    private val freeTextProviderMediaId = Regex("""(?i)\b(radio|links):[A-Za-z0-9_-]{11}(?=\s|[,;.!?]|$)""")
+    private val freeTextAlbumCatalogId = Regex(
+        """(?i)(\bmotion artwork on album\s+'[^'\r\n]{1,150}'\s*\()\d{8,14}(\))""",
+    )
 
     fun metadata(values: Map<String, String>): Map<String, String> =
         values.entries
@@ -129,10 +135,16 @@ object DiagnosticSanitizer {
 
     fun freeText(value: String, maxChars: Int = MAX_TEXT_CHARS): String {
         val sanitized = text(value, maxChars)
-        return freeTextUuid.replace(
+        val noCanonicalIds = freeTextUuid.replace(
             freeTextUri.replace(sanitized, "<uri>"),
             "<id>",
         )
+        val noExternalVideoIds = freeTextProviderMediaId.replace(noCanonicalIds) {
+            "${it.groupValues[1]}:<id>"
+        }
+        return freeTextAlbumCatalogId.replace(noExternalVideoIds) {
+            "${it.groupValues[1]}<id>${it.groupValues[2]}"
+        }
     }
 
     private fun isSensitiveKey(key: String): Boolean {
