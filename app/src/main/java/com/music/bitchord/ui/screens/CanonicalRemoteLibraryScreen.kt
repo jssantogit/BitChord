@@ -295,9 +295,9 @@ private fun RemoteTrackArtwork(
         value = if (mediaAssetId == null || artworkRevision.isNullOrBlank()) {
             null
         } else {
-            when (val result = awaitRecoverableCanonicalArtwork {
+            when (val result = awaitRecoverableCanonicalArtwork(load = {
                 artworkLoader.load(mediaAssetId)
-            }) {
+            })) {
                 is OpenSubsonicArtworkLoadResult.Ready -> withContext(Dispatchers.Default) {
                     BitmapFactory.decodeByteArray(result.bytes, 0, result.bytes.size)?.asImageBitmap()
                 }

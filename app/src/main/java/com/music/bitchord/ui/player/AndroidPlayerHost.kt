@@ -117,13 +117,13 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
             key3 = canonicalArtworkLoader,
         ) {
             value = try {
-                    when (val loaded = awaitRecoverableCanonicalArtwork {
+                    when (val loaded = awaitRecoverableCanonicalArtwork(load = {
                         canonicalArtworkLoader.load(
                             mediaAssetId = selected.mediaAssetId,
                             expectedRecordingId = selected.recordingId,
                             expectedProviderKey = selected.providerKey,
                         )
-                    }) {
+                    })) {
                         is OpenSubsonicArtworkLoadResult.Ready -> withContext(Dispatchers.Default) {
                             BitmapFactory.decodeByteArray(
                                 loaded.bytes, 0, loaded.bytes.size,
