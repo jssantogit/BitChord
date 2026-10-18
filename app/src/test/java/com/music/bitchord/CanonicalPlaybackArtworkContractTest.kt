@@ -62,6 +62,49 @@ class CanonicalPlaybackArtworkContractTest {
     }
 
     @Test
+    fun `mixed queue keeps artwork selection per remote entry while local stays legacy`() {
+        val first = CanonicalRemotePlaybackRequest(
+            recordingId = "recording-hero",
+            mediaAssetId = "selected-hero",
+            providerKey = "opensubsonic:home",
+        )
+        val second = CanonicalRemotePlaybackRequest(
+            recordingId = "recording-other",
+            mediaAssetId = "selected-other",
+            providerKey = "opensubsonic:home",
+        )
+        fun queued(request: CanonicalRemotePlaybackRequest) = Song(
+            // Restored queue entries may use a compatibility rather than recording ID.
+            videoId = "compatibility-${request.recordingId}",
+            title = "Remote", artist = "Artist",
+            thumbnailUrl = null, fromAutoplay = false,
+            localUri = CanonicalRemotePlaybackUri.encode(request),
+        )
+        val remoteFirst = queued(first)
+        val remoteSecond = queued(second)
+        val local = Song(
+            videoId = "local-track", title = "Local", artist = "Artist",
+            thumbnailUrl = "content://media/audio/albumart/1", fromAutoplay = false,
+            localUri = "content://media/external/audio/media/1",
+        )
+
+        assertEquals(
+            "selected-hero",
+            CanonicalPlaybackArtworkIdentity.fromSong(remoteFirst)?.key?.mediaAssetId,
+        )
+        assertEquals(
+            "selected-other",
+            CanonicalPlaybackArtworkIdentity.fromSong(remoteSecond)?.key?.mediaAssetId,
+        )
+        assertNotEquals(
+            CanonicalPlaybackArtworkIdentity.fromSong(remoteFirst)?.key,
+            CanonicalPlaybackArtworkIdentity.fromSong(remoteSecond)?.key,
+        )
+        assertNull(CanonicalPlaybackArtworkIdentity.fromSong(local))
+        assertEquals("content://media/audio/albumart/1", local.thumbnailUrl)
+    }
+
+    @Test
     fun `identity does not accept provider native identifiers as artwork key material`() {
         val identity = CanonicalPlaybackArtworkIdentity(
             recordingId = "recording-canonical",

@@ -769,8 +769,12 @@ private fun InlineQueueRow(
             )
             Spacer(Modifier.width(4.dp))
         }
+        // Match Mini Player and Now Playing: canonical selected MediaAsset first.
+        // The host returns an in-memory image, never a credential-bearing URL.
+        // Local/WebDAV/SMB and other legacy entries keep their existing URL path.
         AsyncImage(
-            model = rememberRemoteArtworkUrl(song),
+            model = PlayerPlatform.host.rememberCanonicalPlaybackArtworkModel(song)
+                ?: rememberRemoteArtworkUrl(song),
             contentDescription = null,
             modifier = Modifier
                 .size(44.dp)
