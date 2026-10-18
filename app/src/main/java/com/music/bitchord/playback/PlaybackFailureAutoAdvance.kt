@@ -83,9 +83,8 @@ internal fun PlaybackFailureCascade.handlePlaybackFailure(
     }
 
     val queue = List(player.mediaItemCount) { index ->
-        val item = player.getMediaItemAt(index)
         FailureQueueEntry(
-            key = failureEntryKey(item.queueTier, item.canonicalIndex, item.queueEntryId, index),
+            key = requireNotNull(failureEntryKeyOrNull(player, index)),
             index = index,
         )
     }
@@ -119,6 +118,12 @@ internal fun PlaybackFailureCascade.handlePlaybackFailure(
             PlaybackFailureHandling.CASCADE_EXHAUSTED
         }
     }
+}
+
+internal fun failureEntryKeyOrNull(player: Player, index: Int): String? {
+    if (index !in 0 until player.mediaItemCount) return null
+    val item = player.getMediaItemAt(index)
+    return failureEntryKey(item.queueTier, item.canonicalIndex, item.queueEntryId, index)
 }
 
 /**
