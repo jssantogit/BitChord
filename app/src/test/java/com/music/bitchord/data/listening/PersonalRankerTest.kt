@@ -9,6 +9,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PersonalRankerTest {
+    private val policy = PersonalRankerPolicy()
+
+    @Test
+    fun noRatingAndNoBehaviorStartsNeutral() = runTest {
+        val result = ranker().rank(candidates("neutral")).single()
+
+        assertEquals("neutral", result.recordingId)
+        assertEquals(0.0, result.score, 0.0)
+        assertEquals(0.0, result.components.explicitPreference, 0.0)
+        assertEquals(0.0, result.components.behavioralEvidence, 0.0)
+        assertEquals(0.0, result.components.recentListeningCooldown, 0.0)
+        assertEquals(0.0, result.components.recentRatingChange, 0.0)
+        assertTrue(result.reasons.isEmpty())
+    }
+
     @Test
     fun explicitRatingUsesApprovedNonLinearPreferenceOrder() = runTest {
         val ranker = ranker(
@@ -22,7 +37,7 @@ class PersonalRankerTest {
         )
 
         val ranked = ranker.rank(
-            listOf("negative", "neutral", "good", "former-favorite", "favorite"),
+            candidates("negative", "neutral", "good", "former-favorite", "favorite"),
         )
 
         assertEquals(
@@ -33,10 +48,43 @@ class PersonalRankerTest {
         assertTrue(ranked[1].components.explicitPreference > ranked[2].components.explicitPreference)
         assertTrue(ranked[2].components.explicitPreference > ranked[3].components.explicitPreference)
         assertTrue(ranked[4].components.explicitPreference < 0.0)
+        assertTrue(RecommendationReason.EXPLICIT_FAVORITE in ranked[0].reasons)
+        assertTrue(RecommendationReason.STRONG_EXPLICIT_PREFERENCE in ranked[1].reasons)
+        assertTrue(RecommendationReason.NEGATIVE_EXPLICIT_PREFERENCE in ranked[4].reasons)
     }
 
     @Test
-    fun completionPromotesWhileEarlySkipSuppressesMoreThanLateSkip() = runTest {
+    fun negativeRatingStaysNegativeDespiteHugeRawStartCount() = runTest {
+        val ranker = ranker(
+            ratings = mapOf("negative" to ratingSignal("negative", 2.0)),
+            behavior = mapOf(
+                "negative" to behaviorSummary("negative", starts = 1_000_000),
+            ),
+        )
+
+        val result = ranker.rank(candidates("negative")).single()
+
+        assertTrue(result.score < 0.0)
+        assertEquals(0.0, result.components.behavioralEvidence, 0.0)
+    }
+
+    @Test
+    fun strongExplicitPreferenceDominatesAmbiguousBehavior() = runTest {
+        val ranker = ranker(
+            ratings = mapOf("favorite" to ratingSignal("favorite", 5.0)),
+            behavior = mapOf(
+                "favorite" to behaviorSummary("favorite", earlySkips = 100),
+                "unrated" to behaviorSummary("unrated", completions = 100),
+            ),
+        )
+
+        val ranked = ranker.rank(candidates("unrated", "favorite"))
+
+        assertEquals("favorite", ranked.first().recordingId)
+    }
+
+    @Test
+    fun completionHeavyBeatsEarlySkipHeavyAndEarlySkipPenalizesMoreThanLateSkip() = runTest {
         val ranker = ranker(
             behavior = mapOf(
                 "completed" to behaviorSummary("completed", completions = 3),
@@ -45,22 +93,20 @@ class PersonalRankerTest {
             ),
         )
 
-        val completed = ranker.rank(listOf("completed")).single()
-        val early = ranker.rank(listOf("early")).single()
-        val late = ranker.rank(listOf("late")).single()
+        val ranked = ranker.rank(candidates("early", "late", "completed"))
+        val completed = ranked.single { it.recordingId == "completed" }
+        val early = ranked.single { it.recordingId == "early" }
+        val late = ranked.single { it.recordingId == "late" }
 
-        assertTrue(completed.score > 0.0)
+        assertEquals("completed", ranked.first().recordingId)
         assertTrue(early.score < late.score)
         assertTrue(abs(early.components.earlySkipPenalty) > abs(late.components.lateSkipPenalty))
-        assertEquals(
-            completed.score,
-            completed.components.total,
-            0.000_001,
-        )
+        assertTrue(RecommendationReason.COMPLETION_HEAVY in completed.reasons)
+        assertTrue(RecommendationReason.EARLY_SKIP_HEAVY in early.reasons)
     }
 
     @Test
-    fun startsAndInterruptionsAloneDoNotBecomePositiveOrNegativePreference() = runTest {
+    fun startsAndInterruptionsAloneRemainNeutral() = runTest {
         val ranker = ranker(
             behavior = mapOf(
                 "noisy" to behaviorSummary(
@@ -71,76 +117,117 @@ class PersonalRankerTest {
             ),
         )
 
-        val result = ranker.rank(listOf("noisy")).single()
+        val result = ranker.rank(candidates("noisy")).single()
 
         assertEquals(0.0, result.score, 0.0)
-        assertEquals(0.0, result.components.completionEvidence, 0.0)
-        assertEquals(0.0, result.components.earlySkipPenalty, 0.0)
-        assertEquals(0.0, result.components.lateSkipPenalty, 0.0)
+        assertEquals(0.0, result.components.behavioralEvidence, 0.0)
     }
 
     @Test
-    fun recentFourPointFiveListeningGetsStrongerCooldownThanStableFourPointZero() = runTest {
-        val recentAt = NOW - ONE_HOUR_MS
+    fun manualSelectionAndReplayArePositiveButBoundedAndAutomaticSelectionIsNotEquivalent() = runTest {
+        val manualEvents = List(100) { index ->
+            startEvent("manual", "manual-$index", SelectionIntent.MANUAL)
+        }
+        val replayEvents = List(100) { index ->
+            startEvent("replay", "replay-$index", SelectionIntent.REPLAY)
+        }
+        val automaticEvents = List(100) { index ->
+            startEvent("automatic", "automatic-$index", SelectionIntent.AUTOMATIC)
+        }
         val ranker = ranker(
-            ratings = mapOf(
-                "former-favorite" to ratingSignal("former-favorite", 4.5),
-                "good" to ratingSignal("good", 4.0),
-            ),
             recentEvents = mapOf(
-                "former-favorite" to listOf(
-                    terminalEvent(
-                        recordingId = "former-favorite",
-                        occurredAtEpochMs = recentAt,
-                        type = ListeningEventType.PLAYBACK_COMPLETED,
-                        listenedDurationMs = 180_000,
-                    ),
-                ),
+                "manual" to manualEvents,
+                "replay" to replayEvents,
+                "automatic" to automaticEvents,
             ),
         )
 
-        val ranked = ranker.rank(listOf("former-favorite", "good"))
-        val formerFavorite = ranked.single { it.recordingId == "former-favorite" }
-        val good = ranked.single { it.recordingId == "good" }
+        val ranked = ranker.rank(candidates("automatic", "manual", "replay"))
+        val manual = ranked.single { it.recordingId == "manual" }
+        val replay = ranked.single { it.recordingId == "replay" }
+        val automatic = ranked.single { it.recordingId == "automatic" }
 
-        assertTrue(formerFavorite.components.recentListeningCooldown < 0.0)
-        assertTrue(formerFavorite.score < good.score)
+        assertTrue(manual.components.manualSelectionEvidence > 0.0)
+        assertTrue(manual.components.manualSelectionEvidence <= policy.maxManualSelectionBoost)
+        assertTrue(replay.components.replayEvidence > 0.0)
+        assertTrue(replay.components.replayEvidence <= policy.maxReplayBoost)
+        assertEquals(0.0, automatic.components.manualSelectionEvidence, 0.0)
+        assertEquals(0.0, automatic.components.replayEvidence, 0.0)
+        assertTrue(RecommendationReason.MANUAL_SELECTION_SIGNAL in manual.reasons)
+        assertTrue(RecommendationReason.REPLAY_SIGNAL in replay.reasons)
+    }
+
+    @Test
+    fun recentFourPointFiveRanksBelowEquivalentFourPointFiveOutsideCooldown() = runTest {
+        val recentAt = NOW - ONE_HOUR_MS
+        val oldAt = NOW - policy.cooldownWindowMs - ONE_HOUR_MS
+        val ranker = ranker(
+            ratings = mapOf(
+                "recent" to ratingSignal("recent", 4.5),
+                "old" to ratingSignal("old", 4.5),
+            ),
+            recentEvents = mapOf(
+                "recent" to listOf(audibleTerminalEvent("recent", recentAt)),
+                "old" to listOf(audibleTerminalEvent("old", oldAt)),
+            ),
+        )
+
+        val ranked = ranker.rank(candidates("recent", "old"))
+        val recent = ranked.single { it.recordingId == "recent" }
+        val old = ranked.single { it.recordingId == "old" }
+
+        assertEquals("old", ranked.first().recordingId)
+        assertTrue(recent.components.recentListeningCooldown < 0.0)
+        assertEquals(0.0, old.components.recentListeningCooldown, 0.0)
+        assertTrue(recent.score > 0.0)
+        assertTrue(RecommendationReason.RECENT_LISTEN_COOLDOWN in recent.reasons)
+    }
+
+    @Test
+    fun cooldownDisappearsWithTime() = runTest {
+        val listenedAt = NOW - ONE_HOUR_MS
+        val ratings = mapOf("track" to ratingSignal("track", 4.5))
+        val events = mapOf("track" to listOf(audibleTerminalEvent("track", listenedAt)))
+
+        val duringCooldown = ranker(
+            ratings = ratings,
+            recentEvents = events,
+            nowEpochMs = NOW,
+        ).rank(candidates("track")).single()
+        val afterCooldown = ranker(
+            ratings = ratings,
+            recentEvents = events,
+            nowEpochMs = listenedAt + policy.cooldownWindowMs + ONE_HOUR_MS,
+        ).rank(candidates("track")).single()
+
+        assertTrue(duringCooldown.components.recentListeningCooldown < 0.0)
+        assertEquals(0.0, afterCooldown.components.recentListeningCooldown, 0.0)
+        assertTrue(afterCooldown.score > duringCooldown.score)
     }
 
     @Test
     fun startOnlyDoesNotTriggerRecentListeningCooldown() = runTest {
         val ranker = ranker(
-            ratings = mapOf(
-                "remote" to ratingSignal("remote", 4.5),
-            ),
+            ratings = mapOf("remote" to ratingSignal("remote", 4.5)),
             recentEvents = mapOf(
                 "remote" to listOf(
-                    ListeningEvent(
-                        id = "start",
-                        sessionId = "session",
+                    startEvent(
                         recordingId = "remote",
-                        mediaAssetId = "asset",
-                        assetProvider = "opensubsonic",
-                        occurredAtEpochMs = NOW - 60_000,
-                        type = ListeningEventType.PLAYBACK_STARTED,
-                        listenedDurationMs = null,
-                        recordingDurationMs = null,
-                        endCause = null,
-                        selectionIntent = SelectionIntent.AUTOMATIC,
-                        selectionOrigin = SelectionOrigin.QUEUE,
-                        recommendationOrigin = null,
+                        eventId = "start",
+                        intent = SelectionIntent.AUTOMATIC,
+                        occurredAtEpochMs = NOW - 60_000L,
                     ),
                 ),
             ),
         )
 
-        val result = ranker.rank(listOf("remote")).single()
+        val result = ranker.rank(candidates("remote")).single()
 
         assertEquals(0.0, result.components.recentListeningCooldown, 0.0)
     }
 
     @Test
-    fun recentRatingDirectionIsSmallAndTransient() = runTest {
+    fun recentRatingIncreaseAndDecreaseAreSmallBoundedTransientSignals() = runTest {
         val changedAt = NOW - ONE_DAY_MS
         val ranker = ranker(
             ratings = mapOf(
@@ -159,13 +246,16 @@ class PersonalRankerTest {
             ),
         )
 
-        val ranked = ranker.rank(listOf("decreased", "increased"))
+        val ranked = ranker.rank(candidates("decreased", "increased"))
         val increased = ranked.single { it.recordingId == "increased" }
         val decreased = ranked.single { it.recordingId == "decreased" }
 
         assertTrue(increased.score > decreased.score)
-        assertTrue(abs(increased.components.ratingMomentum) <= 5.0)
-        assertTrue(abs(decreased.components.ratingMomentum) <= 5.0)
+        assertTrue(abs(increased.components.recentRatingChange) <= policy.maxRecentRatingChangeAdjustment)
+        assertTrue(abs(decreased.components.recentRatingChange) <= policy.maxRecentRatingChangeAdjustment)
+        assertTrue(abs(increased.components.recentRatingChange) < abs(increased.components.explicitPreference))
+        assertTrue(RecommendationReason.RECENT_RATING_INCREASE in increased.reasons)
+        assertTrue(RecommendationReason.RECENT_RATING_DECREASE in decreased.reasons)
     }
 
     @Test
@@ -183,29 +273,79 @@ class PersonalRankerTest {
             ),
         )
 
-        val result = ranker.rank(listOf("cleared")).single()
+        val result = ranker.rank(candidates("cleared")).single()
 
         assertEquals(0.0, result.components.explicitPreference, 0.0)
-        assertEquals(0.0, result.components.ratingMomentum, 0.0)
+        assertEquals(0.0, result.components.recentRatingChange, 0.0)
+        assertEquals(0.0, result.score, 0.0)
     }
 
     @Test
     fun rankingIsDeterministicForTiesAndCanonicalCandidatesAreDeduplicated() = runTest {
         val ranker = ranker()
 
-        val ranked = ranker.rank(listOf("zeta", "alpha", "zeta", "beta", "alpha"))
+        val ranked = ranker.rank(
+            candidates("zeta", "alpha", "zeta", "beta", "alpha"),
+        )
 
         assertEquals(listOf("alpha", "beta", "zeta"), ranked.map { it.recordingId })
     }
+
+    @Test
+    fun scoreAndEveryComponentRemainFiniteAndBoundedUnderExtremeEvidence() = runTest {
+        val ranker = ranker(
+            ratings = mapOf("extreme" to ratingSignal("extreme", 5.0)),
+            behavior = mapOf(
+                "extreme" to RecordingBehaviorSummary(
+                    recordingId = "extreme",
+                    starts = Long.MAX_VALUE,
+                    completions = Long.MAX_VALUE,
+                    earlySkips = Long.MAX_VALUE,
+                    lateSkips = Long.MAX_VALUE,
+                    interruptions = Long.MAX_VALUE,
+                    totalListenedMs = Long.MAX_VALUE,
+                    lastEventAtEpochMs = NOW,
+                ),
+            ),
+            recentEvents = mapOf(
+                "extreme" to List(100) { index ->
+                    startEvent("extreme", "event-$index", SelectionIntent.REPLAY)
+                },
+            ),
+        )
+
+        val result = ranker.rank(candidates("extreme")).single()
+        val values = listOf(
+            result.score,
+            result.components.explicitPreference,
+            result.components.completionEvidence,
+            result.components.earlySkipPenalty,
+            result.components.lateSkipPenalty,
+            result.components.manualSelectionEvidence,
+            result.components.replayEvidence,
+            result.components.behavioralEvidence,
+            result.components.recentListeningCooldown,
+            result.components.recentRatingChange,
+            result.components.total,
+        )
+
+        assertTrue(values.all(Double::isFinite))
+        assertTrue(result.score in policy.minimumScore..policy.maximumScore)
+    }
+
+    private fun candidates(vararg recordingIds: String): List<RecommendationCandidate> =
+        recordingIds.map(::RecommendationCandidate)
 
     private fun ranker(
         ratings: Map<String, ExplicitRecordingRatingSignal> = emptyMap(),
         behavior: Map<String, RecordingBehaviorSummary> = emptyMap(),
         recentEvents: Map<String, List<ListeningEvent>> = emptyMap(),
+        nowEpochMs: Long = NOW,
     ): PersonalRanker = PersonalRanker(
         behaviorReader = FakeBehaviorReader(behavior, recentEvents),
         ratingReader = FakeRatingReader(ratings),
-        nowEpochMs = { NOW },
+        policy = policy,
+        nowEpochMs = { nowEpochMs },
     )
 
     private fun ratingSignal(
@@ -240,21 +380,40 @@ class PersonalRankerTest {
         lastEventAtEpochMs = null,
     )
 
-    private fun terminalEvent(
+    private fun startEvent(
         recordingId: String,
-        occurredAtEpochMs: Long,
-        type: ListeningEventType,
-        listenedDurationMs: Long,
+        eventId: String,
+        intent: SelectionIntent,
+        occurredAtEpochMs: Long = NOW - ONE_DAY_MS,
     ) = ListeningEvent(
-        id = "event-$recordingId-$occurredAtEpochMs",
+        id = eventId,
         sessionId = "session",
         recordingId = recordingId,
         mediaAssetId = null,
         assetProvider = null,
         occurredAtEpochMs = occurredAtEpochMs,
-        type = type,
-        listenedDurationMs = listenedDurationMs,
-        recordingDurationMs = 180_000,
+        type = ListeningEventType.PLAYBACK_STARTED,
+        listenedDurationMs = null,
+        recordingDurationMs = null,
+        endCause = null,
+        selectionIntent = intent,
+        selectionOrigin = SelectionOrigin.LIBRARY,
+        recommendationOrigin = null,
+    )
+
+    private fun audibleTerminalEvent(
+        recordingId: String,
+        occurredAtEpochMs: Long,
+    ) = ListeningEvent(
+        id = "terminal-$recordingId-$occurredAtEpochMs",
+        sessionId = "session",
+        recordingId = recordingId,
+        mediaAssetId = null,
+        assetProvider = null,
+        occurredAtEpochMs = occurredAtEpochMs,
+        type = ListeningEventType.PLAYBACK_COMPLETED,
+        listenedDurationMs = 180_000L,
+        recordingDurationMs = 180_000L,
         endCause = PlaybackEndCause.ENDED,
         selectionIntent = null,
         selectionOrigin = null,
