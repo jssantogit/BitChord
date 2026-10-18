@@ -105,7 +105,7 @@ class ControlledExplorationRerankerTest {
             index = index,
             score = 100.0 - index * scoreStep,
             explicitRating = if (index in underexposed) null else if (index == 4) 3.0 else 4.0,
-            completions = if (index == 4) 1 else 0,
+            completions = if (index == 4 && index !in underexposed) 1 else 0,
         )
     }
 
