@@ -5,7 +5,7 @@ import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.model.Song
 
 /** Durable queue identity. Only [recordingId] identifies the musical work. */
-internal data class CanonicalQueueIdentity(
+data class CanonicalQueueIdentity(
     val recordingId: String,
     val mediaAssetId: String? = null,
     val providerKey: String? = null,
