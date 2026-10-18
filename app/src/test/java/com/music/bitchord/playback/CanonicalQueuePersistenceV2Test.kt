@@ -373,7 +373,7 @@ fun `historical schema one snapshot remains readable`() {
         entryId: String? = null,
     ) = Song(
         videoId = id,
-        title = "Track $id",
+        title = "Track",
         artist = "Artist",
         thumbnailUrl = null,
         localUri = localUri,
