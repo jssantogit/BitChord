@@ -152,7 +152,7 @@ internal class RoomListeningEventStore(
         val active = dao.activeSession()
         if (active != null) {
             val inactivityMs = nowEpochMs - active.lastActivityAtEpochMs
-            if (inactivityMs in 0L..SESSION_INACTIVITY_TIMEOUT_MS) {
+            if (inactivityMs >= 0L && inactivityMs < SESSION_INACTIVITY_TIMEOUT_MS) {
                 return SessionResolution(active.toDomain(), created = false)
             }
             check(dao.endSession(active.id, active.lastActivityAtEpochMs) == 1) {
