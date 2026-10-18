@@ -45,6 +45,7 @@ object Diagnostics {
     )
 
     private val sessionId: String = UUID.randomUUID().toString().substring(0, 8)
+    private val traceReferenceSalt: String = UUID.randomUUID().toString()
     private val buffer = DiagnosticBuffer(BUFFER_CAPACITY)
     private val installLock = Any()
     private val writer = DiagnosticWriteQueue(WRITER_QUEUE_CAPACITY)
@@ -52,7 +53,7 @@ object Diagnostics {
         StructuredTracer(
             mode = diagnosticMode.toTraceMode(),
             sink = DiagnosticsStructuredTraceSink,
-            referenceEncoder = SessionTraceReferenceEncoder(sessionId),
+            referenceEncoder = SessionTraceReferenceEncoder(traceReferenceSalt),
         )
     }
 
