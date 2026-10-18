@@ -189,7 +189,7 @@ internal class CanonicalRecordingIdentityDiscoveryRepository(
         val candidate = convergedCandidates.single()
 
         // Re-check after network activity so a concurrently-added trusted identity
-        // cannot be overwritten by this attempt.
+        // cannot be ignored by this attempt. The final claim below is still atomic.
         val afterLookup = musicBrainzIds(recordingId)
         when {
             afterLookup.size == 1 -> return if (afterLookup.single().equals(candidate, ignoreCase = true)) {
@@ -212,7 +212,7 @@ internal class CanonicalRecordingIdentityDiscoveryRepository(
             claimedBy != null -> return RecordingIdentityResolutionResult.IdentityConflict(candidate, claimedBy)
         }
 
-        dao.upsertExternalIdentity(
+        val insertedRowId = dao.insertExternalIdentityIfAbsent(
             ExternalIdentityEntity(
                 provider = MUSICBRAINZ_PROVIDER,
                 entityType = RECORDING_ENTITY_TYPE,
@@ -225,8 +225,12 @@ internal class CanonicalRecordingIdentityDiscoveryRepository(
             RECORDING_ENTITY_TYPE,
             candidate,
         )) {
-            recordingId -> RecordingIdentityResolutionResult.Promoted(candidate)
             null -> RecordingIdentityResolutionResult.Unresolved
+            recordingId -> if (insertedRowId == -1L) {
+                RecordingIdentityResolutionResult.AlreadyResolved(candidate)
+            } else {
+                RecordingIdentityResolutionResult.Promoted(candidate)
+            }
             else -> RecordingIdentityResolutionResult.IdentityConflict(candidate, persisted)
         }
     }
