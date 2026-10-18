@@ -1,0 +1,167 @@
+name: Canonical restore policy patch
+
+on:
+  push:
+    branches:
+      - playback/canonical-queue-persistence
+    paths:
+      - .github/workflows/_canonical_restore_policy_patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: playback/canonical-queue-persistence
+          fetch-depth: 0
+      - name: Patch restore outcome and service fallback
+        shell: python
+        run: |
+          from pathlib import Path
+
+          persistence = Path('app/src/main/java/com/music/bitchord/playback/BoundedContextPersistence.kt')
+          text = persistence.read_text()
+
+          old = '''    data class State(
+              val context: ContextSnapshot,
+              val source: QueueSource,
+              val window: QueueWindowSnapshot,
+              val entries: List<Entry>,
+              val currentIndex: Int,
+              val positionMs: Long,
+              val contextIdentities: List<CanonicalQueueIdentity?> = emptyList(),
+          )
+
+          private lateinit var prefs: SharedPreferences
+          '''
+          new = '''    data class State(
+              val context: ContextSnapshot,
+              val source: QueueSource,
+              val window: QueueWindowSnapshot,
+              val entries: List<Entry>,
+              val currentIndex: Int,
+              val positionMs: Long,
+              val contextIdentities: List<CanonicalQueueIdentity?> = emptyList(),
+          )
+
+          internal sealed class RestoreOutcome(open val mayFallbackToLastPlayed: Boolean) {
+              data class Restored(val state: State) : RestoreOutcome(false)
+              object AbsentOrInvalid : RestoreOutcome(true)
+              object CanonicalUnavailable : RestoreOutcome(false)
+          }
+
+          private lateinit var prefs: SharedPreferences
+          '''
+          if old not in text:
+              raise SystemExit('State insertion anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''    /** A malformed snapshot is treated as absent by design. */
+          @Synchronized
+          fun load(): State? {
+              val raw = runCatching { prefs.getString(KEY_STATE, null) }.getOrNull() ?: return null
+              val decoded = decode(raw) ?: return null
+              val state = rehydrateAfterLoad(decoded) ?: return null
+              val currentEntryId = state.entries[state.currentIndex].song.queueEntryId
+              val scalarEntryId = runCatching { prefs.getString(KEY_CURRENT_ENTRY_ID, null) }.getOrNull()
+              if (currentEntryId != scalarEntryId) return state
+              val positionMs = runCatching { prefs.getLong(KEY_POSITION, state.positionMs) }.getOrNull()
+                  ?: return state
+              return state.copy(positionMs = positionMs.coerceAtLeast(0L))
+          }
+          '''
+          new = '''    /**
+           * Distinguishes an absent/invalid compatibility snapshot from a valid
+           * canonical snapshot whose selected rendition is currently unavailable.
+           * Only the former may fall back to LastPlayed.
+           */
+          @Synchronized
+          internal fun loadOutcome(): RestoreOutcome {
+              val raw = runCatching { prefs.getString(KEY_STATE, null) }.getOrNull()
+                  ?: return RestoreOutcome.AbsentOrInvalid
+              val decoded = decode(raw) ?: return RestoreOutcome.AbsentOrInvalid
+              val outcome = runBlocking(Dispatchers.IO) {
+                  restoreOutcome(decoded, canonicalResolver)
+              }
+              val state = (outcome as? RestoreOutcome.Restored)?.state ?: return outcome
+              val currentEntryId = state.entries[state.currentIndex].song.queueEntryId
+              val scalarEntryId = runCatching { prefs.getString(KEY_CURRENT_ENTRY_ID, null) }.getOrNull()
+              if (currentEntryId != scalarEntryId) return RestoreOutcome.Restored(state)
+              val positionMs = runCatching { prefs.getLong(KEY_POSITION, state.positionMs) }.getOrNull()
+                  ?: return RestoreOutcome.Restored(state)
+              return RestoreOutcome.Restored(state.copy(positionMs = positionMs.coerceAtLeast(0L)))
+          }
+
+          @Synchronized
+          fun load(): State? = (loadOutcome() as? RestoreOutcome.Restored)?.state
+          '''
+          if old not in text:
+              raise SystemExit('load anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''    private fun rehydrateAfterLoad(state: State): State? {
+              if (state.contextIdentities.isEmpty() && state.entries.none { it.canonicalIdentity != null }) return state
+              val resolver = canonicalResolver ?: return null
+              return runCatching { runBlocking(Dispatchers.IO) { CanonicalQueueMigration.rehydrate(state, resolver) } }
+                  .getOrNull()
+          }
+          '''
+          new = '''    internal suspend fun restoreOutcome(
+              state: State,
+              resolver: CanonicalQueueResolver? = canonicalResolver,
+          ): RestoreOutcome {
+              val hasCanonicalIdentity = state.contextIdentities.any { it != null } ||
+                  state.entries.any { it.canonicalIdentity != null }
+              if (!hasCanonicalIdentity) return RestoreOutcome.Restored(state)
+              resolver ?: return RestoreOutcome.CanonicalUnavailable
+              val restored = runCatching { CanonicalQueueMigration.rehydrate(state, resolver) }
+                  .getOrNull()
+                  ?: return RestoreOutcome.CanonicalUnavailable
+              return RestoreOutcome.Restored(restored)
+          }
+          '''
+          if old not in text:
+              raise SystemExit('rehydrate anchor not found')
+          text = text.replace(old, new, 1)
+          persistence.write_text(text)
+
+          service = Path('app/src/main/java/com/music/bitchord/playback/PlaybackService.kt')
+          text = service.read_text()
+          old = '''    private fun restoreBoundedQueueOrLast(player: ExoPlayer): Boolean {
+              val persisted = BoundedContextPersistence.load()
+              if (persisted != null && restoreBoundedQueue(player, persisted)) return true
+              if (persisted != null) BoundedContextPersistence.clearImmediately()
+              return restoreLastQueue(player)
+          }
+          '''
+          new = '''    private fun restoreBoundedQueueOrLast(player: ExoPlayer): Boolean {
+              return when (val outcome = BoundedContextPersistence.loadOutcome()) {
+                  is BoundedContextPersistence.RestoreOutcome.Restored -> {
+                      if (restoreBoundedQueue(player, outcome.state)) {
+                          true
+                      } else {
+                          BoundedContextPersistence.clearImmediately()
+                          restoreLastQueue(player)
+                      }
+                  }
+                  BoundedContextPersistence.RestoreOutcome.CanonicalUnavailable -> false
+                  BoundedContextPersistence.RestoreOutcome.AbsentOrInvalid -> restoreLastQueue(player)
+              }
+          }
+          '''
+          if old not in text:
+              raise SystemExit('PlaybackService restore anchor not found')
+          text = text.replace(old, new, 1)
+          service.write_text(text)
+      - name: Self-remove workflow and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/_canonical_restore_policy_patch.yml
+          git add app/src/main/java/com/music/bitchord/playback/BoundedContextPersistence.kt app/src/main/java/com/music/bitchord/playback/PlaybackService.kt
+          git commit -m "fix: block legacy fallback for unavailable canonical queue"
+          git push origin HEAD:playback/canonical-queue-persistence
