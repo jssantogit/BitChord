@@ -5,9 +5,9 @@ import android.app.Application
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.os.Bundle
-import android.os.FrameMetrics
 import android.os.Handler
 import android.os.HandlerThread
+import android.view.FrameMetrics
 import android.view.Window
 import java.util.Locale
 import kotlin.math.roundToLong
