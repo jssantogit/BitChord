@@ -1,6 +1,5 @@
 package com.music.bitchord
 
-import android.util.Base64
 import com.music.bitchord.data.catalog.CanonicalBrowseMediaAsset
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.MediaAssetEntity
@@ -21,6 +20,7 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtwork
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAuthMode
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicCredentialStore
 import java.security.MessageDigest
+import java.util.Base64
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -305,10 +305,9 @@ class OpenSubsonicArtworkAccessTest {
     private fun logicalArtworkUri(accountId: String, coverArtId: String): String =
         "opensubsonic://artwork/${encode(accountId)}/${encode(coverArtId)}"
 
-    private fun encode(value: String): String = Base64.encodeToString(
-        value.toByteArray(Charsets.UTF_8),
-        Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
-    )
+    private fun encode(value: String): String = Base64.getUrlEncoder()
+        .withoutPadding()
+        .encodeToString(value.toByteArray(Charsets.UTF_8))
 
     private data class Fixture(
         val persistence: FakeAccountPersistence,
