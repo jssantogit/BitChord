@@ -189,6 +189,35 @@ internal object RuntimePerformanceMonitor {
         }
     }
 
+    /**
+     * Scoped Compose/navigation surfaces may overlap briefly during transitions.
+     * The newest owner is visible; older owners can keep updating in place and
+     * are restored with their latest state when the top owner leaves.
+     */
+    fun enterBaseSurface(owner: Any, context: String) {
+        if (!installed) return
+        synchronized(lock) {
+            surfaces.enterBaseSurface(owner, context)
+            session.setContext(surfaces.currentContext)
+        }
+    }
+
+    fun updateBaseSurface(owner: Any, context: String) {
+        if (!installed) return
+        synchronized(lock) {
+            surfaces.updateBaseSurface(owner, context)
+            session.setContext(surfaces.currentContext)
+        }
+    }
+
+    fun leaveBaseSurface(owner: Any) {
+        if (!installed) return
+        synchronized(lock) {
+            surfaces.leaveBaseSurface(owner)
+            session.setContext(surfaces.currentContext)
+        }
+    }
+
     private fun refreshSamplingLocked() {
         val captureActive = Diagnostics.captureStatus().active
         session.setCaptureActive(captureActive)
