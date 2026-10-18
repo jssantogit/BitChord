@@ -22,6 +22,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
 import org.junit.Test
 

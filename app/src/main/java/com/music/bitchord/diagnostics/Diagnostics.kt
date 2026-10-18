@@ -114,7 +114,7 @@ object Diagnostics {
             level = level,
             category = category,
             name = DiagnosticSanitizer.text(name, 256),
-            message = message?.let(DiagnosticSanitizer::text),
+            message = message?.let(DiagnosticSanitizer::freeText),
             threadName = DiagnosticSanitizer.text(Thread.currentThread().name, 128),
             durationNanos = durationNanos,
             metadata = DiagnosticSanitizer.metadata(metadata),
@@ -393,7 +393,7 @@ object Diagnostics {
     }
 
     private fun safeThrowableText(error: Throwable): String =
-        DiagnosticSanitizer.text(error.stackTraceToString(), MAX_ERROR_CHARS)
+        DiagnosticSanitizer.freeText(error.stackTraceToString(), MAX_ERROR_CHARS)
 
     private fun categoryForTag(tag: String): DiagnosticCategory {
         val normalized = tag.lowercase(Locale.ROOT)

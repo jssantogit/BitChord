@@ -100,6 +100,10 @@ object DiagnosticSanitizer {
         pattern = "(?i)([?&](?:access_?token|refresh_?token|id_?token|token|secret|password|passwd|api_?key|session(?:id|key)?)=)[^&#\\s]+",
     )
     private val keySeparators = Regex("[_\\-.]")
+    // Only for untyped legacy free text. Typed metadata (including traceId) keeps its
+    // structured identity and correlation; arbitrary messages never publish raw URIs/UUIDs.
+    private val freeTextUri = Regex("""(?i)\b(?:https?://|bitchord://|content://|file://)[^\s\[\]<>"']+""")
+    private val freeTextUuid = Regex("""(?i)\b[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\b""")
 
     fun metadata(values: Map<String, String>): Map<String, String> =
         values.entries
@@ -121,6 +125,14 @@ object DiagnosticSanitizer {
         sanitized = knownCookieValue.replace(sanitized) { "${it.groupValues[1]}$REDACTED" }
         sanitized = sensitiveQueryValue.replace(sanitized) { "${it.groupValues[1]}$REDACTED" }
         return sanitized.take(maxChars)
+    }
+
+    fun freeText(value: String, maxChars: Int = MAX_TEXT_CHARS): String {
+        val sanitized = text(value, maxChars)
+        return freeTextUuid.replace(
+            freeTextUri.replace(sanitized, "<uri>"),
+            "<id>",
+        )
     }
 
     private fun isSensitiveKey(key: String): Boolean {
@@ -145,7 +157,7 @@ object DiagnosticFormatter {
         }.orEmpty()
         val message = event.message
             ?.takeIf { it.isNotBlank() }
-            ?.let { " message=${DiagnosticSanitizer.text(it)}" }
+            ?.let { " message=${DiagnosticSanitizer.freeText(it)}" }
             .orEmpty()
         val metadata = DiagnosticSanitizer.metadata(event.metadata)
             .toSortedMap()
@@ -156,7 +168,7 @@ object DiagnosticFormatter {
             .orEmpty()
         val error = event.error
             ?.takeIf { it.isNotBlank() }
-            ?.let { " error=${DiagnosticSanitizer.text(it)}" }
+            ?.let { " error=${DiagnosticSanitizer.freeText(it)}" }
             .orEmpty()
 
         return buildString {
