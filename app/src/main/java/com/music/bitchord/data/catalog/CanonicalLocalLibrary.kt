@@ -12,7 +12,7 @@ import java.util.Locale
 import java.util.UUID
 
 internal object CanonicalLocalLibrary {
-    private const val LOCAL_MEDIASTORE_PROVIDER = "local-mediastore"
+    internal const val LOCAL_MEDIASTORE_PROVIDER = "local-mediastore"
     private const val LOCAL_TAGS_PROVIDER = "local-tags"
     private const val YOUTUBE_PROVIDER = "youtube"
     private const val RECORDING_ENTITY_TYPE = "recording"
