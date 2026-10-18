@@ -8,6 +8,7 @@ import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.ReleaseArtistCreditEntity
 import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.catalog.ReleaseTrackEntity
+import com.music.bitchord.data.catalog.identity.IsrcNormalizer
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 
@@ -63,6 +64,8 @@ internal data class ProviderTrack(
     val bitDepth: Int?,
     val samplingRateHz: Int?,
     val artists: List<ProviderArtist> = emptyList(),
+    /** Strong Recording-level external identity evidence, never playback identity. */
+    val isrcs: List<String> = emptyList(),
 )
 
 internal data class ProviderLibrarySnapshot(
@@ -149,14 +152,15 @@ internal sealed interface ProviderSyncResult {
  *
  * A provider source ID is persisted only as ExternalIdentity/MediaAsset.sourceKey.
  * Canonical Recording/Release/Artist IDs are generated locally unless an already-known
- * canonical mapping (including MusicBrainz evidence) can be reused. Display names are
- * never used as identity evidence.
+ * canonical mapping (including MusicBrainz/ISRC evidence) can be reused. Display names
+ * are never used as identity evidence.
  */
 internal object CanonicalRemoteCatalogSync {
     private const val RECORDING_ENTITY_TYPE = "recording"
     private const val RELEASE_ENTITY_TYPE = "release"
     private const val ARTIST_ENTITY_TYPE = "artist"
     private const val MUSICBRAINZ_PROVIDER = "musicbrainz"
+    private const val ISRC_PROVIDER = "isrc"
 
     suspend fun sync(
         provider: RemoteCatalogProvider,
@@ -215,9 +219,22 @@ internal object CanonicalRemoteCatalogSync {
                     externalId = mbid,
                 )
             }
+            val normalizedIsrcs = IsrcNormalizer.normalizeDistinct(track.isrcs)
+            val isrcRecordingEntityIds = normalizedIsrcs.mapNotNull { isrc ->
+                store.entityIdForExternalIdentity(
+                    provider = ISRC_PROVIDER,
+                    entityType = RECORDING_ENTITY_TYPE,
+                    externalId = isrc,
+                )
+            }.distinct()
+            val unambiguousIsrcRecordingId = isrcRecordingEntityIds.singleOrNull()
+
+            // Existing provider/asset state keeps resync stable. A trusted MBID is
+            // stronger than ISRC. ISRC is consulted only when its known claims agree.
             val recordingId = providerRecordingId
                 ?: existingAsset?.recordingId
                 ?: musicBrainzRecordingEntityId
+                ?: unambiguousIsrcRecordingId
                 ?: idFactory()
 
             store.upsertRecording(
@@ -236,12 +253,24 @@ internal object CanonicalRemoteCatalogSync {
                     entityId = recordingId,
                 ),
             )
-            identityConflicts += persistMusicBrainzEvidenceIfUnclaimed(
+            identityConflicts += persistExternalEvidenceIfUnclaimed(
                 store = store,
+                provider = MUSICBRAINZ_PROVIDER,
                 entityType = RECORDING_ENTITY_TYPE,
-                musicBrainzId = musicBrainzRecordingId,
+                externalId = musicBrainzRecordingId,
                 canonicalEntityId = recordingId,
             )
+            for (isrc in normalizedIsrcs) {
+                // Never transfer an existing ISRC claim. Conflict evidence is
+                // counted while the historical mapping remains untouched.
+                identityConflicts += persistExternalEvidenceIfUnclaimed(
+                    store = store,
+                    provider = ISRC_PROVIDER,
+                    entityType = RECORDING_ENTITY_TYPE,
+                    externalId = isrc,
+                    canonicalEntityId = recordingId,
+                )
+            }
 
             if (track.artists.isNotEmpty()) {
                 val resolved = resolveArtists(
@@ -301,10 +330,11 @@ internal object CanonicalRemoteCatalogSync {
                         entityId = releaseId,
                     ),
                 )
-                identityConflicts += persistMusicBrainzEvidenceIfUnclaimed(
+                identityConflicts += persistExternalEvidenceIfUnclaimed(
                     store = store,
+                    provider = MUSICBRAINZ_PROVIDER,
                     entityType = RELEASE_ENTITY_TYPE,
-                    musicBrainzId = musicBrainzReleaseId,
+                    externalId = musicBrainzReleaseId,
                     canonicalEntityId = releaseId,
                 )
                 if (album.artists.isNotEmpty()) {
@@ -434,10 +464,11 @@ internal object CanonicalRemoteCatalogSync {
                     entityId = artistId,
                 ),
             )
-            conflicts += persistMusicBrainzEvidenceIfUnclaimed(
+            conflicts += persistExternalEvidenceIfUnclaimed(
                 store = store,
+                provider = MUSICBRAINZ_PROVIDER,
                 entityType = ARTIST_ENTITY_TYPE,
-                musicBrainzId = musicBrainzArtistId,
+                externalId = musicBrainzArtistId,
                 canonicalEntityId = artistId,
             )
             artistIds += artistId
@@ -449,25 +480,26 @@ internal object CanonicalRemoteCatalogSync {
         )
     }
 
-    private suspend fun persistMusicBrainzEvidenceIfUnclaimed(
+    private suspend fun persistExternalEvidenceIfUnclaimed(
         store: CanonicalCatalogSyncStore,
+        provider: String,
         entityType: String,
-        musicBrainzId: String?,
+        externalId: String?,
         canonicalEntityId: String,
     ): Int {
-        val mbid = musicBrainzId ?: return 0
+        val id = externalId ?: return 0
         val existingEntityId = store.entityIdForExternalIdentity(
-            provider = MUSICBRAINZ_PROVIDER,
+            provider = provider,
             entityType = entityType,
-            externalId = mbid,
+            externalId = id,
         )
         return when {
             existingEntityId == null -> {
                 store.upsertExternalIdentity(
                     ExternalIdentityEntity(
-                        provider = MUSICBRAINZ_PROVIDER,
+                        provider = provider,
                         entityType = entityType,
-                        externalId = mbid,
+                        externalId = id,
                         entityId = canonicalEntityId,
                     ),
                 )
