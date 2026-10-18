@@ -7,6 +7,8 @@ import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import com.music.bitchord.BuildConfig
+import com.music.bitchord.observability.SessionTraceReferenceEncoder
+import com.music.bitchord.observability.StructuredTracer
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -27,6 +29,7 @@ object Diagnostics {
     private const val LOG_TAG = "BitChordDiag"
     private const val PREFS_NAME = "bitchord_diagnostics"
     private const val KEY_CAPTURE_EXPIRES_AT = "capture_expires_at"
+    private const val KEY_DIAGNOSTIC_MODE = "diagnostic_mode"
     private const val BUFFER_CAPACITY = 1_000
     private const val WRITER_QUEUE_CAPACITY = 512
     private const val MAX_CAPTURE_BYTES = 2L * 1024L * 1024L
@@ -45,6 +48,13 @@ object Diagnostics {
     private val buffer = DiagnosticBuffer(BUFFER_CAPACITY)
     private val installLock = Any()
     private val writer = DiagnosticWriteQueue(WRITER_QUEUE_CAPACITY)
+    private val structuredTracerInstance: StructuredTracer by lazy {
+        StructuredTracer(
+            mode = diagnosticMode.toTraceMode(),
+            sink = DiagnosticsStructuredTraceSink,
+            referenceEncoder = SessionTraceReferenceEncoder(sessionId),
+        )
+    }
 
     @Volatile
     private var application: Application? = null
@@ -54,6 +64,9 @@ object Diagnostics {
 
     @Volatile
     private var captureWindow: CaptureWindow? = null
+
+    @Volatile
+    private var diagnosticMode: DiagnosticMode = DiagnosticMode.STANDARD
 
     @Volatile
     private var installed = false
@@ -68,6 +81,7 @@ object Diagnostics {
                 rootDir = File(app.filesDir, "diagnostics"),
                 maxCaptureBytes = MAX_CAPTURE_BYTES,
             )
+            restoreDiagnosticMode(app)
             restoreCaptureWindow(app)
             installCrashHandler()
             installed = true
@@ -75,7 +89,10 @@ object Diagnostics {
                 category = DiagnosticCategory.STARTUP,
                 name = "diagnostics_install",
                 durationNanos = SystemClock.elapsedRealtimeNanos() - started,
-                metadata = mapOf("captureActive" to captureStatus().active.toString()),
+                metadata = mapOf(
+                    "captureActive" to captureStatus().active.toString(),
+                    "diagnosticMode" to diagnosticMode.name.lowercase(Locale.ROOT),
+                ),
             )
         }
     }
@@ -134,17 +151,51 @@ object Diagnostics {
         }
     }
 
-    /** Preserve the shared DebugLog contract while routing Android diagnostics through one sink. */
+    /** Neutral structured tracer for feature/domain adapters. It never exposes Android types. */
+    fun structuredTracer(): StructuredTracer = structuredTracerInstance.also {
+        it.mode = diagnosticMode.toTraceMode()
+    }
+
+    fun diagnosticMode(): DiagnosticMode = diagnosticMode
+
+    fun setDiagnosticMode(mode: DiagnosticMode): Boolean {
+        val app = checkNotNull(application) { "Diagnostics.install must be called first" }
+        val persisted = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_DIAGNOSTIC_MODE, mode.name)
+            .commit()
+        if (!persisted) {
+            event(
+                category = DiagnosticCategory.APP,
+                name = "diagnostic_mode_persist_failed",
+                level = DiagnosticLevel.WARN,
+                metadata = mapOf("requestedMode" to mode.name.lowercase(Locale.ROOT)),
+            )
+            return false
+        }
+        diagnosticMode = mode
+        structuredTracerInstance.mode = mode.toTraceMode()
+        event(
+            category = DiagnosticCategory.APP,
+            name = "diagnostic_mode_changed",
+            metadata = mapOf("mode" to mode.name.lowercase(Locale.ROOT)),
+        )
+        return true
+    }
+
+    /** Preserve legacy DebugLog only at the detail allowed by the current diagnostic mode. */
     fun fromDebugLog(level: Char, tag: String, message: String, error: Throwable?) {
+        val diagnosticLevel = when (level) {
+            'D' -> DiagnosticLevel.DEBUG
+            'I' -> DiagnosticLevel.INFO
+            'W' -> DiagnosticLevel.WARN
+            else -> DiagnosticLevel.ERROR
+        }
+        if (!diagnosticMode.allowsLegacy(diagnosticLevel)) return
         event(
             category = categoryForTag(tag),
             name = "debug_log:$tag",
-            level = when (level) {
-                'D' -> DiagnosticLevel.DEBUG
-                'I' -> DiagnosticLevel.INFO
-                'W' -> DiagnosticLevel.WARN
-                else -> DiagnosticLevel.ERROR
-            },
+            level = diagnosticLevel,
             message = message,
             error = error,
         )
@@ -171,7 +222,10 @@ object Diagnostics {
         event(
             category = DiagnosticCategory.APP,
             name = "capture_started",
-            metadata = mapOf("durationMillis" to durationMillis.toString()),
+            metadata = mapOf(
+                "durationMillis" to durationMillis.toString(),
+                "diagnosticMode" to diagnosticMode.name.lowercase(Locale.ROOT),
+            ),
         )
         return captureStatus()
     }
@@ -244,6 +298,14 @@ object Diagnostics {
         if (isCaptureActive(event.epochMillis)) {
             writer.offer { fileStore?.appendCapture(line) }
         }
+    }
+
+    private fun restoreDiagnosticMode(app: Application) {
+        val stored = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_DIAGNOSTIC_MODE, null)
+        diagnosticMode = stored
+            ?.let { runCatching { DiagnosticMode.valueOf(it) }.getOrNull() }
+            ?: DiagnosticMode.STANDARD
     }
 
     private fun restoreCaptureWindow(app: Application) {
@@ -322,6 +384,7 @@ object Diagnostics {
             "sdk=${Build.VERSION.SDK_INT}",
             "device=${DiagnosticSanitizer.text("${Build.MANUFACTURER} ${Build.MODEL}")}",
             "session=$sessionId",
+            "diagnosticMode=${diagnosticMode.name.lowercase(Locale.ROOT)}",
             "captureActive=${status.active}",
             "captureExpiresAt=${status.expiresAtEpochMillis ?: 0L}",
             "droppedPersistenceWrites=${writer.droppedWrites}",
