@@ -50,7 +50,7 @@ class StructuredTraceTest {
     @Test
     fun `span records success duration and failure without swallowing exception`() {
         val sink = RecordingStructuredTraceSink()
-        val ticks = ArrayDeque(listOf(10L, 25L, 30L, 80L, 90L))
+        val ticks = ArrayDeque(listOf(10L, 25L, 40L, 50L, 100L))
         val tracer = StructuredTracer(
             mode = TraceMode.VERBOSE,
             sink = sink,
