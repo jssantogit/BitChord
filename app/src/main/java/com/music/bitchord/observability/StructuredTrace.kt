@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Capture detail policy. Standard stays compact; Verbose is an explicit diagnostic opt-in. */
 enum class TraceMode {
@@ -108,7 +109,12 @@ class StructuredTracer(
     private val referenceEncoder: SessionTraceReferenceEncoder = SessionTraceReferenceEncoder(
         UUID.randomUUID().toString(),
     ),
+    private val maxIntermediatePoints: Int = DEFAULT_MAX_INTERMEDIATE_POINTS,
 ) {
+    init {
+        require(maxIntermediatePoints >= 0) { "maxIntermediatePoints must not be negative" }
+    }
+
     @Volatile
     var mode: TraceMode = mode
 
@@ -129,6 +135,7 @@ class StructuredTracer(
             sink = sink,
             monotonicNanos = monotonicNanos,
             referenceEncoder = referenceEncoder,
+            maxIntermediatePoints = maxIntermediatePoints,
         )
         trace.emitStart(attributes)
         return trace
@@ -136,6 +143,7 @@ class StructuredTracer(
 
     private companion object {
         const val MAX_TRACE_ID_CHARS = 80
+        const val DEFAULT_MAX_INTERMEDIATE_POINTS = 64
     }
 }
 
@@ -148,8 +156,10 @@ class StructuredTrace internal constructor(
     private val sink: StructuredTraceSink,
     private val monotonicNanos: () -> Long,
     private val referenceEncoder: SessionTraceReferenceEncoder,
+    maxIntermediatePoints: Int,
 ) {
     private val completed = AtomicBoolean(false)
+    private val remainingIntermediatePoints = AtomicInteger(maxIntermediatePoints)
 
     internal fun emitStart(attributes: Map<String, String>) {
         emit(
@@ -276,6 +286,7 @@ class StructuredTrace internal constructor(
     ) {
         if (!bypassCompletedCheck && completed.get()) return
         if (verbosity == TraceVerbosity.VERBOSE && modeProvider() != TraceMode.VERBOSE) return
+        if (kind.isIntermediate && !claimIntermediatePoint()) return
         sink.record(
             StructuredTracePoint(
                 traceId = traceId,
@@ -290,6 +301,17 @@ class StructuredTrace internal constructor(
             ),
         )
     }
+
+    private fun claimIntermediatePoint(): Boolean {
+        while (true) {
+            val remaining = remainingIntermediatePoints.get()
+            if (remaining <= 0) return false
+            if (remainingIntermediatePoints.compareAndSet(remaining, remaining - 1)) return true
+        }
+    }
+
+    private val TracePointKind.isIntermediate: Boolean
+        get() = this == TracePointKind.EVENT || this == TracePointKind.SPAN
 }
 
 private fun cleanToken(value: String, field: String): String {
