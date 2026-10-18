@@ -15,7 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -257,12 +257,12 @@ class RecordingRatingStoreTest {
     fun observeRatingEmitsCanonicalStateChange() = runTest {
         val store = openStore(MutableClock(1_000L))
         val observed = async(start = CoroutineStart.UNDISPATCHED) {
-            store.observeRating(RECORDING_A).drop(1).first()
+            store.observeRating(RECORDING_A).filterNotNull().first()
         }
 
         store.setRecordingRating(RECORDING_A, 4.0)
 
-        assertEquals(4.0, observed.await()!!.value, 0.0)
+        assertEquals(4.0, observed.await().value, 0.0)
     }
 
     private fun openStore(

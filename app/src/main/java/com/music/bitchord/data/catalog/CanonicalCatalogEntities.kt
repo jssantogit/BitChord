@@ -22,6 +22,14 @@ data class ReleaseEntity(
     val artworkUri: String?,
 )
 
+/** Canonical local artist identity. Provider/native IDs live in ExternalIdentity. */
+@Entity(tableName = "catalog_artist")
+data class ArtistEntity(
+    @androidx.room.PrimaryKey
+    val id: String,
+    val name: String,
+)
+
 @Entity(
     tableName = "catalog_release_track",
     primaryKeys = ["releaseId", "recordingId"],
@@ -45,6 +53,56 @@ data class ReleaseTrackEntity(
     val releaseId: String,
     val recordingId: String,
     val trackNumber: Int?,
+)
+
+@Entity(
+    tableName = "catalog_recording_artist_credit",
+    primaryKeys = ["recordingId", "position"],
+    foreignKeys = [
+        ForeignKey(
+            entity = RecordingEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["recordingId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = ArtistEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["artistId"],
+            onDelete = ForeignKey.NO_ACTION,
+        ),
+    ],
+    indices = [Index("artistId")],
+)
+data class RecordingArtistCreditEntity(
+    val recordingId: String,
+    val position: Int,
+    val artistId: String,
+)
+
+@Entity(
+    tableName = "catalog_release_artist_credit",
+    primaryKeys = ["releaseId", "position"],
+    foreignKeys = [
+        ForeignKey(
+            entity = ReleaseEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["releaseId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = ArtistEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["artistId"],
+            onDelete = ForeignKey.NO_ACTION,
+        ),
+    ],
+    indices = [Index("artistId")],
+)
+data class ReleaseArtistCreditEntity(
+    val releaseId: String,
+    val position: Int,
+    val artistId: String,
 )
 
 @Entity(
