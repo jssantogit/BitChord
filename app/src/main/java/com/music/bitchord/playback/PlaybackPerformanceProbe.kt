@@ -11,6 +11,7 @@ import com.music.bitchord.diagnostics.DiagnosticCategory
  * to the later stall/latency diagnostics slice.
  */
 internal enum class PlaybackPerformanceOperation(val eventName: String) {
+    PREPARE("runtime_playback_prepare"),
     SEEK("runtime_playback_seek"),
     QUEUE_MUTATION("runtime_playback_queue_mutation"),
     QUEUE_REBUILD("runtime_playback_queue_rebuild"),
