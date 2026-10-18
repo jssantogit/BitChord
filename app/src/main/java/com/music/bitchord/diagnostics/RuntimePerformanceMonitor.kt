@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.view.FrameMetrics
 import android.view.Window
+import com.music.bitchord.ui.performance.RuntimePerformanceUiContext
 import java.util.Locale
 import kotlin.math.roundToLong
 
@@ -32,7 +33,7 @@ internal fun frameBudgetNanosForRefreshRate(refreshRateHz: Float): Long {
  * delivers [FrameMetrics] on a dedicated handler thread, where frames are
  * reduced into bounded aggregate windows. Nothing is persisted per frame.
  */
-internal object RuntimePerformanceMonitor {
+internal object RuntimePerformanceMonitor : RuntimePerformanceUiContext.Sink {
     private val worker = HandlerThread("runtime-performance").apply { start() }
     private val handler = Handler(worker.looper)
     private val lock = Any()
@@ -124,6 +125,7 @@ internal object RuntimePerformanceMonitor {
             if (installed) return
             displayManager = app.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
             app.registerActivityLifecycleCallbacks(lifecycleCallbacks)
+            RuntimePerformanceUiContext.install(this)
             installed = true
         }
     }
@@ -217,6 +219,12 @@ internal object RuntimePerformanceMonitor {
             session.setContext(surfaces.currentContext)
         }
     }
+
+    override fun enter(owner: Any, context: String) = enterBaseSurface(owner, context)
+
+    override fun update(owner: Any, context: String) = updateBaseSurface(owner, context)
+
+    override fun leave(owner: Any) = leaveBaseSurface(owner)
 
     private fun refreshSamplingLocked() {
         val captureActive = Diagnostics.captureStatus().active
