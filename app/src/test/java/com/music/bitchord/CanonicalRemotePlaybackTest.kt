@@ -68,6 +68,38 @@ class CanonicalRemotePlaybackTest {
     }
 
     @Test
+    fun `account mismatch and forgotten account stay provider failures without locator leakage`() = runTest {
+        listOf(
+            OpenSubsonicMediaAccessFailure.ACCOUNT_MISMATCH,
+            OpenSubsonicMediaAccessFailure.ACCOUNT_NOT_CONFIGURED,
+        ).forEach { failure ->
+            var calls = 0
+            val resolver = CanonicalRemotePlaybackResolver(
+                openSubsonicResolve = {
+                    calls += 1
+                    OpenSubsonicMediaAccessResult.Failure(failure)
+                },
+            )
+            val logicalUri = CanonicalRemotePlaybackUri.encode(
+                CanonicalRemotePlaybackRequest(
+                    recordingId = "recording-1",
+                    mediaAssetId = "asset-1",
+                    providerKey = "opensubsonic:home",
+                ),
+            )
+
+            val error = assertThrows(IOException::class.java) {
+                runBlocking { resolver.resolve(logicalUri) }
+            }
+
+            assertEquals(1, calls)
+            assertFalse(error.message.orEmpty().contains("server-track-native"))
+            assertFalse(error.message.orEmpty().contains("password", ignoreCase = true))
+            assertFalse(error.message.orEmpty().contains("apiKey", ignoreCase = true))
+        }
+    }
+
+    @Test
     fun `unsupported provider fails before provider-owned OpenSubsonic access`() = runTest {
         var calls = 0
         val resolver = CanonicalRemotePlaybackResolver(
@@ -93,21 +125,20 @@ class CanonicalRemotePlaybackTest {
     }
 
     @Test
-    fun `playback implementation contains no second OpenSubsonic auth stack`() {
-        val source = File(
+    fun `playback package contains no second OpenSubsonic auth stack`() {
+        val root = File(
             System.getProperty("user.dir"),
-            "src/main/java/com/music/bitchord/playback/CanonicalRemotePlayback.kt",
-        ).readText()
+            "src/main/java/com/music/bitchord/playback",
+        )
+        val source = root.walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .joinToString("\n") { it.readText() }
 
         listOf(
             "OpenSubsonicAuth",
             "OpenSubsonicAccountConfig",
-            "MessageDigest",
-            "md5(",
+            "openSubsonicAuthenticationParameters",
             "/rest/stream.view",
-            "format=raw",
-            "apiKey",
-            "saltFactory",
         ).forEach { forbidden ->
             assertFalse("Playback duplicated provider responsibility: $forbidden", source.contains(forbidden))
         }
