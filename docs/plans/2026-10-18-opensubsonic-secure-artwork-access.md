@@ -45,7 +45,9 @@ The request descriptor is non-serializable and exposes only:
 - provider key;
 - a credential-free cache key.
 
-Decoded `coverArtId`, account/auth objects and authenticated parameters stay private. `toString()` redacts locator/auth. Transport exceptions are collapsed to typed failures because exception text can contain a full authenticated URL. Redirects are disabled on the artwork HTTP client so authentication query parameters cannot be forwarded to a different host.
+Decoded `coverArtId`, account/auth objects and authenticated parameters stay private. `toString()` redacts locator/auth. Transport exceptions are collapsed to typed failures because exception text can contain a full authenticated URL.
+
+The artwork transport reuses the shared OkHttp connection infrastructure but explicitly clears inherited application and network interceptors before issuing an OpenSubsonic request. This prevents credentials owned by another provider (for example WebDAV) or a future global request logger from observing the authenticated artwork query. HTTP and HTTPS redirects are also disabled so authentication query parameters cannot be forwarded to another host.
 
 ## Cache
 
@@ -85,7 +87,9 @@ This slice does not alter the existing playback click path, PlaybackResolver, Qu
 
 ## TDD
 
-RED was established in Android CI #218 from the test-only commit `9510a0d05ee7b29b3cc21945d67c17813a40ce21`: compilation reached the new unit test and failed specifically because the artwork access/cache/transport types were absent.
+Initial RED was established in Android CI #218 from the test-only commit `9510a0d05ee7b29b3cc21945d67c17813a40ce21`: compilation reached the new unit test and failed specifically because the artwork access/cache/transport types were absent.
+
+A second security-hardening RED was established in Android CI #254 on `f7edd4106ca14e380e81b34a7a60a8b46374f6f1`: the suite failed specifically because the isolated artwork HTTP client did not yet exist. The corresponding implementation commit `45c4598bf04cda2cc2ab266f299cfb24ebf49009` passed `testDevDebugUnitTest` in Android CI #260.
 
 Regression coverage includes:
 
@@ -98,7 +102,8 @@ Regression coverage includes:
 - missing/malformed artwork;
 - network failure without catalog mutation;
 - stable credential-free cache key and artwork-revision invalidation;
-- cached image use after provider outage;
+- cached image use after provider outage without another credential-store read;
+- artwork HTTP client does not inherit global application/network interceptors and does not follow redirects;
 - typed authentication rejection and missing credential;
 - canonical browse identity without `Song.videoId` or `sourceKey`.
 
