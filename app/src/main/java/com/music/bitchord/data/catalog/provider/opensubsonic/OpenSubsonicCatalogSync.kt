@@ -81,6 +81,19 @@ private class RoomCanonicalCatalogSyncStore(
         externalId: String,
     ): String? = dao.entityIdForExternalIdentity(provider, entityType, externalId)
 
+
+    override suspend fun musicBrainzRecordingIdsForEntity(recordingId: String): List<String> =
+        dao.externalIdentitiesForEntity("musicbrainz", "recording", recordingId)
+            .map(ExternalIdentityEntity::externalId)
+
+    override suspend fun claimMusicBrainzRecordingIdentity(mbid: String, recordingId: String): Boolean {
+        val claim = dao.claimExternalIdentityExclusivelyForEntity(
+            ExternalIdentityEntity("musicbrainz", "recording", mbid, recordingId),
+        )
+        return claim.candidateOwnerEntityId == recordingId &&
+            claim.existingExternalIdsForEntity.all { it == mbid }
+    }
+
     override suspend fun upsertRecording(recording: RecordingEntity) = dao.upsertRecording(recording)
 
     override suspend fun upsertRelease(release: ReleaseEntity) = dao.upsertRelease(release)

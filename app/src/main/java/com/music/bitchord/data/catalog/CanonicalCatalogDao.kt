@@ -1,6 +1,8 @@
 package com.music.bitchord.data.catalog
 
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
@@ -10,6 +12,12 @@ internal data class CanonicalArtistCreditRow(
     val artistId: String,
     val artistName: String,
     val position: Int,
+)
+
+internal data class ExclusiveExternalIdentityClaimResult(
+    val existingExternalIdsForEntity: List<String>,
+    val candidateOwnerEntityId: String?,
+    val inserted: Boolean,
 )
 
 @Dao
@@ -169,6 +177,54 @@ internal interface CanonicalCatalogDao {
     @Upsert
     suspend fun upsertExternalIdentity(identity: ExternalIdentityEntity)
 
+    /**
+     * Atomically claims an external-identity key without ever transferring an
+     * existing claim. Returns -1 when the key is already present.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertExternalIdentityIfAbsent(identity: ExternalIdentityEntity): Long
+
+    /**
+     * Atomically claims an identity for namespaces where one canonical entity
+     * may own at most one external identity for a provider/entity type pair.
+     *
+     * This is intentionally opt-in. It must not be used for namespaces such as
+     * ISRC where multiple identities for the same Recording are valid.
+     */
+    @Transaction
+    suspend fun claimExternalIdentityExclusivelyForEntity(
+        identity: ExternalIdentityEntity,
+    ): ExclusiveExternalIdentityClaimResult {
+        val existingExternalIds = externalIdentitiesForEntity(
+            provider = identity.provider,
+            entityType = identity.entityType,
+            entityId = identity.entityId,
+        ).map(ExternalIdentityEntity::externalId).distinct()
+
+        if (existingExternalIds.isNotEmpty()) {
+            return ExclusiveExternalIdentityClaimResult(
+                existingExternalIdsForEntity = existingExternalIds,
+                candidateOwnerEntityId = entityIdForExternalIdentity(
+                    provider = identity.provider,
+                    entityType = identity.entityType,
+                    externalId = identity.externalId,
+                ),
+                inserted = false,
+            )
+        }
+
+        val inserted = insertExternalIdentityIfAbsent(identity) != -1L
+        return ExclusiveExternalIdentityClaimResult(
+            existingExternalIdsForEntity = emptyList(),
+            candidateOwnerEntityId = entityIdForExternalIdentity(
+                provider = identity.provider,
+                entityType = identity.entityType,
+                externalId = identity.externalId,
+            ),
+            inserted = inserted,
+        )
+    }
+
     // MusicBrainz enrichment cache. These tables are source-specific and can be
     // discarded/rebuilt without changing the canonical catalog.
 
@@ -229,9 +285,7 @@ internal interface CanonicalCatalogDao {
         ORDER BY position ASC
         """,
     )
-    suspend fun musicBrainzReleaseArtistCredits(
-        releaseId: String,
-    ): List<MusicBrainzReleaseArtistCreditEntity>
+    suspend fun musicBrainzReleaseArtistCredits(releaseId: String): List<MusicBrainzReleaseArtistCreditEntity>
 
     @Upsert
     suspend fun upsertMusicBrainzReleaseArtistCredits(
