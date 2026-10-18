@@ -118,6 +118,9 @@ class StructuredTracer(
     @Volatile
     var mode: TraceMode = mode
 
+    /** Encode privacy-safe references before emitting TRACE_START metadata. */
+    fun reference(rawValue: String): String = referenceEncoder.encode(rawValue)
+
     fun startTrace(
         feature: TraceFeature,
         operation: String,
