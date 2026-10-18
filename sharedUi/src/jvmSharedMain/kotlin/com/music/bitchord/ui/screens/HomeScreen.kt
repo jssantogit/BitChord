@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -87,6 +88,7 @@ import com.music.bitchord.ui.components.recentlyPlayedSkeleton
 import com.music.bitchord.ui.components.heroCardWidth
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.components.trackColumnWidth
+import com.music.bitchord.ui.performance.RuntimePerformanceUiContext
 import com.music.bitchord.ui.player.MeshGradientBackground
 import com.music.bitchord.ui.player.MeshPalette
 
@@ -144,6 +146,26 @@ fun HomeScreen(
     isPlaying: Boolean = false,
 ) {
     val recentsViewType by AppUi.host.homeRecentsViewType.collectAsStateWithLifecycle()
+
+    if (RuntimePerformanceUiContext.enabled) {
+        val runtimePerformanceOwner = remember { Any() }
+        DisposableEffect(runtimePerformanceOwner) {
+            RuntimePerformanceUiContext.enter(
+                runtimePerformanceOwner,
+                if (listState.isScrollInProgress) "home_scroll" else "home",
+            )
+            onDispose { RuntimePerformanceUiContext.leave(runtimePerformanceOwner) }
+        }
+        LaunchedEffect(listState, runtimePerformanceOwner) {
+            snapshotFlow { listState.isScrollInProgress }
+                .collect { scrolling ->
+                    RuntimePerformanceUiContext.update(
+                        runtimePerformanceOwner,
+                        if (scrolling) "home_scroll" else "home",
+                    )
+                }
+        }
+    }
 
     PullToRefresh(
         refreshing = refreshing,
