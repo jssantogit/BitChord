@@ -61,6 +61,26 @@ class PlaybackFailureIdentityTest {
     }
 
     @Test
+    fun `duplicate queue entry ids at different physical slots are distinct playback occurrences`() {
+        val firstOccurrence = failureOccurrenceKey(
+            tier = QueueTier.USER_QUEUE,
+            canonicalIndex = null,
+            contextCycleId = null,
+            queueEntryId = "duplicate-entry",
+            physicalIndex = 1,
+        )
+        val secondOccurrence = failureOccurrenceKey(
+            tier = QueueTier.USER_QUEUE,
+            canonicalIndex = null,
+            contextCycleId = null,
+            queueEntryId = "duplicate-entry",
+            physicalIndex = 2,
+        )
+
+        assertNotEquals(firstOccurrence, secondOccurrence)
+    }
+
+    @Test
     fun `occurrence identity remains credential free`() {
         val key = failureOccurrenceKey(
             tier = QueueTier.CONTEXT,
