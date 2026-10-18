@@ -747,8 +747,10 @@ fun NowPlayingScreen(
     windowHeight: Dp,
     modifier: Modifier = Modifier,
 ) {
-    SideEffect {
-        RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.NOW_PLAYING_RECOMPOSITION)
+    if (RuntimePerformanceUiContext.enabled) {
+        SideEffect {
+            RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.NOW_PLAYING_RECOMPOSITION)
+        }
     }
 
     val density = LocalDensity.current
@@ -829,18 +831,20 @@ fun NowPlayingScreen(
     val canvasRenderedState = remember(canvas?.url) { mutableStateOf(false) }
     var canvasRendered by canvasRenderedState
     var canvasFrame by remember(canvas?.url) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(canvasRendered) {
-        RuntimePerformanceUiContext.setState(
-            RuntimePerformanceUiStateKey.CANVAS_MODE,
-            if (canvasRendered) RuntimePerformanceUiStateValue.ACTIVE else RuntimePerformanceUiStateValue.INACTIVE,
-        )
-    }
-    DisposableEffect(Unit) {
-        onDispose {
+    if (RuntimePerformanceUiContext.enabled) {
+        LaunchedEffect(canvasRendered) {
             RuntimePerformanceUiContext.setState(
                 RuntimePerformanceUiStateKey.CANVAS_MODE,
-                RuntimePerformanceUiStateValue.INACTIVE,
+                if (canvasRendered) RuntimePerformanceUiStateValue.ACTIVE else RuntimePerformanceUiStateValue.INACTIVE,
             )
+        }
+        DisposableEffect(Unit) {
+            onDispose {
+                RuntimePerformanceUiContext.setState(
+                    RuntimePerformanceUiStateKey.CANVAS_MODE,
+                    RuntimePerformanceUiStateValue.INACTIVE,
+                )
+            }
         }
     }
     // Spotify's phone presentation starts with the full control deck over its

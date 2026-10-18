@@ -332,14 +332,16 @@ fun ArtworkMeshBackdrop(
     // the CPU-side interpolation is what carries the smoothness.
     val canBlur = !reduceDynamicBlur && renderEffectBlurSupported
 
-    SideEffect {
-        RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.ARTWORK_BACKDROP_RECOMPOSITION)
-    }
-    LaunchedEffect(canBlur) {
-        RuntimePerformanceUiContext.setState(
-            RuntimePerformanceUiStateKey.DYNAMIC_BLUR,
-            if (canBlur) RuntimePerformanceUiStateValue.ENABLED else RuntimePerformanceUiStateValue.REDUCED,
-        )
+    if (RuntimePerformanceUiContext.enabled) {
+        SideEffect {
+            RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.ARTWORK_BACKDROP_RECOMPOSITION)
+        }
+        LaunchedEffect(canBlur) {
+            RuntimePerformanceUiContext.setState(
+                RuntimePerformanceUiStateKey.DYNAMIC_BLUR,
+                if (canBlur) RuntimePerformanceUiStateValue.ENABLED else RuntimePerformanceUiStateValue.REDUCED,
+            )
+        }
     }
 
     // The mesh on screen, and the one fading in over it. Two states rather than
