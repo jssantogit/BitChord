@@ -36,6 +36,8 @@ class PlaybackPerformanceProbeTest {
 
     @Test
     fun `operation names stay stable and low cardinality`() {
+        val names = PlaybackPerformanceOperation.entries.map { it.eventName }
+
         assertEquals(
             listOf(
                 "runtime_playback_prepare",
@@ -44,7 +46,8 @@ class PlaybackPerformanceProbeTest {
                 "runtime_playback_queue_rebuild",
                 "runtime_playback_track_transition",
             ),
-            PlaybackPerformanceOperation.entries.map { it.eventName },
+            names,
         )
+        assertEquals(names.size, names.toSet().size)
     }
 }
