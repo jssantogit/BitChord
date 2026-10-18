@@ -115,7 +115,7 @@ internal class PlaybackPerformancePlayer(
         super.clearMediaItems()
     }
 
-    private inline fun <T> measured(
+    private fun <T> measured(
         operation: PlaybackPerformanceOperation,
         block: () -> T,
     ): T = PlaybackPerformance.measure(operation, block)
