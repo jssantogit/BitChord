@@ -69,7 +69,7 @@ class RecordingArtistCreditPreviewRoomTest {
             assertEquals("artist-a", reopened.entityIdForExternalIdentity("musicbrainz", "artist", artistMbid))
             assertEquals(beforeCredits, reopened.musicBrainzRecordingArtistCredits("r1"))
             assertEquals("asset", reopened.mediaAsset("local", "one")?.id)
-            reopened.openHelper.readableDatabase.query("PRAGMA user_version").use { cur ->
+            db.openHelper.readableDatabase.query("PRAGMA user_version").use { cur ->
                 assertTrue(cur.moveToFirst())
                 assertEquals(3, cur.getInt(0))
             }
