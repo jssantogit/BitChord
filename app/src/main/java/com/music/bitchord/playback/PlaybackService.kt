@@ -1808,7 +1808,7 @@ class PlaybackService : MediaLibraryService() {
         deferPlayToParty = { partySync?.shouldDeferPlay() == true },
         lockedTransport = { playing -> partySync?.onLockedTransport(playing) == true },
         cast = speakers,
-    ) { lastPublishedSubtitle }
+    ) { lastPublishedSubtitle }.withPlaybackPerformanceProbes()
 
     /**
      * The stream a Cast receiver can open for [item], or null when there is none
@@ -3370,8 +3370,8 @@ class PlaybackService : MediaLibraryService() {
         previousEnded: Boolean,
         reason: Int,
         alreadyAudible: Boolean = false,
-    ) {
-        val exoPlayer = player ?: return
+    ) = PlaybackPerformance.measure(PlaybackPerformanceOperation.TRACK_TRANSITION) {
+        val exoPlayer = player ?: return@measure
         syncBoundedContextCursor(exoPlayer, mediaItem)
         if (boundedContextWindow != null && !ListenTogether.state.value.inParty) {
             saveBoundedContextSnapshot(exoPlayer)
