@@ -9,10 +9,11 @@ internal object CanonicalQueueMigration {
         resolver: CanonicalQueueResolver,
     ): BoundedContextPersistence.State {
         val contextSongs = state.context.songs
-        val contextIdentities = state.contextIdentities
-            .takeIf { it.size == contextSongs.size }
-            ?.toMutableList()
-            ?: MutableList(contextSongs.size) { null }
+        val contextIdentities = MutableList<CanonicalQueueIdentity?>(contextSongs.size) { index ->
+            state.contextIdentities
+                .takeIf { it.size == contextSongs.size }
+                ?.get(index)
+        }
 
         // An anchored physical row that already crossed the canonical boundary is
         // stronger evidence than its compatibility Song envelope. Reuse it instead
@@ -26,10 +27,11 @@ internal object CanonicalQueueMigration {
         }
 
         val contextPending = contextSongs.indices.filter { contextIdentities[it] == null }
-        val entryIdentities = state.entries.map { entry ->
+        val entryIdentities = MutableList<CanonicalQueueIdentity?>(state.entries.size) { index ->
+            val entry = state.entries[index]
             entry.canonicalIdentity
                 ?: entry.canonicalIndex?.let(contextIdentities::getOrNull)
-        }.toMutableList()
+        }
         val entryPending = state.entries.indices.filter { index -> entryIdentities[index] == null }
 
         val identificationInput = buildList {
