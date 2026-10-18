@@ -15,6 +15,15 @@ internal data class CanonicalArtistCreditRow(
 @Dao
 internal interface CanonicalCatalogDao {
 
+    @Query("SELECT * FROM catalog_recording WHERE id = :recordingId LIMIT 1")
+    suspend fun recordingById(recordingId: String): RecordingEntity?
+
+    @Query("SELECT * FROM catalog_release WHERE id = :releaseId LIMIT 1")
+    suspend fun releaseById(releaseId: String): ReleaseEntity?
+
+    @Query("SELECT * FROM catalog_artist WHERE id = :artistId LIMIT 1")
+    suspend fun artistById(artistId: String): ArtistEntity?
+
     @Query("SELECT * FROM catalog_media_asset WHERE id = :mediaAssetId LIMIT 1")
     suspend fun mediaAssetById(mediaAssetId: String): MediaAssetEntity?
 
@@ -41,6 +50,21 @@ internal interface CanonicalCatalogDao {
         entityType: String,
         externalId: String,
     ): String?
+
+    @Query(
+        """
+        SELECT * FROM catalog_external_identity
+        WHERE provider = :provider
+          AND entityType = :entityType
+          AND entityId = :entityId
+        ORDER BY externalId
+        """,
+    )
+    suspend fun externalIdentitiesForEntity(
+        provider: String,
+        entityType: String,
+        entityId: String,
+    ): List<ExternalIdentityEntity>
 
     @Upsert
     suspend fun upsertRecording(recording: RecordingEntity)
@@ -129,6 +153,91 @@ internal interface CanonicalCatalogDao {
 
     @Upsert
     suspend fun upsertExternalIdentity(identity: ExternalIdentityEntity)
+
+    // MusicBrainz enrichment cache. These tables are source-specific and can be
+    // discarded/rebuilt without changing the canonical catalog.
+
+    @Query("SELECT * FROM musicbrainz_artist_enrichment WHERE artistId = :artistId LIMIT 1")
+    suspend fun musicBrainzArtistEnrichment(artistId: String): MusicBrainzArtistEnrichmentEntity?
+
+    @Upsert
+    suspend fun upsertMusicBrainzArtistEnrichment(enrichment: MusicBrainzArtistEnrichmentEntity)
+
+    @Query("SELECT * FROM musicbrainz_recording_enrichment WHERE recordingId = :recordingId LIMIT 1")
+    suspend fun musicBrainzRecordingEnrichment(recordingId: String): MusicBrainzRecordingEnrichmentEntity?
+
+    @Upsert
+    suspend fun upsertMusicBrainzRecordingEnrichment(enrichment: MusicBrainzRecordingEnrichmentEntity)
+
+    @Query(
+        """
+        SELECT * FROM musicbrainz_recording_artist_credit
+        WHERE recordingId = :recordingId
+        ORDER BY position ASC
+        """,
+    )
+    suspend fun musicBrainzRecordingArtistCredits(
+        recordingId: String,
+    ): List<MusicBrainzRecordingArtistCreditEntity>
+
+    @Upsert
+    suspend fun upsertMusicBrainzRecordingArtistCredits(
+        credits: List<MusicBrainzRecordingArtistCreditEntity>,
+    )
+
+    @Query("DELETE FROM musicbrainz_recording_artist_credit WHERE recordingId = :recordingId")
+    suspend fun deleteMusicBrainzRecordingArtistCredits(recordingId: String)
+
+    @Transaction
+    suspend fun persistMusicBrainzRecordingEnrichment(
+        enrichment: MusicBrainzRecordingEnrichmentEntity,
+        credits: List<MusicBrainzRecordingArtistCreditEntity>?,
+        clearExistingCredits: Boolean,
+    ) {
+        upsertMusicBrainzRecordingEnrichment(enrichment)
+        if (clearExistingCredits || credits != null) {
+            deleteMusicBrainzRecordingArtistCredits(enrichment.recordingId)
+        }
+        if (!credits.isNullOrEmpty()) upsertMusicBrainzRecordingArtistCredits(credits)
+    }
+
+    @Query("SELECT * FROM musicbrainz_release_enrichment WHERE releaseId = :releaseId LIMIT 1")
+    suspend fun musicBrainzReleaseEnrichment(releaseId: String): MusicBrainzReleaseEnrichmentEntity?
+
+    @Upsert
+    suspend fun upsertMusicBrainzReleaseEnrichment(enrichment: MusicBrainzReleaseEnrichmentEntity)
+
+    @Query(
+        """
+        SELECT * FROM musicbrainz_release_artist_credit
+        WHERE releaseId = :releaseId
+        ORDER BY position ASC
+        """,
+    )
+    suspend fun musicBrainzReleaseArtistCredits(
+        releaseId: String,
+    ): List<MusicBrainzReleaseArtistCreditEntity>
+
+    @Upsert
+    suspend fun upsertMusicBrainzReleaseArtistCredits(
+        credits: List<MusicBrainzReleaseArtistCreditEntity>,
+    )
+
+    @Query("DELETE FROM musicbrainz_release_artist_credit WHERE releaseId = :releaseId")
+    suspend fun deleteMusicBrainzReleaseArtistCredits(releaseId: String)
+
+    @Transaction
+    suspend fun persistMusicBrainzReleaseEnrichment(
+        enrichment: MusicBrainzReleaseEnrichmentEntity,
+        credits: List<MusicBrainzReleaseArtistCreditEntity>?,
+        clearExistingCredits: Boolean,
+    ) {
+        upsertMusicBrainzReleaseEnrichment(enrichment)
+        if (clearExistingCredits || credits != null) {
+            deleteMusicBrainzReleaseArtistCredits(enrichment.releaseId)
+        }
+        if (!credits.isNullOrEmpty()) upsertMusicBrainzReleaseArtistCredits(credits)
+    }
 
     @Query("DELETE FROM catalog_release_track WHERE recordingId = :recordingId")
     suspend fun deleteReleaseTracksForRecording(recordingId: String)
