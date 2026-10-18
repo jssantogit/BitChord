@@ -2,16 +2,16 @@ name: Native bounded patch
 
 on:
   push:
-    branches: [playback/canonical-remote-direct-play]
+    branches:
+      - playback/canonical-remote-direct-play
     paths:
-      - '.github/workflows/native-bounded-patch.yml'
+      - .github/workflows/native-bounded-patch.yml
 
 permissions:
   contents: write
 
 jobs:
   apply:
-    if: github.event.head_commit.message == 'chore: run canonical remote integration patch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
