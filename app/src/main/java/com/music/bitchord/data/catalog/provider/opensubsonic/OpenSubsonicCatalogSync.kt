@@ -2,12 +2,15 @@ package com.music.bitchord.data.catalog.provider.opensubsonic
 
 import android.content.Context
 import androidx.room.withTransaction
+import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.CanonicalCatalogDao
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalProviderRow
 import com.music.bitchord.data.catalog.ExternalIdentityEntity
 import com.music.bitchord.data.catalog.MediaAssetEntity
+import com.music.bitchord.data.catalog.RecordingArtistCreditEntity
 import com.music.bitchord.data.catalog.RecordingEntity
+import com.music.bitchord.data.catalog.ReleaseArtistCreditEntity
 import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.catalog.ReleaseTrackEntity
 import com.music.bitchord.data.catalog.provider.CanonicalCatalogSyncStore
@@ -84,6 +87,18 @@ private class RoomCanonicalCatalogSyncStore(
 
     override suspend fun upsertReleaseTrack(releaseTrack: ReleaseTrackEntity) =
         dao.upsertReleaseTrack(releaseTrack)
+
+    override suspend fun upsertArtist(artist: ArtistEntity) = dao.upsertArtist(artist)
+
+    override suspend fun replaceRecordingArtistCredits(
+        recordingId: String,
+        credits: List<RecordingArtistCreditEntity>,
+    ) = dao.replaceRecordingArtistCredits(recordingId, credits)
+
+    override suspend fun replaceReleaseArtistCredits(
+        releaseId: String,
+        credits: List<ReleaseArtistCreditEntity>,
+    ) = dao.replaceReleaseArtistCredits(releaseId, credits)
 
     override suspend fun upsertMediaAsset(mediaAsset: MediaAssetEntity) = dao.upsertMediaAsset(mediaAsset)
 

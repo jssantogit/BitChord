@@ -668,6 +668,12 @@ class PlaybackService : MediaLibraryService() {
      */
     private var consecutiveErrorSkips = 0
 
+    /** Runtime-only loop guard for selected-asset playback failures. */
+    private val failureCascade = PlaybackFailureCascade()
+
+    /** Logical queue entry that most recently produced audible playback. */
+    private var audibleFailureOccurrenceKey: String? = null
+
     private var scrobbleManager: ScrobbleManager? = null
     private var listenBrainzSong: Song? = null
 
@@ -877,6 +883,11 @@ class PlaybackService : MediaLibraryService() {
                 // say the queue is not simply unplayable end to end.
                 audibleMediaId = exoPlayer.currentMediaItem?.mediaId
                 consecutiveErrorSkips = 0
+                audibleFailureOccurrenceKey = failureOccurrenceKeyOrNull(
+                    exoPlayer,
+                    exoPlayer.currentMediaItemIndex,
+                )
+                failureCascade.onPlaybackStarted()
             }
             if (isPlaying) registerCurrentPlay()
             // Nothing to read ahead for while paused, and a pause is often
@@ -1790,7 +1801,10 @@ class PlaybackService : MediaLibraryService() {
     private fun newSessionPlayer(player: Player, crossfade: CrossfadeController) = SessionPlayer(
         player,
         crossfade,
-        onUserIntent = { partySync?.onLocalIntent() },
+        onUserIntent = {
+            failureCascade.onExplicitUserIntent()
+            partySync?.onLocalIntent()
+        },
         deferPlayToParty = { partySync?.shouldDeferPlay() == true },
         lockedTransport = { playing -> partySync?.onLockedTransport(playing) == true },
         cast = speakers,
@@ -3689,9 +3703,14 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun recoverFrom(error: PlaybackException, player: ExoPlayer) {
         val item = player.currentMediaItem ?: return
-        // Provider-specific failures are terminal for this direct-play vertical;
-        // do not reinterpret the canonical id as a YouTube/source fallback key.
-        if (item.isCanonicalRemotePlayback()) return
+        val currentFailureOccurrence = failureOccurrenceKeyOrNull(player, player.currentMediaItemIndex)
+        val handling = failureCascade.handlePlaybackFailure(
+            error = error,
+            player = player,
+            neverStarted = currentFailureOccurrence == null ||
+                currentFailureOccurrence != audibleFailureOccurrenceKey,
+        )
+        if (handling != PlaybackFailureHandling.NOT_HANDLED) return
         val mediaId = item.mediaId
         val uri = item.localConfiguration?.uri
         val position = player.currentPosition.coerceAtLeast(0L)

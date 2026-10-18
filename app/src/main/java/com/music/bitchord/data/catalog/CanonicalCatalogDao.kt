@@ -2,8 +2,15 @@ package com.music.bitchord.data.catalog
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
+
+internal data class CanonicalArtistCreditRow(
+    val artistId: String,
+    val artistName: String,
+    val position: Int,
+)
 
 @Dao
 internal interface CanonicalCatalogDao {
@@ -43,6 +50,79 @@ internal interface CanonicalCatalogDao {
 
     @Upsert
     suspend fun upsertReleaseTrack(releaseTrack: ReleaseTrackEntity)
+
+    @Upsert
+    suspend fun upsertArtist(artist: ArtistEntity)
+
+    @Upsert
+    suspend fun upsertRecordingArtistCredits(credits: List<RecordingArtistCreditEntity>)
+
+    @Upsert
+    suspend fun upsertReleaseArtistCredits(credits: List<ReleaseArtistCreditEntity>)
+
+    @Query("DELETE FROM catalog_recording_artist_credit WHERE recordingId = :recordingId")
+    suspend fun deleteRecordingArtistCredits(recordingId: String)
+
+    @Query("DELETE FROM catalog_release_artist_credit WHERE releaseId = :releaseId")
+    suspend fun deleteReleaseArtistCredits(releaseId: String)
+
+    @Transaction
+    suspend fun replaceRecordingArtistCredits(
+        recordingId: String,
+        credits: List<RecordingArtistCreditEntity>,
+    ) {
+        deleteRecordingArtistCredits(recordingId)
+        if (credits.isNotEmpty()) upsertRecordingArtistCredits(credits)
+    }
+
+    @Transaction
+    suspend fun replaceReleaseArtistCredits(
+        releaseId: String,
+        credits: List<ReleaseArtistCreditEntity>,
+    ) {
+        deleteReleaseArtistCredits(releaseId)
+        if (credits.isNotEmpty()) upsertReleaseArtistCredits(credits)
+    }
+
+    @Query(
+        """
+        SELECT
+            credit.artistId AS artistId,
+            artist.name AS artistName,
+            credit.position AS position
+        FROM catalog_recording_artist_credit AS credit
+        INNER JOIN catalog_artist AS artist ON artist.id = credit.artistId
+        WHERE credit.recordingId = :recordingId
+        ORDER BY credit.position ASC
+        """,
+    )
+    suspend fun recordingArtistCredits(recordingId: String): List<CanonicalArtistCreditRow>
+
+    @Query(
+        """
+        SELECT
+            credit.artistId AS artistId,
+            artist.name AS artistName,
+            credit.position AS position
+        FROM catalog_release_artist_credit AS credit
+        INNER JOIN catalog_artist AS artist ON artist.id = credit.artistId
+        WHERE credit.releaseId = :releaseId
+        ORDER BY credit.position ASC
+        """,
+    )
+    suspend fun releaseArtistCredits(releaseId: String): List<CanonicalArtistCreditRow>
+
+    @Query(
+        """
+        SELECT recording.*
+        FROM catalog_recording AS recording
+        INNER JOIN catalog_recording_artist_credit AS credit
+            ON credit.recordingId = recording.id
+        WHERE credit.artistId = :artistId
+        ORDER BY recording.title COLLATE NOCASE, recording.id
+        """,
+    )
+    suspend fun recordingsByArtist(artistId: String): List<RecordingEntity>
 
     @Upsert
     suspend fun upsertMediaAsset(mediaAsset: MediaAssetEntity)
