@@ -33,26 +33,17 @@ jobs:
               raise SystemExit(f"expected exactly one session-player factory seam, found {factory_count}")
           source = source.replace(factory_before, factory_after, 1)
 
-          transition_before = """    private fun onTrackBecameCurrent(
-              mediaItem: MediaItem?,
-              previousEnded: Boolean,
-              reason: Int,
-              alreadyAudible: Boolean = false,
-          ) {
-              val exoPlayer = player ?: return
-          """
-          transition_after = """    private fun onTrackBecameCurrent(
-              mediaItem: MediaItem?,
-              previousEnded: Boolean,
-              reason: Int,
-              alreadyAudible: Boolean = false,
-          ) = PlaybackPerformance.measure(PlaybackPerformanceOperation.TRACK_TRANSITION) {
-              val exoPlayer = player ?: return@measure
-          """
-          transition_count = source.count(transition_before)
-          if transition_count != 1:
-              raise SystemExit(f"expected exactly one track-transition seam, found {transition_count}")
-          source = source.replace(transition_before, transition_after, 1)
+          function_marker = "    private fun onTrackBecameCurrent("
+          if source.count(function_marker) != 1:
+              raise SystemExit(f"expected exactly one track-transition function, found {source.count(function_marker)}")
+          function_start = source.index(function_marker)
+          transition_before = "    ) {\n        val exoPlayer = player ?: return\n"
+          transition_at = source.find(transition_before, function_start)
+          next_function = source.find("\n    private fun ", function_start + len(function_marker))
+          if transition_at < 0 or (next_function >= 0 and transition_at > next_function):
+              raise SystemExit("track-transition body seam not found inside onTrackBecameCurrent")
+          transition_after = "    ) = PlaybackPerformance.measure(PlaybackPerformanceOperation.TRACK_TRANSITION) {\n        val exoPlayer = player ?: return@measure\n"
+          source = source[:transition_at] + transition_after + source[transition_at + len(transition_before):]
 
           path.write_text(source)
           PY
