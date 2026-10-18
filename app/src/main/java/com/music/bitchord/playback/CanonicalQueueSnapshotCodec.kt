@@ -11,10 +11,11 @@ import kotlinx.serialization.json.Json
 /**
  * Canonical queue schema v2.
  *
- * A migrated row stores canonical identity plus safe UI metadata only. Rows for
- * which no canonical mapping is proven may remain explicitly legacy, so their
- * compatibility envelope cannot force already-migrated rows back to schema v1.
- * The v2 context itself never stores provider sourceKey, auth, or final endpoints.
+ * Every newly persisted bounded snapshot uses this schema. A migrated row stores
+ * canonical identity plus safe UI metadata only. A row for which no canonical
+ * mapping is proven may remain explicitly legacy-compatible, but that row cannot
+ * force the snapshot back to the historical v1 format. The v2 context never
+ * stores provider sourceKey, auth, final endpoints, or local transport locators.
  */
 internal object CanonicalQueueSnapshotCodec {
     private const val SCHEMA_VERSION = 2
@@ -24,17 +25,8 @@ internal object CanonicalQueueSnapshotCodec {
         explicitNulls = false
     }
 
-    fun canEncode(state: BoundedContextPersistence.State): Boolean =
-        state.contextIdentities.any { it != null } ||
-            state.entries.any { entry ->
-                entry.canonicalIdentity != null ||
-                    entry.canonicalIndex?.let(state.contextIdentities::getOrNull) != null
-            }
-
-    fun encode(state: BoundedContextPersistence.State): String? {
-        if (!canEncode(state)) return null
-        return runCatching { json.encodeToString(StoredState.from(state)) }.getOrNull()
-    }
+    fun encode(state: BoundedContextPersistence.State): String? =
+        runCatching { json.encodeToString(StoredState.from(state)) }.getOrNull()
 
     fun decode(raw: String): BoundedContextPersistence.State? {
         if (!raw.contains("\"schemaVersion\":$SCHEMA_VERSION")) return null
@@ -126,7 +118,9 @@ internal object CanonicalQueueSnapshotCodec {
 
     /**
      * Compatibility payload used only for a row with no proven canonical mapping.
-     * It is never emitted for a migrated row.
+     * It is never emitted for a migrated row. This may carry legacy videoId/URI/path
+     * because no canonical identity is known, but the surrounding v2 snapshot still
+     * omits the historical context sourceKey and any provider auth material.
      */
     @Serializable
     private data class StoredLegacySong(
