@@ -101,17 +101,27 @@ internal interface CanonicalCatalogSyncStore {
 
     suspend fun upsertReleaseTrack(releaseTrack: ReleaseTrackEntity)
 
-    suspend fun upsertArtist(artist: ArtistEntity)
+    /**
+     * Legacy test stores that never receive structured artist evidence may omit these
+     * methods. They fail fast rather than silently discarding canonical Artist state.
+     */
+    suspend fun upsertArtist(artist: ArtistEntity) {
+        error("CanonicalCatalogSyncStore does not support Artist persistence")
+    }
 
     suspend fun replaceRecordingArtistCredits(
         recordingId: String,
         credits: List<RecordingArtistCreditEntity>,
-    )
+    ) {
+        error("CanonicalCatalogSyncStore does not support Recording artist credits")
+    }
 
     suspend fun replaceReleaseArtistCredits(
         releaseId: String,
         credits: List<ReleaseArtistCreditEntity>,
-    )
+    ) {
+        error("CanonicalCatalogSyncStore does not support Release artist credits")
+    }
 
     suspend fun upsertMediaAsset(mediaAsset: MediaAssetEntity)
 
