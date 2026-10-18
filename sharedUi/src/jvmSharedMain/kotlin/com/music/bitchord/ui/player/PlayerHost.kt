@@ -48,6 +48,14 @@ interface PlayerHost {
     @Composable
     fun rememberRemoteArtworkUrl(song: Song?): String?
 
+    /**
+     * Optional rendered model from the selected canonical playback MediaAsset.
+     * No authenticated URL or provider-native locator enters the shared UI.
+     * Desktop/legacy hosts retain their previous artwork behavior by default.
+     */
+    @Composable
+    fun rememberCanonicalPlaybackArtworkModel(song: Song?): Any? = null
+
     /** The system output level the player's volume bar drives, if it drives one. */
     val volume: SystemVolume
 

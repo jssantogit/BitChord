@@ -230,6 +230,41 @@ class OpenSubsonicArtworkAccessTest {
     }
 
     @Test
+    fun `selected recording and provider mismatch never touch cache or authenticated transport`() = runTest {
+        val fixture = fixture(secret = "sensitive-secret")
+        var transportCalls = 0
+        val cache = object : OpenSubsonicArtworkCache {
+            var reads = 0
+            override suspend fun read(cacheKey: String): ByteArray? {
+                reads++
+                return byteArrayOf(7)
+            }
+            override suspend fun write(cacheKey: String, bytes: ByteArray) = Unit
+        }
+        val loader = OpenSubsonicArtworkLoader(
+            fixture.access,
+            OpenSubsonicArtworkTransport { _, _ ->
+                transportCalls++
+                OpenSubsonicArtworkTransportResult.Success(byteArrayOf(9), "image/png")
+            },
+            cache,
+        )
+
+        val wrongRecording = loader.load("asset-canonical", expectedRecordingId = "other")
+        val wrongProvider = loader.load(
+            "asset-canonical",
+            expectedRecordingId = "recording-canonical",
+            expectedProviderKey = "opensubsonic:other",
+        )
+        assertEquals("SELECTION_MISMATCH", (wrongRecording as OpenSubsonicArtworkLoadResult.Placeholder).reason)
+        assertEquals("SELECTION_MISMATCH", (wrongProvider as OpenSubsonicArtworkLoadResult.Placeholder).reason)
+        assertEquals(0, cache.reads)
+        assertEquals(0, transportCalls)
+        assertEquals(0, fixture.credentials.readCalls)
+        assertFalse(wrongRecording.toString().contains("sensitive-secret"))
+    }
+
+    @Test
     fun `artwork http client does not inherit global auth or logging interceptors`() {
         val inherited = Interceptor { chain -> chain.proceed(chain.request()) }
         val globalClient = OkHttpClient.Builder()

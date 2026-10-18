@@ -1,6 +1,9 @@
 package com.music.bitchord
 
 import com.music.bitchord.ui.player.CanonicalPlaybackArtworkIdentity
+import com.music.bitchord.data.model.Song
+import com.music.bitchord.playback.CanonicalRemotePlaybackRequest
+import com.music.bitchord.playback.CanonicalRemotePlaybackUri
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -21,6 +24,37 @@ class CanonicalPlaybackArtworkContractTest {
         assertNotEquals(first.key, anotherRendition.key)
         assertEquals("recording-1", first.key.recordingId)
         assertEquals("asset-a", first.key.mediaAssetId)
+    }
+
+    @Test
+    fun `selected playback URI supplies artwork while local and legacy stay outside this path`() {
+        val selected = CanonicalRemotePlaybackRequest(
+            recordingId = "recording-1",
+            mediaAssetId = "asset-b",
+            providerKey = "opensubsonic:home",
+        )
+        val remote = Song(
+            videoId = "recording-1", title = "Remote", artist = "Artist",
+            localUri = CanonicalRemotePlaybackUri.encode(selected),
+        )
+        val identity = CanonicalPlaybackArtworkIdentity.fromSong(remote)
+        assertEquals("recording-1", identity?.key?.recordingId)
+        assertEquals("asset-b", identity?.key?.mediaAssetId)
+        assertNull(CanonicalPlaybackArtworkIdentity.fromSong(
+            remote.copy(localUri = "content://media/audio/1"),
+        ))
+        assertNull(CanonicalPlaybackArtworkIdentity.fromSong(
+            remote.copy(videoId = "some-other-recording"),
+        ))
+        assertNull(CanonicalPlaybackArtworkIdentity.fromSong(
+            remote.copy(localUri = null),
+        ))
+        val otherSelection = remote.copy(
+            localUri = CanonicalRemotePlaybackUri.encode(
+                selected.copy(mediaAssetId = "asset-c"),
+            ),
+        )
+        assertNotEquals(identity?.key, CanonicalPlaybackArtworkIdentity.fromSong(otherSelection)?.key)
     }
 
     @Test

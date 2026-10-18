@@ -212,12 +212,22 @@ internal class OpenSubsonicArtworkLoader(
     private val transport: OpenSubsonicArtworkTransport,
     private val cache: OpenSubsonicArtworkCache,
 ) {
-    suspend fun load(mediaAssetId: String): OpenSubsonicArtworkLoadResult {
+    suspend fun load(
+        mediaAssetId: String,
+        expectedRecordingId: String? = null,
+        expectedProviderKey: String? = null,
+    ): OpenSubsonicArtworkLoadResult {
         val resolved = access.resolve(mediaAssetId)
         if (resolved is OpenSubsonicArtworkAccessResult.Failure) {
             return OpenSubsonicArtworkLoadResult.Placeholder(resolved.reason.name)
         }
         val request = (resolved as OpenSubsonicArtworkAccessResult.Ready).request
+        if ((expectedRecordingId != null && request.recordingId != expectedRecordingId) ||
+            (expectedProviderKey != null && request.providerKey != expectedProviderKey)
+        ) {
+            // No cached/remote artwork for a stale or forged playback selection.
+            return OpenSubsonicArtworkLoadResult.Placeholder("SELECTION_MISMATCH")
+        }
 
         runCatching { cache.read(request.cacheKey) }
             .getOrNull()
