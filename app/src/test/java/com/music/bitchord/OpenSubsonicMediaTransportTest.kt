@@ -10,6 +10,13 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicRuntime
 import com.music.bitchord.diagnostics.BoundedPerformanceProbe
 import com.music.bitchord.diagnostics.BoundedPerformanceSample
 import com.music.bitchord.diagnostics.DiagnosticCategory
+import com.music.bitchord.observability.SessionTraceReferenceEncoder
+import com.music.bitchord.observability.StructuredTracer
+import com.music.bitchord.observability.StructuredTracePoint
+import com.music.bitchord.observability.StructuredTraceSink
+import com.music.bitchord.observability.TraceFeature
+import com.music.bitchord.observability.TraceOutcome
+import com.music.bitchord.observability.TracePointKind
 import java.io.IOException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -77,6 +84,57 @@ class OpenSubsonicMediaTransportTest {
         assertFalse(serialized.contains("server-track-native"))
         assertFalse(serialized.contains("api-secret"))
         assertFalse(serialized.contains("music.example"))
+    }
+
+    @Test
+    fun `canonical runtime resolution traces provider stages with only private references`() = runTest {
+        val points = mutableListOf<StructuredTracePoint>()
+        val tracer = StructuredTracer(
+            sink = StructuredTraceSink { points.add(it) },
+            traceIdFactory = { "open-subsonic-trace" },
+            referenceEncoder = SessionTraceReferenceEncoder("salt-not-exported"),
+        )
+        val runtime = runtimeRequest()
+        val transport = OpenSubsonicRuntimeTransport(tracer = tracer) {
+            OpenSubsonicMediaAccessResult.Ready(runtime)
+        }
+        assertSame(
+            runtime,
+            transport.resolveRuntime(
+                recordingId = "recording-1",
+                mediaAssetId = "asset-1",
+                providerKey = "opensubsonic:home",
+            ),
+        )
+
+        assertEquals(
+            listOf(TracePointKind.TRACE_START, TracePointKind.SPAN, TracePointKind.EVENT, TracePointKind.TRACE_END),
+            points.map { it.kind },
+        )
+        assertEquals(listOf("access_lookup", "identity_verified"), points.mapNotNull { it.stage })
+        assertEquals(TraceOutcome.SUCCEEDED, points.last().outcome)
+        assertTrue(points.all { it.traceId == "open-subsonic-trace" && it.feature == TraceFeature.PROVIDER })
+        assertTrue(points.first().attributes.getValue("assetRef").startsWith("ref_"))
+        val serialized = points.toString()
+        listOf("recording-1", "asset-1", "opensubsonic:home", "server-track-native", "api-secret", "music.example")
+            .forEach { assertFalse(serialized.contains(it)) }
+    }
+
+    @Test
+    fun `canonical runtime failure closes trace without leaking authenticated access details`() = runTest {
+        val points = mutableListOf<StructuredTracePoint>()
+        val tracer = StructuredTracer(sink = StructuredTraceSink { points.add(it) })
+        val transport = OpenSubsonicRuntimeTransport(tracer = tracer) {
+            OpenSubsonicMediaAccessResult.Failure(OpenSubsonicMediaAccessFailure.CREDENTIAL_UNAVAILABLE)
+        }
+        assertThrows(IOException::class.java) {
+            kotlinx.coroutines.runBlocking {
+                transport.resolveRuntime("recording-1", "asset-1", "opensubsonic:home")
+            }
+        }
+        assertEquals(TraceOutcome.FAILED, points.last().outcome)
+        assertEquals(1, points.count { it.kind == TracePointKind.TRACE_END })
+        assertFalse(points.toString().contains("recording-1"))
     }
 
     @Test

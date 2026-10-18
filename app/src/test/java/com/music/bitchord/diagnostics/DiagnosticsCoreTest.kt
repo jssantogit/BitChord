@@ -93,6 +93,28 @@ class DiagnosticsCoreTest {
     }
 
     @Test
+    fun `free text hides canonical identity and authenticated urls but preserves typed trace ids`() {
+        val rawId = "0b5f7683-2bea-4e4c-8ae0-ce0797afd50e"
+        val rawUri = "bitchord://canonical?recordingId=$rawId&mediaAssetId=$rawId&providerKey=opensubsonic%3A$rawId"
+        val rawUrl = "https://audio.invalid/rest/stream.view?id=private-track&token=secret-value"
+        val message = "no embedded lyrics in $rawUri; links:$rawId failed; upstream=$rawUrl"
+        val sanitized = DiagnosticSanitizer.freeText(message)
+
+        assertFalse(sanitized.contains(rawId))
+        assertFalse(sanitized.contains("bitchord://canonical"))
+        assertFalse(sanitized.contains("audio.invalid"))
+        assertFalse(sanitized.contains("private-track"))
+        assertFalse(sanitized.contains("secret-value"))
+        assertTrue(sanitized.contains("no embedded lyrics"))
+        assertTrue(sanitized.contains("links:"))
+
+        val structured = DiagnosticFormatter.format(
+            event(name = "trace_event", metadata = mapOf("traceId" to rawId)),
+        )
+        assertTrue(structured.contains("traceId=$rawId"))
+    }
+
+    @Test
     fun `capture window is active only before its expiry`() {
         assertTrue(CaptureWindow(expiresAtEpochMillis = 2_000L).isActive(nowEpochMillis = 1_999L))
         assertFalse(CaptureWindow(expiresAtEpochMillis = 2_000L).isActive(nowEpochMillis = 2_000L))
