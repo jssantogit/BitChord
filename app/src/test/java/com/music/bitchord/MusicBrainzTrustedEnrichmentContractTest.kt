@@ -328,6 +328,7 @@ class MusicBrainzTrustedEnrichmentContractTest {
 
         database.close()
         context.deleteDatabase(name)
+        Unit
     }
 
     private suspend fun <T> withDatabase(block: suspend (CanonicalCatalogDatabase) -> T): T {
