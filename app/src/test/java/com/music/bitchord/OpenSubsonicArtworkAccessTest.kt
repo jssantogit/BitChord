@@ -19,9 +19,12 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtwork
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkTransportResult
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAuthMode
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicCredentialStore
+import com.music.bitchord.data.catalog.provider.opensubsonic.isolatedOpenSubsonicArtworkHttpClient
 import java.security.MessageDigest
 import java.util.Base64
 import kotlinx.coroutines.test.runTest
+import okhttp3.Interceptor
+import okhttp3.OkHttpClient
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -211,6 +214,7 @@ class OpenSubsonicArtworkAccessTest {
         assertFalse(first.fromCache)
         assertEquals(1, networkCalls)
 
+        val credentialReadsAfterFetch = fixture.credentials.readCalls
         val offline = OpenSubsonicArtworkTransport { _, _ ->
             networkCalls += 1
             OpenSubsonicArtworkTransportResult.NetworkUnavailable
@@ -221,7 +225,24 @@ class OpenSubsonicArtworkAccessTest {
         assertArrayEquals(byteArrayOf(4, 5, 6), cached.bytes)
         assertTrue(cached.fromCache)
         assertEquals(1, networkCalls)
+        assertEquals(credentialReadsAfterFetch, fixture.credentials.readCalls)
         assertEquals(0, fixture.store.writeCalls)
+    }
+
+    @Test
+    fun `artwork http client does not inherit global auth or logging interceptors`() {
+        val inherited = Interceptor { chain -> chain.proceed(chain.request()) }
+        val globalClient = OkHttpClient.Builder()
+            .addInterceptor(inherited)
+            .addNetworkInterceptor(inherited)
+            .build()
+
+        val isolated = isolatedOpenSubsonicArtworkHttpClient(globalClient)
+
+        assertTrue(isolated.interceptors.isEmpty())
+        assertTrue(isolated.networkInterceptors.isEmpty())
+        assertFalse(isolated.followRedirects)
+        assertFalse(isolated.followSslRedirects)
     }
 
     @Test
