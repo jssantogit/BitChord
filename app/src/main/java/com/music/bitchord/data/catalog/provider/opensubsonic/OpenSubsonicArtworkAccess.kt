@@ -13,9 +13,9 @@ import java.util.Base64
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.HttpUrl.Companion.toHttpUrl
 
 internal fun interface OpenSubsonicArtworkAssetStore {
     suspend fun mediaAsset(mediaAssetId: String): MediaAssetEntity?
@@ -249,15 +249,28 @@ internal class OpenSubsonicArtworkLoader(
     }
 }
 
+/**
+ * Reuses shared connection infrastructure but never global interceptors.
+ * That prevents credentials owned by another provider (for example WebDAV)
+ * or future request loggers from observing an authenticated artwork query.
+ */
+internal fun isolatedOpenSubsonicArtworkHttpClient(
+    sharedClient: OkHttpClient,
+): OkHttpClient {
+    val builder = sharedClient.newBuilder()
+    builder.interceptors().clear()
+    builder.networkInterceptors().clear()
+    return builder
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .build()
+}
+
 internal class OkHttpOpenSubsonicArtworkTransport(
     sharedClient: OkHttpClient = Http.client,
     private val maxBytes: Int = MAX_ARTWORK_BYTES,
 ) : OpenSubsonicArtworkTransport {
-    // Authenticated queries must never be forwarded to a redirected host.
-    private val client = sharedClient.newBuilder()
-        .followRedirects(false)
-        .followSslRedirects(false)
-        .build()
+    private val client = isolatedOpenSubsonicArtworkHttpClient(sharedClient)
 
     override suspend fun fetch(
         endpointUrl: String,
@@ -276,7 +289,6 @@ internal class OkHttpOpenSubsonicArtworkTransport(
                     401, 403 -> OpenSubsonicArtworkTransportResult.AuthenticationRejected
                     in 200..299 -> {
                         val body = response.body
-                            ?: return@use OpenSubsonicArtworkTransportResult.RequestRejected
                         val contentType = body.contentType()?.toString().orEmpty()
                         if (!contentType.startsWith("image/", ignoreCase = true)) {
                             return@use OpenSubsonicArtworkTransportResult.RequestRejected
