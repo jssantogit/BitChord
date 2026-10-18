@@ -153,7 +153,6 @@ internal data class PersonalRankerPolicy(
             )
 
             else -> {
-                // Crossing below neutral is deliberately meaningful rather than generic star arithmetic.
                 val distanceFromNeutral = (neutralRating - bounded) / neutralRating
                 nearNeutralNegativeScore +
                     distanceFromNeutral * (minimumExplicitScore - nearNeutralNegativeScore)
@@ -333,8 +332,8 @@ internal class PersonalRanker(
                 event.selectionIntent == SelectionIntent.REPLAY
         }
         val lastAudibleListenAt = recentEvents.asSequence()
-            .filter(ListeningEvent::isAudibleTerminalEvidence)
-            .maxOfOrNull(ListeningEvent::occurredAtEpochMs)
+            .filter { event -> event.isAudibleTerminalEvidence() }
+            .maxOfOrNull { event -> event.occurredAtEpochMs }
 
         return RecordingRecommendationFeatures(
             recordingId = recordingId,
@@ -369,11 +368,18 @@ internal class PersonalRanker(
     ): Double {
         val currentRating = features.explicitRating ?: return 0.0
         if (!currentRating.isFinite()) return 0.0
-        val changedAt = features.lastRatingChangedAtEpochMs ?: return 0.0
         val direction = features.lastRatingChangeDirection ?: return 0.0
         if (direction == RecordingRatingDirection.CLEARED || direction == RecordingRatingDirection.UNCHANGED) {
             return 0.0
         }
+        val changedAt = when (direction) {
+            RecordingRatingDirection.INITIAL_SET ->
+                features.explicitRatedAtEpochMs ?: features.lastRatingChangedAtEpochMs
+            RecordingRatingDirection.INCREASED,
+            RecordingRatingDirection.DECREASED -> features.lastRatingChangedAtEpochMs
+            RecordingRatingDirection.UNCHANGED,
+            RecordingRatingDirection.CLEARED -> null
+        } ?: return 0.0
         val recency = decayingRecency(now, changedAt, policy.ratingChangeWindowMs)
         if (recency <= 0.0) return 0.0
 
@@ -382,8 +388,7 @@ internal class PersonalRanker(
             RecordingRatingDirection.INCREASED -> policy.maxRecentRatingChangeAdjustment
             RecordingRatingDirection.DECREASED -> -policy.maxRecentRatingChangeAdjustment
             RecordingRatingDirection.UNCHANGED,
-            RecordingRatingDirection.CLEARED,
-            -> 0.0
+            RecordingRatingDirection.CLEARED -> 0.0
         }
         val adjustment = (fullAdjustment * recency).coerceIn(
             -policy.maxRecentRatingChangeAdjustment,
@@ -456,5 +461,5 @@ internal class PersonalRanker(
         recentListeningCooldown,
         recentRatingChange,
         total,
-    ).all(Double::isFinite)
+    ).all { value -> value.isFinite() }
 }
