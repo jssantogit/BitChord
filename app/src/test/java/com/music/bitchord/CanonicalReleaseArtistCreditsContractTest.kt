@@ -114,6 +114,22 @@ class CanonicalReleaseArtistCreditsContractTest {
             externalId: String,
         ) = identities["$provider|$entityType|$externalId"]
 
+
+        override suspend fun musicBrainzRecordingIdsForEntity(recordingId: String): List<String> =
+            identities.entries.filter { (key, owner) ->
+                key.startsWith("musicbrainz|recording|") && owner == recordingId
+            }.map { (key, _) -> key.removePrefix("musicbrainz|recording|") }
+
+        override suspend fun claimMusicBrainzRecordingIdentity(mbid: String, recordingId: String): Boolean {
+            val key = "musicbrainz|recording|$mbid"
+            val owner = identities[key]
+            if (musicBrainzRecordingIdsForEntity(recordingId).any { it != mbid } ||
+                (owner != null && owner != recordingId)
+            ) return false
+            if (owner == null) identities[key] = recordingId
+            return true
+        }
+
         override suspend fun upsertRecording(recording: RecordingEntity) {
             recordings[recording.id] = recording
         }
