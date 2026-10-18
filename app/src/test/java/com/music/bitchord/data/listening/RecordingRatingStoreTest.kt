@@ -10,6 +10,7 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccount
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountRepository
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAuthMode
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicCredentialStore
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -20,7 +21,6 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -64,14 +64,14 @@ class RecordingRatingStoreTest {
         val history = store.ratingHistory(RECORDING_A)
         assertEquals(1, history.size)
         assertNull(history.single().previousValue)
-        assertEquals(5.0, history.single().newValue, 0.0)
+        assertEquals(5.0, history.single().newValue!!, 0.0)
         assertEquals(RecordingRatingChangeType.SET, history.single().type)
         assertEquals(1_000L, history.single().changedAtEpochMs)
 
         val signal = store.explicitRatingSignal(RECORDING_A)
         assertTrue(signal.hasExplicitFeedback)
         assertEquals(5.0, signal.currentRating!!, 0.0)
-        assertEquals(1_000L, signal.currentRatedAtEpochMs)
+        assertEquals(1_000L, signal.currentRatedAtEpochMs!!)
         assertEquals(RecordingRatingDirection.INITIAL_SET, signal.lastChangeDirection)
     }
 
@@ -256,7 +256,9 @@ class RecordingRatingStoreTest {
     @Test
     fun observeRatingEmitsCanonicalStateChange() = runTest {
         val store = openStore(MutableClock(1_000L))
-        val observed = async { store.observeRating(RECORDING_A).drop(1).first() }
+        val observed = async(start = CoroutineStart.UNDISPATCHED) {
+            store.observeRating(RECORDING_A).drop(1).first()
+        }
 
         store.setRecordingRating(RECORDING_A, 4.0)
 
@@ -314,15 +316,23 @@ class RecordingRatingStoreTest {
     private class FakeAccountPersistence : OpenSubsonicAccountPersistence {
         var value: OpenSubsonicAccountRecord? = null
         override fun read(): OpenSubsonicAccountRecord? = value
-        override fun write(record: OpenSubsonicAccountRecord) { value = record }
-        override fun clear() { value = null }
+        override fun write(record: OpenSubsonicAccountRecord) {
+            value = record
+        }
+        override fun clear() {
+            value = null
+        }
     }
 
     private class FakeCredentialStore : OpenSubsonicCredentialStore {
         private val values = mutableMapOf<String, String>()
         override fun read(accountId: String): String? = values[accountId]
-        override fun write(accountId: String, credential: String) { values[accountId] = credential }
-        override fun clear(accountId: String) { values.remove(accountId) }
+        override fun write(accountId: String, credential: String) {
+            values[accountId] = credential
+        }
+        override fun clear(accountId: String) {
+            values.remove(accountId)
+        }
     }
 
     private companion object {
