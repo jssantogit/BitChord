@@ -92,6 +92,43 @@ class StructuredTraceTest {
         assertFalse(first.contains(raw))
         assertTrue(first.startsWith("ref_"))
     }
+
+    @Test
+    fun `trace bounds intermediate points while preserving start end and wrapped work`() {
+        val sink = RecordingStructuredTraceSink()
+        var executed = 0
+        val tracer = StructuredTracer(
+            mode = TraceMode.VERBOSE,
+            sink = sink,
+            traceIdFactory = { "trace-bounded" },
+            monotonicNanos = { 100L + executed },
+            referenceEncoder = SessionTraceReferenceEncoder(sessionSalt = "session-a"),
+            maxIntermediatePoints = 2,
+        )
+        val trace = tracer.startTrace(TraceFeature.PLAYBACK, "seek")
+
+        trace.event("accepted", TraceOutcome.SUCCEEDED)
+        trace.span("dispatch") {
+            executed += 1
+        }
+        trace.event("extra-event", TraceOutcome.SUCCEEDED)
+        trace.span("extra-span") {
+            executed += 1
+        }
+        trace.complete(TraceOutcome.SUCCEEDED)
+
+        assertEquals(2, executed)
+        assertEquals(
+            listOf(
+                TracePointKind.TRACE_START,
+                TracePointKind.EVENT,
+                TracePointKind.SPAN,
+                TracePointKind.TRACE_END,
+            ),
+            sink.points.map { it.kind },
+        )
+        assertFalse(sink.points.any { it.stage == "extra-event" || it.stage == "extra-span" })
+    }
 }
 
 private class RecordingStructuredTraceSink : StructuredTraceSink {
