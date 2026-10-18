@@ -1,6 +1,7 @@
 package com.music.bitchord.data.listening
 
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReader
+import com.music.bitchord.data.catalog.CanonicalRecordingArtistGroupingReader
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -64,14 +65,19 @@ class LibraryRecommendationPipelineTest {
 
         val ranked = pipeline.rank()
 
-        assertEquals(listOf("recording-favorite", "recording-neutral"), ranked.map { it.base.recordingId })
-        assertTrue(RecommendationReason.EXPLICIT_FAVORITE in ranked.first().base.reasons)
+        assertEquals(listOf("recording-favorite", "recording-neutral"), ranked.map { it.base.base.recordingId })
+        assertTrue(RecommendationReason.EXPLICIT_FAVORITE in ranked.first().base.base.reasons)
         assertTrue(ratingReader.explicitSignalReads > 0)
-        assertTrue(ranked.all { it.sessionAdjustment == 0.0 && it.finalScore == it.base.score })
+        assertTrue(ranked.all {
+            it.base.sessionAdjustment == 0.0 &&
+                it.base.finalScore == it.base.base.score &&
+                it.diversityAdjustment == 0.0 &&
+                it.finalScore == it.base.finalScore
+        })
     }
 
     @Test
-    fun `existing rating semantics alter final order without a second ranking algorithm`() = runTest {
+    fun `existing rating semantics alter final order without a second preference algorithm`() = runTest {
         val ranked = pipeline(
             availableIds = listOf("recording-4", "recording-5", "recording-3"),
             ratingReader = FakeRatingReader(
@@ -83,22 +89,22 @@ class LibraryRecommendationPipelineTest {
             ),
         ).rank()
 
-        assertEquals(listOf("recording-5", "recording-4", "recording-3"), ranked.map { it.base.recordingId })
+        assertEquals(listOf("recording-5", "recording-4", "recording-3"), ranked.map { it.base.base.recordingId })
     }
 
     @Test
-    fun `final ties remain deterministic by recording id`() = runTest {
+    fun `final ties remain deterministic by recording id when diversity has no evidence`() = runTest {
         val ranked = pipeline(
             availableIds = listOf("recording-z", "recording-a", "recording-m"),
             ratingReader = FakeRatingReader(emptyMap()),
         ).rank()
 
-        assertEquals(listOf("recording-a", "recording-m", "recording-z"), ranked.map { it.base.recordingId })
+        assertEquals(listOf("recording-a", "recording-m", "recording-z"), ranked.map { it.base.base.recordingId })
         assertEquals(listOf(0.0, 0.0, 0.0), ranked.map { it.finalScore })
     }
 
     @Test
-    fun `limit is applied after ranking so true top N is preserved without session context`() = runTest {
+    fun `limit is applied after all ranking stages so true top N is preserved without context evidence`() = runTest {
         val pipeline = pipeline(
             availableIds = listOf("recording-neutral", "recording-good", "recording-favorite"),
             ratingReader = FakeRatingReader(
@@ -112,7 +118,7 @@ class LibraryRecommendationPipelineTest {
 
         val ranked = pipeline.rank(limit = 1)
 
-        assertEquals(listOf("recording-favorite"), ranked.map { it.base.recordingId })
+        assertEquals(listOf("recording-favorite"), ranked.map { it.base.base.recordingId })
     }
 
     @Test
@@ -141,7 +147,12 @@ class LibraryRecommendationPipelineTest {
             contextReader = NoSessionContextReader,
             nowEpochMs = { THIRTY_DAYS_MS },
         )
-        return LibraryRecommendationPipeline(candidateSource, ranker, sessionReranker)
+        return LibraryRecommendationPipeline(
+            candidateSource,
+            ranker,
+            sessionReranker,
+            ArtistAwareDiversityReranker(NoArtistGroupingReader),
+        )
     }
 
     private class FakeAvailabilityReader(
@@ -153,6 +164,11 @@ class LibraryRecommendationPipelineTest {
     private object NoSessionContextReader : ListeningSessionContextReader {
         override suspend fun currentSession(atEpochMs: Long): ListeningSession? = null
         override suspend fun eventsForSession(sessionId: String): List<ListeningEvent> = emptyList()
+    }
+
+    private object NoArtistGroupingReader : CanonicalRecordingArtistGroupingReader {
+        override suspend fun artistIdsByRecording(recordingIds: List<String>): Map<String, List<String>> =
+            recordingIds.associateWith { emptyList() }
     }
 
     private object NeutralBehaviorReader : ListeningBehaviorReader {
