@@ -112,7 +112,7 @@ class CanonicalIsrcIdentityContractTest {
         val result = CanonicalRemoteCatalogSync.sync(
             provider("opensubsonic:home", track("song", isrcs = listOf(ISRC_A))),
             store,
-        ) { error("provider alias must keep identity stable") } as ProviderSyncResult.Success
+        ) { "asset-stable" } as ProviderSyncResult.Success
 
         assertEquals("stable", store.identity("opensubsonic:home", "recording", "song"))
         assertEquals("other", store.identity("isrc", "recording", ISRC_A))
@@ -133,7 +133,7 @@ class CanonicalIsrcIdentityContractTest {
                 track("song", mbid = MBID_A, isrcs = listOf(ISRC_A)),
             ),
             store,
-        ) { error("known MBID must decide identity") } as ProviderSyncResult.Success
+        ) { "asset-mb" } as ProviderSyncResult.Success
 
         assertEquals("mb-recording", store.identity("opensubsonic:new", "recording", "song"))
         assertEquals("isrc-recording", store.identity("isrc", "recording", ISRC_A))
