@@ -91,5 +91,6 @@ project(":app") {
         dependencies.add("implementation", "androidx.room:room-runtime:2.8.5")
         dependencies.add("implementation", "androidx.room:room-ktx:2.8.5")
         dependencies.add("ksp", "androidx.room:room-compiler:2.8.5")
+        dependencies.add("testImplementation", "org.robolectric:robolectric:4.14.1")
     }
 }
