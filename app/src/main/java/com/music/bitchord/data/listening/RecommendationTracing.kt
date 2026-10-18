@@ -14,6 +14,7 @@ internal enum class RecommendationTraceStage(val key: String) {
     PERSONAL_RANK("personal_rank"),
     SESSION_RERANK("session_rerank"),
     ARTIST_DIVERSITY("artist_diversity"),
+    CONTROLLED_EXPLORATION("controlled_exploration"),
 }
 
 /** Bounded detail policy. These limits are diagnostics policy, never ranking policy. */
@@ -54,7 +55,8 @@ internal interface RecommendationRunTrace {
         baseRanking: List<RankedRecordingCandidate>,
         contextualRanking: List<SessionContextRankedCandidate>,
         diversifiedRanking: List<DiversityRankedCandidate>,
-        finalOutput: List<DiversityRankedCandidate>,
+        exploredRanking: List<ExplorationRankedCandidate>,
+        finalOutput: List<ExplorationRankedCandidate>,
     )
 
     fun fail(error: Throwable)
@@ -74,7 +76,8 @@ private object NoOpRecommendationRunTrace : RecommendationRunTrace {
         baseRanking: List<RankedRecordingCandidate>,
         contextualRanking: List<SessionContextRankedCandidate>,
         diversifiedRanking: List<DiversityRankedCandidate>,
-        finalOutput: List<DiversityRankedCandidate>,
+        exploredRanking: List<ExplorationRankedCandidate>,
+        finalOutput: List<ExplorationRankedCandidate>,
     ) = Unit
 
     override fun fail(error: Throwable) = Unit
@@ -122,7 +125,8 @@ private class StructuredRecommendationRunTrace(
         baseRanking: List<RankedRecordingCandidate>,
         contextualRanking: List<SessionContextRankedCandidate>,
         diversifiedRanking: List<DiversityRankedCandidate>,
-        finalOutput: List<DiversityRankedCandidate>,
+        exploredRanking: List<ExplorationRankedCandidate>,
+        finalOutput: List<ExplorationRankedCandidate>,
     ) {
         val baseRanks = baseRanking.mapIndexed { index, candidate -> candidate.recordingId to index + 1 }.toMap()
         val contextualRanks = contextualRanking
@@ -133,11 +137,11 @@ private class StructuredRecommendationRunTrace(
         val diversityRanks = diversifiedRanking
             .mapIndexed { index, candidate -> candidate.base.base.recordingId to index + 1 }
             .toMap()
-        val outputIds = finalOutput.mapTo(LinkedHashSet()) { it.base.base.recordingId }
+        val outputIds = finalOutput.mapTo(LinkedHashSet()) { it.diversity.base.base.recordingId }
 
         val topIds = finalOutput
             .take(policy.standardTopResults)
-            .mapTo(LinkedHashSet()) { it.base.base.recordingId }
+            .mapTo(LinkedHashSet()) { it.diversity.base.base.recordingId }
         val moverIds = contextualRanking
             .mapNotNull { candidate ->
                 val id = candidate.base.recordingId
@@ -196,6 +200,21 @@ private class StructuredRecommendationRunTrace(
             )
         }
 
+        // Exploration is a deterministic wrapper and may promote at most one candidate.
+        // Preserve the full upstream reasons without exceeding the 24-attribute detail bound.
+        exploredRanking.filter { it.explorationReasons.isNotEmpty() }.take(1).forEach { candidate ->
+            trace.event(
+                stage = "exploration_promotion",
+                outcome = TraceOutcome.SUCCEEDED,
+                attributes = mapOf(
+                    "candidateRef" to trace.reference(candidate.diversity.base.base.recordingId),
+                    "fromRank" to (candidate.promotedFromRank?.toString() ?: "unavailable"),
+                    "toRank" to (candidate.promotedToRank?.toString() ?: "unavailable"),
+                    "reason" to candidate.explorationReasons.map(Enum<*>::name).sorted().joinToString(","),
+                ),
+            )
+        }
+
         trace.event(
             stage = "final_selection",
             outcome = TraceOutcome.SUCCEEDED,
@@ -203,6 +222,7 @@ private class StructuredRecommendationRunTrace(
                 "candidateCount" to baseRanking.size.toString(),
                 "contextualCount" to contextualRanking.size.toString(),
                 "diversifiedCount" to diversifiedRanking.size.toString(),
+                "exploredCount" to exploredRanking.size.toString(),
                 "outputCount" to finalOutput.size.toString(),
                 "requestedLimit" to (requestedLimit?.toString() ?: "all"),
                 "detailCount" to selectedIds.take(policy.verboseMaxCandidates).size.toString(),

@@ -27,7 +27,7 @@ internal class LibraryRecommendationCandidateSource(
 
 /**
  * Library Mode composition: availability -> candidates -> PersonalRanker -> session
- * context -> artist diversity. Limit is applied only after all ranking stages.
+ * context -> artist diversity -> controlled exploration. Limit is applied only after all ranking stages.
  *
  * Observability is read-only and defaults to a no-op reporter. The reporter consumes the
  * rankers' existing explanations; it never participates in scoring or ordering.
@@ -37,9 +37,10 @@ internal class LibraryRecommendationPipeline(
     private val personalRanker: PersonalRanker,
     private val sessionContextReranker: SessionContextReranker,
     private val artistAwareDiversityReranker: ArtistAwareDiversityReranker,
+    private val controlledExplorationReranker: ControlledExplorationReranker = ControlledExplorationReranker(),
     private val traceReporter: RecommendationTraceReporter = RecommendationTraceReporter.NO_OP,
 ) {
-    suspend fun rank(limit: Int? = null): List<DiversityRankedCandidate> {
+    suspend fun rank(limit: Int? = null): List<ExplorationRankedCandidate> {
         require(limit == null || limit > 0) { "Recommendation limit must be positive" }
         val trace = traceReporter.startLibraryRank(limit)
         return try {
@@ -72,11 +73,20 @@ internal class LibraryRecommendationPipeline(
             }
             trace.stageResult(RecommendationTraceStage.ARTIST_DIVERSITY, diversifiedRanking.size)
 
-            val finalOutput = limit?.let(diversifiedRanking::take) ?: diversifiedRanking
+            val exploredRanking = trace.span(
+                stage = RecommendationTraceStage.CONTROLLED_EXPLORATION,
+                attributes = mapOf("inputCount" to diversifiedRanking.size.toString()),
+            ) {
+                controlledExplorationReranker.rerank(diversifiedRanking)
+            }
+            trace.stageResult(RecommendationTraceStage.CONTROLLED_EXPLORATION, exploredRanking.size)
+
+            val finalOutput = limit?.let(exploredRanking::take) ?: exploredRanking
             trace.complete(
                 baseRanking = baseRanking,
                 contextualRanking = contextualRanking,
                 diversifiedRanking = diversifiedRanking,
+                exploredRanking = exploredRanking,
                 finalOutput = finalOutput,
             )
             finalOutput

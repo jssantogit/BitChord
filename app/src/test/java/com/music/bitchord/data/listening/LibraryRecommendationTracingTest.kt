@@ -50,7 +50,7 @@ class LibraryRecommendationTracingTest {
 
         val ranked = pipeline.rank(limit = 2)
 
-        assertEquals(listOf("recording-b", "recording-a"), ranked.map { it.base.base.recordingId })
+        assertEquals(listOf("recording-b", "recording-a"), ranked.map { it.diversity.base.base.recordingId })
         assertTrue(sink.points.isNotEmpty())
         assertTrue(sink.points.all { it.traceId == "recommendation-run" })
 
@@ -108,6 +108,7 @@ class LibraryRecommendationTracingTest {
         assertTrue(sink.points.all { it.traceId == "diversity-run" })
         val diversityStages = sink.points.filter { it.stage == RecommendationTraceStage.ARTIST_DIVERSITY.key }
         assertTrue(diversityStages.isNotEmpty())
+        assertTrue(sink.points.any { it.stage == RecommendationTraceStage.CONTROLLED_EXPLORATION.key })
         val finalPoint = sink.points.single { it.stage == "final_selection" }
         assertEquals("3", finalPoint.attributes["diversifiedCount"])
         val detail = sink.points.filter { it.stage == "candidate_explanation" }
@@ -158,11 +159,13 @@ class LibraryRecommendationTracingTest {
                 overlappingArtistIds = emptySet(),
             )
         }
+        val explored = ControlledExplorationReranker().rerank(diversified)
         run.complete(
             baseRanking = base,
             contextualRanking = contextual,
             diversifiedRanking = diversified,
-            finalOutput = diversified,
+            exploredRanking = explored,
+            finalOutput = explored,
         )
 
         val details = sink.points.filter { it.stage == "candidate_explanation" }
