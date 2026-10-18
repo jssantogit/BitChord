@@ -7,9 +7,11 @@ import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityRepository
 import com.music.bitchord.data.catalog.CanonicalLibraryProviderConfigurationReader
 import com.music.bitchord.data.catalog.CanonicalLocalLibrary
+import com.music.bitchord.data.catalog.CanonicalRecordingArtistGroupingRepository
 import com.music.bitchord.data.catalog.MediaAssetEntity
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.RoomCanonicalLibraryAvailabilityStore
+import com.music.bitchord.data.catalog.RoomCanonicalRecordingArtistGroupingStore
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -107,9 +109,17 @@ class SessionContextRecommendationIntegrationTest {
             },
         )
         val candidateSource = LibraryRecommendationCandidateSource(availability)
+        val groupingReader = CanonicalRecordingArtistGroupingRepository(
+            RoomCanonicalRecordingArtistGroupingStore(catalogDao),
+        )
         var personalRanker = PersonalRanker(eventStore, ratingStore, nowEpochMs = { clock.now })
         var sessionReranker = SessionContextReranker(eventStore, nowEpochMs = { clock.now })
-        var pipeline = LibraryRecommendationPipeline(candidateSource, personalRanker, sessionReranker)
+        var pipeline = LibraryRecommendationPipeline(
+            candidateSource,
+            personalRanker,
+            sessionReranker,
+            ArtistAwareDiversityReranker(groupingReader),
+        )
 
         val candidates = candidateSource.candidates()
         val baseBefore = personalRanker.rank(candidates)
@@ -126,19 +136,27 @@ class SessionContextRecommendationIntegrationTest {
         val contextual = pipeline.rank()
         val limited = pipeline.rank(limit = 1)
 
-        assertEquals(baseBefore.associateBy { it.recordingId }, contextual.associate { it.base.recordingId to it.base })
-        assertEquals(RECORDING_C, contextual.first().base.recordingId)
-        assertEquals(listOf(RECORDING_C), limited.map { it.base.recordingId })
-        assertTrue(contextual.first { it.base.recordingId == RECORDING_A }.sessionAdjustment < 0.0)
+        assertEquals(
+            baseBefore.associateBy { it.recordingId },
+            contextual.associate { it.base.base.recordingId to it.base.base },
+        )
+        assertEquals(RECORDING_C, contextual.first().base.base.recordingId)
+        assertEquals(listOf(RECORDING_C), limited.map { it.base.base.recordingId })
+        assertTrue(contextual.first { it.base.base.recordingId == RECORDING_A }.base.sessionAdjustment < 0.0)
         assertEquals(
             setOf(SessionContextReason.SESSION_EARLY_SKIP),
-            contextual.first { it.base.recordingId == RECORDING_A }.sessionReasons,
+            contextual.first { it.base.base.recordingId == RECORDING_A }.base.sessionReasons,
         )
         assertEquals(
             setOf(SessionContextReason.SESSION_RECENTLY_COMPLETED),
-            contextual.first { it.base.recordingId == RECORDING_B }.sessionReasons,
+            contextual.first { it.base.base.recordingId == RECORDING_B }.base.sessionReasons,
         )
-        assertEquals(0.0, contextual.first { it.base.recordingId == RECORDING_C }.sessionAdjustment, EPSILON)
+        assertEquals(
+            0.0,
+            contextual.first { it.base.base.recordingId == RECORDING_C }.base.sessionAdjustment,
+            EPSILON,
+        )
+        assertTrue(contextual.all { it.diversityAdjustment == 0.0 && it.finalScore == it.base.finalScore })
         assertEquals(ratingsBefore, listOf(RECORDING_A, RECORDING_B, RECORDING_C).associateWith { ratingStore.currentRating(it) })
         assertEquals(behaviorBefore, listOf(RECORDING_A, RECORDING_B, RECORDING_C).associateWith { eventStore.behaviorSummary(it) })
         assertEquals(assetsBefore, listOf(RECORDING_A, RECORDING_B, RECORDING_C).associateWith {
@@ -151,26 +169,33 @@ class SessionContextRecommendationIntegrationTest {
         ratingStore = ratingStore(clock)
         personalRanker = PersonalRanker(eventStore, ratingStore, nowEpochMs = { clock.now })
         sessionReranker = SessionContextReranker(eventStore, nowEpochMs = { clock.now })
-        pipeline = LibraryRecommendationPipeline(candidateSource, personalRanker, sessionReranker)
+        pipeline = LibraryRecommendationPipeline(
+            candidateSource,
+            personalRanker,
+            sessionReranker,
+            ArtistAwareDiversityReranker(groupingReader),
+        )
 
         val afterReopen = pipeline.rank()
-        assertEquals(contextual.map { it.base.recordingId }, afterReopen.map { it.base.recordingId })
-        assertEquals(contextual.map { it.sessionReasons }, afterReopen.map { it.sessionReasons })
+        assertEquals(contextual.map { it.base.base.recordingId }, afterReopen.map { it.base.base.recordingId })
+        assertEquals(contextual.map { it.base.sessionReasons }, afterReopen.map { it.base.sessionReasons })
 
         repeat(7) {
             clock.now += TWENTY_MINUTES_MS
             eventStore.recordPlaybackActivity(PlaybackActivity(RECORDING_C))
         }
         val afterDecay = pipeline.rank()
-        assertTrue(afterDecay.all { it.sessionAdjustment == 0.0 })
-        assertTrue(afterDecay.all { it.finalScore == it.base.score })
+        assertTrue(afterDecay.all { it.base.sessionAdjustment == 0.0 })
+        assertTrue(afterDecay.all { it.base.finalScore == it.base.base.score })
+        assertTrue(afterDecay.all { it.diversityAdjustment == 0.0 && it.finalScore == it.base.finalScore })
 
         clock.now += THIRTY_MINUTES_MS
         val persistedSession = eventStore.currentSession(clock.now)
         assertNull(persistedSession)
         val staleResult = pipeline.rank()
-        assertTrue(staleResult.all { it.sessionAdjustment == 0.0 })
-        assertTrue(staleResult.all { it.finalScore == it.base.score })
+        assertTrue(staleResult.all { it.base.sessionAdjustment == 0.0 })
+        assertTrue(staleResult.all { it.base.finalScore == it.base.base.score })
+        assertTrue(staleResult.all { it.diversityAdjustment == 0.0 && it.finalScore == it.base.finalScore })
     }
 
     private fun openListeningDatabase(): ListeningEventDatabase =
