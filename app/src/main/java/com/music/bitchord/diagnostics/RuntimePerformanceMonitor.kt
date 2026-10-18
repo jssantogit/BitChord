@@ -23,19 +23,20 @@ internal fun frameBudgetNanosForRefreshRate(refreshRateHz: Float): Long {
 }
 
 /**
- * Main-activity frame collector used only while an explicit diagnostics capture
- * is active.
+ * Runtime frame collector used only while an explicit diagnostics capture is
+ * active.
  *
- * Android delivers [FrameMetrics] on a dedicated handler thread, where frames
- * are reduced into [RuntimePerformanceSession]. Nothing is persisted per frame:
- * context switches, activity stops and a short periodic boundary emit one
- * bounded aggregate event instead. When capture is off the window listener is
- * not installed at all.
+ * The main activity is the base surface. Modal surfaces such as Now Playing may
+ * live in a separate Android [Window]; when one is visible, sampling moves to
+ * that window instead of counting both it and the obscured activity. Android
+ * delivers [FrameMetrics] on a dedicated handler thread, where frames are
+ * reduced into bounded aggregate windows. Nothing is persisted per frame.
  */
 internal object RuntimePerformanceMonitor {
     private val worker = HandlerThread("runtime-performance").apply { start() }
     private val handler = Handler(worker.looper)
     private val lock = Any()
+    private val surfaces = RuntimePerformanceSurfaceStack("activity_start")
 
     @Volatile
     private var installed = false
@@ -46,7 +47,7 @@ internal object RuntimePerformanceMonitor {
     @Volatile
     private var frameBudgetNanos: Long = frameBudgetNanosForRefreshRate(DEFAULT_REFRESH_RATE_HZ)
 
-    private val session = RuntimePerformanceSession("activity_start") { snapshot ->
+    private val session = RuntimePerformanceSession(surfaces.currentContext) { snapshot ->
         Diagnostics.event(
             category = DiagnosticCategory.UI,
             name = "runtime_frame_window",
@@ -57,7 +58,9 @@ internal object RuntimePerformanceMonitor {
         )
     }
 
-    private var attachedWindow: Window? = null
+    private var baseWindow: Window? = null
+    private var overlayWindow: Window? = null
+    private var sampledWindow: Window? = null
     private var displayManager: DisplayManager? = null
     private var displayId: Int? = null
     private var frameListenerRegistered = false
@@ -76,8 +79,8 @@ internal object RuntimePerformanceMonitor {
 
         override fun onDisplayChanged(changedDisplayId: Int) {
             if (changedDisplayId != displayId) return
-            // Keep each aggregate window on one budget. A refresh-rate switch is
-            // itself a natural measurement boundary on LTPO/high-refresh devices.
+            // One aggregate must never mix two frame budgets on LTPO/high-refresh
+            // devices. The refresh-rate transition is a natural window boundary.
             session.flush()
             updateDisplayBudget(displayManager?.getDisplay(changedDisplayId)?.refreshRate)
         }
@@ -87,12 +90,14 @@ internal object RuntimePerformanceMonitor {
         override fun run() {
             val captureActive = Diagnostics.captureStatus().active
             session.setCaptureActive(captureActive)
-            if (!captureActive) {
-                synchronized(lock) { stopSamplingLocked() }
-                return
+            synchronized(lock) {
+                if (!captureActive) {
+                    stopSamplingLocked()
+                    return
+                }
+                session.flush()
+                handler.postDelayed(this, FLUSH_INTERVAL_MILLIS)
             }
-            session.flush()
-            handler.postDelayed(this, FLUSH_INTERVAL_MILLIS)
         }
     }
 
@@ -117,6 +122,7 @@ internal object RuntimePerformanceMonitor {
         if (installed) return
         synchronized(lock) {
             if (installed) return
+            displayManager = app.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
             app.registerActivityLifecycleCallbacks(lifecycleCallbacks)
             installed = true
         }
@@ -124,44 +130,78 @@ internal object RuntimePerformanceMonitor {
 
     /** Called from the activity lifecycle. Safe to call repeatedly for the same window. */
     fun attach(activity: Activity) {
+        if (!installed) return
         synchronized(lock) {
-            val window = activity.window
-            if (attachedWindow !== window) {
-                detachLocked()
-                attachedWindow = window
-                displayManager = activity.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
-                displayId = window.decorView.display?.displayId
-                updateDisplayBudget(displayId?.let { displayManager?.getDisplay(it)?.refreshRate })
-            }
-
-            val captureActive = Diagnostics.captureStatus().active
-            session.setCaptureActive(captureActive)
-            if (captureActive) startSamplingLocked()
+            baseWindow = activity.window
+            refreshSamplingLocked()
         }
     }
 
-    /** Flushes the visible activity window before it leaves the foreground. */
+    /** Flushes the visible runtime surface before the main activity leaves the foreground. */
     fun detach(activity: Activity) {
+        if (!installed) return
         synchronized(lock) {
-            if (attachedWindow !== activity.window) return
-            detachLocked()
+            if (baseWindow !== activity.window) return
+            session.flush()
+            stopSamplingLocked()
+            baseWindow = null
+            overlayWindow = null
+            surfaces.hideOverlay()
+            displayId = null
+        }
+    }
+
+    /**
+     * Gives a modal window ownership of runtime measurements. Only this window
+     * is sampled until [detachOverlayWindow] restores the latest base surface.
+     */
+    fun attachOverlayWindow(window: Window?, context: String) {
+        if (!installed || window == null) return
+        synchronized(lock) {
+            overlayWindow = window
+            surfaces.showOverlay(context)
+            session.setContext(surfaces.currentContext)
+            refreshSamplingLocked()
+        }
+    }
+
+    fun detachOverlayWindow(window: Window?) {
+        if (!installed || window == null) return
+        synchronized(lock) {
+            if (overlayWindow !== window) return
+            overlayWindow = null
+            surfaces.hideOverlay()
+            session.setContext(surfaces.currentContext)
+            refreshSamplingLocked()
         }
     }
 
     /**
      * Screen/interaction changes split the current aggregate without creating a
-     * per-frame log stream. Context can be updated even while capture is off.
+     * per-frame log stream. While an overlay is visible the base context is only
+     * remembered; it becomes active again when that overlay closes.
      */
     fun setContext(context: String) {
-        session.setContext(context)
+        if (!installed) return
+        synchronized(lock) {
+            surfaces.setBaseContext(context)
+            session.setContext(surfaces.currentContext)
+        }
+    }
+
+    private fun refreshSamplingLocked() {
+        val captureActive = Diagnostics.captureStatus().active
+        session.setCaptureActive(captureActive)
+        if (!captureActive) {
+            stopSamplingLocked()
+            return
+        }
+        startSamplingLocked()
     }
 
     private fun startSamplingLocked() {
-        val window = attachedWindow ?: return
-        if (!frameListenerRegistered) {
-            window.addOnFrameMetricsAvailableListener(frameListener, handler)
-            frameListenerRegistered = true
-        }
+        val desiredWindow = overlayWindow ?: baseWindow ?: return
+        switchSampledWindowLocked(desiredWindow)
         if (!displayListenerRegistered) {
             displayManager?.registerDisplayListener(displayListener, handler)
             displayListenerRegistered = displayManager != null
@@ -170,24 +210,33 @@ internal object RuntimePerformanceMonitor {
         handler.postDelayed(periodicFlush, FLUSH_INTERVAL_MILLIS)
     }
 
+    private fun switchSampledWindowLocked(window: Window) {
+        if (sampledWindow === window && frameListenerRegistered) return
+
+        session.flush()
+        if (frameListenerRegistered) {
+            sampledWindow?.removeOnFrameMetricsAvailableListener(frameListener)
+            frameListenerRegistered = false
+        }
+
+        sampledWindow = window
+        displayId = window.decorView.display?.displayId
+        updateDisplayBudget(displayId?.let { displayManager?.getDisplay(it)?.refreshRate })
+        window.addOnFrameMetricsAvailableListener(frameListener, handler)
+        frameListenerRegistered = true
+    }
+
     private fun stopSamplingLocked() {
         handler.removeCallbacks(periodicFlush)
         if (frameListenerRegistered) {
-            attachedWindow?.removeOnFrameMetricsAvailableListener(frameListener)
+            sampledWindow?.removeOnFrameMetricsAvailableListener(frameListener)
             frameListenerRegistered = false
         }
+        sampledWindow = null
         if (displayListenerRegistered) {
             displayManager?.unregisterDisplayListener(displayListener)
             displayListenerRegistered = false
         }
-    }
-
-    private fun detachLocked() {
-        session.flush()
-        stopSamplingLocked()
-        attachedWindow = null
-        displayManager = null
-        displayId = null
     }
 
     private fun updateDisplayBudget(rate: Float?) {
