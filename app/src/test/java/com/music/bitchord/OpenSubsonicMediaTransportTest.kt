@@ -1,8 +1,10 @@
 package com.music.bitchord
 
+import androidx.media3.datasource.DataSource
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAuth
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicMediaAccessFailure
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicMediaAccessResult
+import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicMediaDataSourceFactory
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicRuntimeAudioRequest
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicRuntimeTransport
 import java.io.IOException
@@ -36,6 +38,31 @@ class OpenSubsonicMediaTransportTest {
     }
 
     @Test
+    fun `creating Media3 data source does not resolve provider access early`() {
+        var calls = 0
+        val transport = OpenSubsonicRuntimeTransport {
+            calls += 1
+            OpenSubsonicMediaAccessResult.Failure(
+                OpenSubsonicMediaAccessFailure.MEDIA_ASSET_NOT_FOUND,
+            )
+        }
+        val factory = OpenSubsonicMediaDataSourceFactory(
+            transport = transport,
+            upstreamFactory = DataSource.Factory {
+                error("HTTP upstream must not be created before DataSource open")
+            },
+        )
+
+        factory.create(
+            recordingId = "recording-1",
+            mediaAssetId = "asset-1",
+            providerKey = "opensubsonic:home",
+        )
+
+        assertEquals(0, calls)
+    }
+
+    @Test
     fun `provider failures remain safe and locator free`() = runTest {
         listOf(
             OpenSubsonicMediaAccessFailure.ACCOUNT_MISMATCH,
@@ -62,6 +89,27 @@ class OpenSubsonicMediaTransportTest {
             assertFalse(message.contains("apiKey", ignoreCase = true))
             assertFalse(message.contains("password", ignoreCase = true))
         }
+    }
+
+    @Test
+    fun `unexpected provider exception is redacted before transport boundary`() = runTest {
+        val transport = OpenSubsonicRuntimeTransport {
+            error("https://music.example/rest/stream.view?id=server-track-native&apiKey=api-secret")
+        }
+
+        val error = assertThrows(IOException::class.java) {
+            kotlinx.coroutines.runBlocking {
+                transport.resolveRuntime(
+                    recordingId = "recording-1",
+                    mediaAssetId = "asset-1",
+                    providerKey = "opensubsonic:home",
+                )
+            }
+        }
+
+        assertEquals("Remote playback access unavailable", error.message)
+        assertFalse(error.message.orEmpty().contains("server-track-native"))
+        assertFalse(error.message.orEmpty().contains("api-secret"))
     }
 
     @Test
