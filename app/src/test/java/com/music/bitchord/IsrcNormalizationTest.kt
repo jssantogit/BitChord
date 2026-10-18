@@ -25,6 +25,8 @@ class IsrcNormalizationTest {
         assertNull(IsrcNormalizer.normalize("1S-S1Z-99-00001"))
         assertNull(IsrcNormalizer.normalize("USS1Z990001"))
         assertNull(IsrcNormalizer.normalize("US S1Z 99 00001"))
+        assertNull(IsrcNormalizer.normalize("U-SS1Z9900001"))
+        assertNull(IsrcNormalizer.normalize("US-S1Z99-00001"))
     }
 
     @Test
