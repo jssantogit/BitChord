@@ -1,5 +1,8 @@
 package com.music.bitchord.playback
 
+import com.music.bitchord.data.catalog.provider.opensubsonic.androidOpenSubsonicMediaAccess
+import com.music.bitchord.data.catalog.provider.opensubsonic.materializeDataSpec
+
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -765,6 +768,7 @@ class PlaybackService : MediaLibraryService() {
     /** Commands exposed as the secondary buttons on the media notification. */
     private val boundedContextCommand = SessionCommand(ACTION_START_BOUNDED_CONTEXT, Bundle.EMPTY)
     private val clearBoundedContextCommand = SessionCommand(ACTION_CLEAR_BOUNDED_CONTEXT, Bundle.EMPTY)
+    private val canonicalRemotePlaybackCommand = SessionCommand(ACTION_PLAY_CANONICAL_REMOTE, Bundle.EMPTY)
     private val favoriteCommand = SessionCommand(ACTION_TOGGLE_FAVORITE, Bundle.EMPTY)
     private val autoplayCommand = SessionCommand(ACTION_TOGGLE_AUTOPLAY, Bundle.EMPTY)
     private val shuffleCommand = SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY)
@@ -1344,7 +1348,23 @@ class PlaybackService : MediaLibraryService() {
             }
         }
 
+        val canonicalRemoteResolver = CanonicalRemotePlaybackResolver(
+            openSubsonicResolve = androidOpenSubsonicMediaAccess(this)::resolve,
+        )
+
         val streamResolver = ResolvingDataSource.Resolver { dataSpec ->
+            if (CanonicalRemotePlaybackUri.isCanonical(dataSpec.uri.toString())) {
+                val runtimeRequest = try {
+                    runBlocking {
+                        withTimeout(RESOLVE_TIMEOUT_MS) {
+                            canonicalRemoteResolver.resolve(dataSpec.uri.toString())
+                        }
+                    }
+                } catch (e: TimeoutCancellationException) {
+                    throw java.io.IOException("Canonical remote playback resolution timed out", e)
+                }
+                return@Resolver runtimeRequest.materializeDataSpec(dataSpec)
+            }
             // Which track everything below is for, said once, because none of
             // it would otherwise know: this runs on ExoPlayer's loader thread
             // with a DataSpec and nothing else, and the work it starts — the
@@ -1634,12 +1654,18 @@ class PlaybackService : MediaLibraryService() {
             // end of a `bitchord://` URI and nothing below it knows which
             // track's bytes it is fetching; this is the seam where both are in
             // hand. See [StreamContainer].
-            streamResolver.resolveDataSpec(dataSpec).also { resolved ->
-                mediaIdIn(dataSpec.uri)?.let { StreamContainer.served(it, resolved.uri.toString()) }
-                // The same seam tells the cache whose file it is writing, which
-                // decides whether the entry outlives the track — see
-                // [AudioCache.Origin].
-                AudioCache.recordServed(dataSpec, resolved.uri.toString())
+            if (CanonicalRemotePlaybackUri.isCanonical(dataSpec.uri.toString())) {
+                // The resolved URI contains ephemeral provider auth. Never hand it
+                // to legacy stream telemetry/cache bookkeeping.
+                streamResolver.resolveDataSpec(dataSpec)
+            } else {
+                streamResolver.resolveDataSpec(dataSpec).also { resolved ->
+                    mediaIdIn(dataSpec.uri)?.let { StreamContainer.served(it, resolved.uri.toString()) }
+                    // The same seam tells the cache whose file it is writing, which
+                    // decides whether the entry outlives the track — see
+                    // [AudioCache.Origin].
+                    AudioCache.recordServed(dataSpec, resolved.uri.toString())
+                }
             }
         }
         // Read-ahead resolves streams through the same chain the player does.
@@ -1792,6 +1818,7 @@ class PlaybackService : MediaLibraryService() {
      * does, so the receiver is handed the URL the phone would have played.
      */
     private suspend fun resolveForCast(item: MediaItem): CastStream? = withContext(Dispatchers.IO) {
+        if (item.isCanonicalRemotePlayback()) return@withContext null
         val uri = item.localConfiguration?.uri ?: return@withContext null
         val resolver = streamResolver ?: return@withContext null
         val resolved = resolver.resolveDataSpec(DataSpec(uri)).uri
@@ -1868,7 +1895,10 @@ class PlaybackService : MediaLibraryService() {
      * against, and a local file or a download has no YouTube identity to rate.
      */
     private fun canLike(item: MediaItem?): Boolean =
-        item != null && SignedIn.state(this).value && item.toSong().localUri == null
+        item != null &&
+            !item.isCanonicalRemotePlayback() &&
+            SignedIn.state(this).value &&
+            item.toSong().localUri == null
 
     /** Favorite and Shuffle: the only actions shown on the phone notification. */
     private fun notificationButtons(): List<CommandButton> {
@@ -1898,7 +1928,9 @@ class PlaybackService : MediaLibraryService() {
 
     /** Adds Radio/Revert for controllers with room for them, e.g. Android Auto. */
     private fun carButtons(): List<CommandButton> {
-        val current = player?.currentMediaItem?.toSong()
+        val current = player?.currentMediaItem
+            ?.takeUnless { it.isCanonicalRemotePlayback() }
+            ?.toSong()
         val station = current
             ?.takeIf { it.canStartStation() }
             ?.let {
@@ -1954,6 +1986,7 @@ class PlaybackService : MediaLibraryService() {
     private fun startStationFromSession() {
         val originalPlayer = player ?: return
         val currentItem = originalPlayer.currentMediaItem ?: return
+        if (currentItem.isCanonicalRemotePlayback()) return
         val seed = currentItem.toSong().takeIf { it.canStartStation() } ?: return
         val originalManualQueue = (0 until originalPlayer.mediaItemCount)
             .map { originalPlayer.getMediaItemAt(it) }
@@ -2880,6 +2913,7 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun loadAutoplayForCurrentTrack() {
         val exoPlayer = player ?: return
+        if (exoPlayer.currentMediaItem?.isCanonicalRemotePlayback() == true) return
         val party = ListenTogether.state.value
         if (!autoplayEnabled(party) ||
             exoPlayer.repeatMode == Player.REPEAT_MODE_ALL ||
@@ -3670,6 +3704,9 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun recoverFrom(error: PlaybackException, player: ExoPlayer) {
         val item = player.currentMediaItem ?: return
+        // Provider-specific failures are terminal for this direct-play vertical;
+        // do not reinterpret the canonical id as a YouTube/source fallback key.
+        if (item.isCanonicalRemotePlayback()) return
         val mediaId = item.mediaId
         val uri = item.localConfiguration?.uri
         val position = player.currentPosition.coerceAtLeast(0L)
@@ -4211,6 +4248,7 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun lookForBetterCopy(player: ExoPlayer) {
         val item = player.currentMediaItem ?: return
+        if (item.isCanonicalRemotePlayback()) return
         val mediaId = item.mediaId
         val uri = item.localConfiguration?.uri
         val alreadyPending = QualityUpgrade.isPending(mediaId)
@@ -4330,6 +4368,7 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun upgradeQualityNow() {
         val player = player ?: return
+        if (player.currentMediaItem?.isCanonicalRemotePlayback() == true) return
         val mediaId = player.currentMediaItem?.mediaId ?: return
         // Do not charge the manual cooldown for a command that merely arrived
         // while this track's automatic or manual upgrade was already running.
@@ -5717,6 +5756,17 @@ class PlaybackService : MediaLibraryService() {
         LastPlayed.clearImmediately()
     }
 
+    /** Start one canonical remote item without exposing provider-native identity. */
+    private fun startCanonicalRemotePlayback(args: Bundle) {
+        val exoPlayer = player ?: return
+        val (request, metadata) = canonicalRemotePlaybackFromBundle(args) ?: return
+        beginRadioQueue()
+        exoPlayer.setMediaItem(canonicalRemoteMediaItem(request, metadata))
+        exoPlayer.prepare()
+        exoPlayer.play()
+        saveQueueSnapshotImmediately(exoPlayer)
+    }
+
     /** Persist index and position without touching or serializing queue contents. */
     private fun savePlaybackState(player: ExoPlayer) {
         if (player.mediaItemCount == 0) return
@@ -5920,7 +5970,10 @@ class PlaybackService : MediaLibraryService() {
         val nextIndex = player.nextMediaItemIndex
         val upcomingSongs = if (nextIndex != C.INDEX_UNSET) {
             val end = (nextIndex + AudioCache.QUEUE_DEPTH - 1).coerceAtMost(player.mediaItemCount - 1)
-            (nextIndex..end).map { index -> player.getMediaItemAt(index).toSong() }
+            (nextIndex..end).mapNotNull { index ->
+                val item = player.getMediaItemAt(index)
+                item.takeUnless { it.isCanonicalRemotePlayback() }?.toSong()
+            }
         } else {
             emptyList()
         }
@@ -7806,6 +7859,7 @@ class PlaybackService : MediaLibraryService() {
                 .add(favoriteCommand)
                 .add(boundedContextCommand)
                 .add(clearBoundedContextCommand)
+                .add(canonicalRemotePlaybackCommand)
                 .add(autoplayCommand)
                 .add(shuffleCommand)
                 .add(startStationCommand)
@@ -7843,6 +7897,7 @@ class PlaybackService : MediaLibraryService() {
             when (customCommand.customAction) {
                 ACTION_START_BOUNDED_CONTEXT -> startBoundedContext(args)
                 ACTION_CLEAR_BOUNDED_CONTEXT -> clearBoundedContext()
+                ACTION_PLAY_CANONICAL_REMOTE -> startCanonicalRemotePlayback(args)
                 ACTION_TOGGLE_AUTOPLAY -> toggleAutoplayFromNotification()
                 ACTION_TOGGLE_SHUFFLE -> toggleShuffleFromSession()
                 ACTION_START_STATION -> startStationFromSession()

@@ -813,7 +813,13 @@ object AudioCache {
 
             override fun open(dataSpec: DataSpec): Long {
                 val scheme = dataSpec.uri.scheme
-                activeDs = if (scheme == "file" || scheme == "content") {
+                activeDs = if (
+                    scheme == "file" ||
+                    scheme == "content" ||
+                    CanonicalRemotePlaybackUri.isCanonical(dataSpec.uri.toString())
+                ) {
+                    // Canonical remote direct play deliberately has no offline/cache
+                    // semantics in this vertical; auth is materialized at each open.
                     upstreamDs
                 } else {
                     cacheDs
