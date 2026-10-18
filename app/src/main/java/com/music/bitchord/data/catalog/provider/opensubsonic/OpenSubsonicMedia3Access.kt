@@ -39,15 +39,17 @@ internal class OpenSubsonicRuntimeTransport(
     ): OpenSubsonicRuntimeAudioRequest {
         // Provider owns identity validation and opaque authenticated requests. Only
         // the private-salt references and typed stages may leave that boundary.
-        val trace = tracer?.startTrace(
-            feature = TraceFeature.PROVIDER,
-            operation = "opensubsonic_runtime_resolve",
-            attributes = mapOf(
-                "recordingRef" to tracer.reference(recordingId),
-                "assetRef" to tracer.reference(mediaAssetId),
-                "providerRef" to tracer.reference(providerKey),
-            ),
-        )
+        val trace = tracer?.let { activeTracer ->
+            activeTracer.startTrace(
+                feature = TraceFeature.PROVIDER,
+                operation = "opensubsonic_runtime_resolve",
+                attributes = mapOf(
+                    "recordingRef" to activeTracer.reference(recordingId),
+                    "assetRef" to activeTracer.reference(mediaAssetId),
+                    "providerRef" to activeTracer.reference(providerKey),
+                ),
+            )
+        }
         return try {
             val result = try {
                 val lookup: suspend () -> OpenSubsonicMediaAccessResult = {
