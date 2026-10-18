@@ -145,4 +145,22 @@ class CanonicalRemotePlaybackTest {
             assertFalse("Playback duplicated provider responsibility: $forbidden", source.contains(forbidden))
         }
     }
+
+    @Test
+    fun `playback never materializes or handles OpenSubsonic runtime request`() {
+        val root = File(
+            System.getProperty("user.dir"),
+            "src/main/java/com/music/bitchord/playback",
+        )
+        val source = root.walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .joinToString("\n") { it.readText() }
+
+        listOf(
+            "OpenSubsonicRuntimeAudioRequest",
+            "materializeDataSpec",
+        ).forEach { forbidden ->
+            assertFalse("Playback crossed provider runtime transport boundary: $forbidden", source.contains(forbidden))
+        }
+    }
 }
