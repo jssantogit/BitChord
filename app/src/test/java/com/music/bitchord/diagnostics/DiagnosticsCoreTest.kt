@@ -108,6 +108,20 @@ class DiagnosticsCoreTest {
         assertTrue(sanitized.contains("no embedded lyrics"))
         assertTrue(sanitized.contains("links:"))
 
+        // The export formatter is the final persisted-capture / Share boundary,
+        // including legacy WARN and throwable text, not just a standalone helper.
+        val exported = DiagnosticFormatter.format(
+            event(name = "debug_log:BitChord").copy(
+                level = DiagnosticLevel.WARN,
+                message = message,
+                error = message,
+            ),
+        )
+        assertFalse(exported.contains(rawId))
+        assertFalse(exported.contains("bitchord://canonical"))
+        assertFalse(exported.contains("audio.invalid"))
+        assertTrue(exported.contains("no embedded lyrics"))
+
         val structured = DiagnosticFormatter.format(
             event(name = "trace_event", metadata = mapOf("traceId" to rawId)),
         )
