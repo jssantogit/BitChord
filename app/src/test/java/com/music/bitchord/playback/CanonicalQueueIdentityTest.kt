@@ -32,4 +32,25 @@ class CanonicalQueueIdentityTest {
             )
         }
     }
+
+    @Test
+    fun `canonical identity parts must not be blank`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            CanonicalQueueIdentity(recordingId = "")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CanonicalQueueIdentity(
+                recordingId = "recording-1",
+                mediaAssetId = "",
+                providerKey = "provider-1",
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CanonicalQueueIdentity(
+                recordingId = "recording-1",
+                mediaAssetId = "asset-1",
+                providerKey = "",
+            )
+        }
+    }
 }
