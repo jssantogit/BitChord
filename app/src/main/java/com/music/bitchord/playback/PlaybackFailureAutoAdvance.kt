@@ -29,6 +29,12 @@ internal enum class PlaybackFailureHandling {
     NOT_HANDLED,
 }
 
+internal enum class PlaybackFailureDiagnosticOutcome {
+    ADVANCE,
+    EXHAUSTED,
+    TERMINAL,
+}
+
 internal fun classifyPlaybackFailure(
     canonicalRemote: Boolean,
     localUriScheme: String?,
@@ -73,7 +79,11 @@ internal fun PlaybackFailureCascade.handlePlaybackFailure(
     if (disposition == PlaybackFailureDisposition.TERMINAL) {
         TrackLog.w(
             "BitChord",
-            "playback failure kept terminal (${error.errorCodeName}); legacy resolver bypassed",
+            safePlaybackFailureDiagnostic(
+                error,
+                PlaybackFailureDiagnosticOutcome.TERMINAL,
+                failedCount = failedKeys.size,
+            ),
             about = failureLogKey(currentIndex),
         )
         return PlaybackFailureHandling.TERMINAL
@@ -99,7 +109,11 @@ internal fun PlaybackFailureCascade.handlePlaybackFailure(
         is PlaybackFailureCascade.Decision.Advance -> {
             TrackLog.w(
                 "BitChord",
-                "playback entry unavailable (${error.errorCodeName}); advancing within existing queue",
+                safePlaybackFailureDiagnostic(
+                    error,
+                    PlaybackFailureDiagnosticOutcome.ADVANCE,
+                    failedCount = failedKeys.size,
+                ),
                 about = failureLogKey(currentIndex),
             )
             player.seekTo(decision.mediaItemIndex, 0L)
@@ -110,14 +124,37 @@ internal fun PlaybackFailureCascade.handlePlaybackFailure(
         PlaybackFailureCascade.Decision.Exhausted -> {
             TrackLog.w(
                 "BitChord",
-                "playback failure cascade exhausted after ${failedKeys.size} queue entries " +
-                    "(${error.errorCodeName}); stopping without changing queue",
+                safePlaybackFailureDiagnostic(
+                    error,
+                    PlaybackFailureDiagnosticOutcome.EXHAUSTED,
+                    failedCount = failedKeys.size,
+                ),
                 about = failureLogKey(currentIndex),
             )
             player.pause()
             PlaybackFailureHandling.CASCADE_EXHAUSTED
         }
     }
+}
+
+/**
+ * Intentionally ignores [PlaybackException.message], its cause and any URI.
+ * Provider-owned exceptions may originate below authenticated HTTP, so only
+ * Media3's finite error-code name and a bounded attempt count are allowed into
+ * TrackLog/Diagnostics here.
+ */
+internal fun safePlaybackFailureDiagnostic(
+    error: PlaybackException,
+    outcome: PlaybackFailureDiagnosticOutcome,
+    failedCount: Int,
+): String = when (outcome) {
+    PlaybackFailureDiagnosticOutcome.ADVANCE ->
+        "playback entry unavailable (${error.errorCodeName}); advancing within existing queue"
+    PlaybackFailureDiagnosticOutcome.EXHAUSTED ->
+        "playback failure cascade exhausted after $failedCount queue entries " +
+            "(${error.errorCodeName}); stopping without changing queue"
+    PlaybackFailureDiagnosticOutcome.TERMINAL ->
+        "playback failure kept terminal (${error.errorCodeName}); legacy resolver bypassed"
 }
 
 internal fun failureEntryKeyOrNull(player: Player, index: Int): String? {
