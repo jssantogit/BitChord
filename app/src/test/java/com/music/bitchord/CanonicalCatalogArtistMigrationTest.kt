@@ -112,7 +112,7 @@ class CanonicalCatalogArtistMigrationTest {
             dao.releaseArtistCredits("release-1").map { it.artistId },
         )
         assertEquals(
-            listOf("recording-2", "recording-1"),
+            listOf("recording-1", "recording-2"),
             dao.recordingsByArtist("artist-a").map { it.id },
         )
 

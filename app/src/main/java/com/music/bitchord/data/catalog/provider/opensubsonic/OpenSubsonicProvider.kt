@@ -1,6 +1,7 @@
 package com.music.bitchord.data.catalog.provider.opensubsonic
 
 import com.music.bitchord.data.catalog.provider.ProviderAlbum
+import com.music.bitchord.data.catalog.provider.ProviderArtist
 import com.music.bitchord.data.catalog.provider.ProviderCapabilities
 import com.music.bitchord.data.catalog.provider.ProviderHealth
 import com.music.bitchord.data.catalog.provider.ProviderLibrarySnapshot
@@ -218,6 +219,16 @@ internal class OpenSubsonicProvider(
         val albumArtistDisplay = album.displayArtist.clean()
             ?: album.artist.clean()
             ?: artistDisplay
+        val trackArtists = mapStructuredArtists(
+            structured = song.artists,
+            fallbackArtistId = song.artistId,
+            fallbackDisplay = artistDisplay,
+        )
+        val albumArtists = mapStructuredArtists(
+            structured = album.artists,
+            fallbackArtistId = album.artistId,
+            fallbackDisplay = albumArtistDisplay,
+        )
         val coverArtId = song.coverArt.clean() ?: album.coverArt.clean()
         val artworkUri = coverArtId?.let { artworkId -> providerUri("artwork", artworkId) }
         val albumTitle = album.name.clean()
@@ -247,6 +258,7 @@ internal class OpenSubsonicProvider(
                     artworkUri = album.coverArt.clean()?.let { artworkId ->
                         providerUri("artwork", artworkId)
                     } ?: artworkUri,
+                    artists = albumArtists,
                 )
             },
             // This is deliberately a credential-free logical URI. The future
@@ -260,6 +272,38 @@ internal class OpenSubsonicProvider(
             bitRateKbps = song.bitRate,
             bitDepth = song.bitDepth,
             samplingRateHz = song.samplingRate,
+            artists = trackArtists,
+        )
+    }
+
+    /**
+     * OpenSubsonic's structured artist ids are identity evidence. Display text is
+     * never tokenized: if the server exposes only one artistId for a display such
+     * as "A & B feat. C", that remains one provider alias until stronger evidence
+     * arrives.
+     */
+    private fun mapStructuredArtists(
+        structured: List<SubsonicArtist>?,
+        fallbackArtistId: String?,
+        fallbackDisplay: String?,
+    ): List<ProviderArtist> {
+        val explicit = structured.orEmpty().mapNotNull { artist ->
+            val externalId = artist.id.clean() ?: return@mapNotNull null
+            ProviderArtist(
+                externalArtistId = externalId,
+                name = artist.name.clean() ?: fallbackDisplay.clean() ?: externalId,
+                musicBrainzArtistId = artist.musicBrainzId.clean(),
+            )
+        }
+        if (explicit.isNotEmpty()) return explicit
+
+        val fallbackId = fallbackArtistId.clean() ?: return emptyList()
+        return listOf(
+            ProviderArtist(
+                externalArtistId = fallbackId,
+                name = fallbackDisplay.clean() ?: fallbackId,
+                musicBrainzArtistId = null,
+            ),
         )
     }
 
@@ -356,6 +400,13 @@ private data class SubsonicAlbumList(
 )
 
 @Serializable
+private data class SubsonicArtist(
+    val id: String? = null,
+    val name: String? = null,
+    val musicBrainzId: String? = null,
+)
+
+@Serializable
 private data class SubsonicAlbum(
     val id: String,
     val name: String? = null,
@@ -364,6 +415,7 @@ private data class SubsonicAlbum(
     val artist: String? = null,
     val displayArtist: String? = null,
     val artistId: String? = null,
+    val artists: List<SubsonicArtist>? = null,
     val coverArt: String? = null,
     val songCount: Int? = null,
     val duration: Int? = null,
@@ -382,6 +434,7 @@ private data class SubsonicSong(
     val artist: String? = null,
     val displayArtist: String? = null,
     val artistId: String? = null,
+    val artists: List<SubsonicArtist>? = null,
     val track: Int? = null,
     val coverArt: String? = null,
     val duration: Int? = null,
