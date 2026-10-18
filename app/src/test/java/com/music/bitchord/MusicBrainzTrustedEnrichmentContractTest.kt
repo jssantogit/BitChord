@@ -12,11 +12,11 @@ import com.music.bitchord.data.catalog.metadata.MetadataFieldSource
 import com.music.bitchord.data.catalog.metadata.MetadataRefreshResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzClient
 import com.music.bitchord.data.catalog.metadata.MusicBrainzMetadataEnrichmentProvider
+import com.music.bitchord.data.catalog.metadata.MusicBrainzRateLimiter
 import com.music.bitchord.data.catalog.metadata.MusicBrainzTransport
 import java.io.IOException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -45,7 +45,7 @@ class MusicBrainzTrustedEnrichmentContractTest {
     }
 
     @Test
-    fun artistRecordingAndReleaseUseOnlyTheirExactTrustedMbid() = runBlocking {
+    fun artistRecordingAndReleaseUseOnlyTheirExactTrustedMbidAndNormalizeV0Fields() = runBlocking {
         withDatabase { database ->
             val dao = database.catalogDao()
             dao.upsertArtist(ArtistEntity("artist-local", "Same name"))
@@ -58,7 +58,7 @@ class MusicBrainzTrustedEnrichmentContractTest {
             val transport = FakeMusicBrainzTransport { path ->
                 when (path) {
                     "artist/$ARTIST_MBID" -> artistFixture(ARTIST_MBID, "Same name")
-                    "recording/$RECORDING_MBID" -> recordingFixture(RECORDING_MBID, "Track MB")
+                    "recording/$RECORDING_MBID" -> recordingFixture(RECORDING_MBID, "Track MB", 222_000L, true)
                     "release/$RELEASE_MBID" -> releaseFixture(RELEASE_MBID, "Album MB")
                     else -> error("Unexpected MusicBrainz path: $path")
                 }
@@ -76,6 +76,25 @@ class MusicBrainzTrustedEnrichmentContractTest {
             assertTrue(transport.requests.all { request -> "query" !in request.parameters })
             assertTrue(transport.requests.all { request -> request.parameters["fmt"] == "json" })
             assertTrue(transport.requests.all { request -> request.userAgent.contains("Bitchord") })
+
+            val artist = nonNull(repository.resolveArtist("artist-local"))
+            assertEquals("Same name", artist.name.value)
+            assertEquals("Name, Same name", artist.sortName.value)
+            assertEquals("fixture", artist.disambiguation.value)
+            assertEquals("BR", artist.country.value)
+            assertEquals("Bahia", artist.area.value)
+
+            val recording = nonNull(repository.resolveRecording("recording-local"))
+            assertEquals("Track MB", recording.title.value)
+            assertEquals(222_000L, recording.durationMs.value)
+            assertEquals("Artist A feat. Guest", recording.artistDisplay.value)
+
+            val release = nonNull(repository.resolveRelease("release-local"))
+            assertEquals("Album MB", release.title.value)
+            assertEquals("Artist A", release.artistDisplay.value)
+            assertEquals("2025-01-02", release.releaseDate.value)
+            assertEquals("BR", release.country.value)
+            assertEquals("Official", release.status.value)
         }
     }
 
@@ -98,8 +117,8 @@ class MusicBrainzTrustedEnrichmentContractTest {
 
             repository.refreshArtist("artist-one")
             repository.refreshArtist("artist-two")
-            val first = assertNotNull(repository.resolveArtist("artist-one"))
-            val second = assertNotNull(repository.resolveArtist("artist-two"))
+            val first = nonNull(repository.resolveArtist("artist-one"))
+            val second = nonNull(repository.resolveArtist("artist-two"))
 
             assertEquals("artist-one", first.artistId)
             assertEquals("artist-two", second.artistId)
@@ -124,15 +143,13 @@ class MusicBrainzTrustedEnrichmentContractTest {
                     includeCredits = true,
                 )
             }
-            val provider = MusicBrainzMetadataEnrichmentProvider(
-                MusicBrainzClient(transport = transport, userAgent = TEST_USER_AGENT),
-            )
+            val provider = provider(transport)
             val lookup = provider.lookupRecording(RECORDING_MBID)
             assertEquals("RecordingMetadataEnrichment", lookup.valueOrNull()!!::class.simpleName)
             val repository = CanonicalMetadataEnrichmentRepository(dao, provider) { 10_000L }
 
             repository.refreshRecording("recording-local")
-            val resolved = assertNotNull(repository.resolveRecording("recording-local"))
+            val resolved = nonNull(repository.resolveRecording("recording-local"))
 
             assertEquals("MusicBrainz title", resolved.title.value)
             assertEquals(MetadataFieldSource.MUSICBRAINZ, resolved.title.provenance?.source)
@@ -156,7 +173,7 @@ class MusicBrainzTrustedEnrichmentContractTest {
             val repository = repository(dao, transport) { now }
 
             assertTrue(repository.refreshRecording("recording-local") is MetadataRefreshResult.Refreshed)
-            var resolved = assertNotNull(repository.resolveRecording("recording-local"))
+            var resolved = nonNull(repository.resolveRecording("recording-local"))
             assertEquals("First title", resolved.title.value)
             assertEquals(10_000L, resolved.durationMs.value)
             assertEquals(100L, resolved.fetchedAtEpochMs)
@@ -164,7 +181,7 @@ class MusicBrainzTrustedEnrichmentContractTest {
             now = 200L
             response = """{"id":"$RECORDING_MBID","title":"Second title"}"""
             assertTrue(repository.refreshRecording("recording-local") is MetadataRefreshResult.Refreshed)
-            resolved = assertNotNull(repository.resolveRecording("recording-local"))
+            resolved = nonNull(repository.resolveRecording("recording-local"))
             assertEquals("Second title", resolved.title.value)
             assertEquals(10_000L, resolved.durationMs.value)
             assertEquals("Artist A feat. Guest", resolved.artistDisplay.value)
@@ -191,13 +208,13 @@ class MusicBrainzTrustedEnrichmentContractTest {
             assertTrue(repository.refreshRecording("recording-local") is MetadataRefreshResult.Refreshed)
             mode = 1
             assertTrue(repository.refreshRecording("recording-local") is MetadataRefreshResult.Failed)
-            var resolved = assertNotNull(repository.resolveRecording("recording-local"))
+            var resolved = nonNull(repository.resolveRecording("recording-local"))
             assertEquals("Cached title", resolved.title.value)
             assertEquals(55_000L, resolved.durationMs.value)
 
             mode = 2
             assertTrue(repository.refreshRecording("recording-local") is MetadataRefreshResult.Failed)
-            resolved = assertNotNull(repository.resolveRecording("recording-local"))
+            resolved = nonNull(repository.resolveRecording("recording-local"))
             assertEquals("Cached title", resolved.title.value)
             assertEquals(55_000L, resolved.durationMs.value)
         }
@@ -213,7 +230,7 @@ class MusicBrainzTrustedEnrichmentContractTest {
             val repository = repository(dao, transport)
 
             assertTrue(repository.refreshArtist("artist-local") is MetadataRefreshResult.Failed)
-            val resolved = assertNotNull(repository.resolveArtist("artist-local"))
+            val resolved = nonNull(repository.resolveArtist("artist-local"))
             assertEquals("Canonical artist", resolved.name.value)
             assertEquals(MetadataFieldSource.CANONICAL, resolved.name.provenance?.source)
             assertNull(resolved.sortName.value)
@@ -232,7 +249,7 @@ class MusicBrainzTrustedEnrichmentContractTest {
             val callsAfterRefresh = transport.requests.size
 
             repeat(5) {
-                val resolved = assertNotNull(repository.resolveRelease("release-local"))
+                val resolved = nonNull(repository.resolveRelease("release-local"))
                 assertEquals("MB album", resolved.title.value)
             }
             assertEquals(callsAfterRefresh, transport.requests.size)
@@ -260,7 +277,7 @@ class MusicBrainzTrustedEnrichmentContractTest {
             val repository = repository(dao, transport)
 
             repository.refreshRecording("recording-local")
-            val resolved = assertNotNull(repository.resolveRecording("recording-local"))
+            val resolved = nonNull(repository.resolveRecording("recording-local"))
             assertEquals(
                 listOf(ARTIST_MBID, ARTIST_2_MBID),
                 resolved.musicBrainzArtistCredits.map { it.musicBrainzArtistId },
@@ -270,7 +287,6 @@ class MusicBrainzTrustedEnrichmentContractTest {
                 listOf("canonical-a", "canonical-guest"),
                 dao.recordingArtistCredits("recording-local").map { it.artistId },
             )
-            assertEquals(3, dao.recordingsByArtist("same-name-other").size + 3 - 3)
             assertTrue(dao.recordingsByArtist("same-name-other").isEmpty())
         }
     }
@@ -292,7 +308,7 @@ class MusicBrainzTrustedEnrichmentContractTest {
         }
         var repository = repository(database.catalogDao(), transport) { 77L }
         assertTrue(repository.refreshRecording("recording-local") is MetadataRefreshResult.Refreshed)
-        var resolved = assertNotNull(repository.resolveRecording("recording-local"))
+        var resolved = nonNull(repository.resolveRecording("recording-local"))
         assertEquals("Persisted MB title", resolved.title.value)
         assertEquals(241_000L, resolved.durationMs.value)
         database.close()
@@ -302,13 +318,13 @@ class MusicBrainzTrustedEnrichmentContractTest {
             .build()
         val failingTransport = FakeMusicBrainzTransport { throw IOException("offline") }
         repository = repository(database.catalogDao(), failingTransport) { 88L }
-        resolved = assertNotNull(repository.resolveRecording("recording-local"))
+        resolved = nonNull(repository.resolveRecording("recording-local"))
         assertEquals("Persisted MB title", resolved.title.value)
         assertEquals(MetadataFieldSource.MUSICBRAINZ, resolved.title.provenance?.source)
         assertEquals(241_000L, resolved.durationMs.value)
         assertEquals(MetadataFieldSource.CANONICAL, resolved.durationMs.provenance?.source)
         assertTrue(repository.refreshRecording("recording-local") is MetadataRefreshResult.Failed)
-        assertEquals("Persisted MB title", assertNotNull(repository.resolveRecording("recording-local")).title.value)
+        assertEquals("Persisted MB title", nonNull(repository.resolveRecording("recording-local")).title.value)
 
         database.close()
         context.deleteDatabase(name)
@@ -326,16 +342,27 @@ class MusicBrainzTrustedEnrichmentContractTest {
         }
     }
 
+    private fun provider(transport: FakeMusicBrainzTransport): MusicBrainzMetadataEnrichmentProvider {
+        var virtualTime = 0L
+        val limiter = MusicBrainzRateLimiter(
+            nowMillis = { virtualTime },
+            delayMillis = { millis -> virtualTime += millis },
+        )
+        return MusicBrainzMetadataEnrichmentProvider(
+            MusicBrainzClient(
+                transport = transport,
+                rateLimiter = limiter,
+                userAgent = TEST_USER_AGENT,
+            ),
+        )
+    }
+
     private fun repository(
         dao: com.music.bitchord.data.catalog.CanonicalCatalogDao,
         transport: FakeMusicBrainzTransport,
         now: () -> Long = { 1_000L },
-    ): CanonicalMetadataEnrichmentRepository {
-        val provider = MusicBrainzMetadataEnrichmentProvider(
-            MusicBrainzClient(transport = transport, userAgent = TEST_USER_AGENT),
-        )
-        return CanonicalMetadataEnrichmentRepository(dao, provider, now)
-    }
+    ): CanonicalMetadataEnrichmentRepository =
+        CanonicalMetadataEnrichmentRepository(dao, provider(transport), now)
 
     private fun mbIdentity(entityType: String, mbid: String, entityId: String) =
         ExternalIdentityEntity(
@@ -344,6 +371,11 @@ class MusicBrainzTrustedEnrichmentContractTest {
             externalId = mbid,
             entityId = entityId,
         )
+
+    private fun <T : Any> nonNull(value: T?): T {
+        assertNotNull(value)
+        return value!!
+    }
 
     private class FakeMusicBrainzTransport(
         private val responder: suspend (String) -> String,
