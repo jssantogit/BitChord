@@ -188,31 +188,7 @@ internal class CanonicalRecordingIdentityDiscoveryRepository(
         }
         val candidate = convergedCandidates.single()
 
-        // Re-check after network activity so a concurrently-added trusted identity
-        // cannot be ignored by this attempt. The final claim below is still atomic.
-        val afterLookup = musicBrainzIds(recordingId)
-        when {
-            afterLookup.size == 1 -> return if (afterLookup.single().equals(candidate, ignoreCase = true)) {
-                RecordingIdentityResolutionResult.AlreadyResolved(afterLookup.single())
-            } else {
-                RecordingIdentityResolutionResult.AmbiguousExistingIdentity(
-                    (afterLookup + candidate).distinct(),
-                )
-            }
-            afterLookup.size > 1 -> return RecordingIdentityResolutionResult.AmbiguousExistingIdentity(afterLookup)
-        }
-
-        val claimedBy = dao.entityIdForExternalIdentity(
-            provider = MUSICBRAINZ_PROVIDER,
-            entityType = RECORDING_ENTITY_TYPE,
-            externalId = candidate,
-        )
-        when {
-            claimedBy == recordingId -> return RecordingIdentityResolutionResult.AlreadyResolved(candidate)
-            claimedBy != null -> return RecordingIdentityResolutionResult.IdentityConflict(candidate, claimedBy)
-        }
-
-        val insertedRowId = dao.insertExternalIdentityIfAbsent(
+        val claim = dao.claimExternalIdentityExclusivelyForEntity(
             ExternalIdentityEntity(
                 provider = MUSICBRAINZ_PROVIDER,
                 entityType = RECORDING_ENTITY_TYPE,
@@ -220,18 +196,31 @@ internal class CanonicalRecordingIdentityDiscoveryRepository(
                 entityId = recordingId,
             ),
         )
-        return when (val persisted = dao.entityIdForExternalIdentity(
-            MUSICBRAINZ_PROVIDER,
-            RECORDING_ENTITY_TYPE,
-            candidate,
-        )) {
-            null -> RecordingIdentityResolutionResult.Unresolved
-            recordingId -> if (insertedRowId == -1L) {
-                RecordingIdentityResolutionResult.AlreadyResolved(candidate)
-            } else {
-                RecordingIdentityResolutionResult.Promoted(candidate)
+
+        if (claim.existingExternalIdsForEntity.isNotEmpty()) {
+            val existingAfterLookup = claim.existingExternalIdsForEntity
+            return when {
+                existingAfterLookup.size == 1 &&
+                    existingAfterLookup.single().equals(candidate, ignoreCase = true) -> {
+                    RecordingIdentityResolutionResult.AlreadyResolved(existingAfterLookup.single())
+                }
+                existingAfterLookup.size == 1 -> {
+                    RecordingIdentityResolutionResult.AmbiguousExistingIdentity(
+                        (existingAfterLookup + candidate).distinct(),
+                    )
+                }
+                else -> RecordingIdentityResolutionResult.AmbiguousExistingIdentity(existingAfterLookup)
             }
-            else -> RecordingIdentityResolutionResult.IdentityConflict(candidate, persisted)
+        }
+
+        return when (val owner = claim.candidateOwnerEntityId) {
+            null -> RecordingIdentityResolutionResult.Unresolved
+            recordingId -> if (claim.inserted) {
+                RecordingIdentityResolutionResult.Promoted(candidate)
+            } else {
+                RecordingIdentityResolutionResult.AlreadyResolved(candidate)
+            }
+            else -> RecordingIdentityResolutionResult.IdentityConflict(candidate, owner)
         }
     }
 
