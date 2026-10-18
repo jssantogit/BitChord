@@ -9,6 +9,8 @@ import com.music.bitchord.data.model.Song
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
@@ -28,6 +30,7 @@ object BoundedContextPersistence {
         val song: Song,
         val canonicalIndex: Int? = null,
         val cycleId: Long? = null,
+        val canonicalIdentity: CanonicalQueueIdentity? = null,
     )
 
     data class State(
@@ -37,9 +40,11 @@ object BoundedContextPersistence {
         val entries: List<Entry>,
         val currentIndex: Int,
         val positionMs: Long,
+        val contextIdentities: List<CanonicalQueueIdentity?> = emptyList(),
     )
 
     private lateinit var prefs: SharedPreferences
+    private var canonicalResolver: CanonicalQueueResolver? = null
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
@@ -48,13 +53,19 @@ object BoundedContextPersistence {
 
     @Synchronized
     fun init(context: Context) {
-        prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val appContext = context.applicationContext
+        prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        canonicalResolver = androidCanonicalQueueResolver(appContext)
     }
 
     /** Test-only dependency injection; production uses [init]. */
     @Synchronized
-    internal fun initForTesting(testPrefs: SharedPreferences) {
+    internal fun initForTesting(
+        testPrefs: SharedPreferences,
+        testResolver: CanonicalQueueResolver? = null,
+    ) {
         prefs = testPrefs
+        canonicalResolver = testResolver
         writer = Executor { it.run() }
     }
 
@@ -83,11 +94,12 @@ object BoundedContextPersistence {
     }
 
     private fun flushPending() {
-        val (state, startedAt) = synchronized(this) {
+        val (rawState, startedAt) = synchronized(this) {
             val next = pending ?: return
             pending = null
             next to generation
         }
+        val state = canonicalizeForPersistence(rawState)
         val encoded = encode(state) ?: return
         synchronized(this) {
             if (startedAt != generation) return
@@ -95,11 +107,12 @@ object BoundedContextPersistence {
         }
     }
 
-    fun saveImmediately(state: State) {
+    fun saveImmediately(rawState: State) {
         synchronized(this) {
             generation += 1
             pending = null
         }
+        val state = canonicalizeForPersistence(rawState)
         val encoded = encode(state) ?: return
         synchronized(this) { write(state, encoded).commit() }
     }
@@ -131,7 +144,8 @@ object BoundedContextPersistence {
     @Synchronized
     fun load(): State? {
         val raw = runCatching { prefs.getString(KEY_STATE, null) }.getOrNull() ?: return null
-        val state = decode(raw) ?: return null
+        val decoded = decode(raw) ?: return null
+        val state = rehydrateAfterLoad(decoded) ?: return null
         val currentEntryId = state.entries[state.currentIndex].song.queueEntryId
         val scalarEntryId = runCatching { prefs.getString(KEY_CURRENT_ENTRY_ID, null) }.getOrNull()
         if (currentEntryId != scalarEntryId) return state
@@ -154,10 +168,24 @@ object BoundedContextPersistence {
         prefs.edit().clear().commit()
     }
 
+    private fun canonicalizeForPersistence(state: State): State {
+        val resolver = canonicalResolver ?: return state
+        return runCatching { runBlocking(Dispatchers.IO) { CanonicalQueueMigration.canonicalize(state, resolver) } }
+            .getOrDefault(state)
+    }
+
+    private fun rehydrateAfterLoad(state: State): State? {
+        if (state.contextIdentities.isEmpty() && state.entries.none { it.canonicalIdentity != null }) return state
+        val resolver = canonicalResolver ?: return null
+        return runCatching { runBlocking(Dispatchers.IO) { CanonicalQueueMigration.rehydrate(state, resolver) } }
+            .getOrNull()
+    }
+
     /** Visible to JVM tests; the Android wrapper above remains the only writer. */
     internal fun encode(state: State): String? = runCatching {
         require(validateState(state) != null) { "invalid bounded context state" }
-        json.encodeToString(StoredState.serializer(), state.toStored())
+        CanonicalQueueSnapshotCodec.encode(state)
+            ?: json.encodeToString(StoredState.serializer(), state.toStored())
     }.getOrNull()?.takeIf {
         it.toByteArray(StandardCharsets.UTF_8).size <= MAX_SERIALIZED_BYTES
     }
@@ -166,6 +194,9 @@ object BoundedContextPersistence {
     internal fun decode(raw: String): State? {
         if (raw.length > MAX_SERIALIZED_BYTES) return null
         if (raw.toByteArray(StandardCharsets.UTF_8).size > MAX_SERIALIZED_BYTES) return null
+        CanonicalQueueSnapshotCodec.decode(raw)?.let { canonical ->
+            return canonical.takeIf { validateState(it) != null }
+        }
         return runCatching {
             json.decodeFromString<StoredState>(raw).toState()
         }.getOrNull()
@@ -235,6 +266,8 @@ object BoundedContextPersistence {
                     ),
                     canonicalIndex = logicalEntry.canonicalIndex,
                     cycleId = logicalEntry.cycleId,
+                    canonicalIdentity = matching?.canonicalIdentity
+                        ?: state.contextIdentities.getOrNull(logicalEntry.canonicalIndex),
                 )
             }
 
@@ -553,6 +586,7 @@ object BoundedContextPersistence {
 
         val canonical = context.songs
         if (canonical.isEmpty() || canonical.size > MAX_CANONICAL_SONGS) return null
+        if (state.contextIdentities.isNotEmpty() && state.contextIdentities.size != canonical.size) return null
         if (canonical.any { it.videoId.isBlank() || it.queueTier != QueueTier.CONTEXT }) return null
         if (canonical.map { it.contextEntryKey() }.toSet().size != canonical.size) return null
         if (canonical.any { !it.matchesSource(source) }) return null
@@ -596,6 +630,8 @@ object BoundedContextPersistence {
                 if (!anchors.add(canonicalIndex to cycleId)) return null
                 val expected = canonical[canonicalIndex]
                 if (entry.song.contextEntryKey() != expected.contextEntryKey()) return null
+                val contextIdentity = state.contextIdentities.getOrNull(canonicalIndex)
+                if (entry.canonicalIdentity != null && contextIdentity != null && entry.canonicalIdentity != contextIdentity) return null
             }
         }
 
