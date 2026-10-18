@@ -71,6 +71,23 @@ class CanonicalRemotePlaybackTest {
     }
 
     @Test
+    fun `canonical router contains no HTTP chunking or diagnostics implementation`() {
+        val source = File(
+            System.getProperty("user.dir"),
+            "src/main/java/com/music/bitchord/playback/CanonicalRemoteDataSource.kt",
+        ).readText()
+
+        listOf(
+            "OkHttpDataSource",
+            "ChunkedDataSource",
+            "TrackLog",
+            "Diagnostics.",
+        ).forEach { forbidden ->
+            assertFalse("Canonical router must stay transport-neutral: $forbidden", source.contains(forbidden))
+        }
+    }
+
+    @Test
     fun `provider-owned transport is resolved only from DataSource open`() {
         val providerSource = File(
             System.getProperty("user.dir"),
