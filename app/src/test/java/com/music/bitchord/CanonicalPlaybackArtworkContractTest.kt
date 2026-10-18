@@ -1,6 +1,7 @@
 package com.music.bitchord
 
 import com.music.bitchord.ui.player.CanonicalPlaybackArtworkIdentity
+import com.music.bitchord.ui.player.preloadedMenuArtworkFor
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.playback.CanonicalRemotePlaybackRequest
 import com.music.bitchord.playback.CanonicalRemotePlaybackUri
@@ -103,6 +104,45 @@ class CanonicalPlaybackArtworkContractTest {
         )
         assertNull(CanonicalPlaybackArtworkIdentity.fromSong(local))
         assertEquals("content://media/audio/albumart/1", local.thumbnailUrl)
+    }
+
+    @Test
+    fun `three dot menu uses already loaded player cover for same selected asset only`() {
+        val selection = CanonicalRemotePlaybackRequest(
+            recordingId = "recording-push-back",
+            mediaAssetId = "asset-a",
+            providerKey = "opensubsonic:home",
+        )
+        fun song(request: CanonicalRemotePlaybackRequest) = Song(
+            videoId = request.recordingId,
+            title = "Push Back",
+            artist = "AtHeart",
+            thumbnailUrl = null,
+            fromAutoplay = false,
+            localUri = CanonicalRemotePlaybackUri.encode(request),
+        )
+        val playingSong = song(selection)
+        val identity = CanonicalPlaybackArtworkIdentity.fromSong(playingSong)
+        val alreadyRendered = Any()
+        assertEquals(
+            alreadyRendered,
+            preloadedMenuArtworkFor(playingSong.copy(albumName = "Album"), identity, alreadyRendered),
+        )
+        assertNull(preloadedMenuArtworkFor(
+            song(selection.copy(mediaAssetId = "asset-b")), identity, alreadyRendered,
+        ))
+        assertNull(preloadedMenuArtworkFor(
+            song(selection.copy(recordingId = "recording-other")), identity, alreadyRendered,
+        ))
+        assertNull(preloadedMenuArtworkFor(
+            song(selection.copy(providerKey = "opensubsonic:other")), identity, alreadyRendered,
+        ))
+        assertNull(preloadedMenuArtworkFor(
+            playingSong.copy(localUri = "content://media/external/audio/media/1"),
+            identity, alreadyRendered,
+        ))
+        assertNull(preloadedMenuArtworkFor(playingSong, identity, null))
+        assertNull(preloadedMenuArtworkFor(playingSong, null, alreadyRendered))
     }
 
     @Test

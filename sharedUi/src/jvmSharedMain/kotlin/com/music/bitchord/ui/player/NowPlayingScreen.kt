@@ -707,7 +707,8 @@ fun NowPlayingScreen(
      */
     onQueueDragActiveChange: (Boolean) -> Unit = {},
     onClearQueue: () -> Unit,
-    onOpenMenu: () -> Unit,
+    /** Pass the already-resolved cover along with the menu action. */
+    onOpenMenu: (Any?) -> Unit,
     onOpenAlbum: (String) -> Unit,
     /**
      * Opens an artist's page. [browseId] is null for anyone but the lead credit:
@@ -1893,7 +1894,7 @@ fun NowPlayingScreen(
                                     likeStatus = likeStatus,
                                     showRevertCue = showRevertCue,
                                     onToggleLike = onToggleLike,
-                                    onOpenMenu = onOpenMenu,
+                                    onOpenMenu = { onOpenMenu(canonicalArtworkModel) },
                                     onOpenAlbum = onOpenAlbum,
                                     onOpenArtist = onOpenArtist,
                                 )
@@ -3315,10 +3316,10 @@ fun NowPlayingScreen(
                                     },
                                 ),
                                 onClick = when {
-                                    showRevertCue -> onOpenMenu
+                                    showRevertCue -> { onOpenMenu(canonicalArtworkModel) }
                                     lyricsShareGlyphVisible && lyricPicker.picking -> lyricPicker.cancel
                                     lyricsShareGlyphVisible -> lyricPicker.beginPicking
-                                    else -> onOpenMenu
+                                    else -> { onOpenMenu(canonicalArtworkModel) }
                                 },
                                 haptic = if (lyricsShareGlyphVisible && !showRevertCue) {
                                     Haptic.Select

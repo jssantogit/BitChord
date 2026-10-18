@@ -48,3 +48,18 @@ internal data class CanonicalPlaybackArtworkKey(
     val recordingId: String,
     val mediaAssetId: String,
 )
+
+/**
+ * Reuse a *rendered* in-memory model only if the selected canonical Recording,
+ * MediaAsset AND provider routing still match the menu track. This prevents
+ * the old cover surviving a fast A→B→Local transition or an account switch.
+ */
+internal fun preloadedMenuArtworkFor(
+    menuSong: Song?,
+    openedIdentity: CanonicalPlaybackArtworkIdentity?,
+    openedModel: Any?,
+): Any? {
+    if (openedModel == null || openedIdentity == null) return null
+    val selected = CanonicalPlaybackArtworkIdentity.fromSong(menuSong) ?: return null
+    return openedModel.takeIf { selected == openedIdentity }
+}
