@@ -41,7 +41,7 @@ internal class RoomListeningEventStore(
     private val classifier: ListeningOutcomeClassifier = ListeningOutcomeClassifier(),
     private val clock: ListeningClock = ListeningClock { System.currentTimeMillis() },
     private val idGenerator: ListeningIdGenerator = ListeningIdGenerator { UUID.randomUUID().toString() },
-) : ListeningEventStore {
+) : ListeningEventStore, ListeningSessionContextReader {
     private val ingestionMutex = Mutex()
 
     override suspend fun recordPlaybackStarted(start: PlaybackStart): ListeningEvent =
@@ -119,6 +119,11 @@ internal class RoomListeningEventStore(
         return dao.session(sessionId)?.toDomain()
     }
 
+    override suspend fun currentSession(atEpochMs: Long): ListeningSession? {
+        val active = dao.activeSession()?.toDomain() ?: return null
+        return active.takeIf { session -> ListeningSessionPolicy.isCurrent(session, atEpochMs) }
+    }
+
     override suspend fun eventsForSession(sessionId: String): List<ListeningEvent> {
         require(sessionId.isNotBlank())
         return dao.eventsForSession(sessionId).map(ListeningEventEntity::toDomain)
@@ -151,9 +156,9 @@ internal class RoomListeningEventStore(
     private suspend fun activeSessionFor(nowEpochMs: Long): SessionResolution {
         val active = dao.activeSession()
         if (active != null) {
-            val inactivityMs = nowEpochMs - active.lastActivityAtEpochMs
-            if (inactivityMs >= 0L && inactivityMs < SESSION_INACTIVITY_TIMEOUT_MS) {
-                return SessionResolution(active.toDomain(), created = false)
+            val domain = active.toDomain()
+            if (ListeningSessionPolicy.isCurrent(domain, nowEpochMs)) {
+                return SessionResolution(domain, created = false)
             }
             check(dao.endSession(active.id, active.lastActivityAtEpochMs) == 1) {
                 "Listening session was already closed during timeout rollover: ${active.id}"
@@ -196,10 +201,6 @@ internal class RoomListeningEventStore(
         val session: ListeningSession,
         val created: Boolean,
     )
-
-    private companion object {
-        const val SESSION_INACTIVITY_TIMEOUT_MS = 30L * 60L * 1000L
-    }
 }
 
 internal object ListeningEventStores {
