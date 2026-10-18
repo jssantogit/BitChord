@@ -17,7 +17,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.ConscryptMode
 
+@ConscryptMode(ConscryptMode.Mode.OFF)
 @RunWith(RobolectricTestRunner::class)
 class CanonicalCatalogArtistMigrationTest {
 
