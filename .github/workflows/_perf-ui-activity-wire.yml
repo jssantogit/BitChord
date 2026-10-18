@@ -1,0 +1,151 @@
+name: Perf UI activity wiring helper
+
+on:
+  push:
+    branches:
+      - perf/runtime-performance-probes
+    paths:
+      - .github/workflows/_perf-ui-activity-wire.yml
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: perf/runtime-performance-probes
+          fetch-depth: 0
+      - name: Wire bounded UI activity probes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one match, found {count}: {old[:80]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          artwork = "sharedUi/src/jvmSharedMain/kotlin/com/music/bitchord/ui/player/ArtworkMeshBackdrop.kt"
+          replace_once(
+              artwork,
+              "import androidx.compose.runtime.LaunchedEffect\nimport androidx.compose.runtime.getValue\n",
+              "import androidx.compose.runtime.LaunchedEffect\nimport androidx.compose.runtime.SideEffect\nimport androidx.compose.runtime.getValue\n",
+          )
+          replace_once(
+              artwork,
+              "import com.music.bitchord.data.model.artworkAt\n",
+              "import com.music.bitchord.data.model.artworkAt\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiContext\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiSignal\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiStateKey\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiStateValue\n",
+          )
+          replace_once(
+              artwork,
+              """        mesh = withContext(Dispatchers.Default) { meshOf(frame, imageUrl?.hashCode() ?: 0) } ?: mesh
+        meshUrl = imageUrl
+""",
+              """        val updated = withContext(Dispatchers.Default) { meshOf(frame, imageUrl?.hashCode() ?: 0) }
+        if (updated != null) {
+            mesh = updated
+            RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.CANVAS_FRAME_MESH_UPDATE)
+        }
+        meshUrl = imageUrl
+""",
+          )
+          replace_once(
+              artwork,
+              """    val canBlur = !reduceDynamicBlur && renderEffectBlurSupported
+
+    // The mesh on screen, and the one fading in over it. Two states rather than
+""",
+              """    val canBlur = !reduceDynamicBlur && renderEffectBlurSupported
+
+    SideEffect {
+        RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.ARTWORK_BACKDROP_RECOMPOSITION)
+    }
+    LaunchedEffect(canBlur) {
+        RuntimePerformanceUiContext.setState(
+            RuntimePerformanceUiStateKey.DYNAMIC_BLUR,
+            if (canBlur) RuntimePerformanceUiStateValue.ENABLED else RuntimePerformanceUiStateValue.REDUCED,
+        )
+    }
+
+    // The mesh on screen, and the one fading in over it. Two states rather than
+""",
+          )
+          replace_once(
+              artwork,
+              """        val current = shown
+        if (next === current) return@LaunchedEffect
+
+        // Nothing to fade *from* on the first read, and nothing to fade at all
+""",
+              """        val current = shown
+        if (next === current) return@LaunchedEffect
+        RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.ARTWORK_MESH_UPDATE)
+
+        // Nothing to fade *from* on the first read, and nothing to fade at all
+""",
+          )
+
+          now_playing = "sharedUi/src/jvmSharedMain/kotlin/com/music/bitchord/ui/player/NowPlayingScreen.kt"
+          replace_once(
+              now_playing,
+              "import androidx.compose.runtime.SideEffect\n",
+              "import androidx.compose.runtime.SideEffect\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiContext\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiSignal\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiStateKey\nimport com.music.bitchord.ui.performance.RuntimePerformanceUiStateValue\n",
+          )
+          replace_once(
+              now_playing,
+              """    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+""",
+              """    modifier: Modifier = Modifier,
+) {
+    SideEffect {
+        RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.NOW_PLAYING_RECOMPOSITION)
+    }
+
+    val density = LocalDensity.current
+""",
+          )
+          replace_once(
+              now_playing,
+              """    val canvasRenderedState = remember(canvas?.url) { mutableStateOf(false) }
+    var canvasRendered by canvasRenderedState
+    var canvasFrame by remember(canvas?.url) { mutableStateOf<ImageBitmap?>(null) }
+    // Spotify's phone presentation starts with the full control deck over its
+""",
+              """    val canvasRenderedState = remember(canvas?.url) { mutableStateOf(false) }
+    var canvasRendered by canvasRenderedState
+    var canvasFrame by remember(canvas?.url) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(canvasRendered) {
+        RuntimePerformanceUiContext.setState(
+            RuntimePerformanceUiStateKey.CANVAS_MODE,
+            if (canvasRendered) RuntimePerformanceUiStateValue.ACTIVE else RuntimePerformanceUiStateValue.INACTIVE,
+        )
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            RuntimePerformanceUiContext.setState(
+                RuntimePerformanceUiStateKey.CANVAS_MODE,
+                RuntimePerformanceUiStateValue.INACTIVE,
+            )
+        }
+    }
+    // Spotify's phone presentation starts with the full control deck over its
+""",
+          )
+
+          Path(".github/workflows/_perf-ui-activity-wire.yml").unlink()
+      - name: Commit wiring
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "feat(perf): wire bounded UI activity probes"
+          git push origin HEAD:perf/runtime-performance-probes
