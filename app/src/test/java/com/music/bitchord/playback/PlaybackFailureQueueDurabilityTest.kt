@@ -113,7 +113,7 @@ class PlaybackFailureQueueDurabilityTest {
                 BoundedContextPersistence.Entry(
                     song = song,
                     canonicalIndex = index,
-                    contextCycleId = 0L,
+                    cycleId = 0L,
                     canonicalIdentity = identities[index],
                 )
             },
