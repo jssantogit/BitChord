@@ -1,6 +1,8 @@
 package com.music.bitchord.data.catalog
 
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Upsert
@@ -153,6 +155,13 @@ internal interface CanonicalCatalogDao {
 
     @Upsert
     suspend fun upsertExternalIdentity(identity: ExternalIdentityEntity)
+
+    /**
+     * Atomically claims an external-identity key without ever transferring an
+     * existing claim. Returns -1 when the key is already present.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertExternalIdentityIfAbsent(identity: ExternalIdentityEntity): Long
 
     // MusicBrainz enrichment cache. These tables are source-specific and can be
     // discarded/rebuilt without changing the canonical catalog.
