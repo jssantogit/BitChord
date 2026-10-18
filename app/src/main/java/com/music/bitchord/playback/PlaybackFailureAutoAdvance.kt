@@ -72,6 +72,7 @@ internal fun PlaybackFailureCascade.handlePlaybackFailure(
         errorCode = error.errorCode,
         neverStarted = neverStarted,
     )
+    val safeErrorCodeName = error.errorCodeName
 
     if (disposition == PlaybackFailureDisposition.LEGACY_RECOVERY) {
         return PlaybackFailureHandling.NOT_HANDLED
@@ -80,8 +81,8 @@ internal fun PlaybackFailureCascade.handlePlaybackFailure(
         TrackLog.w(
             "BitChord",
             safePlaybackFailureDiagnostic(
-                error,
-                PlaybackFailureDiagnosticOutcome.TERMINAL,
+                errorCodeName = safeErrorCodeName,
+                outcome = PlaybackFailureDiagnosticOutcome.TERMINAL,
                 failedCount = failedKeys.size,
             ),
             about = failureLogKey(currentIndex),
@@ -110,8 +111,8 @@ internal fun PlaybackFailureCascade.handlePlaybackFailure(
             TrackLog.w(
                 "BitChord",
                 safePlaybackFailureDiagnostic(
-                    error,
-                    PlaybackFailureDiagnosticOutcome.ADVANCE,
+                    errorCodeName = safeErrorCodeName,
+                    outcome = PlaybackFailureDiagnosticOutcome.ADVANCE,
                     failedCount = failedKeys.size,
                 ),
                 about = failureLogKey(currentIndex),
@@ -125,8 +126,8 @@ internal fun PlaybackFailureCascade.handlePlaybackFailure(
             TrackLog.w(
                 "BitChord",
                 safePlaybackFailureDiagnostic(
-                    error,
-                    PlaybackFailureDiagnosticOutcome.EXHAUSTED,
+                    errorCodeName = safeErrorCodeName,
+                    outcome = PlaybackFailureDiagnosticOutcome.EXHAUSTED,
                     failedCount = failedKeys.size,
                 ),
                 about = failureLogKey(currentIndex),
@@ -138,23 +139,23 @@ internal fun PlaybackFailureCascade.handlePlaybackFailure(
 }
 
 /**
- * Intentionally ignores [PlaybackException.message], its cause and any URI.
- * Provider-owned exceptions may originate below authenticated HTTP, so only
- * Media3's finite error-code name and a bounded attempt count are allowed into
- * TrackLog/Diagnostics here.
+ * Diagnostics receives only Media3's finite error-code name, never the provider
+ * exception object, message, cause or URI. Provider-owned failures can originate
+ * below authenticated HTTP, so sensitive transport data is structurally absent
+ * from this boundary rather than merely redacted later.
  */
 internal fun safePlaybackFailureDiagnostic(
-    error: PlaybackException,
+    errorCodeName: String,
     outcome: PlaybackFailureDiagnosticOutcome,
     failedCount: Int,
 ): String = when (outcome) {
     PlaybackFailureDiagnosticOutcome.ADVANCE ->
-        "playback entry unavailable (${error.errorCodeName}); advancing within existing queue"
+        "playback entry unavailable ($errorCodeName); advancing within existing queue"
     PlaybackFailureDiagnosticOutcome.EXHAUSTED ->
         "playback failure cascade exhausted after $failedCount queue entries " +
-            "(${error.errorCodeName}); stopping without changing queue"
+            "($errorCodeName); stopping without changing queue"
     PlaybackFailureDiagnosticOutcome.TERMINAL ->
-        "playback failure kept terminal (${error.errorCodeName}); legacy resolver bypassed"
+        "playback failure kept terminal ($errorCodeName); legacy resolver bypassed"
 }
 
 /** Logical identity for bounded dedupe within one failure cascade. */
