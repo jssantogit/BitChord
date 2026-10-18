@@ -1,5 +1,8 @@
 package com.music.bitchord.playback
 
+import com.music.bitchord.data.listening.PlaybackStart
+import com.music.bitchord.data.listening.SelectionIntent
+import com.music.bitchord.data.listening.SelectionOrigin
 import java.net.URI
 
 /**
@@ -11,6 +14,17 @@ internal data class CanonicalPlaybackIdentity(
     val recordingId: String,
     val mediaAssetId: String?,
     val provider: String,
+)
+
+internal fun CanonicalPlaybackIdentity.toPlaybackStart(
+    selectionIntent: SelectionIntent,
+    selectionOrigin: SelectionOrigin,
+): PlaybackStart = PlaybackStart(
+    recordingId = recordingId,
+    mediaAssetId = mediaAssetId,
+    assetProvider = provider,
+    selectionIntent = selectionIntent,
+    selectionOrigin = selectionOrigin,
 )
 
 /**
