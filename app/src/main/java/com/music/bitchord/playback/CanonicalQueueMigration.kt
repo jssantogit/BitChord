@@ -9,30 +9,44 @@ internal object CanonicalQueueMigration {
         resolver: CanonicalQueueResolver,
     ): BoundedContextPersistence.State {
         val contextSongs = state.context.songs
-        val existingContext = state.contextIdentities.takeIf { it.size == contextSongs.size }
-        val entriesNeedingIdentification = state.entries.map { entry ->
-            if (entry.canonicalIdentity != null || entry.canonicalIndex?.let { existingContext?.getOrNull(it) } != null) {
-                null
-            } else {
-                entry.song
-            }
-        }
-        val identificationInput = buildList {
-            if (existingContext == null) addAll(contextSongs)
-            entriesNeedingIdentification.filterNotNull().forEach(::add)
-        }
-        val detected = resolver.identifyAll(identificationInput).iterator()
-        val contextIdentities = if (existingContext != null) {
-            existingContext
-        } else {
-            List(contextSongs.size) { if (detected.hasNext()) detected.next() else null }
-        }
-        val entryIdentities = state.entries.indices.map { index ->
-            val entry = state.entries[index]
+        val contextIdentities = state.contextIdentities
+            .takeIf { it.size == contextSongs.size }
+            ?.toMutableList()
+            ?: MutableList(contextSongs.size) { null }
+
+        val contextPending = contextSongs.indices.filter { contextIdentities[it] == null }
+        val entryIdentities = state.entries.map { entry ->
             entry.canonicalIdentity
                 ?: entry.canonicalIndex?.let(contextIdentities::getOrNull)
-                ?: if (entriesNeedingIdentification[index] != null && detected.hasNext()) detected.next() else null
+        }.toMutableList()
+        val entryPending = state.entries.indices.filter { index -> entryIdentities[index] == null }
+
+        val identificationInput = buildList {
+            contextPending.forEach { add(contextSongs[it]) }
+            entryPending.forEach { add(state.entries[it].song) }
         }
+        if (identificationInput.isNotEmpty()) {
+            val detected = resolver.identifyAll(identificationInput)
+            if (detected.size == identificationInput.size) {
+                var cursor = 0
+                contextPending.forEach { index ->
+                    contextIdentities[index] = detected[cursor++]
+                }
+                entryPending.forEach { index ->
+                    val anchored = state.entries[index].canonicalIndex
+                        ?.let(contextIdentities::getOrNull)
+                    entryIdentities[index] = anchored ?: detected[cursor++]
+                }
+            }
+        }
+
+        state.entries.indices.forEach { index ->
+            if (entryIdentities[index] == null) {
+                entryIdentities[index] = state.entries[index].canonicalIndex
+                    ?.let(contextIdentities::getOrNull)
+            }
+        }
+
         return state.copy(
             contextIdentities = contextIdentities,
             entries = state.entries.mapIndexed { index, entry ->
@@ -45,29 +59,42 @@ internal object CanonicalQueueMigration {
         state: BoundedContextPersistence.State,
         resolver: CanonicalQueueResolver,
     ): BoundedContextPersistence.State? {
-        val contextIdentities = state.contextIdentities.takeIf { it.size == state.context.songs.size }
+        val contextIdentities = state.contextIdentities
+            .takeIf { it.size == state.context.songs.size }
+            ?: if (state.entries.none { it.canonicalIdentity != null }) return state else return null
         val entryIdentities = state.entries.map { entry ->
             entry.canonicalIdentity
-                ?: entry.canonicalIndex?.let { index -> contextIdentities?.getOrNull(index) }
+                ?: entry.canonicalIndex?.let(contextIdentities::getOrNull)
         }
-        if (contextIdentities == null && entryIdentities.none { it != null }) return state
-        if (contextIdentities == null || contextIdentities.any { it == null } || entryIdentities.any { it == null }) {
-            return null
-        }
+        val identitiesToResolve = (contextIdentities + entryIdentities)
+            .filterNotNull()
+            .distinct()
+        if (identitiesToResolve.isEmpty()) return state
 
-        val all = contextIdentities + entryIdentities
-        val resolved = resolver.resolveAll(all)
-        if (resolved.size != all.size || resolved.any { it == null }) return null
-        val contextAssets = resolved.take(contextIdentities.size)
-        val entryAssets = resolved.drop(contextIdentities.size)
+        val resolved = resolver.resolveAll(identitiesToResolve)
+        if (resolved.size != identitiesToResolve.size) return null
+        val byIdentity = identitiesToResolve.indices.associate { index ->
+            identitiesToResolve[index] to resolved[index]
+        }
+        if (byIdentity.values.any { it == null }) return null
+
+        fun asset(identity: CanonicalQueueIdentity?): CanonicalPlayableAsset? =
+            identity?.let(byIdentity::get)
+
         val restoredContextSongs = state.context.songs.mapIndexed { index, song ->
-            song.withCanonicalAsset(requireNotNull(contextAssets[index]))
+            val identity = contextIdentities[index]
+            if (identity == null) song else song.withCanonicalAsset(asset(identity) ?: return null)
         }
         val restoredEntries = state.entries.mapIndexed { index, entry ->
-            entry.copy(
-                song = entry.song.withCanonicalAsset(requireNotNull(entryAssets[index])),
-                canonicalIdentity = entryIdentities[index],
-            )
+            val identity = entryIdentities[index]
+            if (identity == null) {
+                entry
+            } else {
+                entry.copy(
+                    song = entry.song.withCanonicalAsset(asset(identity) ?: return null),
+                    canonicalIdentity = identity,
+                )
+            }
         }
         return state.copy(
             context = state.context.copy(songs = restoredContextSongs),
@@ -80,7 +107,8 @@ internal object CanonicalQueueMigration {
         videoId = asset.uri,
         localUri = asset.uri,
         localPath = asset.path,
-        queueTier = queueTier.takeIf { it == QueueTier.CONTEXT || it == QueueTier.USER_QUEUE || it == QueueTier.AUTOPLAY }
-            ?: QueueTier.CONTEXT,
+        queueTier = queueTier.takeIf {
+            it == QueueTier.CONTEXT || it == QueueTier.USER_QUEUE || it == QueueTier.AUTOPLAY
+        } ?: QueueTier.CONTEXT,
     )
 }
