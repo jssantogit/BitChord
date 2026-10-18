@@ -18,6 +18,9 @@ object RuntimePerformanceUiContext {
     @Volatile
     private var sink: Sink? = null
 
+    val enabled: Boolean
+        get() = sink != null
+
     fun install(sink: Sink?) {
         this.sink = sink
     }
