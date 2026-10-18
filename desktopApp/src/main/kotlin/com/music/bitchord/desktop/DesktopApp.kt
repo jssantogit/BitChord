@@ -3417,7 +3417,8 @@ fun BitChordDesktopApp() {
                             onRemoveFromQueue = ::removeFromQueue,
                             onMoveInQueue = ::moveInQueue,
                             onClearQueue = ::clearQueue,
-                            onOpenMenu = { playerMenuOpen = true },
+                            // Desktop keeps its existing actions menu; no canonical artwork handoff.
+                            onOpenMenu = { _ -> playerMenuOpen = true },
                             onOpenAlbum = { id ->
                                 overlays.nowPlaying = false
                                 openAlbum(id)
