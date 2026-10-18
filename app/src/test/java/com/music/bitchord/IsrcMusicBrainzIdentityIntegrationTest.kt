@@ -152,6 +152,7 @@ class IsrcMusicBrainzIdentityIntegrationTest {
         }
         database.close()
         context.deleteDatabase(databaseName)
+        Unit
     }
 
     @Test
