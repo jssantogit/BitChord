@@ -51,6 +51,37 @@ class ListeningSessionPolicyTest {
     }
 
     @Test
+    fun processRecreationInsideWindowDoesNotCreateListeningSession() = runTest {
+        database = openDatabase()
+        val clock = MutableListeningClock(1_000L)
+        val firstStore = store(clock, "session-1", "start-1")
+        val firstStart = firstStore.recordPlaybackStarted(start("recording:a"))
+
+        clock.now = 1_000L + THIRTY_MINUTES_MS - 1L
+        val recreatedStore = store(clock, "start-2")
+        val secondStart = recreatedStore.recordPlaybackStarted(start("recording:b"))
+
+        assertEquals(firstStart.sessionId, secondStart.sessionId)
+        assertEquals(null, requireNotNull(recreatedStore.session(firstStart.sessionId)).endedAtEpochMs)
+    }
+
+    @Test
+    fun exactlyThirtyMinutesOfInactivityRollsToNewSession() = runTest {
+        database = openDatabase()
+        val clock = MutableListeningClock(1_000L)
+        val firstStore = store(clock, "session-1", "start-1")
+        val firstStart = firstStore.recordPlaybackStarted(start("recording:a"))
+
+        clock.now = 1_000L + THIRTY_MINUTES_MS
+        val recreatedStore = store(clock, "session-2", "start-2")
+        val secondStart = recreatedStore.recordPlaybackStarted(start("recording:b"))
+
+        assertNotEquals(firstStart.sessionId, secondStart.sessionId)
+        assertEquals(1_000L, requireNotNull(recreatedStore.session(firstStart.sessionId)).endedAtEpochMs)
+        assertEquals(clock.now, requireNotNull(recreatedStore.session(secondStart.sessionId)).startedAtEpochMs)
+    }
+
+    @Test
     fun activityAfterMoreThanThirtyMinutesRollsToNewSessionAndSurvivesStoreRecreation() = runTest {
         database = openDatabase()
         val clock = MutableListeningClock(1_000L)
@@ -67,7 +98,7 @@ class ListeningSessionPolicyTest {
     }
 
     @Test
-    fun continuousAudioActivityKeepsLongPlaybackInOneSessionButResumeAfterTimeoutRolls() = runTest {
+    fun continuousAudioActivityKeepsLongPlaybackInOneSessionButResumeAtTimeoutRolls() = runTest {
         database = openDatabase()
         val clock = MutableListeningClock(1_000L)
         val store = store(clock, "session-1", "start-1", "session-2", "rollover-start")
@@ -80,7 +111,7 @@ class ListeningSessionPolicyTest {
         assertEquals(1, store.eventsForSession(firstStart.sessionId).size)
         assertEquals(clock.now, requireNotNull(store.session(firstStart.sessionId)).lastActivityAtEpochMs)
 
-        clock.now += THIRTY_MINUTES_MS + 1L
+        clock.now += THIRTY_MINUTES_MS
         store.recordPlaybackActivity(activity("recording:a"))
         val starts = store.recentEventsForRecording("recording:a", 10)
             .filter { it.type == ListeningEventType.PLAYBACK_STARTED }
