@@ -7,7 +7,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.IOException
 
 class PlaybackFailureAutoAdvancePolicyTest {
 
@@ -155,44 +154,36 @@ class PlaybackFailureAutoAdvancePolicyTest {
     }
 
     @Test
-    fun `credential bearing provider exception is sanitized before diagnostics`() {
-        val secret = "https://user:password@example.invalid/rest/stream.view?id=42&token=sekrit"
-        val error = PlaybackException(
-            secret,
-            IOException("Authorization: Bearer sekrit"),
-            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
-        )
-
+    fun `diagnostics boundary contains only safe media3 error code`() {
         val line = safePlaybackFailureDiagnostic(
-            error,
-            PlaybackFailureDiagnosticOutcome.ADVANCE,
+            errorCodeName = "ERROR_CODE_IO_BAD_HTTP_STATUS",
+            outcome = PlaybackFailureDiagnosticOutcome.ADVANCE,
             failedCount = 1,
         )
 
-        assertTrue(line.contains(error.errorCodeName))
-        assertFalse(line.contains("password"))
-        assertFalse(line.contains("sekrit"))
-        assertFalse(line.contains("stream.view"))
-        assertFalse(line.contains("Authorization"))
+        assertTrue(line.contains("ERROR_CODE_IO_BAD_HTTP_STATUS"))
+        listOf(
+            "password",
+            "sekrit",
+            "stream.view",
+            "Authorization",
+            "https://",
+            "sourceKey",
+        ).forEach { forbidden -> assertFalse(line.contains(forbidden)) }
     }
 
     @Test
     fun `exhausted diagnostic exposes only bounded count and safe error code`() {
-        val error = PlaybackException(
-            "token=do-not-log",
-            IOException("/rest/stream.view"),
-            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-        )
-
         val line = safePlaybackFailureDiagnostic(
-            error,
-            PlaybackFailureDiagnosticOutcome.EXHAUSTED,
+            errorCodeName = "ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT",
+            outcome = PlaybackFailureDiagnosticOutcome.EXHAUSTED,
             failedCount = 3,
         )
 
         assertTrue(line.contains("3 queue entries"))
-        assertTrue(line.contains(error.errorCodeName))
-        assertFalse(line.contains("do-not-log"))
+        assertTrue(line.contains("ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT"))
+        assertFalse(line.contains("token"))
         assertFalse(line.contains("stream.view"))
+        assertFalse(line.contains("http"))
     }
 }
