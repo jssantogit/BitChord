@@ -138,4 +138,36 @@ class PlaybackListeningCallbackMapperTest {
             ),
         )
     }
+
+    @Test
+    fun localToNavidromeReplacesPlaybackButSameRecordingRenditionSwapDoesNot() {
+        val local = CanonicalPlaybackIdentity(
+            recordingId = "local-recording",
+            mediaAssetId = "local-asset",
+            provider = "local-mediastore",
+        )
+        val navidrome = CanonicalPlaybackIdentity(
+            recordingId = "remote-recording",
+            mediaAssetId = "remote-asset",
+            provider = "opensubsonic:home",
+        )
+        val alternateRemoteRendition = CanonicalPlaybackIdentity(
+            recordingId = navidrome.recordingId,
+            mediaAssetId = "remote-asset-lossless",
+            provider = navidrome.provider,
+        )
+
+        assertFalse(
+            PlaybackListeningCallbackMapper.keepsCurrentPlayback(
+                transitionReason = Player.MEDIA_ITEM_TRANSITION_REASON_SEEK,
+                sameRecording = local.recordingId == navidrome.recordingId,
+            ),
+        )
+        assertTrue(
+            PlaybackListeningCallbackMapper.keepsCurrentPlayback(
+                transitionReason = Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED,
+                sameRecording = navidrome.recordingId == alternateRemoteRendition.recordingId,
+            ),
+        )
+    }
 }
