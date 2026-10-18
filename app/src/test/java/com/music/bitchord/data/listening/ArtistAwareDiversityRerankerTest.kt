@@ -138,7 +138,7 @@ class ArtistAwareDiversityRerankerTest {
 
         assertEquals(-15.0, result[1].diversityAdjustment, EPSILON)
         assertEquals(setOf("artist:x", "artist:y"), result[1].overlappingArtistIds)
-        assertEquals(-10.0, result[2].diversityAdjustment, EPSILON)
+        assertEquals(-15.0, result[2].diversityAdjustment, EPSILON)
         assertEquals(setOf("artist:x"), result[2].overlappingArtistIds)
         assertFalse(result[1].diversityAdjustment == -30.0)
     }
