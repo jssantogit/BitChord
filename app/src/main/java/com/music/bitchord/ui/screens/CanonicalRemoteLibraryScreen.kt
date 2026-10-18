@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -44,6 +45,10 @@ import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLibraryBrowseRepository
 import com.music.bitchord.data.catalog.RoomCanonicalLibraryBrowseStore
+import com.music.bitchord.playback.CanonicalRemotePlaybackMetadata
+import com.music.bitchord.playback.CanonicalRemotePlaybackRequest
+import com.music.bitchord.playback.playCanonicalRemote
+import com.music.bitchord.playback.rememberMediaController
 
 /**
  * Offline-first browse for a provider's persisted canonical availability.
@@ -59,6 +64,7 @@ internal fun CanonicalRemoteLibraryScreen(
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
+    val controller = rememberMediaController()
     val repository = remember(context.applicationContext) {
         CanonicalLibraryBrowseRepository(
             RoomCanonicalLibraryBrowseStore(
@@ -85,6 +91,21 @@ internal fun CanonicalRemoteLibraryScreen(
             RemoteBrowseSummary(songCount = library.tracks.size)
             TrackList(
                 tracks = library.tracks,
+                onTrackPlay = { track ->
+                    track.availableAssets.firstOrNull()?.let { asset ->
+                        controller?.playCanonicalRemote(
+                            request = CanonicalRemotePlaybackRequest(
+                                recordingId = track.recordingId,
+                                mediaAssetId = asset.mediaAssetId,
+                                providerKey = asset.providerKey,
+                            ),
+                            metadata = CanonicalRemotePlaybackMetadata(
+                                title = track.title,
+                                artistDisplay = track.artistDisplay,
+                            ),
+                        )
+                    }
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -153,12 +174,6 @@ private fun RemoteBrowseSummary(songCount: Int) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp),
             )
-            Text(
-                text = stringResource(R.string.remote_library_playback_deferred),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp),
-            )
         }
     }
 }
@@ -166,6 +181,7 @@ private fun RemoteBrowseSummary(songCount: Int) {
 @Composable
 private fun TrackList(
     tracks: List<CanonicalBrowseTrack>,
+    onTrackPlay: (CanonicalBrowseTrack) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (tracks.isEmpty()) {
@@ -180,7 +196,7 @@ private fun TrackList(
             items = tracks,
             key = CanonicalBrowseTrack::recordingId,
         ) { track ->
-            CanonicalTrackRow(track = track)
+            CanonicalTrackRow(track = track, onClick = { onTrackPlay(track) })
             HorizontalDivider(
                 modifier = Modifier.padding(start = 84.dp),
                 thickness = 0.5.dp,
@@ -191,13 +207,15 @@ private fun TrackList(
 }
 
 @Composable
-private fun CanonicalTrackRow(track: CanonicalBrowseTrack) {
-    // Deliberately not clickable: remote playback belongs to PlaybackResolver.
-    // Making this row playable now would require fabricating a legacy Song id.
+private fun CanonicalTrackRow(
+    track: CanonicalBrowseTrack,
+    onClick: () -> Unit,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .heightIn(min = 68.dp)
             .padding(horizontal = 20.dp, vertical = 8.dp),
     ) {
