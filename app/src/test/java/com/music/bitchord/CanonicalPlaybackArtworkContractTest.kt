@@ -35,6 +35,7 @@ class CanonicalPlaybackArtworkContractTest {
         )
         val remote = Song(
             videoId = "recording-1", title = "Remote", artist = "Artist",
+            thumbnailUrl = null, fromAutoplay = false,
             localUri = CanonicalRemotePlaybackUri.encode(selected),
         )
         val identity = CanonicalPlaybackArtworkIdentity.fromSong(remote)
