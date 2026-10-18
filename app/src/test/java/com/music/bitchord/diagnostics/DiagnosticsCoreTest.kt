@@ -129,6 +129,35 @@ class DiagnosticsCoreTest {
     }
 
     @Test
+    fun `verbose legacy text redacts opaque provider media ids without removing useful context`() {
+        val videoOne = "AbCD12_-xYz"
+        val videoTwo = "XYz_9876-Ab"
+        val albumId = "9876543210"
+        val raw = "radio:$videoOne ok; links:$videoTwo ok; motion artwork on album 'EXAMPLE - EP' ($albumId); home:more ok"
+        val result = DiagnosticSanitizer.freeText(raw)
+
+        assertFalse(result.contains(videoOne))
+        assertFalse(result.contains(videoTwo))
+        assertFalse(result.contains(albumId))
+        assertTrue(result.contains("radio:<id> ok"))
+        assertTrue(result.contains("links:<id> ok"))
+        assertTrue(result.contains("motion artwork on album 'EXAMPLE - EP' (<id>)"))
+        assertTrue(result.contains("home:more ok"))
+
+        val exported = DiagnosticFormatter.format(
+            event(name = "debug_log:BitChord").copy(
+                level = DiagnosticLevel.DEBUG,
+                category = DiagnosticCategory.OTHER,
+                message = raw,
+            ),
+        )
+        assertFalse(exported.contains(videoOne))
+        assertFalse(exported.contains(videoTwo))
+        assertFalse(exported.contains(albumId))
+        assertTrue(exported.contains("motion artwork on album"))
+    }
+
+    @Test
     fun `capture window is active only before its expiry`() {
         assertTrue(CaptureWindow(expiresAtEpochMillis = 2_000L).isActive(nowEpochMillis = 1_999L))
         assertFalse(CaptureWindow(expiresAtEpochMillis = 2_000L).isActive(nowEpochMillis = 2_000L))
