@@ -4553,7 +4553,10 @@ private fun BitChordApp(
         // A closed menu forgets where it was held, so whatever opens it next
         // — the ⋮, the player — starts from the sheet.
         LaunchedEffect(songActions == null) {
-            if (songActions == null) songMenuOrigin = null
+            if (songActions == null) {
+                songMenuOrigin = null
+                openedPlayerArtwork = null // Release the handed-off Drawable on dismiss.
+            }
         }
 
         // ---- Download manager ----
