@@ -95,6 +95,17 @@ fun rememberMediaController(): MediaController? {
     return controller
 }
 
+/** Starts provider-backed canonical playback using only safe session-boundary data. */
+internal fun MediaController.playCanonicalRemote(
+    request: CanonicalRemotePlaybackRequest,
+    metadata: CanonicalRemotePlaybackMetadata,
+) {
+    sendCustomCommand(
+        SessionCommand(ACTION_PLAY_CANONICAL_REMOTE, Bundle.EMPTY),
+        canonicalRemotePlaybackBundle(request, metadata),
+    )
+}
+
 /** Routes the player-screen AutoPlay button through the playback service. */
 fun MediaController.toggleAutoplay() {
     sendCustomCommand(
