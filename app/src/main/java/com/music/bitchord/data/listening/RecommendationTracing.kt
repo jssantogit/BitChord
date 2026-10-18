@@ -247,7 +247,6 @@ private class StructuredRecommendationRunTrace(
             "contextualRank" to contextualRank.toString(),
             "diversityRank" to (diversityRank?.toString() ?: "unavailable"),
             "diversityAdjustment" to (diversified?.diversityAdjustment?.toString() ?: "unavailable"),
-            "diversityFinalScore" to (diversified?.finalScore?.toString() ?: "unavailable"),
             "diversityReasons" to (diversified?.diversityReasons?.map(Enum<*>::name)?.sorted()?.joinToString(",") ?: ""),
             "rankDelta" to (baseRank - contextualRank).toString(),
             "baseScore" to base.score.toString(),
