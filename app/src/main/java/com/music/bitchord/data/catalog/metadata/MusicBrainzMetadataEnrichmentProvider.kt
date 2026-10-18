@@ -106,7 +106,9 @@ internal class MusicBrainzMetadataEnrichmentProvider(
         val raw = request("artist/$mbid") ?: return MetadataLookupResult.Failure(MetadataLookupFailure.UNAVAILABLE)
         val dto = decode<MusicBrainzArtistDto>(raw)
             ?: return MetadataLookupResult.Failure(MetadataLookupFailure.MALFORMED_RESPONSE)
-        if (dto.id != mbid) return MetadataLookupResult.Failure(MetadataLookupFailure.MALFORMED_RESPONSE)
+        if (!dto.id.equals(mbid, ignoreCase = true)) {
+            return MetadataLookupResult.Failure(MetadataLookupFailure.MALFORMED_RESPONSE)
+        }
         return MetadataLookupResult.Success(
             ArtistMetadataEnrichment(
                 musicBrainzId = mbid,
@@ -128,7 +130,9 @@ internal class MusicBrainzMetadataEnrichmentProvider(
         ) ?: return MetadataLookupResult.Failure(MetadataLookupFailure.UNAVAILABLE)
         val dto = decode<MusicBrainzRecordingDto>(raw)
             ?: return MetadataLookupResult.Failure(MetadataLookupFailure.MALFORMED_RESPONSE)
-        if (dto.id != mbid) return MetadataLookupResult.Failure(MetadataLookupFailure.MALFORMED_RESPONSE)
+        if (!dto.id.equals(mbid, ignoreCase = true)) {
+            return MetadataLookupResult.Failure(MetadataLookupFailure.MALFORMED_RESPONSE)
+        }
         return MetadataLookupResult.Success(
             RecordingMetadataEnrichment(
                 musicBrainzId = mbid,
@@ -149,7 +153,9 @@ internal class MusicBrainzMetadataEnrichmentProvider(
         ) ?: return MetadataLookupResult.Failure(MetadataLookupFailure.UNAVAILABLE)
         val dto = decode<MusicBrainzReleaseDto>(raw)
             ?: return MetadataLookupResult.Failure(MetadataLookupFailure.MALFORMED_RESPONSE)
-        if (dto.id != mbid) return MetadataLookupResult.Failure(MetadataLookupFailure.MALFORMED_RESPONSE)
+        if (!dto.id.equals(mbid, ignoreCase = true)) {
+            return MetadataLookupResult.Failure(MetadataLookupFailure.MALFORMED_RESPONSE)
+        }
         return MetadataLookupResult.Success(
             ReleaseMetadataEnrichment(
                 musicBrainzId = mbid,
@@ -192,7 +198,7 @@ internal class MusicBrainzMetadataEnrichmentProvider(
     private fun List<MusicBrainzArtistCreditDto>.toEvidence(): List<MusicBrainzArtistCredit> =
         mapNotNull { credit ->
             val artistId = credit.artist?.id.validMbidOrNull() ?: return@mapNotNull null
-            val name = credit.name.clean() ?: credit.artist.name.clean() ?: return@mapNotNull null
+            val name = credit.name.clean() ?: credit.artist?.name.clean() ?: return@mapNotNull null
             MusicBrainzArtistCredit(
                 musicBrainzArtistId = artistId,
                 name = name,
@@ -203,13 +209,14 @@ internal class MusicBrainzMetadataEnrichmentProvider(
     private fun String?.clean(): String? = this?.trim()?.takeIf(String::isNotEmpty)
 
     private fun String?.validMbidOrNull(): String? {
-        val value = clean()?.lowercase() ?: return null
+        val value = clean() ?: return null
         return value.takeIf { MBID_REGEX.matches(it) }
     }
 
     companion object {
         private val MBID_REGEX = Regex(
             "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            RegexOption.IGNORE_CASE,
         )
     }
 }
