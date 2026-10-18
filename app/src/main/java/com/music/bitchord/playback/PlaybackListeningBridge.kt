@@ -82,12 +82,11 @@ internal object PlaybackListeningBridge {
                 end(current, PlaybackEndCause.MANUAL_CHANGE)
                 begin(identity, SelectionIntent.UNKNOWN, SelectionOrigin.UNKNOWN)
             }
-            active?.takeIf { it.identity.recordingId == identity.recordingId }?.apply {
-                listenedDurationMs += listenedDeltaMs
-                if (recordingDurationMs != null && recordingDurationMs > 0L) {
-                    this.recordingDurationMs = recordingDurationMs
-                }
-            }
+            active?.takeIf { it.identity.recordingId == identity.recordingId }?.progress
+                ?.observeAudioDelta(
+                    deltaMs = listenedDeltaMs,
+                    recordingDurationMs = recordingDurationMs,
+                )
             eventIngestor().recordPlaybackActivity(
                 PlaybackActivity(
                     recordingId = identity.recordingId,
@@ -230,8 +229,8 @@ internal object PlaybackListeningBridge {
                 recordingId = playback.identity.recordingId,
                 mediaAssetId = playback.identity.mediaAssetId,
                 assetProvider = playback.identity.provider,
-                listenedDurationMs = playback.listenedDurationMs,
-                recordingDurationMs = playback.recordingDurationMs,
+                listenedDurationMs = playback.progress.listenedDurationMs,
+                recordingDurationMs = playback.progress.recordingDurationMs,
                 endCause = cause,
             ),
         )
@@ -294,7 +293,6 @@ internal object PlaybackListeningBridge {
 
     private data class ActivePlayback(
         var identity: CanonicalPlaybackIdentity,
-        var listenedDurationMs: Long = 0L,
-        var recordingDurationMs: Long? = null,
+        val progress: PlaybackListeningProgress = PlaybackListeningProgress(),
     )
 }
