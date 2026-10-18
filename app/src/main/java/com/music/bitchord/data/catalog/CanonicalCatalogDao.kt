@@ -125,6 +125,21 @@ internal interface CanonicalCatalogDao {
     @Query(
         """
         SELECT
+            credit.recordingId AS recordingId,
+            credit.artistId AS artistId,
+            credit.position AS position
+        FROM catalog_recording_artist_credit AS credit
+        WHERE credit.recordingId IN (:recordingIds)
+        ORDER BY credit.recordingId ASC, credit.position ASC, credit.artistId ASC
+        """,
+    )
+    suspend fun recordingArtistCreditIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingArtistIdRow>
+
+    @Query(
+        """
+        SELECT
             credit.artistId AS artistId,
             artist.name AS artistName,
             credit.position AS position

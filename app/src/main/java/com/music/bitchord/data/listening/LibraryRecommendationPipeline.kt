@@ -25,18 +25,21 @@ internal class LibraryRecommendationCandidateSource(
 }
 
 /**
- * Library Mode composition: availability -> candidates -> PersonalRanker -> session context.
- * Limit is deliberately applied only after both ranking stages.
+ * Library Mode composition:
+ * availability -> candidates -> PersonalRanker -> session context -> artist diversity.
+ * Limit is deliberately applied only after every ranking stage.
  */
 internal class LibraryRecommendationPipeline(
     private val candidateSource: LibraryRecommendationCandidateSource,
     private val personalRanker: PersonalRanker,
     private val sessionContextReranker: SessionContextReranker,
+    private val artistAwareDiversityReranker: ArtistAwareDiversityReranker,
 ) {
-    suspend fun rank(limit: Int? = null): List<SessionContextRankedCandidate> {
+    suspend fun rank(limit: Int? = null): List<DiversityRankedCandidate> {
         require(limit == null || limit > 0) { "Recommendation limit must be positive" }
         val baseRanking = personalRanker.rank(candidateSource.candidates())
         val contextualRanking = sessionContextReranker.rerank(baseRanking)
-        return limit?.let(contextualRanking::take) ?: contextualRanking
+        val diversifiedRanking = artistAwareDiversityReranker.rerank(contextualRanking)
+        return limit?.let(diversifiedRanking::take) ?: diversifiedRanking
     }
 }
