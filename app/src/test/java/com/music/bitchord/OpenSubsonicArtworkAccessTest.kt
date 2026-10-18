@@ -20,6 +20,7 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtwork
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAuthMode
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicCredentialStore
 import com.music.bitchord.data.catalog.provider.opensubsonic.isolatedOpenSubsonicArtworkHttpClient
+import com.music.bitchord.ui.player.awaitRecoverableCanonicalArtwork
 import java.security.MessageDigest
 import java.util.Base64
 import kotlinx.coroutines.test.runTest
@@ -226,6 +227,48 @@ class OpenSubsonicArtworkAccessTest {
         assertTrue(cached.fromCache)
         assertEquals(1, networkCalls)
         assertEquals(credentialReadsAfterFetch, fixture.credentials.readCalls)
+        assertEquals(0, fixture.store.writeCalls)
+    }
+
+    @Test
+    fun `same selected remote asset recovers after Navidrome returns and then stays disk cached`() = runTest {
+        val fixture = fixture(secret = "private-test-secret")
+        val cache = FakeArtworkCache()
+        var online = false
+        var fetchCalls = 0
+        val waits = mutableListOf<Long>()
+        val transport = OpenSubsonicArtworkTransport { _, _ ->
+            fetchCalls++
+            if (online) {
+                OpenSubsonicArtworkTransportResult.Success(byteArrayOf(10, 11), "image/png")
+            } else {
+                OpenSubsonicArtworkTransportResult.NetworkUnavailable
+            }
+        }
+        val loader = OpenSubsonicArtworkLoader(fixture.access, transport, cache)
+        val selectedLoad: suspend () -> OpenSubsonicArtworkLoadResult = {
+            loader.load(
+                mediaAssetId = "asset-canonical",
+                expectedRecordingId = "recording-canonical",
+                expectedProviderKey = "opensubsonic:home",
+            )
+        }
+
+        val recovered = awaitRecoverableCanonicalArtwork(
+            load = selectedLoad,
+            wait = { retryDelay ->
+                waits += retryDelay
+                online = true // Server restarts. Selection and queue never change.
+            },
+        ) as OpenSubsonicArtworkLoadResult.Ready
+
+        assertArrayEquals(byteArrayOf(10, 11), recovered.bytes)
+        assertFalse(recovered.fromCache)
+        assertEquals(listOf(2_000L), waits)
+        assertEquals(2, fetchCalls)
+        val cached = selectedLoad() as OpenSubsonicArtworkLoadResult.Ready
+        assertTrue(cached.fromCache)
+        assertEquals(2, fetchCalls)
         assertEquals(0, fixture.store.writeCalls)
     }
 
