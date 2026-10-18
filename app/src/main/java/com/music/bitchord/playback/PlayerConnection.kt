@@ -96,7 +96,7 @@ fun rememberMediaController(): MediaController? {
 }
 
 /** Starts provider-backed canonical playback using only safe session-boundary data. */
-fun MediaController.playCanonicalRemote(
+internal fun MediaController.playCanonicalRemote(
     request: CanonicalRemotePlaybackRequest,
     metadata: CanonicalRemotePlaybackMetadata,
 ) {

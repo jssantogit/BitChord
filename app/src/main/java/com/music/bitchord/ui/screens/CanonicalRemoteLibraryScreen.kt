@@ -92,17 +92,19 @@ internal fun CanonicalRemoteLibraryScreen(
             TrackList(
                 tracks = library.tracks,
                 onTrackPlay = { track ->
-                    controller?.playCanonicalRemote(
-                        request = CanonicalRemotePlaybackRequest(
-                            recordingId = track.recordingId,
-                            mediaAssetId = track.mediaAssetId,
-                            providerKey = track.providerKey,
-                        ),
-                        metadata = CanonicalRemotePlaybackMetadata(
-                            title = track.title,
-                            artistDisplay = track.artistDisplay,
-                        ),
-                    )
+                    track.availableAssets.firstOrNull()?.let { asset ->
+                        controller?.playCanonicalRemote(
+                            request = CanonicalRemotePlaybackRequest(
+                                recordingId = track.recordingId,
+                                mediaAssetId = asset.mediaAssetId,
+                                providerKey = asset.providerKey,
+                            ),
+                            metadata = CanonicalRemotePlaybackMetadata(
+                                title = track.title,
+                                artistDisplay = track.artistDisplay,
+                            ),
+                        )
+                    }
                 },
                 modifier = Modifier.fillMaxSize(),
             )
