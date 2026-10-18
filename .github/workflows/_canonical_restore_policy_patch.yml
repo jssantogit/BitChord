@@ -23,64 +23,38 @@ jobs:
         run: |
           from pathlib import Path
 
+          def replace_function(text: str, signature: str, replacement: str) -> str:
+              start = text.index(signature)
+              brace = text.index('{', start)
+              depth = 0
+              end = None
+              for i in range(brace, len(text)):
+                  if text[i] == '{':
+                      depth += 1
+                  elif text[i] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          end = i + 1
+                          break
+              if end is None:
+                  raise SystemExit(f'unclosed function: {signature}')
+              return text[:start] + replacement + text[end:]
+
           persistence = Path('app/src/main/java/com/music/bitchord/playback/BoundedContextPersistence.kt')
           text = persistence.read_text()
 
-          old = '''    data class State(
-              val context: ContextSnapshot,
-              val source: QueueSource,
-              val window: QueueWindowSnapshot,
-              val entries: List<Entry>,
-              val currentIndex: Int,
-              val positionMs: Long,
-              val contextIdentities: List<CanonicalQueueIdentity?> = emptyList(),
-          )
+          prefs_anchor = '    private lateinit var prefs: SharedPreferences'
+          if 'internal sealed class RestoreOutcome' not in text:
+              outcome = '''    internal sealed class RestoreOutcome(open val mayFallbackToLastPlayed: Boolean) {
+                  data class Restored(val state: State) : RestoreOutcome(false)
+                  object AbsentOrInvalid : RestoreOutcome(true)
+                  object CanonicalUnavailable : RestoreOutcome(false)
+              }
 
-          private lateinit var prefs: SharedPreferences
           '''
-          new = '''    data class State(
-              val context: ContextSnapshot,
-              val source: QueueSource,
-              val window: QueueWindowSnapshot,
-              val entries: List<Entry>,
-              val currentIndex: Int,
-              val positionMs: Long,
-              val contextIdentities: List<CanonicalQueueIdentity?> = emptyList(),
-          )
+              text = text.replace(prefs_anchor, outcome + prefs_anchor, 1)
 
-          internal sealed class RestoreOutcome(open val mayFallbackToLastPlayed: Boolean) {
-              data class Restored(val state: State) : RestoreOutcome(false)
-              object AbsentOrInvalid : RestoreOutcome(true)
-              object CanonicalUnavailable : RestoreOutcome(false)
-          }
-
-          private lateinit var prefs: SharedPreferences
-          '''
-          if old not in text:
-              raise SystemExit('State insertion anchor not found')
-          text = text.replace(old, new, 1)
-
-          old = '''    /** A malformed snapshot is treated as absent by design. */
-          @Synchronized
-          fun load(): State? {
-              val raw = runCatching { prefs.getString(KEY_STATE, null) }.getOrNull() ?: return null
-              val decoded = decode(raw) ?: return null
-              val state = rehydrateAfterLoad(decoded) ?: return null
-              val currentEntryId = state.entries[state.currentIndex].song.queueEntryId
-              val scalarEntryId = runCatching { prefs.getString(KEY_CURRENT_ENTRY_ID, null) }.getOrNull()
-              if (currentEntryId != scalarEntryId) return state
-              val positionMs = runCatching { prefs.getLong(KEY_POSITION, state.positionMs) }.getOrNull()
-                  ?: return state
-              return state.copy(positionMs = positionMs.coerceAtLeast(0L))
-          }
-          '''
-          new = '''    /**
-           * Distinguishes an absent/invalid compatibility snapshot from a valid
-           * canonical snapshot whose selected rendition is currently unavailable.
-           * Only the former may fall back to LastPlayed.
-           */
-          @Synchronized
-          internal fun loadOutcome(): RestoreOutcome {
+          load_replacement = '''    internal fun loadOutcome(): RestoreOutcome {
               val raw = runCatching { prefs.getString(KEY_STATE, null) }.getOrNull()
                   ?: return RestoreOutcome.AbsentOrInvalid
               val decoded = decode(raw) ?: return RestoreOutcome.AbsentOrInvalid
@@ -96,21 +70,20 @@ jobs:
               return RestoreOutcome.Restored(state.copy(positionMs = positionMs.coerceAtLeast(0L)))
           }
 
-          @Synchronized
-          fun load(): State? = (loadOutcome() as? RestoreOutcome.Restored)?.state
-          '''
-          if old not in text:
-              raise SystemExit('load anchor not found')
-          text = text.replace(old, new, 1)
+              @Synchronized
+              fun load(): State? = (loadOutcome() as? RestoreOutcome.Restored)?.state'''
+          text = replace_function(text, '    fun load(): State? {', load_replacement)
+          text = text.replace(
+              '    /** A malformed snapshot is treated as absent by design. */',
+              '''    /**
+               * A malformed/absent snapshot may use LastPlayed; a valid canonical
+               * snapshot with an unavailable rendition must not resurrect a stale
+               * physical transport through that compatibility fallback.
+               */''',
+              1,
+          )
 
-          old = '''    private fun rehydrateAfterLoad(state: State): State? {
-              if (state.contextIdentities.isEmpty() && state.entries.none { it.canonicalIdentity != null }) return state
-              val resolver = canonicalResolver ?: return null
-              return runCatching { runBlocking(Dispatchers.IO) { CanonicalQueueMigration.rehydrate(state, resolver) } }
-                  .getOrNull()
-          }
-          '''
-          new = '''    internal suspend fun restoreOutcome(
+          restore_replacement = '''    internal suspend fun restoreOutcome(
               state: State,
               resolver: CanonicalQueueResolver? = canonicalResolver,
           ): RestoreOutcome {
@@ -122,23 +95,13 @@ jobs:
                   .getOrNull()
                   ?: return RestoreOutcome.CanonicalUnavailable
               return RestoreOutcome.Restored(restored)
-          }
-          '''
-          if old not in text:
-              raise SystemExit('rehydrate anchor not found')
-          text = text.replace(old, new, 1)
+          }'''
+          text = replace_function(text, '    private fun rehydrateAfterLoad(state: State): State? {', restore_replacement)
           persistence.write_text(text)
 
           service = Path('app/src/main/java/com/music/bitchord/playback/PlaybackService.kt')
           text = service.read_text()
-          old = '''    private fun restoreBoundedQueueOrLast(player: ExoPlayer): Boolean {
-              val persisted = BoundedContextPersistence.load()
-              if (persisted != null && restoreBoundedQueue(player, persisted)) return true
-              if (persisted != null) BoundedContextPersistence.clearImmediately()
-              return restoreLastQueue(player)
-          }
-          '''
-          new = '''    private fun restoreBoundedQueueOrLast(player: ExoPlayer): Boolean {
+          service_replacement = '''    private fun restoreBoundedQueueOrLast(player: ExoPlayer): Boolean {
               return when (val outcome = BoundedContextPersistence.loadOutcome()) {
                   is BoundedContextPersistence.RestoreOutcome.Restored -> {
                       if (restoreBoundedQueue(player, outcome.state)) {
@@ -151,11 +114,8 @@ jobs:
                   BoundedContextPersistence.RestoreOutcome.CanonicalUnavailable -> false
                   BoundedContextPersistence.RestoreOutcome.AbsentOrInvalid -> restoreLastQueue(player)
               }
-          }
-          '''
-          if old not in text:
-              raise SystemExit('PlaybackService restore anchor not found')
-          text = text.replace(old, new, 1)
+          }'''
+          text = replace_function(text, '    private fun restoreBoundedQueueOrLast(player: ExoPlayer): Boolean {', service_replacement)
           service.write_text(text)
       - name: Self-remove workflow and push
         run: |
