@@ -1,8 +1,10 @@
 package com.music.bitchord.diagnostics
 
 import android.app.Activity
+import android.app.Application
 import android.content.Context
 import android.hardware.display.DisplayManager
+import android.os.Bundle
 import android.os.FrameMetrics
 import android.os.Handler
 import android.os.HandlerThread
@@ -13,6 +15,7 @@ import kotlin.math.roundToLong
 private const val NANOS_PER_SECOND = 1_000_000_000.0
 private const val DEFAULT_REFRESH_RATE_HZ = 60f
 private const val FLUSH_INTERVAL_MILLIS = 10_000L
+private const val MAIN_ACTIVITY_CLASS = "com.music.bitchord.MainActivity"
 
 internal fun frameBudgetNanosForRefreshRate(refreshRateHz: Float): Long {
     val validRate = refreshRateHz.takeIf { it.isFinite() && it > 0f } ?: DEFAULT_REFRESH_RATE_HZ
@@ -33,6 +36,9 @@ internal object RuntimePerformanceMonitor {
     private val worker = HandlerThread("runtime-performance").apply { start() }
     private val handler = Handler(worker.looper)
     private val lock = Any()
+
+    @Volatile
+    private var installed = false
 
     @Volatile
     private var refreshRateHz: Float = DEFAULT_REFRESH_RATE_HZ
@@ -87,6 +93,32 @@ internal object RuntimePerformanceMonitor {
             }
             session.flush()
             handler.postDelayed(this, FLUSH_INTERVAL_MILLIS)
+        }
+    }
+
+    private val lifecycleCallbacks = object : Application.ActivityLifecycleCallbacks {
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+        override fun onActivityResumed(activity: Activity) = Unit
+        override fun onActivityPaused(activity: Activity) = Unit
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+        override fun onActivityDestroyed(activity: Activity) = Unit
+
+        override fun onActivityStarted(activity: Activity) {
+            if (activity.javaClass.name == MAIN_ACTIVITY_CLASS) attach(activity)
+        }
+
+        override fun onActivityStopped(activity: Activity) {
+            if (activity.javaClass.name == MAIN_ACTIVITY_CLASS) detach(activity)
+        }
+    }
+
+    /** Installs one process-wide lifecycle hook; no frame listener exists until capture is active. */
+    fun install(app: Application) {
+        if (installed) return
+        synchronized(lock) {
+            if (installed) return
+            app.registerActivityLifecycleCallbacks(lifecycleCallbacks)
+            installed = true
         }
     }
 
