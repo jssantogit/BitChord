@@ -4,10 +4,6 @@ import android.os.Bundle
 import androidx.core.os.bundleOf
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
-import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicMediaAccessFailure
-import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicMediaAccessResult
-import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicRuntimeAudioRequest
-import java.io.IOException
 import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -32,9 +28,7 @@ internal data class CanonicalRemotePlaybackMetadata(
     val artistDisplay: String,
 )
 
-/**
- * Logical credential-free URI. Provider-native locators never cross this boundary.
- */
+/** Logical credential-free URI. Provider-native locators never cross this boundary. */
 internal object CanonicalRemotePlaybackUri {
     private const val SCHEME = "bitchord"
     private const val AUTHORITY = "canonical"
@@ -102,52 +96,6 @@ internal fun canonicalRemoteMediaItem(
 
 internal fun MediaItem.isCanonicalRemotePlayback(): Boolean =
     localConfiguration?.uri?.toString()?.let(CanonicalRemotePlaybackUri::isCanonical) == true
-
-/**
- * Playback-side router. It knows only which provider owns the opaque request;
- * authentication and provider-native source identity remain provider-owned.
- */
-internal class CanonicalRemotePlaybackResolver(
-    private val openSubsonicResolve: suspend (mediaAssetId: String) -> OpenSubsonicMediaAccessResult,
-) {
-    suspend fun resolve(logicalUri: String): OpenSubsonicRuntimeAudioRequest {
-        val request = CanonicalRemotePlaybackUri.decode(logicalUri)
-            ?: throw IOException("Invalid canonical remote playback request")
-        if (!request.providerKey.startsWith(OPENSUBSONIC_PROVIDER_PREFIX)) {
-            throw IOException("Canonical remote playback provider unsupported")
-        }
-
-        return when (val result = openSubsonicResolve(request.mediaAssetId)) {
-            is OpenSubsonicMediaAccessResult.Failure -> throw safeFailure(result.reason)
-            is OpenSubsonicMediaAccessResult.Ready -> {
-                val runtime = result.request
-                if (
-                    runtime.recordingId != request.recordingId ||
-                    runtime.mediaAssetId != request.mediaAssetId ||
-                    runtime.providerKey != request.providerKey
-                ) {
-                    throw IOException("Canonical remote playback identity mismatch")
-                }
-                runtime
-            }
-        }
-    }
-
-    private fun safeFailure(reason: OpenSubsonicMediaAccessFailure): IOException = IOException(
-        when (reason) {
-            OpenSubsonicMediaAccessFailure.MEDIA_ASSET_NOT_FOUND -> "Remote media asset unavailable"
-            OpenSubsonicMediaAccessFailure.UNSUPPORTED_PROVIDER -> "Remote playback provider unsupported"
-            OpenSubsonicMediaAccessFailure.ACCOUNT_NOT_CONFIGURED -> "Remote playback account unavailable"
-            OpenSubsonicMediaAccessFailure.ACCOUNT_MISMATCH -> "Remote playback account mismatch"
-            OpenSubsonicMediaAccessFailure.CREDENTIAL_UNAVAILABLE -> "Remote playback credential unavailable"
-            OpenSubsonicMediaAccessFailure.INVALID_LOCATOR -> "Remote media locator unavailable"
-        },
-    )
-
-    private companion object {
-        const val OPENSUBSONIC_PROVIDER_PREFIX = "opensubsonic:"
-    }
-}
 
 internal const val ACTION_PLAY_CANONICAL_REMOTE = "com.music.bitchord.action.PLAY_CANONICAL_REMOTE"
 internal const val EXTRA_CANONICAL_RECORDING_ID = "canonicalRecordingId"
