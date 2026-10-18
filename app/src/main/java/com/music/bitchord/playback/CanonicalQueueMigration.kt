@@ -14,6 +14,17 @@ internal object CanonicalQueueMigration {
             ?.toMutableList()
             ?: MutableList(contextSongs.size) { null }
 
+        // An anchored physical row that already crossed the canonical boundary is
+        // stronger evidence than its compatibility Song envelope. Reuse it instead
+        // of trying to rediscover identity from videoId/URI during persistence.
+        state.entries.forEach { entry ->
+            val index = entry.canonicalIndex ?: return@forEach
+            val identity = entry.canonicalIdentity ?: return@forEach
+            if (index in contextIdentities.indices && contextIdentities[index] == null) {
+                contextIdentities[index] = identity
+            }
+        }
+
         val contextPending = contextSongs.indices.filter { contextIdentities[it] == null }
         val entryIdentities = state.entries.map { entry ->
             entry.canonicalIdentity
