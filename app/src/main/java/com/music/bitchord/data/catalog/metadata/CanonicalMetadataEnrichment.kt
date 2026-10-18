@@ -145,11 +145,13 @@ internal class CanonicalMetadataEnrichmentRepository(
         return when (val lookup = provider.lookupArtist(mbid)) {
             is MetadataLookupResult.Failure -> MetadataRefreshResult.Failed(lookup.reason)
             is MetadataLookupResult.Success -> {
-                if (lookup.value.musicBrainzId != mbid) {
+                if (!lookup.value.musicBrainzId.equals(mbid, ignoreCase = true)) {
                     return MetadataRefreshResult.Failed(MetadataLookupFailure.MALFORMED_RESPONSE)
                 }
                 val fetchedAt = nowEpochMs()
-                val old = dao.musicBrainzArtistEnrichment(artistId).takeIf { it.mbid == mbid }
+                val old = dao.musicBrainzArtistEnrichment(artistId).takeIf {
+                    it.mbid.equals(mbid, ignoreCase = true)
+                }
                 val incoming = lookup.value
                 dao.upsertMusicBrainzArtistEnrichment(
                     MusicBrainzArtistEnrichmentEntity(
@@ -173,15 +175,24 @@ internal class CanonicalMetadataEnrichmentRepository(
         return when (val lookup = provider.lookupRecording(mbid)) {
             is MetadataLookupResult.Failure -> MetadataRefreshResult.Failed(lookup.reason)
             is MetadataLookupResult.Success -> {
-                if (lookup.value.musicBrainzId != mbid) {
+                if (!lookup.value.musicBrainzId.equals(mbid, ignoreCase = true)) {
                     return MetadataRefreshResult.Failed(MetadataLookupFailure.MALFORMED_RESPONSE)
                 }
                 val fetchedAt = nowEpochMs()
                 val previousRaw = dao.musicBrainzRecordingEnrichment(recordingId)
-                val previous = previousRaw.takeIf { it.mbid == mbid }
+                val previous = previousRaw.takeIf { it.mbid.equals(mbid, ignoreCase = true) }
                 val incoming = lookup.value
-                dao.upsertMusicBrainzRecordingEnrichment(
-                    MusicBrainzRecordingEnrichmentEntity(
+                val credits = incoming.artistCredits?.mapIndexed { position, credit ->
+                    MusicBrainzRecordingArtistCreditEntity(
+                        recordingId = recordingId,
+                        position = position,
+                        musicBrainzArtistId = credit.musicBrainzArtistId,
+                        name = credit.name,
+                        joinPhrase = credit.joinPhrase,
+                    )
+                }
+                dao.persistMusicBrainzRecordingEnrichment(
+                    enrichment = MusicBrainzRecordingEnrichmentEntity(
                         recordingId = recordingId,
                         mbid = mbid,
                         title = incoming.title ?: previous?.title,
@@ -189,24 +200,9 @@ internal class CanonicalMetadataEnrichmentRepository(
                         artistDisplay = incoming.artistDisplay ?: previous?.artistDisplay,
                         fetchedAtEpochMs = fetchedAt,
                     ),
+                    credits = credits,
+                    clearExistingCredits = previousRaw != null && previous == null,
                 )
-                if (previousRaw != null && previousRaw.mbid != mbid) {
-                    dao.deleteMusicBrainzRecordingArtistCredits(recordingId)
-                }
-                incoming.artistCredits?.let { credits ->
-                    dao.replaceMusicBrainzRecordingArtistCredits(
-                        recordingId,
-                        credits.mapIndexed { position, credit ->
-                            MusicBrainzRecordingArtistCreditEntity(
-                                recordingId = recordingId,
-                                position = position,
-                                musicBrainzArtistId = credit.musicBrainzArtistId,
-                                name = credit.name,
-                                joinPhrase = credit.joinPhrase,
-                            )
-                        },
-                    )
-                }
                 MetadataRefreshResult.Refreshed(mbid, fetchedAt)
             }
         }
@@ -217,15 +213,24 @@ internal class CanonicalMetadataEnrichmentRepository(
         return when (val lookup = provider.lookupRelease(mbid)) {
             is MetadataLookupResult.Failure -> MetadataRefreshResult.Failed(lookup.reason)
             is MetadataLookupResult.Success -> {
-                if (lookup.value.musicBrainzId != mbid) {
+                if (!lookup.value.musicBrainzId.equals(mbid, ignoreCase = true)) {
                     return MetadataRefreshResult.Failed(MetadataLookupFailure.MALFORMED_RESPONSE)
                 }
                 val fetchedAt = nowEpochMs()
                 val previousRaw = dao.musicBrainzReleaseEnrichment(releaseId)
-                val previous = previousRaw.takeIf { it.mbid == mbid }
+                val previous = previousRaw.takeIf { it.mbid.equals(mbid, ignoreCase = true) }
                 val incoming = lookup.value
-                dao.upsertMusicBrainzReleaseEnrichment(
-                    MusicBrainzReleaseEnrichmentEntity(
+                val credits = incoming.artistCredits?.mapIndexed { position, credit ->
+                    MusicBrainzReleaseArtistCreditEntity(
+                        releaseId = releaseId,
+                        position = position,
+                        musicBrainzArtistId = credit.musicBrainzArtistId,
+                        name = credit.name,
+                        joinPhrase = credit.joinPhrase,
+                    )
+                }
+                dao.persistMusicBrainzReleaseEnrichment(
+                    enrichment = MusicBrainzReleaseEnrichmentEntity(
                         releaseId = releaseId,
                         mbid = mbid,
                         title = incoming.title ?: previous?.title,
@@ -235,24 +240,9 @@ internal class CanonicalMetadataEnrichmentRepository(
                         status = incoming.status ?: previous?.status,
                         fetchedAtEpochMs = fetchedAt,
                     ),
+                    credits = credits,
+                    clearExistingCredits = previousRaw != null && previous == null,
                 )
-                if (previousRaw != null && previousRaw.mbid != mbid) {
-                    dao.deleteMusicBrainzReleaseArtistCredits(releaseId)
-                }
-                incoming.artistCredits?.let { credits ->
-                    dao.replaceMusicBrainzReleaseArtistCredits(
-                        releaseId,
-                        credits.mapIndexed { position, credit ->
-                            MusicBrainzReleaseArtistCreditEntity(
-                                releaseId = releaseId,
-                                position = position,
-                                musicBrainzArtistId = credit.musicBrainzArtistId,
-                                name = credit.name,
-                                joinPhrase = credit.joinPhrase,
-                            )
-                        },
-                    )
-                }
                 MetadataRefreshResult.Refreshed(mbid, fetchedAt)
             }
         }
@@ -262,7 +252,7 @@ internal class CanonicalMetadataEnrichmentRepository(
         val canonical = dao.artistById(artistId) ?: return null
         val mbid = trustedExternalId("artist", artistId)
         val cached = mbid?.let { trusted ->
-            dao.musicBrainzArtistEnrichment(artistId).takeIf { it.mbid == trusted }
+            dao.musicBrainzArtistEnrichment(artistId).takeIf { it.mbid.equals(trusted, ignoreCase = true) }
         }
         return ResolvedArtistMetadata(
             artistId = canonical.id,
@@ -280,7 +270,7 @@ internal class CanonicalMetadataEnrichmentRepository(
         val canonical = dao.recordingById(recordingId) ?: return null
         val mbid = trustedExternalId("recording", recordingId)
         val cached = mbid?.let { trusted ->
-            dao.musicBrainzRecordingEnrichment(recordingId).takeIf { it.mbid == trusted }
+            dao.musicBrainzRecordingEnrichment(recordingId).takeIf { it.mbid.equals(trusted, ignoreCase = true) }
         }
         val credits = if (cached != null) {
             dao.musicBrainzRecordingArtistCredits(recordingId).map { row ->
@@ -304,7 +294,7 @@ internal class CanonicalMetadataEnrichmentRepository(
         val canonical = dao.releaseById(releaseId) ?: return null
         val mbid = trustedExternalId("release", releaseId)
         val cached = mbid?.let { trusted ->
-            dao.musicBrainzReleaseEnrichment(releaseId).takeIf { it.mbid == trusted }
+            dao.musicBrainzReleaseEnrichment(releaseId).takeIf { it.mbid.equals(trusted, ignoreCase = true) }
         }
         val credits = if (cached != null) {
             dao.musicBrainzReleaseArtistCredits(releaseId).map { row ->
