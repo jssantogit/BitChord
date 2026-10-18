@@ -203,6 +203,108 @@ class IsrcMusicBrainzIdentityIntegrationTest {
         }
     }
 
+
+    @Test
+    fun incomingUnclaimedMbidCannotContaminateKnownIsrcRecording() = runBlocking {
+        val database = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val dao = database.catalogDao()
+            val oldMbid = "11111111-1111-1111-1111-111111111111"
+            val incomingMbid = "33333333-3333-3333-3333-333333333333"
+            dao.upsertRecording(RecordingEntity("r1", "Original", "Artist", 180_000L))
+            dao.upsertExternalIdentity(ExternalIdentityEntity("musicbrainz", "recording", oldMbid, "r1"))
+            dao.upsertExternalIdentity(ExternalIdentityEntity("isrc", "recording", ISRC, "r1"))
+            dao.upsertMediaAsset(MediaAssetEntity("old-asset", "r1", "opensubsonic:old", "old-song", "provider://old", null, null, null, null))
+
+            val result = CanonicalRemoteCatalogSync.applySnapshot(
+                providerKey = "opensubsonic:new",
+                snapshot = com.music.bitchord.data.catalog.provider.ProviderLibrarySnapshot(
+                    listOf(conflictingTrack("new-song", incomingMbid)),
+                    complete = true,
+                ),
+                store = RoomStore(dao),
+                idFactory = { "r2" },
+            )
+
+            // Strong MBID X cannot be attached to R1 just because ISRC S matches.
+            assertEquals("r2", dao.entityIdForExternalIdentity("opensubsonic:new", "recording", "new-song"))
+            assertEquals("r2", dao.entityIdForExternalIdentity("musicbrainz", "recording", incomingMbid))
+            assertEquals("r1", dao.entityIdForExternalIdentity("musicbrainz", "recording", oldMbid))
+            assertEquals(listOf(oldMbid), dao.externalIdentitiesForEntity("musicbrainz", "recording", "r1").map { it.externalId })
+            assertEquals("r1", dao.entityIdForExternalIdentity("isrc", "recording", ISRC))
+            assertEquals("r1", dao.mediaAsset("opensubsonic:old", "old-song")?.recordingId)
+            assertEquals("r2", dao.mediaAsset("opensubsonic:new", "new-song")?.recordingId)
+            assertEquals("Original", dao.recordingById("r1")?.title)
+            assertEquals(1, result.identityConflicts)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun establishedProviderAliasAndAssetRemainStableWithoutClaimingDivergentMbid() = runBlocking {
+        val database = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val dao = database.catalogDao()
+            val oldMbid = "11111111-1111-1111-1111-111111111111"
+            val incomingMbid = "33333333-3333-3333-3333-333333333333"
+            dao.upsertRecording(RecordingEntity("r1", "Original", "Artist", 180_000L))
+            dao.upsertExternalIdentity(ExternalIdentityEntity("musicbrainz", "recording", oldMbid, "r1"))
+            dao.upsertExternalIdentity(ExternalIdentityEntity("isrc", "recording", ISRC, "r1"))
+            dao.upsertExternalIdentity(ExternalIdentityEntity("opensubsonic:home", "recording", "song", "r1"))
+            dao.upsertMediaAsset(MediaAssetEntity("stable-asset", "r1", "opensubsonic:home", "song", "provider://old", null, null, null, null))
+
+            val result = CanonicalRemoteCatalogSync.applySnapshot(
+                providerKey = "opensubsonic:home",
+                snapshot = com.music.bitchord.data.catalog.provider.ProviderLibrarySnapshot(
+                    listOf(conflictingTrack("song", incomingMbid)),
+                    complete = true,
+                ),
+                store = RoomStore(dao),
+                idFactory = { error("existing alias and asset must not allocate new Recording") },
+            )
+
+            assertEquals("r1", dao.entityIdForExternalIdentity("opensubsonic:home", "recording", "song"))
+            assertEquals("stable-asset", dao.mediaAsset("opensubsonic:home", "song")?.id)
+            assertEquals("r1", dao.mediaAsset("opensubsonic:home", "song")?.recordingId)
+            assertEquals("r1", dao.entityIdForExternalIdentity("isrc", "recording", ISRC))
+            assertEquals("r1", dao.entityIdForExternalIdentity("musicbrainz", "recording", oldMbid))
+            assertNull(dao.entityIdForExternalIdentity("musicbrainz", "recording", incomingMbid))
+            assertEquals(listOf(oldMbid), dao.externalIdentitiesForEntity("musicbrainz", "recording", "r1").map { it.externalId })
+            assertEquals(1, result.identityConflicts)
+        } finally {
+            database.close()
+        }
+    }
+
+    private fun conflictingTrack(sourceKey: String, mbid: String) =
+        com.music.bitchord.data.catalog.provider.ProviderTrack(
+            externalTrackId = sourceKey,
+            title = "Conflicting provider track",
+            artistDisplay = "Artist",
+            externalArtistId = null,
+            durationMs = 180_000L,
+            trackNumber = 1,
+            musicBrainzRecordingId = mbid,
+            album = null,
+            assetUri = "provider://$sourceKey",
+            artworkUri = null,
+            dateAddedSeconds = null,
+            contentType = "audio/flac",
+            suffix = "flac",
+            bitRateKbps = null,
+            bitDepth = null,
+            samplingRateHz = null,
+            artists = emptyList(),
+            isrcs = listOf(ISRC),
+        )
+
     private fun openSubsonicProvider(
         songId: String,
         isrcs: List<String>,
