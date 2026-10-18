@@ -754,6 +754,7 @@ fun NowPlayingScreen(
     // The selected canonical MediaAsset (not Song.videoId or provider cover ID)
     // supplies artwork through Android's existing provider-owned loader.
     val canonicalArtworkModel = PlayerPlatform.host.rememberCanonicalPlaybackArtworkModel(song)
+    val openMenuWithArtwork: () -> Unit = { onOpenMenu(canonicalArtworkModel) }
     // This is produced by the palette's existing 128 px decode and cache. It
     // samples the upper band rather than the whole sleeve because that is what
     // lies beneath the status bar when the player expands to full bleed.
@@ -1894,7 +1895,7 @@ fun NowPlayingScreen(
                                     likeStatus = likeStatus,
                                     showRevertCue = showRevertCue,
                                     onToggleLike = onToggleLike,
-                                    onOpenMenu = { onOpenMenu(canonicalArtworkModel) },
+                                    onOpenMenu = openMenuWithArtwork,
                                     onOpenAlbum = onOpenAlbum,
                                     onOpenArtist = onOpenArtist,
                                 )
@@ -3316,10 +3317,10 @@ fun NowPlayingScreen(
                                     },
                                 ),
                                 onClick = when {
-                                    showRevertCue -> { onOpenMenu(canonicalArtworkModel) }
+                                    showRevertCue -> openMenuWithArtwork
                                     lyricsShareGlyphVisible && lyricPicker.picking -> lyricPicker.cancel
                                     lyricsShareGlyphVisible -> lyricPicker.beginPicking
-                                    else -> { onOpenMenu(canonicalArtworkModel) }
+                                    else -> openMenuWithArtwork
                                 },
                                 haptic = if (lyricsShareGlyphVisible && !showRevertCue) {
                                     Haptic.Select
