@@ -276,6 +276,10 @@ internal fun isolatedOpenSubsonicArtworkHttpClient(
         .build()
 }
 
+/** Only rate limits or server-side unavailability merit an automatic retry. */
+internal fun isTransientArtworkHttpStatus(status: Int): Boolean =
+    status == 429 || status in 500..599
+
 internal class OkHttpOpenSubsonicArtworkTransport(
     sharedClient: OkHttpClient = Http.client,
     private val maxBytes: Int = MAX_ARTWORK_BYTES,
@@ -310,7 +314,11 @@ internal class OkHttpOpenSubsonicArtworkTransport(
                             ?: return@use OpenSubsonicArtworkTransportResult.RequestRejected
                         OpenSubsonicArtworkTransportResult.Success(bytes, contentType)
                     }
-                    else -> OpenSubsonicArtworkTransportResult.RequestRejected
+                    else -> if (isTransientArtworkHttpStatus(response.code)) {
+                        OpenSubsonicArtworkTransportResult.NetworkUnavailable
+                    } else {
+                        OpenSubsonicArtworkTransportResult.RequestRejected
+                    }
                 }
             }
         } catch (cancelled: CancellationException) {

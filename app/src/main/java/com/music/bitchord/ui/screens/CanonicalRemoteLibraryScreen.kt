@@ -59,6 +59,7 @@ import com.music.bitchord.playback.CanonicalRemotePlaybackMetadata
 import com.music.bitchord.playback.CanonicalRemotePlaybackRequest
 import com.music.bitchord.playback.playCanonicalRemote
 import com.music.bitchord.playback.rememberMediaController
+import com.music.bitchord.ui.player.awaitRecoverableCanonicalArtwork
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -294,7 +295,9 @@ private fun RemoteTrackArtwork(
         value = if (mediaAssetId == null || artworkRevision.isNullOrBlank()) {
             null
         } else {
-            when (val result = artworkLoader.load(mediaAssetId)) {
+            when (val result = awaitRecoverableCanonicalArtwork {
+                artworkLoader.load(mediaAssetId)
+            }) {
                 is OpenSubsonicArtworkLoadResult.Ready -> withContext(Dispatchers.Default) {
                     BitmapFactory.decodeByteArray(result.bytes, 0, result.bytes.size)?.asImageBitmap()
                 }
