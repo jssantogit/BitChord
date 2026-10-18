@@ -1,0 +1,31 @@
+name: Rebase canonical queue PR 13
+
+on:
+  push:
+    branches:
+      - playback/canonical-queue-persistence
+    paths:
+      - .github/workflows/_rebase_canonical_queue_pr13.yml
+
+permissions:
+  contents: write
+
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: playback/canonical-queue-persistence
+          fetch-depth: 0
+      - name: Rebase on current main and self-remove
+        run: |
+          set -euo pipefail
+          EXPECTED_HEAD="$(git rev-parse HEAD)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git rebase origin/main
+          git rm .github/workflows/_rebase_canonical_queue_pr13.yml
+          git commit -m "chore: finish canonical queue rebase"
+          git push --force-with-lease=refs/heads/playback/canonical-queue-persistence:${EXPECTED_HEAD} origin HEAD:playback/canonical-queue-persistence
