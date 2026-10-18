@@ -2,10 +2,8 @@ name: Perf UI activity wiring helper
 
 on:
   push:
-    branches:
-      - perf/runtime-performance-probes
-    paths:
-      - .github/workflows/_perf-ui-activity-wire.yml
+    branches: [perf/runtime-performance-probes]
+    paths: [.github/workflows/_perf-ui-activity-wire.yml]
 
 permissions:
   contents: write
@@ -19,8 +17,9 @@ jobs:
           ref: perf/runtime-performance-probes
           fetch-depth: 0
       - name: Wire bounded UI activity probes
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           def replace_once(path, old, new):
@@ -141,7 +140,9 @@ jobs:
           )
 
           Path(".github/workflows/_perf-ui-activity-wire.yml").unlink()
+          PY
       - name: Commit wiring
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
