@@ -32,7 +32,10 @@ class CanonicalCatalogArtistMigrationTest {
         createVersionOneDatabase(file)
 
         val database = Room.databaseBuilder(context, CanonicalCatalogDatabase::class.java, name)
-            .addMigrations(CanonicalCatalogDatabase.MIGRATION_1_2)
+            .addMigrations(
+                CanonicalCatalogDatabase.MIGRATION_1_2,
+                CanonicalCatalogDatabase.MIGRATION_2_3,
+            )
             .allowMainThreadQueries()
             .build()
         val sql = database.openHelper.writableDatabase
