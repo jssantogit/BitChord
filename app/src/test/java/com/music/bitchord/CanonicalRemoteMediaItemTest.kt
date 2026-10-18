@@ -62,6 +62,7 @@ class CanonicalRemoteMediaItemTest {
         assertEquals(logicalUri, storedSong.localUri)
         assertEquals(logicalUri, restoredUri)
         assertTrue(restored.isCanonicalRemotePlayback())
+        assertFalse(restoredUri.contains("sourceKey", ignoreCase = true))
         assertFalse(restoredUri.contains("server-track-native"))
         assertFalse(restoredUri.contains("apiKey", ignoreCase = true))
         assertFalse(restoredUri.contains("password", ignoreCase = true))
