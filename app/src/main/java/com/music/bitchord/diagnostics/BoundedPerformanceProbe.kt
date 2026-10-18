@@ -25,7 +25,7 @@ class BoundedPerformanceProbe(
         )
     },
 ) {
-    inline fun <T> measure(
+    fun <T> measure(
         category: DiagnosticCategory,
         name: String,
         metadata: Map<String, String> = emptyMap(),
@@ -46,11 +46,11 @@ class BoundedPerformanceProbe(
         }
     }
 
-    suspend inline fun <T> measureSuspend(
+    suspend fun <T> measureSuspend(
         category: DiagnosticCategory,
         name: String,
         metadata: Map<String, String> = emptyMap(),
-        crossinline block: suspend () -> T,
+        block: suspend () -> T,
     ): T {
         val started = nowNanos()
         try {
