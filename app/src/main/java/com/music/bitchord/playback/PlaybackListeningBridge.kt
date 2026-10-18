@@ -61,6 +61,9 @@ internal object PlaybackListeningBridge {
     /** Accessed only from [commands]. */
     private var active: ActivePlayback? = null
 
+    /** Accessed only from [commands]. */
+    private val startGate = PlaybackListeningStartGate()
+
     fun init(context: Context) {
         appContext = context.applicationContext
     }
@@ -69,6 +72,10 @@ internal object PlaybackListeningBridge {
      * Feeds the same wall-clock listening evidence already measured by
      * ListeningRecorder. [listenedDeltaMs] is actual audio time since the
      * previous sampler tick, not player position and not a per-resume total.
+     *
+     * This callback is also the first factual evidence that the selected
+     * occurrence became audible. PLAYBACK_STARTED is therefore gated here,
+     * never by the earlier Media3 selection/transition callback.
      */
     fun observeSample(song: Song, recordingDurationMs: Long?, listenedDeltaMs: Long) {
         require(listenedDeltaMs >= 0L)
@@ -76,12 +83,15 @@ internal object PlaybackListeningBridge {
         commands.submit {
             val identity = resolve(song) ?: return@submit
             val current = active
-            if (current == null) {
-                begin(identity, SelectionIntent.UNKNOWN, SelectionOrigin.UNKNOWN)
-            } else if (current.identity.recordingId != identity.recordingId) {
+            if (current != null && current.identity.recordingId != identity.recordingId) {
                 end(current, PlaybackEndCause.MANUAL_CHANGE)
-                begin(identity, SelectionIntent.UNKNOWN, SelectionOrigin.UNKNOWN)
             }
+
+            val audibleStart = startGate.onAudible(identity)
+            if (active == null && audibleStart != null) {
+                begin(audibleStart)
+            }
+
             active?.takeIf { it.identity.recordingId == identity.recordingId }?.progress
                 ?.observeAudioDelta(
                     deltaMs = listenedDeltaMs,
@@ -166,6 +176,11 @@ internal object PlaybackListeningBridge {
         }
     }
 
+    /**
+     * Stage a possible new playback occurrence from Media3 selection facts.
+     * Selection alone deliberately emits no PLAYBACK_STARTED; [observeSample]
+     * consumes this staged occurrence only after actual audio is observed.
+     */
     private fun startFromMediaItem(
         mediaItem: MediaItem,
         intent: SelectionIntent,
@@ -199,7 +214,12 @@ internal object PlaybackListeningBridge {
                 }
                 end(current, fallbackCause)
             }
-            begin(identity, intent, origin)
+
+            startGate.onSelection(
+                identity = identity,
+                intent = intent,
+                origin = origin,
+            )
         }
     }
 
@@ -209,18 +229,17 @@ internal object PlaybackListeningBridge {
         }
     }
 
-    private suspend fun begin(
-        identity: CanonicalPlaybackIdentity,
-        intent: SelectionIntent,
-        origin: SelectionOrigin,
-    ) {
+    private suspend fun begin(start: PlaybackListeningStartGate.AudibleStart) {
         eventIngestor().recordPlaybackStarted(
-            identity.toPlaybackStart(
-                selectionIntent = intent,
-                selectionOrigin = origin,
+            start.identity.toPlaybackStart(
+                selectionIntent = start.intent,
+                selectionOrigin = start.origin,
             ),
         )
-        active = ActivePlayback(identity = identity)
+        active = ActivePlayback(
+            occurrenceId = start.occurrenceId,
+            identity = start.identity,
+        )
     }
 
     private suspend fun end(playback: ActivePlayback, cause: PlaybackEndCause) {
@@ -235,6 +254,7 @@ internal object PlaybackListeningBridge {
             ),
         )
         if (active === playback) active = null
+        startGate.onPlaybackEnded(playback.occurrenceId)
     }
 
     private suspend fun resolve(mediaItem: MediaItem): CanonicalPlaybackIdentity? {
@@ -292,6 +312,7 @@ internal object PlaybackListeningBridge {
     }
 
     private data class ActivePlayback(
+        val occurrenceId: Long,
         var identity: CanonicalPlaybackIdentity,
         val progress: PlaybackListeningProgress = PlaybackListeningProgress(),
     )
