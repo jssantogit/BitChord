@@ -37,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +67,7 @@ import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.data.model.playingRowMatcher
 import com.music.bitchord.data.settings.LibraryViewType
 import com.music.bitchord.data.settings.LocalMusicSort
+import com.music.bitchord.diagnostics.runtimePerformanceContext
 import com.music.bitchord.download.DownloadedCollection
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.ExplicitSongTitle
@@ -79,6 +81,7 @@ import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.ui.components.rememberRemoteArtworkUrl
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.performance.RuntimePerformanceUiContext
 import com.music.bitchord.ui.theme.ArtworkPalette
 
 /**
@@ -186,14 +189,29 @@ fun rememberLocalFolderGroups(
     tab: LocalFolderTab,
     songs: List<Song>,
     query: String,
-): List<LocalGroup> = remember(browseId, tab, songs, folder.collections, query) {
-    fun LocalGroup.matches() = query.isBlank() ||
-        title.contains(query, ignoreCase = true) ||
-        subtitle.contains(query, ignoreCase = true)
-    when (tab) {
-        LocalFolderTab.SONGS -> emptyList()
-        LocalFolderTab.ARTISTS -> LocalGroups.artistsOf(browseId, songs).filter { it.matches() }
-        LocalFolderTab.ALBUMS -> LocalGroups.albumsOf(browseId, songs, folder.collections).filter { it.matches() }
+): List<LocalGroup> {
+    if (RuntimePerformanceUiContext.enabled) {
+        val runtimePerformanceOwner = remember(browseId) { Any() }
+        val context = runtimePerformanceContext(
+            isHome = false,
+            homeScrollInProgress = false,
+            isLocalMusicRoot = browseId == "local:all",
+        )
+        DisposableEffect(runtimePerformanceOwner, context) {
+            RuntimePerformanceUiContext.enter(runtimePerformanceOwner, context)
+            onDispose { RuntimePerformanceUiContext.leave(runtimePerformanceOwner) }
+        }
+    }
+
+    return remember(browseId, tab, songs, folder.collections, query) {
+        fun LocalGroup.matches() = query.isBlank() ||
+            title.contains(query, ignoreCase = true) ||
+            subtitle.contains(query, ignoreCase = true)
+        when (tab) {
+            LocalFolderTab.SONGS -> emptyList()
+            LocalFolderTab.ARTISTS -> LocalGroups.artistsOf(browseId, songs).filter { it.matches() }
+            LocalFolderTab.ALBUMS -> LocalGroups.albumsOf(browseId, songs, folder.collections).filter { it.matches() }
+        }
     }
 }
 

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +42,10 @@ import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import com.music.bitchord.data.model.CARD_ART_PX
 import com.music.bitchord.data.model.artworkAt
+import com.music.bitchord.ui.performance.RuntimePerformanceUiContext
+import com.music.bitchord.ui.performance.RuntimePerformanceUiSignal
+import com.music.bitchord.ui.performance.RuntimePerformanceUiStateKey
+import com.music.bitchord.ui.performance.RuntimePerformanceUiStateValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -254,7 +259,11 @@ fun rememberArtworkMesh(
         // decoded real content.  A frame whose mean luminance is below this
         // threshold is discarded; the last valid mesh is kept instead.
         if (isLikelyBlackFrame(frame)) return@LaunchedEffect
-        mesh = withContext(Dispatchers.Default) { meshOf(frame, imageUrl?.hashCode() ?: 0) } ?: mesh
+        val updated = withContext(Dispatchers.Default) { meshOf(frame, imageUrl?.hashCode() ?: 0) }
+        if (updated != null) {
+            mesh = updated
+            RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.CANVAS_FRAME_MESH_UPDATE)
+        }
         meshUrl = imageUrl
     }
     return mesh
@@ -323,6 +332,18 @@ fun ArtworkMeshBackdrop(
     // the CPU-side interpolation is what carries the smoothness.
     val canBlur = !reduceDynamicBlur && renderEffectBlurSupported
 
+    if (RuntimePerformanceUiContext.enabled) {
+        SideEffect {
+            RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.ARTWORK_BACKDROP_RECOMPOSITION)
+        }
+        LaunchedEffect(canBlur) {
+            RuntimePerformanceUiContext.setState(
+                RuntimePerformanceUiStateKey.DYNAMIC_BLUR,
+                if (canBlur) RuntimePerformanceUiStateValue.ENABLED else RuntimePerformanceUiStateValue.REDUCED,
+            )
+        }
+    }
+
     // The mesh on screen, and the one fading in over it. Two states rather than
     // one animated value because what crossfades here is a pair of bitmaps, not
     // a pair of colours: the outgoing one has to stay drawable until the fade
@@ -341,6 +362,7 @@ fun ArtworkMeshBackdrop(
         incoming = null
         val current = shown
         if (next === current) return@LaunchedEffect
+        RuntimePerformanceUiContext.record(RuntimePerformanceUiSignal.ARTWORK_MESH_UPDATE)
 
         // Nothing to fade *from* on the first read, and nothing to fade at all
         // when the user has asked for less motion.

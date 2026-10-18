@@ -274,6 +274,24 @@ class CanonicalLibraryBrowseTest {
             externalId: String,
         ): String? = identities[identityKey(provider, entityType, externalId)]?.entityId
 
+
+        override suspend fun musicBrainzRecordingIdsForEntity(recordingId: String): List<String> =
+            identities.values.filter { it.provider == "musicbrainz" && it.entityType == "recording" &&
+                it.entityId == recordingId
+            }.map(ExternalIdentityEntity::externalId)
+
+        override suspend fun claimMusicBrainzRecordingIdentity(mbid: String, recordingId: String): Boolean {
+            val key = "musicbrainz|recording|$mbid"
+            val owner = identities[key]?.entityId
+            if (musicBrainzRecordingIdsForEntity(recordingId).any { it != mbid } ||
+                (owner != null && owner != recordingId)
+            ) return false
+            if (owner == null) {
+                upsertExternalIdentity(ExternalIdentityEntity("musicbrainz", "recording", mbid, recordingId))
+            }
+            return true
+        }
+
         override suspend fun upsertRecording(recording: RecordingEntity) {
             recordings[recording.id] = recording
             touch()
