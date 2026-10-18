@@ -43,6 +43,12 @@ object BoundedContextPersistence {
         val contextIdentities: List<CanonicalQueueIdentity?> = emptyList(),
     )
 
+    internal sealed class RestoreOutcome(open val mayFallbackToLastPlayed: Boolean) {
+        data class Restored(val state: State) : RestoreOutcome(false)
+        object AbsentOrInvalid : RestoreOutcome(true)
+        object CanonicalUnavailable : RestoreOutcome(false)
+    }
+
     private lateinit var prefs: SharedPreferences
     private var canonicalResolver: CanonicalQueueResolver? = null
     private val json = Json {
@@ -140,19 +146,30 @@ object BoundedContextPersistence {
             .apply()
     }
 
-    /** A malformed snapshot is treated as absent by design. */
+    /**
+     * A malformed/absent snapshot may use LastPlayed; a valid canonical
+     * snapshot with an unavailable rendition must not resurrect a stale
+     * physical transport through that compatibility fallback.
+     */
     @Synchronized
-    fun load(): State? {
-        val raw = runCatching { prefs.getString(KEY_STATE, null) }.getOrNull() ?: return null
-        val decoded = decode(raw) ?: return null
-        val state = rehydrateAfterLoad(decoded) ?: return null
-        val currentEntryId = state.entries[state.currentIndex].song.queueEntryId
-        val scalarEntryId = runCatching { prefs.getString(KEY_CURRENT_ENTRY_ID, null) }.getOrNull()
-        if (currentEntryId != scalarEntryId) return state
-        val positionMs = runCatching { prefs.getLong(KEY_POSITION, state.positionMs) }.getOrNull()
-            ?: return state
-        return state.copy(positionMs = positionMs.coerceAtLeast(0L))
+    internal fun loadOutcome(): RestoreOutcome {
+    val raw = runCatching { prefs.getString(KEY_STATE, null) }.getOrNull()
+        ?: return RestoreOutcome.AbsentOrInvalid
+    val decoded = decode(raw) ?: return RestoreOutcome.AbsentOrInvalid
+    val outcome = runBlocking(Dispatchers.IO) {
+        restoreOutcome(decoded, canonicalResolver)
     }
+    val state = (outcome as? RestoreOutcome.Restored)?.state ?: return outcome
+    val currentEntryId = state.entries[state.currentIndex].song.queueEntryId
+    val scalarEntryId = runCatching { prefs.getString(KEY_CURRENT_ENTRY_ID, null) }.getOrNull()
+    if (currentEntryId != scalarEntryId) return RestoreOutcome.Restored(state)
+    val positionMs = runCatching { prefs.getLong(KEY_POSITION, state.positionMs) }.getOrNull()
+        ?: return RestoreOutcome.Restored(state)
+    return RestoreOutcome.Restored(state.copy(positionMs = positionMs.coerceAtLeast(0L)))
+}
+
+    @Synchronized
+    fun load(): State? = (loadOutcome() as? RestoreOutcome.Restored)?.state
 
     @Synchronized
     fun clear() {
@@ -174,12 +191,19 @@ object BoundedContextPersistence {
             .getOrDefault(state)
     }
 
-    private fun rehydrateAfterLoad(state: State): State? {
-        if (state.contextIdentities.isEmpty() && state.entries.none { it.canonicalIdentity != null }) return state
-        val resolver = canonicalResolver ?: return null
-        return runCatching { runBlocking(Dispatchers.IO) { CanonicalQueueMigration.rehydrate(state, resolver) } }
-            .getOrNull()
-    }
+    internal suspend fun restoreOutcome(
+    state: State,
+    resolver: CanonicalQueueResolver? = canonicalResolver,
+): RestoreOutcome {
+    val hasCanonicalIdentity = state.contextIdentities.any { it != null } ||
+        state.entries.any { it.canonicalIdentity != null }
+    if (!hasCanonicalIdentity) return RestoreOutcome.Restored(state)
+    resolver ?: return RestoreOutcome.CanonicalUnavailable
+    val restored = runCatching { CanonicalQueueMigration.rehydrate(state, resolver) }
+        .getOrNull()
+        ?: return RestoreOutcome.CanonicalUnavailable
+    return RestoreOutcome.Restored(restored)
+}
 
     /** Visible to JVM tests; the Android wrapper above remains the only writer. */
     internal fun encode(state: State): String? = runCatching {

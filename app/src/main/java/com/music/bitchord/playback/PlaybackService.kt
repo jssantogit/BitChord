@@ -5780,11 +5780,19 @@ class PlaybackService : MediaLibraryService() {
      * LastPlayed physical snapshot when the new record is absent or unsafe.
      */
     private fun restoreBoundedQueueOrLast(player: ExoPlayer): Boolean {
-        val persisted = BoundedContextPersistence.load()
-        if (persisted != null && restoreBoundedQueue(player, persisted)) return true
-        if (persisted != null) BoundedContextPersistence.clearImmediately()
-        return restoreLastQueue(player)
+    return when (val outcome = BoundedContextPersistence.loadOutcome()) {
+        is BoundedContextPersistence.RestoreOutcome.Restored -> {
+            if (restoreBoundedQueue(player, outcome.state)) {
+                true
+            } else {
+                BoundedContextPersistence.clearImmediately()
+                restoreLastQueue(player)
+            }
+        }
+        BoundedContextPersistence.RestoreOutcome.CanonicalUnavailable -> false
+        BoundedContextPersistence.RestoreOutcome.AbsentOrInvalid -> restoreLastQueue(player)
     }
+}
 
     private fun restoreBoundedQueue(
         exoPlayer: ExoPlayer,
