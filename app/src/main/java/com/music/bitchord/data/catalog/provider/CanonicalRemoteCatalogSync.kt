@@ -1,8 +1,11 @@
 package com.music.bitchord.data.catalog.provider
 
+import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.ExternalIdentityEntity
 import com.music.bitchord.data.catalog.MediaAssetEntity
+import com.music.bitchord.data.catalog.RecordingArtistCreditEntity
 import com.music.bitchord.data.catalog.RecordingEntity
+import com.music.bitchord.data.catalog.ReleaseArtistCreditEntity
 import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.catalog.ReleaseTrackEntity
 import java.util.UUID
@@ -25,6 +28,13 @@ internal data class ProviderHealth(
     val detail: String? = null,
 )
 
+/** Structured artist identity evidence supplied by a provider. */
+internal data class ProviderArtist(
+    val externalArtistId: String,
+    val name: String,
+    val musicBrainzArtistId: String? = null,
+)
+
 internal data class ProviderAlbum(
     val externalAlbumId: String,
     val title: String,
@@ -32,6 +42,7 @@ internal data class ProviderAlbum(
     val externalArtistId: String?,
     val musicBrainzReleaseId: String?,
     val artworkUri: String?,
+    val artists: List<ProviderArtist> = emptyList(),
 )
 
 internal data class ProviderTrack(
@@ -51,6 +62,7 @@ internal data class ProviderTrack(
     val bitRateKbps: Int?,
     val bitDepth: Int?,
     val samplingRateHz: Int?,
+    val artists: List<ProviderArtist> = emptyList(),
 )
 
 internal data class ProviderLibrarySnapshot(
@@ -89,6 +101,28 @@ internal interface CanonicalCatalogSyncStore {
 
     suspend fun upsertReleaseTrack(releaseTrack: ReleaseTrackEntity)
 
+    /**
+     * Legacy test stores that never receive structured artist evidence may omit these
+     * methods. They fail fast rather than silently discarding canonical Artist state.
+     */
+    suspend fun upsertArtist(artist: ArtistEntity) {
+        error("CanonicalCatalogSyncStore does not support Artist persistence")
+    }
+
+    suspend fun replaceRecordingArtistCredits(
+        recordingId: String,
+        credits: List<RecordingArtistCreditEntity>,
+    ) {
+        error("CanonicalCatalogSyncStore does not support Recording artist credits")
+    }
+
+    suspend fun replaceReleaseArtistCredits(
+        releaseId: String,
+        credits: List<ReleaseArtistCreditEntity>,
+    ) {
+        error("CanonicalCatalogSyncStore does not support Release artist credits")
+    }
+
     suspend fun upsertMediaAsset(mediaAsset: MediaAssetEntity)
 
     suspend fun upsertExternalIdentity(identity: ExternalIdentityEntity)
@@ -114,12 +148,14 @@ internal sealed interface ProviderSyncResult {
  * Provider-agnostic canonical sync rules.
  *
  * A provider source ID is persisted only as ExternalIdentity/MediaAsset.sourceKey.
- * Canonical Recording/Release IDs are generated locally unless an already-known
- * canonical mapping (including MusicBrainz evidence) can be reused.
+ * Canonical Recording/Release/Artist IDs are generated locally unless an already-known
+ * canonical mapping (including MusicBrainz evidence) can be reused. Display names are
+ * never used as identity evidence.
  */
 internal object CanonicalRemoteCatalogSync {
     private const val RECORDING_ENTITY_TYPE = "recording"
     private const val RELEASE_ENTITY_TYPE = "release"
+    private const val ARTIST_ENTITY_TYPE = "artist"
     private const val MUSICBRAINZ_PROVIDER = "musicbrainz"
 
     suspend fun sync(
@@ -207,6 +243,28 @@ internal object CanonicalRemoteCatalogSync {
                 canonicalEntityId = recordingId,
             )
 
+            if (track.artists.isNotEmpty()) {
+                val resolved = resolveArtists(
+                    providerKey = providerKey,
+                    providerArtists = track.artists,
+                    store = store,
+                    idFactory = idFactory,
+                )
+                identityConflicts += resolved.identityConflicts
+                if (resolved.artistIds.isNotEmpty()) {
+                    store.replaceRecordingArtistCredits(
+                        recordingId = recordingId,
+                        credits = resolved.artistIds.mapIndexed { position, artistId ->
+                            RecordingArtistCreditEntity(
+                                recordingId = recordingId,
+                                position = position,
+                                artistId = artistId,
+                            )
+                        },
+                    )
+                }
+            }
+
             val album = track.album
             if (album != null && album.externalAlbumId.isNotBlank()) {
                 val externalAlbumId = album.externalAlbumId.trim()
@@ -249,6 +307,27 @@ internal object CanonicalRemoteCatalogSync {
                     musicBrainzId = musicBrainzReleaseId,
                     canonicalEntityId = releaseId,
                 )
+                if (album.artists.isNotEmpty()) {
+                    val resolved = resolveArtists(
+                        providerKey = providerKey,
+                        providerArtists = album.artists,
+                        store = store,
+                        idFactory = idFactory,
+                    )
+                    identityConflicts += resolved.identityConflicts
+                    if (resolved.artistIds.isNotEmpty()) {
+                        store.replaceReleaseArtistCredits(
+                            releaseId = releaseId,
+                            credits = resolved.artistIds.mapIndexed { position, artistId ->
+                                ReleaseArtistCreditEntity(
+                                    releaseId = releaseId,
+                                    position = position,
+                                    artistId = artistId,
+                                )
+                            },
+                        )
+                    }
+                }
                 // Do not delete other ReleaseTrack rows here. A Recording may be
                 // present on multiple canonical releases and those associations
                 // can come from other providers/local evidence.
@@ -282,9 +361,8 @@ internal object CanonicalRemoteCatalogSync {
             val existingSourceKeys = store.mediaAssetSourceKeys(providerKey)
             for (existingSourceKey in existingSourceKeys) {
                 if (existingSourceKey !in seenSourceKeys) {
-                    // Availability disappeared. Keep the provider/native alias as
-                    // identity evidence even if this row predates ExternalIdentity
-                    // persistence for the provider; remove only the MediaAsset.
+                    // Availability disappeared. Keep every canonical identity,
+                    // Artist/credit relation and provider alias; prune only availability.
                     val staleAsset = store.mediaAsset(providerKey, existingSourceKey)
                     val existingAlias = store.entityIdForExternalIdentity(
                         provider = providerKey,
@@ -311,6 +389,63 @@ internal object CanonicalRemoteCatalogSync {
             syncedAssets = seenSourceKeys.size,
             removedAssets = removedAssets,
             identityConflicts = identityConflicts,
+        )
+    }
+
+    private suspend fun resolveArtists(
+        providerKey: String,
+        providerArtists: List<ProviderArtist>,
+        store: CanonicalCatalogSyncStore,
+        idFactory: () -> String,
+    ): ResolvedArtists {
+        var conflicts = 0
+        val artistIds = ArrayList<String>(providerArtists.size)
+
+        for (providerArtist in providerArtists) {
+            val externalArtistId = providerArtist.externalArtistId.cleanId() ?: continue
+            val providerArtistEntityId = store.entityIdForExternalIdentity(
+                provider = providerKey,
+                entityType = ARTIST_ENTITY_TYPE,
+                externalId = externalArtistId,
+            )
+            val musicBrainzArtistId = providerArtist.musicBrainzArtistId.cleanId()
+            val musicBrainzArtistEntityId = musicBrainzArtistId?.let { mbid ->
+                store.entityIdForExternalIdentity(
+                    provider = MUSICBRAINZ_PROVIDER,
+                    entityType = ARTIST_ENTITY_TYPE,
+                    externalId = mbid,
+                )
+            }
+            val artistId = providerArtistEntityId
+                ?: musicBrainzArtistEntityId
+                ?: idFactory()
+
+            store.upsertArtist(
+                ArtistEntity(
+                    id = artistId,
+                    name = providerArtist.name.trim().ifEmpty { "Unknown Artist" },
+                ),
+            )
+            store.upsertExternalIdentity(
+                ExternalIdentityEntity(
+                    provider = providerKey,
+                    entityType = ARTIST_ENTITY_TYPE,
+                    externalId = externalArtistId,
+                    entityId = artistId,
+                ),
+            )
+            conflicts += persistMusicBrainzEvidenceIfUnclaimed(
+                store = store,
+                entityType = ARTIST_ENTITY_TYPE,
+                musicBrainzId = musicBrainzArtistId,
+                canonicalEntityId = artistId,
+            )
+            artistIds += artistId
+        }
+
+        return ResolvedArtists(
+            artistIds = artistIds,
+            identityConflicts = conflicts,
         )
     }
 
@@ -342,6 +477,11 @@ internal object CanonicalRemoteCatalogSync {
             else -> 1 // evidence conflict: reconciliation belongs to a later slice
         }
     }
+
+    private data class ResolvedArtists(
+        val artistIds: List<String>,
+        val identityConflicts: Int,
+    )
 
     private fun String?.cleanId(): String? = this?.trim()?.takeIf(String::isNotEmpty)
 }
