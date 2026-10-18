@@ -7,6 +7,9 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicMediaAc
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicMediaDataSourceFactory
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicRuntimeAudioRequest
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicRuntimeTransport
+import com.music.bitchord.diagnostics.BoundedPerformanceProbe
+import com.music.bitchord.diagnostics.BoundedPerformanceSample
+import com.music.bitchord.diagnostics.DiagnosticCategory
 import java.io.IOException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -35,6 +38,45 @@ class OpenSubsonicMediaTransportTest {
 
         assertEquals(1, calls)
         assertSame(runtime, resolved)
+    }
+
+    @Test
+    fun `runtime resolution emits one bounded secret-free performance sample`() = runTest {
+        val times = ArrayDeque(listOf(1_000L, 1_075L))
+        val samples = mutableListOf<BoundedPerformanceSample>()
+        val probe = BoundedPerformanceProbe(
+            nowNanos = { times.removeFirst() },
+            sink = samples::add,
+        )
+        val runtime = runtimeRequest()
+        val transport = OpenSubsonicRuntimeTransport(
+            performanceProbe = probe,
+        ) {
+            OpenSubsonicMediaAccessResult.Ready(runtime)
+        }
+
+        val resolved = transport.resolveRuntime(
+            recordingId = "recording-1",
+            mediaAssetId = "asset-1",
+            providerKey = "opensubsonic:home",
+        )
+
+        assertSame(runtime, resolved)
+        assertEquals(
+            listOf(
+                BoundedPerformanceSample(
+                    category = DiagnosticCategory.NETWORK,
+                    name = "runtime_stream_resolution",
+                    durationNanos = 75L,
+                    metadata = mapOf("provider" to "opensubsonic"),
+                ),
+            ),
+            samples,
+        )
+        val serialized = samples.single().toString()
+        assertFalse(serialized.contains("server-track-native"))
+        assertFalse(serialized.contains("api-secret"))
+        assertFalse(serialized.contains("music.example"))
     }
 
     @Test

@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.WindowInfo
+import com.music.bitchord.diagnostics.RuntimePerformanceMonitor
 import com.music.bitchord.ui.components.MiniPlayerPull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -197,13 +198,18 @@ class PlayerSheetMotion(
      * it always has.
      */
     fun attachWindow(window: Window?) {
-        this.window = window ?: return
-        windowAnimations = window.attributes.windowAnimations
-        window.setWindowAnimations(0)
+        val nextWindow = window ?: return
+        if (this.window !== nextWindow) {
+            this.window?.let(RuntimePerformanceMonitor::detachOverlayWindow)
+            this.window = nextWindow
+            RuntimePerformanceMonitor.attachOverlayWindow(nextWindow, "now_playing")
+        }
+        windowAnimations = nextWindow.attributes.windowAnimations
+        nextWindow.setWindowAnimations(0)
         windowRestore?.cancel()
         windowRestore = scope.launch {
             delay(WINDOW_ENTER_MS)
-            window.setWindowAnimations(windowAnimations)
+            nextWindow.setWindowAnimations(windowAnimations)
         }
     }
 
@@ -287,7 +293,9 @@ class PlayerSheetMotion(
         held = Float.NaN
         laidOut = false
         sheet = null
+        val previousWindow = window
         window = null
+        RuntimePerformanceMonitor.detachOverlayWindow(previousWindow)
     }
 
     private suspend fun slide(from: Float, to: Float, velocity: Float = 0f) {
