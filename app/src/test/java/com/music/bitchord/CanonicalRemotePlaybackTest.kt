@@ -138,6 +138,8 @@ class CanonicalRemotePlaybackTest {
             "OpenSubsonicAuth",
             "OpenSubsonicAccountConfig",
             "openSubsonicAuthenticationParameters",
+            "MessageDigest",
+            "saltFactory",
             "/rest/stream.view",
         ).forEach { forbidden ->
             assertFalse("Playback duplicated provider responsibility: $forbidden", source.contains(forbidden))
