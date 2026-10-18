@@ -53,6 +53,9 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         val applicationStarted = SystemClock.elapsedRealtimeNanos()
         Diagnostics.install(this)
+        if (BuildConfig.DEBUG) {
+            com.music.bitchord.diagnostics.RuntimePerformanceMonitor.install(this)
+        }
         // The player is drawn by the shared UI module; this is what it reads
         // underneath — settings, the Canvas decoder, outputs, the party.
         Diagnostics.span(DiagnosticCategory.STARTUP, "stream_hooks_install_early") {
