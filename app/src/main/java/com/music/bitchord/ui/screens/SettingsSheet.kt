@@ -1447,6 +1447,17 @@ fun SettingsScreen(
         }
 
         SearchableSettingsGroup(search, header = stringResource(R.string.advanced_options)) {
+            if (DiagnosticsUiEntry.isAvailable(context)) {
+                val diagnosticsTitle = "Diagnostics"
+                row(diagnosticsTitle, "debug", "logs", "report", "capture") {
+                    SettingsRow(
+                        icon = Icons.Rounded.Tune,
+                        title = diagnosticsTitle,
+                        subtitle = "Capture, inspect, and share diagnostic reports",
+                        onClick = { DiagnosticsUiEntry.open(context) },
+                    )
+                }
+            }
             val smartAlignmentTitle = stringResource(R.string.smart_version_alignment)
             row(smartAlignmentTitle, "alignment", "sync", "waveform", "video", "audio", "skit", "intro") {
                 SettingsRow(

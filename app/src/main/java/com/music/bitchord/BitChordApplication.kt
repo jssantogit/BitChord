@@ -1,6 +1,7 @@
 package com.music.bitchord
 
 import android.app.Application
+import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import coil3.ImageLoader
@@ -24,6 +25,8 @@ import com.music.bitchord.data.smb.SmbCoverFetcher
 import com.music.bitchord.data.webdav.WebDavCoilAuth
 import com.music.bitchord.data.canvas.SpotifyToken
 import com.music.bitchord.data.spotify.SpotifyLibrary
+import com.music.bitchord.diagnostics.DiagnosticCategory
+import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.playback.AudioCache
 import com.music.bitchord.playback.LastPlayed
 import com.music.bitchord.playback.BoundedContextPersistence
@@ -48,21 +51,25 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
+        val applicationStarted = SystemClock.elapsedRealtimeNanos()
+        Diagnostics.install(this)
         // The player is drawn by the shared UI module; this is what it reads
         // underneath — settings, the Canvas decoder, outputs, the party.
-        AndroidStreamHooks.installEarly()
-        PlayerPlatform.install(AndroidPlayerHost(this))
-        com.music.bitchord.ui.AppUi.install(com.music.bitchord.ui.AndroidAppUiHost)
-        // The shared data layer (lyrics, the YouTube Music client) logs to
-        // logcat on debug builds only, as the app's own DebugLog always has.
+        Diagnostics.span(DiagnosticCategory.STARTUP, "stream_hooks_install_early") {
+            AndroidStreamHooks.installEarly()
+        }
+        Diagnostics.span(DiagnosticCategory.STARTUP, "player_platform_install") {
+            PlayerPlatform.install(AndroidPlayerHost(this))
+        }
+        Diagnostics.span(DiagnosticCategory.STARTUP, "app_ui_install") {
+            com.music.bitchord.ui.AppUi.install(com.music.bitchord.ui.AndroidAppUiHost)
+        }
+        // The shared data layer keeps its existing API. On Android debug builds
+        // it now feeds the structured diagnostics recorder rather than a second,
+        // independent logcat pipeline.
         if (BuildConfig.DEBUG) {
             DebugLog.sink = DebugLog.Sink { level, tag, message, error ->
-                when (level) {
-                    'D' -> android.util.Log.d(tag, message, error)
-                    'I' -> android.util.Log.i(tag, message, error)
-                    'W' -> android.util.Log.w(tag, message, error)
-                    else -> android.util.Log.e(tag, message, error)
-                }
+                Diagnostics.fromDebugLog(level, tag, message, error)
             }
         }
         // The Spotify library and import live in the shared module; the tokens are the WebView's.
@@ -72,11 +79,15 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         // The per-app language picker, which YouTube Music's `hl` follows.
         // Full tag (zh-Hant / zh-Hans preserved); Innertube maps to hl/gl.
         Innertube.appLanguage = { AppCompatDelegate.getApplicationLocales().get(0)?.toLanguageTag() }
-        migrateScriptOnlyAppLocale()
+        Diagnostics.span(DiagnosticCategory.STARTUP, "locale_migration") {
+            migrateScriptOnlyAppLocale()
+        }
         LyricsTranslation.cacheDir = cacheDir
         // PlaybackService shares this process, so seeding the cookie here means
         // stream resolution is authenticated from the first play onwards.
-        authStore = AuthStore(this)
+        authStore = Diagnostics.span(DiagnosticCategory.STARTUP, "auth_store_init") {
+            AuthStore(this)
+        }
         // Opened off the main thread, alongside everything below: none of these
         // reads a setting or the session, and between them they are the slowest
         // opens at startup — SourceRegistry's encrypted store most of all.
@@ -85,87 +96,138 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         // threads racing to create it. Joined before onCreate returns, so
         // nothing that runs after startup can see any of them half open.
         val backgroundInit = thread(name = "startup-init") {
-            SourceRegistry.init(this)
-            AndroidStreamHooks.initInnerTubeX(this)
-            // Its own directory: canvas clips are looping video, not audio, and
-            // belong in a cache AudioCache's own limit and eviction policy were
-            // never sized for. See CanvasCache's doc for why this one exists at
-            // all — it is the fix for canvas clips re-fetching the same few
-            // seconds of video from the network on every loop.
-            CanvasCache.init(this)
+            Diagnostics.span(DiagnosticCategory.STARTUP, "background_init_total") {
+                Diagnostics.span(DiagnosticCategory.STARTUP, "source_registry_init") {
+                    SourceRegistry.init(this)
+                }
+                Diagnostics.span(DiagnosticCategory.STARTUP, "innertubex_init") {
+                    AndroidStreamHooks.initInnerTubeX(this)
+                }
+                // Its own directory: canvas clips are looping video, not audio, and
+                // belong in a cache AudioCache's own limit and eviction policy were
+                // never sized for. See CanvasCache's doc for why this one exists at
+                // all — it is the fix for canvas clips re-fetching the same few
+                // seconds of video from the network on every loop.
+                Diagnostics.span(DiagnosticCategory.STARTUP, "canvas_cache_init") {
+                    CanvasCache.init(this)
+                }
+            }
         }
         // Migration-safe: an old single cookie becomes the first encrypted
         // session, while newer installs restore the profile the listener chose.
-        val restoredSession = authStore.activeSession
-        if (restoredSession != null && authStore.activeAccountId == null) {
-            authStore.select(restoredSession.accountId, restoredSession.activeProfileId)
+        val restoredSession = Diagnostics.span(DiagnosticCategory.STARTUP, "auth_session_read") {
+            authStore.activeSession
         }
-        authStore.cookie = restoredSession?.cookie
-        Innertube.cookie = restoredSession?.cookie
-        // Which account that cookie actually acts as. Read here rather than on
-        // demand so the answer is usually in hand before the first request needs
-        // it: a play registered under the wrong account is indistinguishable, to
-        // the listener, from one that was never registered at all. Fire and
-        // forget — every caller works without it, just less precisely.
-        if (restoredSession != null) {
-            // After the cookie, never before: setting the cookie clears any
-            // channel the last session was acting as, so restoring the choice
-            // first would restore it into the value about to be wiped.
-            restoredSession.profiles.firstOrNull { it.profileId == restoredSession.activeProfileId }
-                ?.let { Innertube.selectChannel(it.pageId, it.dataSyncId, it.authUser) }
-            CoroutineScope(Dispatchers.IO).launch { Innertube.ensureSessionScope() }
+        Diagnostics.span(DiagnosticCategory.STARTUP, "auth_session_restore") {
+            if (restoredSession != null && authStore.activeAccountId == null) {
+                authStore.select(restoredSession.accountId, restoredSession.activeProfileId)
+            }
+            authStore.cookie = restoredSession?.cookie
+            Innertube.cookie = restoredSession?.cookie
+            // Which account that cookie actually acts as. Read here rather than on
+            // demand so the answer is usually in hand before the first request needs
+            // it: a play registered under the wrong account is indistinguishable, to
+            // the listener, from one that was never registered at all. Fire and
+            // forget — every caller works without it, just less precisely.
+            if (restoredSession != null) {
+                // After the cookie, never before: setting the cookie clears any
+                // channel the last session was acting as, so restoring the choice
+                // first would restore it into the value about to be wiped.
+                restoredSession.profiles.firstOrNull { it.profileId == restoredSession.activeProfileId }
+                    ?.let { Innertube.selectChannel(it.pageId, it.dataSyncId, it.authUser) }
+                CoroutineScope(Dispatchers.IO).launch { Innertube.ensureSessionScope() }
+            }
         }
-        AppSettings.init(this, authStore)
+        Diagnostics.span(DiagnosticCategory.STARTUP, "app_settings_init") {
+            AppSettings.init(this, authStore)
+        }
         // Before anything resolves a track: an addon with `checkValidLossless`
         // is gated on this, and the gate reads "no" until it has looked.
-        com.music.bitchord.playback.audio.LosslessOutput.init(this)
+        Diagnostics.span(DiagnosticCategory.STARTUP, "lossless_output_init") {
+            com.music.bitchord.playback.audio.LosslessOutput.init(this)
+        }
         // Restores a party this device is still a member of, so a process death
         // mid-session is something the rest of the party never sees. The socket
         // and the clock offset are not restored — both are re-established on
         // the next connect, which is the only way to be sure they are current.
-        ListenTogether.init(this)
-        SearchHistory.init(this)
-        LastPlayed.init(this)
-        BoundedContextPersistence.init(this)
-        com.music.bitchord.playback.PartyPersonalQueueStash.init(this)
+        Diagnostics.span(DiagnosticCategory.STARTUP, "listen_together_init") {
+            ListenTogether.init(this)
+        }
+        Diagnostics.span(DiagnosticCategory.STARTUP, "search_history_init") {
+            SearchHistory.init(this)
+        }
+        Diagnostics.span(DiagnosticCategory.STARTUP, "last_played_init") {
+            LastPlayed.init(this)
+        }
+        Diagnostics.span(DiagnosticCategory.STARTUP, "bounded_context_init") {
+            BoundedContextPersistence.init(this)
+        }
+        Diagnostics.span(DiagnosticCategory.STARTUP, "party_queue_stash_init") {
+            com.music.bitchord.playback.PartyPersonalQueueStash.init(this)
+        }
         // Which tracks the listener has reverted to YouTube's own upload. Read
         // by [Song.toMediaItem], so it has to be open before the restart
         // snapshot below is turned back into queue items.
-        OriginalVersion.init(this)
+        Diagnostics.span(DiagnosticCategory.STARTUP, "original_version_init") {
+            OriginalVersion.init(this)
+        }
         // What's already saved to Downloads, so the song menu can say so
         // without a media-store query per row.
-        Downloads.init(this)
+        Diagnostics.span(DiagnosticCategory.STARTUP, "downloads_init") {
+            Downloads.init(this)
+        }
         // The device's own listening record. Opened here rather than in
         // PlaybackService because the Replay page reads it from the UI side and
         // both live in this process — one owner, one directory.
-        ListeningStats.init(this)
+        Diagnostics.span(DiagnosticCategory.STARTUP, "listening_stats_init") {
+            ListeningStats.init(this)
+        }
         // After AppSettings, whose switch decides whether half of it runs.
-        ArtistFacts.init(this)
+        Diagnostics.span(DiagnosticCategory.STARTUP, "artist_facts_init") {
+            ArtistFacts.init(this)
+        }
         // One cache directory can only be opened once per process, and
         // PlaybackService shares this one — so it's opened here, not there.
-        AudioCache.init(this)
+        Diagnostics.span(DiagnosticCategory.STARTUP, "audio_cache_init") {
+            AudioCache.init(this)
+        }
         // The offscreen WebView that mints a Spotify access token from the
         // listener's own session cookie needs a Context, and nothing in the
         // suspend call chain that reaches it (a track's canvas lookup) has
         // one to hand — see SpotifyToken's doc for why.
-        SpotifyToken.init(this)
+        Diagnostics.span(DiagnosticCategory.STARTUP, "spotify_token_init") {
+            SpotifyToken.init(this)
+        }
         // A sideloaded update is just a new APK over the old one, so app data —
         // including whatever the old build left in these caches — survives it
         // untouched. Wipe both on the first launch of a higher versionCode so a
         // format or key change between builds can't serve stale or mismatched
         // bytes from a cache the new code didn't write.
         if (AppSettings.consumeVersionUpdate(BuildConfig.VERSION_CODE)) {
-            AudioCache.clear()
-            SingletonImageLoader.get(this).let { loader ->
-                loader.memoryCache?.clear()
-                loader.diskCache?.clear()
+            Diagnostics.span(DiagnosticCategory.STARTUP, "version_update_cache_clear") {
+                AudioCache.clear()
+                SingletonImageLoader.get(this).let { loader ->
+                    loader.memoryCache?.clear()
+                    loader.diskCache?.clear()
+                }
             }
         }
         // Initialize LastFM with saved settings if available
-        initLastfm()
+        Diagnostics.span(DiagnosticCategory.STARTUP, "lastfm_init") {
+            initLastfm()
+        }
         // The public "apps open right now" count; see Presence.
-        com.music.bitchord.data.presence.AndroidPresence.install(this)
-        backgroundInit.join()
+        Diagnostics.span(DiagnosticCategory.STARTUP, "presence_install") {
+            com.music.bitchord.data.presence.AndroidPresence.install(this)
+        }
+        Diagnostics.span(DiagnosticCategory.STARTUP, "background_join_wait") {
+            backgroundInit.join()
+        }
+        Diagnostics.event(
+            category = DiagnosticCategory.STARTUP,
+            name = "application_on_create",
+            durationNanos = SystemClock.elapsedRealtimeNanos() - applicationStarted,
+        )
     }
 
     /**
