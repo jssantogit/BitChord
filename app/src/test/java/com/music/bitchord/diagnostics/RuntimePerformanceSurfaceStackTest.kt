@@ -39,4 +39,36 @@ class RuntimePerformanceSurfaceStackTest {
 
         assertEquals("search_idle", stack.currentContext)
     }
+
+    @Test
+    fun `latest scoped base wins and covered owner updates restore without stealing visibility`() {
+        val stack = RuntimePerformanceSurfaceStack("activity_start")
+        val homeOwner = Any()
+        val detailOwner = Any()
+
+        stack.enterBaseSurface(homeOwner, "home")
+        assertEquals("home", stack.currentContext)
+
+        stack.enterBaseSurface(detailOwner, "local_music")
+        assertEquals("local_music", stack.currentContext)
+
+        stack.updateBaseSurface(homeOwner, "home_scroll")
+        assertEquals("local_music", stack.currentContext)
+
+        stack.leaveBaseSurface(detailOwner)
+        assertEquals("home_scroll", stack.currentContext)
+    }
+
+    @Test
+    fun `leaving covered scoped base keeps the visible scoped base`() {
+        val stack = RuntimePerformanceSurfaceStack("activity_start")
+        val homeOwner = Any()
+        val detailOwner = Any()
+
+        stack.enterBaseSurface(homeOwner, "home")
+        stack.enterBaseSurface(detailOwner, "other")
+        stack.leaveBaseSurface(homeOwner)
+
+        assertEquals("other", stack.currentContext)
+    }
 }
