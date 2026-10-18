@@ -16,7 +16,6 @@ import com.music.bitchord.data.listening.ListeningEventStores
 import com.music.bitchord.data.listening.PlaybackActivity
 import com.music.bitchord.data.listening.PlaybackEnd
 import com.music.bitchord.data.listening.PlaybackEndCause
-import com.music.bitchord.data.listening.PlaybackStart
 import com.music.bitchord.data.listening.SelectionIntent
 import com.music.bitchord.data.listening.SelectionOrigin
 import com.music.bitchord.data.model.Song
@@ -217,10 +216,7 @@ internal object PlaybackListeningBridge {
         origin: SelectionOrigin,
     ) {
         eventIngestor().recordPlaybackStarted(
-            PlaybackStart(
-                recordingId = identity.recordingId,
-                mediaAssetId = identity.mediaAssetId,
-                assetProvider = identity.provider,
+            identity.toPlaybackStart(
                 selectionIntent = intent,
                 selectionOrigin = origin,
             ),
