@@ -26,7 +26,7 @@ internal class LibraryRecommendationCandidateSource(
 
 /**
  * Library Mode composition:
- * availability -> candidates -> PersonalRanker -> session context -> artist diversity.
+ * availability -> candidates -> PersonalRanker -> session context -> artist diversity -> controlled exploration.
  * Limit is deliberately applied only after every ranking stage.
  */
 internal class LibraryRecommendationPipeline(
@@ -34,12 +34,14 @@ internal class LibraryRecommendationPipeline(
     private val personalRanker: PersonalRanker,
     private val sessionContextReranker: SessionContextReranker,
     private val artistAwareDiversityReranker: ArtistAwareDiversityReranker,
+    private val controlledExplorationReranker: ControlledExplorationReranker = ControlledExplorationReranker(),
 ) {
-    suspend fun rank(limit: Int? = null): List<DiversityRankedCandidate> {
+    suspend fun rank(limit: Int? = null): List<ExplorationRankedCandidate> {
         require(limit == null || limit > 0) { "Recommendation limit must be positive" }
         val baseRanking = personalRanker.rank(candidateSource.candidates())
         val contextualRanking = sessionContextReranker.rerank(baseRanking)
         val diversifiedRanking = artistAwareDiversityReranker.rerank(contextualRanking)
-        return limit?.let(diversifiedRanking::take) ?: diversifiedRanking
+        val exploredRanking = controlledExplorationReranker.rerank(diversifiedRanking)
+        return limit?.let(exploredRanking::take) ?: exploredRanking
     }
 }
