@@ -147,8 +147,8 @@ class PlaybackFailureQueueDurabilityTest {
         ),
         queueTier = QueueTier.CONTEXT,
         queueEntryId = entryId,
-        sourceType = source.type,
-        sourceId = source.id,
-        sourceTitle = source.title,
+        playbackSource = source.title,
+        playbackSourceType = source.type,
+        playbackSourceId = source.id,
     )
 }
