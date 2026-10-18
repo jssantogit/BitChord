@@ -71,6 +71,25 @@ class RuntimePerformanceUiActivityWindowTest {
     }
 
     @Test
+    fun `Canvas frame mesh churn stays one bounded aggregate`() {
+        val snapshots = mutableListOf<RuntimePerformanceUiActivitySnapshot>()
+        val window = RuntimePerformanceUiActivityWindow("now_playing", snapshots::add)
+        window.setCaptureActive(true)
+
+        repeat(4) { window.record(RuntimePerformanceUiSignal.CANVAS_FRAME_MESH_UPDATE) }
+        window.flush()
+
+        assertEquals(1, snapshots.size)
+        assertEquals(
+            mapOf(
+                "context" to "now_playing",
+                "canvasFrameMeshUpdates" to "4",
+            ),
+            snapshots.single().toDiagnosticMetadata(),
+        )
+    }
+
+    @Test
     fun `context change flushes the old bounded activity window`() {
         val snapshots = mutableListOf<RuntimePerformanceUiActivitySnapshot>()
         val window = RuntimePerformanceUiActivityWindow("home", snapshots::add)
