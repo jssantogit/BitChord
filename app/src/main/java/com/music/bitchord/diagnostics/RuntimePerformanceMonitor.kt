@@ -10,6 +10,9 @@ import android.os.HandlerThread
 import android.view.FrameMetrics
 import android.view.Window
 import com.music.bitchord.ui.performance.RuntimePerformanceUiContext
+import com.music.bitchord.ui.performance.RuntimePerformanceUiSignal
+import com.music.bitchord.ui.performance.RuntimePerformanceUiStateKey
+import com.music.bitchord.ui.performance.RuntimePerformanceUiStateValue
 import java.util.Locale
 import kotlin.math.roundToLong
 
@@ -32,6 +35,10 @@ internal fun frameBudgetNanosForRefreshRate(refreshRateHz: Float): Long {
  * that window instead of counting both it and the obscured activity. Android
  * delivers [FrameMetrics] on a dedicated handler thread, where frames are
  * reduced into bounded aggregate windows. Nothing is persisted per frame.
+ *
+ * Compose churn and feature state use a parallel bounded activity window. UI
+ * callbacks only increment fixed in-memory counters; the same ten-second/context
+ * boundaries turn those counters into diagnostics events.
  */
 internal object RuntimePerformanceMonitor : RuntimePerformanceUiContext.Sink {
     private val worker = HandlerThread("runtime-performance").apply { start() }
@@ -59,6 +66,14 @@ internal object RuntimePerformanceMonitor : RuntimePerformanceUiContext.Sink {
         )
     }
 
+    private val uiActivityWindow = RuntimePerformanceUiActivityWindow(surfaces.currentContext) { snapshot ->
+        Diagnostics.event(
+            category = DiagnosticCategory.UI,
+            name = "runtime_ui_activity_window",
+            metadata = snapshot.toDiagnosticMetadata(),
+        )
+    }
+
     private var baseWindow: Window? = null
     private var overlayWindow: Window? = null
     private var sampledWindow: Window? = null
@@ -81,7 +96,7 @@ internal object RuntimePerformanceMonitor : RuntimePerformanceUiContext.Sink {
         override fun onDisplayChanged(changedDisplayId: Int) {
             if (changedDisplayId != displayId) return
             // One aggregate must never mix two frame budgets on LTPO/high-refresh
-            // devices. The refresh-rate transition is a natural window boundary.
+            // devices. The refresh-rate transition is a natural frame boundary.
             session.flush()
             updateDisplayBudget(displayManager?.getDisplay(changedDisplayId)?.refreshRate)
         }
@@ -91,12 +106,14 @@ internal object RuntimePerformanceMonitor : RuntimePerformanceUiContext.Sink {
         override fun run() {
             val captureActive = Diagnostics.captureStatus().active
             session.setCaptureActive(captureActive)
+            uiActivityWindow.setCaptureActive(captureActive)
             synchronized(lock) {
                 if (!captureActive) {
                     stopSamplingLocked()
                     return
                 }
                 session.flush()
+                uiActivityWindow.flush()
                 handler.postDelayed(this, FLUSH_INTERVAL_MILLIS)
             }
         }
@@ -145,6 +162,7 @@ internal object RuntimePerformanceMonitor : RuntimePerformanceUiContext.Sink {
         synchronized(lock) {
             if (baseWindow !== activity.window) return
             session.flush()
+            uiActivityWindow.flush()
             stopSamplingLocked()
             baseWindow = null
             overlayWindow = null
@@ -162,7 +180,7 @@ internal object RuntimePerformanceMonitor : RuntimePerformanceUiContext.Sink {
         synchronized(lock) {
             overlayWindow = window
             surfaces.showOverlay(context)
-            session.setContext(surfaces.currentContext)
+            updateCurrentContextLocked()
             refreshSamplingLocked()
         }
     }
@@ -173,13 +191,13 @@ internal object RuntimePerformanceMonitor : RuntimePerformanceUiContext.Sink {
             if (overlayWindow !== window) return
             overlayWindow = null
             surfaces.hideOverlay()
-            session.setContext(surfaces.currentContext)
+            updateCurrentContextLocked()
             refreshSamplingLocked()
         }
     }
 
     /**
-     * Screen/interaction changes split the current aggregate without creating a
+     * Screen/interaction changes split the current aggregates without creating a
      * per-frame log stream. While an overlay is visible the base context is only
      * remembered; it becomes active again when that overlay closes.
      */
@@ -187,7 +205,7 @@ internal object RuntimePerformanceMonitor : RuntimePerformanceUiContext.Sink {
         if (!installed) return
         synchronized(lock) {
             surfaces.setBaseContext(context)
-            session.setContext(surfaces.currentContext)
+            updateCurrentContextLocked()
         }
     }
 
@@ -200,7 +218,7 @@ internal object RuntimePerformanceMonitor : RuntimePerformanceUiContext.Sink {
         if (!installed) return
         synchronized(lock) {
             surfaces.enterBaseSurface(owner, context)
-            session.setContext(surfaces.currentContext)
+            updateCurrentContextLocked()
         }
     }
 
@@ -208,7 +226,7 @@ internal object RuntimePerformanceMonitor : RuntimePerformanceUiContext.Sink {
         if (!installed) return
         synchronized(lock) {
             surfaces.updateBaseSurface(owner, context)
-            session.setContext(surfaces.currentContext)
+            updateCurrentContextLocked()
         }
     }
 
@@ -216,7 +234,7 @@ internal object RuntimePerformanceMonitor : RuntimePerformanceUiContext.Sink {
         if (!installed) return
         synchronized(lock) {
             surfaces.leaveBaseSurface(owner)
-            session.setContext(surfaces.currentContext)
+            updateCurrentContextLocked()
         }
     }
 
@@ -226,9 +244,29 @@ internal object RuntimePerformanceMonitor : RuntimePerformanceUiContext.Sink {
 
     override fun leave(owner: Any) = leaveBaseSurface(owner)
 
+    override fun record(signal: RuntimePerformanceUiSignal) {
+        if (!installed) return
+        uiActivityWindow.record(signal)
+    }
+
+    override fun setState(
+        key: RuntimePerformanceUiStateKey,
+        value: RuntimePerformanceUiStateValue,
+    ) {
+        if (!installed) return
+        uiActivityWindow.setState(key, value)
+    }
+
+    private fun updateCurrentContextLocked() {
+        val context = surfaces.currentContext
+        session.setContext(context)
+        uiActivityWindow.setContext(context)
+    }
+
     private fun refreshSamplingLocked() {
         val captureActive = Diagnostics.captureStatus().active
         session.setCaptureActive(captureActive)
+        uiActivityWindow.setCaptureActive(captureActive)
         if (!captureActive) {
             stopSamplingLocked()
             return
@@ -251,6 +289,7 @@ internal object RuntimePerformanceMonitor : RuntimePerformanceUiContext.Sink {
         if (sampledWindow === window && frameListenerRegistered) return
 
         session.flush()
+        uiActivityWindow.flush()
         if (frameListenerRegistered) {
             sampledWindow?.removeOnFrameMetricsAvailableListener(frameListener)
             frameListenerRegistered = false
