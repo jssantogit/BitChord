@@ -38,6 +38,7 @@ class PlaybackPerformanceProbeTest {
     fun `operation names stay stable and low cardinality`() {
         assertEquals(
             listOf(
+                "runtime_playback_prepare",
                 "runtime_playback_seek",
                 "runtime_playback_queue_mutation",
                 "runtime_playback_queue_rebuild",
