@@ -157,6 +157,7 @@ internal fun safePlaybackFailureDiagnostic(
         "playback failure kept terminal (${error.errorCodeName}); legacy resolver bypassed"
 }
 
+/** Logical identity for bounded dedupe within one failure cascade. */
 internal fun failureEntryKeyOrNull(player: Player, index: Int): String? {
     if (index !in 0 until player.mediaItemCount) return null
     val item = player.getMediaItemAt(index)
@@ -164,9 +165,27 @@ internal fun failureEntryKeyOrNull(player: Player, index: Int): String? {
 }
 
 /**
- * Stable enough for a runtime cascade while deliberately carrying no provider
- * locator. Context uses its logical collection slot so later repeat-all cycles
- * deduplicate the same entry; user/autoplay rows already carry queueEntryId.
+ * Physical occurrence identity used only to answer whether the current attempt
+ * has produced audible audio. Unlike [failureEntryKey], it keeps repeat-all
+ * cycles distinct so audio heard in an earlier cycle cannot mark a later failed
+ * occurrence as already started.
+ */
+internal fun failureOccurrenceKeyOrNull(player: Player, index: Int): String? {
+    if (index !in 0 until player.mediaItemCount) return null
+    val item = player.getMediaItemAt(index)
+    return failureOccurrenceKey(
+        tier = item.queueTier,
+        canonicalIndex = item.canonicalIndex,
+        contextCycleId = item.contextCycleId,
+        queueEntryId = item.queueEntryId,
+        physicalIndex = index,
+    )
+}
+
+/**
+ * Stable logical identity for a runtime cascade while deliberately carrying no
+ * provider locator. Context uses its logical collection slot so later repeat-all
+ * cycles deduplicate the same entry; user/autoplay rows use queueEntryId.
  */
 internal fun failureEntryKey(
     tier: QueueTier,
@@ -176,6 +195,19 @@ internal fun failureEntryKey(
 ): String = when {
     tier == QueueTier.CONTEXT && canonicalIndex != null && canonicalIndex >= 0 ->
         "context:$canonicalIndex"
+    !queueEntryId.isNullOrBlank() -> "entry:$queueEntryId"
+    else -> "slot:$physicalIndex"
+}
+
+internal fun failureOccurrenceKey(
+    tier: QueueTier,
+    canonicalIndex: Int?,
+    contextCycleId: Long?,
+    queueEntryId: String?,
+    physicalIndex: Int,
+): String = when {
+    tier == QueueTier.CONTEXT && canonicalIndex != null && canonicalIndex >= 0 && contextCycleId != null ->
+        "context:$canonicalIndex:cycle:$contextCycleId"
     !queueEntryId.isNullOrBlank() -> "entry:$queueEntryId"
     else -> "slot:$physicalIndex"
 }
