@@ -3096,11 +3096,6 @@ private fun BitChordApp(
                             isPlaying = player.isPlaying,
                             title = stringResource(R.string.listen_now),
                             signedIn = signedIn,
-                            rediscovery = {
-                                LibraryRediscoveryShelfEntry(
-                                    refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
-                                )
-                            },
                             onSignIn = { webSession = WebSessionMode.SIGN_IN },
                             onItemClick = { item, shelfTitle ->
                                 val song = shelfSong(item)
@@ -3371,6 +3366,11 @@ private fun BitChordApp(
                                         replayLandingPage = page
                                         showReplay = true
                                     },
+                                )
+                            },
+                            rediscovery = {
+                                LibraryRediscoveryShelfEntry(
+                                    refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
                                 )
                             },
                             onSignIn = { webSession = WebSessionMode.SIGN_IN },
