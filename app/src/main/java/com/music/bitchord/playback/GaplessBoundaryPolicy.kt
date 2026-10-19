@@ -5,5 +5,6 @@ package com.music.bitchord.playback
  * Does not predict buffer/sample continuity on an Android output device.
  */
 internal object GaplessBoundaryPolicy {
-    fun mustUseNativeBoundary(crossfadeMs: Long, smartFadeEnabled: Boolean): Boolean = false
+    fun mustUseNativeBoundary(crossfadeMs: Long, smartFadeEnabled: Boolean): Boolean =
+        crossfadeMs <= 0L && !smartFadeEnabled
 }
