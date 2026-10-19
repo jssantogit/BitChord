@@ -5,7 +5,7 @@
   "items": [
     {
       "number": 97,
-      "expected_head_sha": "17d294bf08176b387f7923c24067451a6ac08973",
+      "expected_head_sha": "2a360297e033e5c6807b6e51d07ad0f0920ef65e",
       "allowed_files": [
         "docs/delivery-di4d-artifact.md",
         "tests/test_delivery_artifact.py",
@@ -16,7 +16,7 @@
     },
     {
       "number": 98,
-      "expected_head_sha": "78c0e847b3b25ed6830ef553814a7e5c848f9be9",
+      "expected_head_sha": "67d27a37e761c81a272c48cc3aec499f19a8589c",
       "allowed_files": [
         "docs/delivery-di4e-pilot.md",
         "tests/test_delivery_checkpoint_pilot.py",
