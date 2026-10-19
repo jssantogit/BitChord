@@ -20,7 +20,7 @@ _SHA = re.compile(r"^[0-9a-f]{40}$")
 _REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9/_.-]{0,127}$")
 _PATH = re.compile(r"^[A-Za-z0-9_./@+\-]+$")
 _CHECK = {"success", "failure", "pending", "missing"}
-_MERGE = {"clean", "dirty", "behind", "unknown"}
+_MERGE = {"clean", "dirty", "behind", "unknown", "blocked", "unstable", "draft"}
 
 
 def _need(ok, message):
@@ -83,7 +83,9 @@ def plan(snapshot):
         if p["mergeable"] != "clean":
             blockers[n].append({
                 "dirty": "conflict", "behind": "stale_base",
-                "unknown": "mergeability_unknown"}[p["mergeable"]])
+                "unknown": "mergeability_unknown",
+                "blocked": "merge_policy_blocked", "unstable": "ci_unstable",
+                "draft": "draft"}[p["mergeable"]])
         if p["base_ref"] != "main":
             parent = by_ref.get(p["base_ref"])
             blockers[n].append("stacked_base" if parent is not None else "missing_parent")
