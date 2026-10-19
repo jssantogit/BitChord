@@ -158,13 +158,15 @@ object DiagnosticSanitizer {
         }
     }
 
+    private val sensitiveIdentityKeys = setOf(
+        "title", "tracktitle", "artist", "artistname", "album", "albumname",
+        "trackid", "videoid", "mediaid", "mediaassetid", "recordingid",
+        "providerkey", "sourceurl", "url", "uri",
+    )
+
     private fun isSensitiveKey(key: String): Boolean {
         val compact = key.trim().lowercase(Locale.ROOT).replace(keySeparators, "")
-        return compact in setOf(
-            "title", "tracktitle", "artist", "artistname", "album", "albumname",
-            "trackid", "videoid", "mediaid", "mediaassetid", "recordingid",
-            "providerkey", "sourceurl", "url", "uri",
-        ) ||
+        return compact in sensitiveIdentityKeys ||
             compact == "authorization" ||
             compact == "cookie" ||
             compact == "session" ||
