@@ -9,6 +9,8 @@ import com.music.bitchord.data.catalog.MusicBrainzRecordingArtistCreditEntity
 import com.music.bitchord.data.catalog.MusicBrainzRecordingEnrichmentEntity
 import com.music.bitchord.data.catalog.RecordingArtistCreditEntity
 import com.music.bitchord.data.catalog.RecordingEntity
+import com.music.bitchord.data.catalog.ReleaseArtistCreditEntity
+import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.catalog.provider.ProviderSyncResult
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountConfig
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAuth
@@ -47,7 +49,7 @@ class CanonicalCreditResyncIntegrityRoomTest {
             return when (endpoint) {
                 "getAlbumList2" -> envelope("\"status\":\"ok\",\"albumList2\":{\"album\":[{\"id\":\"album-1\",\"name\":\"Album\"}]}")
                 "getAlbum" -> envelope(
-                    "\"status\":\"ok\",\"album\":{\"id\":\"album-1\",\"name\":\"Album\",\"song\":[" +
+                    "\"status\":\"ok\",\"album\":{\"id\":\"album-1\",\"name\":\"Album\",\"artists\":[{\"id\":\"provider-artist-b\",\"name\":\"Artist B\"}],\"song\":[" +
                     song("song-1") +
                     (if (mode == "partial-transaction") "," + song("song-2") else "") +
                     "]}"
@@ -77,6 +79,9 @@ class CanonicalCreditResyncIntegrityRoomTest {
         dao.upsertRecording(RecordingEntity("recording-1", "Original", "Artist A", 100L))
         dao.upsertArtist(ArtistEntity("artist-a", "Artist A"))
         dao.upsertArtist(ArtistEntity("artist-b", "Artist B"))
+        dao.upsertRelease(ReleaseEntity("release-1", "Original album", "Artist A", null))
+        dao.upsertExternalIdentity(ExternalIdentityEntity("opensubsonic:home", "release", "album-1", "release-1"))
+        dao.upsertReleaseArtistCredits(listOf(ReleaseArtistCreditEntity("release-1", 0, "artist-a")))
         dao.upsertExternalIdentity(ExternalIdentityEntity("musicbrainz", "recording", recordingMbid, "recording-1"))
         dao.upsertExternalIdentity(ExternalIdentityEntity("musicbrainz", "artist", artistAMbid, "artist-a"))
         dao.upsertExternalIdentity(ExternalIdentityEntity("musicbrainz", "artist", artistBMbid, "artist-b"))
@@ -106,6 +111,7 @@ class CanonicalCreditResyncIntegrityRoomTest {
             assertTrue(result is ProviderSyncResult.Success)
             val dao = db.catalogDao()
             assertEquals(listOf("artist-a"), dao.recordingArtistCredits("recording-1").map { it.artistId })
+            assertEquals(listOf("artist-a"), dao.releaseArtistCredits("release-1").map { it.artistId })
             assertEquals("recording-1", dao.entityIdForExternalIdentity("musicbrainz", "recording", recordingMbid))
             assertEquals("artist-a", dao.entityIdForExternalIdentity("musicbrainz", "artist", artistAMbid))
             assertEquals("artist-b", dao.entityIdForExternalIdentity("opensubsonic:home", "artist", "provider-artist-b"))
@@ -115,6 +121,7 @@ class CanonicalCreditResyncIntegrityRoomTest {
             db = Room.databaseBuilder(context, CanonicalCatalogDatabase::class.java, name)
                 .allowMainThreadQueries().build()
             assertEquals(listOf("artist-a"), db.catalogDao().recordingArtistCredits("recording-1").map { it.artistId })
+            assertEquals(listOf("artist-a"), db.catalogDao().releaseArtistCredits("release-1").map { it.artistId })
             assertEquals("asset-1", db.catalogDao().mediaAsset("opensubsonic:home", "song-1")?.id)
             val replay = OpenSubsonicCatalogSync.sync(db, provider(transport),
                 idFactory = { error("A replay must not allocate new canonical IDs") })
