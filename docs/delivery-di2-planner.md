@@ -16,3 +16,17 @@ Read-only *proposal* is not an approved manifest. An operator must independently
 ### Next slice
 
 DI3 will take these immutable results and perform bounded parallel GET-only preflight via injected, explicitly read-only data access. No PR changes, no branch sync, no merges.
+
+### First-party live collection
+
+The separate `tools/delivery_snapshot.py` collector safely bridges current public GitHub REST state into the DI2 snapshot contract with GET-only permissions:
+
+```bash
+python3 -m unittest tests.test_delivery_snapshot -v
+python3 tools/delivery_snapshot.py --repo jssantogit/BitChord > /tmp/bitchord-open-pr-snapshot.json
+python3 tools/delivery_planner.py --input /tmp/bitchord-open-pr-snapshot.json > /tmp/bitchord-plan.json
+```
+
+The collector enumerates all open PR pages, reads authoritative detail HEAD/base/draft/mergeability, changed files (bounded to ≤100), required Android checks, re-reads the PR HEAD and verifies protected main SHA before and after the batch. Inconsistent data, missing/duplicate checks, untrusted fork heads, incomplete pagination or a moved main fail closed. The output omits titles, actors, comments, raw API errors and secrets; keep it local, do not commit rapidly stale real snapshots as fixtures. It does not have write methods.
+
+Mergeability values `blocked`, `unstable` and `draft` are now explicit blocked categories, consistent with actual GitHub responses. The collector and Planner are observational only; draft PRs remain ineligible. **The source snapshot is not a reviewed manifest**, even if the Planner yields potential candidates.
