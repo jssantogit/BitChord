@@ -3,6 +3,7 @@ package com.music.bitchord.ui.screens
 import android.app.Application
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.music.bitchord.data.listening.RediscoveryPresentationAvailability
@@ -62,6 +63,37 @@ class LibraryRediscoveryShelfComposeTest {
         }
         compose.onNodeWithText("Older Song").assertExists()
         compose.onNodeWithText("Another Song").assertDoesNotExist()
+    }
+
+    @Test fun canonicalRecordingRouteShowsRealMetadataAndHasBackWithoutPlayback() {
+        val exits = mutableListOf<String>()
+        compose.setContent {
+            CanonicalRediscoveryRecordingContent(
+                state = CanonicalRediscoveryRecordingState.Ready(
+                    recordingId = "rec-old", title = "Older Song", artistDisplay = "Artist",
+                ),
+                onBack = { exits += "back" },
+            )
+        }
+        compose.onNodeWithText("Older Song").assertExists()
+        compose.onNodeWithText("Artist").assertExists()
+        compose.onNodeWithContentDescription("Close").performClick()
+        compose.runOnIdle { assertEquals(listOf("back"), exits) }
+    }
+
+    @Test fun canonicalRecordingRouteFailsClosedWhenCurrentMediaDisappears() {
+        val state = mutableStateOf<CanonicalRediscoveryRecordingState>(
+            CanonicalRediscoveryRecordingState.Ready(
+                recordingId = "rec-old", title = "Older Song", artistDisplay = "Artist",
+            ),
+        )
+        compose.setContent {
+            CanonicalRediscoveryRecordingContent(state = state.value, onBack = {})
+        }
+        compose.onNodeWithText("Older Song").assertExists()
+        compose.runOnIdle { state.value = CanonicalRediscoveryRecordingState.Unavailable }
+        compose.onNodeWithText("Older Song").assertDoesNotExist()
+        compose.onNodeWithText("Recording unavailable").assertExists()
     }
 
     @Test fun missingAssetNeverRendersStaleRecording() {
