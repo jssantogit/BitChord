@@ -14,7 +14,7 @@ DI4a local journal, DI4b live reconciliation and DI4c portable evidence remain t
 Example after separately obtaining the exact artifact bytes and reviewed pins:
 
 ```bash
-python3 tools/delivery_artifact.py \
+python3 -m tools.delivery_artifact \
   --repo jssantogit/BitChord \
   --manifest .github/integration-batches/<reviewed-batch>.json \
   --content /tmp/di4-evidence/delivery-checkpoint.json \

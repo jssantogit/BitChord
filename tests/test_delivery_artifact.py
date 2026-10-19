@@ -1,12 +1,14 @@
 """DI4d: runner-independent, GET-only artifact provenance & pinning (RED)."""
 import copy
+import os
+from unittest.mock import patch
 from pathlib import Path
 import tempfile
 import unittest
 
 from tools.delivery_journal import initialize
 from tools.delivery_transfer import export_evidence
-from tools.delivery_artifact import ArtifactError, inspect_remote_evidence, GitHubArtifactReader
+from tools.delivery_artifact import ArtifactError, inspect_remote_evidence, GitHubArtifactReader, read_local_artifact
 
 MAIN = 'a' * 40
 HEAD = 'b' * 40
@@ -136,6 +138,34 @@ class ArtifactTests(unittest.TestCase):
                 self.inspect(**options)
         with self.assertRaises(ArtifactError):
             self.inspect(blob=b'x' * 65537)
+
+    def test_local_file_is_read_through_a_single_nofollow_descriptor(self):
+        with tempfile.TemporaryDirectory() as folder:
+            evidence = Path(folder) / 'evidence.json'
+            evidence.write_bytes(self.blob)
+            with patch.object(Path, 'read_bytes',
+                              side_effect=AssertionError('unsafe_second_path_open')):
+                self.assertEqual(self.blob, read_local_artifact(evidence))
+
+    def test_symlink_swap_at_file_open_fails_closed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            evidence = Path(folder) / 'evidence.json'
+            secret = Path(folder) / 'secret.txt'
+            evidence.write_bytes(self.blob)
+            secret.write_text('DO-NOT-READ-SECRET')
+            original = os.open
+
+            def replace_before_open(path, flags, *args, **kwargs):
+                if os.fspath(path) == os.fspath(evidence):
+                    evidence.unlink()
+                    evidence.symlink_to(secret)
+                return original(path, flags, *args, **kwargs)
+
+            with patch('tools.delivery_artifact.os.open',
+                       side_effect=replace_before_open):
+                with self.assertRaises(ArtifactError) as caught:
+                    read_local_artifact(evidence)
+            self.assertNotIn('DO-NOT-READ-SECRET', str(caught.exception))
 
     def test_live_reader_restricts_get_paths_and_repo(self):
         reader = GitHubArtifactReader(token=None)
