@@ -61,6 +61,17 @@ class PlannerTests(unittest.TestCase):
             with self.subTest(ps=ps), self.assertRaises(PlannerInputError):
                 plan({"main_sha": MAIN, "pull_requests": ps})
 
+    def test_actual_github_blocked_and_unstable_states_are_explained(self):
+        result = plan({"main_sha": MAIN, "pull_requests": [
+            pr(1, "perf/p1", mergeable="blocked"),
+            pr(2, "catalog/p2", mergeable="unstable"),
+            pr(3, "infra/p3", mergeable="draft"),
+        ]})
+        self.assertEqual([], result["manifest_proposal"]["items"])
+        self.assertIn("merge_policy_blocked", result["ordered"][0]["blockers"])
+        self.assertIn("ci_unstable", result["ordered"][1]["blockers"])
+        self.assertIn("draft", result["ordered"][2]["blockers"])
+
     def test_bounded_batch_never_approves_itself(self):
         p = plan({"main_sha": MAIN, "pull_requests": [
             pr(n, f"infra/p{n}") for n in (4, 2, 3, 1)]})
