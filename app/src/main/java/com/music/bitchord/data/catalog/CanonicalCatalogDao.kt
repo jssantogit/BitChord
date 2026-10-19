@@ -74,6 +74,51 @@ internal interface CanonicalCatalogDao {
         entityId: String,
     ): List<ExternalIdentityEntity>
 
+
+    /**
+     * One Recording's pre-existing, ordered evidence read under one Room transaction.
+     * No writes; MusicBrainz cache and canonical Artist identities remain untouched.
+     */
+    @Transaction
+    suspend fun recordingArtistCreditPreviewSnapshot(
+        recordingId: String,
+    ): com.music.bitchord.data.catalog.metadata.preview.RecordingArtistCreditPreviewSnapshot {
+        val evidence = musicBrainzRecordingArtistCredits(recordingId).map {
+            com.music.bitchord.data.catalog.metadata.preview.ArtistCreditEvidence(
+                position = it.position,
+                musicBrainzArtistId = it.musicBrainzArtistId,
+                name = it.name,
+                joinPhrase = it.joinPhrase,
+            )
+        }
+        val aliases = evidence.map { it.musicBrainzArtistId }.distinct()
+        val claims = aliases.associateWith { mbid ->
+            val artistId = entityIdForExternalIdentity("musicbrainz", "artist", mbid)
+            com.music.bitchord.data.catalog.metadata.preview.ArtistCreditClaim(
+                artistId = artistId,
+                artistExists = artistId != null && artistById(artistId) != null,
+                trustedMbids = artistId?.let {
+                    externalIdentitiesForEntity("musicbrainz", "artist", it)
+                        .map(ExternalIdentityEntity::externalId)
+                }.orEmpty(),
+            )
+        }
+        return com.music.bitchord.data.catalog.metadata.preview.RecordingArtistCreditPreviewSnapshot(
+            recordingId = recordingId,
+            recordingExists = recordingById(recordingId) != null,
+            trustedRecordingMbids = externalIdentitiesForEntity("musicbrainz", "recording", recordingId)
+                .map(ExternalIdentityEntity::externalId),
+            cachedRecordingMbid = musicBrainzRecordingEnrichment(recordingId)?.mbid,
+            evidenceCredits = evidence,
+            currentCanonicalCredits = recordingArtistCreditIds(listOf(recordingId)).map {
+                com.music.bitchord.data.catalog.metadata.preview.CanonicalArtistCredit(
+                    position = it.position, artistId = it.artistId,
+                )
+            },
+            claimsByArtistMbid = claims,
+        )
+    }
+
     @Upsert
     suspend fun upsertRecording(recording: RecordingEntity)
 

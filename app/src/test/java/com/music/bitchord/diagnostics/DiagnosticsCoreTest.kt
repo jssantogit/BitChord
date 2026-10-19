@@ -93,6 +93,71 @@ class DiagnosticsCoreTest {
     }
 
     @Test
+    fun `free text hides canonical identity and authenticated urls but preserves typed trace ids`() {
+        val rawId = "0b5f7683-2bea-4e4c-8ae0-ce0797afd50e"
+        val rawUri = "bitchord://canonical?recordingId=$rawId&mediaAssetId=$rawId&providerKey=opensubsonic%3A$rawId"
+        val rawUrl = "https://audio.invalid/rest/stream.view?id=private-track&token=secret-value"
+        val message = "no embedded lyrics in $rawUri; links:$rawId failed; upstream=$rawUrl"
+        val sanitized = DiagnosticSanitizer.freeText(message)
+
+        assertFalse(sanitized.contains(rawId))
+        assertFalse(sanitized.contains("bitchord://canonical"))
+        assertFalse(sanitized.contains("audio.invalid"))
+        assertFalse(sanitized.contains("private-track"))
+        assertFalse(sanitized.contains("secret-value"))
+        assertTrue(sanitized.contains("no embedded lyrics"))
+        assertTrue(sanitized.contains("links:"))
+
+        // The export formatter is the final persisted-capture / Share boundary,
+        // including legacy WARN and throwable text, not just a standalone helper.
+        val exported = DiagnosticFormatter.format(
+            event(name = "debug_log:BitChord").copy(
+                level = DiagnosticLevel.WARN,
+                message = message,
+                error = message,
+            ),
+        )
+        assertFalse(exported.contains(rawId))
+        assertFalse(exported.contains("bitchord://canonical"))
+        assertFalse(exported.contains("audio.invalid"))
+        assertTrue(exported.contains("no embedded lyrics"))
+
+        val structured = DiagnosticFormatter.format(
+            event(name = "trace_event", metadata = mapOf("traceId" to rawId)),
+        )
+        assertTrue(structured.contains("traceId=$rawId"))
+    }
+
+    @Test
+    fun `verbose legacy text redacts opaque provider media ids without removing useful context`() {
+        val videoOne = "AbCD12_-xYz"
+        val videoTwo = "XYz_9876-Ab"
+        val albumId = "9876543210"
+        val raw = "radio:$videoOne ok; links:$videoTwo ok; motion artwork on album 'EXAMPLE - EP' ($albumId); home:more ok"
+        val result = DiagnosticSanitizer.freeText(raw)
+
+        assertFalse(result.contains(videoOne))
+        assertFalse(result.contains(videoTwo))
+        assertFalse(result.contains(albumId))
+        assertTrue(result.contains("radio:<id> ok"))
+        assertTrue(result.contains("links:<id> ok"))
+        assertTrue(result.contains("motion artwork on album 'EXAMPLE - EP' (<id>)"))
+        assertTrue(result.contains("home:more ok"))
+
+        val exported = DiagnosticFormatter.format(
+            event(name = "debug_log:BitChord").copy(
+                level = DiagnosticLevel.DEBUG,
+                category = DiagnosticCategory.OTHER,
+                message = raw,
+            ),
+        )
+        assertFalse(exported.contains(videoOne))
+        assertFalse(exported.contains(videoTwo))
+        assertFalse(exported.contains(albumId))
+        assertTrue(exported.contains("motion artwork on album"))
+    }
+
+    @Test
     fun `capture window is active only before its expiry`() {
         assertTrue(CaptureWindow(expiresAtEpochMillis = 2_000L).isActive(nowEpochMillis = 1_999L))
         assertFalse(CaptureWindow(expiresAtEpochMillis = 2_000L).isActive(nowEpochMillis = 2_000L))

@@ -137,6 +137,7 @@ private fun DiagnosticsPanel(
     onRestartAndCapture: () -> Unit,
 ) {
     var status by remember { mutableStateOf(Diagnostics.captureStatus()) }
+    var mode by remember { mutableStateOf(Diagnostics.diagnosticMode()) }
     var refreshToken by remember { mutableStateOf(0) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -144,6 +145,7 @@ private fun DiagnosticsPanel(
 
     fun refresh() {
         status = Diagnostics.captureStatus()
+        mode = Diagnostics.diagnosticMode()
         refreshToken += 1
     }
 
@@ -194,6 +196,39 @@ private fun DiagnosticsPanel(
         Text(
             "Start capture here, reproduce the problem in BitChord, return here, inspect the events, then share the report. Persistent capture expires automatically after one hour.",
             style = MaterialTheme.typography.bodyMedium,
+        )
+
+        OutlinedButton(
+            onClick = {
+                val target = if (mode == DiagnosticMode.STANDARD) {
+                    DiagnosticMode.VERBOSE
+                } else {
+                    DiagnosticMode.STANDARD
+                }
+                runControl("Diagnostics mode changed to ${target.name.lowercase()}") {
+                    check(Diagnostics.setDiagnosticMode(target)) {
+                        "Could not persist diagnostics mode"
+                    }
+                }
+            },
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                if (mode == DiagnosticMode.STANDARD) {
+                    "Mode: Standard"
+                } else {
+                    "Mode: Verbose"
+                },
+            )
+        }
+        Text(
+            if (mode == DiagnosticMode.STANDARD) {
+                "Standard records structured traces plus legacy warnings/errors. Legacy Debug/Info free-text is suppressed."
+            } else {
+                "Verbose also records legacy Debug/Info free-text. Use it only for targeted investigations; this choice persists through restart until changed."
+            },
+            style = MaterialTheme.typography.bodySmall,
         )
 
         Row(

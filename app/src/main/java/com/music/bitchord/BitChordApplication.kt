@@ -39,6 +39,8 @@ import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.SearchHistory
 import com.music.bitchord.data.sources.SourceRegistry
+import com.music.bitchord.data.sources.SourceResolver
+import com.music.bitchord.data.sources.StructuredSourceResolutionTraceReporter
 import com.music.bitchord.data.stats.ArtistFacts
 import com.music.bitchord.data.stats.ListeningStats
 import com.music.bitchord.download.Downloads
@@ -56,6 +58,9 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         Diagnostics.install(this)
         if (BuildConfig.DEBUG) {
             com.music.bitchord.diagnostics.RuntimePerformanceMonitor.install(this)
+            // Process-wide watchdog: no periodic work in non-debug builds.
+            com.music.bitchord.diagnostics.MainThreadStallDetector.install()
+            SourceResolver.traceReporter = StructuredSourceResolutionTraceReporter(Diagnostics.structuredTracer())
         }
         // The player is drawn by the shared UI module; this is what it reads
         // underneath — settings, the Canvas decoder, outputs, the party.

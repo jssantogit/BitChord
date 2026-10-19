@@ -15,6 +15,8 @@ import android.net.Uri
 import android.widget.Toast
 import android.os.Bundle
 import android.os.Handler
+import com.music.bitchord.BuildConfig
+import com.music.bitchord.diagnostics.Diagnostics
 import android.os.SystemClock
 import com.music.bitchord.data.TelemetryProvenance
 import kotlinx.coroutines.sync.Mutex
@@ -852,6 +854,23 @@ class PlaybackService : MediaLibraryService() {
      * — and this has to move with it. It is attached to exactly one player at a
      * time: the one [player] names.
      */
+    private val playbackE2ETraceObserver: PlaybackE2ETraceObserver? by lazy {
+        if (!BuildConfig.DEBUG) {
+            null
+        } else {
+            val timeoutHandler = Handler(android.os.Looper.getMainLooper())
+            PlaybackE2ETraceObserver(
+                tracer = Diagnostics.structuredTracer(),
+                scheduleTimeout = { delayMs, onTimeout ->
+                    val runnable = Runnable { onTimeout() }
+                    timeoutHandler.postDelayed(runnable, delayMs)
+                    val cancel: () -> Unit = { timeoutHandler.removeCallbacks(runnable) }
+                    cancel
+                },
+            )
+        }
+    }
+
     private val playbackListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             val activePlayer = this@PlaybackService.player ?: return
@@ -862,6 +881,7 @@ class PlaybackService : MediaLibraryService() {
             // The player this fired on, which is by definition the one the
             // session is currently pointed at.
             val exoPlayer = player ?: return
+            if (isPlaying) playbackE2ETraceObserver?.onAudible(exoPlayer.currentMediaItem?.mediaId)
             // The only number that describes what a listener actually
             // waits through. Every other timing in this app measures one
             // leg of getting a track started — a resolve, a client walk, an
@@ -949,6 +969,11 @@ class PlaybackService : MediaLibraryService() {
          * on the audio, which is what the media notification shows too.
          */
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (playWhenReady) {
+                playbackE2ETraceObserver?.onPlayAccepted(player?.currentMediaItem?.mediaId)
+            } else {
+                playbackE2ETraceObserver?.onPaused()
+            }
             // Something started the phone's own player while a receiver is the
             // speaker — an internal path, since the session player's door
             // already sends a listener's play to the receiver. The phone goes
@@ -984,6 +1009,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            playbackE2ETraceObserver?.onMediaChanged(mediaItem?.mediaId)
             // The player this fired on, which is by definition the one the
             // session is currently pointed at.
             val exoPlayer = player ?: return
@@ -1050,6 +1076,7 @@ class PlaybackService : MediaLibraryService() {
          * broken app looks like from the outside.
          */
         override fun onPlayerError(error: PlaybackException) {
+            playbackE2ETraceObserver?.onError()
             // The player this fired on, which is by definition the one the
             // session is currently pointed at.
             val exoPlayer = player ?: return
@@ -1059,6 +1086,11 @@ class PlaybackService : MediaLibraryService() {
         // Nothing follows the last track, so there is no transition to
         // pause on — the queue simply runs out and the timer is spent.
         override fun onPlaybackStateChanged(state: Int) {
+            if (state == Player.STATE_READY) {
+                playbackE2ETraceObserver?.onReady(player?.currentMediaItem?.mediaId)
+            } else if (state == Player.STATE_IDLE || state == Player.STATE_ENDED) {
+                playbackE2ETraceObserver?.onPaused()
+            }
             // The player this fired on, which is by definition the one the
             // session is currently pointed at.
             val exoPlayer = player ?: return
