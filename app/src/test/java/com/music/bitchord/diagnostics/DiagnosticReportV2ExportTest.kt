@@ -61,4 +61,31 @@ class DiagnosticReportV2ExportTest {
         assertEquals(1L, store.captureRotationsSinceOpen)
         assertEquals(2, store.captureFiles().size)
     }
+    @Test fun legacyCaptureAndCrashCannotLeakPreSanitizerSecretsInSharedTxt() {
+        val store = DiagnosticFileStore(temp.newFolder(), 4096L)
+        val privateId = "dd51b6f2-2a2a-4f7b-aa8f-a8aa0136a70e"
+        val rawUrl = "https://private.example.test/rest/stream?token=super-private"
+        store.appendCapture("legacy provider failed: $rawUrl recordingId=$privateId")
+        store.writeLastCrash("fatal: Authorization: Bearer older-secret $rawUrl")
+        val report = store.createExport(
+            metadataLines = listOf("lastEndpoint=$rawUrl"),
+            recentEventLines = listOf("legacy audio id=$privateId"),
+            fileName = "privacy.txt",
+            reportV2Input = DiagnosticReportV2Input(
+                recentEvents = emptyList(),
+                flushComplete = true,
+                rejectedWrites = 0L,
+                evictedMemoryEvents = 0L,
+            ),
+            includeJsonl = true,
+        ).readText()
+        assertTrue(report.contains("[persisted-capture]"))
+        assertTrue(report.contains("[last-crash]"))
+        assertTrue(report.contains("[report-v2]"))
+        listOf("private.example.test", "super-private", privateId, "older-secret")
+            .forEach { assertFalse("export leaked $it", report.contains(it)) }
+        assertTrue(report.contains("<uri>"))
+        assertTrue(report.contains("unparsed_legacy_capture_lines="))
+    }
+
 }
