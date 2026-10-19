@@ -53,6 +53,11 @@ class DiagnosticBuffer(
     private val lock = Any()
     private val events = ArrayDeque<DiagnosticEvent>(capacity)
     private var nextSequence = 0L
+    private var evictions = 0L
+
+    /** Known ring losses since last clear; unknown losses before this process are excluded. */
+    val evictedCount: Long
+        get() = synchronized(lock) { evictions }
 
     val size: Int
         get() = synchronized(lock) { events.size }
@@ -60,7 +65,10 @@ class DiagnosticBuffer(
     fun append(event: DiagnosticEvent): DiagnosticEvent = synchronized(lock) {
         val numbered = if (event.sequence > 0L) event else event.copy(sequence = ++nextSequence)
         if (numbered.sequence > nextSequence) nextSequence = numbered.sequence
-        if (events.size == capacity) events.removeFirst()
+        if (events.size == capacity) {
+            events.removeFirst()
+            evictions++
+        }
         events.addLast(numbered)
         numbered
     }
@@ -68,7 +76,7 @@ class DiagnosticBuffer(
     fun snapshot(): List<DiagnosticEvent> = synchronized(lock) { events.toList() }
 
     fun clear() {
-        synchronized(lock) { events.clear() }
+        synchronized(lock) { events.clear(); evictions = 0L }
     }
 }
 
