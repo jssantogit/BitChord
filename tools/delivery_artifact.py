@@ -136,15 +136,18 @@ def inspect_remote_evidence(reader, manifest, *, run_id, attempt,
 
 
 def read_local_artifact(path):
-    """Read a single already-extracted checkpoint file; reject symlinks."""
+    """Read through one no-follow file descriptor, avoiding path-swap races."""
     try:
-        file = Path(path)
-        info = file.lstat()
-        _need(stat.S_ISREG(info.st_mode) and
-              0 < info.st_size <= MAX_BYTES and not file.is_symlink())
-        blob = file.read_bytes()
-        _need(len(blob) == info.st_size)
-        return blob
+        # NONBLOCK prevents an attacker-provided FIFO from hanging before fstat.
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW |
+                     os.O_NONBLOCK | os.O_CLOEXEC)
+        with os.fdopen(fd, 'rb') as source:
+            info = os.fstat(source.fileno())
+            _need(stat.S_ISREG(info.st_mode) and
+                  0 < info.st_size <= MAX_BYTES)
+            blob = source.read(MAX_BYTES + 1)
+            _need(len(blob) == info.st_size)
+            return blob
     except Exception:
         raise ArtifactError('untrusted_or_incomplete_artifact') from None
 
