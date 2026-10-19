@@ -99,10 +99,9 @@ private val PIPELINE_ICON_TINT = Color.White.copy(alpha = 0.6f)
  *    `PrecisionAudioSink.publishOutputExactness`.
  *
  * This used to be gated behind a Bit-perfect mode that turned the DSP stages
- * off for you. The mode is gone — with every stage already idle the samples
- * were bit-exact without it, so the toggle mostly duplicated the Output
- * precision preference — but the readout is not, because "is it exact right
- * now" is worth answering whether or not there is a switch that forces it.
+ * off for you. The mode is gone. PCM encoding preservation inside the app is not proof
+ * of end-to-end bit-perfect output: the Android mixer/HAL and selected route
+ * must be independently observed before a positive claim is permitted.
  */
 private fun bitExactVerdict(
     dsd: Boolean,
@@ -120,7 +119,7 @@ private fun bitExactVerdict(
     loudnessActive -> "No — loudness normalization"
     eqActive -> "No — equalizer"
     spatialActive -> "No — spatial audio"
-    else -> when (AudioFidelityTruth.classify(outputExact, anyDsp = false, routeActuallyObserved)) {
+    else -> when (AudioFidelityTruth.classify(outputExact, anyDsp = false, routeActuallyObserved = routeActuallyObserved)) {
         FidelityTruth.ALTERED -> "No — ${outputExactDetail ?: "converted downstream"}"
         FidelityTruth.PCM_EXACT_ROUTE_NOT_PROVEN -> "Not proven — PCM exact to AudioTrack; output route not verified"
         FidelityTruth.END_TO_END_VERIFIED -> "Yes${outputExactDetail?.let { " ($it)" }.orEmpty()}"
