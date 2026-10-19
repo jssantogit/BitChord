@@ -10,6 +10,8 @@ on:
         type: choice
         options:
           - pilot-o2
+          - playback-b2-b3
+          - catalog-listening-c3-l2
       mode:
         description: Read-only plan, or explicitly gated serial integration
         required: true
