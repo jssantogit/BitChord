@@ -26,8 +26,9 @@ class AndroidCIQueueContractTests(unittest.TestCase):
         self.assertIn("group: android-ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}", self.workflow)
         self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", self.workflow)
 
-    def test_all_active_pr_heads_use_one_lossless_job_queue(self):
-        self.assertIn("group: ${{ github.event_name == 'pull_request' && 'bitchord-android-pr-queue' || format('bitchord-android-main-{0}', github.sha) }}", self.workflow)
+    def test_all_active_pr_heads_use_two_lossless_job_queues(self):
+        self.assertIn("'bitchord-android-pr-lane-a'", self.workflow)
+        self.assertIn("'bitchord-android-pr-lane-b'", self.workflow)
         self.assertIn('      queue: max\n      cancel-in-progress: false', self.workflow)
 
     def test_main_is_independent_of_pr_lane(self):
