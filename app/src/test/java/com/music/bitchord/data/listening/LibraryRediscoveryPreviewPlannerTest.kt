@@ -197,6 +197,66 @@ class LibraryRediscoveryPreviewPlannerTest {
         ).preview((0 until 7).map { candidate("id:$it") }).size)
     }
 
+    @Test
+    fun `presentation is read only typed and retains source order and evidence`() {
+        val ranked = listOf(
+            candidate("fresh", lastAudible = NOW - 2L * DAY),
+            candidate("old", rating = 4.5, completions = 2,
+                manualSelections = 1, lastAudible = NOW - 70L * DAY,
+                lastEvent = NOW - 70L * DAY),
+            candidate("unplayed", rating = 5.0, completions = 0, lastAudible = null),
+            candidate("older", lastAudible = NOW - 50L * DAY,
+                lastEvent = NOW - 50L * DAY),
+        )
+        val shortlist = planner.preview(ranked)
+        val before = shortlist.toList()
+        val items = LibraryRediscoveryPresentationContract().present(shortlist)
+        assertEquals(listOf("old", "older"), items.map { it.recordingId })
+        assertEquals(listOf(1, 2), items.map { it.shelfPosition })
+        assertEquals(listOf(2, 4), items.map { it.rankPosition })
+        assertEquals(listOf(70L, 50L), items.map { it.daysSinceLastAudible })
+        assertEquals(NOW - 70L * DAY, items.first().lastAudibleListenAtEpochMs)
+        assertEquals(NOW - 70L * DAY, items.first().lastInteractionAtEpochMs)
+        assertEquals(
+            listOf(RediscoveryReason.POSITIVE_EXPLICIT_PREFERENCE,
+                RediscoveryReason.CONFIRMED_POSITIVE_BEHAVIOR, RediscoveryReason.LONG_ABSENCE),
+            items.first().reasonCodes,
+        )
+        assertEquals(
+            RediscoveryPresentationAvailability.AVAILABLE_AT_SNAPSHOT,
+            items.first().availability,
+        )
+        assertTrue(items.all { it.canNavigateToCanonicalRecording })
+        assertEquals(before, shortlist)
+        assertEquals(listOf("fresh", "old", "unplayed", "older"),
+            ranked.map { it.base.base.recordingId })
+        assertEquals(items, LibraryRediscoveryPresentationContract().present(shortlist))
+    }
+
+    @Test
+    fun `presentation is empty without evidence and caps to five without reranking`() {
+        val presentation = LibraryRediscoveryPresentationContract()
+        assertTrue(presentation.present(emptyList()).isEmpty())
+        assertTrue(presentation.present(planner.preview(listOf(
+            candidate("only-start", starts = 9, completions = 0, lastAudible = null),
+            candidate("negative", rating = 2.0, completions = 3),
+        ))).isEmpty())
+        val expanded = LibraryRediscoveryPreviewPlanner(
+            policy = LibraryRediscoveryPreviewPolicy(maxResults = 10),
+            nowEpochMs = { NOW },
+        ).preview((0 until 8).map { index ->
+            candidate("rec:$index", lastAudible = NOW - (40L + index) * DAY,
+                lastEvent = NOW - (40L + index) * DAY)
+        })
+        val items = presentation.present(expanded)
+        assertEquals(8, expanded.size)
+        assertEquals(5, items.size)
+        assertEquals(expanded.take(5).map { it.recordingId },
+            items.map { it.recordingId })
+        assertEquals((1..5).toList(), items.map { it.shelfPosition })
+        assertTrue(items.all { RediscoveryReason.LONG_ABSENCE in it.reasonCodes })
+    }
+
     private fun candidate(
         id: String,
         score: Double = 30.0,
