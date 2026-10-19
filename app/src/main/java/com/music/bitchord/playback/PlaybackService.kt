@@ -5821,8 +5821,34 @@ class PlaybackService : MediaLibraryService() {
     /** Restore the bounded queue without preparing or resolving a stream. */
     private fun restoreLastQueue(player: ExoPlayer): Boolean {
         val last = LastPlayed.load() ?: return false
+        // A deleted MediaStore row can remain in the physical compatibility
+        // snapshot even after the local library scanner has removed it.
+        // Validate only concrete local file identities, off the main thread,
+        // before a phantom track reaches Media3/MiniPlayer. Unknown provider
+        // availability and remote tracks must never be pruned.
+        val available = runBlocking(Dispatchers.IO) {
+            DeletedLocalMediaRestore.filter(last) { song ->
+                DeletedLocalMediaAvailability.definitelyMissing(this@PlaybackService, song)
+            }
+        }
+        if (available == null) {
+            LastPlayed.clearImmediately()
+            return false
+        }
+        if (available.songs.size != last.songs.size) {
+            // The stale item must not reappear on the next process restart.
+            // Preserve the surviving entry IDs and only reset position when
+            // the selected entry changed; do not fabricate Listening events.
+            LastPlayed.saveQueueImmediately(
+                available.songs, available.index, available.positionMs,
+            )
+        }
         persistedQueueStart = 0
-        player.setMediaItems(last.songs.map { it.toMediaItem() }, last.index, last.positionMs)
+        player.setMediaItems(
+            available.songs.map { it.toMediaItem() },
+            available.index,
+            available.positionMs,
+        )
         return true
     }
 
