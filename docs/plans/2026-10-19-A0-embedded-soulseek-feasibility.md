@@ -1,7 +1,7 @@
 # A0 — Embedded Soulseek Feasibility v0
 
 **Date:** 2026-10-19  
-**Scope:** research and architecture only; no network/device execution authorized  
+**Scope:** feasibility report and loopback-only Android/Kotlin socket experiment; no external network/device execution authorized  
 **Decision state:** MOBILE_CLIENT_PREFERRED / ENGINE_INTEGRATION_NOT_PROVEN  
 **Recovery:** NO_EXISTING_IMPLEMENTATION (scope-limited verified search)  
 **Operational gate:** REAL_NETWORK_NOT_EXERCISED
@@ -46,28 +46,35 @@ Additional repository-level evidence:
 - No implicit file sharing, local-storage enumeration or listening server by default. Clearly disclose P2P peer-IP visibility and NAT/CGNAT limits; bound file size, storage quota, sockets, timeouts and retries. Keystore-backed secret storage is for production only. Never put passwords, IPs, peer paths or user queries into logs.
 - `CanonicalLocalLibrary.sync` can create a fresh random `RecordingId` for a new, unbound URI. A4 must agree on an explicit, atomic/idempotent `RecordingId ↔ published MediaStore URI` seam **with Catalog ownership**; filename, metadata and peer are not trusted identity.
 
-## 4. Prototype gate and falsifiable results
+## 4. Implemented Kotlin A0 loopback spike, gates and evidence
 
-A0 investigation demonstrates **source-level** feasibility of an Android-targeted C# Soulseek client (Seeker). It does **not** demonstrate an engine integrated into BitChord.
+The branch adds a deliberately isolated `internal` probe in `app/src/main/java/com/music/bitchord/acquisition/a0/A0SoulseekLoopbackProbe.kt` and its JUnit test in `app/src/test/java/com/music/bitchord/acquisition/a0/A0SoulseekLoopbackProbeTest.kt`. It has **no app UI entry point, no manifest/service changes, no added runtime dependency** and refuses all non-loopback endpoints *before* attempting name resolution or any TCP connection.
 
-No executable networking prototype or third-party protocol code has been committed here: there is no verified approach yet for bundling .NET Android components into the existing Kotlin/Gradle one-APK application, and importing GPL/AGPL code without completing provenance/notice obligations would be premature. This is a real blocker rather than a simulated success.
+The probe exercises upstream-documented Soulseek **server framing** over actual `127.0.0.1` sockets: little-endian message length + message code; login (code 1, user/password, protocol major 170, MD5 wire digest, test-only minor version) and login response (without propagating server text); FileSearch request (code 26, explicit token and search query). It uses a 4-second socket timeout, 1 MiB inbound frame limit, 512-byte query limit, typed login rejection and fail-closed close. **No inbound search-results parser, peer handshake, queue or file-transfer receiver exists in this probe.** Historical Soulseek MD5 hashing is required by the **wire protocol** and is *not* secure credential storage; never reuse test credentials or minor ID for real login.
 
-Execution environment for this research: no Android device/emulator or Android SDK and no `dotnet` CLI available; shell GitHub networking was unavailable, so repository inspection used authenticated read-only GitHub APIs. Owner has **not authorized** real Soulseek credentials, peer network or device smoke.
+- Protocol reference, not imported third-party code: [Soulseek.NET login request](https://github.com/jpdillingham/Soulseek.NET/blob/master/src/Messaging/Messages/Server/LoginRequest.cs), [FileSearch request](https://github.com/jpdillingham/Soulseek.NET/blob/master/src/Messaging/Messages/Server/SearchRequest.cs), [message framing](https://github.com/jpdillingham/Soulseek.NET/blob/master/src/Messaging/MessageBuilder.cs), [login response](https://github.com/jpdillingham/Soulseek.NET/blob/master/src/Messaging/Messages/Server/LoginResponse.cs). The GPL-3.0-only + §7 NOTICE remains a downstream import/derivative assessment requirement.
+- Real localhost socket JUnit tests cover field encoding and MD5 test vector, search request, closure after explicit session end, denial redaction, early non-loopback refusal, search-before-auth guard and oversized payload fail-closed.
+- **TDD order:** tests committed first at `5e58482584cfdeecde36ee19720c498c9e17e96f`; [RED Android CI #672](https://github.com/jssantogit/BitChord/actions/runs/39288074237) was **cancelled** due to PR concurrency before a failure/success result, so CI RED proof must not be claimed. Implementation at `53f0bd879964238500f747cce7a60921b6e20400`; [Android CI #674](https://github.com/jssantogit/BitChord/actions/runs/39288252165) triggered on exact code HEAD, last observed `in_progress`. Before declaring GREEN, inspect the result and final latest HEAD check.
+- Environment includes JDK/Kotlin but no Android SDK, .NET CLI, Android device or emulator; no real credentials or external peer network were authorized.
 
 | Gate | Observed result |
 | --- | --- |
-| Existing A0 implementation | `NO_EXISTING_IMPLEMENTATION` from live scoped search |
-| Runtime reference on Android | `SOURCE_TARGET_VERIFIED`: Seeker's `net10.0-android36.0` project |
-| slskd Android-hosted build | `NOT_BUILT / NOT_PROVEN` |
-| Seeker/Soulseek.NET embedded in Kotlin BitChord APK | `NOT_BUILT / NOT_PROVEN` |
-| Android install & launch / foreground lifecycle | `DEVICE_NOT_AVAILABLE` |
-| Soulseek login/search/selection/socket transfer | `REAL_NETWORK_NOT_EXERCISED` |
-| Authorized audio bytes/hash/codec | `NOT_MEASURED` |
-| Startup latency, RSS/Java/native heap, CPU, APK delta, radio/battery | `NOT_MEASURED` |
-| RED→GREEN A0 behavioral tests | `NOT_EXECUTED` (documentation-only checkpoint) |
-| GitHub PR check | See this PR's live CI on exact head; unrelated main #592 is not a branch result |
+| Recovery | `NO_EXISTING_IMPLEMENTATION` after scoped live audit |
+| Source-targeted client | `SEEKER_ANDROID_PROJECT_VERIFIED` (`net10.0-android36.0`) |
+| Android Kotlin app source & localhost framing | `IMPLEMENTED, CI_CHECK_PENDING`; tests execute TCP *only on localhost* |
+| Upstream slskd daemon embedded into APK | `NOT_BUILT / NOT_SELECTED` |
+| Full Soulseek login / search responses / selected peer | `REAL_NETWORK_NOT_EXERCISED` / `NOT_IMPLEMENTED` |
+| Authenticated P2P download, authorized audio, SHA-256/codec | `NOT_IMPLEMENTED / NOT_MEASURED` |
+| Android physical installation and process-death / background behavior | `DEVICE_NOT_EXERCISED` |
+| Startup latency, RSS/heap, CPU, APK delta, radio/battery | `NOT_MEASURED` |
+| Source-code license import | `NONE`; protocol fields independently encoded, legal review still pending |
+| Merge and productive slices | `NOT_AUTHORIZED` |
 
-Do **not** promote `SOURCE_TARGET_VERIFIED` to `REAL_SOULSEEK_TRANSFER_PROVEN`. The minimum actual acceptance test requires: one APK on a real API26/34/36-representative device; user-requested start; login with dedicated authorized account; search, explicit candidate, P2P transfer of owner-created/licensed audio into app-private temporary storage; byte count, SHA-256, file format and session logout/idle close; then latency/memory/CPU and recoverable failure evidence with redacted logs. Separate explicit operational authorization required before the test.
+**Important:** localhost server fixture is not the Soulseek service, a search candidate, a peer, or an audio transfer. This experiment only narrows the feasibility risk of building a small Kotlin packet framing layer inside BitChord, while full protocol implementation is still unproven and may be too costly to maintain.
+
+The Seeker [fork changes record](https://github.com/jackBonadies/SeekerAndroid/blob/master/Seeker/Soulseek.NET-master/SEEKER-CHANGES.md) specifically documents dual-stack/IPv6-only carrier networking, Latin-1 filename fallbacks, transfer and concurrent search fixes. An eventual native implementation must reproduce **verified behaviors** through interoperability tests; do not extrapolate this localhost framing success to real mobile-peer reachability.
+
+**Real acceptance still requires** a single APK on representative Android versions, user-requested session, licensed test credentials, actual search response and explicit user candidate choice, P2P receipt of legally authorized audio into app-private storage, SHA-256/codec and idle shutdown, battery/CPU/memory measures. Physical device/network requires a separate explicit owner authorization.
 
 ## 5. Conditional architecture recommendation
 
@@ -94,5 +101,5 @@ All five are only **proposed**; implementation and merge require separate owner/
 
 1. Confirm owner approval for a dedicated **physical/network** proof with test credentials and an audio file for which sharing/download permission exists. Do **not** write credentials in GitHub, Notion, CI, or logs.
 2. Arrange a reproducible Android build environment capable of testing one-APK .NET/Kotlin interop **before** porting any source, alongside a native-JVM feasibility check. If neither can be compiled or isolated with credible app integration, retain blocker and revise technology choice.
-3. Write failing A0 runtime/lifecycle acceptance tests, prove RED, implement only scoped spike, prove GREEN on the same HEAD and capture Android CI; then run approved real network smoke separately.
+3. Retain the committed loopback protocol tests; verify Android CI result on the exact final HEAD, and record the RED run's cancellation accurately. Add further RED→GREEN acceptance tests only for a genuinely selected and approved integration engine; do not mistake localhost for the production network.
 4. Return measurements and evidence to orchestration; no A1–A5 or merge until explicitly approved.
