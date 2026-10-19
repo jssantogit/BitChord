@@ -1,5 +1,8 @@
 package com.music.bitchord.data.sources
 
+import com.music.bitchord.data.TrackLog
+import kotlinx.coroutines.withContext
+
 import com.music.bitchord.observability.StructuredTrace
 import com.music.bitchord.observability.TraceFlowContext
 import com.music.bitchord.observability.StructuredTracer
@@ -76,7 +79,9 @@ private class StructuredSourceResolutionRunTrace(
     private val trace: StructuredTrace,
 ) : SourceResolutionRunTrace {
     override suspend fun <T> lookup(block: suspend () -> T): T =
-        trace.spanSuspend(stage = "select_stream", block = block)
+        withContext(TrackLog.linkCorrelation(trace.flowId, trace.context().spanId)) {
+            trace.spanSuspend(stage = "select_stream", block = block)
+        }
 
     override fun complete(found: Boolean) {
         val outcome = if (found) TraceOutcome.SUCCEEDED else TraceOutcome.SKIPPED
