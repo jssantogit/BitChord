@@ -167,7 +167,12 @@ class DiagnosticFileStore(
         val terminated = if (line.endsWith('\n')) line else "$line\n"
         val bytes = terminated.toByteArray(Charsets.UTF_8)
         if (bytes.size <= maxCaptureBytes) return bytes
-        return bytes.copyOf(maxCaptureBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        // Reserve a newline and stop before any incomplete UTF-8 codepoint.
+        // The old byte slice could leave an invalid multibyte suffix and
+        // produce an unterminated, unparsable forensic event.
+        var end = (maxCaptureBytes - 1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        while (end > 0 && (bytes[end].toInt() and 0xC0) == 0x80) end--
+        return bytes.copyOf(end) + byteArrayOf('\n'.code.toByte())
     }
 
     private fun safeFileName(requested: String): String {
