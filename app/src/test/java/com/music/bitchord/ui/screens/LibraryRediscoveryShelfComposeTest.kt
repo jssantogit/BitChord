@@ -17,7 +17,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
 
 @RunWith(RobolectricTestRunner::class)
-@Config(application = Application::class, sdk = [35])
+@Config(application = Application::class, manifest = "src/test/AndroidManifest.xml", sdk = [35])
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class LibraryRediscoveryShelfComposeTest {
     @get:Rule val compose = createComposeRule()
