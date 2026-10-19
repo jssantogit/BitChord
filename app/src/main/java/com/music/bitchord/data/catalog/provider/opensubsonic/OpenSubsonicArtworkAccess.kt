@@ -229,19 +229,33 @@ internal class OpenSubsonicArtworkLoader(
             return OpenSubsonicArtworkLoadResult.Placeholder("SELECTION_MISMATCH")
         }
 
-        runCatching { cache.read(request.cacheKey) }
-            .getOrNull()
-            ?.takeIf { it.isNotEmpty() }
-            ?.let { cached ->
-                return OpenSubsonicArtworkLoadResult.Ready(cached, fromCache = true)
-            }
+        // Cache I/O is optional; coroutine cancellation is not. Do not continue
+        // an authenticated fetch after its owning UI selection was disposed.
+        val cached = try {
+            cache.read(request.cacheKey)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+        cached?.takeIf { it.isNotEmpty() }?.let {
+            return OpenSubsonicArtworkLoadResult.Ready(it, fromCache = true)
+        }
 
         return when (val fetched = request.fetch(transport)) {
             is OpenSubsonicArtworkFetchResult.Ready -> {
                 if (fetched.bytes.isEmpty()) {
                     OpenSubsonicArtworkLoadResult.Placeholder("EMPTY_ARTWORK")
                 } else {
-                    runCatching { cache.write(request.cacheKey, fetched.bytes) }
+                    // Do not publish a stale image when composition/selection
+                    // cancellation arrives during a cache write.
+                    try {
+                        cache.write(request.cacheKey, fetched.bytes)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        // A valid fetched image must still display on ordinary disk failure.
+                    }
                     OpenSubsonicArtworkLoadResult.Ready(fetched.bytes, fromCache = false)
                 }
             }
