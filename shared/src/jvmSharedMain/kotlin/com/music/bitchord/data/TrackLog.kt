@@ -79,32 +79,32 @@ object TrackLog {
     // record(), which is what Copy Log actually depends on.
 
     fun d(tag: String, message: String, about: String? = working.get()) {
-        echo?.invoke('D', tag, message, null)
+        echo?.invoke('D', sanitizeForExport(tag), sanitizeForExport(message), null)
         record('D', message, about)
     }
 
     fun i(tag: String, message: String, about: String? = working.get()) {
-        echo?.invoke('I', tag, message, null)
+        echo?.invoke('I', sanitizeForExport(tag), sanitizeForExport(message), null)
         record('I', message, about)
     }
 
     fun w(tag: String, message: String, about: String? = working.get()) {
-        echo?.invoke('W', tag, message, null)
+        echo?.invoke('W', sanitizeForExport(tag), sanitizeForExport(message), null)
         record('W', message, about)
     }
 
     fun w(tag: String, message: String, error: Throwable, about: String? = working.get()) {
-        echo?.invoke('W', tag, message, error)
+        echo?.invoke('W', sanitizeForExport(tag), sanitizeForExport("$message\n${error.stackTraceToString()}"), null)
         record('W', "$message\n${error.stackTraceToString()}", about)
     }
 
     fun e(tag: String, message: String, about: String? = working.get()) {
-        echo?.invoke('E', tag, message, null)
+        echo?.invoke('E', sanitizeForExport(tag), sanitizeForExport(message), null)
         record('E', message, about)
     }
 
     fun e(tag: String, message: String, error: Throwable, about: String? = working.get()) {
-        echo?.invoke('E', tag, message, error)
+        echo?.invoke('E', sanitizeForExport(tag), sanitizeForExport("$message\n${error.stackTraceToString()}"), null)
         record('E', "$message\n${error.stackTraceToString()}", about)
     }
 
@@ -146,10 +146,11 @@ object TrackLog {
      * history that matters.
      */
     private fun record(level: Char, message: String, about: String?) {
-        val text = if (message.length > MAX_LINE_CHARS) {
-            message.take(MAX_LINE_CHARS) + "…(${message.length - MAX_LINE_CHARS} more)"
+        val safe = sanitizeForExport(message)
+        val text = if (safe.length > MAX_LINE_CHARS) {
+            safe.take(MAX_LINE_CHARS) + "…(${safe.length - MAX_LINE_CHARS} more)"
         } else {
-            message
+            safe
         }
         synchronized(lines) {
             lines.addLast(Line(System.currentTimeMillis(), level, text, about))
@@ -235,6 +236,8 @@ object TrackLog {
         safe = Regex("""(?i)(\b(?:bearer|authorization\s*[:=]\s*bearer)\s+)[^\s,;]+""")
             .replace(safe) { match -> match.groupValues[1] + "<redacted>" }
         safe = Regex("""(?i)(\b(?:access_?token|token|api_?key|secret|password|cookie|session_?key)\s*[:=]\s*)[^\s,;]+""")
+            .replace(safe) { match -> match.groupValues[1] + "<redacted>" }
+        safe = Regex("""(?i)(\b(?:track_?id|video_?id|recording_?id|media_?id|artist|title|album)\s*[:=]\s*)[^\r\n,;]+""")
             .replace(safe) { match -> match.groupValues[1] + "<redacted>" }
         safe = Regex("""(?i)\b(?:radio|links):[A-Za-z0-9_-]{11}(?=\s|[,;.!?]|$)""")
             .replace(safe) { match -> match.value.substringBefore(':') + ":<id>" }
