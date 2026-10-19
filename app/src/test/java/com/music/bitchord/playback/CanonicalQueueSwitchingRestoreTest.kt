@@ -64,7 +64,7 @@ class CanonicalQueueSwitchingRestoreTest {
             calls++
             // Remote request is reconstructed strictly from canonical identities,
             // even when the account is offline. Only local URI is catalog-backed.
-            identities.map(::asset)
+            identities.map { it?.let(::asset) }
         }
         val restored = requireNotNull(CanonicalQueueMigration.rehydrate(decoded, resolver))
         val projected = requireNotNull(BoundedContextPersistence.restoreProjection(restored))
