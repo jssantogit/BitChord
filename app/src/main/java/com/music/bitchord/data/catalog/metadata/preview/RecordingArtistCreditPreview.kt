@@ -181,3 +181,82 @@ internal class RecordingArtistCreditPreviewRepository(
     suspend fun preview(recordingId: String): RecordingArtistCreditPreview =
         RecordingArtistCreditPreviewPlanner.plan(dao.recordingArtistCreditPreviewSnapshot(recordingId))
 }
+
+
+/**
+ * Strictly bounded, deterministic summary of recording-scoped, read-only proposals.
+ * READY_FOR_PROMOTION is informational only; batch preview has no apply operation.
+ */
+internal enum class BatchPreviewOutcome {
+    READY_FOR_PROMOTION,
+    ALREADY_MATCHES,
+    CONFLICT,
+    UNRESOLVED,
+    NO_EVIDENCE,
+    IDENTITY_CONFLICT,
+}
+
+internal data class RecordingArtistCreditBatchPreview(
+    val results: List<RecordingArtistCreditPreview>,
+    val countsByOutcome: Map<BatchPreviewOutcome, Int>,
+    val countsByIssue: Map<PreviewIssue, Int>,
+)
+
+/** Pure aggregation over independently validated #42 snapshots. Never produces partial credits. */
+internal object RecordingArtistCreditBatchPreviewPlanner {
+    const val MAX_RECORDINGS = 32
+
+    fun plan(snapshots: List<RecordingArtistCreditPreviewSnapshot>): RecordingArtistCreditBatchPreview {
+        require(snapshots.size <= MAX_RECORDINGS) { "Too many recordings in preview batch" }
+        require(snapshots.none { it.recordingId.isBlank() }) { "Recording IDs must not be blank" }
+        require(snapshots.map { it.recordingId }.distinct().size == snapshots.size) {
+            "Duplicate recording snapshot in preview batch"
+        }
+
+        val results = snapshots.sortedBy { it.recordingId }
+            .map(RecordingArtistCreditPreviewPlanner::plan)
+        val countsByOutcome = BatchPreviewOutcome.values().associateWith { outcome ->
+            results.count { result -> result.outcome() == outcome }
+        }
+        val countsByIssue = PreviewIssue.values().associateWith { issue ->
+            results.count { result -> result.issueOrNull() == issue }
+        }
+        return RecordingArtistCreditBatchPreview(results, countsByOutcome, countsByIssue)
+    }
+
+    private fun RecordingArtistCreditPreview.outcome(): BatchPreviewOutcome = when (this) {
+        is RecordingArtistCreditPreview.ReadyForPromotion -> BatchPreviewOutcome.READY_FOR_PROMOTION
+        is RecordingArtistCreditPreview.AlreadyMatches -> BatchPreviewOutcome.ALREADY_MATCHES
+        is RecordingArtistCreditPreview.Conflict -> BatchPreviewOutcome.CONFLICT
+        is RecordingArtistCreditPreview.Unresolved -> BatchPreviewOutcome.UNRESOLVED
+        is RecordingArtistCreditPreview.NoEvidence -> BatchPreviewOutcome.NO_EVIDENCE
+        is RecordingArtistCreditPreview.IdentityConflict -> BatchPreviewOutcome.IDENTITY_CONFLICT
+    }
+
+    private fun RecordingArtistCreditPreview.issueOrNull(): PreviewIssue? = when (this) {
+        is RecordingArtistCreditPreview.NoEvidence -> issue
+        is RecordingArtistCreditPreview.Unresolved -> issue
+        is RecordingArtistCreditPreview.IdentityConflict -> issue
+        else -> null
+    }
+}
+
+/**
+ * One multi-recording Room transaction. No network, name matching, writes, or implicit
+ * cache refresh. Duplicate caller IDs are coalesced, preserving a stable ascending order.
+ * Check the raw request bound BEFORE opening any Room transaction.
+ */
+internal class RecordingArtistCreditBatchPreviewRepository(
+    private val dao: CanonicalCatalogDao,
+) {
+    suspend fun previewBatch(recordingIds: List<String>): RecordingArtistCreditBatchPreview {
+        require(recordingIds.size <= RecordingArtistCreditBatchPreviewPlanner.MAX_RECORDINGS) {
+            "Too many recording IDs in preview request"
+        }
+        require(recordingIds.none(String::isBlank)) { "Recording IDs must not be blank" }
+        val orderedIds = recordingIds.distinct().sorted()
+        return RecordingArtistCreditBatchPreviewPlanner.plan(
+            dao.recordingArtistCreditBatchPreviewSnapshots(orderedIds),
+        )
+    }
+}

@@ -119,6 +119,18 @@ internal interface CanonicalCatalogDao {
         )
     }
 
+
+    /**
+     * An entire bounded batch is observed within one Room transaction to prevent
+     * hybrid snapshots while provider sync is updating canonical credit claims.
+     * No queries by provider-native ID and no writes.
+     */
+    @Transaction
+    suspend fun recordingArtistCreditBatchPreviewSnapshots(
+        recordingIds: List<String>,
+    ): List<com.music.bitchord.data.catalog.metadata.preview.RecordingArtistCreditPreviewSnapshot> =
+        recordingIds.map { recordingArtistCreditPreviewSnapshot(it) }
+
     @Upsert
     suspend fun upsertRecording(recording: RecordingEntity)
 
