@@ -73,7 +73,7 @@ jobs:
           BATCH: ${{ inputs.batch_slug }}
         run: |
           set -euo pipefail
-          python3 tools/delivery_checkpoint_pilot.py \
+          python3 -m tools.delivery_checkpoint_pilot \
             --repo jssantogit/BitChord \
             --manifest ".github/integration-batches/$BATCH.json" \
             --output "$RUNNER_TEMP/delivery-checkpoint.json" \
@@ -130,7 +130,7 @@ jobs:
           EXPECTED_MAIN: ${{ inputs.expected_main_sha }}
         run: |
           set -euo pipefail
-          python3 tools/delivery_artifact.py \
+          python3 -m tools.delivery_artifact \
             --repo jssantogit/BitChord \
             --manifest ".github/integration-batches/$BATCH.json" \
             --content "$RUNNER_TEMP/di4-evidence-in/delivery-checkpoint.json" \
