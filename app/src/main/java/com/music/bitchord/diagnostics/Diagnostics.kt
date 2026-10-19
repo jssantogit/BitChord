@@ -84,6 +84,22 @@ object Diagnostics {
             )
             restoreDiagnosticMode(app)
             restoreCaptureWindow(app)
+            // Local-only, best-effort typed recovery events. Never blocks source work.
+            DiagnosticFailureBreadcrumbs.sink = DiagnosticFailureSink { breadcrumb ->
+                event(
+                    category = breadcrumb.category,
+                    name = "failure_recovery",
+                    level = if (breadcrumb.outcome == DiagnosticRecoveryOutcome.RECOVERED) {
+                        DiagnosticLevel.INFO
+                    } else {
+                        DiagnosticLevel.WARN
+                    },
+                    metadata = mapOf(
+                        "reasonCode" to breadcrumb.reason.wireName,
+                        "recoveryOutcome" to breadcrumb.outcome.wireName,
+                    ),
+                )
+            }
             installCrashHandler()
             installed = true
             event(
