@@ -42,8 +42,8 @@ class TraceCorrelationD2Test {
         assertEquals(queue.context().spanId, starts[3].parentSpanId)
         assertEquals(provider.context().spanId, starts[4].parentSpanId)
         assertEquals(provider.context().spanId, starts[5].parentSpanId)
-        assertTrue(starts.all { it.flowId.startsWith("ref_") })
-        assertTrue(starts.none { it.flowId.contains("internal-id") })
+        assertTrue(starts.all { it.flowId?.startsWith("ref_") == true })
+        assertTrue(starts.none { it.flowId?.contains("internal-id") == true })
         val mapped = StructuredTraceDiagnosticMapper.map(starts[3]).metadata
         assertEquals(starts[3].flowId, mapped["flowId"])
         assertEquals(starts[3].parentSpanId, mapped["parentSpanId"])
