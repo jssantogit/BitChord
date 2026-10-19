@@ -50,6 +50,35 @@ auto-merges on multiple PRs simultaneously.
    live main SHA. Missing/false blocks execution. Set back to false to
    disable. The workflow has no schedule and never runs on PR changes.
 
+## Required safe authentication check before any execute
+
+Before enabling `INTEGRATION_WRITE_ENABLED`, verify the GitHub App installation
+and the environment approval path using the **separate manual workflow**
+[Verify Integration App Authentication](../.github/workflows/integration-auth-check.yml):
+
+1. Keep `INTEGRATION_WRITE_ENABLED` unset or `false` at repository scope.
+2. Actions → **Verify Integration App Authentication** → Run workflow →
+   branch `main` and `expected_main_sha` set to the live, reviewed
+   protected `main` HEAD. The workflow is manual only.
+3. The `integration-apply` environment should ask the named human reviewer
+   to approve the pending job. An unexpected bypass or no review request
+   means stop and inspect environment protection before proceeding.
+4. After human approval, the job uses `actions/create-github-app-token@v3`
+   with the **same permission set** as the real queue. It makes exclusively
+   GET requests to validate the token sees only BitChord, protected main,
+   the required active ruleset, PR and Actions read APIs. It never modifies
+   branches, PRs, rulesets, secrets or workflows.
+5. Require the exact log `AUTH CHECK OK: ... zero writes.`, check the
+   workflow status `completed/success`, and independently confirm that
+   the protected `main` SHA and relevant PRs did not change.
+
+This authentication check intentionally mints a short-lived GitHub App
+**write-capable** installation token, but the workflow performs **only GET**
+requests. Approval is still required. A GREEN auth check proves credentials
+and read APIs can be accessed, **not** that a real merge or post-merge
+gate has been exercised. Keep `INTEGRATION_WRITE_ENABLED` disabled until
+there is separate explicit user authorization for the first real integration.
+
 ## How to use
 
 GitHub → Actions → **Controlled Integration Queue** → Run workflow:
