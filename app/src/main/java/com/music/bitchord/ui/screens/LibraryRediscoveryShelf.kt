@@ -1,0 +1,276 @@
+package com.music.bitchord.ui.screens
+
+import android.content.Context
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.room.InvalidationTracker
+import com.music.bitchord.R
+import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReader
+import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReaders
+import com.music.bitchord.data.catalog.CanonicalRecordingArtistGroupingReaders
+import com.music.bitchord.data.catalog.RecordingEntity
+import com.music.bitchord.data.listening.ArtistAwareDiversityReranker
+import com.music.bitchord.data.listening.ExplorationRankedCandidate
+import com.music.bitchord.data.listening.LibraryRecommendationCandidateSource
+import com.music.bitchord.data.listening.LibraryRecommendationPipeline
+import com.music.bitchord.data.listening.LibraryRediscoveryPresentationContract
+import com.music.bitchord.data.listening.LibraryRediscoveryPreviewPlanner
+import com.music.bitchord.data.listening.ListeningEventDatabase
+import com.music.bitchord.data.listening.PersonalRanker
+import com.music.bitchord.data.listening.RediscoveryPresentationItem
+import com.music.bitchord.data.listening.RediscoveryReason
+import com.music.bitchord.data.listening.RoomListeningEventStore
+import com.music.bitchord.data.listening.RoomRecordingRatingStore
+import com.music.bitchord.data.listening.SessionContextReranker
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/** Presentation snapshot only. Never contains a sourceKey, provider ID, URL or queue request. */
+internal data class RediscoveryShelfRow(
+    val item: RediscoveryPresentationItem,
+    val title: String,
+    val artistDisplay: String,
+)
+
+internal sealed interface RediscoveryShelfUiState {
+    data object Loading : RediscoveryShelfUiState
+    data object Empty : RediscoveryShelfUiState
+    data class Ready(val items: List<RediscoveryShelfRow>) : RediscoveryShelfUiState
+}
+
+/**
+ * L2 adapter: consumes the complete real Library pipeline through #43 and L1.
+ * Metadata is read for at most five pre-selected IDs; no new eligibility rule,
+ * ranking, score or first-party event is introduced. Availability is checked again
+ * after the presentation snapshot to fail closed when a MediaAsset disappeared.
+ */
+internal class LibraryRediscoveryShelfReader(
+    private val fullRanking: suspend () -> List<ExplorationRankedCandidate>,
+    private val planner: LibraryRediscoveryPreviewPlanner,
+    private val presentation: LibraryRediscoveryPresentationContract,
+    private val availability: CanonicalLibraryAvailabilityReader,
+    private val recording: suspend (String) -> RecordingEntity?,
+) {
+    suspend fun load(): RediscoveryShelfUiState {
+        val items = presentation.present(planner.preview(fullRanking()))
+        if (items.isEmpty()) return RediscoveryShelfUiState.Empty
+        val availableIds = availability.availableRecordingIds().toSet()
+        val rows = items.mapNotNull { item ->
+            if (item.recordingId !in availableIds) return@mapNotNull null
+            val metadata = recording(item.recordingId) ?: return@mapNotNull null
+            RediscoveryShelfRow(
+                item = item,
+                title = metadata.title,
+                artistDisplay = metadata.artistDisplay,
+            )
+        }
+        return if (rows.isEmpty()) RediscoveryShelfUiState.Empty
+        else RediscoveryShelfUiState.Ready(rows)
+    }
+
+    /** A shelf click checks current canonical availability and eligibility again. */
+    suspend fun resolveForNavigation(recordingId: String): RediscoveryShelfRow? =
+        (load() as? RediscoveryShelfUiState.Ready)?.items
+            ?.firstOrNull { it.item.recordingId == recordingId }
+}
+
+private fun persistentRediscoveryShelfReader(context: Context): LibraryRediscoveryShelfReader {
+    val app = context.applicationContext
+    val catalog = CanonicalCatalogDatabase.get(app)
+    val listening = ListeningEventDatabase.get(app)
+    val availability = CanonicalLibraryAvailabilityReaders.persistent(app)
+    val behavior = RoomListeningEventStore(listening.listeningEventDao())
+    val ratings = RoomRecordingRatingStore(listening.recordingRatingDao())
+    val pipeline = LibraryRecommendationPipeline(
+        LibraryRecommendationCandidateSource(availability),
+        PersonalRanker(behavior, ratings),
+        SessionContextReranker(behavior),
+        ArtistAwareDiversityReranker(CanonicalRecordingArtistGroupingReaders.persistent(app)),
+    )
+    return LibraryRediscoveryShelfReader(
+        fullRanking = { pipeline.rank() }, // NO limit: #43 eligibility sees the complete ranking
+        planner = LibraryRediscoveryPreviewPlanner(),
+        presentation = LibraryRediscoveryPresentationContract(),
+        availability = availability,
+        recording = { id -> catalog.catalogDao().recordingById(id) },
+    )
+}
+
+/**
+ * Android-only Library slot. Room invalidations recompute data outside composition.
+ * On click, the Recording ID is revalidated, and an inert canonical detail dialog
+ * opens. The legacy track browse click would autoplay, so it must not be reused.
+ */
+@Composable
+internal fun LibraryRediscoveryShelfEntry(refreshToken: Any? = null) {
+    val context = LocalContext.current.applicationContext
+    val reader = remember(context) { persistentRediscoveryShelfReader(context) }
+    val changes = remember(reader) { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
+    val catalog = remember(context) { CanonicalCatalogDatabase.get(context) }
+    val listening = remember(context) { ListeningEventDatabase.get(context) }
+    val scope = rememberCoroutineScope()
+
+    DisposableEffect(catalog, listening, changes) {
+        val catalogObserver = object : InvalidationTracker.Observer(
+            "catalog_recording", "catalog_media_asset",
+        ) {
+            override fun onInvalidated(tables: Set<String>) { changes.tryEmit(Unit) }
+        }
+        val listeningObserver = object : InvalidationTracker.Observer(
+            "listening_event", "recording_rating_current",
+        ) {
+            override fun onInvalidated(tables: Set<String>) { changes.tryEmit(Unit) }
+        }
+        catalog.invalidationTracker.addObserver(catalogObserver)
+        listening.invalidationTracker.addObserver(listeningObserver)
+        onDispose {
+            catalog.invalidationTracker.removeObserver(catalogObserver)
+            listening.invalidationTracker.removeObserver(listeningObserver)
+        }
+    }
+    LaunchedEffect(refreshToken) { changes.emit(Unit) }
+    val state by produceState<RediscoveryShelfUiState>(
+        initialValue = RediscoveryShelfUiState.Loading, key1 = reader, key2 = changes,
+    ) {
+        changes.onStart { emit(Unit) }.collectLatest {
+            value = try {
+                withContext(Dispatchers.IO) { reader.load() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                RediscoveryShelfUiState.Empty // No false "forgotten" claim on failed reads
+            }
+        }
+    }
+
+    var selected by remember { mutableStateOf<RediscoveryShelfRow?>(null) }
+    LaunchedEffect(state) {
+        if (selected != null &&
+            (state as? RediscoveryShelfUiState.Ready)?.items
+                ?.none { it.item.recordingId == selected?.item?.recordingId } != false
+        ) selected = null
+    }
+    LibraryRediscoveryShelf(state = state, onRecordingClick = { recordingId ->
+        scope.launch {
+            val resolved = withContext(Dispatchers.IO) {
+                try { reader.resolveForNavigation(recordingId) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { null }
+            }
+            if (resolved != null) selected = resolved else changes.emit(Unit)
+        }
+    })
+    selected?.let { recording ->
+        AlertDialog(
+            onDismissRequest = { selected = null },
+            title = { Text(recording.title) },
+            text = { Text(recording.artistDisplay) },
+            confirmButton = {
+                TextButton(onClick = { selected = null }) {
+                    Text(stringResource(R.string.rediscovery_close))
+                }
+            },
+        )
+    }
+}
+
+/** Stable, compact Compose shelf; no independent sorting or selection state. */
+@Composable
+internal fun LibraryRediscoveryShelf(
+    state: RediscoveryShelfUiState,
+    onRecordingClick: (String) -> Unit,
+) {
+    if (state == RediscoveryShelfUiState.Empty) return
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
+        Text(
+            text = stringResource(R.string.rediscovery_title),
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+        )
+        when (state) {
+            RediscoveryShelfUiState.Loading -> Text(
+                text = stringResource(R.string.rediscovery_loading),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = 20.dp),
+            )
+            RediscoveryShelfUiState.Empty -> Unit
+            is RediscoveryShelfUiState.Ready -> LazyRow(
+                contentPadding = PaddingValues(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                items(state.items.take(5), key = { it.item.recordingId }) { row ->
+                    Card(
+                        modifier = Modifier.width(206.dp).clickable {
+                            onRecordingClick(row.item.recordingId)
+                        },
+                    ) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(
+                                text = row.title,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = row.artistDisplay,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = stringResource(
+                                    R.string.rediscovery_days,
+                                    row.item.daysSinceLastAudible,
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                            Text(
+                                text = stringResource(
+                                    if (RediscoveryReason.POSITIVE_EXPLICIT_PREFERENCE
+                                        in row.item.reasonCodes
+                                    ) R.string.rediscovery_reason_rating
+                                    else R.string.rediscovery_reason_behavior,
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -312,6 +312,7 @@ import com.music.bitchord.data.settings.LocalMusicSort
 import com.music.bitchord.ui.screens.HomeScreen
 import com.music.bitchord.ui.screens.LibraryGridPage
 import com.music.bitchord.ui.screens.LibraryScreen
+import com.music.bitchord.ui.screens.LibraryRediscoveryShelfEntry
 import com.music.bitchord.ui.screens.MoodGenrePlaylistsScreen
 import com.music.bitchord.ui.screens.SearchScreen
 import com.music.bitchord.data.settings.SongSort
@@ -3095,6 +3096,11 @@ private fun BitChordApp(
                             isPlaying = player.isPlaying,
                             title = stringResource(R.string.listen_now),
                             signedIn = signedIn,
+                            rediscovery = {
+                                LibraryRediscoveryShelfEntry(
+                                    refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
+                                )
+                            },
                             onSignIn = { webSession = WebSessionMode.SIGN_IN },
                             onItemClick = { item, shelfTitle ->
                                 val song = shelfSong(item)

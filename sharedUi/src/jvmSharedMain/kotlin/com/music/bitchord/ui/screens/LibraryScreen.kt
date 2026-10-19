@@ -116,6 +116,8 @@ fun LibraryScreen(
     deviceItems: List<ShelfItem>,
     /** The big "Library" heading; the desktop's pages carry none. */
     showTitle: Boolean = true,
+    /** Optional Android-owned canonical read-only shelf; desktop remains unchanged. */
+    rediscovery: (@Composable () -> Unit)? = null,
 ) {
     val pinnedPlaylists by AppUi.host.pinnedPlaylists.collectAsStateWithLifecycle()
     val onDevice = stringResource(Res.string.on_device)
@@ -141,6 +143,7 @@ fun LibraryScreen(
                 }
             }
             item(key = "replay") { replay() }
+            rediscovery?.let { shelf -> item(key = "rediscovery") { shelf() } }
             if (links.isNotEmpty()) {
                 item(key = "links") { LibraryLinkList(links = links, onClick = onShelfItemClick) }
             }
