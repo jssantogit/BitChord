@@ -15,11 +15,17 @@ or upload APKs. Physical smoke APKs remain explicit/manual by existing policy.
 PR #49 (C2) is hard-denied.
 
 The owner has enabled GitHub's `allow_auto_merge` and
-`allow_update_branch`. This v0 intentionally uses GitHub's **native
-update-branch REST operation followed by a protected exact-HEAD direct merge**
-rather than asynchronous `--auto`, because an independently completing
-auto-merge could bypass the controller's per-merge post-CI serial gate.
-Do not enable independent auto-merges on multiple PRs simultaneously.
+`allow_update_branch`. However, **a read-only GitHub Actions token may not
+receive these optional flags from the repository metadata API**. The controller
+validates exact repository identity and protected-branch ruleset instead of
+mistaking missing flags for disabled capabilities. Explicit
+`allow_merge_commit=false` remains a blocking condition. Auto-merge
+itself is **not used**: this controller uses GitHub's **native update-branch
+REST operation followed by a protected exact-HEAD direct merge** rather than
+asynchronous `--auto`, because independently completing auto-merge could
+bypass its per-merge post-CI serial gate. The actual GitHub endpoints
+enforce capabilities and are never bypassed. Do not enable independent
+auto-merges on multiple PRs simultaneously.
 
 ## Required setup before enabling execute
 

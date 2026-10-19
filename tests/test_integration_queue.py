@@ -43,7 +43,8 @@ class FakeAPI:
         self.post_shas = {}
 
     def repo_settings(self):
-        return {'allow_auto_merge': True, 'allow_update_branch': True,
+        return {'full_name': 'jssantogit/BitChord', 'default_branch': 'main',
+                'allow_auto_merge': True, 'allow_update_branch': True,
                 'allow_merge_commit': True}
 
     def branch(self):
@@ -134,6 +135,56 @@ class QueueTests(unittest.TestCase):
         self.run_controller(api)
         self.assertEqual([], api.calls)
         self.assertEqual(M, api.main)
+
+    def test_plan_accepts_missing_optional_switches_from_readonly_token(self):
+        api = FakeAPI()
+        api.repo_settings = lambda: {
+            'full_name': 'jssantogit/BitChord', 'default_branch': 'main',
+        }
+        self.run_controller(api, mode='plan')
+        self.assertEqual([], api.calls)
+        self.assertEqual(M, api.main)
+
+    def test_execute_uses_protected_merge_without_optional_settings_visibility(self):
+        api = FakeAPI()
+        api.repo_settings = lambda: {
+            'full_name': 'jssantogit/BitChord', 'default_branch': 'main',
+        }
+        self.run_controller(api, mode='execute')
+        self.assertEqual([('merge', 48, H1)], api.calls)
+        self.assertEqual(MERGE1, api.main)
+
+    def test_plan_does_not_require_write_features_enabled(self):
+        api = FakeAPI()
+        api.repo_settings = lambda: {
+            'full_name': 'jssantogit/BitChord', 'default_branch': 'main',
+            'allow_auto_merge': False, 'allow_update_branch': False,
+            'allow_merge_commit': True,
+        }
+        self.run_controller(api, mode='plan')
+        self.assertEqual([], api.calls)
+
+    def test_wrong_repository_metadata_blocks_plan_and_execute(self):
+        for mode in ('plan', 'execute'):
+            api = FakeAPI()
+            api.repo_settings = lambda: {
+                'full_name': 'someone-else/Other', 'default_branch': 'main',
+                'allow_auto_merge': True, 'allow_update_branch': True,
+                'allow_merge_commit': True,
+            }
+            with self.subTest(mode=mode), self.assertRaises(StopIntegration):
+                self.run_controller(api, mode=mode)
+            self.assertEqual([], api.calls)
+
+    def test_explicitly_disabled_merge_commits_still_block_execution(self):
+        api = FakeAPI()
+        api.repo_settings = lambda: {
+            'full_name': 'jssantogit/BitChord', 'default_branch': 'main',
+            'allow_merge_commit': False,
+        }
+        with self.assertRaises(StopIntegration):
+            self.run_controller(api, mode='execute')
+        self.assertEqual([], api.calls)
 
     def test_prevents_unexpected_main_or_head(self):
         api = FakeAPI()
