@@ -206,4 +206,5 @@
     <string name="rediscovery_reason_rating">Você gostou desta música</string>
     <string name="rediscovery_reason_behavior">Ouvida várias vezes</string>
     <string name="rediscovery_close">Fechar</string>
+    <string name="rediscovery_unavailable">Gravação indisponível</string>
 </resources>

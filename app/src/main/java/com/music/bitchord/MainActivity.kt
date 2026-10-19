@@ -312,6 +312,7 @@ import com.music.bitchord.data.settings.LocalMusicSort
 import com.music.bitchord.ui.screens.HomeScreen
 import com.music.bitchord.ui.screens.LibraryGridPage
 import com.music.bitchord.ui.screens.LibraryScreen
+import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingDetailsScreen
 import com.music.bitchord.ui.screens.LibraryRediscoveryShelfEntry
 import com.music.bitchord.ui.screens.MoodGenrePlaylistsScreen
 import com.music.bitchord.ui.screens.SearchScreen
@@ -2199,6 +2200,8 @@ private fun BitChordApp(
     // picture, so they cannot disagree. Read while any of them is on screen —
     // which includes the Library tab, since the cards live at the top of it.
     // See [rememberReplayState].
+    // Page navigation is keyed by the canonical RecordingId, never provider/source IDs.
+    var rediscoveryRecordingId by rememberSaveable { mutableStateOf<String?>(null) }
     val replayOpen = showReplay || replayStory != null || showReplayShare ||
         (selectedTab == TAB_LIBRARY && detail == null && !showSettings)
     val (replay, setReplayPeriod) = rememberReplayState(replayOpen)
@@ -2609,6 +2612,7 @@ private fun BitChordApp(
         // straight to Library. See [onLibraryItemClick].
         BackHandler(enabled = libraryShowAll != null && detail == null) { libraryShowAll = null }
         BackHandler(enabled = detailActiveShelf != null) { detailActiveShelf = null }
+        BackHandler(enabled = rediscoveryRecordingId != null) { rediscoveryRecordingId = null }
 
         // On a tablet the page and the player stand side by side rather than
         // one over the other: everything a phone stacks in a single column —
@@ -2645,6 +2649,7 @@ private fun BitChordApp(
                         showSettings -> "settings"
                         showReplay -> "replay"
                         detail != null -> detail.browseId
+                        rediscoveryRecordingId != null -> "rediscovery:" + rediscoveryRecordingId
                         else -> "$TAB_KEY$selectedTab"
                     },
                     // Tabs swap outright; everything else crossfades.
@@ -2728,7 +2733,12 @@ private fun BitChordApp(
                     val pageDetailListState = remember(key) {
                         detailListStates.getOrPut(key) { LazyListState() }
                     }
-                    if (key == "history") {
+                    if (key.startsWith("rediscovery:")) {
+                        CanonicalRediscoveryRecordingDetailsScreen(
+                            recordingId = key.removePrefix("rediscovery:"),
+                            onBack = { rediscoveryRecordingId = null },
+                        )
+                    } else if (key == "history") {
                         HistoryScreen(
                             state = historyState,
                             listState = historyListState,
@@ -3371,6 +3381,7 @@ private fun BitChordApp(
                             rediscovery = {
                                 LibraryRediscoveryShelfEntry(
                                     refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
+                                    onOpenRecording = { rediscoveryRecordingId = it },
                                 )
                             },
                             onSignIn = { webSession = WebSessionMode.SIGN_IN },

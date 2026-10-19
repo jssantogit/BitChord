@@ -213,4 +213,5 @@
     <string name="rediscovery_reason_rating">You liked this</string>
     <string name="rediscovery_reason_behavior">Played repeatedly</string>
     <string name="rediscovery_close">Close</string>
+    <string name="rediscovery_unavailable">Recording unavailable</string>
 </resources>
