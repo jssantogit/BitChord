@@ -16,7 +16,11 @@ import io.ktor.client.statement.bodyAsText
 import java.net.URI
 import java.time.OffsetDateTime
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -87,6 +91,18 @@ internal class KtorOpenSubsonicTransport(
 }
 
 /**
+ * Counts only, never source IDs, credentials or URLs. Optional collection stays
+ * Catalog-internal and cannot affect sync correctness if its observer fails.
+ */
+internal data class OpenSubsonicEnumerationMetrics(
+    val pageRequests: Int,
+    val albumRequests: Int,
+    val trackCount: Int,
+    val peakAlbumRequestsInFlight: Int,
+    val elapsedMillis: Long,
+)
+
+/**
  * OpenSubsonic/Navidrome adapter. It enumerates the remote library using ID3-
  * oriented APIs (`getAlbumList2` + `getAlbum`) and emits provider-neutral rows.
  * No canonical IDs are created here.
@@ -96,9 +112,12 @@ internal class OpenSubsonicProvider(
     private val transport: OpenSubsonicTransport = KtorOpenSubsonicTransport(config.normalizedServerUrl),
     private val pageSize: Int = 500,
     private val saltFactory: () -> String = ::defaultOpenSubsonicSalt,
+    private val maxConcurrentAlbumFetches: Int = 4,
+    private val onEnumerationMetrics: ((OpenSubsonicEnumerationMetrics) -> Unit)? = null,
 ) : RemoteCatalogProvider {
     init {
         require(pageSize in 1..500) { "OpenSubsonic pageSize must be between 1 and 500" }
+        require(maxConcurrentAlbumFetches in 1..8) { "OpenSubsonic album concurrency must be between 1 and 8" }
     }
 
     override val providerKey: String = "opensubsonic:${config.accountId}"
@@ -149,48 +168,85 @@ internal class OpenSubsonicProvider(
     }
 
     override suspend fun librarySnapshot(): ProviderLibrarySnapshot {
-        val albumIds = enumerateAlbumIds()
+        val startNanos = System.nanoTime()
+        val counts = EnumerationCounts()
+        val albumIds = enumerateAlbumIds(counts)
         val tracks = ArrayList<ProviderTrack>()
         val seenSourceKeys = HashSet<String>()
 
-        for (albumId in albumIds) {
-            val response = request(
-                endpoint = "getAlbum",
-                extraParameters = mapOf("id" to albumId),
-            )
-            val album = response.album
-                ?: throw OpenSubsonicProtocolException("getAlbum returned no album")
-            if (album.id.trim() != albumId) {
-                throw OpenSubsonicProtocolException("getAlbum response did not match request")
-            }
-            val songs = album.song
-                ?: if (album.songCount == 0) emptyList() else
-                    throw OpenSubsonicProtocolException("getAlbum returned no song list")
-            if (album.songCount != null && album.songCount != songs.size) {
-                throw OpenSubsonicProtocolException("getAlbum song count is inconsistent")
-            }
-            for (song in songs) {
-                if (song.isDir) continue
-                val track = mapTrack(song, album)
-                if (!seenSourceKeys.add(track.externalTrackId)) {
-                    throw OpenSubsonicProtocolException("Duplicate source ID in album enumeration")
+        // Allocate at most maxConcurrentAlbumFetches coroutines/results per batch.
+        // awaitAll maintains input order even when the responses arrive reversed.
+        // Any failure or cancellation aborts the entire coroutineScope: a partial
+        // response can never be tagged complete or passed to the Room sync.
+        coroutineScope {
+            for (batch in albumIds.chunked(maxConcurrentAlbumFetches)) {
+                val pages = batch.map { albumId ->
+                    async {
+                        val inFlight = counts.active.incrementAndGet()
+                        counts.peak.updateAndGet { prior -> maxOf(prior, inFlight) }
+                        counts.albumRequests.incrementAndGet()
+                        try {
+                            fetchAlbumTracks(albumId)
+                        } finally {
+                            counts.active.decrementAndGet()
+                        }
+                    }
+                }.awaitAll()
+                for (albumTracks in pages) {
+                    for (track in albumTracks) {
+                        if (!seenSourceKeys.add(track.externalTrackId)) {
+                            throw OpenSubsonicProtocolException("Duplicate source ID in album enumeration")
+                        }
+                        tracks += track
+                    }
                 }
-                tracks += track
             }
         }
-
-        return ProviderLibrarySnapshot(
-            tracks = tracks,
-            complete = true,
-        )
+        // Measurement is observational only. Never let logging or callbacks
+        // change the success/failure truth of a verified complete snapshot.
+        runCatching {
+            onEnumerationMetrics?.invoke(OpenSubsonicEnumerationMetrics(
+                pageRequests = counts.pageRequests,
+                albumRequests = counts.albumRequests.get(),
+                trackCount = tracks.size,
+                peakAlbumRequestsInFlight = counts.peak.get(),
+                elapsedMillis = ((System.nanoTime() - startNanos) / 1_000_000L).coerceAtLeast(0),
+            ))
+        }
+        return ProviderLibrarySnapshot(tracks = tracks, complete = true)
     }
 
-    private suspend fun enumerateAlbumIds(): List<String> {
+    private suspend fun fetchAlbumTracks(albumId: String): List<ProviderTrack> {
+        val response = request(endpoint = "getAlbum", extraParameters = mapOf("id" to albumId))
+        val album = response.album
+            ?: throw OpenSubsonicProtocolException("getAlbum returned no album")
+        if (album.id.trim() != albumId) {
+            throw OpenSubsonicProtocolException("getAlbum response did not match request")
+        }
+        val songs = album.song
+            ?: if (album.songCount == 0) emptyList() else
+                throw OpenSubsonicProtocolException("getAlbum returned no song list")
+        if (album.songCount != null && album.songCount != songs.size) {
+            throw OpenSubsonicProtocolException("getAlbum song count is inconsistent")
+        }
+        return songs.asSequence().filterNot(SubsonicSong::isDir)
+            .map { song -> mapTrack(song, album) }.toList()
+    }
+
+    private class EnumerationCounts {
+        var pageRequests: Int = 0 // single coroutine, pagination is sequential
+        val albumRequests = AtomicInteger()
+        val active = AtomicInteger()
+        val peak = AtomicInteger()
+    }
+
+    private suspend fun enumerateAlbumIds(counts: EnumerationCounts): List<String> {
         val ids = ArrayList<String>()
         val seen = LinkedHashSet<String>()
         var offset = 0
 
         while (true) {
+            counts.pageRequests += 1
             val response = request(
                 endpoint = "getAlbumList2",
                 extraParameters = mapOf(
