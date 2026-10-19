@@ -160,10 +160,15 @@ class IntegrationController:
 
     def verify_rules(self):
         repo = self.api.repo_settings()
-        need(repo.get('allow_update_branch') is True and
-             repo.get('allow_auto_merge') is True and
-             repo.get('allow_merge_commit') is True,
-             'Required repository switches are disabled')
+        # The read-only GITHUB_TOKEN may not see optional repository settings.
+        # Auto-merge is not used by this controller; update-branch and merging
+        # are enforced by their native GitHub endpoints and branch ruleset.
+        # Never infer disabled settings from missing or redacted API fields.
+        need(repo.get('full_name') == self.repository and
+             repo.get('default_branch') == 'main',
+             'Repository identity or default branch changed')
+        need(repo.get('allow_merge_commit') is not False,
+             'Merge commits explicitly disabled in repository settings')
         rules = self.api.ruleset()
         need(rules.get('enforcement') == 'active' and
              not rules.get('bypass_actors'),
