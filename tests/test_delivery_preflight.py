@@ -24,6 +24,7 @@ class Reader:
         self.lock = threading.Lock()
         self.sha = MAIN
         self.drift = False
+        self.repository = "jssantogit/BitChord"
 
     def main_sha(self):
         return ("e" * 40) if self.drift else self.sha
@@ -36,7 +37,9 @@ class Reader:
         with self.lock:
             self.active -= 1
         return {"head_sha": format(n, "040x"), "base_ref": "main",
-                "base_sha": MAIN, "draft": False, "mergeable": "clean"}
+                "base_sha": MAIN, "draft": False, "mergeable": "clean",
+                "state": "open", "merged": False,
+                "head_repo": "jssantogit/BitChord"}
 
     def files(self, n):
         return [f"src/{n}.kt"]
@@ -94,6 +97,25 @@ class PreflightTests(unittest.TestCase):
         self.assertFalse(any(x["verified_candidate"] for x in result["results"]))
         self.assertTrue(all("read_error" in x["blockers"] for x in result["results"]))
         self.assertNotIn("private token", str(result))
+
+    def test_closed_or_foreign_pr_is_not_prepared_for_execution(self):
+        class Closed(Reader):
+            def pr(self, n):
+                result = super().pr(n)
+                if n == 1:
+                    result["state"] = "closed"
+                    result["merged"] = True
+                if n == 2:
+                    result["head_repo"] = "attacker/untrusted"
+                return result
+
+        result = parallel_preflight(sample(), Closed())
+        self.assertIn("pr_closed", result["results"][0]["blockers"])
+        self.assertIn("untrusted_head_repository", result["results"][1]["blockers"])
+        self.assertFalse(result["results"][0]["verified_candidate"])
+        self.assertFalse(result["results"][1]["verified_candidate"])
+        self.assertTrue(result["approval_required"])
+        self.assertFalse(result["executable"])
 
     def test_rejects_unapproved_planner_or_unbounded_workers(self):
         bad = sample()
