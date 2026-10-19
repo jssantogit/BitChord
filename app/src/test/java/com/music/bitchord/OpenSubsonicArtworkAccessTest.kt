@@ -27,6 +27,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import com.music.bitchord.data.catalog.provider.opensubsonic.OkHttpOpenSubsonicArtworkTransport
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -447,11 +450,82 @@ class OpenSubsonicArtworkAccessTest {
         assertEquals(1, transportCalls)
     }
 
+
+    @Test
+    fun `Navidrome HTTP 503 then 429 then online recovers same selected asset and populates cache`() = runTest {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setResponseCode(503))
+            server.enqueue(MockResponse().setResponseCode(429))
+            server.enqueue(
+                MockResponse().setResponseCode(200)
+                    .addHeader("Content-Type", "image/png")
+                    .setBody("image-payload")
+            )
+            val fixture = fixture(serverUrl = server.url("/").toString(), secret = "private-fixture-key")
+            val loader = OpenSubsonicArtworkLoader(
+                fixture.access,
+                OkHttpOpenSubsonicArtworkTransport(OkHttpClient()),
+                FakeArtworkCache(),
+            )
+            val delays = mutableListOf<Long>()
+            val loadSelected: suspend () -> OpenSubsonicArtworkLoadResult = {
+                loader.load("asset-canonical", "recording-canonical", "opensubsonic:home")
+            }
+
+            val recovered = awaitRecoverableCanonicalArtwork(
+                load = loadSelected,
+                wait = { delays += it },
+            ) as OpenSubsonicArtworkLoadResult.Ready
+            assertArrayEquals("image-payload".toByteArray(), recovered.bytes)
+            assertFalse(recovered.fromCache)
+            assertEquals(listOf(2_000L, 4_000L), delays)
+            assertEquals(3, server.requestCount)
+
+            val offlineCacheHit = loadSelected() as OpenSubsonicArtworkLoadResult.Ready
+            assertTrue(offlineCacheHit.fromCache)
+            assertArrayEquals(recovered.bytes, offlineCacheHit.bytes)
+            assertEquals(3, server.requestCount)
+            assertEquals(0, fixture.store.writeCalls)
+            assertFalse(recovered.toString().contains("private-fixture-key"))
+        }
+    }
+
+    @Test
+    fun `Navidrome HTTP 401 and 404 terminate without retry or corrupted cache`() = runTest {
+        MockWebServer().use { server ->
+            server.start()
+            server.enqueue(MockResponse().setResponseCode(401))
+            server.enqueue(MockResponse().setResponseCode(404))
+            val fixture = fixture(serverUrl = server.url("/").toString())
+            val loader = OpenSubsonicArtworkLoader(
+                fixture.access,
+                OkHttpOpenSubsonicArtworkTransport(OkHttpClient()),
+                FakeArtworkCache(),
+            )
+            val selected: suspend () -> OpenSubsonicArtworkLoadResult = {
+                loader.load("asset-canonical", "recording-canonical", "opensubsonic:home")
+            }
+            val noRetry: suspend (Long) -> Unit = { error("Permanent HTTP response cannot retry") }
+
+            val unauthorized = awaitRecoverableCanonicalArtwork(selected, noRetry)
+                as OpenSubsonicArtworkLoadResult.Placeholder
+            val absentCover = awaitRecoverableCanonicalArtwork(selected, noRetry)
+                as OpenSubsonicArtworkLoadResult.Placeholder
+
+            assertEquals("AUTHENTICATION_REJECTED", unauthorized.reason)
+            assertEquals("REQUEST_REJECTED", absentCover.reason)
+            assertEquals(2, server.requestCount)
+            assertEquals(0, fixture.store.writeCalls)
+        }
+    }
+
     private fun fixture(
         authMode: OpenSubsonicAuthMode = OpenSubsonicAuthMode.API_KEY,
         username: String = "",
         secret: String = "fixture-api-key",
         salt: String = "abcdef123456",
+        serverUrl: String = "https://music.example.test",
     ): Fixture {
         val persistence = FakeAccountPersistence()
         val credentials = FakeCredentialStore()
@@ -462,7 +536,7 @@ class OpenSubsonicArtworkAccessTest {
         )
         repository.save(
             OpenSubsonicAccountDraft(
-                serverUrl = "https://music.example.test",
+                serverUrl = serverUrl,
                 authMode = authMode,
                 username = username,
                 secretReplacement = secret,
