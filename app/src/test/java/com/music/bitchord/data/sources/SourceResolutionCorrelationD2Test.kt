@@ -1,5 +1,6 @@
 package com.music.bitchord.data.sources
 
+import com.music.bitchord.data.TrackLog
 import com.music.bitchord.observability.SessionTraceReferenceEncoder
 import com.music.bitchord.observability.StructuredTracePoint
 import com.music.bitchord.observability.StructuredTraceSink
@@ -27,7 +28,15 @@ class SourceResolutionCorrelationD2Test {
         val source = withContext(Dispatchers.Default) {
             reporter.startCorrelated("raw-account-credential", "private-media-id", command.context())
         }
-        val result = withContext(Dispatchers.Default) { source.lookup { "stream-ready" } }
+        val result = withContext(Dispatchers.Default) {
+            source.lookup {
+                val correlation = TrackLog.currentCorrelation()
+                assertEquals(command.context().flowId, correlation?.flowId)
+                assertTrue(correlation?.parentSpanId?.startsWith("ref_") == true)
+                "stream-ready"
+            }
+        }
+        assertEquals(null, TrackLog.currentCorrelation())
         source.complete(found = true)
         command.complete(TraceOutcome.SUCCEEDED)
         assertEquals("stream-ready", result)
