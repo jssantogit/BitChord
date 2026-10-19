@@ -24,6 +24,8 @@ internal data class CanonicalPlayableAsset(
     val identity: CanonicalQueueIdentity,
     val uri: String,
     val path: String? = null,
+    /** Ephemeral local album art supplied by the catalog, never v2 snapshot. */
+    val artworkUri: String? = null,
 )
 
 /** Playback-owned catalog seam. It never exposes sourceKey or provider auth. */
@@ -88,7 +90,12 @@ internal class RoomCanonicalQueueResolver(context: Context) : CanonicalQueueReso
                 provider == LOCAL_PROVIDER && assetId != null -> {
                     val row = localByAsset[assetId]
                     if (row == null || row.recordingId != identity.recordingId) null
-                    else CanonicalPlayableAsset(identity, row.uri, row.path)
+                    else CanonicalPlayableAsset(
+                        identity = identity,
+                        uri = row.uri,
+                        path = row.path,
+                        artworkUri = row.artworkUri,
+                    )
                 }
                 provider != null && assetId != null -> {
                     val request = runCatching {
