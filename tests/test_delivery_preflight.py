@@ -117,6 +117,34 @@ class PreflightTests(unittest.TestCase):
         self.assertTrue(result["approval_required"])
         self.assertFalse(result["executable"])
 
+    def test_portable_restart_evidence_never_bypasses_di3_preflight(self):
+        # A clean live observation AND a verified portable checkpoint are still
+        # two read-only reports; neither may authorize a protected merge.
+        import tempfile
+        from pathlib import Path
+        from tools.delivery_journal import initialize
+        from tools.delivery_transfer import export_evidence, inspect_evidence
+        manifest = {"version": 1, "repository": "jssantogit/BitChord",
+                    "target": "main", "items": [{
+                        "number": 1, "expected_head_sha": format(1, "040x"),
+                        "expected_base_ref": "main", "depends_on": None,
+                        "allowed_files": ["src/1.kt"]}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            file = Path(tmp) / "checkpoint.json"
+            initialize(file, manifest, MAIN, authorized=False)
+            blob, digest = export_evidence(
+                file, manifest, run_id=77, attempt=1, source_main_sha=MAIN,
+                event="workflow_dispatch", ref="refs/heads/main")
+            recovered = inspect_evidence(
+                blob, manifest, sha256=digest, run_id=77, attempt=1,
+                expected_main_sha=MAIN)
+        live = parallel_preflight(sample(), Reader())
+        self.assertTrue(all(row["verified_candidate"] for row in live["results"]))
+        self.assertFalse(live["executable"])
+        self.assertFalse(recovered["executable"])
+        self.assertFalse(recovered["replay_merge"])
+        self.assertTrue(recovered["approval_required"])
+
     def test_rejects_unapproved_planner_or_unbounded_workers(self):
         bad = sample()
         bad["executable"] = True
