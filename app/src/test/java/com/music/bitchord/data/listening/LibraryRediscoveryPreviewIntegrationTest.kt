@@ -12,6 +12,8 @@ import com.music.bitchord.data.catalog.MediaAssetEntity
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.RoomCanonicalLibraryAvailabilityStore
 import com.music.bitchord.data.catalog.RoomCanonicalRecordingArtistGroupingStore
+import com.music.bitchord.ui.screens.LibraryRediscoveryShelfReader
+import com.music.bitchord.ui.screens.RediscoveryShelfUiState
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.*
@@ -186,6 +188,28 @@ class LibraryRediscoveryPreviewIntegrationTest {
         assertEquals(beforeListeningTables, tableNames(requireNotNull(listeningDb)))
         assertEquals(beforeSession, eventStore.currentSession(clock.now))
         assertNull(beforeSession)
+
+        val shelfReader = LibraryRediscoveryShelfReader(
+            fullRanking = { pipeline.rank() },
+            planner = planner,
+            presentation = LibraryRediscoveryPresentationContract(),
+            availability = availability,
+            recording = { id -> dao.recordingById(id) },
+        )
+        val shelf = shelfReader.load() as RediscoveryShelfUiState.Ready
+        assertEquals(listOf(oldBehavior, oldExplicit), shelf.items.map { it.item.recordingId })
+        assertEquals(listOf("old-behavior", "old-explicit"), shelf.items.map { it.title })
+        assertNotNull(shelfReader.resolveForNavigation(oldBehavior))
+        assertNull(shelfReader.resolveForNavigation(unavailable))
+        // A previously eligible asset disappears; no stale Recording is navigable.
+        dao.deleteMediaAsset(
+            CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER,
+            "content://media/external/audio/$oldBehavior",
+        )
+        assertNull(shelfReader.resolveForNavigation(oldBehavior))
+        assertEquals(listOf(oldExplicit),
+            (shelfReader.load() as RediscoveryShelfUiState.Ready)
+                .items.map { it.item.recordingId })
     }
 
     @Test fun onDiskRoomReopenKeepsTerminalEvidenceAndPresentationStable() = runTest {
