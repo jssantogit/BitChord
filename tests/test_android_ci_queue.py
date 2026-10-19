@@ -18,7 +18,7 @@ class AndroidCIQueueContractTests(unittest.TestCase):
         self.assertIn('name: Android · test and build', self.workflow)
         self.assertIn('  pull_request:', self.workflow)
         self.assertIn('    branches: [main]', self.workflow)
-        self.assertIn('run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest', self.workflow)
+        self.assertIn('run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest', self.workflow)
         self.assertNotIn(':app:assembleDevDebug', self.workflow)
         self.assertNotIn('\n  paths:', self.workflow)
 
