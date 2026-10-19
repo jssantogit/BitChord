@@ -95,7 +95,7 @@ internal class RoomCanonicalPreferenceMembershipReader(
                 "SELECT DISTINCT recordingId FROM catalog_recording_artist_credit WHERE artistId = ? ORDER BY recordingId LIMIT ?"
         }
         val ids = mutableListOf<String>()
-        catalog.openHelper.readableDatabase.query(sql, arrayOf(canonicalId, maximumMembers + 1))
+        catalog.openHelper.readableDatabase.query(sql, arrayOf<Any>(canonicalId, maximumMembers + 1))
             .use { cursor ->
                 while (cursor.moveToNext()) ids += cursor.getString(0)
             }
