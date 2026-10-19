@@ -167,11 +167,8 @@ class CanonicalCreditResyncIntegrityRoomTest {
             val transport = FakeTransport().apply { mode = "partial-transaction" }
             val beforeRecording = dao.recordingById("recording-1")
             val beforeAsset = dao.mediaAsset("opensubsonic:home", "song-1")
-            var calls = 0
             val failed = OpenSubsonicCatalogSync.sync(db, provider(transport), idFactory = {
-                calls++
-                if (calls > 1) error("simulated database apply failure")
-                "new-release"
+                error("simulated failure while allocating previously unseen MediaAsset")
             })
             assertTrue(failed is ProviderSyncResult.Failure)
             assertEquals(beforeRecording, dao.recordingById("recording-1"))

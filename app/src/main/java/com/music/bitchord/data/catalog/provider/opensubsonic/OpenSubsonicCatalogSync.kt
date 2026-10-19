@@ -31,6 +31,24 @@ internal object OpenSubsonicCatalogSync {
         context: Context,
         provider: OpenSubsonicProvider,
         idFactory: () -> String = { UUID.randomUUID().toString() },
+    ): ProviderSyncResult = syncInternal(provider, idFactory) {
+        CanonicalCatalogDatabase.get(context)
+    }
+
+    /**
+     * Test seam: the same real provider transport and Room transaction as production.
+     * Never replaces the singleton database; callers pass an isolated Room instance.
+     */
+    internal suspend fun sync(
+        database: CanonicalCatalogDatabase,
+        provider: OpenSubsonicProvider,
+        idFactory: () -> String = { UUID.randomUUID().toString() },
+    ): ProviderSyncResult = syncInternal(provider, idFactory) { database }
+
+    private suspend fun syncInternal(
+        provider: OpenSubsonicProvider,
+        idFactory: () -> String,
+        databaseProvider: () -> CanonicalCatalogDatabase,
     ): ProviderSyncResult {
         val snapshot = try {
             provider.librarySnapshot()
@@ -40,7 +58,7 @@ internal object OpenSubsonicCatalogSync {
             return ProviderSyncResult.Failure("OpenSubsonic library snapshot failed")
         }
 
-        val database = CanonicalCatalogDatabase.get(context)
+        val database = databaseProvider()
         return try {
             database.withTransaction {
                 CanonicalRemoteCatalogSync.applySnapshot(
@@ -106,12 +124,23 @@ private class RoomCanonicalCatalogSyncStore(
     override suspend fun replaceRecordingArtistCredits(
         recordingId: String,
         credits: List<RecordingArtistCreditEntity>,
-    ) = dao.replaceRecordingArtistCredits(recordingId, credits)
+    ) {
+        // A provider resync may seed previously empty canonical credits, but is
+        // NEVER authority to replace credits already owned by the canonical
+        // catalog (including credits promoted separately by an explicit command).
+        // This read and optional insert run under syncInternal's Room transaction.
+        if (dao.recordingArtistCreditIds(listOf(recordingId)).isNotEmpty()) return
+        dao.replaceRecordingArtistCredits(recordingId, credits)
+    }
 
     override suspend fun replaceReleaseArtistCredits(
         releaseId: String,
         credits: List<ReleaseArtistCreditEntity>,
-    ) = dao.replaceReleaseArtistCredits(releaseId, credits)
+    ) {
+        // Release credits have the same immutable-on-resync ownership guarantee.
+        if (dao.releaseArtistCredits(releaseId).isNotEmpty()) return
+        dao.replaceReleaseArtistCredits(releaseId, credits)
+    }
 
     override suspend fun upsertMediaAsset(mediaAsset: MediaAssetEntity) = dao.upsertMediaAsset(mediaAsset)
 
