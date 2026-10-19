@@ -12,5 +12,9 @@ internal object AudioFidelityTruth {
         pcmExact: Boolean,
         anyDsp: Boolean,
         routeActuallyObserved: Boolean,
-    ): FidelityTruth = FidelityTruth.END_TO_END_VERIFIED
+    ): FidelityTruth = when {
+        anyDsp || !pcmExact -> FidelityTruth.ALTERED
+        !routeActuallyObserved -> FidelityTruth.PCM_EXACT_ROUTE_NOT_PROVEN
+        else -> FidelityTruth.END_TO_END_VERIFIED
+    }
 }
