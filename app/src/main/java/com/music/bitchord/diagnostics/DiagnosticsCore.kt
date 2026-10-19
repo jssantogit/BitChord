@@ -123,7 +123,13 @@ object DiagnosticSanitizer {
                 key.take(128) to if (isSensitiveKey(key)) {
                     REDACTED
                 } else {
-                    freeText(value, MAX_METADATA_VALUE_CHARS)
+                    (if (key == "traceId") {
+                        // Correlation token produced by StructuredTracer; keep the legacy
+                        // typed trace correlation contract, never free-text UUIDs.
+                        text(value, MAX_METADATA_VALUE_CHARS)
+                    } else {
+                        freeText(value, MAX_METADATA_VALUE_CHARS)
+                    }).replace("\r", "\\r").replace("\n", "\\n")
                 }
             }
 
