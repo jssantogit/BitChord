@@ -204,7 +204,10 @@ internal class OpenSubsonicProvider(
             // allow an availability prune against this response.
             val listing = response.albumList2
                 ?: throw OpenSubsonicProtocolException("getAlbumList2 returned no album list")
+            // An omitted/null nested album array is not the same as an
+            // explicitly complete empty page; never prune cached assets for it.
             val page = listing.album
+                ?: throw OpenSubsonicProtocolException("getAlbumList2 returned no album array")
             if (page.isEmpty()) break
             if (page.size > pageSize) {
                 throw OpenSubsonicProtocolException("Album page exceeds requested size")
@@ -415,7 +418,8 @@ private data class SubsonicExtension(
 
 @Serializable
 private data class SubsonicAlbumList(
-    val album: List<SubsonicAlbum> = emptyList(),
+    // Keep missing/null distinct from an explicit [] on the wire.
+    val album: List<SubsonicAlbum>? = null,
 )
 
 @Serializable
