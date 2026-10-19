@@ -96,9 +96,9 @@ class SnapshotTests(unittest.TestCase):
         def fixture(path):
             calls.append(path)
             if path.endswith("page=1"):
-                return [{"number": n} for n in range(1, 101)]
+                return [{"number": n, "head": {"sha": format(n, "040x"), "ref": f"infra/p{n}"}, "base": {"ref": "main"}, "draft": True} for n in range(1, 101)]
             if path.endswith("page=2"):
-                return [{"number": 101}]
+                return [{"number": 101, "head": {"sha": format(101, "040x"), "ref": "infra/p101"}, "base": {"ref": "main"}, "draft": True}]
             return {"check_runs": [
                 {"name": "Android · test and build", "status": "completed",
                  "conclusion": "success"},
