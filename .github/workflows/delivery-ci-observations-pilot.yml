@@ -1,0 +1,52 @@
+name: Delivery CI Observations Pilot
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/delivery-ci-observations-pilot.yml'
+      - 'tools/delivery_ci_observations.py'
+      - 'tests/test_delivery_ci_observations.py'
+      - 'tools/delivery_metrics.py'
+
+permissions:
+  contents: read
+
+jobs:
+  ci-observations:
+    name: Delivery · read-only CI observations
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'infra/di5-firstparty-ci-observations-v0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Execute first-party GET collector and DI1 report
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 tools/delivery_ci_observations.py --repo jssantogit/BitChord --limit 12 > "$RUNNER_TEMP/ci-observations.json"
+          python3 tools/delivery_metrics.py --input "$RUNNER_TEMP/ci-observations.json" > "$RUNNER_TEMP/di1-ci-report.json"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          observations = json.loads((root / 'ci-observations.json').read_text())
+          report = json.loads((root / 'di1-ci-report.json').read_text())
+          assert observations['prs'] == observations['blocks'] == []
+          assert report['version'] == 1
+          assert report['metrics']['observed_jobs'] == len(observations['jobs'])
+          assert report['metrics']['observed_jobs'] > 0, 'no Android jobs sampled'
+          print('CI METRICS PILOT OK: jobs=', report['metrics']['observed_jobs'],
+                'finished=', report['metrics']['finished_jobs'],
+                'median_queue_seconds=', report['metrics']['median_queue_seconds'],
+                'median_execution_seconds=', report['metrics']['median_execution_seconds'])
+          PY
