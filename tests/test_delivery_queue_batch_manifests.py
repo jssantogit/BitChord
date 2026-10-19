@@ -22,11 +22,11 @@ FILES = {
     93: ["docs/delivery-di6-workflow-sync-guard.md", "tests/test_workflow_sync_guard.py", "tools/integration_queue.py"],
 }
 HEADS = {
-    90: "e1546aa6b6897bb2a2425172ef0c22833a0c555c",
-    91: "d15c316007418f734fe6b2af455d44cc24797999",
-    95: "1c7b63b032bdb479816c7e8cb31b7e966e603d87",
-    92: "be47e330bfddf04ae5eef20517c8724c090cf1d6",
-    93: "6837786430a30b1e702fed32bb3a1f52f94f3136",
+    90: "6c716800e34c7d2fac1b8a87e92ec55332738569",
+    91: "689332233dff49073b7903b7dc9337b6fab6e13a",
+    95: "763d8ccce371752035e9a6e35d856437d1a0bbe9",
+    92: "b5fde113666d72c85521cd83b809dd8e6d9a665f",
+    93: "b6852860487b059345c5ab15f6abf1cbecd084a2",
 }
 
 class NewInfraManifestTests(unittest.TestCase):
