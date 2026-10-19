@@ -12,6 +12,8 @@ on:
           - pilot-o2
           - playback-b2-b3
           - catalog-listening-c3-l2
+          - infra-workflows-1
+          - infra-workflows-2
       mode:
         description: Read-only plan, or explicitly gated serial integration
         required: true
