@@ -65,6 +65,8 @@ import com.music.bitchord.R
 import com.music.bitchord.data.NerdStats
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.playback.AudioOutputStatus
+import com.music.bitchord.playback.AudioFidelityTruth
+import com.music.bitchord.playback.FidelityTruth
 import com.music.bitchord.playback.dsd.DsdFilter
 import com.music.bitchord.playback.dsd.DsdFormat
 import dev.chrisbanes.haze.HazeState
@@ -109,6 +111,7 @@ private fun bitExactVerdict(
     loudnessActive: Boolean,
     eqActive: Boolean,
     spatialActive: Boolean,
+    routeActuallyObserved: Boolean,
 ): String = when {
     // Not a fault to fix: there is no DSD output path (native DSD or DoP)
     // here, so the PCM conversion is a deviation every DSD track carries,
@@ -117,8 +120,11 @@ private fun bitExactVerdict(
     loudnessActive -> "No — loudness normalization"
     eqActive -> "No — equalizer"
     spatialActive -> "No — spatial audio"
-    outputExact -> "Yes${outputExactDetail?.let { " ($it)" }.orEmpty()}"
-    else -> "No — ${outputExactDetail ?: "converted downstream"}"
+    else -> when (AudioFidelityTruth.classify(outputExact, anyDsp = false, routeActuallyObserved)) {
+        FidelityTruth.ALTERED -> "No — ${outputExactDetail ?: "converted downstream"}"
+        FidelityTruth.PCM_EXACT_ROUTE_NOT_PROVEN -> "Not proven — PCM exact to AudioTrack; output route not verified"
+        FidelityTruth.END_TO_END_VERIFIED -> "Yes${outputExactDetail?.let { " ($it)" }.orEmpty()}"
+    }
 }
 
 /**
@@ -428,6 +434,7 @@ fun AudioPipelineDialog(
                         loudnessActive = loudnessNormalization && outputStatus.loudnessGainDb != null,
                         eqActive = eqEnabled,
                         spatialActive = spatialAudio,
+                        routeActuallyObserved = outputStatus.directPlaybackActual,
                     ),
                 )
             }
@@ -464,23 +471,25 @@ fun AudioPipelineDialog(
                 PipelineRow("Transport", outputStatus.transportType.label)
 
                 val directStatusText = when {
-                    outputStatus.transportType == com.music.bitchord.playback.audio.TransportType.DIRECT_USB ->
-                        "Active (Direct Userspace USB)"
+                    outputStatus.requestedTransportType == com.music.bitchord.playback.audio.TransportType.DIRECT_USB ->
+                        "Requested (USB stream not observed)"
                     outputStatus.directPlaybackActual ->
                         "Active (Direct AudioTrack, Bypasses Mixer)"
                     outputStatus.directPlaybackRejected ->
-                        "Rejected"
+                        "Rejected by negotiation"
+                    outputStatus.directPlaybackSelected ->
+                        "Selected (actual output route not verified)"
                     outputStatus.directPlaybackSupported ->
-                        "Supported (Framework Mixed)"
+                        "Supported (actual output route not verified)"
                     else ->
-                        "Not Supported (Mixed Path)"
+                        "Direct output not confirmed"
                 }
                 PipelineRow("Direct", directStatusText)
                 PipelineRow("AudioTrack", audioTrackText)
 
                 val mixerText = when {
-                    outputStatus.transportType == com.music.bitchord.playback.audio.TransportType.DIRECT_USB ->
-                        "Direct (Bypasses System Mixer)"
+                    outputStatus.requestedTransportType == com.music.bitchord.playback.audio.TransportType.DIRECT_USB ->
+                        "Direct USB requested; mixer bypass not observed"
                     outputStatus.directPlaybackActual ->
                         "Direct path active; endpoint format not independently verified"
                     outputStatus.systemMixerRateHz != null -> {
