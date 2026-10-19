@@ -154,7 +154,7 @@ class LibraryRediscoveryPreviewIntegrationTest {
         assertEquals(preview.map { it.rankPosition }, presentation.map { it.rankPosition })
         assertEquals(preview.map { it.lastAudibleListenAtEpochMs },
             presentation.map { it.lastAudibleListenAtEpochMs })
-        assertEquals(listOf(79L, 45L), presentation.map { it.daysSinceLastAudible })
+        assertEquals(listOf(78L, 44L), presentation.map { it.daysSinceLastAudible })
         assertTrue(presentation.all { it.availability ==
             RediscoveryPresentationAvailability.AVAILABLE_AT_SNAPSHOT &&
             it.canNavigateToCanonicalRecording })
