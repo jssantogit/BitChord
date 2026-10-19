@@ -1,0 +1,96 @@
+name: Controlled Integration Queue
+
+# No push/PR/schedule trigger: never merge just because a branch or PR changed.
+on:
+  workflow_dispatch:
+    inputs:
+      batch:
+        description: Reviewed batch slug from .github/integration-batches/
+        required: true
+        type: choice
+        options:
+          - pilot-o2
+          - playback-b2-b3
+          - catalog-listening-c3-l2
+      mode:
+        description: Read-only plan, or explicitly gated serial integration
+        required: true
+        type: choice
+        default: plan
+        options:
+          - plan
+          - execute
+      expected_main_sha:
+        description: Exact 40-character approved main SHA (checked again live)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: bitchord-serial-integration
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.ref == 'refs/heads/main' && inputs.mode == 'plan'
+    name: Integration · read-only plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run orchestration regression tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Inspect approved batch without changes
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BATCH_NAME: ${{ inputs.batch }}
+          MAIN_SHA: ${{ inputs.expected_main_sha }}
+        run: |
+          python3 tools/integration_queue.py \
+            --mode plan --batch "$BATCH_NAME" --expected-main-sha "$MAIN_SHA"
+
+  execute:
+    if: github.ref == 'refs/heads/main' && inputs.mode == 'execute'
+    name: Integration · protected serial merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    # Configure required human approval for this environment before enabling writes.
+    environment: integration-apply
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Enforce independent owner opt-in
+        env:
+          WRITE_GATE: ${{ vars.INTEGRATION_WRITE_ENABLED }}
+        run: |
+          test "$WRITE_GATE" = true || {
+            echo 'Integration writes disabled: owner must explicitly set INTEGRATION_WRITE_ENABLED=true'
+            exit 1
+          }
+      - name: Run orchestration regression tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Obtain narrowly scoped GitHub App installation token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.INTEGRATION_APP_ID }}
+          private-key: ${{ secrets.INTEGRATION_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-actions: read
+      - name: Execute one approved serial batch, stop on any RED
+        env:
+          INTEGRATION_APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          INTEGRATION_WRITE_ENABLED: ${{ vars.INTEGRATION_WRITE_ENABLED }}
+          BATCH_NAME: ${{ inputs.batch }}
+          MAIN_SHA: ${{ inputs.expected_main_sha }}
+        run: |
+          python3 tools/integration_queue.py \
+            --mode execute --batch "$BATCH_NAME" --expected-main-sha "$MAIN_SHA"

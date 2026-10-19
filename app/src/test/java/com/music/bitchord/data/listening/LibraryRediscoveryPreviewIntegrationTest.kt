@@ -148,6 +148,19 @@ class LibraryRediscoveryPreviewIntegrationTest {
         assertTrue(full.indexOfFirst { it.base.base.recordingId == oldBehavior } >= 5)
 
         val preview = planner.preview(full)
+        val presentation = LibraryRediscoveryPresentationContract().present(preview)
+        assertEquals(listOf(oldBehavior, oldExplicit), presentation.map { it.recordingId })
+        assertEquals(listOf(1, 2), presentation.map { it.shelfPosition })
+        assertEquals(preview.map { it.rankPosition }, presentation.map { it.rankPosition })
+        assertEquals(preview.map { it.lastAudibleListenAtEpochMs },
+            presentation.map { it.lastAudibleListenAtEpochMs })
+        assertEquals(listOf(78L, 44L), presentation.map { it.daysSinceLastAudible })
+        assertTrue(presentation.all { it.availability ==
+            RediscoveryPresentationAvailability.AVAILABLE_AT_SNAPSHOT &&
+            it.canNavigateToCanonicalRecording })
+        assertEquals(emptyList<RediscoveryPresentationItem>(),
+            LibraryRediscoveryPresentationContract().present(
+                planner.preview(pipeline.rank(limit = 5))))
         assertEquals(listOf(oldBehavior, oldExplicit), preview.map { it.recordingId })
         assertEquals(listOf(79L * day - 1000L, 45L * day - 1000L),
             preview.map { it.timeSinceLastAudibleMs })
@@ -173,6 +186,113 @@ class LibraryRediscoveryPreviewIntegrationTest {
         assertEquals(beforeListeningTables, tableNames(requireNotNull(listeningDb)))
         assertEquals(beforeSession, eventStore.currentSession(clock.now))
         assertNull(beforeSession)
+    }
+
+    @Test fun onDiskRoomReopenKeepsTerminalEvidenceAndPresentationStable() = runTest {
+        val context: Context = RuntimeEnvironment.getApplication()
+        val suffix = System.nanoTime().toString()
+        val catalogName = "rediscovery-presentation-catalog-$suffix.db"
+        val listeningName = "rediscovery-presentation-events-$suffix.db"
+        var diskCatalog: CanonicalCatalogDatabase? = null
+        var diskListening: ListeningEventDatabase? = null
+        try {
+            diskCatalog = Room.databaseBuilder(
+                context, CanonicalCatalogDatabase::class.java, catalogName,
+            ).allowMainThreadQueries().build()
+            diskListening = Room.databaseBuilder(
+                context, ListeningEventDatabase::class.java, listeningName,
+            ).allowMainThreadQueries().build()
+            val recordingId = "persisted-positive"
+            val uri = "content://media/external/audio/rediscovery-reopen"
+            diskCatalog.catalogDao().upsertRecording(RecordingEntity(
+                id = recordingId, title = "Known", artistDisplay = "Artist", durationMs = 180_000L,
+            ))
+            diskCatalog.catalogDao().upsertMediaAsset(MediaAssetEntity(
+                id = "reopen-asset", recordingId = recordingId,
+                provider = CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER,
+                sourceKey = uri, uri = uri, path = null, dateAddedSeconds = null,
+                dateModifiedSeconds = null, artworkUri = null,
+            ))
+            val clock = MutableClock(now - 80L * day)
+            val ids = GuardedIds()
+            val eventStoreBefore = RoomListeningEventStore(
+                dao = diskListening.listeningEventDao(), clock = clock, idGenerator = ids,
+            )
+            RoomRecordingRatingStore(
+                dao = diskListening.recordingRatingDao(), nowEpochMs = { clock.now },
+            ).setRecordingRating(recordingId, 5.0)
+            eventStoreBefore.recordPlaybackStarted(PlaybackStart(
+                recordingId = recordingId, selectionIntent = SelectionIntent.MANUAL,
+                selectionOrigin = SelectionOrigin.LIBRARY,
+            ))
+            clock.now += 1000L
+            eventStoreBefore.recordPlaybackEnded(PlaybackEnd(
+                recordingId = recordingId, listenedDurationMs = 180_000L,
+                recordingDurationMs = 180_000L, endCause = PlaybackEndCause.ENDED,
+            ))
+            diskCatalog.close()
+            diskListening.close()
+            diskCatalog = null
+            diskListening = null
+
+            diskCatalog = Room.databaseBuilder(
+                context, CanonicalCatalogDatabase::class.java, catalogName,
+            ).allowMainThreadQueries().build()
+            diskListening = Room.databaseBuilder(
+                context, ListeningEventDatabase::class.java, listeningName,
+            ).allowMainThreadQueries().build()
+            clock.now = now
+            ids.allowWrites = false
+            val persistedEvents = RoomListeningEventStore(
+                dao = diskListening.listeningEventDao(), clock = clock, idGenerator = ids,
+            )
+            val persistedRatings = RoomRecordingRatingStore(
+                dao = diskListening.recordingRatingDao(), nowEpochMs = { clock.now },
+            )
+            val dao = diskCatalog.catalogDao()
+            val source = LibraryRecommendationCandidateSource(
+                CanonicalLibraryAvailabilityRepository(
+                    RoomCanonicalLibraryAvailabilityStore(dao),
+                    CanonicalLibraryProviderConfigurationReader {
+                        setOf(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
+                    },
+                ),
+            )
+            val pipeline = LibraryRecommendationPipeline(
+                source,
+                PersonalRanker(persistedEvents, persistedRatings, nowEpochMs = { clock.now }),
+                SessionContextReranker(persistedEvents, nowEpochMs = { clock.now }),
+                ArtistAwareDiversityReranker(
+                    CanonicalRecordingArtistGroupingRepository(
+                        RoomCanonicalRecordingArtistGroupingStore(dao),
+                    ),
+                ),
+            )
+            val full = pipeline.rank()
+            val preview = LibraryRediscoveryPreviewPlanner(nowEpochMs = { clock.now }).preview(full)
+            val items = LibraryRediscoveryPresentationContract().present(preview)
+
+            assertEquals(listOf(recordingId), items.map { it.recordingId })
+            assertEquals(1, items.single().rankPosition)
+            assertEquals(79L, items.single().daysSinceLastAudible)
+            assertEquals(now - 80L * day + 1000L, items.single().lastAudibleListenAtEpochMs)
+            assertEquals(listOf(
+                RediscoveryReason.POSITIVE_EXPLICIT_PREFERENCE,
+                RediscoveryReason.LONG_ABSENCE,
+            ), items.single().reasonCodes)
+            assertEquals(RediscoveryPresentationAvailability.AVAILABLE_AT_SNAPSHOT,
+                items.single().availability)
+            assertEquals(5.0, persistedRatings.currentRating(recordingId)!!.value, 0.0)
+            assertEquals(1L, persistedEvents.behaviorSummary(recordingId).completions)
+            assertEquals(items,
+                LibraryRediscoveryPresentationContract().present(
+                    LibraryRediscoveryPreviewPlanner(nowEpochMs = { clock.now }).preview(pipeline.rank())))
+        } finally {
+            diskCatalog?.close()
+            diskListening?.close()
+            context.deleteDatabase(catalogName)
+            context.deleteDatabase(listeningName)
+        }
     }
 
     private fun tableNames(db: androidx.room.RoomDatabase): Set<String> =
