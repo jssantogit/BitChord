@@ -11,7 +11,10 @@ import sys
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from tools.delivery_planner import PlannerInputError, plan
+if __package__:
+    from tools.delivery_planner import PlannerInputError, plan
+else:
+    from delivery_planner import PlannerInputError, plan
 
 
 class SnapshotError(ValueError):
