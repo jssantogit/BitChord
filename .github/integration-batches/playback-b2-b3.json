@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 51,
+      "expected_head_sha": "35d9752216d369bdacbda2d5211e759c7a94f656",
+      "expected_base_ref": "main",
+      "depends_on": null,
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/playback/DeletedLocalMediaAvailability.kt",
+        "app/src/main/java/com/music/bitchord/playback/DeletedLocalMediaRestore.kt",
+        "app/src/main/java/com/music/bitchord/playback/LastPlayed.kt",
+        "app/src/main/java/com/music/bitchord/playback/PlaybackService.kt",
+        "app/src/test/java/com/music/bitchord/playback/DeletedLocalMediaLastPlayedPersistenceTest.kt",
+        "app/src/test/java/com/music/bitchord/playback/DeletedLocalMediaRestoreTest.kt"
+      ]
+    },
+    {
+      "number": 53,
+      "expected_head_sha": "56198f37890335b037c566bad6cc5f8798f91cbf",
+      "expected_base_ref": "playback/deleted-local-media-restore-v0",
+      "depends_on": 51,
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/playback/CanonicalQueueMigration.kt",
+        "app/src/main/java/com/music/bitchord/playback/CanonicalQueueResolver.kt",
+        "app/src/test/java/com/music/bitchord/playback/CanonicalQueueSwitchingRestoreTest.kt"
+      ]
+    }
+  ]
+}

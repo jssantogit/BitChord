@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 52,
+      "expected_head_sha": "0671b63740f8f1e95da1c46a0f93944a101fd547",
+      "expected_base_ref": "main",
+      "depends_on": null,
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicCatalogSync.kt",
+        "app/src/test/java/com/music/bitchord/CanonicalCreditResyncIntegrityRoomTest.kt"
+      ]
+    },
+    {
+      "number": 50,
+      "expected_head_sha": "cb58deecc0f2fc87114a9172ea934937fb99e938",
+      "expected_base_ref": "main",
+      "depends_on": null,
+      "allowed_files": [
+        "app/build.gradle.kts",
+        "app/src/main/java/com/music/bitchord/MainActivity.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/CanonicalRediscoveryRecordingDetailsScreen.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/LibraryRediscoveryShelf.kt",
+        "app/src/test/java/com/music/bitchord/data/listening/LibraryRediscoveryPreviewIntegrationTest.kt",
+        "app/src/test/java/com/music/bitchord/ui/screens/LibraryRediscoveryShelfComposeTest.kt",
+        "app/src/test/resources/robolectric.properties",
+        "sharedUi/src/commonMain/composeResources/values-pt/strings.xml",
+        "sharedUi/src/commonMain/composeResources/values/strings.xml",
+        "sharedUi/src/jvmSharedMain/kotlin/com/music/bitchord/ui/screens/LibraryScreen.kt"
+      ]
+    }
+  ]
+}
