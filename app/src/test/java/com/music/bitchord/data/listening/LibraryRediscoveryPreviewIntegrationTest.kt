@@ -282,7 +282,7 @@ class LibraryRediscoveryPreviewIntegrationTest {
             ), items.single().reasonCodes)
             assertEquals(RediscoveryPresentationAvailability.AVAILABLE_AT_SNAPSHOT,
                 items.single().availability)
-            assertEquals(5.0, persistedRatings.currentRating(recordingId)!!, 0.0)
+            assertEquals(5.0, persistedRatings.currentRating(recordingId)!!.value, 0.0)
             assertEquals(1L, persistedEvents.behaviorSummary(recordingId).completions)
             assertEquals(items,
                 LibraryRediscoveryPresentationContract().present(
