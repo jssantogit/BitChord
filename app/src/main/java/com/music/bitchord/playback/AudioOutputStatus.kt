@@ -440,8 +440,7 @@ object AudioOutputStatus {
 
         val requestedDirect = snapshot.requestedTransportType == TransportType.AUDIO_TRACK_DIRECT ||
             snapshot.directPlaybackSelected ||
-            snapshot.negotiationResult?.output?.isDirect == true ||
-            false
+            snapshot.negotiationResult?.output?.isDirect == true
 
         val sampleRate = snapshot.actualSampleRateHz
             ?: snapshot.negotiationResult?.output?.sampleRateHz
