@@ -76,6 +76,10 @@ class OpenSubsonicSnapshotCompletenessRoomTest {
         try {
             seed(db)
             val scenarios = listOf<suspend (String, Map<String, String>) -> String>(
+                // An omitted album array is NOT evidence of an empty library.
+                // Explicit "album":[] is the only safe empty page.
+                { endpoint, _ -> if (endpoint == "getAlbumList2") envelope(""""albumList2":{}""") else error("unexpected getAlbum") },
+                { endpoint, _ -> if (endpoint == "getAlbumList2") envelope(""""albumList2":{"album":null}""") else error("unexpected getAlbum") },
                 { endpoint, _ -> if (endpoint == "getAlbumList2") albums("same", "same") else album("same") },
                 { endpoint, args ->
                     if (endpoint == "getAlbumList2") {
