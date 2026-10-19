@@ -63,6 +63,9 @@ class GitHubReadOnly:
             "base_sha": data["base"]["sha"],
             "draft": data["draft"],
             "mergeable": data["mergeable_state"],
+            "state": data["state"],
+            "merged": data["merged"],
+            "head_repo": (data["head"].get("repo") or {}).get("full_name"),
         }
 
     def files(self, n):
@@ -91,6 +94,10 @@ def _inspect(row, reader, main_sha):
         p = reader.pr(number)
         files = reader.files(number)
         check = reader.check(row["head_sha"])
+        if p.get("state") != "open" or p.get("merged") is not False:
+            blockers.append("pr_closed")
+        if p.get("head_repo") != getattr(reader, "repository", None):
+            blockers.append("untrusted_head_repository")
         if p.get("head_sha") != row["head_sha"]:
             blockers.append("head_drift")
         if p.get("base_ref") != row["base_ref"]:
