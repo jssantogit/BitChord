@@ -9,7 +9,10 @@ import json
 import re
 import sys
 
-from tools.integration_queue import validate_manifest
+if __package__:
+    from tools.integration_queue import validate_manifest
+else:
+    from integration_queue import validate_manifest
 
 
 class PlannerInputError(ValueError):
