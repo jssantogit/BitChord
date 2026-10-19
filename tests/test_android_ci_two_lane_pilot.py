@@ -37,8 +37,8 @@ class TwoLanePilotTests(unittest.TestCase):
             yaml,
         )
         self.assertIn("    name: Android · test and build", yaml)
-        self.assertIn(
-            "run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest",
+        self.assertRegex(
+            r"run: \./gradlew (?:--build-cache )?-Pbitchord\.bundleWear=false :app:testDevDebugUnitTest",
             yaml,
         )
 
