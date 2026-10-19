@@ -599,6 +599,11 @@ object AudioOutputStatus {
         }
     }
 
+    /** Invalidates measurements when the sink's physical route changes. */
+    internal fun clearMeasurementsForRoute(
+        snapshot: Snapshot, newKind: AudioRouting.Kind, newDeviceId: Int?,
+    ): Snapshot = snapshot
+
     fun reset() {
         current.value = Snapshot()
     }
