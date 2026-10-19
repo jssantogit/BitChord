@@ -65,10 +65,10 @@ class DiagnosticFileStore(
             writer.appendLine("BitChord diagnostics report")
             writer.appendLine()
             writer.appendLine("[metadata]")
-            metadataLines.forEach(writer::appendLine)
+            metadataLines.forEach { writer.appendLine(safeSharedText(it)) }
             writer.appendLine()
             writer.appendLine("[recent-events]")
-            recentEventLines.forEach(writer::appendLine)
+            recentEventLines.forEach { writer.appendLine(safeSharedText(it)) }
 
             val capture = captureFilesLocked()
             val capturedLines = ArrayList<String>()
@@ -79,9 +79,11 @@ class DiagnosticFileStore(
             } else {
                 capture.forEach { file ->
                     writer.appendLine("--- ${file.name} ---")
-                    file.forEachLine {
-                        writer.appendLine(it)
-                        if (reportV2Input != null) capturedLines.add(it)
+                    file.forEachLine { raw ->
+                        // Old persisted logs may predate D1's ingress sanitization.
+                        val safe = safeSharedText(raw)
+                        writer.appendLine(safe)
+                        if (reportV2Input != null) capturedLines.add(safe)
                     }
                 }
             }
@@ -90,7 +92,7 @@ class DiagnosticFileStore(
             writer.appendLine("[last-crash]")
             val crash = lastCrashFile()
             if (crash.isFile) {
-                crash.forEachLine { writer.appendLine(it) }
+                crash.forEachLine { writer.appendLine(safeSharedText(it)) }
             } else {
                 writer.appendLine("<none>")
             }
@@ -174,6 +176,16 @@ class DiagnosticFileStore(
         while (end > 0 && (bytes[end].toInt() and 0xC0) == 0x80) end--
         return bytes.copyOf(end) + byteArrayOf('\n'.code.toByte())
     }
+
+    /**
+     * Last outbound boundary, including legacy on-disk content recorded before D1.
+     * This intentionally favors privacy over preserving historic unsalted UUID
+     * trace identifiers; current causal flowId/parentSpanId use safe ref_ tokens.
+     */
+    private fun safeSharedText(line: String): String =
+        DiagnosticSanitizer.freeText(line)
+            .replace("\r", "\\r")
+            .replace("\n", "\\n")
 
     private fun safeFileName(requested: String): String {
         val sanitized = requested
