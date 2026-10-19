@@ -132,6 +132,24 @@ object TrackLog {
      */
     fun about(id: String?): CoroutineContext = working.asContextElement(id)
 
+    /**
+     * Optional safe refs for legacy log correlation, passed explicitly by the
+     * owning diagnostics trace. No raw media identifiers are stored here.
+     * asContextElement restores the previous value on suspend/thread switch.
+     */
+    data class Correlation(val flowId: String, val parentSpanId: String)
+    private val linkedCorrelation = ThreadLocal<Correlation?>()
+
+    fun linkCorrelation(flowId: String, parentSpanId: String): CoroutineContext {
+        val valid = Regex("ref_[0-9a-f]{20}")
+        val link = if (valid.matches(flowId) && valid.matches(parentSpanId)) {
+            Correlation(flowId, parentSpanId)
+        } else null
+        return linkedCorrelation.asContextElement(link)
+    }
+
+    fun currentCorrelation(): Correlation? = linkedCorrelation.get()
+
     private class Line(val at: Long, val level: Char, val text: String, val track: String?)
 
     private val lines = ArrayDeque<Line>()
