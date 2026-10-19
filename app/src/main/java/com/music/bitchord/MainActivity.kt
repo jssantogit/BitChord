@@ -3958,6 +3958,8 @@ private fun BitChordApp(
                 // One tab handler, whichever bar is drawing it.
                 val onTabSelected: (Int) -> Unit = { index ->
                     viewModel.clearDetail()
+                    // Tab changes dismiss an open canonical Recording details page.
+                    rediscoveryRecordingId = null
                     viewModel.closeMoodGenre()
                     showSettings = false
                     showAccountScrobbling = false
