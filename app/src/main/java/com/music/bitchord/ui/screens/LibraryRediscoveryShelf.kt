@@ -27,11 +27,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.room.InvalidationTracker
-import com.music.bitchord.R
+import com.music.bitchord.sharedui.resources.Res
+import com.music.bitchord.sharedui.resources.rediscovery_close
+import com.music.bitchord.sharedui.resources.rediscovery_title
+import com.music.bitchord.sharedui.resources.rediscovery_loading
+import com.music.bitchord.sharedui.resources.rediscovery_days_suffix
+import com.music.bitchord.sharedui.resources.rediscovery_reason_rating
+import com.music.bitchord.sharedui.resources.rediscovery_reason_behavior
+import org.jetbrains.compose.resources.stringResource
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReader
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReaders
@@ -57,6 +63,14 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+internal data class RediscoveryShelfTexts(
+    val title: String = "Rediscover",
+    val loading: String = "Finding songs…",
+    val daysSuffix: String = "days since last listen",
+    val explicitReason: String = "You liked this",
+    val behaviorReason: String = "Played repeatedly",
+)
 
 /** Presentation snapshot only. Never contains a sourceKey, provider ID, URL or queue request. */
 internal data class RediscoveryShelfRow(
@@ -183,7 +197,14 @@ internal fun LibraryRediscoveryShelfEntry(refreshToken: Any? = null) {
                 ?.none { it.item.recordingId == selected?.item?.recordingId } != false
         ) selected = null
     }
-    LibraryRediscoveryShelf(state = state, onRecordingClick = { recordingId ->
+    val strings = RediscoveryShelfTexts(
+        title = stringResource(Res.string.rediscovery_title),
+        loading = stringResource(Res.string.rediscovery_loading),
+        daysSuffix = stringResource(Res.string.rediscovery_days_suffix),
+        explicitReason = stringResource(Res.string.rediscovery_reason_rating),
+        behaviorReason = stringResource(Res.string.rediscovery_reason_behavior),
+    )
+    LibraryRediscoveryShelf(state = state, texts = strings, onRecordingClick = { recordingId ->
         scope.launch {
             val resolved = withContext(Dispatchers.IO) {
                 try { reader.resolveForNavigation(recordingId) }
@@ -200,7 +221,7 @@ internal fun LibraryRediscoveryShelfEntry(refreshToken: Any? = null) {
             text = { Text(recording.artistDisplay) },
             confirmButton = {
                 TextButton(onClick = { selected = null }) {
-                    Text(stringResource(R.string.rediscovery_close))
+                    Text(stringResource(Res.string.rediscovery_close))
                 }
             },
         )
@@ -212,17 +233,18 @@ internal fun LibraryRediscoveryShelfEntry(refreshToken: Any? = null) {
 internal fun LibraryRediscoveryShelf(
     state: RediscoveryShelfUiState,
     onRecordingClick: (String) -> Unit,
+    texts: RediscoveryShelfTexts = RediscoveryShelfTexts(),
 ) {
     if (state == RediscoveryShelfUiState.Empty) return
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp)) {
         Text(
-            text = stringResource(R.string.rediscovery_title),
+            text = texts.title,
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
         )
         when (state) {
             RediscoveryShelfUiState.Loading -> Text(
-                text = stringResource(R.string.rediscovery_loading),
+                text = texts.loading,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(horizontal = 20.dp),
             )
@@ -251,20 +273,13 @@ internal fun LibraryRediscoveryShelf(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                text = stringResource(
-                                    R.string.rediscovery_days,
-                                    row.item.daysSinceLastAudible,
-                                ),
+                                text = "${row.item.daysSinceLastAudible} ${texts.daysSuffix}",
                                 style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.padding(top = 8.dp),
                             )
                             Text(
-                                text = stringResource(
-                                    if (RediscoveryReason.POSITIVE_EXPLICIT_PREFERENCE
-                                        in row.item.reasonCodes
-                                    ) R.string.rediscovery_reason_rating
-                                    else R.string.rediscovery_reason_behavior,
-                                ),
+                                text = if (RediscoveryReason.POSITIVE_EXPLICIT_PREFERENCE in row.item.reasonCodes)
+                                    texts.explicitReason else texts.behaviorReason,
                                 style = MaterialTheme.typography.labelSmall,
                             )
                         }

@@ -1204,10 +1204,4 @@
     <string name="wear_os_code_hint">Pairing code</string>
     <string name="wear_os_done">Done</string>
     <string name="signed_by">Signed by %1$s</string>
-    <string name="rediscovery_title">Rediscover</string>
-    <string name="rediscovery_loading">Finding songs…</string>
-    <string name="rediscovery_days">%1$d days since last listen</string>
-    <string name="rediscovery_reason_rating">You liked this</string>
-    <string name="rediscovery_reason_behavior">Played repeatedly</string>
-    <string name="rediscovery_close">Close</string>
 </resources>
