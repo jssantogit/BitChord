@@ -84,6 +84,18 @@ class CanonicalQueueSwitchingRestoreTest {
             artwork.map { it?.mediaAssetId })
         assertTrue(projected.entries[2].song.localUri!!.startsWith("content://media/"))
         assertFalse(CanonicalRemotePlaybackUri.isCanonical(projected.entries[2].song.localUri!!))
+        // The local art comes back from its canonical MediaAsset, not a stale
+        // remote A/B cover or persisted canonical transport metadata.
+        assertEquals("content://media/external/audio/albumart/77",
+            projected.entries[2].song.thumbnailUrl)
+        val openedA = artwork[0]
+        val renderedA = Any()
+        assertNull(com.music.bitchord.ui.player.preloadedMenuArtworkFor(
+            projected.entries[1].song, openedA, renderedA))
+        assertNull(com.music.bitchord.ui.player.preloadedMenuArtworkFor(
+            projected.entries[2].song, openedA, renderedA))
+        assertEquals(renderedA, com.music.bitchord.ui.player.preloadedMenuArtworkFor(
+            projected.entries[3].song, openedA, renderedA))
     }
 
     @Test
@@ -103,6 +115,7 @@ class CanonicalQueueSwitchingRestoreTest {
             identity,
             uri = "content://media/external/audio/media/77",
             path = "/music/current-local.flac",
+            artworkUri = "content://media/external/audio/albumart/77",
         )
         return CanonicalPlayableAsset(identity, remoteUri(identity))
     }
