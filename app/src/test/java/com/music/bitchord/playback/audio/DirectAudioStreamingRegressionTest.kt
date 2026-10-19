@@ -477,7 +477,7 @@ class DirectAudioStreamingRegressionTest {
         assertEquals("Float32", mixerFallback.dsp.format)
     }
 
-    // 13. Telemetry path evaluation truthfully reports Direct Active when directSupport confirms runtime support
+    // 13. Runtime support only establishes a direct candidate, not actual mixer bypass
     @Test
     fun telemetryEvaluationTruthfullyReportsDirectActiveWhenRuntimeDirectSupported() {
         // Chu2 DSP with 176.4 kHz streaming track where Android runtime directSupport is true
@@ -502,11 +502,12 @@ class DirectAudioStreamingRegressionTest {
 
         val evaluated = AudioOutputStatus.evaluateActualPath(snapshot)
 
-        assertTrue("Direct playback must be actual", evaluated.directPlaybackActual)
+        assertFalse("Runtime direct support cannot prove active mixer bypass", evaluated.directPlaybackActual)
+        assertTrue("Direct candidate is still selected", evaluated.directPlaybackSelected)
         assertFalse("Direct playback must not be rejected", evaluated.directPlaybackRejected)
-        assertEquals(TransportType.AUDIO_TRACK_DIRECT, evaluated.transportType)
-        assertNull("System mixer must be bypassed", evaluated.systemMixerRateHz)
-        assertNull("HAL format must be null on direct bypass", evaluated.halFormat)
+        assertEquals(TransportType.AUDIO_TRACK, evaluated.transportType)
+        assertNull("Mixer rate has not been independently observed", evaluated.systemMixerRateHz)
+        assertNull("HAL format has not been observed", evaluated.halFormat)
         assertEquals("PCM24 / 96000 Hz", evaluated.usbEndpointFormat)
     }
 
@@ -565,7 +566,7 @@ class DirectAudioStreamingRegressionTest {
         assertEquals(FallbackReason.ROUTE_LIMITATION, result.output.fallbackReason)
     }
 
-    // 16. publishNegotiation propagates route directSupport and descriptors into snapshot
+    // 16. publishNegotiation preserves supported/direct candidate and descriptors without claiming actual
     @Test
     fun publishNegotiationPropagatesRouteDirectSupportAndDescriptorsIntoSnapshot() {
         val directSupport = DirectAudioProbe.DirectSupport(
@@ -598,11 +599,12 @@ class DirectAudioStreamingRegressionTest {
         assertEquals(directSupport, snapshot.directSupport)
         assertTrue(snapshot.sampleRatesHz.contains(96000))
         assertTrue(snapshot.encodings.contains(AudioFormat.ENCODING_PCM_24BIT_PACKED))
-        assertTrue(snapshot.directPlaybackActual)
-        assertEquals(TransportType.AUDIO_TRACK_DIRECT, snapshot.transportType)
+        assertFalse("Negotiated direct is not an observed route", snapshot.directPlaybackActual)
+        assertTrue(snapshot.directPlaybackSelected)
+        assertEquals(TransportType.AUDIO_TRACK, snapshot.transportType)
     }
 
-    // 17. evaluateActualPath honors negotiationResult route direct support when snapshot.directSupport is null
+    // 17. evaluateActualPath recognizes negotiation support without inferring a proven path
     @Test
     fun evaluateActualPathHonorsNegotiationResultRouteDirectSupport() {
         val directSupport = DirectAudioProbe.DirectSupport(
@@ -640,9 +642,10 @@ class DirectAudioStreamingRegressionTest {
 
         val evaluated = AudioOutputStatus.evaluateActualPath(snapshotWithNullDirectSupport)
 
-        assertTrue("Direct playback must be accepted via negotiation route directSupport", evaluated.directPlaybackActual)
+        assertFalse("Negotiated support does not prove active direct route", evaluated.directPlaybackActual)
+        assertTrue("Negotiated support must preserve selection", evaluated.directPlaybackSelected)
         assertFalse(evaluated.directPlaybackRejected)
-        assertEquals(TransportType.AUDIO_TRACK_DIRECT, evaluated.transportType)
+        assertEquals(TransportType.AUDIO_TRACK, evaluated.transportType)
     }
 
     // 18. Local playback behavior remains unchanged
