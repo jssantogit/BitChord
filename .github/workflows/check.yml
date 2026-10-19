@@ -18,10 +18,11 @@ jobs:
   android:
     # Keep this check context until the main ruleset is migrated separately.
     name: Android · test and build
-    # One active Android test job across PRs; queued jobs are retained instead
-    # of replacing unrelated PR checks. Main is isolated from the PR lane.
+    # Two independent PR lanes, serial within each and never cross-cancelling.
+    # A = catalog/ and intelligence/; B = all other PR branches.
+    # Main remains independent, with each commit in its own group.
     concurrency:
-      group: ${{ github.event_name == 'pull_request' && 'bitchord-android-pr-queue' || format('bitchord-android-main-{0}', github.sha) }}
+      group: ${{ github.event_name == 'pull_request' && (startsWith(github.head_ref, 'catalog/') || startsWith(github.head_ref, 'intelligence/')) && 'bitchord-android-pr-lane-a' || github.event_name == 'pull_request' && 'bitchord-android-pr-lane-b' || format('bitchord-android-main-{0}', github.sha) }}
       queue: max
       cancel-in-progress: false
     runs-on: ubuntu-latest
