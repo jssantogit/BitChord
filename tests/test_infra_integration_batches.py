@@ -27,10 +27,13 @@ class InfrastructureBatchTests(unittest.TestCase):
                 all_prs.extend(x["number"] for x in items)
         self.assertEqual(len(all_prs), len(set(all_prs)))
 
-    def test_choices_expose_only_the_two_new_explicit_batch_names(self):
+    def test_dynamic_batch_requires_reviewed_protected_main_manifest(self):
         workflow = QUEUE.read_text(encoding="utf-8")
+        batch_input = workflow.split("      batch:", 1)[1].split("      mode:", 1)[0]
+        self.assertIn("type: string", batch_input)
+        self.assertNotIn("options:", batch_input)
         for name in EXPECTED:
-            self.assertIn("          - " + name, workflow)
+            self.assertTrue((BATCHES / (name + ".json")).is_file())
         self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("environment: integration-apply", workflow)
         self.assertIn("group: bitchord-serial-integration", workflow)
