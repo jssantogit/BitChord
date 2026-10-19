@@ -19,6 +19,11 @@ class DiagnosticFileStore(
     }
 
     private val lock = Any()
+    private var rotationsSinceOpen = 0L
+
+    /** Observable known rotation count since store construction, not across restarts. */
+    val captureRotationsSinceOpen: Long
+        get() = synchronized(lock) { rotationsSinceOpen }
 
     fun appendCapture(line: String) {
         synchronized(lock) {
@@ -50,6 +55,8 @@ class DiagnosticFileStore(
         metadataLines: List<String>,
         recentEventLines: List<String>,
         fileName: String,
+        reportV2Input: DiagnosticReportV2Input? = null,
+        includeJsonl: Boolean = false,
     ): File = synchronized(lock) {
         ensureRoot()
         val exports = exportsDir().apply { mkdirs() }
@@ -64,6 +71,7 @@ class DiagnosticFileStore(
             recentEventLines.forEach(writer::appendLine)
 
             val capture = captureFilesLocked()
+            val capturedLines = ArrayList<String>()
             writer.appendLine()
             writer.appendLine("[persisted-capture]")
             if (capture.isEmpty()) {
@@ -71,7 +79,10 @@ class DiagnosticFileStore(
             } else {
                 capture.forEach { file ->
                     writer.appendLine("--- ${file.name} ---")
-                    file.forEachLine { writer.appendLine(it) }
+                    file.forEachLine {
+                        writer.appendLine(it)
+                        if (reportV2Input != null) capturedLines.add(it)
+                    }
                 }
             }
 
@@ -82,6 +93,20 @@ class DiagnosticFileStore(
                 crash.forEachLine { writer.appendLine(it) }
             } else {
                 writer.appendLine("<none>")
+            }
+
+            // Existing TXT section layout remains intact; v2 is an additive
+            // deterministic, bounded audit view of the same locked file snapshot.
+            reportV2Input?.let { input ->
+                val report = DiagnosticReportV2.build(input, capturedLines)
+                writer.appendLine()
+                writer.appendLine("[report-v2]")
+                writer.append(report.toHumanText())
+                if (includeJsonl) {
+                    writer.appendLine()
+                    writer.appendLine("[events-jsonl-v2]")
+                    writer.append(report.toJsonl())
+                }
             }
         }
         pruneExportsLocked()
@@ -118,6 +143,7 @@ class DiagnosticFileStore(
     private fun rotateCaptureLocked() {
         val current = currentCaptureFile()
         if (!current.exists()) return
+        rotationsSinceOpen++
         val previous = previousCaptureFile()
         if (previous.exists()) previous.delete()
         if (!current.renameTo(previous)) {
