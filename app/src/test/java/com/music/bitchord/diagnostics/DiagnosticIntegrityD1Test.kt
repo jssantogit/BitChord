@@ -50,7 +50,7 @@ class DiagnosticIntegrityD1Test {
         val uuid = "dd51b6f2-2a2a-4f7b-aa8f-a8aa0136a70e"
         val url = "https://private.invalid/stream?id=$uuid&token=SECRET-MEDIA"
         val fields = DiagnosticSanitizer.metadata(
-            mapOf("detail" to "retry\n$url", "mediaId" to uuid, "operation" to "offline_online"),
+            mapOf("detail" to "retry\n$url", "mediaId" to uuid, "title" to "PRIVATE SONG", "artist" to "PRIVATE ARTIST", "operation" to "offline_online"),
         )
         assertFalse(fields.toString().contains(uuid))
         assertFalse(fields.toString().contains("private.invalid"))
