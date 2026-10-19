@@ -5,7 +5,7 @@
   "items": [
     {
       "number": 92,
-      "expected_head_sha": "be47e330bfddf04ae5eef20517c8724c090cf1d6",
+      "expected_head_sha": "b5fde113666d72c85521cd83b809dd8e6d9a665f",
       "allowed_files": [
         "docs/delivery-di5-ci-observations.md",
         "tests/test_delivery_ci_observations.py",
@@ -16,7 +16,7 @@
     },
     {
       "number": 93,
-      "expected_head_sha": "6837786430a30b1e702fed32bb3a1f52f94f3136",
+      "expected_head_sha": "b6852860487b059345c5ab15f6abf1cbecd084a2",
       "allowed_files": [
         "docs/delivery-di6-workflow-sync-guard.md",
         "tests/test_workflow_sync_guard.py",
