@@ -89,7 +89,17 @@ internal object CanonicalQueueMigration {
         val byIdentity = identitiesToResolve.indices.associate { index ->
             identitiesToResolve[index] to resolved[index]
         }
-        if (byIdentity.values.any { it == null }) return null
+        // A late or incorrectly ordered batch response must not attach A's
+        // playable bytes (and cover art) to selected B. Identity is not the
+        // response's list index, nor is a Song title/videoId sufficient proof.
+        // Remote logical URIs must exactly reproduce the selected rendition
+        // and provider routing, with no native URL, token or extra parameters.
+        if (byIdentity.any { (requested, selected) ->
+                selected == null ||
+                    selected.identity != requested ||
+                    !selected.matchesCanonicalSelection(requested)
+            }
+        ) return null
 
         fun asset(identity: CanonicalQueueIdentity?): CanonicalPlayableAsset? =
             identity?.let(byIdentity::get)
@@ -113,6 +123,24 @@ internal object CanonicalQueueMigration {
             context = state.context.copy(songs = restoredContextSongs),
             entries = restoredEntries,
             contextIdentities = contextIdentities,
+        )
+    }
+
+    private fun CanonicalPlayableAsset.matchesCanonicalSelection(
+        selected: CanonicalQueueIdentity,
+    ): Boolean {
+        if (uri.isBlank()) return false
+        if (selected.providerKey == RoomCanonicalQueueResolver.LOCAL_PROVIDER) {
+            return !CanonicalRemotePlaybackUri.isCanonical(uri)
+        }
+        val mediaAssetId = selected.mediaAssetId ?: return false
+        val providerKey = selected.providerKey ?: return false
+        return uri == CanonicalRemotePlaybackUri.encode(
+            CanonicalRemotePlaybackRequest(
+                recordingId = selected.recordingId,
+                mediaAssetId = mediaAssetId,
+                providerKey = providerKey,
+            ),
         )
     }
 
