@@ -1,0 +1,84 @@
+name: Verify Integration App Authentication
+
+# One-time/manual read-only test. Never triggered by a push, PR or schedule.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_main_sha:
+        description: Exact protected main SHA approved for this verification
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bitchord-integration-auth-verification
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Integration App · approval and read-only authentication
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The job is paused until the owner's environment reviewer approves.
+    environment: integration-apply
+    steps:
+      - name: Confirm no merge writes are enabled
+        env:
+          WRITE_GATE: ${{ vars.INTEGRATION_WRITE_ENABLED }}
+          EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          test "$WRITE_GATE" != "true" || {
+            echo 'REFUSED: integration writes are enabled; disable them for this test.'
+            exit 1
+          }
+          test "${#EXPECTED_MAIN_SHA}" -eq 40 && test "$EXPECTED_MAIN_SHA" = "$CURRENT_SHA" || {
+            echo 'REFUSED: approved main SHA differs from workflow SHA.'
+            exit 1
+          }
+      - name: Mint repository-scoped GitHub App installation token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.INTEGRATION_APP_ID }}
+          private-key: ${{ secrets.INTEGRATION_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-actions: read
+      - name: Verify installation scope and API reads; never write
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: jssantogit/BitChord
+          EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only GET requests; no branch update, PATCH, PUT, POST, or merge.
+          repo="$(gh api repos/jssantogit/BitChord --jq '.full_name')"
+          test "$repo" = "$GH_REPO" || { echo 'Unexpected repository'; exit 1; }
+
+          installation_repositories="$(gh api installation/repositories --jq '[.repositories[].full_name] | join(",")')"
+          test "$installation_repositories" = "$GH_REPO" || {
+            echo 'Installation token scope is not exclusively the BitChord repository'
+            exit 1
+          }
+
+          main_sha="$(gh api repos/jssantogit/BitChord/branches/main --jq '.commit.sha')"
+          protected="$(gh api repos/jssantogit/BitChord/branches/main --jq '.protected')"
+          test "$main_sha" = "$EXPECTED_MAIN_SHA" && test "$protected" = true || {
+            echo 'Protected main moved or protection was disabled'
+            exit 1
+          }
+
+          enforcement="$(gh api repos/jssantogit/BitChord/rulesets/25365768 --jq '.enforcement')"
+          test "$enforcement" = active || {
+            echo 'Main integration ruleset is no longer active'
+            exit 1
+          }
+
+          gh api repos/jssantogit/BitChord/pulls/48 --jq '.number' | grep -qx '48'
+          gh api 'repos/jssantogit/BitChord/actions/runs?per_page=1' --jq '.total_count' >/dev/null
+          echo 'AUTH CHECK OK: human environment approval, scoped GitHub App token, protected main and required read APIs verified; zero writes.'
