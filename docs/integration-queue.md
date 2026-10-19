@@ -146,3 +146,64 @@ python3 -m unittest discover -s tests -v
 
 A separate PR/main workflow runs these contract tests without assembling an
 APK or altering the existing required Android check.
+
+## Next proposed two-stage integration window — PREPARATION ONLY
+
+The first real single-PR pilot, **O2 #48**, succeeded through App-authenticated
+branch sync, required Android pre-merge CI #581, protected merge
+`c986301c836a70e1933eded4c9b5964968a80346`, and main push Android
+post-merge CI #582. The new manifests are *not* approvals to run `execute`.
+
+**Do not increase `MAX_ITEMS=3` to fit four PRs.** The controller's job
+budget is 40 minutes and its GitHub App installation token is short-lived.
+For four pending slices, stage **two separately approved manual dispatches**:
+
+| Batch (run only after the previous batch GREEN) | Exact sequence | Why |
+| --- | --- | --- |
+| `playback-b2-b3` | B2 #51 → B3 #53 | B3 must follow B2 in the same batch and retarget after B2 |
+| `catalog-listening-c3-l2` | C3 #52 → L2 #50 | Independent slices; each must pass its own pre/post Android CI |
+
+Every manifest pins the original SHA and observed exact **stack-only** PR
+file allowlist at this checkpoint. Neither batch contains C2 #49. Each
+requires separate `mode=plan`, reviewed current main SHA, owner approval
+of `mode=execute` through `integration-apply`, and review of all manifest
+and live PR checks. The second batch must use the **new** protected main SHA
+after the first batch's completed post-merge GREEN.
+
+### Blockers to clear before even running read-only plans
+
+- **B2 #51, C3 #52 and L2 #50 are still draft PRs whose base refs
+  are the old B1/C1/L1 stack branches**. Their parent PRs #46/#45/#47
+  are merged into main, but those ancestors moved before merging.
+  The controller intentionally refuses a non-main `expected_base_ref`
+  for a batch root, and refuses draft PRs. Do not attempt execute in
+  the current state.
+- In a **separate explicit preparation/review step**, retarget only the
+  three root PRs to `main` and confirm the same **exact stack-only**
+  changed-file sets and original pinned HEADs. Check that their content
+  contains no reverted upstream parent changes or regressions. Review
+  semantic readiness (especially L2 canonical navigation and L2 Robolectric
+  tests) before marking those roots ready for review. If retarget creates
+  additional files, conflicts or changes the HEAD, **stop and revise the
+  manifest and tests in an independently reviewed infra PR**; never
+  silently expand the allowlist or bypass required tests.
+- **B3 #53 intentionally stays based on B2's branch at the initial gate**.
+  It also starts draft. Its current PR stack-only diff contains three
+  files, while a naive comparison of B3 to current main includes six B2
+  files too. Retargeting B3 to main *before* B2 merges would violate
+  isolation. In the Playback batch, the controller checks B2 has merged
+  first, then retargets B3 to main, rechecks exactly three B3-only files,
+  syncs its branch and requires fresh CI.
+- Only after the review and independent explicit approval of both
+  manifests should the infrastructure PR containing them be merged.
+  Verify infra post-merge Android CI GREEN before dispatching any batch.
+  No automatic trigger, self-merge, skip, forced push, broad App scope,
+  or review bypass is permitted.
+- `INTEGRATION_WRITE_ENABLED` may still be **true** from the O2 pilot:
+  that variable is owner-managed and not introspectable via the current
+  connector. Return it to `false` outside the expressly supervised
+  execute windows; a future plan must never be treated as write approval.
+
+These manifests and choices merely expose selectable **future** batches;
+they do not change live functional PR bases, their draft status, branch
+contents or main on their own.
