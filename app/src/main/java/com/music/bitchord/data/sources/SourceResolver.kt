@@ -41,6 +41,9 @@ object SourceResolver {
 
     private const val TAG = "BitChord"
 
+    @Volatile
+    internal var traceReporter: SourceResolutionTraceReporter = SourceResolutionTraceReporter.NO_OP
+
     /**
      * What to ask a source for, right now.
      *
@@ -107,12 +110,25 @@ object SourceResolver {
     suspend fun resolve(uri: Uri): SourceStream? {
         val configId = uri.getQueryParameter("s") ?: return null
         val trackId = uri.getQueryParameter("t") ?: return null
-        return resolve(
-            configId = configId,
-            trackId = trackId,
-            target = targetIn(uri),
-            pickedMix = uri.getQueryParameter(MIX_PARAM),
-        )
+        val trace = traceReporter.start(configId, trackId)
+        return try {
+            val stream = trace.lookup {
+                resolve(
+                    configId = configId,
+                    trackId = trackId,
+                    target = targetIn(uri),
+                    pickedMix = uri.getQueryParameter(MIX_PARAM),
+                )
+            }
+            trace.complete(found = stream != null)
+            stream
+        } catch (cancelled: CancellationException) {
+            trace.cancel()
+            throw cancelled
+        } catch (error: Throwable) {
+            trace.fail()
+            throw error
+        }
     }
 
     /**

@@ -12,6 +12,11 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import com.music.bitchord.data.Http
 import com.music.bitchord.diagnostics.BoundedPerformanceProbe
 import com.music.bitchord.diagnostics.DiagnosticCategory
+import com.music.bitchord.BuildConfig
+import com.music.bitchord.diagnostics.Diagnostics
+import com.music.bitchord.observability.StructuredTracer
+import com.music.bitchord.observability.TraceFeature
+import com.music.bitchord.observability.TraceOutcome
 import java.io.IOException
 import java.io.InterruptedIOException
 import java.util.concurrent.CopyOnWriteArrayList
@@ -24,6 +29,7 @@ import kotlinx.coroutines.runBlocking
  */
 internal class OpenSubsonicRuntimeTransport(
     private val performanceProbe: BoundedPerformanceProbe = BoundedPerformanceProbe(),
+    private val tracer: StructuredTracer? = null,
     private val resolve: suspend (mediaAssetId: String) -> OpenSubsonicMediaAccessResult,
 ) {
     suspend fun resolveRuntime(
@@ -31,33 +37,60 @@ internal class OpenSubsonicRuntimeTransport(
         mediaAssetId: String,
         providerKey: String,
     ): OpenSubsonicRuntimeAudioRequest {
-        val result = try {
-            performanceProbe.measureSuspend(
-                category = DiagnosticCategory.NETWORK,
-                name = "runtime_stream_resolution",
-                metadata = mapOf("provider" to "opensubsonic"),
-            ) {
-                resolve(mediaAssetId)
-            }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Throwable) {
-            throw IOException("Remote playback access unavailable")
+        // Provider owns identity validation and opaque authenticated requests. Only
+        // the private-salt references and typed stages may leave that boundary.
+        val trace = tracer?.let { activeTracer ->
+            activeTracer.startTrace(
+                feature = TraceFeature.PROVIDER,
+                operation = "opensubsonic_runtime_resolve",
+                attributes = mapOf(
+                    "recordingRef" to activeTracer.reference(recordingId),
+                    "assetRef" to activeTracer.reference(mediaAssetId),
+                    "providerRef" to activeTracer.reference(providerKey),
+                ),
+            )
         }
-
-        return when (result) {
-            is OpenSubsonicMediaAccessResult.Failure -> throw safeFailure(result.reason)
-            is OpenSubsonicMediaAccessResult.Ready -> {
-                val runtime = result.request
-                if (
-                    runtime.recordingId != recordingId ||
-                    runtime.mediaAssetId != mediaAssetId ||
-                    runtime.providerKey != providerKey
-                ) {
-                    throw IOException("Canonical remote playback identity mismatch")
+        return try {
+            val result = try {
+                val lookup: suspend () -> OpenSubsonicMediaAccessResult = {
+                    performanceProbe.measureSuspend(
+                        category = DiagnosticCategory.NETWORK,
+                        name = "runtime_stream_resolution",
+                        metadata = mapOf("provider" to "opensubsonic"),
+                    ) {
+                        resolve(mediaAssetId)
+                    }
                 }
-                runtime
+                if (trace == null) lookup() else trace.spanSuspend("access_lookup", block = lookup)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                throw IOException("Remote playback access unavailable")
             }
+
+            val runtime = when (result) {
+                is OpenSubsonicMediaAccessResult.Failure -> throw safeFailure(result.reason)
+                is OpenSubsonicMediaAccessResult.Ready -> {
+                    val request = result.request
+                    if (
+                        request.recordingId != recordingId ||
+                        request.mediaAssetId != mediaAssetId ||
+                        request.providerKey != providerKey
+                    ) {
+                        throw IOException("Canonical remote playback identity mismatch")
+                    }
+                    request
+                }
+            }
+            trace?.event("identity_verified", TraceOutcome.SUCCEEDED)
+            trace?.complete(TraceOutcome.SUCCEEDED)
+            runtime
+        } catch (cancelled: CancellationException) {
+            trace?.complete(TraceOutcome.CANCELLED)
+            throw cancelled
+        } catch (error: Throwable) {
+            trace?.complete(TraceOutcome.FAILED)
+            throw error
         }
     }
 
@@ -243,7 +276,10 @@ internal fun androidOpenSubsonicMediaDataSourceFactory(
 ): OpenSubsonicMediaDataSourceFactory {
     val access = androidOpenSubsonicMediaAccess(context.applicationContext)
     return OpenSubsonicMediaDataSourceFactory(
-        transport = OpenSubsonicRuntimeTransport(resolve = access::resolve),
+        transport = OpenSubsonicRuntimeTransport(
+            tracer = if (BuildConfig.DEBUG) Diagnostics.structuredTracer() else null,
+            resolve = access::resolve,
+        ),
         upstreamFactory = OkHttpDataSource.Factory(Http.client),
     )
 }
