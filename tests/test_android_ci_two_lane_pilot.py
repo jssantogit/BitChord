@@ -31,7 +31,7 @@ class TwoLanePilotTests(unittest.TestCase):
 
     def test_no_job_loss_or_cross_pr_cancel(self):
         yaml = self.workflow
-        self.assertIn("      queue: max\\n      cancel-in-progress: false", yaml)
+        self.assertIn("      queue: max\n      cancel-in-progress: false", yaml)
         self.assertIn(
             "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
             yaml,
