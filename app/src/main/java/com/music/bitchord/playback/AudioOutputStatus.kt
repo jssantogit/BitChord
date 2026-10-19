@@ -499,15 +499,15 @@ object AudioOutputStatus {
                 val encodingSupported = encodingMatchesDescriptors || directSupported
                 val isFloatPcm = encoding == AudioFormat.ENCODING_PCM_FLOAT
 
-                val maxUsbRate = sampleRates.maxOrNull() ?: 48000
+                val maxUsbRate = sampleRates.maxOrNull()
                 val usbEnc = when {
                     encodings.contains(AudioFormat.ENCODING_PCM_32BIT) -> "PCM32"
                     encodings.contains(AudioFormat.ENCODING_PCM_24BIT_PACKED) -> "PCM24"
                     encodings.contains(AudioFormat.ENCODING_PCM_FLOAT) -> "Float32"
                     encodings.contains(AudioFormat.ENCODING_PCM_16BIT) -> "PCM16"
-                    else -> "PCM16"
+                    else -> "Unknown PCM"
                 }
-                val usbEndpointStr = "$usbEnc / $maxUsbRate Hz"
+                val usbEndpointStr = "$usbEnc / ${maxUsbRate?.let { "$it Hz" } ?: "rate not advertised"}"
 
                 val isGenuineDirect = requestedDirect &&
                     directSupported &&
