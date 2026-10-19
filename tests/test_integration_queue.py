@@ -169,11 +169,22 @@ class QueueTests(unittest.TestCase):
             api = FakeAPI()
             api.repo_settings = lambda: {
                 'full_name': 'someone-else/Other', 'default_branch': 'main',
+                'allow_auto_merge': True, 'allow_update_branch': True,
                 'allow_merge_commit': True,
             }
             with self.subTest(mode=mode), self.assertRaises(StopIntegration):
                 self.run_controller(api, mode=mode)
             self.assertEqual([], api.calls)
+
+    def test_explicitly_disabled_merge_commits_still_block_execution(self):
+        api = FakeAPI()
+        api.repo_settings = lambda: {
+            'full_name': 'jssantogit/BitChord', 'default_branch': 'main',
+            'allow_merge_commit': False,
+        }
+        with self.assertRaises(StopIntegration):
+            self.run_controller(api, mode='execute')
+        self.assertEqual([], api.calls)
 
     def test_prevents_unexpected_main_or_head(self):
         api = FakeAPI()
