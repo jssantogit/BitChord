@@ -5,6 +5,11 @@ on:
     paths:
       - 'tools/integration_queue.py'
       - 'tools/delivery_metrics.py'
+      - 'tools/delivery_planner.py'
+      - 'tools/delivery_snapshot.py'
+      - 'tests/test_delivery_snapshot.py'
+      - 'tests/test_delivery_cli.py'
+      - 'tests/test_delivery_planner.py'
       - 'tests/test_delivery_metrics.py'
       - 'tests/test_integration_queue.py'
       - 'tests/test_android_ci_queue.py'
@@ -21,6 +26,11 @@ on:
     paths:
       - 'tools/integration_queue.py'
       - 'tools/delivery_metrics.py'
+      - 'tools/delivery_planner.py'
+      - 'tools/delivery_snapshot.py'
+      - 'tests/test_delivery_snapshot.py'
+      - 'tests/test_delivery_cli.py'
+      - 'tests/test_delivery_planner.py'
       - 'tests/test_delivery_metrics.py'
       - 'tests/test_integration_queue.py'
       - 'tests/test_android_ci_queue.py'
