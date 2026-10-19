@@ -1,0 +1,141 @@
+name: DI4 Cross-run Evidence Pilot
+
+# Inert evidence transport only. Never performs repository writes or merges.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Export on main or inspect a completed prior export
+        required: true
+        type: choice
+        options:
+          - export
+          - inspect
+      batch_slug:
+        description: Exact reviewed manifest slug already on protected main
+        type: string
+        required: true
+      expected_main_sha:
+        description: Exact main SHA; reject stale runs
+        type: string
+        required: true
+      source_run_id:
+        description: Completed source run id, inspect only
+        type: string
+        required: false
+      source_attempt:
+        description: Source attempt, inspect only
+        type: string
+        required: false
+      artifact_id:
+        description: Source artifact id, inspect only
+        type: string
+        required: false
+      evidence_sha256:
+        description: Independently copied evidence digest, inspect only
+        type: string
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: di4-readonly-evidence-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  export:
+    name: DI4 · export inert checkpoint
+    if: github.ref == 'refs/heads/main' && inputs.mode == 'export'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify pinned protected main and safe batch
+        shell: bash
+        env:
+          EXPECTED_MAIN: ${{ inputs.expected_main_sha }}
+          BATCH: ${{ inputs.batch_slug }}
+        run: |
+          set -euo pipefail
+          test "$EXPECTED_MAIN" = "$GITHUB_SHA"
+          [[ "$BATCH" =~ ^[a-z0-9][a-z0-9_-]{0,60}$ ]]
+          test -f ".github/integration-batches/$BATCH.json"
+      - name: Generate sealed evidence with no execution authority
+        shell: bash
+        env:
+          BATCH: ${{ inputs.batch_slug }}
+        run: |
+          set -euo pipefail
+          python3 tools/delivery_checkpoint_pilot.py \
+            --repo jssantogit/BitChord \
+            --manifest ".github/integration-batches/$BATCH.json" \
+            --output "$RUNNER_TEMP/delivery-checkpoint.json" \
+            --main-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
+            --attempt "$GITHUB_RUN_ATTEMPT" \
+            --event "$GITHUB_EVENT_NAME" --ref "$GITHUB_REF"
+      - name: Upload one-day non-authoritative evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: di4-checkpoint-evidence
+          path: ${{ runner.temp }}/delivery-checkpoint.json
+          if-no-files-found: error
+          retention-days: 1
+
+  inspect:
+    name: DI4 · inspect prior-run evidence
+    if: github.ref == 'refs/heads/main' && inputs.mode == 'inspect'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify pinned protected main and safe batch
+        shell: bash
+        env:
+          EXPECTED_MAIN: ${{ inputs.expected_main_sha }}
+          BATCH: ${{ inputs.batch_slug }}
+        run: |
+          set -euo pipefail
+          test "$EXPECTED_MAIN" = "$GITHUB_SHA"
+          [[ "$BATCH" =~ ^[a-z0-9][a-z0-9_-]{0,60}$ ]]
+          test -f ".github/integration-batches/$BATCH.json"
+      - name: Download only named evidence from the selected completed run
+        uses: actions/download-artifact@v4
+        with:
+          name: di4-checkpoint-evidence
+          repository: jssantogit/BitChord
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/di4-evidence-in
+      - name: Revalidate GitHub provenance and independently pinned digest
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BATCH: ${{ inputs.batch_slug }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_ATTEMPT: ${{ inputs.source_attempt }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
+          EVIDENCE_SHA256: ${{ inputs.evidence_sha256 }}
+          EXPECTED_MAIN: ${{ inputs.expected_main_sha }}
+        run: |
+          set -euo pipefail
+          python3 tools/delivery_artifact.py \
+            --repo jssantogit/BitChord \
+            --manifest ".github/integration-batches/$BATCH.json" \
+            --content "$RUNNER_TEMP/di4-evidence-in/delivery-checkpoint.json" \
+            --run-id "$SOURCE_RUN_ID" --attempt "$SOURCE_ATTEMPT" \
+            --artifact-id "$ARTIFACT_ID" \
+            --expected-main-sha "$EXPECTED_MAIN" \
+            --sha256 "$EVIDENCE_SHA256"
+          echo 'Evidence inspected only. Revalidation and human approval remain mandatory.'
