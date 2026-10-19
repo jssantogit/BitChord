@@ -12,6 +12,7 @@ internal object DeletedLocalMediaRestore {
         snapshot: LastPlayed.Snapshot,
         isDeletedLocal: (Song) -> Boolean,
     ): LastPlayed.Snapshot? {
+        if (snapshot.songs.isEmpty()) return null
         val current = snapshot.index.coerceIn(snapshot.songs.indices)
         val survivors = snapshot.songs.withIndex().filterNot { (_, song) ->
             song.isLocalRestoreCandidate() && isDeletedLocal(song)
