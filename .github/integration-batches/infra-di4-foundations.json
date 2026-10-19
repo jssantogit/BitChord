@@ -27,9 +27,10 @@
     },
     {
       "number": 95,
-      "expected_head_sha": "714abbd3a03663d536ef01435386739a8ff99497",
+      "expected_head_sha": "1c7b63b032bdb479816c7e8cb31b7e966e603d87",
       "allowed_files": [
         "docs/delivery-di4c-transfer.md",
+        "tests/test_delivery_preflight.py",
         "tests/test_delivery_transfer.py",
         "tools/delivery_transfer.py"
       ],
