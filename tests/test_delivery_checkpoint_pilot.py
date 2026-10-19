@@ -66,8 +66,8 @@ class PilotTests(unittest.TestCase):
         text = (Path(__file__).resolve().parents[1] /
                 '.github/workflows/delivery-checkpoint-evidence.yml').read_text()
         self.assertIn('workflow_dispatch:', text)
-        self.assertIn('mode: export', text)
-        self.assertIn('mode: inspect', text)
+        self.assertIn('          - export', text)
+        self.assertIn('          - inspect', text)
         self.assertIn('actions/upload-artifact@v4', text)
         self.assertIn('actions/download-artifact@v4', text)
         self.assertIn('retention-days: 1', text)
