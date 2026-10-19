@@ -23,6 +23,7 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.isolatedOpenSubsoni
 import com.music.bitchord.ui.player.awaitRecoverableCanonicalArtwork
 import java.security.MessageDigest
 import java.util.Base64
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
@@ -351,6 +352,99 @@ class OpenSubsonicArtworkAccessTest {
         assertFalse("videoId" in assetFields)
         assertFalse("sourceKey" in trackFields)
         assertFalse("sourceKey" in assetFields)
+    }
+
+
+    @Test
+    fun `disposing artwork while cache read is suspended cancels before any authenticated fetch`() = runTest {
+        val fixture = fixture(secret = "test-only-secret")
+        var transportCalls = 0
+        val cache = object : OpenSubsonicArtworkCache {
+            override suspend fun read(cacheKey: String): ByteArray? {
+                throw CancellationException("selected row disposed")
+            }
+            override suspend fun write(cacheKey: String, bytes: ByteArray) = Unit
+        }
+        val loader = OpenSubsonicArtworkLoader(
+            fixture.access,
+            OpenSubsonicArtworkTransport { _, _ ->
+                transportCalls++
+                OpenSubsonicArtworkTransportResult.Success(byteArrayOf(3), "image/png")
+            },
+            cache,
+        )
+
+        val failure = runCatching {
+            loader.load(
+                mediaAssetId = "asset-canonical",
+                expectedRecordingId = "recording-canonical",
+                expectedProviderKey = "opensubsonic:home",
+            )
+        }.exceptionOrNull()
+
+        assertTrue("Cancelled cache reads must propagate cancellation", failure is CancellationException)
+        assertEquals(0, transportCalls)
+        assertEquals(0, fixture.credentials.readCalls)
+    }
+
+    @Test
+    fun `disposing artwork during cache write never publishes a completed stale image`() = runTest {
+        val fixture = fixture()
+        var transportCalls = 0
+        val cache = object : OpenSubsonicArtworkCache {
+            override suspend fun read(cacheKey: String): ByteArray? = null
+            override suspend fun write(cacheKey: String, bytes: ByteArray) {
+                throw CancellationException("selection changed before artwork could be cached")
+            }
+        }
+        val loader = OpenSubsonicArtworkLoader(
+            fixture.access,
+            OpenSubsonicArtworkTransport { _, _ ->
+                transportCalls++
+                OpenSubsonicArtworkTransportResult.Success(byteArrayOf(7, 8), "image/png")
+            },
+            cache,
+        )
+
+        val failure = runCatching {
+            loader.load(
+                mediaAssetId = "asset-canonical",
+                expectedRecordingId = "recording-canonical",
+                expectedProviderKey = "opensubsonic:home",
+            )
+        }.exceptionOrNull()
+
+        assertTrue("Cancelled cache writes must propagate cancellation", failure is CancellationException)
+        assertEquals(1, transportCalls)
+        assertEquals(0, fixture.store.writeCalls)
+    }
+
+    @Test
+    fun `ordinary cache I O failures preserve uncached fetch and successful display`() = runTest {
+        val fixture = fixture()
+        var transportCalls = 0
+        val cache = object : OpenSubsonicArtworkCache {
+            override suspend fun read(cacheKey: String): ByteArray? = error("disk read unavailable")
+            override suspend fun write(cacheKey: String, bytes: ByteArray) = error("disk write unavailable")
+        }
+        val loader = OpenSubsonicArtworkLoader(
+            fixture.access,
+            OpenSubsonicArtworkTransport { _, _ ->
+                transportCalls++
+                OpenSubsonicArtworkTransportResult.Success(byteArrayOf(12, 13), "image/png")
+            },
+            cache,
+        )
+
+        val result = loader.load(
+            mediaAssetId = "asset-canonical",
+            expectedRecordingId = "recording-canonical",
+            expectedProviderKey = "opensubsonic:home",
+        ) as OpenSubsonicArtworkLoadResult.Ready
+
+        assertArrayEquals(byteArrayOf(12, 13), result.bytes)
+        assertFalse(result.fromCache)
+        assertEquals(1, transportCalls)
     }
 
     private fun fixture(
