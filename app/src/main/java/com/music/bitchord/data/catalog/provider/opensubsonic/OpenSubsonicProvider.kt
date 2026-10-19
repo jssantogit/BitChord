@@ -151,6 +151,7 @@ internal class OpenSubsonicProvider(
     override suspend fun librarySnapshot(): ProviderLibrarySnapshot {
         val albumIds = enumerateAlbumIds()
         val tracks = ArrayList<ProviderTrack>()
+        val seenSourceKeys = HashSet<String>()
 
         for (albumId in albumIds) {
             val response = request(
@@ -159,11 +160,23 @@ internal class OpenSubsonicProvider(
             )
             val album = response.album
                 ?: throw OpenSubsonicProtocolException("getAlbum returned no album")
-            tracks += album.song.orEmpty()
-                .asSequence()
-                .filterNot(SubsonicSong::isDir)
-                .map { song -> mapTrack(song, album) }
-                .toList()
+            if (album.id.trim() != albumId) {
+                throw OpenSubsonicProtocolException("getAlbum response did not match request")
+            }
+            val songs = album.song
+                ?: if (album.songCount == 0) emptyList() else
+                    throw OpenSubsonicProtocolException("getAlbum returned no song list")
+            if (album.songCount != null && album.songCount != songs.size) {
+                throw OpenSubsonicProtocolException("getAlbum song count is inconsistent")
+            }
+            for (song in songs) {
+                if (song.isDir) continue
+                val track = mapTrack(song, album)
+                if (!seenSourceKeys.add(track.externalTrackId)) {
+                    throw OpenSubsonicProtocolException("Duplicate source ID in album enumeration")
+                }
+                tracks += track
+            }
         }
 
         return ProviderLibrarySnapshot(
@@ -186,20 +199,24 @@ internal class OpenSubsonicProvider(
                     "offset" to offset.toString(),
                 ),
             )
-            val page = response.albumList2?.album.orEmpty()
+            // A successful HTTP response without the expected envelope is not
+            // proof that the library is empty. Treat it as incomplete and NEVER
+            // allow an availability prune against this response.
+            val listing = response.albumList2
+                ?: throw OpenSubsonicProtocolException("getAlbumList2 returned no album list")
+            val page = listing.album
             if (page.isEmpty()) break
-
-            var newIds = 0
+            if (page.size > pageSize) {
+                throw OpenSubsonicProtocolException("Album page exceeds requested size")
+            }
             for (album in page) {
-                if (album.id.isNotBlank() && seen.add(album.id)) {
-                    ids += album.id
-                    newIds += 1
+                val id = album.id.trim()
+                if (id.isEmpty() || !seen.add(id)) {
+                    throw OpenSubsonicProtocolException("Duplicate or blank album ID in pagination")
                 }
+                ids += id
             }
             if (page.size < pageSize) break
-            if (newIds == 0) {
-                throw OpenSubsonicProtocolException("Album pagination made no progress")
-            }
             offset += page.size
         }
 
