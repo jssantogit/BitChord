@@ -123,14 +123,18 @@ class CanonicalQueueSwitchingRestoreTest {
         // without forging an extra logical context song.
         val contextIds = order.distinct()
         val context = contextIds.mapIndexed { index, identity -> song(identity, "context-$index") }
-        val windowStart = contextIds.indexOf(order.first())
+        val windowStart = if (selectedIndex < contextIds.size &&
+            order[selectedIndex] == contextIds[selectedIndex]
+        ) selectedIndex else contextIds.lastIndex
         val entries = order.mapIndexed { index, identity ->
             val contextIndex = contextIds.indexOf(identity)
             val isRepeat = index > order.indexOf(identity)
             BoundedContextPersistence.Entry(
-                song = song(identity, "entry-$index").copy(
-                    queueTier = if (isRepeat) QueueTier.USER_QUEUE else QueueTier.CONTEXT,
-                ),
+                song = if (isRepeat) {
+                    song(identity, "entry-$index").copy(queueTier = QueueTier.USER_QUEUE)
+                } else {
+                    context[contextIndex].copy(queueEntryId = "entry-$index")
+                },
                 canonicalIndex = if (isRepeat) null else contextIndex,
                 cycleId = if (isRepeat) null else 0L,
                 canonicalIdentity = identity,
