@@ -16,7 +16,7 @@ class DI4CrossRunBatchTests(unittest.TestCase):
         self.assertEqual([None, 97], [r['depends_on'] for r in rows])
         self.assertEqual(['main', 'infra/di4d-cross-run-artifact-verification-v0'],
                          [r['expected_base_ref'] for r in rows])
-        self.assertEqual(['cfeb250e89445bc8500d73ff0cbc52015abb047f',
+        self.assertEqual(['17d294bf08176b387f7923c24067451a6ac08973',
                           '78c0e847b3b25ed6830ef553814a7e5c848f9be9'],
                          [r['expected_head_sha'] for r in rows])
         self.assertEqual([
