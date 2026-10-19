@@ -213,6 +213,7 @@ android {
             // so a test of that layer fails on the logging rather than on the
             // logic it was written to check.
             isReturnDefaultValues = true
+            isIncludeAndroidResources = true // Compose/Robolectric shelf semantics use app strings
         }
     }
 }
