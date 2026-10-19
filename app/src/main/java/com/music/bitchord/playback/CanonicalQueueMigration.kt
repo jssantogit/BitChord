@@ -148,6 +148,14 @@ internal object CanonicalQueueMigration {
         videoId = asset.uri,
         localUri = asset.uri,
         localPath = asset.path,
+        // v2 intentionally omits persisted thumbnail transport. Reacquire a
+        // local album-art content URI from its *selected* canonical MediaAsset
+        // after restart; remote art stays in the B1 provider-owned pipeline.
+        thumbnailUrl = if (asset.identity.providerKey == RoomCanonicalQueueResolver.LOCAL_PROVIDER) {
+            asset.artworkUri
+        } else {
+            null
+        },
         queueTier = queueTier.takeIf {
             it == QueueTier.CONTEXT || it == QueueTier.USER_QUEUE || it == QueueTier.AUTOPLAY
         } ?: QueueTier.CONTEXT,
