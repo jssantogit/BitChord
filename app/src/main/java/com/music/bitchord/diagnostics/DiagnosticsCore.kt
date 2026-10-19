@@ -160,7 +160,12 @@ object DiagnosticSanitizer {
 
     private fun isSensitiveKey(key: String): Boolean {
         val compact = key.trim().lowercase(Locale.ROOT).replace(keySeparators, "")
-        return compact == "authorization" ||
+        return compact in setOf(
+            "title", "tracktitle", "artist", "artistname", "album", "albumname",
+            "trackid", "videoid", "mediaid", "mediaassetid", "recordingid",
+            "providerkey", "sourceurl", "url", "uri",
+        ) ||
+            compact == "authorization" ||
             compact == "cookie" ||
             compact == "session" ||
             compact.endsWith("token") ||
