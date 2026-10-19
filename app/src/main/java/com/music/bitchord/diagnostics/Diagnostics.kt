@@ -193,11 +193,16 @@ object Diagnostics {
             else -> DiagnosticLevel.ERROR
         }
         if (!diagnosticMode.allowsLegacy(diagnosticLevel)) return
+        val link = com.music.bitchord.data.TrackLog.currentCorrelation()
         event(
             category = categoryForTag(tag),
             name = "debug_log:$tag",
             level = diagnosticLevel,
             message = message,
+            metadata = link?.let { mapOf(
+                "flowId" to it.flowId,
+                "parentSpanId" to it.parentSpanId,
+            ) } ?: emptyMap(),
             error = error,
         )
     }
