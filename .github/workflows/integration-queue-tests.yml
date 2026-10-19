@@ -5,6 +5,8 @@ on:
     paths:
       - 'tools/integration_queue.py'
       - 'tests/test_integration_queue.py'
+      - 'tests/test_android_ci_queue.py'
+      - '.github/workflows/check.yml'
       - '.github/workflows/integration-queue.yml'
       - '.github/workflows/integration-queue-tests.yml'
       - '.github/integration-batches/**'
@@ -14,6 +16,8 @@ on:
     paths:
       - 'tools/integration_queue.py'
       - 'tests/test_integration_queue.py'
+      - 'tests/test_android_ci_queue.py'
+      - '.github/workflows/check.yml'
       - '.github/workflows/integration-queue.yml'
       - '.github/workflows/integration-queue-tests.yml'
       - '.github/integration-batches/**'
