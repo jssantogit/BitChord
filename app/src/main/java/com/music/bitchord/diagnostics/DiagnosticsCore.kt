@@ -1,5 +1,7 @@
 package com.music.bitchord.diagnostics
 
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /** A severity independent of Android's Log API so diagnostics stay testable. */
@@ -34,6 +36,7 @@ data class DiagnosticEvent(
     val durationNanos: Long?,
     val metadata: Map<String, String>,
     val error: String?,
+    val sequence: Long = 0L,
 )
 
 /**
@@ -49,15 +52,17 @@ class DiagnosticBuffer(
 
     private val lock = Any()
     private val events = ArrayDeque<DiagnosticEvent>(capacity)
+    private var nextSequence = 0L
 
     val size: Int
         get() = synchronized(lock) { events.size }
 
-    fun append(event: DiagnosticEvent) {
-        synchronized(lock) {
-            if (events.size == capacity) events.removeFirst()
-            events.addLast(event)
-        }
+    fun append(event: DiagnosticEvent): DiagnosticEvent = synchronized(lock) {
+        val numbered = if (event.sequence > 0L) event else event.copy(sequence = ++nextSequence)
+        if (numbered.sequence > nextSequence) nextSequence = numbered.sequence
+        if (events.size == capacity) events.removeFirst()
+        events.addLast(numbered)
+        numbered
     }
 
     fun snapshot(): List<DiagnosticEvent> = synchronized(lock) { events.toList() }
@@ -118,7 +123,7 @@ object DiagnosticSanitizer {
                 key.take(128) to if (isSensitiveKey(key)) {
                     REDACTED
                 } else {
-                    text(value, MAX_METADATA_VALUE_CHARS)
+                    freeText(value, MAX_METADATA_VALUE_CHARS)
                 }
             }
 
@@ -184,19 +189,30 @@ object DiagnosticFormatter {
             .orEmpty()
 
         return buildString {
+            append("schema=v2 utc=")
+            append(DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(event.epochMillis)))
+            append(" seq=")
+            append(event.sequence)
+            append(" mono_ns=")
+            append(event.monotonicNanos)
+            append(' ')
             append(event.level.name)
             append(' ')
             append(event.category.name)
             append(' ')
-            append(DiagnosticSanitizer.text(event.name, 256))
+            append(DiagnosticSanitizer.freeText(event.name, 256))
             append(duration)
             append(" session=")
             append(event.sessionId.take(64))
             append(" thread=")
-            append(DiagnosticSanitizer.text(event.threadName, 128))
+            append(DiagnosticSanitizer.freeText(event.threadName, 128))
             append(message)
             append(metadata)
             append(error)
-        }
+        }.replace("\r", "\\r").replace("\n", "\\n")
     }
+}
+
+object DiagnosticCaptureIntegrity {
+    fun flushStatus(flushed: Boolean): String = if (flushed) "complete" else "partial_flush_timeout"
 }
