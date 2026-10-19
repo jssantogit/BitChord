@@ -42,7 +42,7 @@ class GaplessBoundaryPolicyTest {
             val next = queue.advanceAutomatically(repeatAll = true)
             assertTrue(next != null)
             assertEquals(4, queue.canonicalSize)
-            assertEquals(before.isShuffleEnabled, queue.snapshot().isShuffleEnabled)
+            assertEquals(before.shuffleEnabled, queue.snapshot().shuffleEnabled)
             // Only QueueWindow/Media3 determine the next logical occurrence.
             assertTrue((0 until 4).contains(next!!.canonicalIndex))
         }
