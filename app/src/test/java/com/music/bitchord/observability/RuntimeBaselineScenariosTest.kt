@@ -7,11 +7,10 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicRuntime
 import com.music.bitchord.diagnostics.BoundedPerformanceProbe
 import com.music.bitchord.diagnostics.MainThreadStallState
 import com.music.bitchord.playback.PlaybackE2ETraceObserver
-import com.sun.net.httpserver.HttpServer
-import java.net.InetSocketAddress
+import mockwebserver3.MockResponse
+import mockwebserver3.MockWebServer
 import java.nio.file.Files
 import java.util.Collections
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -29,21 +28,22 @@ import org.junit.Test
 class RuntimeBaselineScenariosTest {
     @Test
     fun `existing OpenSubsonic transport measures twenty cold and warm requests with real HTTP cache`() = runBlocking {
-        val serverHits = AtomicInteger(0)
-        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-        server.createContext("/audio") { exchange ->
-            serverHits.incrementAndGet()
-            val bytes = "fixture-audio".toByteArray()
-            exchange.responseHeaders.add("Cache-Control", "public, max-age=3600")
-            exchange.sendResponseHeaders(200, bytes.size.toLong())
-            exchange.responseBody.use { it.write(bytes) }
+        val server = MockWebServer()
+        repeat(20) {
+            server.enqueue(
+                MockResponse.Builder()
+                    .code(200)
+                    .addHeader("Cache-Control", "public, max-age=3600")
+                    .body("fixture-audio")
+                    .build(),
+            )
         }
         server.start()
         val cacheDirectory = Files.createTempDirectory("bitchord-o1-cache").toFile()
         val cache = Cache(cacheDirectory, 1_048_576L)
         try {
             val client = OkHttpClient.Builder().cache(cache).build()
-            val endpoint = "http://127.0.0.1:${server.address.port}/audio?private=do-not-export"
+            val endpoint = server.url("/audio?private=do-not-export").toString()
             val runtime = request(endpoint)
             val points = mutableListOf<StructuredTracePoint>()
             val sequence = AtomicInteger()
@@ -73,7 +73,7 @@ class RuntimeBaselineScenariosTest {
                 assertSame(runtime, transport.resolveRuntime("recording-1", "asset-1", "opensubsonic:home"))
                 warmPoints += points.drop(warmStart)
             }
-            assertEquals(20, serverHits.get()) // warm uses real OkHttp disk cache
+            assertEquals(20, server.requestCount) // warm uses real OkHttp disk cache
             val cold = RuntimePerformanceBaseline.summarize(config(RuntimeBaselineScenario.PROVIDER_COLD), coldPoints)
             val warm = RuntimePerformanceBaseline.summarize(config(RuntimeBaselineScenario.PROVIDER_WARM), warmPoints)
             assertEquals(20, cold.correlatedTraces)
@@ -86,25 +86,22 @@ class RuntimeBaselineScenariosTest {
             println("O1_PROVIDER_WARM_JVM\n${warm.toSafeText()}")
         } finally {
             cache.close()
-            server.stop(0)
+            server.close()
             cacheDirectory.deleteRecursively()
         }
     }
 
     @Test
     fun `provider failure reconnect and controlled coroutine saturation preserve correlated outcomes`() = runBlocking {
-        val firstFailure = AtomicBoolean(true)
-        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-        server.createContext("/flaky") { exchange ->
-            val failure = firstFailure.compareAndSet(true, false)
-            val bytes = if (failure) "temporary" else "recovered"
-            exchange.sendResponseHeaders(if (failure) 503 else 200, bytes.length.toLong())
-            exchange.responseBody.use { it.write(bytes.toByteArray()) }
+        val server = MockWebServer()
+        server.enqueue(MockResponse.Builder().code(503).body("temporary").build())
+        repeat(9) {
+            server.enqueue(MockResponse.Builder().code(200).body("recovered").build())
         }
         server.start()
         try {
             val client = OkHttpClient()
-            val endpoint = "http://127.0.0.1:${server.address.port}/flaky?token=hidden"
+            val endpoint = server.url("/flaky?token=hidden").toString()
             val request = request(endpoint)
             val points = Collections.synchronizedList(mutableListOf<StructuredTracePoint>())
             val sequence = AtomicInteger()
@@ -144,7 +141,7 @@ class RuntimeBaselineScenariosTest {
             assertEquals(9, report.phases.single { it.stage == "total" && it.outcome == TraceOutcome.SUCCEEDED }.distribution.count)
             assertFalse(report.toSafeText().contains("hidden"))
         } finally {
-            server.stop(0)
+            server.close()
         }
     }
 
