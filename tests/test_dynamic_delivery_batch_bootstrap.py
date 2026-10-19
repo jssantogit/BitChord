@@ -8,6 +8,11 @@ WF = ROOT / ".github/workflows/integration-queue.yml"
 PY = ROOT / ".github/workflows/integration-queue-tests.yml"
 
 class DynamicBatchBootstrapTests(unittest.TestCase):
+    def test_bootstrap_does_not_pin_its_own_descendant_heads(self):
+        folder = ROOT / '.github/integration-batches'
+        self.assertFalse((folder / 'infra-di4-foundations.json').exists())
+        self.assertFalse((folder / 'infra-delivery-reliability.json').exists())
+
     def test_dispatch_accepts_name_of_reviewed_manifest_without_choice_bootstrap(self):
         value = WF.read_text(encoding="utf-8")
         section = value.split("      batch:", 1)[1].split("      mode:", 1)[0]
