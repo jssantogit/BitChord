@@ -22,6 +22,8 @@ class ManualEvidenceWorkflowTests(unittest.TestCase):
         data = WORKFLOW.read_text('utf-8')
         self.assertIn('actions/upload-artifact@v4', data)
         self.assertIn('actions/download-artifact@v4', data)
+        self.assertIn('python3 -m tools.delivery_checkpoint_pilot', data)
+        self.assertIn('python3 -m tools.delivery_artifact', data)
         self.assertIn('retention-days: 1', data)
         self.assertIn('name: di4-checkpoint-evidence', data)
         self.assertIn('run-id: ${{ inputs.source_run_id }}', data)
