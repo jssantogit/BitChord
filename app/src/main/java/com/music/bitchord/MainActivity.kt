@@ -620,6 +620,11 @@ private fun BitChordApp(
     var showSpotifyLogin by remember { mutableStateOf(false) }
     var discordDialog by remember { mutableStateOf<DiscordDialog?>(null) }
     var songActions by remember { mutableStateOf<Song?>(null) }
+    // Transient UI-only handoff: reuse the Now Playing image already rendered
+    // when opening its three-dot menu. Never persist this model or its source.
+    var openedPlayerArtwork by remember {
+        mutableStateOf<Pair<com.music.bitchord.ui.player.CanonicalPlaybackArtworkIdentity, Any>?>(null)
+    }
     var showLyricsOffset by remember { mutableStateOf(false) }
     /**
      * Whether the track menu that is up was opened from the player.
@@ -2376,9 +2381,12 @@ private fun BitChordApp(
             // The enriched copy, not player.song — otherwise the menu
             // hides the album and artist rows even once their browse
             // ids have been resolved.
-            onOpenMenu = {
+            onOpenMenu = { loadedArtworkModel ->
                 menuFromPlayer = true
                 songMenuOrigin = null
+                openedPlayerArtwork = com.music.bitchord.ui.player.CanonicalPlaybackArtworkIdentity
+                    .fromSong(song)
+                    ?.let { identity -> loadedArtworkModel?.let { identity to it } }
                 songActions = song
             },
             onOpenAlbum = { id ->
@@ -4346,6 +4354,11 @@ private fun BitChordApp(
             SongActionsSheet(
                 song = song,
                 presentation = presentation,
+                preloadedArtworkModel = if (fromPlayer) {
+                    com.music.bitchord.ui.player.preloadedMenuArtworkFor(
+                        song, openedPlayerArtwork?.first, openedPlayerArtwork?.second,
+                    )
+                } else null,
                 signedIn = signedIn,
                 likeStatus = likeStatuses[song.videoId] ?: LikeStatus.INDIFFERENT,
                 onPlayNext = { playNext(song); songActions = null },
@@ -4540,7 +4553,10 @@ private fun BitChordApp(
         // A closed menu forgets where it was held, so whatever opens it next
         // — the ⋮, the player — starts from the sheet.
         LaunchedEffect(songActions == null) {
-            if (songActions == null) songMenuOrigin = null
+            if (songActions == null) {
+                songMenuOrigin = null
+                openedPlayerArtwork = null // Release the handed-off Drawable on dismiss.
+            }
         }
 
         // ---- Download manager ----

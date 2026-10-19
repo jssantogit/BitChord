@@ -63,6 +63,7 @@ import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.haptics.Haptic
 import com.music.bitchord.ui.haptics.rememberHaptics
 import com.music.bitchord.ui.player.PlayerDock
+import com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
@@ -410,7 +411,7 @@ fun MiniPlayer(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AsyncImage(
-                model = rememberRemoteArtworkUrl(song)?.artworkAt(ROW_ART_PX),
+                model = rememberPlaybackArtworkImageModel(song, ROW_ART_PX),
                 contentDescription = null,
                 modifier = Modifier
                     .size(40.dp)

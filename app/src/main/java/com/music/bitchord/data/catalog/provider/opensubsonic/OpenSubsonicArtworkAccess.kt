@@ -212,12 +212,22 @@ internal class OpenSubsonicArtworkLoader(
     private val transport: OpenSubsonicArtworkTransport,
     private val cache: OpenSubsonicArtworkCache,
 ) {
-    suspend fun load(mediaAssetId: String): OpenSubsonicArtworkLoadResult {
+    suspend fun load(
+        mediaAssetId: String,
+        expectedRecordingId: String? = null,
+        expectedProviderKey: String? = null,
+    ): OpenSubsonicArtworkLoadResult {
         val resolved = access.resolve(mediaAssetId)
         if (resolved is OpenSubsonicArtworkAccessResult.Failure) {
             return OpenSubsonicArtworkLoadResult.Placeholder(resolved.reason.name)
         }
         val request = (resolved as OpenSubsonicArtworkAccessResult.Ready).request
+        if ((expectedRecordingId != null && request.recordingId != expectedRecordingId) ||
+            (expectedProviderKey != null && request.providerKey != expectedProviderKey)
+        ) {
+            // No cached/remote artwork for a stale or forged playback selection.
+            return OpenSubsonicArtworkLoadResult.Placeholder("SELECTION_MISMATCH")
+        }
 
         runCatching { cache.read(request.cacheKey) }
             .getOrNull()
@@ -266,6 +276,10 @@ internal fun isolatedOpenSubsonicArtworkHttpClient(
         .build()
 }
 
+/** Only rate limits or server-side unavailability merit an automatic retry. */
+internal fun isTransientArtworkHttpStatus(status: Int): Boolean =
+    status == 429 || status in 500..599
+
 internal class OkHttpOpenSubsonicArtworkTransport(
     sharedClient: OkHttpClient = Http.client,
     private val maxBytes: Int = MAX_ARTWORK_BYTES,
@@ -300,7 +314,11 @@ internal class OkHttpOpenSubsonicArtworkTransport(
                             ?: return@use OpenSubsonicArtworkTransportResult.RequestRejected
                         OpenSubsonicArtworkTransportResult.Success(bytes, contentType)
                     }
-                    else -> OpenSubsonicArtworkTransportResult.RequestRejected
+                    else -> if (isTransientArtworkHttpStatus(response.code)) {
+                        OpenSubsonicArtworkTransportResult.NetworkUnavailable
+                    } else {
+                        OpenSubsonicArtworkTransportResult.RequestRejected
+                    }
                 }
             }
         } catch (cancelled: CancellationException) {

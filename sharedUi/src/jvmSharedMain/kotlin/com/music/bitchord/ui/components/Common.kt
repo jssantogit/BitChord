@@ -544,7 +544,7 @@ private fun SongRowContent(
         } else {
             Box(Modifier.size(52.dp)) {
                 AsyncImage(
-                    model = com.music.bitchord.ui.player.rememberRemoteArtworkUrl(song)?.artworkAt(ROW_ART_PX),
+                    model = com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel(song, ROW_ART_PX),
                     contentDescription = null,
                     modifier = Modifier
                         .matchParentSize()

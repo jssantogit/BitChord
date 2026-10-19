@@ -53,7 +53,7 @@ import com.music.bitchord.data.model.ROW_ART_PX
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.UiState
 import com.music.bitchord.data.model.UserPlaylist
-import com.music.bitchord.data.model.artworkAt
+import com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel
 
 /**
  * Rearranges one of the account's playlists: every entry with a handle to drag
@@ -278,7 +278,7 @@ private fun ReorderRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AsyncImage(
-            model = song.artworkAt(ROW_ART_PX),
+            model = rememberPlaybackArtworkImageModel(song, ROW_ART_PX),
             contentDescription = null,
             modifier = Modifier
                 .size(44.dp)

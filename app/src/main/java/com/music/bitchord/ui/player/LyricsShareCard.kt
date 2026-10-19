@@ -2,6 +2,9 @@ package com.music.bitchord.ui.player
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoadResult
+import com.music.bitchord.data.catalog.provider.opensubsonic.androidOpenSubsonicArtworkLoader
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -12,8 +15,40 @@ import com.music.bitchord.ui.replay.drawLogo
 import com.music.bitchord.ui.replay.ellipsised
 import com.music.bitchord.ui.replay.loadBitmap
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+/**
+ * The player hands this renderer a Song and optional *legacy* URL. Resolve a
+ * canonical song only here, at the Android provider boundary, using the same
+ * OpenSubsonicArtworkLoader / credential-free disk cache as the library.
+ * No provider auth or authenticated locator is copied into the share request.
+ */
+private suspend fun loadLyricsShareArtwork(context: Context, card: LyricsShareRequest): Bitmap? {
+    val selected = CanonicalPlaybackArtworkIdentity.fromSong(card.song)
+    if (selected != null) {
+        val canonical = try {
+            when (val result = androidOpenSubsonicArtworkLoader(context).load(
+                mediaAssetId = selected.mediaAssetId,
+                expectedRecordingId = selected.recordingId,
+                expectedProviderKey = selected.providerKey,
+            )) {
+                is OpenSubsonicArtworkLoadResult.Ready ->
+                    BitmapFactory.decodeByteArray(result.bytes, 0, result.bytes.size)
+                is OpenSubsonicArtworkLoadResult.Placeholder -> null
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Provider transport failures can contain authenticated URLs.
+            null
+        }
+        if (canonical != null) return canonical
+    }
+    // Local and legacy cards retain the original URL-based renderer path.
+    return card.artworkUrl?.let { loadBitmap(context, it) }
+}
 
 /**
  * The picked lines as one picture, drawn to a bitmap you can send.
@@ -56,7 +91,10 @@ internal suspend fun renderLyricsShareCard(
     story: Boolean = false,
 ): Bitmap = withContext(Dispatchers.Default) {
     val type = Fonts(context)
-    val cover = card.artworkUrl?.let { loadBitmap(context, it) }
+    // Card artwork must follow the same selected canonical MediaAsset as Mini,
+    // Now Playing, the queue and the actions sheet. Never pass a provider URL
+    // (or native cover id) through LyricsShareRequest or the shared UI.
+    val cover = loadLyricsShareArtwork(context, card)
 
     // ── Sizing ──────────────────────────────────────────────────────────────
     // No room is reserved for the words to sit in: they get their own height,

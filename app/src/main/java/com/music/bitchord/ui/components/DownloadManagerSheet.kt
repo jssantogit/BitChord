@@ -56,7 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.music.bitchord.R
 import com.music.bitchord.data.model.ROW_ART_PX
-import com.music.bitchord.data.model.artworkAt
+import com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel
 import com.music.bitchord.download.DownloadProgress
 import com.music.bitchord.download.DownloadSession
 import com.music.bitchord.download.Downloads
@@ -299,7 +299,7 @@ private fun DownloadManagerRow(
     ) {
         Box(Modifier.size(ART_SIZE), contentAlignment = Alignment.Center) {
             AsyncImage(
-                model = item.song.artworkAt(ROW_ART_PX),
+                model = rememberPlaybackArtworkImageModel(item.song, ROW_ART_PX),
                 contentDescription = null,
                 modifier = Modifier
                     .size(ART_SIZE)

@@ -2,6 +2,8 @@ package com.music.bitchord.ui.player
 
 import com.music.bitchord.wear.WearBridge
 import android.content.Context
+import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
 import android.database.ContentObserver
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -11,6 +13,8 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.data.canvas.CanvasArtwork
@@ -19,6 +23,8 @@ import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsTranslation
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoadResult
+import com.music.bitchord.data.catalog.provider.opensubsonic.androidOpenSubsonicArtworkLoader
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.LastPlayerScreen
 import com.music.bitchord.playback.AudioOutputStatus
@@ -26,7 +32,9 @@ import com.music.bitchord.playback.AudioRouting
 import com.music.bitchord.playback.cast.CastController
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -48,6 +56,8 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
     private val app = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val main = Handler(Looper.getMainLooper())
+    // One provider-owned loader/cache/client instance shared by Mini and Now Playing.
+    private val canonicalArtworkLoader by lazy { androidOpenSubsonicArtworkLoader(app) }
 
     override val settings: PlayerSettingsSource = object : PlayerSettingsSource {
         override val animatedCanvas get() = AppSettings.animatedCanvas
@@ -94,6 +104,43 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
     @Composable
     override fun rememberRemoteArtworkUrl(song: Song?): String? =
         com.music.bitchord.ui.components.rememberRemoteArtworkUrl(song)
+
+    @Composable
+    override fun rememberCanonicalPlaybackArtworkModel(song: Song?): Any? {
+        val selected = remember(song?.localUri) {
+            CanonicalPlaybackArtworkIdentity.fromSong(song)
+        } ?: return null // No provider/database work for ordinary local or legacy rows.
+        val image by produceState<Any?>(
+            initialValue = null,
+            key1 = selected.key,
+            key2 = selected.providerKey, // Routing may change without changing artwork identity.
+            key3 = canonicalArtworkLoader,
+        ) {
+            value = try {
+                    when (val loaded = awaitRecoverableCanonicalArtwork(load = {
+                        canonicalArtworkLoader.load(
+                            mediaAssetId = selected.mediaAssetId,
+                            expectedRecordingId = selected.recordingId,
+                            expectedProviderKey = selected.providerKey,
+                        )
+                    })) {
+                        is OpenSubsonicArtworkLoadResult.Ready -> withContext(Dispatchers.Default) {
+                            BitmapFactory.decodeByteArray(
+                                loaded.bytes, 0, loaded.bytes.size,
+                            )?.let { BitmapDrawable(app.resources, it) }
+                        }
+                        is OpenSubsonicArtworkLoadResult.Placeholder -> null
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Provider failures and malformed images are safe placeholders;
+                    // never log exception messages (which might contain auth URLs).
+                    null
+                }
+        }
+        return image
+    }
 
     // Lazy, all three: the player is not the first thing the process does, and
     // none of these objects should be woken for a launch that never opens it.

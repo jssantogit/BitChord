@@ -20,6 +20,7 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtwork
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAuthMode
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicCredentialStore
 import com.music.bitchord.data.catalog.provider.opensubsonic.isolatedOpenSubsonicArtworkHttpClient
+import com.music.bitchord.ui.player.awaitRecoverableCanonicalArtwork
 import java.security.MessageDigest
 import java.util.Base64
 import kotlinx.coroutines.test.runTest
@@ -227,6 +228,83 @@ class OpenSubsonicArtworkAccessTest {
         assertEquals(1, networkCalls)
         assertEquals(credentialReadsAfterFetch, fixture.credentials.readCalls)
         assertEquals(0, fixture.store.writeCalls)
+    }
+
+    @Test
+    fun `same selected remote asset recovers after Navidrome returns and then stays disk cached`() = runTest {
+        val fixture = fixture(secret = "private-test-secret")
+        val cache = FakeArtworkCache()
+        var online = false
+        var fetchCalls = 0
+        val waits = mutableListOf<Long>()
+        val transport = OpenSubsonicArtworkTransport { _, _ ->
+            fetchCalls++
+            if (online) {
+                OpenSubsonicArtworkTransportResult.Success(byteArrayOf(10, 11), "image/png")
+            } else {
+                OpenSubsonicArtworkTransportResult.NetworkUnavailable
+            }
+        }
+        val loader = OpenSubsonicArtworkLoader(fixture.access, transport, cache)
+        val selectedLoad: suspend () -> OpenSubsonicArtworkLoadResult = {
+            loader.load(
+                mediaAssetId = "asset-canonical",
+                expectedRecordingId = "recording-canonical",
+                expectedProviderKey = "opensubsonic:home",
+            )
+        }
+
+        val recovered = awaitRecoverableCanonicalArtwork(
+            load = selectedLoad,
+            wait = { retryDelay ->
+                waits += retryDelay
+                online = true // Server restarts. Selection and queue never change.
+            },
+        ) as OpenSubsonicArtworkLoadResult.Ready
+
+        assertArrayEquals(byteArrayOf(10, 11), recovered.bytes)
+        assertFalse(recovered.fromCache)
+        assertEquals(listOf(2_000L), waits)
+        assertEquals(2, fetchCalls)
+        val cached = selectedLoad() as OpenSubsonicArtworkLoadResult.Ready
+        assertTrue(cached.fromCache)
+        assertEquals(2, fetchCalls)
+        assertEquals(0, fixture.store.writeCalls)
+    }
+
+    @Test
+    fun `selected recording and provider mismatch never touch cache or authenticated transport`() = runTest {
+        val fixture = fixture(secret = "sensitive-secret")
+        var transportCalls = 0
+        val cache = object : OpenSubsonicArtworkCache {
+            var reads = 0
+            override suspend fun read(cacheKey: String): ByteArray? {
+                reads++
+                return byteArrayOf(7)
+            }
+            override suspend fun write(cacheKey: String, bytes: ByteArray) = Unit
+        }
+        val loader = OpenSubsonicArtworkLoader(
+            fixture.access,
+            OpenSubsonicArtworkTransport { _, _ ->
+                transportCalls++
+                OpenSubsonicArtworkTransportResult.Success(byteArrayOf(9), "image/png")
+            },
+            cache,
+        )
+
+        val wrongRecording = loader.load("asset-canonical", expectedRecordingId = "other")
+        val wrongProvider = loader.load(
+            "asset-canonical",
+            expectedRecordingId = "recording-canonical",
+            expectedProviderKey = "opensubsonic:other",
+        )
+        assertEquals("SELECTION_MISMATCH", (wrongRecording as OpenSubsonicArtworkLoadResult.Placeholder).reason)
+        assertEquals("SELECTION_MISMATCH", (wrongProvider as OpenSubsonicArtworkLoadResult.Placeholder).reason)
+        assertEquals(0, cache.reads)
+        assertEquals(0, transportCalls)
+        assertEquals(0, fixture.credentials.readCalls)
+        assertFalse(wrongRecording.toString().contains("sensitive-secret"))
     }
 
     @Test

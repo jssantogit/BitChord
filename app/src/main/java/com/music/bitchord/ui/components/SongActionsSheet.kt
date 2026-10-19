@@ -194,6 +194,8 @@ fun SongActionsSheet(
      * held row itself above them.
      */
     presentation: SongActionsPresentation = SongActionsPresentation.Sheet,
+    /** The image already displayed in Now Playing when its ⋯ menu was opened. */
+    preloadedArtworkModel: Any? = null,
 ) {
     var pickingSleepTimer by remember { mutableStateOf(false) }
     val menu = presentation == SongActionsPresentation.Menu
@@ -380,7 +382,11 @@ fun SongActionsSheet(
             return@TintedSheet
         }
 
-        SheetTrackHeader(song, subtitleColor = palette.onBackgroundVariant)
+        SheetTrackHeader(
+            song,
+            subtitleColor = palette.onBackgroundVariant,
+            preloadedArtworkModel = preloadedArtworkModel,
+        )
         HorizontalDivider(thickness = 0.5.dp, color = palette.divider)
         rows()
         Spacer(Modifier.height(24.dp))
@@ -905,6 +911,7 @@ internal fun SheetTrackHeader(
     song: Song,
     modifier: Modifier = Modifier,
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    preloadedArtworkModel: Any? = null,
 ) {
     Row(
         modifier = modifier
@@ -913,7 +920,8 @@ internal fun SheetTrackHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AsyncImage(
-            model = song.artworkAt(ROW_ART_PX),
+            model = preloadedArtworkModel
+                ?: com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel(song, ROW_ART_PX),
             contentDescription = null,
             modifier = Modifier
                 .size(52.dp)

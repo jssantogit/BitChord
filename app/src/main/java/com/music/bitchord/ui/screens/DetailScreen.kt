@@ -1940,7 +1940,7 @@ private fun CompactSongRow(
     ) {
         Box(Modifier.size(48.dp)) {
             AsyncImage(
-                model = song.artworkAt(ROW_ART_PX),
+                model = com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel(song, ROW_ART_PX),
                 contentDescription = null,
                 modifier = Modifier
                     .size(48.dp)
@@ -1999,7 +1999,7 @@ private fun SuggestedSongRow(
     ) {
         Box(Modifier.size(52.dp)) {
             AsyncImage(
-                model = song.artworkAt(ROW_ART_PX),
+                model = com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel(song, ROW_ART_PX),
                 contentDescription = null,
                 modifier = Modifier
                     .size(52.dp)
