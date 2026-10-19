@@ -5,7 +5,7 @@
   "items": [
     {
       "number": 97,
-      "expected_head_sha": "cfeb250e89445bc8500d73ff0cbc52015abb047f",
+      "expected_head_sha": "17d294bf08176b387f7923c24067451a6ac08973",
       "allowed_files": [
         "docs/delivery-di4d-artifact.md",
         "tests/test_delivery_artifact.py",
