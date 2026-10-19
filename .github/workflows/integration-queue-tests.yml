@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'tools/integration_queue.py'
+      - 'tools/delivery_metrics.py'
+      - 'tests/test_delivery_metrics.py'
       - 'tests/test_integration_queue.py'
       - 'tests/test_android_ci_queue.py'
       - 'tests/test_workflow_security.py'
@@ -18,6 +20,8 @@ on:
     branches: [main]
     paths:
       - 'tools/integration_queue.py'
+      - 'tools/delivery_metrics.py'
+      - 'tests/test_delivery_metrics.py'
       - 'tests/test_integration_queue.py'
       - 'tests/test_android_ci_queue.py'
       - 'tests/test_workflow_security.py'
