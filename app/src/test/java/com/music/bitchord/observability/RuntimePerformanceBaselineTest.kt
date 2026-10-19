@@ -10,7 +10,7 @@ class RuntimePerformanceBaselineTest {
     private val configuration = RuntimeBaselineConfig(
         scenario = RuntimeBaselineScenario.PROVIDER_COLD,
         repetitions = 20,
-        warmupRuns = 2,
+        warmupRuns = 0,
         concurrency = 1,
         traceMode = TraceMode.STANDARD,
     )
