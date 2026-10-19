@@ -213,6 +213,9 @@ android {
             // so a test of that layer fails on the logging rather than on the
             // logic it was written to check.
             isReturnDefaultValues = true
+            // Robolectric Compose ActivityScenario must resolve the merged debug manifest.
+            // Without resources the app appears as org.robolectric.default and all UI tests fail before composition.
+            isIncludeAndroidResources = true
         }
     }
 }
