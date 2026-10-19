@@ -5,9 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# Per-PR workflows supersede old HEADs; main runs are keyed by commit and
+# must never be cancelled by newer integration commits.
 concurrency:
-  group: android-ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: android-ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -16,6 +18,12 @@ jobs:
   android:
     # Keep this check context until the main ruleset is migrated separately.
     name: Android · test and build
+    # One active Android test job across PRs; queued jobs are retained instead
+    # of replacing unrelated PR checks. Main is isolated from the PR lane.
+    concurrency:
+      group: ${{ github.event_name == 'pull_request' && 'bitchord-android-pr-queue' || format('bitchord-android-main-{0}', github.sha) }}
+      queue: max
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
