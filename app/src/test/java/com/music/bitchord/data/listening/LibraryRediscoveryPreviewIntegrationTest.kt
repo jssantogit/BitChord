@@ -148,6 +148,19 @@ class LibraryRediscoveryPreviewIntegrationTest {
         assertTrue(full.indexOfFirst { it.base.base.recordingId == oldBehavior } >= 5)
 
         val preview = planner.preview(full)
+        val presentation = LibraryRediscoveryPresentationContract().present(preview)
+        assertEquals(listOf(oldBehavior, oldExplicit), presentation.map { it.recordingId })
+        assertEquals(listOf(1, 2), presentation.map { it.shelfPosition })
+        assertEquals(preview.map { it.rankPosition }, presentation.map { it.rankPosition })
+        assertEquals(preview.map { it.lastAudibleListenAtEpochMs },
+            presentation.map { it.lastAudibleListenAtEpochMs })
+        assertEquals(listOf(79L, 45L), presentation.map { it.daysSinceLastAudible })
+        assertTrue(presentation.all { it.availability ==
+            RediscoveryPresentationAvailability.AVAILABLE_AT_SNAPSHOT &&
+            it.canNavigateToCanonicalRecording })
+        assertEquals(emptyList<RediscoveryPresentationItem>(),
+            LibraryRediscoveryPresentationContract().present(
+                planner.preview(pipeline.rank(limit = 5))))
         assertEquals(listOf(oldBehavior, oldExplicit), preview.map { it.recordingId })
         assertEquals(listOf(79L * day - 1000L, 45L * day - 1000L),
             preview.map { it.timeSinceLastAudibleMs })
