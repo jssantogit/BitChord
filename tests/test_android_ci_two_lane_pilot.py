@@ -38,8 +38,8 @@ class TwoLanePilotTests(unittest.TestCase):
         )
         self.assertIn("    name: Android · test and build", yaml)
         self.assertRegex(
-            r"run: \./gradlew (?:--build-cache )?-Pbitchord\.bundleWear=false :app:testDevDebugUnitTest",
             yaml,
+            r"run: \./gradlew (?:--build-cache )?-Pbitchord\.bundleWear=false :app:testDevDebugUnitTest",
         )
 
     def test_routing_is_deterministic_for_each_workstream(self):
