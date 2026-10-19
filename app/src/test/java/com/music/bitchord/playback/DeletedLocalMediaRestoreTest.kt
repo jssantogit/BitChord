@@ -103,6 +103,41 @@ class DeletedLocalMediaRestoreTest {
         assertEquals(0L, result?.positionMs)
     }
 
+    @Test
+    fun `only an exact MediaStore audio row is safe to declare deleted`() {
+        assertTrue(DeletedLocalMediaAvailability.isMediaStoreAudioItemUri(deletedUri))
+        assertTrue(DeletedLocalMediaAvailability.isMediaStoreAudioItemUri(
+            "content://media/external_primary/audio/media/74",
+        ))
+        assertFalse(DeletedLocalMediaAvailability.isMediaStoreAudioItemUri(
+            "content://media/external/audio/albumart/42",
+        ))
+        assertFalse(DeletedLocalMediaAvailability.isMediaStoreAudioItemUri(
+            "content://media/external/audio/media/42?apiKey=do-not-read",
+        ))
+        assertFalse(DeletedLocalMediaAvailability.isMediaStoreAudioItemUri(
+            "content://other.provider/external/audio/media/42",
+        ))
+        assertFalse(DeletedLocalMediaAvailability.isMediaStoreAudioItemUri(
+            "content://media/external/audio/media/not-a-row",
+        ))
+    }
+
+    @Test
+    fun `a missing file under a still readable folder is definite deletion`() {
+        val directory = java.nio.file.Files.createTempDirectory("bitchord-b2-").toFile()
+        val file = java.io.File(directory, "song.flac")
+        try {
+            assertTrue(file.createNewFile())
+            assertFalse(DeletedLocalMediaAvailability.missingReadableFile(file))
+            assertTrue(file.delete())
+            assertTrue(DeletedLocalMediaAvailability.missingReadableFile(file))
+        } finally {
+            file.delete()
+            directory.delete()
+        }
+    }
+
     private fun local(id: String, uri: String?, entryId: String) = Song(
         videoId = id, title = id, artist = "Artist", thumbnailUrl = null,
         localUri = uri, queueEntryId = entryId, queueTier = QueueTier.CONTEXT,
