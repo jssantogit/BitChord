@@ -24,6 +24,11 @@ object LastPlayed {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
+    /** Exercises the real codec/storage boundary without an Android device. */
+    internal fun initForTesting(testPrefs: SharedPreferences) {
+        prefs = testPrefs
+    }
+
     internal fun window(size: Int, index: Int): IntRange {
         if (size <= 0) return IntRange.EMPTY
         val safeIndex = index.coerceIn(0, size - 1)
