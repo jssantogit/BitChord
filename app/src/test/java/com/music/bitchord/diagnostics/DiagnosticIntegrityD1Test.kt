@@ -57,6 +57,8 @@ class DiagnosticIntegrityD1Test {
         assertFalse(fields.toString().contains("SECRET-MEDIA"))
         assertFalse(fields.toString().contains('\n'))
         assertEquals("offline_online", fields["operation"])
+        assertEquals(DiagnosticSanitizer.REDACTED, fields["title"])
+        assertEquals(DiagnosticSanitizer.REDACTED, fields["artist"])
         val formatted = DiagnosticFormatter.format(event(metadata = mapOf("detail" to url)))
         assertFalse(formatted.contains(uuid))
         assertFalse(formatted.contains("private.invalid"))
