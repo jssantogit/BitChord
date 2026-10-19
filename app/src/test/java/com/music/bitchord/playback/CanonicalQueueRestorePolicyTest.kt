@@ -31,6 +31,34 @@ class CanonicalQueueRestorePolicyTest {
     }
 
     @Test
+    fun `decoded canonical queue that cannot project must never resurrect LastPlayed after service recreation`() {
+        val selected = CanonicalQueueIdentity(
+            recordingId = "rec-selected",
+            mediaAssetId = "asset-selected",
+            providerKey = "opensubsonic:home",
+        )
+        val stored = canonicalState(selected)
+        val reloaded = requireNotNull(BoundedContextPersistence.decode(
+            requireNotNull(BoundedContextPersistence.encode(stored)),
+        ))
+
+        assertFalse(PlaybackLifecycleRestoreGate.mayFallBackAfterFailedProjection(reloaded))
+        // Canonical snapshot must remain authoritative despite corrupt
+        // projection, absent artwork, a temporarily offline server, or a
+        // stopped service; it is not evidence to resume legacy playback.
+    }
+
+    @Test
+    fun `legacy-only projection failure preserves compatibility restoration gate`() {
+        val prior = canonicalState(CanonicalQueueIdentity("rec", "asset", "opensubsonic:home"))
+        val legacy = prior.copy(
+            contextIdentities = emptyList(),
+            entries = prior.entries.map { it.copy(canonicalIdentity = null) },
+        )
+        assertTrue(PlaybackLifecycleRestoreGate.mayFallBackAfterFailedProjection(legacy))
+    }
+
+    @Test
     fun `absent or invalid bounded snapshot may still use LastPlayed compatibility`() {
         val outcome = BoundedContextPersistence.RestoreOutcome.AbsentOrInvalid
 
