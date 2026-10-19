@@ -55,7 +55,7 @@ internal object DeletedLocalMediaAvailability {
         return missingReadableFile(file)
     }
 
-    private fun missingReadableFile(file: File): Boolean = try {
+    internal fun missingReadableFile(file: File): Boolean = try {
         // The parent must still be readable; otherwise loss of a storage mount
         // or temporary access cannot be distinguished from deletion.
         file.parentFile?.canRead() == true && !file.isFile
