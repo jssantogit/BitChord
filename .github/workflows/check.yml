@@ -49,7 +49,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run Android unit tests
-        run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
 
       - name: Upload Android test reports
         if: failure()
