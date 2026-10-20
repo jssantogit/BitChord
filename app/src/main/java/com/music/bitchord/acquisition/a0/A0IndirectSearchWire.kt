@@ -78,7 +78,10 @@ internal object A0IndirectSearchWire {
                 file.remoteFilename.replace('\\', '/').substringAfterLast('/') ==
                     A0OneShotPublicSearchWire.TARGET_FILENAME
         } else 0
-        return A0OneShotPublicSearchWire.Observation(count)
+        return A0OneShotPublicSearchWire.Observation(
+            untrustedFilenameMatches = count,
+            untrustedResultCount = reply.files.size + reply.lockedFiles.size
+        )
     }
 
     /** Indirect P socket first message: uint32 length=5, uint8 code=0, uint32 token. */
