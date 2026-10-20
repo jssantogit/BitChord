@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 76,
+      "expected_head_sha": "5a18457c02663867b32caa91d3be9c7f8ff7fbb0",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/catalog/CanonicalCatalogDao.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/CanonicalMultiSourceBrowse.kt",
+        "app/src/test/java/com/music/bitchord/CanonicalMultiSourceBrowseRoomTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 73,
+      "expected_head_sha": "ef0dae539e5cb1872a4a4f39698e0a9fb5e8fab4",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticFileStore.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticHardeningD5Test.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 81,
+      "expected_head_sha": "b89769c464c8343ed9ab5053645d6a4a77fb942d",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/playback/AudioFidelityTruth.kt",
+        "app/src/main/java/com/music/bitchord/playback/AudioOutputStatus.kt",
+        "app/src/main/java/com/music/bitchord/playback/PlaybackService.kt",
+        "app/src/main/java/com/music/bitchord/ui/components/AudioPipelineDialog.kt",
+        "app/src/test/java/com/music/bitchord/playback/AudioFidelityTruthTest.kt",
+        "app/src/test/java/com/music/bitchord/playback/audio/AudioTelemetryHardeningTest.kt",
+        "app/src/test/java/com/music/bitchord/playback/audio/DirectAudioStreamingRegressionTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    }
+  ]
+}
