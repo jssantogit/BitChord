@@ -1,12 +1,10 @@
-name: Update Contributors
+name: Preview Contributors Update
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * 0'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   update-contributors:
@@ -57,12 +55,16 @@ jobs:
               f.write(updated)
           "
 
-      - name: Commit and push if changed
+      - name: Preview proposed change without committing
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet MAINTAINERS.md; then
-            git add MAINTAINERS.md
-            git commit -m "chore: update contributors in MAINTAINERS.md [skip ci]"
-            git push
+          if git diff --quiet -- MAINTAINERS.md; then
+            echo "Contributors unchanged. No repository writes." >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## Proposed MAINTAINERS.md update (read-only)"
+              echo 'No push or pull request was created.'
+              echo '~~~diff'
+              git diff -- MAINTAINERS.md
+              echo '~~~'
+            } >> "$GITHUB_STEP_SUMMARY"
           fi

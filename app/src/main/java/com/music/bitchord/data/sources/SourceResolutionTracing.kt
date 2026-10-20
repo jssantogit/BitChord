@@ -1,6 +1,10 @@
 package com.music.bitchord.data.sources
 
+import com.music.bitchord.data.TrackLog
+import kotlinx.coroutines.withContext
+
 import com.music.bitchord.observability.StructuredTrace
+import com.music.bitchord.observability.TraceFlowContext
 import com.music.bitchord.observability.StructuredTracer
 import com.music.bitchord.observability.TraceFeature
 import com.music.bitchord.observability.TraceOutcome
@@ -11,6 +15,13 @@ import com.music.bitchord.observability.TraceOutcome
  */
 internal fun interface SourceResolutionTraceReporter {
     fun start(sourceConfigId: String, trackId: String): SourceResolutionRunTrace
+
+    /** Optional observational parent: preexisting callers retain their exact behavior. */
+    fun startCorrelated(
+        sourceConfigId: String,
+        trackId: String,
+        parent: TraceFlowContext,
+    ): SourceResolutionRunTrace = start(sourceConfigId, trackId)
 
     companion object {
         val NO_OP: SourceResolutionTraceReporter = SourceResolutionTraceReporter { _, _ ->
@@ -37,7 +48,20 @@ private object NoOpSourceResolutionTrace : SourceResolutionRunTrace {
 internal class StructuredSourceResolutionTraceReporter(
     private val tracer: StructuredTracer,
 ) : SourceResolutionTraceReporter {
-    override fun start(sourceConfigId: String, trackId: String): SourceResolutionRunTrace {
+    override fun start(sourceConfigId: String, trackId: String): SourceResolutionRunTrace =
+        create(sourceConfigId, trackId, parent = null)
+
+    override fun startCorrelated(
+        sourceConfigId: String,
+        trackId: String,
+        parent: TraceFlowContext,
+    ): SourceResolutionRunTrace = create(sourceConfigId, trackId, parent)
+
+    private fun create(
+        sourceConfigId: String,
+        trackId: String,
+        parent: TraceFlowContext?,
+    ): SourceResolutionRunTrace {
         val trace = tracer.startTrace(
             feature = TraceFeature.PROVIDER,
             operation = "source_stream_resolution",
@@ -45,6 +69,7 @@ internal class StructuredSourceResolutionTraceReporter(
                 "sourceRef" to tracer.reference(sourceConfigId),
                 "trackRef" to tracer.reference(trackId),
             ),
+            parent = parent,
         )
         return StructuredSourceResolutionRunTrace(trace)
     }
@@ -54,7 +79,9 @@ private class StructuredSourceResolutionRunTrace(
     private val trace: StructuredTrace,
 ) : SourceResolutionRunTrace {
     override suspend fun <T> lookup(block: suspend () -> T): T =
-        trace.spanSuspend(stage = "select_stream", block = block)
+        withContext(TrackLog.linkCorrelation(trace.flowId, trace.context().spanId)) {
+            trace.spanSuspend(stage = "select_stream", block = block)
+        }
 
     override fun complete(found: Boolean) {
         val outcome = if (found) TraceOutcome.SUCCEEDED else TraceOutcome.SKIPPED
