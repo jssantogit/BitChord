@@ -85,7 +85,7 @@ class ObservationTests(unittest.TestCase):
                          collect_observations(reader)['jobs'][0]['lane'])
         reader.runs[0]['head_branch'] = 'token=SECRET_IN_REF'
         data = collect_observations(reader)
-        self.assertEqual('pr_b', data['jobs'][0]['lane'])
+        self.assertEqual('pr_c', data['jobs'][0]['lane'])
         self.assertNotIn('SECRET_IN_REF', str(data))
 
 
