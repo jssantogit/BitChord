@@ -27,3 +27,6 @@ Test a bounded increase from one active PR Android job to at most **two** concur
 ## Safety
 
 No APKs, no extra jobs, no reduction of tests or step timeouts, no main/ruleset changes, no workflow_dispatch that could accidentally block required check, no merges automatically. This is a *pilot*, not a workload-independent optimal scheduler.
+## Historical handoff
+
+This document records the deployed two-lane policy and its prior acceptance criteria. The separately proposed third-lane experiment is documented in [ci-three-lane-pilot.md](ci-three-lane-pilot.md) on its **DRAFT, unmerged** branch. Do not consider that proposal active until an independently approved protected workflow merge and post-main Android GREEN.

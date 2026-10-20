@@ -1355,4 +1355,10 @@
     <string name="wear_os_code_hint">Code d’association</string>
     <string name="wear_os_done">Terminé</string>
     <string name="signed_by">Signé par %1$s</string>
+    <string name="playback_recovery_connection">Une piste distante ne peut pas démarrer. Vérifiez la connexion ou le serveur.</string>
+    <string name="playback_recovery_unavailable">La version distante sélectionnée est indisponible pour le moment.</string>
+    <string name="playback_recovery_failed">Impossible d’ouvrir la piste distante sélectionnée.</string>
+    <string name="playback_recovery_retry">Réessayer</string>
+    <string name="playback_recovery_retrying">Nouvelle tentative…</string>
+    <string name="playback_recovery_dismiss">Fermer</string>
 </resources>
