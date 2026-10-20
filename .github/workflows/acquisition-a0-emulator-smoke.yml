@@ -67,10 +67,9 @@ jobs:
           ram-size: 2048M
           disable-animations: true
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: |
-            ./gradlew --no-daemon --build-cache -Pbitchord.bundleWear=false \
-              "-Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.acquisition.a0.A0AcquisitionEmulatorSmokeTest" \
-              :app:connectedDevDebugAndroidTest
+          # This action executes script via sh -c; multiline backslash formatting
+          # is not a shell continuation here and Gradle receives a literal '\\' task.
+          script: ./gradlew --no-daemon --build-cache -Pbitchord.bundleWear=false -Pandroid.testInstrumentationRunnerArguments.class=com.music.bitchord.acquisition.a0.A0AcquisitionEmulatorSmokeTest :app:connectedDevDebugAndroidTest
 
       - name: Upload focused instrumentation reports (no bugreport)
         if: always()
