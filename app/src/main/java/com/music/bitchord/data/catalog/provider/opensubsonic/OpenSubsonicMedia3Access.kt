@@ -477,3 +477,19 @@ internal fun androidOpenSubsonicMediaDataSourceFactory(
         upstreamFactory = OkHttpDataSource.Factory(safeStreamClient),
     )
 }
+
+/**
+ * Provider-owned composition seam for Playback's B12 preview and B13 handoff.
+ * Preview is read-only/no network; only an explicit refresh discovers the
+ * public extension manifest. No consumer receives the account or Keystore.
+ */
+internal fun androidOpenSubsonicStreamPolicyGateway(
+    context: Context,
+): OpenSubsonicStreamPolicyGateway {
+    val appContext = context.applicationContext
+    val accounts = OpenSubsonicAccountRepository(
+        persistence = SharedPrefsOpenSubsonicAccountPersistence(appContext),
+        credentials = AndroidKeystoreOpenSubsonicCredentialStore(appContext),
+    )
+    return OpenSubsonicStreamPolicyGateway(savedConfig = accounts::savedConfig)
+}
