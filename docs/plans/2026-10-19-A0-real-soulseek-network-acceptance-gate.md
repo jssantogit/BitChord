@@ -37,6 +37,13 @@ Its README also describes excluded search phrases sent by the Soulseek server. A
 
 References: [Soulseek.NET README](https://github.com/jpdillingham/Soulseek.NET), [Soulseek.NET LICENSE](https://github.com/jpdillingham/Soulseek.NET/blob/master/LICENSE), [Seeker README](https://github.com/jackBonadies/SeekerAndroid), [GitHub environments](https://docs.github.com/en/actions/reference/workflows-and-actions/deployments-and-environments).
 
+## 2026-10-19 controlled fixture and modern protocol correction
+
+- Generated a fresh **32,044-byte owner-authored PCM WAV**, SHA-256 `baa73555f873990bccd20e52808eefd2584567b1c43cd6d0d9cc1b78132f9c24` with offline deterministic `tools/a0_fixture.py` and four passing local Python tests. Peer setup: [controlled Nicotine+ uploader guide](2026-10-19-A0-controlled-peer-setup.md). Only the WAV may be shared; the reference manifest stays private. Account/peer setup is still not confirmed.
+- The current A0 `direction=0` request plus outbound F is **legacy-local-fixture semantics**. [Nicotine+ protocol documentation](https://nicotine-plus.org/doc/SLSKPROTOCOL.html) requires modern `QueueUpload` P code 43 → peer-sent `TransferRequest(direction=1, size)` → local permission response → peer-initiated F and receiver's **8-byte initial FileOffset(0)**. The code now serializes `QueueUpload` and offset correctly in isolation (CI #865 GREEN), but lacks a real incoming F listener and server-driven peer negotiation. **Cannot claim end-to-end public-network readiness**.
+- Modern `PeerInit` typically uses token zero, unlike the positive tokens in earlier fixtures. The protocol documentation permits experimental major 177, but selecting a globally compatible minor/version and checking the applicable third-party license constraints is pending. Never transmit fixture version 1201 as a BitChord identity.
+- The PR currently cannot be assumed conflict-free against latest protected `main`. Integration remains separately coordinated.
+
 ## How to execute only after separate authorization
 
 **Preferred environment:** run a reviewed test-only build of the actual BitChord APK on an authorized Android device or emulator. A trusted non-public peer should be controlled by the project owner and should share only the synthetic test WAV. Keep server addresses and credentials out of repository artifacts.
