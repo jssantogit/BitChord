@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 82,
+      "expected_head_sha": "e9798757a35c4fed6a7ca357c56cdf6a6db4fca0",
+      "expected_base_ref": "main",
+      "depends_on": null,
+      "allowed_files": [
+        ".github/workflows/close-issue.yml",
+        ".github/workflows/integration-queue-tests.yml",
+        ".github/workflows/update-contributors.yml",
+        "tests/test_workflow_security.py"
+      ]
+    },
+    {
+      "number": 84,
+      "expected_head_sha": "11901d1e90736dd809552d279d446b7ed4e73d84",
+      "expected_base_ref": "main",
+      "depends_on": null,
+      "allowed_files": [
+        ".github/workflows/contributors-image.yml"
+      ]
+    },
+    {
+      "number": 83,
+      "expected_head_sha": "a7f0c3fa6fde2d21dbbf00fe1d66e8e9d3e97d66",
+      "expected_base_ref": "main",
+      "depends_on": null,
+      "allowed_files": [
+        ".github/workflows/check.yml",
+        "docs/ci-gradle-build-cache-pilot.md",
+        "tests/test_android_ci_build_cache_pilot.py",
+        "tests/test_android_ci_queue.py"
+      ]
+    }
+  ]
+}

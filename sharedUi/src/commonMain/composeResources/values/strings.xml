@@ -214,4 +214,9 @@
     <string name="rediscovery_reason_behavior">Played repeatedly</string>
     <string name="rediscovery_close">Close</string>
     <string name="rediscovery_unavailable">Recording unavailable</string>
+    <string name="recording_feedback_edit">Edit rating</string>
+    <string name="recording_feedback_clear">Clear rating</string>
+    <string name="recording_feedback_current">Rating: %1$s</string>
+    <string name="recording_feedback_history">Changes: %1$d</string>
+    <string name="recording_feedback_unavailable">Rating unavailable</string>
 </resources>
