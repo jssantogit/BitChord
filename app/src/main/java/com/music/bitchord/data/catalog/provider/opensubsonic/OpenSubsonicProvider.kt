@@ -122,6 +122,20 @@ internal class OpenSubsonicProvider(
 
     override val providerKey: String = "opensubsonic:${config.accountId}"
 
+    /** No secrets/URLs escape this boolean guard or its callers. */
+    internal fun matchesSavedConfig(saved: OpenSubsonicAccountConfig?): Boolean =
+        saved != null &&
+            saved.accountId == config.accountId &&
+            saved.normalizedServerUrl == config.normalizedServerUrl &&
+            when {
+                config.auth is OpenSubsonicAuth.ApiKey && saved.auth is OpenSubsonicAuth.ApiKey ->
+                    config.auth.value == saved.auth.value
+                config.auth is OpenSubsonicAuth.Password && saved.auth is OpenSubsonicAuth.Password ->
+                    config.auth.username == saved.auth.username &&
+                        config.auth.password == saved.auth.password
+                else -> false
+            }
+
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true

@@ -20,6 +20,10 @@ internal class AndroidOpenSubsonicAccountOperations(
     context: Context,
 ) : OpenSubsonicAccountOperations {
     private val appContext = context.applicationContext
+    private val savedAccount = OpenSubsonicAccountRepository(
+        persistence = SharedPrefsOpenSubsonicAccountPersistence(appContext),
+        credentials = AndroidKeystoreOpenSubsonicCredentialStore(appContext),
+    )
 
     override suspend fun test(provider: OpenSubsonicProvider): OpenSubsonicConnectionReport {
         val health = provider.health()
@@ -37,7 +41,10 @@ internal class AndroidOpenSubsonicAccountOperations(
     }
 
     override suspend fun sync(provider: OpenSubsonicProvider): ProviderSyncResult =
-        OpenSubsonicCatalogSync.sync(appContext, provider)
+        OpenSubsonicCatalogSync.sync(
+            appContext, provider,
+            accountIsCurrent = { provider.matchesSavedConfig(savedAccount.savedConfig()) },
+        )
 }
 
 /** Coordinates UI actions without exposing transport/request exception text. */
@@ -74,6 +81,12 @@ internal class OpenSubsonicAccountController(
             // Never carry exception text into UI/persisted status; request URLs
             // can contain apiKey or salted-token query parameters.
             ProviderSyncResult.Failure("OpenSubsonic sync failed")
+        }
+        // A user may change URL/auth or forget and recreate an account while
+        // this network operation was suspended. Do not mutate the NEW account's
+        // status with a result from the old configuration.
+        if (!provider.matchesSavedConfig(repository.savedConfig())) {
+            return ProviderSyncResult.Failure("OpenSubsonic account changed during sync")
         }
         repository.recordSync(result, nowEpochSeconds())
         return result
