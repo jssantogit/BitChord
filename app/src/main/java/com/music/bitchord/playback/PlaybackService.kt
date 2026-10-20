@@ -6452,7 +6452,7 @@ class PlaybackService : MediaLibraryService() {
             directUsbProbe = directUsbProbe,
             directSupport = directSupport,
             bluetoothTelemetry = btTelemetry,
-            systemMixerRateHz = if (routeKind == AudioRouting.Kind.USB) 48000 else null,
+            systemMixerRateHz = null,
         )
 
         if (format != null) {
@@ -6552,7 +6552,7 @@ class PlaybackService : MediaLibraryService() {
             // silently re-converted, costing an extra quantization and leaving
             // this readout naming a bit depth that was never written.
             delegateSupportsPcm24 = false,
-            knownSystemMixerRateHz = if (routeKind == AudioRouting.Kind.USB) 48000 else null,
+            knownSystemMixerRateHz = null,
         )
 
         AudioOutputStatus.publishNegotiation(negotiation)
