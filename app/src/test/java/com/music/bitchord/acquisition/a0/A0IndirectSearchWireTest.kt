@@ -18,7 +18,9 @@ class A0IndirectSearchWireTest {
 
     @Test fun ignoresOtherServerFramesAndKeepsFrameAlignment() {
         val stream = ByteArrayInputStream(frame(64, byteArrayOf(1, 2)) + offer())
-        assertNull(A0IndirectSearchWire.readServerEvent(stream))
+        val ignored = mutableListOf<Int>()
+        assertNull(A0IndirectSearchWire.readServerEvent(stream) { ignored.add(it) })
+        assertEquals(listOf(64), ignored)
         assertEquals(31415, A0IndirectSearchWire.readServerEvent(stream)!!.token)
     }
 
@@ -41,6 +43,24 @@ class A0IndirectSearchWireTest {
             reject { A0IndirectSearchWire.readServerEvent(ByteArrayInputStream(packet)) }
         }
         reject { A0IndirectSearchWire.readServerEvent(ByteArrayInputStream(frame(41, byteArrayOf()))) }
+    }
+
+    @Test fun rejectedIndirectOfferDoesNotLoseAlignmentForSubsequentFrame() {
+        val source = ByteArrayInputStream(offer(type="F") + offer())
+        try {
+            A0IndirectSearchWire.readServerEvent(source)
+            fail("Invalid P negotiation was accepted")
+        } catch (_: A0IndirectSearchWire.RejectedPeerOffer) {
+            // A complete rejected frame must not poison the remaining stream.
+        }
+        assertEquals(31415, A0IndirectSearchWire.readServerEvent(source)!!.token)
+    }
+
+    @Test fun ignoredEventCallbackReceivesOnlyCodeNotPayload() {
+        val source = ByteArrayInputStream(frame(102, byteArrayOf(27, 45, 87)))
+        val codes = mutableListOf<Int>()
+        assertNull(A0IndirectSearchWire.readServerEvent(source, codes::add))
+        assertEquals(listOf(102), codes)
     }
 
     @Test fun pierceFirewallHasSingleByteInitCodeAndTokenButDoesNotRequestFile() {
