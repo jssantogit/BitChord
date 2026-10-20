@@ -99,6 +99,22 @@ class ResumePolicyTests(unittest.TestCase):
         with self.assertRaises(ResumePolicyError):
             self.decide(live=live)
 
+    def test_unhashable_untrusted_values_are_typed_policy_errors(self):
+        for field, value in [('stage', []), ('stage', {}),
+                             ('version', True), ('stage', 1)]:
+            with self.subTest(field=field, value=str(value)):
+                state = checkpoint()
+                state[field] = value
+                with self.assertRaises(ResumePolicyError):
+                    self.decide(state=state)
+        for field, value in [('android_check', []), ('pr_state', []),
+                             ('merged', []), ('android_check', {})]:
+            with self.subTest(field=field, value=str(value)):
+                live = observed()
+                live[field] = value
+                with self.assertRaises(ResumePolicyError):
+                    self.decide(live=live)
+
     def test_unexpected_fields_refused_and_no_write_calls_exist(self):
         state = checkpoint()
         state['write_token'] = 'secret'
