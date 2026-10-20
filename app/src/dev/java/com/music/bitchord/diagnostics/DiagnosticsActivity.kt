@@ -176,6 +176,7 @@ private fun DiagnosticsPanel(
     }
     var incidentCategory by remember { mutableStateOf<DiagnosticCategory?>(null) }
     var incidentOutcome by remember { mutableStateOf<DiagnosticFunctionalTerminal?>(null) }
+    var minimumSeverity by remember { mutableStateOf<DiagnosticLevel?>(null) }
     var incidentFlow by remember { mutableStateOf<String?>(null) }
     var lastTenMinutes by remember { mutableStateOf(false) }
     val flowOptions = triage.incidents.mapNotNull { it.flowId }.distinct()
@@ -183,6 +184,7 @@ private fun DiagnosticsPanel(
         DiagnosticIncidentFilter(
             category = incidentCategory,
             outcome = incidentOutcome,
+            minimumLevel = minimumSeverity,
             flowId = incidentFlow,
             sinceUtcMillis = if (lastTenMinutes) System.currentTimeMillis() - 600_000L else null,
         ),
@@ -377,6 +379,13 @@ private fun DiagnosticsPanel(
                 modifier = Modifier.weight(1f),
             ) { Text("Flow: " + (incidentFlow ?: "ALL")) }
         }
+        OutlinedButton(
+            onClick = {
+                val options = listOf<DiagnosticLevel?>(null, DiagnosticLevel.WARN, DiagnosticLevel.ERROR)
+                minimumSeverity = options[(options.indexOf(minimumSeverity) + 1) % options.size]
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Minimum severity: " + (minimumSeverity?.name ?: "ALL")) }
         if (filteredIncidents.isEmpty()) {
             Text("No incidents match current filters.")
         } else {
@@ -388,6 +397,27 @@ private fun DiagnosticsPanel(
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
                 )
+            }
+        }
+        if (incidentFlow != null) {
+            Text("Selected flow timeline (observed points only)", style = MaterialTheme.typography.titleMedium)
+            val flowTimeline = remember(refreshToken, incidentFlow) {
+                Diagnostics.recentEvents().filter { it.metadata["flowId"] == incidentFlow }
+                    .sortedWith(compareBy<DiagnosticEvent> { it.epochMillis }.thenBy { it.sequence })
+                    .takeLast(30)
+            }
+            if (flowTimeline.isEmpty()) {
+                Text("No flow evidence in this in-memory window. Missing points are UNKNOWN.")
+            } else {
+                flowTimeline.forEach { item ->
+                    Text(
+                        item.sequence.toString() + " · " + item.name +
+                            " · " + (item.metadata["stage"] ?: "unknown") +
+                            " · " + (item.metadata["outcome"] ?: "unknown"),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
             }
         }
         HorizontalDivider()
