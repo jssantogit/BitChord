@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 78,
+      "expected_head_sha": "ce12467726999dea416d76e141b795bad75008e7",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/playback/CrossfadeController.kt",
+        "app/src/main/java/com/music/bitchord/playback/CrossfadeHandoffCancellation.kt",
+        "app/src/main/java/com/music/bitchord/playback/PlaybackService.kt",
+        "app/src/test/java/com/music/bitchord/playback/CrossfadeHandoffCancellationTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 71,
+      "expected_head_sha": "1b2df8647deee64c1a8f4e378985a78095edd82f",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticFileStore.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticReportV2.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticWriteQueue.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/Diagnostics.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticsCore.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticReportV2ExportTest.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticReportV2Test.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 70,
+      "expected_head_sha": "3c4f54e21392ee6b89341ee9632b6def698e23d7",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/listening/AdaptiveSmartCollectionPreview.kt",
+        "app/src/test/java/com/music/bitchord/data/listening/LibraryRediscoveryPreviewIntegrationTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    }
+  ]
+}

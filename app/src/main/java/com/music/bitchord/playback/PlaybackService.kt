@@ -5861,9 +5861,14 @@ class PlaybackService : MediaLibraryService() {
         is BoundedContextPersistence.RestoreOutcome.Restored -> {
             if (restoreBoundedQueue(player, outcome.state)) {
                 true
-            } else {
+            } else if (PlaybackLifecycleRestoreGate.mayFallBackAfterFailedProjection(outcome.state)) {
+                // Legacy compatibility, only when no canonical identity was proven.
                 BoundedContextPersistence.clearImmediately()
                 restoreLastQueue(player)
+            } else {
+                // Preserve the selected canonical snapshot for explicit recovery;
+                // never resurrect a physical fallback or autoplay on recreation.
+                false
             }
         }
         BoundedContextPersistence.RestoreOutcome.CanonicalUnavailable -> false
@@ -6558,9 +6563,13 @@ class PlaybackService : MediaLibraryService() {
     private fun requestOutputReconfiguration() {
         outputReconfigureJob?.cancel()
         outputReconfigureJob = scope.launch {
-            // Replacing two renderers during a blend would cut one half of it.
-            // Wait for the short transition to settle, then swap the engine.
-            while (crossfade?.isTransitioning() == true) delay(50)
+            // A physical route/preference change invalidates both old sinks.
+            // Let the existing controller settle and retire the non-session
+            // player immediately; waiting for the old route's fade can strand
+            // a never-ready standby and expose a second audible player.
+            // Do not do this in applyOutputRoute(), which also receives
+            // ordinary decoder/BT telemetry updates that are NOT route moves.
+            crossfade?.onOutputRouteChanged()
             val requestedFloat = shouldEnableFloatOutput()
             if (requestedFloat == configuredFloatOutput) {
                 applyOutputRoute()

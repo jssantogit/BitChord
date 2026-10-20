@@ -698,6 +698,11 @@ class CrossfadeController(
     fun release() {
         tickerJob?.cancel()
         tickerJob = null
+        // A cancelled ticker cannot complete BAILING or retire the standby.
+        // Settle before dropping listeners, or a second audio track can linger.
+        if (phase != Phase.IDLE &&
+            CrossfadeHandoffCancellation.settleImmediately(CrossfadeInterruption.CONTROLLER_RELEASE)
+        ) finish()
         endEase(clickless = false)
         releaseHold()
         listeningTo?.removeListener(listener)
@@ -730,9 +735,27 @@ class CrossfadeController(
         if (phase != Phase.IDLE) bail()
     }
 
+    /** Route transfer must leave only the MediaSession owner audible. */
+    fun onOutputRouteChanged() {
+        if (phase != Phase.IDLE &&
+            CrossfadeHandoffCancellation.settleImmediately(CrossfadeInterruption.ROUTE_CHANGE)
+        ) finish()
+    }
+
     // ---- Ticker -------------------------------------------------------------
 
     private fun tick() {
+        // An idle controller must not retain the old mix window once the user
+        // disables crossfade. This includes pause/buffering and repeat-one:
+        // the native Media3 timeline, not a stale two-player handoff, owns EOS.
+        if (phase == Phase.IDLE &&
+            GaplessBoundaryPolicy.mustUseNativeBoundary(
+                configuredFadeMs(),
+                AppSettings.smartFadeEnabled.value,
+            )
+        ) {
+            AppSettings.smartTransitionWindow.value = null
+        }
         // A pause has to take the other player with it, or one half of the blend
         // carries on alone over a stopped one. Mirrored every tick rather than
         // handled as an event, so audio focus loss, the sleep timer and the
