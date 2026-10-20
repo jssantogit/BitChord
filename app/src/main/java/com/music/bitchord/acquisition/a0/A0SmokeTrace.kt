@@ -46,6 +46,7 @@ internal class A0SmokeTrace private constructor(
     enum class Transport { WIFI, CELLULAR, VPN, ETHERNET, OTHER, DISCONNECTED, UNKNOWN }
 
     private val complete = AtomicBoolean(false)
+    private val socketsClosing = AtomicBoolean(false)
     private val ignoredServerFrames = AtomicInteger(0)
 
     fun note(
@@ -54,6 +55,7 @@ internal class A0SmokeTrace private constructor(
         reason: Reason? = null
     ) {
         if (complete.get()) return
+        if (stage == Stage.SERVER_READ_FAILURE && socketsClosing.get()) return
         val attributes = linkedMapOf("elapsedMs" to elapsedMillis().toString())
         if (reason != null) attributes["reasonCode"] = reason.name.lowercase(Locale.ROOT)
         trace.event(
@@ -61,6 +63,11 @@ internal class A0SmokeTrace private constructor(
             outcome = outcome,
             attributes = attributes
         )
+    }
+
+    /** Mark deliberate teardown before sockets are closed, suppressing read errors it causes. */
+    fun beginSocketTeardown() {
+        socketsClosing.set(true)
     }
 
     /** Distinguish silent login server from partially received frame, without raw bytes. */
