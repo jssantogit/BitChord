@@ -54,8 +54,9 @@ class A0ManualLoginActivity : Activity() {
         text("Somente para uma conta exclusiva de TESTE. " +
              "O protocolo Soulseek envia a senha por TCP SEM TLS. " +
              "Não reutilize senhas de outros serviços.")
-        text("Este teste verifica apenas o login e encerra a sessão. " +
-             "Não pesquisa, compartilha ou baixa arquivos. " +
+        text("O primeiro botão testa apenas o login. O segundo envia UMA pesquisa " +
+             "por um nome de áudio CC0 e espera no máximo uma resposta P2P. " +
+             "Nenhum botão compartilha ou baixa arquivos. " +
              "Desconecte o Seeker antes de iniciar.")
         val user = EditText(this).apply {
             hint = "Usuário dedicado"
