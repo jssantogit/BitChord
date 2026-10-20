@@ -5,7 +5,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.model.Song
@@ -24,11 +23,11 @@ import kotlinx.coroutines.withContext
 @Composable
 internal fun CanonicalSongMenuRating(song: Song) {
     val context = LocalContext.current.applicationContext
-    val resolver = remember(context) { androidCanonicalQueueResolver(context) }
-    val resolvedId by produceState<String?>(initialValue = null, resolver, song) {
+    val resolvedId by produceState<String?>(null, context, song) {
         value = try {
             withContext(Dispatchers.IO) {
-                CanonicalSongFeedbackTarget(resolver).recordingId(song)
+                // Construct the Catalog-backed resolver off the main thread.
+                CanonicalSongFeedbackTarget(androidCanonicalQueueResolver(context)).recordingId(song)
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
