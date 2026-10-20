@@ -71,6 +71,9 @@ class DiagnosticIncidentTriage private constructor(
             append("\",\"category\":\"").append(it.category.name.lowercase())
             append("\",\"reason\":\"").append(it.reasonCode)
             append("\",\"outcome\":\"").append(it.outcome.name.lowercase())
+            it.flowId?.let { safeFlow ->
+                append("\",\"flowId\":\"").append(safeFlow)
+            }
             append("\",\"occurrences\":").append(it.occurrences)
             append(",\"firstUtcMillis\":").append(it.firstObservedUtcMillis)
             append(",\"lastUtcMillis\":").append(it.lastObservedUtcMillis)
