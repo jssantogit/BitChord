@@ -56,7 +56,8 @@ def adjudicate_resume(checkpoint, observed, *,
     ))
     _need(set(observed) == {
         'repository', 'main_sha', 'pr_number', 'head_sha',
-        'pr_state', 'merged', 'merge_sha', 'android_check'})
+        'pr_state', 'merged', 'merge_sha', 'android_check',
+        'android_check_sha'})
     _need(type(checkpoint['version']) is int and checkpoint['version'] == 1 and
           checkpoint['repository'] == _REPO and
           observed['repository'] == _REPO and
@@ -81,6 +82,7 @@ def adjudicate_resume(checkpoint, observed, *,
           observed['pr_state'] in ('open', 'closed') and
           type(observed['merged']) is bool and
           (observed['merge_sha'] is None or _sha(observed['merge_sha'])) and
+          _sha(observed['android_check_sha']) and
           (observed['android_check'] is None or
            (type(observed['android_check']) is str and
             observed['android_check'] in _ANDROID)))
@@ -106,7 +108,8 @@ def adjudicate_resume(checkpoint, observed, *,
                 observed['merge_sha'] == checkpoint['merge_sha'] and
                 observed['main_sha'] == checkpoint['merge_sha']):
             return _result('halt_postmerge_identity_drift', n)
-        if observed['android_check'] != 'success':
+        if (observed['android_check'] != 'success' or
+                observed['android_check_sha'] != checkpoint['merge_sha']):
             return _result('halt_postmerge_ci_red', n)
         return _result('manual_confirm_completion' if stage == 'post_ci_green'
                        else 'manual_postmerge_ci_review', n)
@@ -114,6 +117,7 @@ def adjudicate_resume(checkpoint, observed, *,
         return _result('halt_pr_closed', n)
     if observed['main_sha'] != checkpoint['main_sha']:
         return _result('halt_main_drift', n)
-    if observed['android_check'] != 'success':
+    if (observed['android_check'] != 'success' or
+            observed['android_check_sha'] != checkpoint['expected_head_sha']):
         return _result('halt_android_unverified', n)
     return _result('require_live_preflight', n)
