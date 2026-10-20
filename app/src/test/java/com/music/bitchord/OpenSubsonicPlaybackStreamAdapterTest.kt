@@ -85,7 +85,9 @@ class OpenSubsonicPlaybackStreamAdapterTest {
             (adapter.prepareCappedMp3("recording-1", "asset-1", "opensubsonic:home", 4, 160_000)
                 as OpenSubsonicStreamPreparation.Rejected).reason,
         )
-        gateway.refresh(4, "opensubsonic:home")
+        adapter.refreshCapabilities(4, "opensubsonic:home")
+        assertEquals(OpenSubsonicStreamConfidence.ADVERTISED,
+            adapter.previewCapabilities(4, "opensubsonic:home").transcoding)
         val accepted = adapter.prepareCappedMp3(
             "recording-1", "asset-1", "opensubsonic:home", 4, 160_000,
         )
