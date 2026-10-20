@@ -321,6 +321,11 @@ object Diagnostics {
                 ioFailures = writer.failedWrites,
                 captureRotations = store.captureRotationsSinceOpen,
             ),
+            incidentReport = DiagnosticIncidentTriage.build(
+                events = snapshot,
+                rejectedWrites = writer.droppedWrites,
+                flushComplete = flushComplete,
+            ),
         )
     }
 
