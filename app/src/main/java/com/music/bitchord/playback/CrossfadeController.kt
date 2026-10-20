@@ -698,6 +698,11 @@ class CrossfadeController(
     fun release() {
         tickerJob?.cancel()
         tickerJob = null
+        // A cancelled ticker cannot complete BAILING or retire the standby.
+        // Settle before dropping listeners, or a second audio track can linger.
+        if (phase != Phase.IDLE &&
+            CrossfadeHandoffCancellation.settleImmediately(CrossfadeInterruption.CONTROLLER_RELEASE)
+        ) finish()
         endEase(clickless = false)
         releaseHold()
         listeningTo?.removeListener(listener)
@@ -728,6 +733,13 @@ class CrossfadeController(
      */
     fun onSkipRequested() {
         if (phase != Phase.IDLE) bail()
+    }
+
+    /** Route transfer must leave only the MediaSession owner audible. */
+    fun onOutputRouteChanged() {
+        if (phase != Phase.IDLE &&
+            CrossfadeHandoffCancellation.settleImmediately(CrossfadeInterruption.ROUTE_CHANGE)
+        ) finish()
     }
 
     // ---- Ticker -------------------------------------------------------------
