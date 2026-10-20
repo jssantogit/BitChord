@@ -1,4 +1,4 @@
-"""Regression tests for bounded two-lane Android PR concurrency.
+"""Regression tests for bounded CI lanes, including three-lane migration.
 
 The required check and test scope must not change. These tests protect our
 routing contract; observable scheduler behavior must still be tested on GitHub.
@@ -10,19 +10,22 @@ CHECK = pathlib.Path(__file__).resolve().parents[1] / ".github/workflows/check.y
 
 
 def lane_for_pr_branch(branch: str) -> str:
-    """Independent policy oracle matching the documented two-lane assignment."""
-    return "a" if branch.startswith(("catalog/", "intelligence/")) else "b"
+    """Independent static policy oracle matching the current three-lane routing."""
+    if branch.startswith(("catalog/", "intelligence/")):
+        return "a"
+    return "b" if branch.startswith("playback/") else "c"
 
 
-class TwoLanePilotTests(unittest.TestCase):
+class AndroidLanePolicyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.workflow = CHECK.read_text(encoding="utf-8")
 
-    def test_two_stable_pr_groups_with_main_outside(self):
+    def test_three_stable_pr_groups_with_main_outside(self):
         yaml = self.workflow
         self.assertIn("'bitchord-android-pr-lane-a'", yaml)
         self.assertIn("'bitchord-android-pr-lane-b'", yaml)
+        self.assertIn("'bitchord-android-pr-lane-c'", yaml)
         self.assertIn("startsWith(github.head_ref, 'catalog/')", yaml)
         self.assertIn("startsWith(github.head_ref, 'intelligence/')", yaml)
         self.assertIn("github.event_name == 'pull_request'", yaml)
@@ -47,10 +50,10 @@ class TwoLanePilotTests(unittest.TestCase):
             "catalog/c7-canonical": "a",
             "intelligence/l8-integrity": "a",
             "playback/b8-output": "b",
-            "perf/d5-logs": "b",
-            "acquisition/a0-on-device": "b",
-            "infra/workflow-permissions-safety-v0": "b",
-            "external/manual-branch": "b",
+            "perf/d5-logs": "c",
+            "acquisition/a0-on-device": "c",
+            "infra/workflow-permissions-safety-v0": "c",
+            "external/manual-branch": "c",
         }
         for branch, lane in cases.items():
             with self.subTest(branch=branch):
