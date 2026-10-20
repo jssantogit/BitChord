@@ -1,7 +1,7 @@
 # A0 — Embedded Soulseek Feasibility v0
 
 **Date:** 2026-10-19  
-**Scope:** feasibility report and loopback-only Android/Kotlin socket experiment; no external network/device execution authorized  
+**Scope:** feasibility report, loopback-only Android/Kotlin protocol frames and read-only parser, plus owned-WAV local-byte staging; no external network/device execution authorized  
 **Decision state:** MOBILE_CLIENT_PREFERRED / ENGINE_INTEGRATION_NOT_PROVEN  
 **Recovery:** NO_EXISTING_IMPLEMENTATION (scope-limited verified search)  
 **Operational gate:** REAL_NETWORK_NOT_EXERCISED
@@ -83,6 +83,14 @@ The Seeker [fork changes record](https://github.com/jackBonadies/SeekerAndroid/b
 - `app/src/test/java/com/music/bitchord/acquisition/a0/A0SoulseekSearchResponseParserTest.kt`: deterministic zlib fixtures cover public/locked candidates, field/attribute preservation, token/code checks, truncated or inconsistent frame, compressed bomb, absurd file counts, malformed string lengths, negative byte count and legacy Latin-1. **Fixtures are not real Soulseek search results**. No real peer socket, file selection/download, filesystem write or Android device is exercised by this parser.
 
 The new decoder reduces protocol compatibility uncertainty only for message framing and parsing. It does not establish actual peer connectivity, interoperability, audio acquisition, CPU/memory behavior or valid license status. `REAL_NETWORK_NOT_EXERCISED` remains unchanged.
+
+### A0 additional local-byte staging evidence (test-owned WAV; not a Soulseek transfer)
+
+- **TDD/provenance:** test-first JUnit `A0VerifiedByteStagerTest.kt` at commit `59b623ef967c51ac2a3ccb02964a51cfb9f99d71` verifies streamed bytes from a **real localhost TCP socket** carrying a self-generated PCM WAV, expected size and SHA-256, malformed/truncated/oversized inputs, cancellation, deletion of `.partial` on failure, unknown container and duplicate-file non-overwrite. [Android CI #819](https://github.com/jssantogit/BitChord/actions/runs/39345218953) was **cancelled** by the branch's following push; a RED CI failure was **not** obtained. Local `kotlinc` compilation of the focused harness without the implementation exited 1 (unresolved stager), followed by a local Kotlin/JVM harness **PASS** after implementation for bytes/hash/truncation/digest mismatch/cancellation/container/bounds/cleanup.
+- **Code:** `A0VerifiedByteStager.kt` at `42b24e336f5bbd469b51675440c808cbd41c0872`. Explicit caller-supplied **app-private** directory (privacy of directory is caller's obligation), bounded up-to-512-MiB streamed size with 8 KiB buffer, external *trusted* expected SHA-256, `MessageDigest.isEqual` after exactly requested bytes, unique temporary `.partial` name unrelated to peer-controlled filenames, same-directory `ATOMIC_MOVE` to `.verified` on success, cleanup if closed/truncated/cancelled/corrupted. Fail closed if atomic move is not available; no silent non-atomic fallback. Header-only hints `WAV_HEADER_ONLY`, `FLAC_HEADER_ONLY`, `ID3_HEADER_ONLY` are not codecs proven playable or safe.
+- **Verified GitHub build:** [Android CI #820](https://github.com/jssantogit/BitChord/actions/runs/39345379884) **completed/success** on the exact code HEAD `42b24e336f5bbd469b51675440c808cbd41c0872`. This verifies Android JVM unit tests, not Android-device behavior. Any later documentation commit must obtain a new exact-HEAD CI before declaring full-branch GREEN.
+- **Crucial trust limit:** search results provide a claimed size/filename, but not a trustworthy SHA-256. The SHA-256 in this local test comes from its **independent owner-created fixture**. This spike proves a byte-integrity mechanism given trusted hash input; it does **not** prove authenticity of arbitrary Soulseek files, music codec decoding, peer negotiation, actual remote bytes or full Android lifecycle. No Catalog recording/media binding, MediaStore, UI, service, real credentials or network was implemented.
+- **Main drift:** initial PR base `fedba346...`; protected `main` had advanced to `213a5fc1012523e778765ce8019cfa97ac8abfc3` on 2026-10-19. Keep branch draft/behind and coordinate any later non-destructive synchronization with central integration orchestration.
 
 ## 5. Conditional architecture recommendation
 
