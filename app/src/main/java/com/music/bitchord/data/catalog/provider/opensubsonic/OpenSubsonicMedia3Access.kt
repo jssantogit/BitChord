@@ -152,11 +152,26 @@ internal class OpenSubsonicMediaDataSource(
     private val transport: OpenSubsonicRuntimeTransport,
     private val upstreamFactory: DataSource.Factory,
     private val variant: OpenSubsonicStreamVariant? = null,
+    private val truthObserver: ((OpenSubsonicStreamTruthSnapshot) -> Unit)? = null,
 ) : DataSource {
     private val transferListeners = CopyOnWriteArrayList<TransferListener>()
     private var upstream: DataSource? = null
     private var logicalDataSpec: DataSpec? = null
     private var transferStarted = false
+    private val truth = OpenSubsonicStreamTruthTracker()
+    private var truthAttempt: Long? = null
+
+    /** Sanitized facts only; this never contains a URL, native source ID or credential. */
+    internal val streamTruth: OpenSubsonicStreamTruthSnapshot get() = truth.snapshot
+
+    private fun publishTruth() {
+        // Observers are advisory. A diagnostics/UI callback must never abort audio I/O.
+        truthObserver?.let { observer -> runCatching { observer(truth.snapshot) } }
+    }
+
+    private fun recordTruth(action: (Long) -> Unit) {
+        truthAttempt?.let { action(it); publishTruth() }
+    }
 
     override fun addTransferListener(transferListener: TransferListener) {
         transferListeners += transferListener
@@ -165,6 +180,12 @@ internal class OpenSubsonicMediaDataSource(
     override fun open(dataSpec: DataSpec): Long {
         if (upstream != null) throw IOException("OpenSubsonic stream already open")
         logicalDataSpec = dataSpec
+        val safeIntent = variant ?: (
+            OpenSubsonicStreamVariantPlanner.original(recordingId, mediaAssetId, providerKey, 0)
+                as? OpenSubsonicStreamVariantPlan.Accepted
+            )?.variant
+        truthAttempt = safeIntent?.let { truth.begin(it) }
+        publishTruth()
         transferListeners.forEach { it.onTransferInitializing(this, dataSpec, true) }
 
         val authenticatedSpec = try {
@@ -190,6 +211,7 @@ internal class OpenSubsonicMediaDataSource(
                             recordingId, mediaAssetId, providerKey, requireNotNull(variant),
                         )
                     }
+                    recordTruth { truth.onDecision(it, negotiated) }
                     when (negotiated) {
                         is OpenSubsonicTranscodeDecisionOutcome.Ready ->
                             negotiated.ticket.materializeAuthenticatedDataSpec(dataSpec)
@@ -202,16 +224,30 @@ internal class OpenSubsonicMediaDataSource(
             }
         } catch (interrupted: InterruptedException) {
             Thread.currentThread().interrupt()
+            recordTruth { truth.onFailure(it) }
             throw InterruptedIOException("OpenSubsonic playback resolution interrupted")
+        } catch (error: Exception) {
+            recordTruth { truth.onFailure(it) }
+            throw error
         }
         val next = upstreamFactory.createDataSource()
         upstream = next
         return try {
             val length = next.open(authenticatedSpec)
+            // DataSource does not provide a trustworthy successful HTTP status.
+            // Never infer 200/206 or decoded codec from an opened upstream.
+            recordTruth {
+                truth.onHeaders(
+                    it, 0, next.responseHeaders.filterKeys { key ->
+                        key.equals("content-type", ignoreCase = true)
+                    }, length,
+                )
+            }
             transferStarted = true
             transferListeners.forEach { it.onTransferStart(this, dataSpec, true) }
             length
         } catch (error: Exception) {
+            recordTruth { truth.onFailure(it) }
             upstream = null
             runCatching { next.close() }
             throw sanitizeTransportFailure(error)
@@ -223,6 +259,7 @@ internal class OpenSubsonicMediaDataSource(
         return try {
             val read = current.read(buffer, offset, length)
             if (read > 0) {
+                recordTruth { truth.onBytes(it, read) }
                 val spec = logicalDataSpec
                 if (spec != null) {
                     transferListeners.forEach {
@@ -232,6 +269,7 @@ internal class OpenSubsonicMediaDataSource(
             }
             read
         } catch (error: Exception) {
+            recordTruth { truth.onFailure(it) }
             throw sanitizeTransportFailure(error)
         }
     }
@@ -267,6 +305,12 @@ internal class OpenSubsonicMediaDataSource(
         if (hadStarted && spec != null) {
             transferListeners.forEach { it.onTransferEnd(this, spec, true) }
         }
+        if (closeFailure != null) {
+            recordTruth { truth.onFailure(it) }
+        } else {
+            recordTruth { truth.onClose(it) }
+        }
+        truthAttempt = null
         closeFailure?.let { throw it }
     }
 
@@ -308,6 +352,7 @@ internal class OpenSubsonicMediaDataSource(
 internal class OpenSubsonicMediaDataSourceFactory(
     private val transport: OpenSubsonicRuntimeTransport,
     private val upstreamFactory: DataSource.Factory,
+    private val truthObserver: ((OpenSubsonicStreamTruthSnapshot) -> Unit)? = null,
 ) {
     fun create(
         recordingId: String,
@@ -319,6 +364,7 @@ internal class OpenSubsonicMediaDataSourceFactory(
         providerKey = providerKey,
         transport = transport,
         upstreamFactory = upstreamFactory,
+        truthObserver = truthObserver,
     )
 
     /** Catalog-owned B13 seam: no side effects until Media3 DataSource.open. */
@@ -330,6 +376,7 @@ internal class OpenSubsonicMediaDataSourceFactory(
             transport = transport,
             upstreamFactory = upstreamFactory,
             variant = variant,
+            truthObserver = truthObserver,
         )
 }
 
