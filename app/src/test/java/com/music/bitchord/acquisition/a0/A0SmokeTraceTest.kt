@@ -87,13 +87,13 @@ class A0SmokeTraceTest {
         val trace = A0SmokeTrace.start(
             StructuredTracer(sink = StructuredTraceSink { points.add(it) })
         )
-        trace.beginSocketTeardown()
+        // Closed sockets on the completed probe must not masquerade as a fresh error.
+        trace.note(A0SmokeTrace.Stage.SOCKETS_CLOSED)
         trace.note(
             A0SmokeTrace.Stage.SERVER_READ_FAILURE,
             TraceOutcome.DEGRADED,
             A0SmokeTrace.Reason.SERVER_IO_FAILURE
         )
-        trace.note(A0SmokeTrace.Stage.SOCKETS_CLOSED)
         trace.finish(TraceOutcome.DEGRADED, A0SmokeTrace.Reason.NO_PEER_REPLY)
         assertFalse(points.any { it.stage == "server_read_failure" })
         assertTrue(points.any { it.stage == "sockets_closed" })
