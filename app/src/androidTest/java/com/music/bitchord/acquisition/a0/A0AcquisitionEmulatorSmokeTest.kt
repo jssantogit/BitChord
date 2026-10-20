@@ -227,28 +227,20 @@ class A0AcquisitionEmulatorSmokeTest {
                                 true
                             }
                         }
-                        Socket("127.0.0.1", messageListener.localPort).use { socket ->
-                            socket.soTimeout = 4000
-                            socket.getOutputStream().write(A0SoulseekPeerWireProbe.peerInit("android-fixture", 71))
-                            socket.getOutputStream().write(A0SoulseekPeerWireProbe.downloadRequest(
-                                "Owned\\two-sockets.wav", 73, data.size.toLong()
-                            ))
-                            socket.getOutputStream().flush()
-                            val approved = A0SoulseekPeerWireProbe.readTransferDecision(
-                                socket.getInputStream(), 73, data.size.toLong()
-                            )
-                            assertTrue(approved.allowed)
-                            assertEquals(data.size.toLong(), approved.peerReportedByteCount)
-                        }
-                        val received = A0SoulseekLocalFileChannelProbe.receiveFixture(
-                            port = fileListener.localPort,
+                        val result = A0LocalTwoChannelSession.receiveOwnedFixture(
+                            messagePort = messageListener.localPort,
+                            filePort = fileListener.localPort,
                             username = "android-fixture",
-                            connectionToken = 75,
+                            messageConnectionToken = 71,
+                            fileConnectionToken = 75,
                             transferToken = 73,
+                            remoteFilename = "Owned\\two-sockets.wav",
                             expectedBytes = data.size.toLong(),
                             trustedSha256Hex = sha256(data),
                             appPrivateDirectory = directory
                         )
+                        assertTrue(result is A0LocalTwoChannelSession.Outcome.Completed)
+                        val received = (result as A0LocalTwoChannelSession.Outcome.Completed).receipt
                         assertTrue(messagePeer.get(10, TimeUnit.SECONDS))
                         assertTrue(filePeer.get(10, TimeUnit.SECONDS))
                         assertEquals(data.size.toLong(), received.byteCount)
