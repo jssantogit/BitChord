@@ -219,4 +219,8 @@
     <string name="recording_feedback_current">Rating: %1$s</string>
     <string name="recording_feedback_history">Changes: %1$d</string>
     <string name="recording_feedback_unavailable">Rating unavailable</string>
+    <string name="my_ratings_title">My ratings</string>
+    <string name="my_ratings_empty">No ratings yet. Rate a canonical song from its menu.</string>
+    <string name="my_ratings_loading">Loading recording…</string>
+    <string name="my_ratings_more">Showing the first %1$d ratings; more are saved.</string>
 </resources>
