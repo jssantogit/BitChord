@@ -38,7 +38,7 @@ class OpenSubsonicStreamLifecycleTest {
         )
     }
 
-    private class Fixture {
+    private inner class Fixture {
         val original = OpenSubsonicAccountConfig(
             "home", "https://music.example", OpenSubsonicAuth.ApiKey("secret-one"),
         )
