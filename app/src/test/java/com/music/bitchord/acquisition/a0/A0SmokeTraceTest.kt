@@ -39,7 +39,10 @@ class A0SmokeTraceTest {
 
     @Test fun allLoggedFieldsAreStrictlyAllowlistedNeverPeerData() {
         val points = mutableListOf<StructuredTracePoint>()
-        val tracer = StructuredTracer(sink = StructuredTraceSink { points.add(it) })
+        val tracer = StructuredTracer(
+            sink = StructuredTraceSink { points.add(it) },
+            traceIdFactory = { "fixed-a0-id" }
+        )
         val trace = A0SmokeTrace.start(tracer)
         for (stage in A0SmokeTrace.Stage.values()) {
             trace.note(stage, TraceOutcome.SUCCEEDED)
