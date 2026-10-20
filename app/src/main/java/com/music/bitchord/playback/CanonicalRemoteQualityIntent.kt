@@ -111,7 +111,7 @@ internal object CanonicalRemoteQualityPlanner {
         val ceiling = when (selected) {
             AudioQuality.HIGH -> 320
             AudioQuality.MEDIUM -> 160
-            AudioQuality.LOW -> 96
+            AudioQuality.LOW -> AudioQuality.LOW.maxKbps
             AudioQuality.LOSSLESS -> error("Original handling must return before MP3 planning")
         }
         return CanonicalRemoteQualityPreview(
