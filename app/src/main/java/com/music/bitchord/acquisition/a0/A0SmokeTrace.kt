@@ -55,6 +55,7 @@ internal class A0SmokeTrace private constructor(
         reason: Reason? = null
     ) {
         if (complete.get()) return
+        if (stage == Stage.SOCKETS_CLOSED) socketsClosing.set(true)
         if (stage == Stage.SERVER_READ_FAILURE && socketsClosing.get()) return
         val attributes = linkedMapOf("elapsedMs" to elapsedMillis().toString())
         if (reason != null) attributes["reasonCode"] = reason.name.lowercase(Locale.ROOT)
