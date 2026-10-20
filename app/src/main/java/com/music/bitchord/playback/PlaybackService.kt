@@ -1,6 +1,9 @@
 package com.music.bitchord.playback
 
 import com.music.bitchord.data.catalog.provider.opensubsonic.androidOpenSubsonicMediaDataSourceFactory
+import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.RecordingEntity
+import com.music.bitchord.data.catalog.MediaAssetEntity
 
 import android.app.PendingIntent
 import android.content.Context
@@ -562,6 +565,7 @@ class PlaybackService : MediaLibraryService() {
      * capturing it.
      */
     private var player: ExoPlayer? = null
+    private val canonicalBatchQueueMutex = Mutex()
 
     /**
      * The idle player. Between transitions it holds nothing; to arm one,
@@ -776,6 +780,7 @@ class PlaybackService : MediaLibraryService() {
     private val boundedContextCommand = SessionCommand(ACTION_START_BOUNDED_CONTEXT, Bundle.EMPTY)
     private val clearBoundedContextCommand = SessionCommand(ACTION_CLEAR_BOUNDED_CONTEXT, Bundle.EMPTY)
     private val canonicalRemotePlaybackCommand = SessionCommand(ACTION_PLAY_CANONICAL_REMOTE, Bundle.EMPTY)
+    private val canonicalBatchQueueCommand = SessionCommand(ACTION_EXECUTE_CANONICAL_BATCH, Bundle.EMPTY)
     private val favoriteCommand = SessionCommand(ACTION_TOGGLE_FAVORITE, Bundle.EMPTY)
     private val autoplayCommand = SessionCommand(ACTION_TOGGLE_AUTOPLAY, Bundle.EMPTY)
     private val shuffleCommand = SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY)
@@ -5792,6 +5797,160 @@ class PlaybackService : MediaLibraryService() {
         LastPlayed.clearImmediately()
     }
 
+    /**
+     * B10: a single explicit canonical batch edit, executed on the owning
+     * PlaybackService player. All catalog I/O runs away from Main; capture the
+     * exact timeline before and after to discard delayed callbacks.
+     */
+    private data class PreparedCanonicalBatch(
+        val freshSelections: List<CanonicalCollectionSelection>,
+        val playable: List<CanonicalPlayableAsset>,
+    )
+
+    private fun captureCanonicalBatchSnapshot(exo: ExoPlayer): CanonicalBatchQueueSnapshot {
+        val count = exo.mediaItemCount
+        val items = (0 until count).map(exo::getMediaItemAt)
+        return CanonicalBatchQueueSnapshot(
+            currentIndex = exo.currentMediaItemIndex.takeIf { it in 0 until count } ?: -1,
+            contextGeneration = boundedEditState.contextGeneration,
+            queueKeys = items.mapIndexed { index, item ->
+                item.queueEntryId ?: ("missing:" + index + ":" + item.mediaId)
+            },
+            tiers = items.map { it.queueTier },
+            transitioning = crossfade?.isTransitioning() == true,
+        )
+    }
+
+    private suspend fun prepareCanonicalBatch(
+        plan: CanonicalCollectionIntentPlan,
+    ): PreparedCanonicalBatch? = withContext(Dispatchers.IO) {
+        if (plan.selections.isEmpty()) return@withContext null
+        val dao = CanonicalCatalogDatabase.get(applicationContext).catalogDao()
+        val fresh = ArrayList<CanonicalCollectionSelection>(plan.selections.size)
+        val rows = ArrayList<MediaAssetEntity>(plan.selections.size)
+        for (selection in plan.selections) {
+            val identity = selection.identity
+            val id = identity.mediaAssetId ?: return@withContext null
+            val provider = identity.providerKey ?: return@withContext null
+            val asset = dao.mediaAssetById(id) ?: return@withContext null
+            val recording = dao.recordingById(identity.recordingId) ?: return@withContext null
+            if (asset.recordingId != identity.recordingId || asset.provider != provider) {
+                return@withContext null
+            }
+            if (provider != RoomCanonicalQueueResolver.LOCAL_PROVIDER &&
+                !provider.startsWith("opensubsonic:")
+            ) return@withContext null
+            rows += asset
+            fresh += selection.copy(title = recording.title, artistDisplay = recording.artistDisplay)
+        }
+
+        val resolved = androidCanonicalQueueResolver(applicationContext)
+            .resolveAll(plan.selections.map { it.identity })
+        if (resolved.size != plan.selections.size) return@withContext null
+        val safe = ArrayList<CanonicalPlayableAsset>(resolved.size)
+        for (index in resolved.indices) {
+            val selected = plan.selections[index].identity
+            val asset = resolved[index] ?: return@withContext null
+            if (asset.identity != selected) return@withContext null
+            val expected = if (selected.providerKey == RoomCanonicalQueueResolver.LOCAL_PROVIDER) {
+                rows[index].uri
+            } else {
+                CanonicalRemotePlaybackUri.encode(
+                    CanonicalRemotePlaybackRequest(
+                        selected.recordingId,
+                        selected.mediaAssetId ?: return@withContext null,
+                        selected.providerKey ?: return@withContext null,
+                    ),
+                )
+            }
+            if (asset.uri != expected || asset.uri.isBlank()) return@withContext null
+            safe += asset
+        }
+        PreparedCanonicalBatch(fresh, safe)
+    }
+
+    private suspend fun executeCanonicalBatch(args: Bundle): Boolean =
+        canonicalBatchQueueMutex.withLock {
+            val token = args.getString(EXTRA_CANONICAL_BATCH_TOKEN) ?: return@withLock false
+            // Consumption precedes any suspension, so stale/doubled callbacks
+            // and Activity recreation cannot apply the same operation twice.
+            val plan = CanonicalBatchQueueRequests.take(token) ?: return@withLock false
+            val exo = player ?: return@withLock false
+            if (ListenTogether.state.value.inParty || CastController.state.value.casting ||
+                castPlayback.active) return@withLock false
+            val prior = captureCanonicalBatchSnapshot(exo)
+            val prepared = try {
+                prepareCanonicalBatch(plan)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            } ?: return@withLock false
+
+            val live = captureCanonicalBatchSnapshot(exo)
+            val edit = CanonicalBatchQueuePolicy.decide(
+                plan = plan,
+                expected = prior,
+                actual = live,
+                freshSelections = prepared.freshSelections,
+            ) as? CanonicalBatchQueueDecision.Apply ?: return@withLock false
+
+            // No credential-bearing requests or URLs cross MediaSession.
+            val entries = prepared.playable.mapIndexed { ordinal, resolved ->
+                val selected = prepared.freshSelections[ordinal]
+                val tier = edit.tiers[ordinal]
+                val identity = selected.identity
+                val mediaItem = if (identity.providerKey == RoomCanonicalQueueResolver.LOCAL_PROVIDER) {
+                    Song(
+                        videoId = resolved.uri,
+                        title = selected.title,
+                        artist = selected.artistDisplay,
+                        thumbnailUrl = resolved.artworkUri,
+                        localUri = resolved.uri,
+                        localPath = resolved.path,
+                        queueTier = tier,
+                    ).toMediaItem()
+                } else {
+                    canonicalRemoteMediaItem(
+                        CanonicalRemotePlaybackRequest(
+                            identity.recordingId,
+                            requireNotNull(identity.mediaAssetId),
+                            requireNotNull(identity.providerKey),
+                        ),
+                        CanonicalRemotePlaybackMetadata(selected.title, selected.artistDisplay),
+                    )
+                }
+                QueueShuffle.withQueueMetadata(
+                    mediaItem,
+                    newEntryId = UUID.randomUUID().toString(),
+                    newTier = tier,
+                )
+            }
+            // One owner-thread Media3 insertion, with no setMediaItems that
+            // could erase played history, active context or pending tiers.
+            if (captureCanonicalBatchSnapshot(exo) != live) return@withLock false
+            if (entries.isEmpty()) return@withLock false
+            if (!edit.startPlayback && exo.mediaItemCount == 0) {
+                exo.playWhenReady = false
+            }
+            try {
+                if (edit.startPlayback) crossfade?.onSkipRequested()
+                exo.addMediaItems(edit.insertionIndex, entries)
+                if (edit.startPlayback) {
+                    failureCascade.onExplicitUserIntent()
+                    exo.seekTo(edit.insertionIndex, 0L)
+                    if (exo.playbackState == Player.STATE_IDLE) exo.prepare()
+                    exo.play()
+                }
+                saveQueueSnapshotImmediately(exo)
+                true
+            } catch (_: Exception) {
+                // A consumed one-shot token must never be replayed after an
+                // uncertain player/platform failure; report failure to caller.
+                false
+            }
+        }
+
     /** Start one canonical remote item without exposing provider-native identity. */
     private fun startCanonicalRemotePlayback(args: Bundle) {
         val exoPlayer = player ?: return
@@ -7939,6 +8098,7 @@ class PlaybackService : MediaLibraryService() {
                 .add(boundedContextCommand)
                 .add(clearBoundedContextCommand)
                 .add(canonicalRemotePlaybackCommand)
+                .add(canonicalBatchQueueCommand)
                 .add(autoplayCommand)
                 .add(shuffleCommand)
                 .add(startStationCommand)
@@ -7973,6 +8133,17 @@ class PlaybackService : MediaLibraryService() {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction == ACTION_EXECUTE_CANONICAL_BATCH) {
+                // Return the actual result, not a false success before the
+                // read-only Catalog revalidation and player-owned commit.
+                return scope.future(Dispatchers.Main) {
+                    if (executeCanonicalBatch(args)) {
+                        SessionResult(SessionResult.RESULT_SUCCESS)
+                    } else {
+                        SessionResult(SessionError.ERROR_NOT_SUPPORTED)
+                    }
+                }
+            }
             when (customCommand.customAction) {
                 ACTION_START_BOUNDED_CONTEXT -> startBoundedContext(args)
                 ACTION_CLEAR_BOUNDED_CONTEXT -> clearBoundedContext()
