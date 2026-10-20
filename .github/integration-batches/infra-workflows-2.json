@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 85,
+      "expected_head_sha": "9c4a30f7e2f21368bc90667801025b1dc03d6863",
+      "expected_base_ref": "main",
+      "depends_on": null,
+      "allowed_files": [
+        ".github/workflows/check.yml",
+        "docs/ci-two-lane-pilot.md",
+        "tests/test_android_ci_queue.py",
+        "tests/test_android_ci_two_lane_pilot.py"
+      ]
+    }
+  ]
+}
