@@ -138,13 +138,13 @@ persistent capture is introduced.
 
 ### Reconstructing a journey (D6)
 
-The read-only \`DiagnosticJourneyReconstructor\` projects the existing
-\`StructuredTracer\` flow/stage/outcome evidence into a journey. An observed
+The read-only `DiagnosticJourneyReconstructor` projects the existing
+`StructuredTracer` flow/stage/outcome evidence into a journey. An observed
 stage does **not** prove adjacent stages. The last confirmed successful stage
 and the first unobserved expected stage are reported separately. Missing
-\`trace_end\` means terminal outcome **UNKNOWN**, even if another event looks
+`trace_end` means terminal outcome **UNKNOWN**, even if another event looks
 successful. Cancellation is not failure. Session selection and point budgets
-are bounded, and correlation is explicit through ephemeral \`ref_\` handles.
+are bounded, and correlation is explicit through ephemeral `ref_` handles.
 This does not assert coverage of every screen or provider callback.
 
 Coverage matrix (expected evidence, not an assertion that every path emits it):
@@ -163,14 +163,14 @@ Playback, Catalog and Listening.
 The watchdog records stalls **after recovery**. It cannot classify a process
 killed during a stall as ANR. A retained uncaught-exception snapshot proves
 only that the handler observed the exception. On API 30+ the bounded,
-best-effort \`ApplicationExitInfo\` read runs only when exporting; the reported
+best-effort `ApplicationExitInfo` read runs only when exporting; the reported
 historical reason is not automatically correlated with a specific flow or
 current process. API 26 and unavailable platform data remain unsupported or
 UNKNOWN. No heavy stack collection or extra uncaught exception hooks.
 
 ### Bottlenecks (D8)
 
-\`DiagnosticBottleneckAnalysis\` analyzes at most 1,024 already captured span
+`DiagnosticBottleneckAnalysis` analyzes at most 1,024 already captured span
 events in an explicit snapshot, up to 32 operation/phase groups and 128
 measurements per group. Queue, execution and external waits are separate when
 typed phase evidence exists; otherwise phase is unclassified. p50/p95 are
@@ -182,8 +182,8 @@ as critical-path latency. New continuous probes are not enabled.
 
 The D3 typed breadcrumbs remain the input. A burst of 66 identical artwork
 fallbacks can be represented as one warning **cluster**, not 66 independent
-proven incidents or one proven root cause. A trusted \`attemptRef\` separates
-explicit attempts. Without an attempt marker, \`attemptBoundaryKnown=false\`.
+proven incidents or one proven root cause. A trusted `attemptRef` separates
+explicit attempts. Without an attempt marker, `attemptBoundaryKnown=false`.
 Only explicit failed/recovered terminal evidence resolves a terminal outcome;
 fallback, missing retry and an absent terminal leave UNKNOWN. No retries are
 performed by Diagnostics and no raw media identifiers are exported.
@@ -194,7 +194,7 @@ The dev Diagnostics Activity provides local incident filters for feature,
 outcome, flow and a ten-minute window, plus a manual reproduction marker.
 The marker is a bounded app event, not a synthetic failure. The normal
 **Share report** operation preserves all legacy TXT sections and report-v2
-schema and adds \`[incident-triage-v3]\` and \`[incidents-jsonl-v3]\`.
+schema and adds `[incident-triage-v3]`, `[incidents-jsonl-v3]` and\n`[measured-bottlenecks-v0]` with bounded counts, measured maxima, p50/p95\nonly when enough valid samples exist, explicit truncation, and\n`critical_path_proven=false`. Incident JSONL includes only validated\nephemeral flow references when available.
 Incident JSONL uses fixed typed fields, explicit unknown causality and
 timestamps; arbitrary message/metadata values are never copied. The current
 v3 projection uses the **in-memory snapshot only**. The persisted capture
