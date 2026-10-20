@@ -17,7 +17,8 @@ def checkpoint():
 def observed():
     return {'repository': 'jssantogit/BitChord', 'main_sha': MAIN,
             'pr_number': 97, 'head_sha': HEAD, 'pr_state': 'open',
-            'merged': False, 'merge_sha': None, 'android_check': 'success'}
+            'merged': False, 'merge_sha': None, 'android_check': 'success',
+            'android_check_sha': HEAD}
 
 class ResumePolicyTests(unittest.TestCase):
     def decide(self, state=None, live=None, **kwargs):
@@ -61,6 +62,7 @@ class ResumePolicyTests(unittest.TestCase):
         live['merged'] = True
         live['merge_sha'] = MERGE
         live['main_sha'] = MERGE
+        live['android_check_sha'] = MERGE
         self.assertEqual('manual_postmerge_ci_review', self.decide(state, live)['decision'])
         state['stage'] = 'post_ci_green'
         self.assertEqual('manual_confirm_completion', self.decide(state, live)['decision'])
@@ -85,6 +87,23 @@ class ResumePolicyTests(unittest.TestCase):
                 live['android_check'] = check
                 self.assertEqual('halt_android_unverified',
                                  self.decide(live=live)['decision'])
+
+    def test_android_success_must_match_exact_pre_and_post_merge_sha(self):
+        pre = observed()
+        pre['android_check_sha'] = 'f' * 40
+        self.assertEqual('halt_android_unverified',
+                         self.decide(live=pre)['decision'])
+        post_state = checkpoint()
+        post_state['stage'] = 'merged_observed'
+        post_state['merge_sha'] = MERGE
+        post = observed()
+        post['pr_state'] = 'closed'
+        post['merged'] = True
+        post['merge_sha'] = MERGE
+        post['main_sha'] = MERGE
+        post['android_check_sha'] = HEAD  # old PR check cannot prove main CI
+        self.assertEqual('halt_postmerge_ci_red',
+                         self.decide(state=post_state, live=post)['decision'])
 
     def test_untrusted_or_executable_evidence_rejected(self):
         state = checkpoint()
