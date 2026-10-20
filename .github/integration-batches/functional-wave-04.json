@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 69,
+      "expected_head_sha": "90cb02ec4506fe92372f63b0dbb4d6c3e6923484",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/CanonicalRemoteCatalogSync.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicArtworkAccess.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticFailureBreadcrumbs.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/Diagnostics.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticFailureBreadcrumbsD3Test.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 68,
+      "expected_head_sha": "3af718db75a75afd3e1dd919a7fbfd5caceaeb2b",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/listening/RuleBasedSmartPlaylistPreview.kt",
+        "app/src/test/java/com/music/bitchord/data/listening/RuleBasedSmartPlaylistPlannerTest.kt",
+        "app/src/test/java/com/music/bitchord/data/listening/RuleBasedSmartPlaylistRoomTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 74,
+      "expected_head_sha": "b77aebbb538b67e2aea2f39634d9250d36d03732",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicCachedState.kt",
+        "app/src/test/java/com/music/bitchord/OpenSubsonicCachedStateTruthTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    }
+  ]
+}

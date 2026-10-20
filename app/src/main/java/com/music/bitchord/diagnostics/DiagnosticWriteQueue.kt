@@ -35,6 +35,7 @@ internal class DiagnosticWriteQueue(
 
     private val completion = CompletionTracker()
     private val dropped = AtomicLong(0L)
+    private val failed = AtomicLong(0L)
     private val dataQueueSlots = Semaphore(queueCapacity)
     private val submissionLock = ReentrantLock()
     private val controlLock = ReentrantLock()
@@ -50,6 +51,10 @@ internal class DiagnosticWriteQueue(
 
     val droppedWrites: Long
         get() = dropped.get()
+
+    /** Actual writer block exceptions observed during this process. */
+    val failedWrites: Long
+        get() = failed.get()
 
     /**
      * Attempts to enqueue [block] without waiting for data queue capacity.
@@ -71,6 +76,9 @@ internal class DiagnosticWriteQueue(
                 dataQueueSlots.release()
                 try {
                     block()
+                } catch (error: Throwable) {
+                    failed.incrementAndGet()
+                    throw error
                 } finally {
                     completion.complete(sequence)
                 }
