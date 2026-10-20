@@ -73,6 +73,9 @@ internal class OpenSubsonicRuntimeTransport(
                 is OpenSubsonicMediaAccessResult.Failure -> throw safeFailure(result.reason)
                 is OpenSubsonicMediaAccessResult.Ready -> {
                     val request = result.request
+                    if (!request.accountIsCurrent()) {
+                        throw IOException("Remote playback account changed during resolution")
+                    }
                     if (
                         request.recordingId != recordingId ||
                         request.mediaAssetId != mediaAssetId ||
@@ -158,6 +161,10 @@ internal class OpenSubsonicMediaDataSource(
     private var upstream: DataSource? = null
     private var logicalDataSpec: DataSpec? = null
     private var transferStarted = false
+    // These closures are provider-private; only credential-free snapshots may
+    // reach the optional observer. Revision checks on reads avoid Keystore I/O.
+    private var accountRevisionCurrent: () -> Boolean = { true }
+    private var accountConfigCurrent: () -> Boolean = { true }
     private val truth = OpenSubsonicStreamTruthTracker()
     private var truthAttempt: Long? = null
 
@@ -198,6 +205,11 @@ internal class OpenSubsonicMediaDataSource(
                             providerKey = providerKey,
                         )
                     }
+                    if (!runtime.accountIsCurrent()) {
+                        throw IOException("OpenSubsonic account changed before stream open")
+                    }
+                    accountRevisionCurrent = runtime::accountRevisionIsCurrent
+                    accountConfigCurrent = runtime::accountIsCurrent
                     runtime.materializeAuthenticatedDataSpec(dataSpec)
                 }
                 OpenSubsonicStreamVariantMode.EXTENSION_TRANSCODE_REQUESTED -> {
@@ -213,8 +225,14 @@ internal class OpenSubsonicMediaDataSource(
                     }
                     recordTruth { truth.onDecision(it, negotiated) }
                     when (negotiated) {
-                        is OpenSubsonicTranscodeDecisionOutcome.Ready ->
+                        is OpenSubsonicTranscodeDecisionOutcome.Ready -> {
+                            if (!negotiated.ticket.accountIsCurrent()) {
+                                throw IOException("OpenSubsonic account changed after negotiation")
+                            }
+                            accountRevisionCurrent = negotiated.ticket::accountRevisionIsCurrent
+                            accountConfigCurrent = negotiated.ticket::accountIsCurrent
                             negotiated.ticket.materializeAuthenticatedDataSpec(dataSpec)
+                        }
                         is OpenSubsonicTranscodeDecisionOutcome.Rejected ->
                             throw IOException("OpenSubsonic stream variant unavailable: " + negotiated.reason)
                     }
@@ -233,7 +251,14 @@ internal class OpenSubsonicMediaDataSource(
         val next = upstreamFactory.createDataSource()
         upstream = next
         return try {
+            if (!accountConfigCurrent()) {
+                throw IOException("OpenSubsonic account changed before authenticated transport")
+            }
             val length = next.open(authenticatedSpec)
+            // A mutable account might rotate during a blocked HTTP open.
+            if (!accountConfigCurrent()) {
+                throw IOException("OpenSubsonic account changed during authenticated transport")
+            }
             // DataSource does not provide a trustworthy successful HTTP status.
             // Never infer 200/206 or decoded codec from an opened upstream.
             recordTruth {
@@ -257,7 +282,14 @@ internal class OpenSubsonicMediaDataSource(
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         val current = upstream ?: throw IOException("OpenSubsonic stream is not open")
         return try {
+            if (!accountRevisionCurrent()) {
+                throw IOException("OpenSubsonic account changed during stream")
+            }
             val read = current.read(buffer, offset, length)
+            // Never release bytes read after a save/logout switched the account.
+            if (!accountRevisionCurrent()) {
+                throw IOException("OpenSubsonic account changed during stream")
+            }
             if (read > 0) {
                 recordTruth { truth.onBytes(it, read) }
                 val spec = logicalDataSpec
@@ -291,6 +323,8 @@ internal class OpenSubsonicMediaDataSource(
         val spec = logicalDataSpec
         upstream = null
         logicalDataSpec = null
+        accountRevisionCurrent = { true }
+        accountConfigCurrent = { true }
         val hadStarted = transferStarted
         transferStarted = false
 
