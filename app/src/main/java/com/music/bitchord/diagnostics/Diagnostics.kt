@@ -283,19 +283,19 @@ object Diagnostics {
      */
     fun createExport(): File {
         val store = checkNotNull(fileStore) { "Diagnostics.install must be called first" }
-        writer.awaitWritesIssuedBeforeCall(timeoutMillis = 2_000L)
+        val flushComplete = writer.awaitWritesIssuedBeforeCall(timeoutMillis = 2_000L)
         val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
         return store.createExport(
-            metadataLines = reportMetadataLines(),
+            metadataLines = reportMetadataLines() + "captureFlushStatus=${DiagnosticCaptureIntegrity.flushStatus(flushComplete)}",
             recentEventLines = buffer.snapshot().map(DiagnosticFormatter::format),
             fileName = "bitchord-diagnostics-$timestamp.txt",
         )
     }
 
     private fun record(event: DiagnosticEvent) {
-        buffer.append(event)
-        val line = DiagnosticFormatter.format(event)
-        if (BuildConfig.DEBUG) logcat(event.level, line)
+        val numbered = buffer.append(event)
+        val line = DiagnosticFormatter.format(numbered)
+        if (BuildConfig.DEBUG) logcat(numbered.level, line)
         if (isCaptureActive(event.epochMillis)) {
             writer.offer { fileStore?.appendCapture(line) }
         }
