@@ -26,6 +26,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.room.InvalidationTracker
+import com.music.bitchord.sharedui.resources.Res
+import com.music.bitchord.sharedui.resources.smart_collections_title
+import com.music.bitchord.sharedui.resources.smart_collections_loading
+import com.music.bitchord.sharedui.resources.smart_collections_error
+import com.music.bitchord.sharedui.resources.smart_collections_empty
+import com.music.bitchord.sharedui.resources.smart_collections_rediscovery
+import com.music.bitchord.sharedui.resources.smart_collections_positives
+import com.music.bitchord.sharedui.resources.smart_collections_exploration
+import com.music.bitchord.sharedui.resources.smart_collections_rediscovery_reason
+import com.music.bitchord.sharedui.resources.smart_collections_positive_reason
+import com.music.bitchord.sharedui.resources.smart_collections_exploration_reason
+import org.jetbrains.compose.resources.stringResource
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReader
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReaders
@@ -203,6 +215,18 @@ internal fun AdaptiveCollectionsLibraryEntry(
             }
         }
     }
+    val texts = AdaptiveCollectionsTexts(
+        title = stringResource(Res.string.smart_collections_title),
+        loading = stringResource(Res.string.smart_collections_loading),
+        error = stringResource(Res.string.smart_collections_error),
+        empty = stringResource(Res.string.smart_collections_empty),
+        rediscovery = stringResource(Res.string.smart_collections_rediscovery),
+        positives = stringResource(Res.string.smart_collections_positives),
+        exploration = stringResource(Res.string.smart_collections_exploration),
+        rediscoveryReason = stringResource(Res.string.smart_collections_rediscovery_reason),
+        positivesReason = stringResource(Res.string.smart_collections_positive_reason),
+        explorationReason = stringResource(Res.string.smart_collections_exploration_reason),
+    )
     AdaptiveCollectionsBody(state, onRecordingClick = { kind, id ->
         scope.launch {
             val available = withContext(Dispatchers.IO) {
@@ -213,7 +237,7 @@ internal fun AdaptiveCollectionsLibraryEntry(
             if (available != null) onOpenRecording(available.recordingId)
             else changes.emit(Unit)
         }
-    }, texts = AdaptiveCollectionsTexts())
+    }, texts = texts)
 }
 
 /** UI is read-only: no auto play, provider/native identity, or implicit feedback. */
