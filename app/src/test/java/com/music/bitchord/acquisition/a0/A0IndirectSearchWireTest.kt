@@ -74,6 +74,7 @@ class A0IndirectSearchWireTest {
             ByteArrayInputStream(searchReply("peer", 72, "secret\\Ringingsound.wav")), 72, "peer"
         )
         assertEquals(1, result.untrustedFilenameMatches)
+        assertEquals(1, result.untrustedResultCount)
         assertFalse(result.toString().contains("secret"))
         assertFalse(result.toString().contains("peer"))
         for (packet in listOf(
@@ -82,9 +83,11 @@ class A0IndirectSearchWireTest {
             le(1_500_000),
             searchReply("peer", 72, "secret\\different.wav").copyOf(7)
         )) reject { A0IndirectSearchWire.readIndirectReply(ByteArrayInputStream(packet), 72, "peer") }
-        assertEquals(0, A0IndirectSearchWire.readIndirectReply(
+        val unrelated = A0IndirectSearchWire.readIndirectReply(
             ByteArrayInputStream(searchReply("peer", 72, "other.wav")), 72, "peer"
-        ).untrustedFilenameMatches)
+        )
+        assertEquals(0, unrelated.untrustedFilenameMatches)
+        assertEquals(1, unrelated.untrustedResultCount)
     }
 
     private fun offer(
