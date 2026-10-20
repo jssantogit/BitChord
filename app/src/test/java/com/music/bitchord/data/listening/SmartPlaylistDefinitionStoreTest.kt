@@ -76,6 +76,30 @@ class SmartPlaylistDefinitionStoreTest {
         }
     }
 
+    @Test fun editorAcceptsOnlyL6RulesWithFiniteBoundedValues() {
+        val valid = com.music.bitchord.ui.screens.SmartPlaylistEditorDraft(
+            name = "My rules", minimumRating = "4.0",
+            minimumCompletions = "2", minimumDurationMinutes = "3", limit = "50",
+        ).toQuery()
+        assertEquals(4.0, valid.minimumExplicitRating)
+        assertEquals(2L, valid.minimumCompletions)
+        assertEquals(180_000L, valid.minimumDurationMs)
+        assertTrue(runCatching {
+            com.music.bitchord.ui.screens.SmartPlaylistEditorDraft(minimumRating = "NaN").toQuery()
+        }.isFailure)
+        assertTrue(runCatching {
+            com.music.bitchord.ui.screens.SmartPlaylistEditorDraft(minimumCompletions = "2.5").toQuery()
+        }.isFailure)
+        assertTrue(runCatching {
+            com.music.bitchord.ui.screens.SmartPlaylistEditorDraft(minimumRating = "4", limit = "0").toQuery()
+        }.isFailure)
+        assertTrue(runCatching {
+            com.music.bitchord.ui.screens.SmartPlaylistEditorDraft(
+                minimumDurationMinutes = "9223372036854775807",
+            ).toQuery()
+        }.isFailure)
+    }
+
     @Test fun rulePreviewEnforcesAndFiltersAndFailsClosedAboveFiveThousand() {
         val rule = RuleBasedSmartPlaylistQuery(
             minimumExplicitRating = 4.0, minimumCompletions = 2, limit = 10,

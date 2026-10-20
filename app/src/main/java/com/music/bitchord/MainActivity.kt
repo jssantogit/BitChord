@@ -318,6 +318,8 @@ import com.music.bitchord.ui.screens.CanonicalMyRatingsEntry
 import com.music.bitchord.ui.screens.CanonicalMyRatingsScreen
 import com.music.bitchord.ui.screens.LibraryRediscoveryShelfEntry
 import com.music.bitchord.ui.screens.AdaptiveCollectionsLibraryEntry
+import com.music.bitchord.ui.screens.SmartPlaylistBuilderEntry
+import com.music.bitchord.ui.screens.SmartPlaylistBuilderScreen
 import com.music.bitchord.ui.screens.MoodGenrePlaylistsScreen
 import com.music.bitchord.ui.screens.SearchScreen
 import com.music.bitchord.data.settings.SongSort
@@ -2207,6 +2209,7 @@ private fun BitChordApp(
     // Page navigation is keyed by the canonical RecordingId, never provider/source IDs.
     var rediscoveryRecordingId by rememberSaveable { mutableStateOf<String?>(null) }
     var showCanonicalMyRatings by rememberSaveable { mutableStateOf(false) }
+    var showSmartPlaylistBuilder by rememberSaveable { mutableStateOf(false) }
     val replayOpen = showReplay || replayStory != null || showReplayShare ||
         (selectedTab == TAB_LIBRARY && detail == null && !showSettings)
     val (replay, setReplayPeriod) = rememberReplayState(replayOpen)
@@ -2619,6 +2622,7 @@ private fun BitChordApp(
         BackHandler(enabled = detailActiveShelf != null) { detailActiveShelf = null }
         BackHandler(enabled = rediscoveryRecordingId != null) { rediscoveryRecordingId = null }
         BackHandler(enabled = showCanonicalMyRatings) { showCanonicalMyRatings = false }
+        BackHandler(enabled = showSmartPlaylistBuilder) { showSmartPlaylistBuilder = false }
 
         // On a tablet the page and the player stand side by side rather than
         // one over the other: everything a phone stacks in a single column —
@@ -2657,6 +2661,7 @@ private fun BitChordApp(
                         detail != null -> detail.browseId
                         rediscoveryRecordingId != null -> "rediscovery:" + rediscoveryRecordingId
                         showCanonicalMyRatings -> "my_ratings"
+                        showSmartPlaylistBuilder -> "smart_playlist_builder"
                         else -> "$TAB_KEY$selectedTab"
                     },
                     // Tabs swap outright; everything else crossfades.
@@ -2742,6 +2747,8 @@ private fun BitChordApp(
                     }
                     if (key == "my_ratings") {
                         CanonicalMyRatingsScreen(onBack = { showCanonicalMyRatings = false })
+                    } else if (key == "smart_playlist_builder") {
+                        SmartPlaylistBuilderScreen(onBack = { showSmartPlaylistBuilder = false })
                     } else if (key.startsWith("rediscovery:")) {
                         CanonicalRediscoveryRecordingDetailsScreen(
                             recordingId = key.removePrefix("rediscovery:"),
@@ -3390,6 +3397,7 @@ private fun BitChordApp(
                             rediscovery = {
                                 Column {
                                     CanonicalMyRatingsEntry(onOpen = { showCanonicalMyRatings = true })
+                                    SmartPlaylistBuilderEntry(onOpen = { showSmartPlaylistBuilder = true })
                                     LibraryRediscoveryShelfEntry(
                                         refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
                                         onOpenRecording = { rediscoveryRecordingId = it },
@@ -3977,6 +3985,7 @@ private fun BitChordApp(
                     // Tab changes dismiss an open canonical Recording details page.
                     rediscoveryRecordingId = null
                     showCanonicalMyRatings = false
+                    showSmartPlaylistBuilder = false
                     viewModel.closeMoodGenre()
                     showSettings = false
                     showAccountScrobbling = false
