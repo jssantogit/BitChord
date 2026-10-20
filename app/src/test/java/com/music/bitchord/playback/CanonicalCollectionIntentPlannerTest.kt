@@ -108,7 +108,7 @@ class CanonicalCollectionIntentPlannerTest {
     }
 
     @Test(expected = CancellationException::class)
-    fun `cancellation propagates and never produces an executable partial plan`() = runBlocking {
+    fun `cancellation propagates and never produces an executable partial plan`(): Unit = runBlocking {
         val resolver = object : CanonicalQueueResolver {
             override suspend fun identifyAll(songs: List<Song>): List<CanonicalQueueIdentity?> = error("unused")
             override suspend fun resolveAll(identities: List<CanonicalQueueIdentity?>): List<CanonicalPlayableAsset?> =
