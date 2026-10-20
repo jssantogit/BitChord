@@ -112,7 +112,7 @@ class CanonicalRemoteQualityIntentTest {
     }
 
     @Test fun `low and high policy cannot exceed bounded offered bitrate`() {
-        for ((quality, expected) in listOf(AudioQuality.LOW to 96, AudioQuality.HIGH to 320)) {
+        for ((quality, expected) in listOf(AudioQuality.LOW to AudioQuality.LOW.maxKbps, AudioQuality.HIGH to 320)) {
             val preview = CanonicalRemoteQualityPlanner.preview(
                 CanonicalRemoteQualityPreferences(quality, quality),
                 CanonicalRemoteNetwork.WIFI, metered = false,
@@ -122,4 +122,17 @@ class CanonicalRemoteQualityIntentTest {
             assertEquals(expected, preview.maxBitrateKbps)
         }
     }
+    @Test fun `remote low bitrate honors existing persisted user ceiling`() {
+        val selected = AudioQuality.LOW
+        val preview = CanonicalRemoteQualityPlanner.preview(
+            CanonicalRemoteQualityPreferences(selected, selected),
+            CanonicalRemoteNetwork.MOBILE, metered = true,
+            source = CanonicalRemoteSource.OPENSUBSONIC,
+            capability = CanonicalRemoteTranscodeCapability.VERIFIED_MP3,
+        )
+        assertNotNull(preview.maxBitrateKbps)
+        assertTrue("remote Low must not exceed the existing Low cap",
+            preview.maxBitrateKbps!! <= selected.maxKbps)
+    }
+
 }
