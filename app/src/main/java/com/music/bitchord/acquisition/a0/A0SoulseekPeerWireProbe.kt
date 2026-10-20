@@ -19,6 +19,7 @@ internal object A0SoulseekPeerWireProbe {
     private const val INIT_PEER = 1 // One-byte initialization code
     private const val PEER_TRANSFER_REQUEST = 40 // Four-byte peer message code
     private const val PEER_TRANSFER_RESPONSE = 41
+    private const val PEER_QUEUE_UPLOAD = 43
     private const val DIRECTION_DOWNLOAD = 0
 
     data class TransferDecision(val allowed: Boolean, val peerReportedByteCount: Long?)
@@ -30,7 +31,31 @@ internal object A0SoulseekPeerWireProbe {
         return frame(byteArrayOf(INIT_PEER.toByte()) + name + utf8Field("P", 1) + intLE(token))
     }
 
-    /** Serializes only download direction. Remote filename is never a local path. */
+    /**
+     * Modern P-channel download request: QueueUpload code 43 followed ONLY by
+     * the length-prefixed remote filename. Compatible clients may asynchronously
+     * send a TransferRequest upload (direction 1) after queue promotion.
+     *
+     * This is serialization only, not an active P2P engine. No peer is contacted.
+     * See Nicotine+ Soulseek Protocol Documentation, Peer Code 43.
+     */
+    fun queueUploadRequest(remoteFilename: String): ByteArray {
+        val filename = utf8Field(remoteFilename, MAX_FILENAME_BYTES)
+        return frame(intLE(PEER_QUEUE_UPLOAD) + filename)
+    }
+
+    /**
+     * Downloader's first offset message on an incoming F data channel is a RAW
+     * eight-byte uint64 zero (not a length-prefixed peer message).
+     * No resume support is claimed. The current standalone A0 F fixture uses
+     * a legacy outbound flow and must not be presented as modern interoperability.
+     */
+    fun initialDownloadOffset(): ByteArray = ByteArray(8)
+
+    /** Legacy Download direction=0 frame for our existing localhost fixtures ONLY.
+     * Modern public-network peers generally expect QueueUpload (code 43)
+     * and a peer-initiated F connection; do not use this method for live A0.
+     */
     fun downloadRequest(remoteFilename: String, token: Int, advertisedByteCount: Long): ByteArray {
         require(token > 0) { "A0 requires a positive transfer correlation token" }
         require(advertisedByteCount in 44..MAX_TEST_TRANSFER_BYTES) {
