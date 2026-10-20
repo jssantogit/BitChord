@@ -261,13 +261,19 @@ class A0ManualLoginActivity : Activity() {
                                                 System.nanoTime() < deadline &&
                                                 inbox.isEmpty() && attempts < 2
                                             ) {
-                                                val offer = A0IndirectSearchWire.readServerEvent(
-                                                    connection.getInputStream()
-                                                )
-                                                if (offer == null) {
-                                                    trace.ignoredServerFrame()
+                                                val offer = try {
+                                                    A0IndirectSearchWire.readServerEvent(
+                                                        connection.getInputStream()
+                                                    ) { code -> trace.ignoredServerFrame(code) }
+                                                } catch (_: A0IndirectSearchWire.RejectedPeerOffer) {
+                                                    trace.note(
+                                                        A0SmokeTrace.Stage.SERVER_OFFER_REJECTED,
+                                                        TraceOutcome.DEGRADED,
+                                                        A0SmokeTrace.Reason.WIRE_REJECTED
+                                                    )
                                                     continue
                                                 }
+                                                if (offer == null) continue
                                                 trace.note(A0SmokeTrace.Stage.SERVER_OFFER_RECEIVED)
                                                 attemptedIndirect.set(true)
                                                 attempts++
