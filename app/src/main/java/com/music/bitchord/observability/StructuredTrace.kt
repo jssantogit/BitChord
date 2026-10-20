@@ -3,6 +3,7 @@ package com.music.bitchord.observability
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -209,7 +210,7 @@ class StructuredTrace internal constructor(
         } catch (error: Throwable) {
             emitSpan(
                 cleanStage,
-                TraceOutcome.FAILED,
+                if (error is CancellationException) TraceOutcome.CANCELLED else TraceOutcome.FAILED,
                 started,
                 attributes + ("errorType" to error.javaClass.simpleName),
                 verbosity,
@@ -233,7 +234,7 @@ class StructuredTrace internal constructor(
         } catch (error: Throwable) {
             emitSpan(
                 cleanStage,
-                TraceOutcome.FAILED,
+                if (error is CancellationException) TraceOutcome.CANCELLED else TraceOutcome.FAILED,
                 started,
                 attributes + ("errorType" to error.javaClass.simpleName),
                 verbosity,
