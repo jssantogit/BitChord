@@ -18,3 +18,34 @@ This produces descriptive CI queue wait and execution metrics only. It does **no
 Test: `python3 -m unittest tests.test_delivery_ci_observations tests.test_delivery_metrics -v`.
 
 Future separately reviewed telemetry work can collect periodic measurements and confidence intervals, with explicit token/retention limits.
+
+## Lane pressure attribution v0 — observational only
+
+The same DI5 GET-only collector now maps the GitHub workflow run's **explicit**
+`event` and `head_branch` into a strictly bounded lane label:
+`pr_a` (catalog/ or intelligence/), `pr_b` (other PR branches),
+`main` (push with exact main ref), or `unknown` (missing or unrelated
+source). It does **not** infer PR numbers from branch names or SHAs, and
+does not export raw branch names, workflow payloads, tokens or authors.
+
+The existing DI1 report now provides `metrics_by_lane`: number of
+observed Android jobs, number with complete measurable durations, median
+job queue seconds (`started_at - created_at`) and median execution seconds
+(`completed_at - started_at`). Unknown timestamps remain null and
+unfinished jobs never receive fabricated durations. Per-run observations
+still expose only strictly typed PR/run identity, exact check SHA,
+status/conclusion, and UTC timestamps. A missing lane in older snapshots is
+`unknown`, so older DI5 artifacts remain consumable.
+
+Interpretation: these measurements describe GitHub's reported **job-level**
+timestamps, not an observed scheduler reason or exclusive runner contention.
+Cancelled/superseded PR runs, queued jobs without start, overlapping jobs,
+main-push scheduling and runner startup must be distinguished from Gradle
+task duration. Compare repeated samples and annotate run policy before
+making any lane concurrency or cache configuration change.
+
+This is independent of integration-overlap PR #120 and queue phase-logging
+PR #125. It does not modify `.github/workflows/check.yml`, add an Actions
+workflow, alter required tests, add external telemetry, enable any merge or
+expand MAX_ITEMS=3. Production scheduling changes require separate evidence,
+review and authorization.
