@@ -1,6 +1,6 @@
-# A0 — Owner-controlled Soulseek peer setup (NO LIVE TEST EXECUTED)
+# A0 — OPTIONAL FALLBACK: Owner-controlled Soulseek peer setup (NO LIVE TEST EXECUTED)
 
-**Status:** fixture READY; account, test peer and real network permission/implementation gates NOT VERIFIED. This is a preparation guide for [draft PR #63](https://github.com/jssantogit/BitChord/pull/63), not a network-enabled workflow or an external-download command.
+**Status:** OPTIONAL FALLBACK ONLY, not required by the public-peer-first strategy approved 2026-10-20. Primary plan: [A0 Public Peers First](2026-10-20-A0-public-peer-first.md). Fixture READY; account, test peer and real network permission/implementation gates NOT VERIFIED. This is a preparation guide for [draft PR #63](https://github.com/jssantogit/BitChord/pull/63), not a network-enabled workflow or an external-download command.
 
 ## Recommended peer: Nicotine+ on a dedicated desktop test account
 
