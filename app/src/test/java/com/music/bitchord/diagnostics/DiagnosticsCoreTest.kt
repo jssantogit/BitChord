@@ -45,7 +45,7 @@ class DiagnosticsCoreTest {
             ),
         )
 
-        assertEquals("abc123", sanitized["trackId"])
+        assertEquals(DiagnosticSanitizer.REDACTED, sanitized["trackId"])
         assertEquals(DiagnosticSanitizer.REDACTED, sanitized["Authorization"])
         assertEquals(DiagnosticSanitizer.REDACTED, sanitized["cookie"])
         assertEquals(DiagnosticSanitizer.REDACTED, sanitized["access_token"])

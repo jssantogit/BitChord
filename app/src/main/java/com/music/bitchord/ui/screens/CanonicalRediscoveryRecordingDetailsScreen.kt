@@ -97,13 +97,17 @@ internal fun CanonicalRediscoveryRecordingDetailsScreen(
             }
         }
     }
-    CanonicalRediscoveryRecordingContent(state = state, onBack = onBack)
+    CanonicalRediscoveryRecordingContent(
+        state = state, onBack = onBack,
+        feedback = { id -> CanonicalRecordingFeedbackEntry(id) },
+    )
 }
 
 @Composable
 internal fun CanonicalRediscoveryRecordingContent(
     state: CanonicalRediscoveryRecordingState,
     onBack: () -> Unit,
+    feedback: (@Composable (String) -> Unit)? = null,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -142,6 +146,9 @@ internal fun CanonicalRediscoveryRecordingContent(
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(horizontal = 20.dp),
                     )
+                    // Rating is a separate, explicitly tapped control. Rendering
+                    // this read-only destination never emits a preference write.
+                    feedback?.invoke(state.recordingId)
                 }
             }
         }
