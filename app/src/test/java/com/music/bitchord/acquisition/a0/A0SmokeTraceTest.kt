@@ -82,6 +82,23 @@ class A0SmokeTraceTest {
             it.contains("carrier", true) || it.contains("ssid", true) })
     }
 
+    @Test fun deliberateSocketShutdownDoesNotEmitSpuriousServerReadFailure() {
+        val points = mutableListOf<StructuredTracePoint>()
+        val trace = A0SmokeTrace.start(
+            StructuredTracer(sink = StructuredTraceSink { points.add(it) })
+        )
+        trace.beginSocketTeardown()
+        trace.note(
+            A0SmokeTrace.Stage.SERVER_READ_FAILURE,
+            TraceOutcome.DEGRADED,
+            A0SmokeTrace.Reason.SERVER_IO_FAILURE
+        )
+        trace.note(A0SmokeTrace.Stage.SOCKETS_CLOSED)
+        trace.finish(TraceOutcome.DEGRADED, A0SmokeTrace.Reason.NO_PEER_REPLY)
+        assertFalse(points.any { it.stage == "server_read_failure" })
+        assertTrue(points.any { it.stage == "sockets_closed" })
+    }
+
     @Test fun repeatedUnrelatedServerFramesAreAggregatedAndTerminalIsOnceOnly() {
         val points = mutableListOf<StructuredTracePoint>()
         val trace = A0SmokeTrace.start(
