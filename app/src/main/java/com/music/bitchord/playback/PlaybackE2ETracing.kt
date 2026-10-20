@@ -1,6 +1,7 @@
 package com.music.bitchord.playback
 
 import com.music.bitchord.observability.StructuredTrace
+import com.music.bitchord.observability.TraceFlowContext
 import com.music.bitchord.observability.StructuredTracer
 import com.music.bitchord.observability.TraceFeature
 import com.music.bitchord.observability.TraceOutcome
@@ -30,11 +31,12 @@ internal class PlaybackE2ETraceObserver(
     private var active: Pending? = null
 
     /** A playWhenReady=true callback confirms the Media3 player accepted play intent. */
-    fun onPlayAccepted(mediaId: String?) {
+    fun onPlayAccepted(mediaId: String?, parent: TraceFlowContext? = null) {
         close(TraceOutcome.CANCELLED, "superseded")
         val trace = tracer.startTrace(
             feature = TraceFeature.PLAYBACK,
             operation = "play_to_audible",
+            parent = parent,
         )
         val pending = Pending(mediaId, trace)
         active = pending

@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 97,
+      "expected_head_sha": "2a360297e033e5c6807b6e51d07ad0f0920ef65e",
+      "allowed_files": [
+        "docs/delivery-di4d-artifact.md",
+        "tests/test_delivery_artifact.py",
+        "tools/delivery_artifact.py"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 98,
+      "expected_head_sha": "67d27a37e761c81a272c48cc3aec499f19a8589c",
+      "allowed_files": [
+        "docs/delivery-di4e-pilot.md",
+        "tests/test_delivery_checkpoint_pilot.py",
+        "tools/delivery_checkpoint_pilot.py"
+      ],
+      "depends_on": 97,
+      "expected_base_ref": "infra/di4d-cross-run-artifact-verification-v0"
+    }
+  ]
+}
