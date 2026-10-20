@@ -28,14 +28,14 @@ internal object A0OneShotPublicSearchWire {
     /** Tell the login server the port opened by the short-lived P listener. */
     fun setWaitPort(port: Int): ByteArray {
         require(port in 1..65535) { "Invalid A0 one-shot P port" }
-        return frame(2, intLE(port))
+        return frame(2, intLEBytes(port))
     }
 
     /** Submit exactly ONE immutable open-license reference filename query. */
     fun fileSearch(token: Int): ByteArray {
         require(token > 0) { "A0 search token must be positive" }
         val bytes = TARGET_FILENAME.toByteArray(Charsets.UTF_8)
-        return frame(26, intLE(token) + intLE(bytes.size) + bytes)
+        return frame(26, intLEBytes(token) + intLEBytes(bytes.size) + bytes)
     }
 
     /**
