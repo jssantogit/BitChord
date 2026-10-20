@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 59,
+      "expected_head_sha": "45765c0cddd85b31f5bd10d10924134ccdef3011",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/diagnostics/Diagnostics.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticsCore.kt",
+        "app/src/main/java/com/music/bitchord/observability/StructuredTrace.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticIntegrityD1Test.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticPrivacyCancellationD1Test.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticsCoreTest.kt",
+        "shared/src/jvmSharedMain/kotlin/com/music/bitchord/data/TrackLog.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 60,
+      "expected_head_sha": "a64be52875813100c3fa4610a36a1dcccd345995",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/playback/PlaybackLifecycleRestoreGate.kt",
+        "app/src/main/java/com/music/bitchord/playback/PlaybackService.kt",
+        "app/src/test/java/com/music/bitchord/playback/CanonicalQueueRestorePolicyTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 61,
+      "expected_head_sha": "3d8f3bc4e29c8fe51fa0e51167a10a485eb9f919",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicProvider.kt",
+        "app/src/test/java/com/music/bitchord/OpenSubsonicSnapshotCompletenessRoomTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    }
+  ]
+}
