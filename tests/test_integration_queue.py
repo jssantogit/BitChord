@@ -447,5 +447,51 @@ class QueueTests(unittest.TestCase):
 
 
 
+    def test_stage_metrics_identify_next_preparation_and_required_ci_wait(self):
+        api = FakeAPI()
+        observed = []
+        queue = IntegrationController(
+            api, 'jssantogit/BitChord', sleep=lambda _: None,
+            clock=lambda: 0, timeout_seconds=60, logger=observed.append)
+        data = manifest(
+            item(48, H1, ['o2.kt']),
+            item(51, H2, ['b2.kt'], depends_on=48,
+                 base_ref='perf/o2'))
+        queue.run(data, mode='execute', expected_main_sha=M)
+        lines = [s for s in observed if s.startswith('QUEUE_METRIC ')]
+        self.assertTrue(any('pr=48 phase=prepare_head outcome=ok '
+                            'duration_ms=0' in x for x in lines))
+        self.assertTrue(any('pr=48 phase=premerge_ci outcome=ok '
+                            'duration_ms=0' in x for x in lines))
+        self.assertTrue(any('pr=48 phase=protected_merge outcome=ok '
+                            'duration_ms=0' in x for x in lines))
+        self.assertTrue(any('pr=51 phase=prepare_next outcome=ok '
+                            'duration_ms=0' in x for x in lines))
+        self.assertTrue(any('pr=48 phase=postmain_ci outcome=ok '
+                            'duration_ms=0' in x for x in lines))
+        self.assertLess(
+            next(i for i, x in enumerate(observed)
+                 if 'pr=51 phase=prepare_next outcome=ok' in x),
+            next(i for i, x in enumerate(observed)
+                 if 'pr=48 phase=postmain_ci outcome=ok' in x))
+        self.assertTrue(all('v=1 ' in x for x in lines))
+        self.assertFalse(any('token' in x.lower() for x in lines))
+
+    def test_failed_postmain_still_emits_bounded_blocked_metric(self):
+        api = FakeAPI(post='failure')
+        observed = []
+        queue = IntegrationController(
+            api, 'jssantogit/BitChord', sleep=lambda _: None,
+            clock=lambda: 12, timeout_seconds=60, logger=observed.append)
+        with self.assertRaisesRegex(StopIntegration, 'Post-merge CI RED'):
+            queue.run(manifest(item(48, H1, ['o2.kt'])),
+                      mode='execute', expected_main_sha=M)
+        self.assertTrue(any(
+            'QUEUE_METRIC v=1 pr=48 phase=postmain_ci '
+            'outcome=blocked duration_ms=0' in x for x in observed))
+        self.assertEqual([48], [n for op, n, *_ in api.calls if op == 'merge'])
+
+
+
 if __name__ == '__main__':
     unittest.main()
