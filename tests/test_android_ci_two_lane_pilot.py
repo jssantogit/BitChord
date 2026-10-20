@@ -57,5 +57,12 @@ class TwoLanePilotTests(unittest.TestCase):
                 self.assertEqual(lane_for_pr_branch(branch), lane)
 
 
+    def test_migration_requires_three_lane_and_matching_first_party_observation(self):
+        from tools.delivery_ci_observations import _lane_for_run
+        self.assertIn("'bitchord-android-pr-lane-c'", self.workflow)
+        self.assertEqual('pr_b', _lane_for_run('pull_request', 'playback/b13'))
+        self.assertEqual('pr_c', _lane_for_run('pull_request', 'perf/d10'))
+
+
 if __name__ == "__main__":
     unittest.main()
