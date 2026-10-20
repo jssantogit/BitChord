@@ -57,7 +57,7 @@ def adjudicate_resume(checkpoint, observed, *,
     _need(set(observed) == {
         'repository', 'main_sha', 'pr_number', 'head_sha',
         'pr_state', 'merged', 'merge_sha', 'android_check'})
-    _need(checkpoint['version'] == 1 and
+    _need(type(checkpoint['version']) is int and checkpoint['version'] == 1 and
           checkpoint['repository'] == _REPO and
           observed['repository'] == _REPO and
           checkpoint['approval_required'] is True and
@@ -75,13 +75,15 @@ def adjudicate_resume(checkpoint, observed, *,
           checkpoint['pr_number'] > 0 and
           type(observed['pr_number']) is int and
           observed['pr_number'] == checkpoint['pr_number'])
-    _need(checkpoint['stage'] in _STAGES and
-          type(checkpoint['stage']) is str and
-          observed['pr_state'] in ('open', 'closed') and
+    _need(type(checkpoint['stage']) is str and
+          checkpoint['stage'] in _STAGES and
           type(observed['pr_state']) is str and
+          observed['pr_state'] in ('open', 'closed') and
           type(observed['merged']) is bool and
           (observed['merge_sha'] is None or _sha(observed['merge_sha'])) and
-          observed['android_check'] in _ANDROID)
+          (observed['android_check'] is None or
+           (type(observed['android_check']) is str and
+            observed['android_check'] in _ANDROID)))
     stage = checkpoint['stage']
     if stage in ('merged_observed', 'post_ci_green'):
         _need(set(checkpoint).issuperset({'merge_sha'}) and
