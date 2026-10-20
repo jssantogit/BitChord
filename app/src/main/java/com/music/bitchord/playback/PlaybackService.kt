@@ -781,6 +781,7 @@ class PlaybackService : MediaLibraryService() {
     private val clearBoundedContextCommand = SessionCommand(ACTION_CLEAR_BOUNDED_CONTEXT, Bundle.EMPTY)
     private val canonicalRemotePlaybackCommand = SessionCommand(ACTION_PLAY_CANONICAL_REMOTE, Bundle.EMPTY)
     private val canonicalBatchQueueCommand = SessionCommand(ACTION_EXECUTE_CANONICAL_BATCH, Bundle.EMPTY)
+    private val canonicalRecoveryCommand = SessionCommand(ACTION_RETRY_CANONICAL_FAILURE, Bundle.EMPTY)
     private val favoriteCommand = SessionCommand(ACTION_TOGGLE_FAVORITE, Bundle.EMPTY)
     private val autoplayCommand = SessionCommand(ACTION_TOGGLE_AUTOPLAY, Bundle.EMPTY)
     private val shuffleCommand = SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY)
@@ -879,13 +880,29 @@ class PlaybackService : MediaLibraryService() {
     private val playbackListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             val activePlayer = this@PlaybackService.player ?: return
-            if (player === activePlayer) updateAudioEffectSession(activePlayer)
+            if (player === activePlayer) {
+                updateAudioEffectSession(activePlayer)
+                if (events.contains(Player.EVENT_TIMELINE_CHANGED)) {
+                    PlaybackRecoveryNotices.reconcileQueue(
+                        (0 until activePlayer.mediaItemCount).map { index ->
+                            playbackRecoveryEntryId(activePlayer.getMediaItemAt(index), index)
+                        }.toSet(),
+                    )
+                }
+            }
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             // The player this fired on, which is by definition the one the
             // session is currently pointed at.
             val exoPlayer = player ?: return
+            if (isPlaying) {
+                exoPlayer.currentMediaItem?.let { current ->
+                    PlaybackRecoveryNotices.onAudible(
+                        playbackRecoveryEntryId(current, exoPlayer.currentMediaItemIndex),
+                    )
+                }
+            }
             if (isPlaying) playbackE2ETraceObserver?.onAudible(exoPlayer.currentMediaItem?.mediaId)
             // The only number that describes what a listener actually
             // waits through. Every other timing in this app measures one
@@ -3740,13 +3757,45 @@ class PlaybackService : MediaLibraryService() {
      */
     private fun recoverFrom(error: PlaybackException, player: ExoPlayer) {
         val item = player.currentMediaItem ?: return
-        val currentFailureOccurrence = failureOccurrenceKeyOrNull(player, player.currentMediaItemIndex)
+        val failedIndex = player.currentMediaItemIndex
+        val currentFailureOccurrence = failureOccurrenceKeyOrNull(player, failedIndex)
+        val neverStarted = currentFailureOccurrence == null ||
+            currentFailureOccurrence != audibleFailureOccurrenceKey
         val handling = failureCascade.handlePlaybackFailure(
             error = error,
             player = player,
-            neverStarted = currentFailureOccurrence == null ||
-                currentFailureOccurrence != audibleFailureOccurrenceKey,
+            neverStarted = neverStarted,
         )
+        // A failed selected remote asset is not permission to change provider,
+        // restart automatically or infer catalog unavailability. B5 continues
+        // advancing boundedly; keep one explicit, secret-free retry affordance.
+        if (neverStarted && handling != PlaybackFailureHandling.NOT_HANDLED &&
+            error.errorCode in 2000..2999 && item.isCanonicalRemotePlayback()
+        ) {
+            val request = item.localConfiguration?.uri?.toString()
+                ?.let(CanonicalRemotePlaybackUri::decode)
+            if (request != null) {
+                val reason = when (error.errorCode) {
+                    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+                    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+                        PlaybackRecoveryReason.CONNECTION_OR_SERVER
+                    PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND,
+                    PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
+                        PlaybackRecoveryReason.REMOTE_UNAVAILABLE
+                    else -> PlaybackRecoveryReason.REMOTE_OPEN_FAILED
+                }
+                PlaybackRecoveryNotices.reportFailure(
+                    PlaybackRecoveryNotice(
+                        entryId = playbackRecoveryEntryId(item, failedIndex),
+                        recordingId = request.recordingId,
+                        mediaAssetId = request.mediaAssetId,
+                        providerKey = request.providerKey,
+                        reason = reason,
+                    ),
+                    beforeAudio = true,
+                )
+            }
+        }
         if (handling != PlaybackFailureHandling.NOT_HANDLED) return
         val mediaId = item.mediaId
         val uri = item.localConfiguration?.uri
@@ -5796,6 +5845,71 @@ class PlaybackService : MediaLibraryService() {
         persistedQueueStart = 0
         LastPlayed.clearImmediately()
     }
+
+    /**
+     * B11: explicit recovery of the very same queue occurrence and selected
+     * canonical MediaAsset. No polling, provider substitution or queue rewrite.
+     * A read-only Catalog check guards against removed/relinked rows.
+     */
+    private suspend fun retryCanonicalRemoteFailure(args: Bundle): Boolean =
+        canonicalBatchQueueMutex.withLock {
+            val key = args.getString(EXTRA_RETRY_CANONICAL_ENTRY_ID) ?: return@withLock false
+            val failed = PlaybackRecoveryNotices.notice.value ?: return@withLock false
+            if (failed.entryId != key || failed.status != PlaybackRecoveryStatus.WAITING_FOR_USER) {
+                return@withLock false
+            }
+            val exo = player ?: return@withLock false
+            if (ListenTogether.state.value.inParty || CastController.state.value.casting ||
+                castPlayback.active) return@withLock false
+
+            val anchor = captureCanonicalBatchSnapshot(exo)
+            val index = (0 until exo.mediaItemCount).firstOrNull { i ->
+                playbackRecoveryEntryId(exo.getMediaItemAt(i), i) == key
+            } ?: run {
+                PlaybackRecoveryNotices.reconcileQueue(emptySet())
+                return@withLock false
+            }
+            val item = exo.getMediaItemAt(index)
+            val request = item.localConfiguration?.uri?.toString()
+                ?.let(CanonicalRemotePlaybackUri::decode) ?: return@withLock false
+            if (request.recordingId != failed.recordingId ||
+                request.mediaAssetId != failed.mediaAssetId ||
+                request.providerKey != failed.providerKey) return@withLock false
+
+            val present = try {
+                withContext(Dispatchers.IO) {
+                    val asset = CanonicalCatalogDatabase.get(applicationContext)
+                        .catalogDao().mediaAssetById(request.mediaAssetId)
+                    asset?.recordingId == request.recordingId &&
+                        asset.provider == request.providerKey
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // A transient catalog/database error is not evidence of removal.
+                return@withLock false
+            }
+            if (captureCanonicalBatchSnapshot(exo) != anchor) return@withLock false
+            val outcome = PlaybackRecoveryNotices.beginRetry(
+                key,
+                request.recordingId,
+                request.mediaAssetId,
+                request.providerKey,
+                present = present,
+            )
+            if (outcome != PlaybackRecoveryRetryResult.STARTED) return@withLock false
+            try {
+                crossfade?.onSkipRequested()
+                failureCascade.onExplicitUserIntent()
+                exo.seekTo(index, 0L)
+                exo.prepare()
+                exo.play()
+                true
+            } catch (_: Exception) {
+                PlaybackRecoveryNotices.onRetryFailed(key)
+                false
+            }
+        }
 
     /**
      * B10: a single explicit canonical batch edit, executed on the owning
@@ -8099,6 +8213,7 @@ class PlaybackService : MediaLibraryService() {
                 .add(clearBoundedContextCommand)
                 .add(canonicalRemotePlaybackCommand)
                 .add(canonicalBatchQueueCommand)
+                .add(canonicalRecoveryCommand)
                 .add(autoplayCommand)
                 .add(shuffleCommand)
                 .add(startStationCommand)
@@ -8133,6 +8248,15 @@ class PlaybackService : MediaLibraryService() {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction == ACTION_RETRY_CANONICAL_FAILURE) {
+                return scope.future(Dispatchers.Main) {
+                    if (retryCanonicalRemoteFailure(args)) {
+                        SessionResult(SessionResult.RESULT_SUCCESS)
+                    } else {
+                        SessionResult(SessionError.ERROR_NOT_SUPPORTED)
+                    }
+                }
+            }
             if (customCommand.customAction == ACTION_EXECUTE_CANONICAL_BATCH) {
                 // Return the actual result, not a false success before the
                 // read-only Catalog revalidation and player-owned commit.
