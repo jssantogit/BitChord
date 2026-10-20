@@ -22,18 +22,20 @@ class A0OneShotPublicSearchWireTest {
         assertEquals(q.size - 4, int(s))
         assertEquals(26, int(s))
         assertEquals(27182, int(s))
-        assertEquals("Ringingsound wav", text(s)) // Nicotine+ strips periods for SoulseekQt interop
+        assertEquals("naruto", text(s)) // Nicotine+ strips unsupported trailing wildcard
         assertEquals(-1, s.read())
     }
 
-    @Test fun searchTermIsSanitizedWhileTrustedFilenameGateRemainsExact() {
+    @Test fun requestedNarutoWildcardIsNormalizedForReadOnlyConnectivityProbe() {
+        assertEquals("naruto*", A0OneShotPublicSearchWire.REQUESTED_SEARCH)
+        assertEquals("naruto", A0OneShotPublicSearchWire.SEARCH_TERM)
+        // CC0 rights gate stays explicit, never reassign Naruto file rights.
         assertEquals("Ringingsound.wav", A0OneShotPublicSearchWire.TARGET_FILENAME)
-        assertEquals("Ringingsound wav", A0OneShotPublicSearchWire.SEARCH_TERM)
         val wire = A0OneShotPublicSearchWire.fileSearch(120)
         val q = ByteArrayInputStream(wire)
         int(q); int(q); int(q)
-        assertEquals("Ringingsound wav", text(q))
-        assertFalse(wire.toString(Charsets.ISO_8859_1).contains("Ringingsound.wav"))
+        assertEquals("naruto", text(q))
+        assertFalse(wire.toString(Charsets.ISO_8859_1).contains("naruto*"))
     }
 
     @Test fun oneCorrelatedDirectPeerReplyCountsFilenameButNeverExposesPeerData() {
@@ -43,6 +45,7 @@ class A0OneShotPublicSearchWireTest {
             ByteArrayInputStream(payload), expectedSearchToken = 27182
         )
         assertEquals(1, result.untrustedFilenameMatches)
+        assertEquals(1, result.untrustedResultCount)
         assertTrue(result.toString().contains("1"))
         assertFalse(result.toString().contains("a_private_username"))
         assertFalse(result.toString().contains("secret_folder"))
@@ -81,6 +84,7 @@ class A0OneShotPublicSearchWireTest {
             ByteArrayInputStream(reply), 27182
         )
         assertEquals(0, parsed.untrustedFilenameMatches)
+        assertEquals(1, parsed.untrustedResultCount) // Valid P reply but not a CC0 file
     }
 
     @Test fun invalidWaitPortAndTokensCannotGeneratePackets() {
