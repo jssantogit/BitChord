@@ -3,6 +3,9 @@ package com.music.bitchord.acquisition.a0
 import android.app.Activity
 import android.os.Bundle
 import android.content.Intent
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.diagnostics.DiagnosticsShare
 import com.music.bitchord.observability.TraceOutcome
@@ -43,6 +46,7 @@ class A0ManualLoginActivity : Activity() {
     @Volatile private var activeDirectPeer: Socket? = null
     @Volatile private var activeIndirectPeer: Socket? = null
     @Volatile private var stopping = false
+    @Volatile private var activeTrace: A0SmokeTrace? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -129,6 +133,27 @@ class A0ManualLoginActivity : Activity() {
                     Diagnostics.startCapture(180_000L).active
                 }.getOrDefault(false)
                 val trace = A0SmokeTrace.start(Diagnostics.structuredTracer())
+                activeTrace = trace
+                val transport = runCatching {
+                    val manager = getSystemService(Context.CONNECTIVITY_SERVICE)
+                        as ConnectivityManager
+                    val network = manager.activeNetwork
+                    val capabilities = network?.let { manager.getNetworkCapabilities(it) }
+                    when {
+                        network == null -> A0SmokeTrace.Transport.DISCONNECTED
+                        capabilities == null -> A0SmokeTrace.Transport.UNKNOWN
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ->
+                            A0SmokeTrace.Transport.VPN
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ->
+                            A0SmokeTrace.Transport.WIFI
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ->
+                            A0SmokeTrace.Transport.CELLULAR
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ->
+                            A0SmokeTrace.Transport.ETHERNET
+                        else -> A0SmokeTrace.Transport.OTHER
+                    }
+                }.getOrDefault(A0SmokeTrace.Transport.UNKNOWN)
+                trace.networkTransport(transport)
                 trace.note(
                     A0SmokeTrace.Stage.CAPTURE_READY,
                     if (captureEnabled) TraceOutcome.SUCCEEDED else TraceOutcome.DEGRADED
@@ -382,6 +407,7 @@ class A0ManualLoginActivity : Activity() {
                     activeSocket = null
                     trace.note(A0SmokeTrace.Stage.SOCKETS_CLOSED)
                     trace.finish(finalOutcome, finalReason)
+                    activeTrace = null
                     if (captureEnabled) runCatching { Diagnostics.stopCapture() }
                 }
                 if (!stopping && !isFinishing && !isDestroyed) {
@@ -420,6 +446,11 @@ class A0ManualLoginActivity : Activity() {
 
     override fun onStop() {
         stopping = true
+        activeTrace?.note(
+            A0SmokeTrace.Stage.STOP_REQUESTED,
+            TraceOutcome.CANCELLED,
+            A0SmokeTrace.Reason.CANCELLED
+        )
         activeListener?.close() // Interrupt any pending direct peer result.
         activeDirectPeer?.close()
         activeIndirectPeer?.close()
