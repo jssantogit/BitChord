@@ -1293,4 +1293,10 @@
     <string name="wear_os_code_hint">Codice di associazione</string>
     <string name="wear_os_done">Fine</string>
     <string name="signed_by">Firmato da %1$s</string>
+    <string name="playback_recovery_connection">Impossibile avviare un brano remoto. Controlla la connessione o il server.</string>
+    <string name="playback_recovery_unavailable">La versione remota selezionata non è disponibile ora.</string>
+    <string name="playback_recovery_failed">Impossibile aprire il brano remoto selezionato.</string>
+    <string name="playback_recovery_retry">Riprova</string>
+    <string name="playback_recovery_retrying">Nuovo tentativo…</string>
+    <string name="playback_recovery_dismiss">Chiudi</string>
 </resources>

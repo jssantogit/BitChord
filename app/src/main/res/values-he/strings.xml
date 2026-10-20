@@ -1359,4 +1359,10 @@
     <string name="wear_os_code_hint">קוד צימוד</string>
     <string name="wear_os_done">סיום</string>
     <string name="signed_by">נחתם על ידי %1$s</string>
+    <string name="playback_recovery_connection">לא ניתן להתחיל רצועה מרוחקת. יש לבדוק את החיבור או השרת.</string>
+    <string name="playback_recovery_unavailable">הגרסה המרוחקת שנבחרה אינה זמינה כרגע.</string>
+    <string name="playback_recovery_failed">לא ניתן לפתוח את הרצועה המרוחקת שנבחרה.</string>
+    <string name="playback_recovery_retry">לנסות שוב</string>
+    <string name="playback_recovery_retrying">מנסה שוב…</string>
+    <string name="playback_recovery_dismiss">סגירה</string>
 </resources>

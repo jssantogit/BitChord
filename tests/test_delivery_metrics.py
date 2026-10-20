@@ -79,5 +79,46 @@ class DeliveryMetricsTests(unittest.TestCase):
             summarize(p)
 
 
+    def test_lane_pressure_is_aggregated_from_explicit_bounded_labels(self):
+        p = {"prs": [], "blocks": [], "jobs": [
+            {"run_id": 11, "pr_number": 4, "head_sha": H1, "lane": "pr_a",
+             "created_at": "2026-10-20T08:00:00Z",
+             "started_at": "2026-10-20T08:01:00Z",
+             "completed_at": "2026-10-20T08:04:00Z",
+             "conclusion": "success"},
+            {"run_id": 12, "pr_number": 5, "head_sha": H2, "lane": "pr_b",
+             "created_at": "2026-10-20T08:00:00Z",
+             "started_at": "2026-10-20T08:03:00Z",
+             "completed_at": "2026-10-20T08:10:00Z",
+             "conclusion": "success"},
+            {"run_id": 13, "pr_number": None, "head_sha": H2, "lane": "main",
+             "created_at": "2026-10-20T08:05:00Z",
+             "started_at": "2026-10-20T08:05:30Z",
+             "completed_at": "2026-10-20T08:07:00Z",
+             "conclusion": "success"},
+            {"run_id": 14, "pr_number": 6, "head_sha": H1, "lane": "pr_b",
+             "created_at": "2026-10-20T08:09:00Z",
+             "started_at": None, "completed_at": None,
+             "conclusion": None},
+        ]}
+        out = summarize(p)
+        self.assertEqual(2, out["metrics_by_lane"]["pr_b"]["jobs"])
+        self.assertEqual(1, out["metrics_by_lane"]["pr_b"]["finished_jobs"])
+        self.assertEqual(180, out["metrics_by_lane"]["pr_b"]["median_queue_seconds"])
+        self.assertEqual(420, out["metrics_by_lane"]["pr_b"]["median_execution_seconds"])
+        self.assertEqual(60, out["metrics_by_lane"]["pr_a"]["median_queue_seconds"])
+        self.assertEqual(30, out["metrics_by_lane"]["main"]["median_queue_seconds"])
+        self.assertIsNone(out["jobs"][3]["queue_seconds"])
+
+    def test_lane_label_must_be_allowlisted_and_missing_is_unknown(self):
+        job = {"run_id": 11, "pr_number": None, "head_sha": H1,
+               "created_at": "2026-10-20T08:00:00Z",
+               "started_at": None, "completed_at": None, "conclusion": None}
+        p = {"prs": [], "blocks": [], "jobs": [job]}
+        self.assertEqual('unknown', summarize(p)["jobs"][0]["lane"])
+        job["lane"] = "secret=raw/branch"
+        with self.assertRaises(DeliveryDataError):
+            summarize(p)
+
 if __name__ == "__main__":
     unittest.main()
