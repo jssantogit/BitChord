@@ -74,11 +74,23 @@ internal class A0SmokeTrace private constructor(
         )
     }
 
-    /** Avoid unbounded high-frequency server notification spam. */
-    fun ignoredServerFrame() {
+    /**
+     * Codes are protocol constants only (fixed four-byte header), NEVER payloads.
+     * Preserve the first 16 frames, with a hard range and overall count cap.
+     */
+    fun ignoredServerFrame(code: Int = -1) {
         if (complete.get()) return
         val seen = ignoredServerFrames.incrementAndGet()
-        if (seen <= 3) note(Stage.SERVER_FRAME_IGNORED, TraceOutcome.SKIPPED)
+        if (seen <= 16) {
+            trace.event(
+                stage = Stage.SERVER_FRAME_IGNORED.name.lowercase(Locale.ROOT),
+                outcome = TraceOutcome.SKIPPED,
+                attributes = mapOf(
+                    "elapsedMs" to elapsedMillis().toString(),
+                    "serverCode" to if (code in 0..4095) code.toString() else "out_of_range"
+                )
+            )
+        }
     }
 
     fun finish(outcome: TraceOutcome, reason: Reason? = null) {
