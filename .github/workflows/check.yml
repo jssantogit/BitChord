@@ -5,9 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+# Per-PR workflows supersede old HEADs; main runs are keyed by commit and
+# must never be cancelled by newer integration commits.
 concurrency:
-  group: android-ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: android-ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -16,6 +18,13 @@ jobs:
   android:
     # Keep this check context until the main ruleset is migrated separately.
     name: Android · test and build
+    # Two independent PR lanes, serial within each and never cross-cancelling.
+    # A = catalog/ and intelligence/; B = all other PR branches.
+    # Main remains independent, with each commit in its own group.
+    concurrency:
+      group: ${{ github.event_name == 'pull_request' && (startsWith(github.head_ref, 'catalog/') || startsWith(github.head_ref, 'intelligence/')) && 'bitchord-android-pr-lane-a' || github.event_name == 'pull_request' && 'bitchord-android-pr-lane-b' || format('bitchord-android-main-{0}', github.sha) }}
+      queue: max
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -41,7 +50,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run Android unit tests
-        run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
 
       - name: Upload Android test reports
         if: failure()

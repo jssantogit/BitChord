@@ -68,6 +68,21 @@ def validate_manifest(manifest, repository):
     return items
 
 
+def workflow_sync_guard(files, behind):
+    """Reject App update-branch on stale workflow-file PRs before PUT 403.
+
+    The App deliberately lacks workflow-write permission. The owner must first
+    synchronize such branches outside this restricted writer, then recheck
+    exact HEAD, file allowlist and full Android CI. This is not a bypass.
+    """
+    need(type(behind) is int and behind >= 0, 'Unknown divergence; cannot sync')
+    need(type(files) is list and all(type(path) is str for path in files),
+         'Invalid files for workflow sync')
+    need(not (behind > 0 and any(
+        path.startswith('.github/workflows/') for path in files)),
+        'workflow_file_sync_requires_manual_preparation')
+
+
 class GitHubREST:
     """Never log authentication headers or sensitive response bodies."""
     def __init__(self, repository, token):
@@ -313,8 +328,7 @@ class IntegrationController:
                 pr = self.checked_pr(entry, 'main', initial=False)
             head = pr['head']['sha']
             compare = self.api.compare('main', head)
-            need(type(compare.get('behind_by')) is int,
-                 'Unknown divergence; cannot sync')
+            workflow_sync_guard(entry['allowed_files'], compare.get('behind_by'))
             if compare['behind_by'] > 0:
                 self.api.update_branch(n, head)
                 head = self.wait_head_update(n, head, main, deadline)

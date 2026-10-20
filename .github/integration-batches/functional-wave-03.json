@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 67,
+      "expected_head_sha": "6f4d18eaaff4283861029bb14dbc33ee375ff872",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicProvider.kt",
+        "app/src/test/java/com/music/bitchord/OpenSubsonicBoundedEnumerationTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 66,
+      "expected_head_sha": "eeca0ddb2aebd9af42221f86525930e8384b017c",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/listening/CanonicalInferredPreferencePreview.kt",
+        "app/src/test/java/com/music/bitchord/data/listening/CanonicalInferredPreferencePlannerTest.kt",
+        "app/src/test/java/com/music/bitchord/data/listening/CanonicalInferredPreferenceRoomTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 75,
+      "expected_head_sha": "f217123d89b661cfc1f8cd9c592df86af5b39c2b",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/playback/CrossfadeController.kt",
+        "app/src/main/java/com/music/bitchord/playback/GaplessBoundaryPolicy.kt",
+        "app/src/test/java/com/music/bitchord/playback/GaplessBoundaryPolicyTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    }
+  ]
+}

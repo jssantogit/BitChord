@@ -1,6 +1,10 @@
 package com.music.bitchord.data.catalog.provider.opensubsonic
 
 import android.content.Context
+import com.music.bitchord.diagnostics.DiagnosticCategory
+import com.music.bitchord.diagnostics.DiagnosticFailureBreadcrumbs
+import com.music.bitchord.diagnostics.DiagnosticFailureReason
+import com.music.bitchord.diagnostics.DiagnosticRecoveryOutcome
 import com.music.bitchord.data.Http
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.MediaAssetEntity
@@ -148,7 +152,12 @@ internal class OpenSubsonicArtworkRequest internal constructor(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Throwable) {
-            // Transport exceptions may embed the full authenticated URL.
+            // Do not log transport messages (they may contain authenticated URLs).
+            DiagnosticFailureBreadcrumbs.record(
+                DiagnosticCategory.NETWORK,
+                DiagnosticFailureReason.ARTWORK_TRANSPORT_EXCEPTION,
+                DiagnosticRecoveryOutcome.FALLBACK,
+            )
             OpenSubsonicArtworkFetchResult.NetworkUnavailable
         }
     }
@@ -236,6 +245,11 @@ internal class OpenSubsonicArtworkLoader(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
+            DiagnosticFailureBreadcrumbs.record(
+                DiagnosticCategory.NETWORK,
+                DiagnosticFailureReason.ARTWORK_CACHE_READ_FAILED,
+                DiagnosticRecoveryOutcome.FALLBACK,
+            )
             null
         }
         cached?.takeIf { it.isNotEmpty() }?.let {
@@ -254,6 +268,11 @@ internal class OpenSubsonicArtworkLoader(
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
+                        DiagnosticFailureBreadcrumbs.record(
+                            DiagnosticCategory.NETWORK,
+                            DiagnosticFailureReason.ARTWORK_CACHE_WRITE_FAILED,
+                            DiagnosticRecoveryOutcome.DEGRADED,
+                        )
                         // A valid fetched image must still display on ordinary disk failure.
                     }
                     OpenSubsonicArtworkLoadResult.Ready(fetched.bytes, fromCache = false)
@@ -263,12 +282,30 @@ internal class OpenSubsonicArtworkLoader(
                 OpenSubsonicArtworkLoadResult.Placeholder("CREDENTIAL_UNAVAILABLE")
             OpenSubsonicArtworkFetchResult.AccountMismatch ->
                 OpenSubsonicArtworkLoadResult.Placeholder("ACCOUNT_MISMATCH")
-            OpenSubsonicArtworkFetchResult.NetworkUnavailable ->
+            OpenSubsonicArtworkFetchResult.NetworkUnavailable -> {
+                DiagnosticFailureBreadcrumbs.record(
+                    DiagnosticCategory.NETWORK,
+                    DiagnosticFailureReason.ARTWORK_NETWORK_UNAVAILABLE,
+                    DiagnosticRecoveryOutcome.FALLBACK,
+                )
                 OpenSubsonicArtworkLoadResult.Placeholder("NETWORK_UNAVAILABLE")
-            OpenSubsonicArtworkFetchResult.AuthenticationRejected ->
+            }
+            OpenSubsonicArtworkFetchResult.AuthenticationRejected -> {
+                DiagnosticFailureBreadcrumbs.record(
+                    DiagnosticCategory.NETWORK,
+                    DiagnosticFailureReason.ARTWORK_AUTH_REJECTED,
+                    DiagnosticRecoveryOutcome.FAILED,
+                )
                 OpenSubsonicArtworkLoadResult.Placeholder("AUTHENTICATION_REJECTED")
-            OpenSubsonicArtworkFetchResult.RequestRejected ->
+            }
+            OpenSubsonicArtworkFetchResult.RequestRejected -> {
+                DiagnosticFailureBreadcrumbs.record(
+                    DiagnosticCategory.NETWORK,
+                    DiagnosticFailureReason.ARTWORK_REQUEST_REJECTED,
+                    DiagnosticRecoveryOutcome.FAILED,
+                )
                 OpenSubsonicArtworkLoadResult.Placeholder("REQUEST_REJECTED")
+            }
         }
     }
 }
