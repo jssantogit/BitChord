@@ -66,14 +66,15 @@ class A0ManualLoginActivity : Activity() {
             it.setPadding(0, 12, 0, 12)
             page.addView(it)
         }
-        text("BitChord A0 — teste de login Soulseek")
+        text("BitChord A0 — teste de conectividade P2P Soulseek")
         text("Somente para uma conta exclusiva de TESTE. " +
              "O protocolo Soulseek envia a senha por TCP SEM TLS. " +
              "Não reutilize senhas de outros serviços.")
-        text("O primeiro botão testa apenas o login. O segundo envia UMA pesquisa " +
-             "por um nome de áudio CC0 e tenta resposta P2P direta ou indireta. " +
-             "Nenhum botão compartilha ou baixa arquivos. " +
-             "Desconecte o Seeker antes de iniciar.")
+        text("O primeiro botão testa somente login. O segundo envia uma única " +
+             "busca diagnóstica naruto* (normalizada para naruto pelo protocolo) " +
+             "e tenta receber respostas P2P diretas ou indiretas. " +
+             "Resultados não comprovam direitos autorais ou disponibilidade. " +
+             "Nada será compartilhado ou baixado. Desconecte o Seeker primeiro.")
         val user = EditText(this).apply {
             hint = "Usuário dedicado"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
@@ -96,7 +97,7 @@ class A0ManualLoginActivity : Activity() {
         val action = Button(this).apply { text = "Testar login uma única vez" }
         page.addView(action)
         val searchAction = Button(this).apply {
-            text = "Pesquisar arquivo CC0 (sem baixar)"
+            text = "Pesquisar naruto* (sem baixar)"
         }
         page.addView(searchAction)
         val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
@@ -235,13 +236,11 @@ class A0ManualLoginActivity : Activity() {
                                                             peer.getInputStream(), token
                                                         )
                                                     trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_ACCEPTED)
-                                                    inbox.offer(if (observation.untrustedFilenameMatches > 0) {
-                                                        "RESPOSTA P2P DIRETA: correspondência " +
-                                                            "não verificada. Nenhum download."
-                                                    } else {
-                                                        "RESPOSTA P2P DIRETA: sem correspondência. " +
-                                                            "Nenhum download."
-                                                    })
+                                                    inbox.offer(
+                                                        "RESPOSTA P2P DIRETA: " +
+                                                            "${observation.untrustedResultCount} entradas " +
+                                                            "declaradas, não verificadas. Nenhum download."
+                                                    )
                                                 }
                                             } catch (_: SocketTimeoutException) {
                                                 if (++directWaits <= 2) trace.note(
@@ -303,13 +302,11 @@ class A0ManualLoginActivity : Activity() {
                                                             peer.getInputStream(), token, offer.username
                                                         )
                                                         trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_ACCEPTED)
-                                                        inbox.offer(if (observation.untrustedFilenameMatches > 0) {
-                                                            "RESPOSTA P2P INDIRETA: correspondência " +
-                                                                "não verificada. Nenhum download."
-                                                        } else {
-                                                            "RESPOSTA P2P INDIRETA: sem correspondência. " +
-                                                                "Nenhum download."
-                                                        })
+                                                        inbox.offer(
+                                                            "RESPOSTA P2P INDIRETA: " +
+                                                                "${observation.untrustedResultCount} entradas " +
+                                                                "declaradas, não verificadas. Nenhum download."
+                                                        )
                                                     }
                                                 } catch (_: SocketTimeoutException) {
                                                     trace.note(
