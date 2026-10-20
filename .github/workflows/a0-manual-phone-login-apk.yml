@@ -1,0 +1,52 @@
+name: A0 Manual Phone Login APK
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - "app/src/devDebug/**"
+      - "app/src/main/java/com/music/bitchord/acquisition/a0/A0ExperimentalLoginCodec.kt"
+      - ".github/workflows/a0-manual-phone-login-apk.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a0-manual-phone-login-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    if: github.event.pull_request.number == 63 && github.event.pull_request.head.repo.full_name == github.repository
+    name: A0 · secretless devDebug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout PR revision (NO secrets)
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle executable
+        run: chmod +x gradlew
+
+      - name: Build DEV DEBUG APK WITHOUT passwords, LASTFM or Soulseek credentials
+        env:
+          LASTFM_API_KEY: ""
+          LASTFM_SECRET: ""
+        run: ./gradlew --no-daemon -Pbitchord.bundleWear=false :app:assembleDevDebug
+
+      - name: Upload short-lived test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: a0-phone-login-apk-${{ github.event.pull_request.head.sha }}
+          path: app/build/outputs/apk/dev/debug/*.apk
+          if-no-files-found: error
+          retention-days: 2
