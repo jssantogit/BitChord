@@ -18,16 +18,23 @@ import java.io.InputStream
  */
 internal object A0OneShotPublicSearchWire {
     const val TARGET_FILENAME = "Ringingsound.wav"
-    // Nicotine+ deliberately strips punctuation from global search terms:
-    // SoulseekQt may not return results for terms such as "Ringingsound.wav".
-    // Keep the exact independently CC0-reviewed filename gate unchanged.
-    const val SEARCH_TERM = "Ringingsound wav"
+    // User-requested broad P2P reachability probe. Nicotine+ normalizes trailing
+    // '*' out of wire search terms; wildcard syntax on Soulseek is not guaranteed.
+    // This is NOT a licensed-audio search and NEVER authorizes downloads.
+    const val REQUESTED_SEARCH = "naruto*"
+    const val SEARCH_TERM = "naruto"
     private const val MAX_PEER_INIT_BYTES = 4096
     private const val MAX_PEER_SEARCH_BYTES = 1_048_576
     private const val MAX_PEER_NAME_BYTES = 128
     private const val MAX_PROBE_BYTES = 64L * 1024L * 1024L
 
-    data class Observation(val untrustedFilenameMatches: Int)
+    // Strict CC0 match remains reserved for an independent licensed-file test.
+    // For this broad read-only smoke, count only claims returned by a peer;
+    // no filenames, addresses, or file bytes leave the parser.
+    data class Observation(
+        val untrustedFilenameMatches: Int,
+        val untrustedResultCount: Int = 0
+    )
 
     /** Tell the login server the port opened by the short-lived P listener. */
     fun setWaitPort(port: Int): ByteArray {
@@ -35,7 +42,7 @@ internal object A0OneShotPublicSearchWire {
         return frame(2, intLEBytes(port))
     }
 
-    /** Submit exactly ONE immutable open-license reference filename query. */
+    /** Submit ONE sanitized broad discovery probe (never download or license evidence). */
     fun fileSearch(token: Int): ByteArray {
         require(token > 0) { "A0 search token must be positive" }
         val bytes = SEARCH_TERM.toByteArray(Charsets.UTF_8)
@@ -76,7 +83,10 @@ internal object A0OneShotPublicSearchWire {
                     it.remoteFilename.replace('\\', '/').substringAfterLast('/') == TARGET_FILENAME
             }
         } else 0
-        return Observation(count)
+        return Observation(
+            untrustedFilenameMatches = count,
+            untrustedResultCount = parsed.files.size + parsed.lockedFiles.size
+        )
     }
 
     private fun frame(code: Int, payload: ByteArray): ByteArray {
