@@ -173,6 +173,58 @@ class PlaybackFailureCascadeTest {
         )
     }
 
+    @Test
+    fun `late Navidrome failure after queue changed never poisons current cascade`() {
+        val cascade = PlaybackFailureCascade()
+        val pendingRemote = FailureQueueEntry("remote-a", 0)
+        val updatedQueue = entries("remote-b", "local-viable")
+        val originalQueue = updatedQueue.toList()
+
+        assertEquals(PlaybackFailureCascade.Decision.Exhausted,
+            cascade.onFailure(pendingRemote, updatedQueue, FailureRepeatMode.ALL))
+        assertFalse("stale response must not start a failure cascade", cascade.isActive)
+        assertTrue(cascade.failedKeys.isEmpty())
+        assertEquals(originalQueue, updatedQueue)
+        assertEquals(PlaybackFailureCascade.Decision.Advance(1),
+            cascade.onFailure(updatedQueue[0], updatedQueue, FailureRepeatMode.OFF))
+    }
+
+    @Test
+    fun `Navidrome offline to local handoff and explicit online reselect preserves original queue`() {
+        val queue = entries("remote-a", "remote-b", "local-c")
+        val snapshot = queue.toList()
+        val cascade = PlaybackFailureCascade()
+
+        assertEquals(PlaybackFailureCascade.Decision.Advance(1),
+            cascade.onFailure(queue[0], queue, FailureRepeatMode.OFF))
+        assertEquals(PlaybackFailureCascade.Decision.Advance(2),
+            cascade.onFailure(queue[1], queue, FailureRepeatMode.OFF))
+        cascade.onPlaybackStarted()
+        assertFalse(cascade.isActive)
+        assertEquals(snapshot, queue)
+
+        // An explicit selection once Navidrome reconnects may replay A, but
+        // the runtime guard cannot silently change its provider or rendition.
+        cascade.onExplicitUserIntent()
+        assertTrue(cascade.failedKeys.isEmpty())
+        assertEquals(PlaybackFailureCascade.Decision.Advance(1),
+            cascade.onFailure(queue[0], queue, FailureRepeatMode.OFF))
+        assertEquals(snapshot, queue)
+    }
+
+    @Test
+    fun `all remote failures exhaust once including repeat all without modifying original entries`() {
+        val queue = entries("remote-a", "remote-b")
+        val before = queue.toList()
+        val cascade = PlaybackFailureCascade()
+        assertEquals(PlaybackFailureCascade.Decision.Advance(1),
+            cascade.onFailure(queue[0], queue, FailureRepeatMode.ALL))
+        assertEquals(PlaybackFailureCascade.Decision.Exhausted,
+            cascade.onFailure(queue[1], queue, FailureRepeatMode.ALL))
+        assertEquals(before, queue)
+        assertEquals(setOf("remote-a", "remote-b"), cascade.failedKeys)
+    }
+
     private fun entries(vararg keys: String): List<FailureQueueEntry> =
         keys.mapIndexed { index, key -> FailureQueueEntry(key, index) }
 }

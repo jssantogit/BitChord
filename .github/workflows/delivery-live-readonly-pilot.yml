@@ -1,0 +1,79 @@
+name: Delivery Live Read-only Pilot
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/delivery-live-readonly-pilot.yml'
+      - 'tools/delivery_snapshot.py'
+      - 'tools/delivery_planner.py'
+      - 'tools/delivery_preflight.py'
+      - 'tests/test_delivery_snapshot.py'
+      - 'tests/test_delivery_planner.py'
+      - 'tests/test_delivery_preflight.py'
+
+permissions:
+  contents: read
+
+jobs:
+  live-e2e:
+    name: Delivery · live read-only acceptance
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.number == 89
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Collect, plan and preflight with GitHub GET only
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/delivery_snapshot.py --repo jssantogit/BitChord > "$RUNNER_TEMP/delivery-snapshot.json"
+          python3 tools/delivery_planner.py --input "$RUNNER_TEMP/delivery-snapshot.json" > "$RUNNER_TEMP/delivery-plan.json"
+          python3 tools/delivery_preflight.py --plan "$RUNNER_TEMP/delivery-plan.json" --repo jssantogit/BitChord --workers 4 > "$RUNNER_TEMP/delivery-preflight.json"
+      - name: Verify fail-closed acceptance invariants
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ['RUNNER_TEMP'])
+          snapshot = json.loads((root / 'delivery-snapshot.json').read_text())
+          plan = json.loads((root / 'delivery-plan.json').read_text())
+          preflight = json.loads((root / 'delivery-preflight.json').read_text())
+          inputs = {row['number']: row for row in snapshot['pull_requests']}
+          planned = {row['number']: row for row in plan['ordered']}
+          inspected = {row['number']: row for row in preflight['results']}
+
+          assert inputs, 'empty live snapshot'
+          assert len(inputs) == len(planned) == len(inspected), 'incomplete E2E coverage'
+          assert set(inputs) == set(planned) == set(inspected), 'PR identity mismatch'
+          assert snapshot['main_sha'] == plan['main_sha'] == preflight['main_sha'], 'main SHA mismatch'
+          assert preflight['main_drift'] is False, 'main drift; fail closed'
+          assert plan['approval_required'] is True and plan['executable'] is False, 'planner attempted authorization'
+          assert preflight['approval_required'] is True and preflight['executable'] is False, 'preflight attempted authorization'
+          assert all(not item['verified_candidate'] or not item['blockers'] for item in inspected.values()), 'false verified candidate'
+          for n, original in inputs.items():
+              if original['draft']:
+                  assert 'draft' in planned[n]['blockers'], 'draft lost in planner'
+                  assert 'draft' in inspected[n]['blockers'], 'draft lost in preflight'
+                  assert not inspected[n]['verified_candidate'], 'draft verified'
+              if original['base_ref'] != 'main':
+                  assert 'stacked_base' in planned[n]['blockers'], 'stacked dependency lost'
+          if all(row['draft'] for row in inputs.values()):
+              assert not plan['manifest_proposal']['items'], 'all-draft batch was proposed'
+              assert not any(row['verified_candidate'] for row in inspected.values()), 'all-draft candidate verified'
+          print('LIVE READ-ONLY E2E OK: PRs=', len(inputs),
+                'drafts=', sum(row['draft'] for row in inputs.values()),
+                'proposed=', len(plan['manifest_proposal']['items']),
+                'verified=', sum(row['verified_candidate'] for row in inspected.values()))
+          PY

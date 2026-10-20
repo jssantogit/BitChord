@@ -43,9 +43,9 @@ class AudioTelemetryHardeningTest {
         // 2. Direct playback is rejected
         assertTrue(evaluated.directPlaybackRejected)
         assertFalse(evaluated.directPlaybackActual)
-        // 3. AudioFlinger Mixer is in the path at 48000 Hz with HAL format PCM24 packed
-        assertEquals(48000, evaluated.systemMixerRateHz)
-        assertEquals("PCM24 packed", evaluated.halFormat)
+        // 3. AudioFlinger/HAL state is unobserved; no invented rate or format
+        assertNull("Unobserved AudioFlinger mixer rate must not be guessed", evaluated.systemMixerRateHz)
+        assertNull("Unobserved HAL format must not be fabricated", evaluated.halFormat)
         // 4. AudioTrack requested is Float32 / 176400 Hz (not physical Float32)
         assertEquals(AudioFormat.ENCODING_PCM_FLOAT, evaluated.actualEncoding)
         assertEquals(176400, evaluated.actualSampleRateHz)
@@ -75,9 +75,9 @@ class AudioTelemetryHardeningTest {
         // 2. Direct playback is rejected (AudioFlinger is still in the path)
         assertTrue(evaluated.directPlaybackRejected)
         assertFalse(evaluated.directPlaybackActual)
-        // 3. AudioFlinger mixer and HAL format
-        assertEquals(48000, evaluated.systemMixerRateHz)
-        assertEquals("PCM24 packed", evaluated.halFormat)
+        // 3. AudioFlinger mixer and HAL format are not established by descriptors
+        assertNull("Unobserved AudioFlinger mixer rate must not be guessed", evaluated.systemMixerRateHz)
+        assertNull("Unobserved HAL format must not be fabricated", evaluated.halFormat)
         // 4. Client format remains Float32
         assertEquals(AudioFormat.ENCODING_PCM_FLOAT, evaluated.actualEncoding)
         assertEquals(176400, evaluated.actualSampleRateHz)
@@ -105,9 +105,10 @@ class AudioTelemetryHardeningTest {
 
         val evaluated = AudioOutputStatus.evaluateActualPath(directCapableSnapshot)
 
-        assertTrue(evaluated.directPlaybackActual)
+        assertFalse("Direct capability is not observed routing", evaluated.directPlaybackActual)
+        assertTrue("The negotiated direct candidate must be retained", evaluated.directPlaybackSelected)
         assertFalse(evaluated.directPlaybackRejected)
-        assertEquals(TransportType.AUDIO_TRACK_DIRECT, evaluated.transportType)
+        assertEquals(TransportType.AUDIO_TRACK, evaluated.transportType)
         assertNull(evaluated.systemMixerRateHz)
         assertNull(evaluated.halFormat)
         assertEquals("PCM24 / 192000 Hz", evaluated.usbEndpointFormat)
@@ -128,8 +129,8 @@ class AudioTelemetryHardeningTest {
 
         assertFalse(evaluated.directPlaybackActual)
         assertFalse(evaluated.directPlaybackRejected)
-        assertEquals(48000, evaluated.systemMixerRateHz)
-        assertEquals("PCM24 packed", evaluated.halFormat)
+        assertNull("Unobserved AudioFlinger mixer rate must not be guessed", evaluated.systemMixerRateHz)
+        assertNull("Unobserved HAL format must not be fabricated", evaluated.halFormat)
         assertNull(evaluated.usbEndpointFormat)
     }
 
@@ -163,10 +164,11 @@ class AudioTelemetryHardeningTest {
         // 2. Active AudioTrack is 176.4 kHz PCM16
         assertEquals(176400, evaluated.actualSampleRateHz)
         assertEquals(AudioFormat.ENCODING_PCM_16BIT, evaluated.actualEncoding)
-        // 3. Direct playback is ACTIVE and bypassing mixer (not capped at 96 kHz)
-        assertTrue("Direct playback must be active at 176.4 kHz", evaluated.directPlaybackActual)
+        // 3. Runtime support chooses direct negotiation, not independently proven mixer bypass
+        assertFalse("Direct probe cannot prove mixer bypass", evaluated.directPlaybackActual)
+        assertTrue("The negotiated direct candidate must be retained", evaluated.directPlaybackSelected)
         assertFalse("Direct playback must not be rejected", evaluated.directPlaybackRejected)
-        assertNull("System mixer must be bypassed", evaluated.systemMixerRateHz)
+        assertNull("Mixer rate is not independently observed", evaluated.systemMixerRateHz)
     }
 
     @Test
@@ -191,7 +193,8 @@ class AudioTelemetryHardeningTest {
 
         val evaluated = AudioOutputStatus.evaluateActualPath(pending)
 
-        assertTrue("Direct playback must survive an unmeasured rate", evaluated.directPlaybackActual)
+        assertFalse("Unknown rate is not active-route proof", evaluated.directPlaybackActual)
+        assertTrue("The negotiated direct candidate must be retained", evaluated.directPlaybackSelected)
         assertFalse("Direct playback must not be rejected", evaluated.directPlaybackRejected)
     }
 
