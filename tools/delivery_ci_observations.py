@@ -63,7 +63,9 @@ def _lane_for_run(event, head_branch):
     if event == 'pull_request':
         if head_branch.startswith(('catalog/', 'intelligence/')):
             return 'pr_a'
-        return 'pr_b'
+        if head_branch.startswith('playback/'):
+            return 'pr_b'
+        return 'pr_c'
     return 'unknown'
 
 
