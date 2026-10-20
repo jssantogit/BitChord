@@ -2,6 +2,10 @@ package com.music.bitchord.acquisition.a0
 
 import android.app.Activity
 import android.os.Bundle
+import android.content.Intent
+import com.music.bitchord.diagnostics.Diagnostics
+import com.music.bitchord.diagnostics.DiagnosticsShare
+import com.music.bitchord.observability.TraceOutcome
 import android.text.InputType
 import android.view.View
 import android.view.WindowManager
@@ -12,10 +16,13 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import java.io.IOException
+import java.net.ConnectException
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import java.net.SocketException
 import java.util.concurrent.Executors
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -88,6 +95,11 @@ class A0ManualLoginActivity : Activity() {
             text = "Pesquisar arquivo CC0 (sem baixar)"
         }
         page.addView(searchAction)
+        val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
+        page.addView(exportAction)
+        text("Captura temporária iniciada automaticamente ao testar. " +
+            "Depois do resultado, exporte os logs. Revise o relatório antes de compartilhar. " +
+            "Não envie credenciais, capturas de rede ou logcat bruto.")
         val status = text("Nenhuma conexão iniciada.")
 
         val scroll = ScrollView(this).apply { addView(page) }
@@ -112,28 +124,46 @@ class A0ManualLoginActivity : Activity() {
                 "Verificando uma sessão; nenhum arquivo será transferido."
             }
             worker.execute {
+                // Existing Diagnostics capture and structured tracing; no raw inputs.
+                val captureEnabled = runCatching {
+                    Diagnostics.startCapture(180_000L).active
+                }.getOrDefault(false)
+                val trace = A0SmokeTrace.start(Diagnostics.structuredTracer())
+                trace.note(
+                    A0SmokeTrace.Stage.CAPTURE_READY,
+                    if (captureEnabled) TraceOutcome.SUCCEEDED else TraceOutcome.DEGRADED
+                )
+                trace.note(A0SmokeTrace.Stage.LOGIN_STARTED)
+                var finalOutcome = TraceOutcome.FAILED
+                var finalReason: A0SmokeTrace.Reason? = null
                 var packet: ByteArray? = null
                 var result = "Falha ao iniciar a verificação."
                 var searchSubmitted = false
                 try {
                     packet = A0ExperimentalLoginCodec.encode(username, secret)
+                    trace.note(A0SmokeTrace.Stage.SERVER_CONNECT_STARTED)
                     Socket().use { connection ->
                         activeSocket = connection
                         // One fixed, documented SoulseekQt server endpoint.
                         // No user-controlled URL, proxy, redirects or fallback.
                         connection.connect(InetSocketAddress(SERVER_HOST, SERVER_PORT), 7000)
+                        trace.note(A0SmokeTrace.Stage.SERVER_CONNECTED)
                         connection.soTimeout = 7000
                         connection.getOutputStream().write(packet)
                         connection.getOutputStream().flush()
+                        trace.note(A0SmokeTrace.Stage.LOGIN_PACKET_SENT)
                         // Wipe before receiving a reply, which might stall.
                         packet.fill(0)
                         packet = null
                         A0ExperimentalLoginCodec.readResponse(connection.getInputStream())
+                        trace.note(A0SmokeTrace.Stage.LOGIN_ACCEPTED)
                         if (!performSearch) {
                             result = "LOGIN CONFIRMADO. Sessão encerrada, sem buscas ou downloads."
+                            finalOutcome = TraceOutcome.SUCCEEDED
                         } else {
                             ServerSocket(0, 1).use { listener ->
                                 activeListener = listener
+                                trace.note(A0SmokeTrace.Stage.SEARCH_LISTENER_OPEN)
                                 listener.soTimeout = 12_000
                                 val token = SecureRandom().nextInt(Int.MAX_VALUE - 1) + 1
                                 connection.getOutputStream().apply {
@@ -142,6 +172,9 @@ class A0ManualLoginActivity : Activity() {
                                     flush()
                                 }
                                 searchSubmitted = true
+                                trace.note(A0SmokeTrace.Stage.SEARCH_PORT_ANNOUNCED)
+                                trace.note(A0SmokeTrace.Stage.SEARCH_SENT)
+                                trace.note(A0SmokeTrace.Stage.SEARCH_WAIT_STARTED)
                                 // The cellular network may reject inbound P. Modern peers
                                 // can fall back to server code 18 and outbound PierceFirewall.
                                 // Separate readers prevent blocking on accept() while the
@@ -252,8 +285,13 @@ class A0ManualLoginActivity : Activity() {
                         }
                     }
                 } catch (_: A0ExperimentalLoginCodec.LoginDenied) {
+                    finalReason = A0SmokeTrace.Reason.LOGIN_DENIED
+                    trace.note(A0SmokeTrace.Stage.LOGIN_DENIED, TraceOutcome.FAILED, finalReason)
                     result = "LOGIN RECUSADO. Confira a conta e desconecte o Seeker."
                 } catch (_: SocketTimeoutException) {
+                    finalOutcome = TraceOutcome.DEGRADED
+                    finalReason = A0SmokeTrace.Reason.READ_TIMEOUT
+                    trace.note(A0SmokeTrace.Stage.SERVER_READ_TIMEOUT, TraceOutcome.DEGRADED, finalReason)
                     result = if (searchSubmitted) {
                         "BUSCA ENVIADA; NENHUMA RESPOSTA P2P RECEBIDA. " +
                             "A rede móvel pode bloquear conexões de entrada."
@@ -261,10 +299,21 @@ class A0ManualLoginActivity : Activity() {
                         "TIMEOUT. A conexão ou resposta do servidor não chegou."
                     }
                 } catch (_: IllegalArgumentException) {
+                    finalReason = A0SmokeTrace.Reason.INVALID_INPUT
+                    trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE, TraceOutcome.FAILED, finalReason)
                     result = "ENTRADA INVÁLIDA. Confira usuário e senha de teste."
-                } catch (_: IOException) {
+                } catch (error: IOException) {
+                    finalReason = when (error) {
+                        is UnknownHostException -> A0SmokeTrace.Reason.DNS_FAILURE
+                        is ConnectException -> A0SmokeTrace.Reason.CONNECT_FAILED
+                        is SocketException -> A0SmokeTrace.Reason.SOCKET_CLOSED
+                        else -> A0SmokeTrace.Reason.SERVER_IO_FAILURE
+                    }
+                    trace.note(A0SmokeTrace.Stage.IO_FAILURE, TraceOutcome.FAILED, finalReason)
                     result = "ERRO DE REDE OU PROTOCOLO. Nenhum arquivo foi baixado."
                 } catch (_: RuntimeException) {
+                    finalReason = A0SmokeTrace.Reason.UNKNOWN_FAILURE
+                    trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE, TraceOutcome.FAILED, finalReason)
                     result = "ERRO NO TESTE. Nenhuma credencial foi armazenada."
                 } finally {
                     activeListener?.close()
@@ -273,6 +322,9 @@ class A0ManualLoginActivity : Activity() {
                     secret.fill('\u0000')
                     activeSocket?.close()
                     activeSocket = null
+                    trace.note(A0SmokeTrace.Stage.SOCKETS_CLOSED)
+                    trace.finish(finalOutcome, finalReason)
+                    if (captureEnabled) runCatching { Diagnostics.stopCapture() }
                 }
                 if (!stopping && !isFinishing && !isDestroyed) {
                     runOnUiThread {
@@ -287,6 +339,25 @@ class A0ManualLoginActivity : Activity() {
         }
         action.setOnClickListener { start(false) }
         searchAction.setOnClickListener { start(true) }
+        exportAction.setOnClickListener {
+            exportAction.isEnabled = false
+            worker.execute {
+                val report = runCatching { Diagnostics.createExport() }
+                runOnUiThread {
+                    exportAction.isEnabled = true
+                    if (!stopping && !isFinishing && !isDestroyed) {
+                        report.onSuccess { file ->
+                            startActivity(Intent.createChooser(
+                                DiagnosticsShare.createIntent(this@A0ManualLoginActivity, file),
+                                "Compartilhar relatório de diagnóstico"
+                            ))
+                        }.onFailure {
+                            status.text = "Falha ao exportar logs. Nenhum dado foi enviado."
+                        }
+                    }
+                }
+            }
+        }
     }
 
     override fun onStop() {
