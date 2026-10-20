@@ -5861,9 +5861,14 @@ class PlaybackService : MediaLibraryService() {
         is BoundedContextPersistence.RestoreOutcome.Restored -> {
             if (restoreBoundedQueue(player, outcome.state)) {
                 true
-            } else {
+            } else if (PlaybackLifecycleRestoreGate.mayFallBackAfterFailedProjection(outcome.state)) {
+                // Legacy compatibility, only when no canonical identity was proven.
                 BoundedContextPersistence.clearImmediately()
                 restoreLastQueue(player)
+            } else {
+                // Preserve the selected canonical snapshot for explicit recovery;
+                // never resurrect a physical fallback or autoplay on recreation.
+                false
             }
         }
         BoundedContextPersistence.RestoreOutcome.CanonicalUnavailable -> false
