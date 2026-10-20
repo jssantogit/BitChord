@@ -14,7 +14,9 @@ import java.io.InputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.security.MessageDigest
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -249,6 +251,171 @@ class A0AcquisitionEmulatorSmokeTest {
                         assertFalse(directory.listFiles().orEmpty().any { it.name.endsWith(".partial") })
                     } finally {
                         workers.shutdownNow()
+                    }
+                }
+            }
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test(timeout = 20000)
+    fun deniedPResponseNeverOpensFileSocketOrTouchesPrivateStorage() {
+        val directory = File(
+            InstrumentationRegistry.getInstrumentation().targetContext.filesDir,
+            "a0-rejected-" + System.nanoTime()
+        )
+        assertTrue(directory.mkdirs())
+        val audio = ownedWav()
+        try {
+            ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { pListener ->
+                ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { fListener ->
+                    fListener.soTimeout = 800
+                    val pool = Executors.newSingleThreadExecutor()
+                    try {
+                        val peer = pool.submit<Boolean> {
+                            pListener.accept().use { socket ->
+                                socket.soTimeout = 4000
+                                readFrame(socket.getInputStream()) // PeerInit P
+                                readFrame(socket.getInputStream()) // Download TransferRequest
+                                socket.getOutputStream().write(
+                                    frame(41, intLE(103) + byteArrayOf(0) + text("peer-denied"))
+                                )
+                                socket.getOutputStream().flush()
+                                true
+                            }
+                        }
+                        val result = A0LocalTwoChannelSession.receiveOwnedFixture(
+                            pListener.localPort, fListener.localPort, "android-fixture",
+                            101, 107, 103, "Owned\\denied.wav", audio.size.toLong(),
+                            sha256(audio), directory
+                        )
+                        assertTrue(result is A0LocalTwoChannelSession.Outcome.Denied)
+                        assertTrue(peer.get(10, TimeUnit.SECONDS))
+                        try {
+                            fListener.accept().close()
+                            fail("Rejected P message must never open an F channel")
+                        } catch (_: SocketTimeoutException) {
+                            // Expected: F channel was never requested.
+                        }
+                        assertTrue(directory.listFiles().isNullOrEmpty())
+                    } finally {
+                        pool.shutdownNow()
+                    }
+                }
+            }
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test(timeout = 20000)
+    fun disconnectedFileChannelDeletesPartialBytesOnAndroid() {
+        val directory = File(
+            InstrumentationRegistry.getInstrumentation().targetContext.filesDir,
+            "a0-truncated-" + System.nanoTime()
+        )
+        assertTrue(directory.mkdirs())
+        val audio = ownedWav()
+        try {
+            ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { pListener ->
+                ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { fListener ->
+                    val pool = Executors.newFixedThreadPool(2)
+                    try {
+                        val pPeer = pool.submit<Boolean> {
+                            pListener.accept().use { socket ->
+                                readFrame(socket.getInputStream())
+                                readFrame(socket.getInputStream())
+                                socket.getOutputStream().write(
+                                    frame(41, intLE(103) + byteArrayOf(1) + longLE(audio.size.toLong()))
+                                )
+                                socket.getOutputStream().flush()
+                                true
+                            }
+                        }
+                        val fPeer = pool.submit<Boolean> {
+                            fListener.accept().use { socket ->
+                                readFrame(socket.getInputStream()) // F PeerInit
+                                assertEquals(103, readInt(socket.getInputStream())) // Raw token
+                                socket.getOutputStream().write(audio.copyOfRange(0, 64))
+                                socket.getOutputStream().flush()
+                                true
+                            }
+                        }
+                        try {
+                            A0LocalTwoChannelSession.receiveOwnedFixture(
+                                pListener.localPort, fListener.localPort, "android-fixture",
+                                101, 107, 103, "Owned\\truncated.wav", audio.size.toLong(),
+                                sha256(audio), directory
+                            )
+                            fail("Unexpected EOF on F channel must not commit a file")
+                        } catch (_: IOException) {
+                            assertTrue(directory.listFiles().isNullOrEmpty())
+                        }
+                        assertTrue(pPeer.get(10, TimeUnit.SECONDS))
+                        assertTrue(fPeer.get(10, TimeUnit.SECONDS))
+                    } finally {
+                        pool.shutdownNow()
+                    }
+                }
+            }
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test(timeout = 20000)
+    fun stalledFileChannelTimesOutAndCleansPartialOnAndroid() {
+        val directory = File(
+            InstrumentationRegistry.getInstrumentation().targetContext.filesDir,
+            "a0-timeout-" + System.nanoTime()
+        )
+        assertTrue(directory.mkdirs())
+        val audio = ownedWav()
+        val release = CountDownLatch(1)
+        try {
+            ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { pListener ->
+                ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { fListener ->
+                    val pool = Executors.newFixedThreadPool(2)
+                    try {
+                        val pPeer = pool.submit<Boolean> {
+                            pListener.accept().use { socket ->
+                                readFrame(socket.getInputStream())
+                                readFrame(socket.getInputStream())
+                                socket.getOutputStream().write(
+                                    frame(41, intLE(103) + byteArrayOf(1) + longLE(audio.size.toLong()))
+                                )
+                                socket.getOutputStream().flush()
+                                true
+                            }
+                        }
+                        val fPeer = pool.submit<Boolean> {
+                            fListener.accept().use { socket ->
+                                readFrame(socket.getInputStream())
+                                assertEquals(103, readInt(socket.getInputStream()))
+                                socket.getOutputStream().write(audio.copyOfRange(0, 64))
+                                socket.getOutputStream().flush()
+                                release.await(10, TimeUnit.SECONDS) // Keeps F alive without sending remaining bytes
+                                true
+                            }
+                        }
+                        try {
+                            A0LocalTwoChannelSession.receiveOwnedFixture(
+                                pListener.localPort, fListener.localPort, "android-fixture",
+                                101, 107, 103, "Owned\\stalled.wav", audio.size.toLong(),
+                                sha256(audio), directory
+                            )
+                            fail("Stalled F channel must time out and never commit a file")
+                        } catch (_: SocketTimeoutException) {
+                            assertTrue(directory.listFiles().isNullOrEmpty())
+                        } finally {
+                            release.countDown()
+                        }
+                        assertTrue(pPeer.get(10, TimeUnit.SECONDS))
+                        assertTrue(fPeer.get(10, TimeUnit.SECONDS))
+                    } finally {
+                        release.countDown()
+                        pool.shutdownNow()
                     }
                 }
             }
