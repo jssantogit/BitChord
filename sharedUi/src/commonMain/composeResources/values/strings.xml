@@ -257,4 +257,10 @@
     <string name="smart_playlist_reason_absence">Time away</string>
     <string name="smart_playlist_reason_recency">Recent listen</string>
     <string name="smart_playlist_reason_duration">Trusted duration</string>
+    <string name="smart_collection_batch_play">Play</string>
+    <string name="smart_collection_batch_queue">Add to queue</string>
+    <string name="smart_collection_batch_added">Added to queue</string>
+    <string name="smart_collection_batch_played">Starting playback</string>
+    <string name="smart_collection_batch_empty">No eligible recordings</string>
+    <string name="smart_collection_batch_failed">Collection unavailable or queue action rejected</string>
 </resources>
