@@ -306,10 +306,20 @@ object Diagnostics {
         val store = checkNotNull(fileStore) { "Diagnostics.install must be called first" }
         val flushComplete = writer.awaitWritesIssuedBeforeCall(timeoutMillis = 2_000L)
         val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+        val snapshot = buffer.snapshot()
         return store.createExport(
-            metadataLines = reportMetadataLines() + "captureFlushStatus=${DiagnosticCaptureIntegrity.flushStatus(flushComplete)}",
-            recentEventLines = buffer.snapshot().map(DiagnosticFormatter::format),
+            metadataLines = reportMetadataLines() +
+                "captureFlushStatus=${DiagnosticCaptureIntegrity.flushStatus(flushComplete)}",
+            recentEventLines = snapshot.map(DiagnosticFormatter::format),
             fileName = "bitchord-diagnostics-$timestamp.txt",
+            reportV2Input = DiagnosticReportV2Input(
+                recentEvents = snapshot,
+                flushComplete = flushComplete,
+                rejectedWrites = writer.droppedWrites,
+                evictedMemoryEvents = buffer.evictedCount,
+                ioFailures = writer.failedWrites,
+                captureRotations = store.captureRotationsSinceOpen,
+            ),
         )
     }
 
