@@ -1324,4 +1324,10 @@
     <string name="wear_os_code_hint">配對碼</string>
     <string name="wear_os_done">完成</string>
     <string name="spotify_use_spdc_token">使用 sp_dc 權杖</string>
+    <string name="playback_recovery_connection">遠端歌曲無法開始播放。請檢查網路連線或伺服器。</string>
+    <string name="playback_recovery_unavailable">所選遠端版本目前無法使用。</string>
+    <string name="playback_recovery_failed">無法開啟所選遠端歌曲。</string>
+    <string name="playback_recovery_retry">重試</string>
+    <string name="playback_recovery_retrying">正在重試…</string>
+    <string name="playback_recovery_dismiss">關閉</string>
 </resources>
