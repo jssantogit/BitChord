@@ -55,6 +55,20 @@ class A0SmokeTraceTest {
         )) assertFalse("Unsafe field $secret", output.contains(secret, ignoreCase = true))
     }
 
+    @Test fun ignoredServerCodesRemainBoundedAndIncludeSafeNumericFrameTypes() {
+        val points = mutableListOf<StructuredTracePoint>()
+        val trace = A0SmokeTrace.start(
+            StructuredTracer(sink = StructuredTraceSink { points.add(it) })
+        )
+        trace.ignoredServerFrame(64)
+        trace.ignoredServerFrame(102)
+        trace.ignoredServerFrame(Int.MAX_VALUE)
+        trace.finish(TraceOutcome.DEGRADED)
+        val ignored = points.filter { it.stage == "server_frame_ignored" }
+        assertEquals(listOf("64", "102", "out_of_range"), ignored.map { it.attributes["serverCode"] })
+        assertEquals("3", points.last().attributes["ignoredServerFrames"])
+    }
+
     @Test fun networkContextOnlyExportsCoarseTransportType() {
         val points = mutableListOf<StructuredTracePoint>()
         val trace = A0SmokeTrace.start(
@@ -79,6 +93,6 @@ class A0SmokeTraceTest {
         trace.finish(TraceOutcome.FAILED)
         assertEquals(1, points.count { it.kind == TracePointKind.TRACE_END })
         assertEquals("200", points.last().attributes["ignoredServerFrames"])
-        assertTrue(points.size <= 8)
+        assertTrue(points.size <= 18)
     }
 }
