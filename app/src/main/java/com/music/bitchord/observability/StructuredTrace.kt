@@ -3,6 +3,7 @@ package com.music.bitchord.observability
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -55,6 +56,8 @@ data class StructuredTracePoint(
     val durationNanos: Long?,
     val attributes: Map<String, String>,
     val verbosity: TraceVerbosity,
+    val flowId: String? = null,
+    val parentSpanId: String? = null,
 )
 
 fun interface StructuredTraceSink {
@@ -63,6 +66,22 @@ fun interface StructuredTraceSink {
     companion object {
         val NO_OP = StructuredTraceSink { }
     }
+}
+
+/**
+ * Immutable session-local causal handle: references are salted, no raw media IDs.
+ * Pass it explicitly across callbacks, coroutines and asynchronous boundaries.
+ */
+class TraceFlowContext internal constructor(
+    val flowId: String,
+    val spanId: String,
+    internal val ownerToken: Any,
+)
+
+/** Privacy-safe bridge for legacy log adapters, without exporting legacy IDs. */
+object TraceLegacyCorrelationBridge {
+    fun attributes(context: TraceFlowContext, ignoredLegacyTrackId: String?): Map<String, String> =
+        mapOf("flowId" to context.flowId, "parentSpanId" to context.spanId)
 }
 
 /**
@@ -115,6 +134,8 @@ class StructuredTracer(
         require(maxIntermediatePoints >= 0) { "maxIntermediatePoints must not be negative" }
     }
 
+    private val sessionOwner = Any()
+
     @Volatile
     var mode: TraceMode = mode
 
@@ -125,12 +146,20 @@ class StructuredTracer(
         feature: TraceFeature,
         operation: String,
         attributes: Map<String, String> = emptyMap(),
+        parent: TraceFlowContext? = null,
     ): StructuredTrace {
+        require(parent == null || parent.ownerToken === sessionOwner) {
+            "cannot correlate across diagnostics sessions"
+        }
         val traceId = traceIdFactory().take(MAX_TRACE_ID_CHARS)
         require(traceId.isNotBlank()) { "traceId must not be blank" }
         val startedAt = monotonicNanos()
         val trace = StructuredTrace(
             traceId = traceId,
+            flowId = parent?.flowId ?: referenceEncoder.encode(traceId),
+            parentSpanId = parent?.spanId,
+            spanId = referenceEncoder.encode(traceId),
+            ownerToken = sessionOwner,
             feature = feature,
             operation = cleanToken(operation, "operation"),
             startedAtNanos = startedAt,
@@ -152,6 +181,10 @@ class StructuredTracer(
 
 class StructuredTrace internal constructor(
     val traceId: String,
+    val flowId: String,
+    val parentSpanId: String?,
+    private val spanId: String,
+    private val ownerToken: Any,
     val feature: TraceFeature,
     val operation: String,
     private val startedAtNanos: Long,
@@ -163,6 +196,9 @@ class StructuredTrace internal constructor(
 ) {
     private val completed = AtomicBoolean(false)
     private val remainingIntermediatePoints = AtomicInteger(maxIntermediatePoints)
+
+    /** Explicit immutable propagation; never derived from ambient thread locals. */
+    fun context(): TraceFlowContext = TraceFlowContext(flowId, spanId, ownerToken)
 
     internal fun emitStart(attributes: Map<String, String>) {
         emit(
@@ -209,7 +245,7 @@ class StructuredTrace internal constructor(
         } catch (error: Throwable) {
             emitSpan(
                 cleanStage,
-                TraceOutcome.FAILED,
+                if (error is CancellationException) TraceOutcome.CANCELLED else TraceOutcome.FAILED,
                 started,
                 attributes + ("errorType" to error.javaClass.simpleName),
                 verbosity,
@@ -233,7 +269,7 @@ class StructuredTrace internal constructor(
         } catch (error: Throwable) {
             emitSpan(
                 cleanStage,
-                TraceOutcome.FAILED,
+                if (error is CancellationException) TraceOutcome.CANCELLED else TraceOutcome.FAILED,
                 started,
                 attributes + ("errorType" to error.javaClass.simpleName),
                 verbosity,
@@ -301,6 +337,8 @@ class StructuredTrace internal constructor(
                 durationNanos = durationNanos,
                 attributes = boundedAttributes(attributes),
                 verbosity = verbosity,
+                flowId = flowId,
+                parentSpanId = parentSpanId,
             ),
         )
     }
