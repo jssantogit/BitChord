@@ -85,8 +85,19 @@ class ObservationTests(unittest.TestCase):
                          collect_observations(reader)['jobs'][0]['lane'])
         reader.runs[0]['head_branch'] = 'token=SECRET_IN_REF'
         data = collect_observations(reader)
-        self.assertEqual('pr_b', data['jobs'][0]['lane'])
+        self.assertEqual('pr_c', data['jobs'][0]['lane'])
         self.assertNotIn('SECRET_IN_REF', str(data))
+
+
+    def test_android_lane_migration_keeps_reporting_in_sync(self):
+        from pathlib import Path
+        from tools.delivery_ci_observations import _lane_for_run
+        workflow = (Path(__file__).resolve().parents[1] /
+                    '.github/workflows/check.yml').read_text()
+        self.assertIn("'bitchord-android-pr-lane-c'", workflow)
+        self.assertEqual('pr_b', _lane_for_run('pull_request', 'playback/b13'))
+        self.assertEqual('pr_c', _lane_for_run('pull_request', 'perf/d10'))
+
 
 if __name__ == '__main__':
     unittest.main()

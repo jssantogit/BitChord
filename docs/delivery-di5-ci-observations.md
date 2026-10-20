@@ -49,3 +49,7 @@ PR #125. It does not modify `.github/workflows/check.yml`, add an Actions
 workflow, alter required tests, add external telemetry, enable any merge or
 expand MAX_ITEMS=3. Production scheduling changes require separate evidence,
 review and authorization.
+
+### Candidate third-lane routing (only on the unmerged pilot branch)
+
+When the companion third-lane CI workflow is installed through a protected, separately authorized merge, the observation labels change together: `pr_a` = catalog/intelligence; `pr_b` = playback; `pr_c` = other PR branches. The `main` and `unknown` labels remain unchanged. The deployed two-lane mapping remains the truth until the new workflow actually reaches protected main. Do not compare historical `pr_b` samples to future `pr_b` samples without accounting for the changed routing policy.
