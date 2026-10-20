@@ -84,7 +84,10 @@ internal class OpenSubsonicMediaAccess(
             savedConfig = accounts::savedConfig,
             configMatches = OpenSubsonicProvider(config)::matchesSavedConfig,
         )
-        if (!lease.isCurrent()) {
+        // A revision check is sufficient immediately after savedConfig():
+        // avoid a second Keystore read during access resolution. The full
+        // configuration check occurs at the authenticated DataSource.open gate.
+        if (!lease.revisionIsCurrent()) {
             return OpenSubsonicMediaAccessResult.Failure(
                 OpenSubsonicMediaAccessFailure.CREDENTIAL_UNAVAILABLE,
             )
