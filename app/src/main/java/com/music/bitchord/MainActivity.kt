@@ -317,6 +317,7 @@ import com.music.bitchord.ui.screens.CanonicalSongMenuRating
 import com.music.bitchord.ui.screens.CanonicalMyRatingsEntry
 import com.music.bitchord.ui.screens.CanonicalMyRatingsScreen
 import com.music.bitchord.ui.screens.LibraryRediscoveryShelfEntry
+import com.music.bitchord.ui.screens.AdaptiveCollectionsLibraryEntry
 import com.music.bitchord.ui.screens.MoodGenrePlaylistsScreen
 import com.music.bitchord.ui.screens.SearchScreen
 import com.music.bitchord.data.settings.SongSort
@@ -3390,6 +3391,10 @@ private fun BitChordApp(
                                 Column {
                                     CanonicalMyRatingsEntry(onOpen = { showCanonicalMyRatings = true })
                                     LibraryRediscoveryShelfEntry(
+                                        refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
+                                        onOpenRecording = { rediscoveryRecordingId = it },
+                                    )
+                                    AdaptiveCollectionsLibraryEntry(
                                         refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
                                         onOpenRecording = { rediscoveryRecordingId = it },
                                     )
