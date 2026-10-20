@@ -90,7 +90,7 @@ class A0ManualLoginActivity : Activity() {
         fun start(performSearch: Boolean) {
             if (!acknowledge.isChecked) {
                 status.text = "Leia e confirme o aviso de segurança."
-                return@setOnClickListener
+                return
             }
             val username = user.text.toString()
             val secret = password.text.toString().toCharArray()
