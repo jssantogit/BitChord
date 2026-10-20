@@ -58,6 +58,7 @@ class DiagnosticFileStore(
         reportV2Input: DiagnosticReportV2Input? = null,
         includeJsonl: Boolean = false,
         incidentReport: DiagnosticIncidentTriage? = null,
+        performanceReport: List<DiagnosticBottleneckSummary> = emptyList(),
     ): File = synchronized(lock) {
         ensureRoot()
         val exports = exportsDir().apply { mkdirs() }
@@ -119,6 +120,22 @@ class DiagnosticFileStore(
                 writer.appendLine("[incidents-jsonl-v3]")
                 report.toJsonl().lineSequence().filter(String::isNotBlank).forEach {
                     writer.appendLine(safeSharedText(it))
+                }
+            }
+            if (performanceReport.isNotEmpty()) {
+                writer.appendLine()
+                writer.appendLine("[measured-bottlenecks-v0]")
+                writer.appendLine("source=observed_trace_spans_only")
+                writer.appendLine("critical_path_proven=false")
+                performanceReport.take(32).forEach { sample ->
+                    writer.appendLine(safeSharedText(
+                        "feature=${sample.feature} operation=${sample.operation} phase=${sample.phase}" +
+                            " count=${sample.sampleCount} max_ns=${sample.maxObservedNanos}" +
+                            " p50_ns=${sample.p50Nanos?.toString() ?: "insufficient"}" +
+                            " p95_ns=${sample.p95Nanos?.toString() ?: "insufficient"}" +
+                            " percentile_evidence=${sample.percentileEvidence.name.lowercase()}" +
+                            " samples_dropped=${sample.samplesDropped}"
+                    ))
                 }
             }
         }
