@@ -111,7 +111,7 @@ class SmartCollectionBatchHandoffTest {
         assertEquals(0, dispatches)
     }
 
-    @Test fun failedExecutionIsNotReportedAsQueuedAndCancellationPropagates() = runBlocking {
+    @Test fun failedExecutionIsNotReportedAsQueuedAndCancellationPropagates(): Unit = runBlocking {
         val resolver = Resolver()
         val source = SmartCollectionActionSource.SavedDefinition("rule")
         val handoff = SmartCollectionBatchHandoff(
