@@ -22,8 +22,18 @@ class A0OneShotPublicSearchWireTest {
         assertEquals(q.size - 4, int(s))
         assertEquals(26, int(s))
         assertEquals(27182, int(s))
-        assertEquals("Ringingsound.wav", text(s))
+        assertEquals("Ringingsound wav", text(s)) // Nicotine+ strips periods for SoulseekQt interop
         assertEquals(-1, s.read())
+    }
+
+    @Test fun searchTermIsSanitizedWhileTrustedFilenameGateRemainsExact() {
+        assertEquals("Ringingsound.wav", A0OneShotPublicSearchWire.TARGET_FILENAME)
+        assertEquals("Ringingsound wav", A0OneShotPublicSearchWire.SEARCH_TERM)
+        val wire = A0OneShotPublicSearchWire.fileSearch(120)
+        val q = ByteArrayInputStream(wire)
+        int(q); int(q); int(q)
+        assertEquals("Ringingsound wav", text(q))
+        assertFalse(wire.toString(Charsets.ISO_8859_1).contains("Ringingsound.wav"))
     }
 
     @Test fun oneCorrelatedDirectPeerReplyCountsFilenameButNeverExposesPeerData() {
