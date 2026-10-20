@@ -164,6 +164,7 @@ class A0ManualLoginActivity : Activity() {
                 var packet: ByteArray? = null
                 var result = "Falha ao iniciar a verificação."
                 var searchSubmitted = false
+                var loginReplyProgress: A0LoginReadProgress? = null
                 try {
                     packet = A0ExperimentalLoginCodec.encode(username, secret)
                     trace.note(A0SmokeTrace.Stage.SERVER_CONNECT_STARTED)
@@ -173,14 +174,21 @@ class A0ManualLoginActivity : Activity() {
                         // No user-controlled URL, proxy, redirects or fallback.
                         connection.connect(InetSocketAddress(SERVER_HOST, SERVER_PORT), 7000)
                         trace.note(A0SmokeTrace.Stage.SERVER_CONNECTED)
-                        connection.soTimeout = 7000
+                        // One bounded login attempt: allow slower server replies on Wi-Fi,
+                        // without automatic reconnect/relogin or credential replay.
+                        connection.soTimeout = 12_000
                         connection.getOutputStream().write(packet)
                         connection.getOutputStream().flush()
                         trace.note(A0SmokeTrace.Stage.LOGIN_PACKET_SENT)
                         // Wipe before receiving a reply, which might stall.
                         packet.fill(0)
                         packet = null
-                        A0ExperimentalLoginCodec.readResponse(connection.getInputStream())
+                        loginReplyProgress = A0LoginReadProgress(
+                            connection.getInputStream()
+                        ) {
+                            trace.note(A0SmokeTrace.Stage.LOGIN_RESPONSE_FIRST_BYTE)
+                        }
+                        A0ExperimentalLoginCodec.readResponse(checkNotNull(loginReplyProgress))
                         trace.note(A0SmokeTrace.Stage.LOGIN_ACCEPTED)
                         if (!performSearch) {
                             result = "LOGIN CONFIRMADO. Sessão encerrada, sem buscas ou downloads."
@@ -380,7 +388,11 @@ class A0ManualLoginActivity : Activity() {
                 } catch (_: SocketTimeoutException) {
                     finalOutcome = TraceOutcome.DEGRADED
                     finalReason = A0SmokeTrace.Reason.READ_TIMEOUT
-                    trace.note(A0SmokeTrace.Stage.SERVER_READ_TIMEOUT, TraceOutcome.DEGRADED, finalReason)
+                    if (!searchSubmitted && loginReplyProgress != null) {
+                        trace.loginResponseProblem(loginReplyProgress.phase, timedOut = true)
+                    } else {
+                        trace.note(A0SmokeTrace.Stage.SERVER_READ_TIMEOUT, TraceOutcome.DEGRADED, finalReason)
+                    }
                     result = if (searchSubmitted) {
                         "BUSCA ENVIADA; NENHUMA RESPOSTA P2P RECEBIDA. " +
                             "A rede móvel pode bloquear conexões de entrada."
@@ -392,6 +404,9 @@ class A0ManualLoginActivity : Activity() {
                     trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE, TraceOutcome.FAILED, finalReason)
                     result = "ENTRADA INVÁLIDA. Confira usuário e senha de teste."
                 } catch (error: IOException) {
+                    if (!searchSubmitted && loginReplyProgress != null) {
+                        trace.loginResponseProblem(loginReplyProgress.phase, timedOut = false)
+                    }
                     finalReason = when (error) {
                         is UnknownHostException -> A0SmokeTrace.Reason.DNS_FAILURE
                         is ConnectException -> A0SmokeTrace.Reason.CONNECT_FAILED
