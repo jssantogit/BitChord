@@ -388,8 +388,9 @@ class A0ManualLoginActivity : Activity() {
                 } catch (_: SocketTimeoutException) {
                     finalOutcome = TraceOutcome.DEGRADED
                     finalReason = A0SmokeTrace.Reason.READ_TIMEOUT
-                    if (!searchSubmitted && loginReplyProgress != null) {
-                        trace.loginResponseProblem(loginReplyProgress.phase, timedOut = true)
+                    val readProgress = loginReplyProgress
+                    if (!searchSubmitted && readProgress != null) {
+                        trace.loginResponseProblem(readProgress.phase, timedOut = true)
                     } else {
                         trace.note(A0SmokeTrace.Stage.SERVER_READ_TIMEOUT, TraceOutcome.DEGRADED, finalReason)
                     }
@@ -404,8 +405,9 @@ class A0ManualLoginActivity : Activity() {
                     trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE, TraceOutcome.FAILED, finalReason)
                     result = "ENTRADA INVÁLIDA. Confira usuário e senha de teste."
                 } catch (error: IOException) {
-                    if (!searchSubmitted && loginReplyProgress != null) {
-                        trace.loginResponseProblem(loginReplyProgress.phase, timedOut = false)
+                    val readProgress = loginReplyProgress
+                    if (!searchSubmitted && readProgress != null) {
+                        trace.loginResponseProblem(readProgress.phase, timedOut = false)
                     }
                     finalReason = when (error) {
                         is UnknownHostException -> A0SmokeTrace.Reason.DNS_FAILURE
