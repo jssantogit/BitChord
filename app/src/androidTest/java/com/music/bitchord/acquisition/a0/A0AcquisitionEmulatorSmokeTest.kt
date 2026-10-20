@@ -179,6 +179,92 @@ class A0AcquisitionEmulatorSmokeTest {
         }
     }
 
+    @Test(timeout = 20000)
+    fun separatePeerMessageAndFileSocketsReceiveOnlyOwnedLocalAudio() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val directory = File(context.filesDir, "a0-two-sockets-" + System.nanoTime())
+        assertTrue(directory.mkdirs())
+        val data = ownedWav()
+        try {
+            ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { messageListener ->
+                ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { fileListener ->
+                    assertFalse(messageListener.localPort == fileListener.localPort)
+                    val workers = Executors.newFixedThreadPool(2)
+                    try {
+                        val messagePeer = workers.submit<Boolean> {
+                            messageListener.accept().use { socket ->
+                                socket.soTimeout = 4000
+                                val init = ByteArrayInputStream(readFrame(socket.getInputStream()))
+                                assertEquals(1, init.read())
+                                assertEquals("android-fixture", readString(init))
+                                assertEquals("P", readString(init))
+                                assertEquals(71, readInt(init))
+                                val request = ByteArrayInputStream(readFrame(socket.getInputStream()))
+                                assertEquals(40, readInt(request))
+                                assertEquals(0, readInt(request))
+                                assertEquals(73, readInt(request))
+                                assertEquals("Owned\\two-sockets.wav", readString(request))
+                                assertEquals(data.size.toLong(), readLong(request))
+                                socket.getOutputStream().write(
+                                    frame(41, intLE(73) + byteArrayOf(1) + longLE(data.size.toLong()))
+                                )
+                                socket.getOutputStream().flush()
+                                true
+                            }
+                        }
+                        val filePeer = workers.submit<Boolean> {
+                            fileListener.accept().use { socket ->
+                                socket.soTimeout = 4000
+                                val init = ByteArrayInputStream(readFrame(socket.getInputStream()))
+                                assertEquals(1, init.read())
+                                assertEquals("android-fixture", readString(init))
+                                assertEquals("F", readString(init))
+                                assertEquals(75, readInt(init))
+                                assertEquals(73, readInt(socket.getInputStream())) // raw transfer token
+                                socket.getOutputStream().write(data.copyOfRange(0, 31))
+                                socket.getOutputStream().write(data.copyOfRange(31, data.size))
+                                socket.getOutputStream().flush()
+                                true
+                            }
+                        }
+                        Socket("127.0.0.1", messageListener.localPort).use { socket ->
+                            socket.soTimeout = 4000
+                            socket.getOutputStream().write(A0SoulseekPeerWireProbe.peerInit("android-fixture", 71))
+                            socket.getOutputStream().write(A0SoulseekPeerWireProbe.downloadRequest(
+                                "Owned\\two-sockets.wav", 73, data.size.toLong()
+                            ))
+                            socket.getOutputStream().flush()
+                            val approved = A0SoulseekPeerWireProbe.readTransferDecision(
+                                socket.getInputStream(), 73, data.size.toLong()
+                            )
+                            assertTrue(approved.allowed)
+                            assertEquals(data.size.toLong(), approved.peerReportedByteCount)
+                        }
+                        val received = A0SoulseekLocalFileChannelProbe.receiveFixture(
+                            port = fileListener.localPort,
+                            username = "android-fixture",
+                            connectionToken = 75,
+                            transferToken = 73,
+                            expectedBytes = data.size.toLong(),
+                            trustedSha256Hex = sha256(data),
+                            appPrivateDirectory = directory
+                        )
+                        assertTrue(messagePeer.get(10, TimeUnit.SECONDS))
+                        assertTrue(filePeer.get(10, TimeUnit.SECONDS))
+                        assertEquals(data.size.toLong(), received.byteCount)
+                        assertArrayEquals(data, received.file.readBytes())
+                        assertEquals("WAV_HEADER_ONLY", received.containerHint)
+                        assertFalse(directory.listFiles().orEmpty().any { it.name.endsWith(".partial") })
+                    } finally {
+                        workers.shutdownNow()
+                    }
+                }
+            }
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
     private fun ownedWav(): ByteArray {
         val header = ByteArray(44)
         fun mark(at: Int, text: String) = text.toByteArray(Charsets.US_ASCII).copyInto(header, at)
