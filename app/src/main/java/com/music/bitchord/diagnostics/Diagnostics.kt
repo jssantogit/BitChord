@@ -326,6 +326,10 @@ object Diagnostics {
                 rejectedWrites = writer.droppedWrites,
                 flushComplete = flushComplete,
             ),
+            performanceReport = DiagnosticBottleneckAnalysis.summarize(
+                events = snapshot,
+                captureEnabled = true, // explicit export; never a runtime hot-path probe
+            ),
         )
     }
 
