@@ -32,6 +32,7 @@ import com.music.bitchord.sharedui.resources.my_ratings_loading
 import com.music.bitchord.sharedui.resources.my_ratings_more
 import com.music.bitchord.sharedui.resources.my_ratings_title
 import com.music.bitchord.sharedui.resources.recording_feedback_current
+import com.music.bitchord.sharedui.resources.recording_feedback_edit
 import com.music.bitchord.sharedui.resources.rediscovery_close
 import com.music.bitchord.sharedui.resources.rediscovery_unavailable
 import kotlinx.coroutines.CancellationException
@@ -123,7 +124,7 @@ internal fun CanonicalMyRatingsScreen(onBack: () -> Unit) {
                         TextButton(onClick = {
                             editingId = if (editingId == rating.recordingId) null else rating.recordingId
                         }) {
-                            Text(stringResource(com.music.bitchord.sharedui.resources.Res.string.recording_feedback_edit))
+                            Text(stringResource(Res.string.recording_feedback_edit))
                         }
                         if (editingId == rating.recordingId) {
                             CanonicalRecordingFeedbackEntry(rating.recordingId)
