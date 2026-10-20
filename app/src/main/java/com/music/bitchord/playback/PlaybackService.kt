@@ -3759,17 +3759,17 @@ class PlaybackService : MediaLibraryService() {
         val item = player.currentMediaItem ?: return
         val failedIndex = player.currentMediaItemIndex
         val currentFailureOccurrence = failureOccurrenceKeyOrNull(player, failedIndex)
-        val neverStarted = currentFailureOccurrence == null ||
+        val failedBeforeAudio = currentFailureOccurrence == null ||
             currentFailureOccurrence != audibleFailureOccurrenceKey
         val handling = failureCascade.handlePlaybackFailure(
             error = error,
             player = player,
-            neverStarted = neverStarted,
+            neverStarted = failedBeforeAudio,
         )
         // A failed selected remote asset is not permission to change provider,
         // restart automatically or infer catalog unavailability. B5 continues
         // advancing boundedly; keep one explicit, secret-free retry affordance.
-        if (neverStarted && handling != PlaybackFailureHandling.NOT_HANDLED &&
+        if (failedBeforeAudio && handling != PlaybackFailureHandling.NOT_HANDLED &&
             error.errorCode in 2000..2999 && item.isCanonicalRemotePlayback()
         ) {
             val request = item.localConfiguration?.uri?.toString()
