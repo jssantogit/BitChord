@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 90,
+      "expected_head_sha": "e591ce85c3c9e475057d9cff189997e6fdb8d2a2",
+      "allowed_files": [
+        "docs/delivery-di4a-journal.md",
+        "tests/test_delivery_journal.py",
+        "tools/delivery_journal.py"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 91,
+      "expected_head_sha": "3f261afe37f99d9bbfc6a8e0af8a110990ac24f0",
+      "allowed_files": [
+        "docs/delivery-di4b-reconcile.md",
+        "tests/test_delivery_reconcile.py",
+        "tools/delivery_reconcile.py"
+      ],
+      "depends_on": 90,
+      "expected_base_ref": "infra/di4-checkpoint-journal-v0"
+    },
+    {
+      "number": 95,
+      "expected_head_sha": "74223ba082cffd4a351eea879aa3113e1540ce60",
+      "allowed_files": [
+        "docs/delivery-di4c-transfer.md",
+        "tests/test_delivery_preflight.py",
+        "tests/test_delivery_transfer.py",
+        "tools/delivery_transfer.py"
+      ],
+      "depends_on": 91,
+      "expected_base_ref": "infra/di4-readonly-reconciler-v0"
+    }
+  ]
+}

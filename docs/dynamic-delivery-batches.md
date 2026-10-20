@@ -1,0 +1,16 @@
+# Dynamic protected-main batch dispatch — bootstrap only
+
+The existing *Controlled Integration Queue* remains a manually dispatched, protected-main-only controller with **no automatic merge** and no change to `MAX_ITEMS=3`. Its `batch` input now accepts a string rather than a hardcoded Actions dropdown. The controller still rejects unsafe batch names and loads **only** a JSON manifest committed to `.github/integration-batches/<slug>.json` in its protected-main checkout. It verifies exact PR HEAD/base/diff, non-draft state, active ruleset, owner write opt-in, dedicated App token, required Android pre/post-merge CI and human-approved `integration-apply` environment for `execute`.
+
+Lightweight Python CI filters now match future `tools/delivery_*.py` and `tests/test_delivery_*.py` without repeatedly editing the shared workflow.
+
+## Two-phase infrastructure rollout prevents SHA self-reference
+
+**This bootstrap PR does not contain manifests for DI4/DI5/DI6.** An earlier draft staged manifests in the same PR as the workflow changes. The five implementation branches then incorporated that earlier bootstrap ancestor while the bootstrap itself was still receiving HEAD-pin corrections. That creates a circular dependency: synchronizing implementation branches changes their HEADs, so the staged manifests become obsolete again. The bootstrap therefore installs the stable selector and CI globs **without those manifests**.
+
+1. Review the selector, ruleset, CI path filters, changed files, exact HEAD and full Android/Python CI on this bootstrap PR. Its initial protected main integration is an explicit owner-approved *bootstrap exception*; existing queue cannot select an uninstalled dynamic slug.
+2. After its protected merge and exact-main Android CI GREEN, reconcile #90/#91/#95 and #92/#93 against the actual new main (non-destructive history, no force/rebase/reset); remove inherited earlier bootstrap artifacts as necessary. Preserve each PR's minimal **own-only** changed-file allowlist and update their staged child bases. Require Android + Python CI GREEN on each exact final HEAD.
+3. **Only then** create a separate reviewed manifest-only PR, pin the final five HEADs, parent dependencies and 3/2 exact allowlists. This changes protected main but not implementation HEADs; check for drift afterwards. Manifests are reviewed evidence, not approval to execute.
+4. Dispatch the queue on protected main with `mode=plan`, reviewed manifest slug and *fresh current exact main SHA*. After the owner and `integration-apply` environment independently approve, use `mode=execute` to integrate the bounded approved batch. The queue itself merges each PR sequentially with exact pre/postmerge Android CI and stops on any drift, failed CI, conflict or timeout. Start the second batch only with a new approved current-main SHA.
+
+**No automatic pushes/merges, workflow permission broadening, bypass, functional PR integration or DI4 writer activation.** DI4a/DI4b/DI4c still do not implement production cross-run persistence or resumable merge writes.
