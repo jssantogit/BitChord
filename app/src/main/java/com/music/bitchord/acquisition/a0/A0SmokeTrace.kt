@@ -22,7 +22,8 @@ internal class A0SmokeTrace private constructor(
 ) {
     enum class Stage {
         NETWORK_CONTEXT, CAPTURE_READY, LOGIN_STARTED, SERVER_CONNECT_STARTED, SERVER_CONNECTED,
-        LOGIN_PACKET_SENT, LOGIN_ACCEPTED, SEARCH_LISTENER_OPEN,
+        LOGIN_PACKET_SENT, LOGIN_RESPONSE_FIRST_BYTE, LOGIN_RESPONSE_TIMEOUT,
+        LOGIN_RESPONSE_READ_FAILURE, LOGIN_ACCEPTED, SEARCH_LISTENER_OPEN,
         SEARCH_PORT_ANNOUNCED, SEARCH_SENT, SEARCH_WAIT_STARTED,
         DIRECT_ACCEPTED, DIRECT_FRAME_RECEIVED, DIRECT_REPLY_REJECTED,
         DIRECT_REPLY_ACCEPTED, DIRECT_READ_TIMEOUT, DIRECT_IO_FAILURE,
@@ -59,6 +60,20 @@ internal class A0SmokeTrace private constructor(
             stage = stage.name.lowercase(Locale.ROOT),
             outcome = outcome,
             attributes = attributes
+        )
+    }
+
+    /** Distinguish silent login server from partially received frame, without raw bytes. */
+    fun loginResponseProblem(phase: A0LoginReadProgress.Phase, timedOut: Boolean) {
+        if (complete.get()) return
+        trace.event(
+            stage = if (timedOut) "login_response_timeout" else "login_response_read_failure",
+            outcome = TraceOutcome.DEGRADED,
+            attributes = mapOf(
+                "elapsedMs" to elapsedMillis().toString(),
+                "readPhase" to phase.name.lowercase(Locale.ROOT),
+                "reasonCode" to if (timedOut) "read_timeout" else "server_io_failure"
+            )
         )
     }
 
