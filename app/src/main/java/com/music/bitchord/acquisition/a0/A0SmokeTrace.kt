@@ -21,7 +21,7 @@ internal class A0SmokeTrace private constructor(
     private val monotonicNanos: () -> Long
 ) {
     enum class Stage {
-        CAPTURE_READY, LOGIN_STARTED, SERVER_CONNECT_STARTED, SERVER_CONNECTED,
+        NETWORK_CONTEXT, CAPTURE_READY, LOGIN_STARTED, SERVER_CONNECT_STARTED, SERVER_CONNECTED,
         LOGIN_PACKET_SENT, LOGIN_ACCEPTED, SEARCH_LISTENER_OPEN,
         SEARCH_PORT_ANNOUNCED, SEARCH_SENT, SEARCH_WAIT_STARTED,
         DIRECT_ACCEPTED, DIRECT_FRAME_RECEIVED, DIRECT_REPLY_REJECTED,
@@ -42,6 +42,8 @@ internal class A0SmokeTrace private constructor(
         UNKNOWN_FAILURE
     }
 
+    enum class Transport { WIFI, CELLULAR, VPN, ETHERNET, OTHER, DISCONNECTED, UNKNOWN }
+
     private val complete = AtomicBoolean(false)
     private val ignoredServerFrames = AtomicInteger(0)
 
@@ -57,6 +59,18 @@ internal class A0SmokeTrace private constructor(
             stage = stage.name.lowercase(Locale.ROOT),
             outcome = outcome,
             attributes = attributes
+        )
+    }
+
+    fun networkTransport(transport: Transport) {
+        if (complete.get()) return
+        trace.event(
+            stage = Stage.NETWORK_CONTEXT.name.lowercase(Locale.ROOT),
+            outcome = TraceOutcome.SUCCEEDED,
+            attributes = mapOf(
+                "elapsedMs" to elapsedMillis().toString(),
+                "transport" to transport.name.lowercase(Locale.ROOT)
+            )
         )
     }
 
