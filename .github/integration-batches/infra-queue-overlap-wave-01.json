@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 120,
+      "expected_head_sha": "a7b670ecb5be3e5fde87b6db6eb093eddf8627f9",
+      "allowed_files": [
+        "docs/integration-queue.md",
+        "tests/test_integration_queue.py",
+        "tools/integration_queue.py"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 125,
+      "expected_head_sha": "1b1686332b6f50876c568d67e6bc9316b2c46e41",
+      "allowed_files": [
+        "docs/integration-queue.md",
+        "tests/test_integration_queue.py",
+        "tools/integration_queue.py"
+      ],
+      "depends_on": 120,
+      "expected_base_ref": "infra/integration-postci-next-preflight-overlap-v0"
+    },
+    {
+      "number": 128,
+      "expected_head_sha": "a326f506e507acee90262d7e5adb8fb83cedeb80",
+      "allowed_files": [
+        "docs/delivery-di5-ci-observations.md",
+        "tests/test_delivery_ci_observations.py",
+        "tests/test_delivery_metrics.py",
+        "tools/delivery_ci_observations.py",
+        "tools/delivery_metrics.py"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    }
+  ]
+}
