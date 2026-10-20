@@ -402,7 +402,10 @@ internal class OpenSubsonicMediaDataSourceFactory(
     )
 
     /** Catalog-owned B13 seam: no side effects until Media3 DataSource.open. */
-    fun createWithVariant(variant: OpenSubsonicStreamVariant): DataSource =
+    fun createWithVariant(
+        variant: OpenSubsonicStreamVariant,
+        onTruth: ((OpenSubsonicStreamTruthSnapshot) -> Unit)? = null,
+    ): DataSource =
         OpenSubsonicMediaDataSource(
             recordingId = variant.recordingId,
             mediaAssetId = variant.mediaAssetId,
@@ -410,7 +413,7 @@ internal class OpenSubsonicMediaDataSourceFactory(
             transport = transport,
             upstreamFactory = upstreamFactory,
             variant = variant,
-            truthObserver = truthObserver,
+            truthObserver = onTruth ?: truthObserver,
         )
 }
 
