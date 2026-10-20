@@ -48,11 +48,14 @@ internal class PlaybackFailureCascade {
         orderedQueue: List<FailureQueueEntry>,
         repeatMode: FailureRepeatMode,
     ): Decision {
-        failed += current.key
         val currentPosition = orderedQueue.indexOfFirst {
             it.index == current.index && it.key == current.key
         }
+        // A provider's late failure callback can outlive an explicit queue
+        // replacement. It is not a failure of any entry in this queue and
+        // must not poison the active cascade or suppress a later valid retry.
         if (currentPosition < 0) return Decision.Exhausted
+        failed += current.key
 
         val after = orderedQueue.drop(currentPosition + 1)
         val wrapped = if (repeatMode == FailureRepeatMode.ALL) {

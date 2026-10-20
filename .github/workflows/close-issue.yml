@@ -11,8 +11,8 @@ jobs:
   close:
     if: >-
       !github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/close') &&
-      contains(fromJSON('["kushagrasinghx", "Galaxyyss"]'), github.event.comment.user.login)
+      github.event.comment.body == '/close' &&
+      github.event.comment.user.login == github.repository_owner
     runs-on: ubuntu-latest
     steps:
       - name: Close the issue
