@@ -115,9 +115,9 @@ class OpenSubsonicAuthenticatedTranscodeDecisionTest {
     }
 
     @Test fun malformedServerResponseOrTransportExceptionContainsNoSecrets() = runBlocking {
-        for (body in listOf("not-json", """{"subsonic-response":{"status":"ok"}}""")) {
+        for (responseBody in listOf("not-json", """{"subsonic-response":{"status":"ok"}}""")) {
             val engine = OpenSubsonicTranscodeDecisionEngine(object : OpenSubsonicDecisionTransport {
-                override suspend fun post(endpoint: String, parameters: Map<String, String>, body: String) = body@body
+                override suspend fun post(endpoint: String, parameters: Map<String, String>, body: String): String = responseBody
             })
             val result = engine.negotiate(runtime(), variant(), capability(), config) { true }
             assertTrue(result is OpenSubsonicTranscodeDecisionOutcome.Rejected)
