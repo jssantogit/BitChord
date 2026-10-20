@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fail-closed, serial BitChord integration controller; no writes in plan mode."""
 import argparse
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -292,6 +293,20 @@ class IntegrationController:
             return None
         return self.poll(check, f'post-merge CI {merged_sha}', deadline)
 
+    def measured(self, n, phase, operation):
+        """Log bounded, low-cardinality phase evidence without changing the gate."""
+        started = self.clock()
+        outcome = 'blocked'
+        try:
+            result = operation()
+            outcome = 'ok'
+            return result
+        finally:
+            elapsed = max(0.0, min(float(self.clock() - started),
+                                    float(self.timeout_seconds)))
+            self.log(f'QUEUE_METRIC v=1 pr={n} phase={phase} '
+                     f'outcome={outcome} duration_ms={int(elapsed * 1000)}')
+
     def prepare_entry(self, entry, main, merged, deadline):
         """Prepare an approved PR for CI, but NEVER merge here.
 
@@ -351,14 +366,19 @@ class IntegrationController:
                      f'PR #{n}: stale prepared batch entry')
                 prepared = None
             else:
-                head = self.prepare_entry(entry, main, merged, deadline)
+                head = self.measured(
+                    n, 'prepare_head',
+                    lambda: self.prepare_entry(entry, main, merged, deadline))
             # Exact HEAD, allowed files, base SHA, mergeable state and Android
             # GREEN are ALWAYS revalidated immediately before this merge.
-            self.wait_premerge(entry, main, head, deadline)
+            self.measured(
+                n, 'premerge_ci',
+                lambda: self.wait_premerge(entry, main, head, deadline))
             need(self.main_sha() == main,
                  f'PR #{n}: main changed before merge')
             self.log(f'MERGE #{n}: head={head}, main={main}')
-            result = self.api.merge(n, head)
+            result = self.measured(
+                n, 'protected_merge', lambda: self.api.merge(n, head))
             new_main = result.get('sha')
             need(result.get('merged') is True and
                  isinstance(new_main, str) and SHA.fullmatch(new_main),
@@ -374,8 +394,10 @@ class IntegrationController:
             if index + 1 < len(entries):
                 following = entries[index + 1]
                 try:
-                    next_head = self.prepare_entry(
-                        following, new_main, merged | {n}, deadline)
+                    next_head = self.measured(
+                        following['number'], 'prepare_next',
+                        lambda: self.prepare_entry(
+                            following, new_main, merged | {n}, deadline))
                     prepared = (following['number'], new_main, next_head)
                     self.log(f"PREPARED #{following['number']}: "
                              f"head={next_head}, main={new_main}; "
@@ -387,7 +409,9 @@ class IntegrationController:
                     self.log(f"PREPARATION HALTED #{following['number']}: "
                              "will verify post-main CI before stopping")
             self.log(f'POST-CI #{n}: waiting for {new_main}')
-            self.wait_postmerge(new_main, deadline)
+            self.measured(
+                n, 'postmain_ci',
+                lambda: self.wait_postmerge(new_main, deadline))
             merged.add(n)
             main = new_main
             self.log(f'GREEN #{n}: new main={main}')
@@ -418,9 +442,13 @@ def main():
     path = Path('.github/integration-batches') / (args.batch + '.json')
     need(path.is_file(), 'Approved batch manifest not found')
     batch = json.loads(path.read_text(encoding='utf-8'))
+    def realtime_log(message):
+        stamp = datetime.now(timezone.utc).isoformat(timespec='milliseconds')
+        print(f'{stamp} {message}', flush=True)
+
     IntegrationController(
         GitHubREST('jssantogit/BitChord', token),
-        'jssantogit/BitChord').run(
+        'jssantogit/BitChord', logger=realtime_log).run(
             batch, mode=args.mode, expected_main_sha=args.expected_main_sha)
 
 
