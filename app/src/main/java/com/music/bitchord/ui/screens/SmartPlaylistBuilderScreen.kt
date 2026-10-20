@@ -190,6 +190,13 @@ internal fun SmartPlaylistBuilderScreen(onBack: () -> Unit) {
 
     val errorText = stringResource(Res.string.smart_playlist_error)
     val overflowText = stringResource(Res.string.smart_playlist_overflow)
+    val reasonLabels = mapOf(
+        RuleBasedInclusionReason.EXPLICIT_RATING to stringResource(Res.string.smart_playlist_reason_rating),
+        RuleBasedInclusionReason.CONFIRMED_COMPLETION to stringResource(Res.string.smart_playlist_reason_completion),
+        RuleBasedInclusionReason.AUDIBLE_ABSENCE to stringResource(Res.string.smart_playlist_reason_absence),
+        RuleBasedInclusionReason.AUDIBLE_RECENCY to stringResource(Res.string.smart_playlist_reason_recency),
+        RuleBasedInclusionReason.TRUSTED_DURATION to stringResource(Res.string.smart_playlist_reason_duration),
+    )
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -312,20 +319,8 @@ internal fun SmartPlaylistBuilderScreen(onBack: () -> Unit) {
             Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 Text(row.title, style = MaterialTheme.typography.titleMedium)
                 Text(row.artistDisplay, style = MaterialTheme.typography.bodySmall)
-                Text(row.reasons.joinToString(" · ") { reason ->
-                    when (reason) {
-                        RuleBasedInclusionReason.EXPLICIT_RATING ->
-                            stringResource(Res.string.smart_playlist_reason_rating)
-                        RuleBasedInclusionReason.CONFIRMED_COMPLETION ->
-                            stringResource(Res.string.smart_playlist_reason_completion)
-                        RuleBasedInclusionReason.AUDIBLE_ABSENCE ->
-                            stringResource(Res.string.smart_playlist_reason_absence)
-                        RuleBasedInclusionReason.AUDIBLE_RECENCY ->
-                            stringResource(Res.string.smart_playlist_reason_recency)
-                        RuleBasedInclusionReason.TRUSTED_DURATION ->
-                            stringResource(Res.string.smart_playlist_reason_duration)
-                    }
-                }, style = MaterialTheme.typography.labelSmall)
+                Text(row.reasons.joinToString(" · ") { reason -> reasonLabels.getValue(reason) },
+                    style = MaterialTheme.typography.labelSmall)
             }
         }
         item(key = "saved-heading") {
