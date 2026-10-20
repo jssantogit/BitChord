@@ -28,6 +28,7 @@ _REASONS = {
     "CI_TIMEOUT": "ci_timeout",
     "REVIEW_BLOCKED": "review",
 }
+_LANES = ('main', 'pr_a', 'pr_b', 'pr_c', 'unknown')
 _CONCLUSIONS = {None, "success", "failure", "cancelled", "skipped",
                 "timed_out", "action_required", "neutral"}
 
@@ -112,9 +113,11 @@ def summarize(payload):
               "finished job without start")
         conclusion = raw.get("conclusion")
         _need(conclusion in _CONCLUSIONS, "invalid job conclusion")
+        lane = raw.get("lane", "unknown")
+        _need(type(lane) is str and lane in _LANES, "invalid job lane")
         output_jobs.append({
             "run_id": run, "pr_number": n, "head_sha": sha,
-            "queue_seconds": _elapsed(created, started),
+            "lane": lane, "queue_seconds": _elapsed(created, started),
             "execution_seconds": _elapsed(started, ended),
             "conclusion": conclusion,
         })
@@ -136,8 +139,21 @@ def summarize(payload):
     output_blocks.sort(key=lambda b: (b["pr_number"] or 0, b["stage"], b["reason"]))
     queued = [j["queue_seconds"] for j in output_jobs if j["queue_seconds"] is not None]
     executed = [j["execution_seconds"] for j in output_jobs if j["execution_seconds"] is not None]
+    metrics_by_lane = {}
+    for lane in _LANES:
+        group = [job for job in output_jobs if job["lane"] == lane]
+        queue_times = [job["queue_seconds"] for job in group
+                       if job["queue_seconds"] is not None]
+        run_times = [job["execution_seconds"] for job in group
+                     if job["execution_seconds"] is not None]
+        metrics_by_lane[lane] = {
+            "jobs": len(group),
+            "finished_jobs": len(run_times),
+            "median_queue_seconds": _median(queue_times),
+            "median_execution_seconds": _median(run_times),
+        }
     return {"version": 1, "prs": output_prs, "jobs": output_jobs,
-            "blocks": output_blocks,
+            "blocks": output_blocks, "metrics_by_lane": metrics_by_lane,
             "metrics": {
                 "observed_prs": len(output_prs),
                 "merged_prs": sum(p["merged"] for p in output_prs),

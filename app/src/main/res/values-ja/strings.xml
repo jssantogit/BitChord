@@ -1332,4 +1332,10 @@
     <string name="wear_os_code_hint">ペア設定コード</string>
     <string name="wear_os_done">完了</string>
     <string name="signed_by">%1$s のサイン</string>
+    <string name="playback_recovery_connection">リモート曲を開始できませんでした。接続またはサーバーを確認してください。</string>
+    <string name="playback_recovery_unavailable">選択したリモート版は現在利用できません。</string>
+    <string name="playback_recovery_failed">選択したリモート曲を開けませんでした。</string>
+    <string name="playback_recovery_retry">再試行</string>
+    <string name="playback_recovery_retrying">再試行中…</string>
+    <string name="playback_recovery_dismiss">閉じる</string>
 </resources>
