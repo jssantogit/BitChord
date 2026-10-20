@@ -23,15 +23,22 @@ internal object A0IndirectSearchWire {
         val token: Int
     )
 
-    /** Consume a complete server frame. Other server events are ignored. */
-    fun readServerEvent(input: InputStream): Offer? {
+    /** A fully read but unsupported P offer; the next server frame remains aligned. */
+    internal class RejectedPeerOffer : IOException("A0 server sent an unsupported P offer")
+
+    /** Consume a complete server frame; callback gets only a numeric code, never its content. */
+    fun readServerEvent(input: InputStream, onIgnoredCode: (Int) -> Unit = {}): Offer? {
         val size = le32(input)
         if (size !in 4..MAX_SERVER_FRAME) invalid()
         val code = le32(input)
         val payload = ByteArrayInputStream(exact(input, size - 4))
         if (code == 41) throw IOException("A0 login replaced; search session ended")
-        if (code != 18) return null
+        if (code != 18) {
+            onIgnoredCode(code)
+            return null
+        }
 
+        return try {
         val username = field(payload)
         val type = field(payload)
         val ip = exact(payload, 4).reversedArray() // Nicotine+ unpack_ip uses reverse byte order.
@@ -46,7 +53,12 @@ internal object A0IndirectSearchWire {
             privileged !in 0..1 || obfuscation != 0 || obfuscatedPort != 0 ||
             payload.available() != 0 || !publicIpv4(ip)
         ) invalid()
-        return Offer(username, InetAddress.getByAddress(ip), port, token)
+        Offer(username, InetAddress.getByAddress(ip), port, token)
+        } catch (_: IOException) {
+            // The envelope was completely read: refusing one malformed offer
+            // must not lose subsequent messages on the authenticated socket.
+            throw RejectedPeerOffer()
+        }
     }
 
     /** Read one code-9 response on an outbound P socket after PierceFirewall. */
