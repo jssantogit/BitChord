@@ -57,6 +57,7 @@ class DiagnosticFileStore(
         fileName: String,
         reportV2Input: DiagnosticReportV2Input? = null,
         includeJsonl: Boolean = false,
+        incidentReport: DiagnosticIncidentTriage? = null,
     ): File = synchronized(lock) {
         ensureRoot()
         val exports = exportsDir().apply { mkdirs() }
@@ -108,6 +109,16 @@ class DiagnosticFileStore(
                     writer.appendLine()
                     writer.appendLine("[events-jsonl-v2]")
                     writer.append(report.toJsonl())
+                }
+            }
+            incidentReport?.let { report ->
+                writer.appendLine()
+                writer.appendLine("[incident-triage-v3]")
+                report.toHumanLines().forEach { writer.appendLine(safeSharedText(it)) }
+                writer.appendLine()
+                writer.appendLine("[incidents-jsonl-v3]")
+                report.toJsonl().lineSequence().filter(String::isNotBlank).forEach {
+                    writer.appendLine(safeSharedText(it))
                 }
             }
         }
