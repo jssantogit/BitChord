@@ -279,5 +279,173 @@ class QueueTests(unittest.TestCase):
             self.run_controller(api, mode='execute')
 
 
+    def test_next_pr_preparation_overlaps_previous_main_ci_but_merge_waits(self):
+        class ObservedAPI(FakeAPI):
+            def __init__(self):
+                super().__init__()
+                self.timeline = []
+
+            def update_branch(self, n, head):
+                self.timeline.append(('sync', n))
+                return super().update_branch(n, head)
+
+            def main_ci(self, sha):
+                self.timeline.append(('post', sha))
+                return super().main_ci(sha)
+
+            def merge(self, n, head):
+                self.timeline.append(('merge', n))
+                return super().merge(n, head)
+
+        api = ObservedAPI()
+        data = manifest(
+            item(48, H1, ['o2.kt']),
+            item(51, H2, ['b2.kt'], depends_on=48,
+                 base_ref='perf/o2'))
+        self.run_controller(api, data, mode='execute')
+        self.assertLess(api.timeline.index(('merge', 48)),
+                        api.timeline.index(('sync', 51)))
+        self.assertLess(api.timeline.index(('sync', 51)),
+                        api.timeline.index(('post', MERGE1)))
+        self.assertLess(api.timeline.index(('post', MERGE1)),
+                        api.timeline.index(('merge', 51)))
+        self.assertEqual(MERGE2, api.main)
+
+    def test_postmerge_failure_still_blocks_prepared_next_pr(self):
+        class ObservedAPI(FakeAPI):
+            def __init__(self):
+                super().__init__(post='failure')
+                self.timeline = []
+
+            def update_branch(self, n, head):
+                self.timeline.append(('sync', n))
+                return super().update_branch(n, head)
+
+            def main_ci(self, sha):
+                self.timeline.append(('post', sha))
+                return super().main_ci(sha)
+
+        api = ObservedAPI()
+        data = manifest(
+            item(48, H1, ['o2.kt']),
+            item(51, H2, ['b2.kt'], depends_on=48,
+                 base_ref='perf/o2'))
+        with self.assertRaisesRegex(StopIntegration, 'Post-merge CI RED'):
+            self.run_controller(api, data, mode='execute')
+        self.assertLess(api.timeline.index(('sync', 51)),
+                        api.timeline.index(('post', MERGE1)))
+        self.assertEqual([48], [op[1] for op in api.calls
+                                if op[0] == 'merge'])
+
+    def test_next_preparation_rejection_does_not_skip_previous_postmerge_ci(self):
+        class ObservedAPI(FakeAPI):
+            def __init__(self):
+                super().__init__()
+                self.observed_main_post_ci = []
+
+            def main_ci(self, sha):
+                self.observed_main_post_ci.append(sha)
+                return super().main_ci(sha)
+
+        api = ObservedAPI()
+        api.file_scopes[51] = ['b2.kt', 'not-approved.kt']
+        data = manifest(
+            item(48, H1, ['o2.kt']),
+            item(51, H2, ['b2.kt'], depends_on=48,
+                 base_ref='perf/o2'))
+        with self.assertRaises(StopIntegration):
+            self.run_controller(api, data, mode='execute')
+        self.assertIn(MERGE1, api.observed_main_post_ci)
+        self.assertEqual([48], [op[1] for op in api.calls
+                                if op[0] == 'merge'])
+
+
+
+    def test_head_changed_after_speculative_prepare_is_blocked(self):
+        class DriftingAPI(FakeAPI):
+            def main_ci(self, sha):
+                if sha == MERGE1:
+                    self.prs[51]['head']['sha'] = 'f' * 40
+                return super().main_ci(sha)
+
+        api = DriftingAPI()
+        data = manifest(
+            item(48, H1, ['o2.kt']),
+            item(51, H2, ['b2.kt'], depends_on=48,
+                 base_ref='perf/o2'))
+        with self.assertRaisesRegex(StopIntegration, 'head drift'):
+            self.run_controller(api, data, mode='execute')
+        self.assertEqual([48], [op[1] for op in api.calls
+                                if op[0] == 'merge'])
+
+    def test_unapproved_diff_after_speculative_prepare_is_blocked(self):
+        class ChangedFilesAPI(FakeAPI):
+            def main_ci(self, sha):
+                if sha == MERGE1:
+                    self.file_scopes[51].append('unexpected-file.kt')
+                return super().main_ci(sha)
+
+        api = ChangedFilesAPI()
+        data = manifest(
+            item(48, H1, ['o2.kt']),
+            item(51, H2, ['b2.kt'], depends_on=48,
+                 base_ref='perf/o2'))
+        with self.assertRaisesRegex(StopIntegration, 'diff outside'):
+            self.run_controller(api, data, mode='execute')
+        self.assertEqual([48], [op[1] for op in api.calls
+                                if op[0] == 'merge'])
+
+    def test_prepared_next_android_red_still_blocks_merge(self):
+        class NextRedAPI(FakeAPI):
+            def checks(self, sha):
+                if sha == U2:
+                    return [{'name': 'Android · test and build',
+                             'status': 'completed',
+                             'conclusion': 'failure'}]
+                return super().checks(sha)
+
+        api = NextRedAPI()
+        data = manifest(
+            item(48, H1, ['o2.kt']),
+            item(51, H2, ['b2.kt'], depends_on=48,
+                 base_ref='perf/o2'))
+        with self.assertRaisesRegex(StopIntegration, 'pre-merge CI RED'):
+            self.run_controller(api, data, mode='execute')
+        self.assertEqual([48], [op[1] for op in api.calls
+                                if op[0] == 'merge'])
+
+    def test_pending_postmain_requires_real_success_before_second_merge(self):
+        class DelayedPostAPI(FakeAPI):
+            def __init__(self):
+                super().__init__()
+                self.post_count = 0
+                self.events = []
+
+            def main_ci(self, sha):
+                if sha == MERGE1:
+                    self.post_count += 1
+                    self.events.append(('main_check', self.post_count))
+                    if self.post_count == 1:
+                        return [{'head_sha': sha, 'event': 'push',
+                                 'status': 'in_progress',
+                                 'conclusion': None}]
+                return super().main_ci(sha)
+
+            def merge(self, n, head):
+                if n == 51:
+                    self.events.append(('merge_next', self.post_count))
+                return super().merge(n, head)
+
+        api = DelayedPostAPI()
+        data = manifest(
+            item(48, H1, ['o2.kt']),
+            item(51, H2, ['b2.kt'], depends_on=48,
+                 base_ref='perf/o2'))
+        self.run_controller(api, data, mode='execute')
+        self.assertEqual(2, api.post_count)
+        self.assertIn(('merge_next', 2), api.events)
+
+
+
 if __name__ == '__main__':
     unittest.main()
