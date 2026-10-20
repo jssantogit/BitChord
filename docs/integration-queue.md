@@ -139,6 +139,28 @@ main push before stopping. No background thread, independent writer,
 parallel merge, bypass, extra GitHub App permission or replay mechanism
 is introduced.
 
+### Phase-level observability (stacked metrics pilot)
+
+The same protected executor emits `QUEUE_METRIC v=1` records with fixed
+low-cardinality fields `pr`, `phase`, `outcome` and `duration_ms`.
+Phases are `prepare_head`, `premerge_ci`, `protected_merge`,
+`prepare_next` and `postmain_ci`. `ok` means that specific phase
+returned successfully; `blocked` means an error occurred. Durations are
+monotonic, nonnegative and bounded by the controller's total time budget.
+
+The CLI logger attaches a UTC ISO-8601 timestamp and flushes every event
+immediately. No auth headers, credential values, media IDs, request payload,
+raw GitHub error body, dynamic labels or PR source text are emitted by this
+metric contract. The new timings distinguish phase wall-clock waiting from
+actual Gradle test execution; use GitHub job timing separately to diagnose
+runner wait, cache setup and task execution. In tests, injected logger/clock
+give deterministic zero-duration observations.
+
+No performance gain is asserted by emitting these metrics. Compare real
+protected-batch runs only after separately approved pilot integration; an
+improvement in throughput must be measured without changing mandatory
+Android pre- and post-main CI verification.
+
 This pilot does **not** increase `MAX_ITEMS=3`, the 40-minute execution
 budget, 50-minute job limit, or the one-hour App token window. Validate
 against a separately owner-approved 2–3 PR batch only after this draft
