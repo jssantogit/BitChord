@@ -171,6 +171,22 @@ private fun DiagnosticsPanel(
     val recentEvents = remember(refreshToken) {
         Diagnostics.recentEvents().takeLast(40).asReversed()
     }
+    val triage = remember(refreshToken) {
+        DiagnosticIncidentTriage.build(Diagnostics.recentEvents())
+    }
+    var incidentCategory by remember { mutableStateOf<DiagnosticCategory?>(null) }
+    var incidentOutcome by remember { mutableStateOf<DiagnosticFunctionalTerminal?>(null) }
+    var incidentFlow by remember { mutableStateOf<String?>(null) }
+    var lastTenMinutes by remember { mutableStateOf(false) }
+    val flowOptions = triage.incidents.mapNotNull { it.flowId }.distinct()
+    val filteredIncidents = triage.filter(
+        DiagnosticIncidentFilter(
+            category = incidentCategory,
+            outcome = incidentOutcome,
+            flowId = incidentFlow,
+            sinceUtcMillis = if (lastTenMinutes) System.currentTimeMillis() - 600_000L else null,
+        ),
+    )
     val remainingMinutes = if (status.active) {
         ceil(status.remainingMillis / 60_000.0).toInt().coerceAtLeast(1)
     } else {
@@ -307,6 +323,73 @@ private fun DiagnosticsPanel(
             Text("Refresh events")
         }
 
+        HorizontalDivider()
+        Text("Incident triage (observed evidence)", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "In-memory window only. A missing stage or event is UNKNOWN; warning clusters do not prove a root cause.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        OutlinedButton(
+            onClick = {
+                runCatching {
+                    Diagnostics.event(
+                        category = DiagnosticCategory.UI,
+                        name = "manual_reproduction_marker",
+                        metadata = mapOf("trigger" to "user_marked"),
+                    )
+                }
+                refresh()
+            },
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Mark: reproduced the problem now") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = {
+                    val options = listOf<DiagnosticCategory?>(null,
+                        DiagnosticCategory.UI, DiagnosticCategory.PLAYER,
+                        DiagnosticCategory.CATALOG, DiagnosticCategory.NETWORK,
+                        DiagnosticCategory.APP, DiagnosticCategory.DATABASE)
+                    incidentCategory = options[(options.indexOf(incidentCategory) + 1) % options.size]
+                },
+                modifier = Modifier.weight(1f),
+            ) { Text("Feature: " + (incidentCategory?.name ?: "ALL")) }
+            OutlinedButton(
+                onClick = {
+                    val options = listOf<DiagnosticFunctionalTerminal?>(null,
+                        DiagnosticFunctionalTerminal.UNKNOWN, DiagnosticFunctionalTerminal.FAILED,
+                        DiagnosticFunctionalTerminal.RECOVERED, DiagnosticFunctionalTerminal.CANCELLED)
+                    incidentOutcome = options[(options.indexOf(incidentOutcome) + 1) % options.size]
+                },
+                modifier = Modifier.weight(1f),
+            ) { Text("Outcome: " + (incidentOutcome?.name ?: "ALL")) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = { lastTenMinutes = !lastTenMinutes },
+                modifier = Modifier.weight(1f),
+            ) { Text(if (lastTenMinutes) "Window: 10m" else "Window: ALL") }
+            OutlinedButton(
+                onClick = {
+                    val options = listOf<String?>(null) + flowOptions
+                    incidentFlow = options[(options.indexOf(incidentFlow).coerceAtLeast(0) + 1) % options.size]
+                },
+                modifier = Modifier.weight(1f),
+            ) { Text("Flow: " + (incidentFlow ?: "ALL")) }
+        }
+        if (filteredIncidents.isEmpty()) {
+            Text("No incidents match current filters.")
+        } else {
+            filteredIncidents.take(40).forEach { item ->
+                Text(
+                    item.incidentId + " · " + item.category.name + " · " + item.reasonCode +
+                        " · count=" + item.occurrences + " · " + item.outcome.name +
+                        " · cause=UNKNOWN · last confirmed=" + (item.lastConfirmedStage ?: "UNKNOWN"),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+        }
         HorizontalDivider()
         Text("Recent events", style = MaterialTheme.typography.titleMedium)
         if (recentEvents.isEmpty()) {
