@@ -187,18 +187,21 @@ class A0ManualLoginActivity : Activity() {
                                 try {
                                     readers.execute {
                                         listener.soTimeout = 1000
+                                        var directWaits = 0
                                         while (!Thread.currentThread().isInterrupted &&
                                             !listener.isClosed && System.nanoTime() < deadline &&
                                             inbox.isEmpty()
                                         ) {
                                             try {
                                                 listener.accept().use { peer ->
+                                                    trace.note(A0SmokeTrace.Stage.DIRECT_ACCEPTED)
                                                     activeDirectPeer = peer
                                                     peer.soTimeout = 4000
                                                     val observation =
                                                         A0OneShotPublicSearchWire.readOneDirectPeerReply(
                                                             peer.getInputStream(), token
                                                         )
+                                                    trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_ACCEPTED)
                                                     inbox.offer(if (observation.untrustedFilenameMatches > 0) {
                                                         "RESPOSTA P2P DIRETA: correspondência " +
                                                             "não verificada. Nenhum download."
@@ -208,10 +211,18 @@ class A0ManualLoginActivity : Activity() {
                                                     })
                                                 }
                                             } catch (_: SocketTimeoutException) {
-                                                // Retry accept only within the single search deadline.
+                                                if (++directWaits <= 2) trace.note(
+                                                    A0SmokeTrace.Stage.DIRECT_READ_TIMEOUT,
+                                                    TraceOutcome.SKIPPED,
+                                                    A0SmokeTrace.Reason.READ_TIMEOUT
+                                                )
                                             } catch (_: IOException) {
                                                 if (listener.isClosed) break
-                                                // One malformed/unrelated peer cannot end the probe.
+                                                trace.note(
+                                                    A0SmokeTrace.Stage.DIRECT_REPLY_REJECTED,
+                                                    TraceOutcome.DEGRADED,
+                                                    A0SmokeTrace.Reason.PEER_IO_FAILURE
+                                                )
                                             } finally {
                                                 activeDirectPeer = null
                                             }
@@ -227,23 +238,32 @@ class A0ManualLoginActivity : Activity() {
                                             ) {
                                                 val offer = A0IndirectSearchWire.readServerEvent(
                                                     connection.getInputStream()
-                                                ) ?: continue
+                                                )
+                                                if (offer == null) {
+                                                    trace.ignoredServerFrame()
+                                                    continue
+                                                }
+                                                trace.note(A0SmokeTrace.Stage.SERVER_OFFER_RECEIVED)
                                                 attemptedIndirect.set(true)
                                                 attempts++
                                                 try {
+                                                    trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECT_STARTED)
                                                     Socket().use { peer ->
                                                         activeIndirectPeer = peer
                                                         peer.connect(
                                                             InetSocketAddress(offer.address, offer.port), 2500
                                                         )
                                                         peer.soTimeout = 4000
+                                                        trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECTED)
                                                         peer.getOutputStream().apply {
                                                             write(A0IndirectSearchWire.pierceFirewall(offer.token))
                                                             flush()
                                                         }
+                                                        trace.note(A0SmokeTrace.Stage.PIERCE_SENT)
                                                         val observation = A0IndirectSearchWire.readIndirectReply(
                                                             peer.getInputStream(), token, offer.username
                                                         )
+                                                        trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_ACCEPTED)
                                                         inbox.offer(if (observation.untrustedFilenameMatches > 0) {
                                                             "RESPOSTA P2P INDIRETA: correspondência " +
                                                                 "não verificada. Nenhum download."
@@ -252,19 +272,45 @@ class A0ManualLoginActivity : Activity() {
                                                                 "Nenhum download."
                                                         })
                                                     }
+                                                } catch (_: SocketTimeoutException) {
+                                                    trace.note(
+                                                        A0SmokeTrace.Stage.INDIRECT_READ_TIMEOUT,
+                                                        TraceOutcome.DEGRADED,
+                                                        A0SmokeTrace.Reason.READ_TIMEOUT
+                                                    )
+                                                } catch (_: ConnectException) {
+                                                    trace.note(
+                                                        A0SmokeTrace.Stage.INDIRECT_CONNECT_FAILED,
+                                                        TraceOutcome.DEGRADED,
+                                                        A0SmokeTrace.Reason.CONNECT_FAILED
+                                                    )
                                                 } catch (_: IOException) {
-                                                    // Bounded fallback failed; never expose endpoint/user.
+                                                    trace.note(
+                                                        A0SmokeTrace.Stage.INDIRECT_REPLY_REJECTED,
+                                                        TraceOutcome.DEGRADED,
+                                                        A0SmokeTrace.Reason.PEER_IO_FAILURE
+                                                    )
                                                 } finally {
                                                     activeIndirectPeer = null
                                                 }
                                             }
                                         } catch (_: SocketTimeoutException) {
-                                            // No additional server negotiation within 12 seconds.
+                                            trace.note(
+                                                A0SmokeTrace.Stage.SERVER_READ_TIMEOUT,
+                                                TraceOutcome.DEGRADED,
+                                                A0SmokeTrace.Reason.READ_TIMEOUT
+                                            )
                                         } catch (_: IOException) {
+                                            trace.note(
+                                                A0SmokeTrace.Stage.SERVER_READ_FAILURE,
+                                                TraceOutcome.DEGRADED,
+                                                A0SmokeTrace.Reason.SERVER_IO_FAILURE
+                                            )
                                             failedServerReader.set(true)
                                         }
                                     }
-                                    result = inbox.poll(12, TimeUnit.SECONDS) ?: when {
+                                    val peerStatus = inbox.poll(12, TimeUnit.SECONDS)
+                                    result = peerStatus ?: when {
                                         attemptedIndirect.get() ->
                                             "NEGOCIAÇÃO INDIRETA TENTADA; NENHUMA RESPOSTA P2P " +
                                                 "RECEBIDA. Nenhum download."
@@ -274,6 +320,18 @@ class A0ManualLoginActivity : Activity() {
                                             "BUSCA ENVIADA; NENHUMA RESPOSTA P2P RECEBIDA. " +
                                                 "A rede pode bloquear conexões de entrada."
                                     }
+                                    if (peerStatus == null) {
+                                        trace.note(
+                                            A0SmokeTrace.Stage.NO_REPLY,
+                                            TraceOutcome.DEGRADED,
+                                            A0SmokeTrace.Reason.NO_PEER_REPLY
+                                        )
+                                        finalOutcome = TraceOutcome.DEGRADED
+                                        finalReason = A0SmokeTrace.Reason.NO_PEER_REPLY
+                                    } else {
+                                        finalOutcome = TraceOutcome.SUCCEEDED
+                                    }
+                                    trace.note(A0SmokeTrace.Stage.SEARCH_COMPLETED, finalOutcome)
                                 } finally {
                                     listener.close()
                                     activeDirectPeer?.close()
