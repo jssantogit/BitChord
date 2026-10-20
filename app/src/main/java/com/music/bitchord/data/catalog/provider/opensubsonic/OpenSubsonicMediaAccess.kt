@@ -124,6 +124,23 @@ internal class OpenSubsonicRuntimeAudioRequest internal constructor(
         putAll(openSubsonicAuthenticationParameters(auth, saltFactory))
     }
 
+    /** Provider-private POST query, never passed through logical Media3 DataSpec. */
+    internal fun materializeTranscodeDecisionParameters(): Map<String, String> = linkedMapOf(
+        "v" to OPEN_SUBSONIC_API_VERSION,
+        "c" to OPEN_SUBSONIC_CLIENT_NAME,
+        "f" to "json",
+        "mediaId" to sourceKey,
+        "mediaType" to "song",
+    ).apply { putAll(openSubsonicAuthenticationParameters(auth, saltFactory)) }
+
+    /** Provider-private GET query; opaque transcodeParams added without rewriting. */
+    internal fun materializeTranscodeStreamParameters(): Map<String, String> = linkedMapOf(
+        "v" to OPEN_SUBSONIC_API_VERSION,
+        "c" to OPEN_SUBSONIC_CLIENT_NAME,
+        "mediaId" to sourceKey,
+        "mediaType" to "song",
+    ).apply { putAll(openSubsonicAuthenticationParameters(auth, saltFactory)) }
+
     suspend fun probe(transport: OpenSubsonicRuntimeProbeTransport): OpenSubsonicRuntimeProbeResult = try {
         transport.probe(endpointUrl, materializeParameters())
     } catch (cancelled: CancellationException) {
