@@ -52,6 +52,19 @@ class A0SmokeTraceTest {
         )) assertFalse("Unsafe field $secret", output.contains(secret, ignoreCase = true))
     }
 
+    @Test fun networkContextOnlyExportsCoarseTransportType() {
+        val points = mutableListOf<StructuredTracePoint>()
+        val trace = A0SmokeTrace.start(
+            StructuredTracer(sink = StructuredTraceSink { points.add(it) })
+        )
+        trace.networkTransport(A0SmokeTrace.Transport.CELLULAR)
+        trace.finish(TraceOutcome.DEGRADED)
+        val event = points.single { it.stage == "network_context" }
+        assertEquals("cellular", event.attributes["transport"])
+        assertFalse(event.attributes.keys.any { it.contains("ip", true) ||
+            it.contains("carrier", true) || it.contains("ssid", true) })
+    }
+
     @Test fun repeatedUnrelatedServerFramesAreAggregatedAndTerminalIsOnceOnly() {
         val points = mutableListOf<StructuredTracePoint>()
         val trace = A0SmokeTrace.start(
