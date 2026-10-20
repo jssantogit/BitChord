@@ -17,6 +17,9 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketTimeoutException
 import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.security.SecureRandom
 
 /**
@@ -30,6 +33,8 @@ class A0ManualLoginActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     @Volatile private var activeSocket: Socket? = null
     @Volatile private var activeListener: ServerSocket? = null
+    @Volatile private var activeDirectPeer: Socket? = null
+    @Volatile private var activeIndirectPeer: Socket? = null
     @Volatile private var stopping = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,7 +60,7 @@ class A0ManualLoginActivity : Activity() {
              "O protocolo Soulseek envia a senha por TCP SEM TLS. " +
              "Não reutilize senhas de outros serviços.")
         text("O primeiro botão testa apenas o login. O segundo envia UMA pesquisa " +
-             "por um nome de áudio CC0 e espera no máximo uma resposta P2P. " +
+             "por um nome de áudio CC0 e tenta resposta P2P direta ou indireta. " +
              "Nenhum botão compartilha ou baixa arquivos. " +
              "Desconecte o Seeker antes de iniciar.")
         val user = EditText(this).apply {
@@ -137,21 +142,110 @@ class A0ManualLoginActivity : Activity() {
                                     flush()
                                 }
                                 searchSubmitted = true
-                                // Peers connect to our advertised port with P replies.
-                                // On carrier CGNAT no incoming connections may arrive;
-                                // that is NOT evidence that a file does not exist.
-                                listener.accept().use { peer ->
-                                    peer.soTimeout = 4_000
-                                    val resultP = A0OneShotPublicSearchWire.readOneDirectPeerReply(
-                                        peer.getInputStream(), token
-                                    )
-                                    result = if (resultP.untrustedFilenameMatches > 0) {
-                                        "RESPOSTA P2P: nome encontrado em metadados NÃO VERIFICADOS. " +
-                                            "Nenhum arquivo foi baixado."
-                                    } else {
-                                        "RESPOSTA P2P recebida, sem correspondência do nome. " +
-                                            "Nenhum arquivo foi baixado."
+                                // The cellular network may reject inbound P. Modern peers
+                                // can fall back to server code 18 and outbound PierceFirewall.
+                                // Separate readers prevent blocking on accept() while the
+                                // server is offering an indirect P connection.
+                                val inbox = LinkedBlockingQueue<String>(1)
+                                val attemptedIndirect = AtomicBoolean(false)
+                                val failedServerReader = AtomicBoolean(false)
+                                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(12)
+                                val readers = Executors.newFixedThreadPool(2)
+                                try {
+                                    readers.execute {
+                                        listener.soTimeout = 1000
+                                        while (!Thread.currentThread().isInterrupted &&
+                                            !listener.isClosed && System.nanoTime() < deadline &&
+                                            inbox.isEmpty()
+                                        ) {
+                                            try {
+                                                listener.accept().use { peer ->
+                                                    activeDirectPeer = peer
+                                                    peer.soTimeout = 4000
+                                                    val observation =
+                                                        A0OneShotPublicSearchWire.readOneDirectPeerReply(
+                                                            peer.getInputStream(), token
+                                                        )
+                                                    inbox.offer(if (observation.untrustedFilenameMatches > 0) {
+                                                        "RESPOSTA P2P DIRETA: correspondência " +
+                                                            "não verificada. Nenhum download."
+                                                    } else {
+                                                        "RESPOSTA P2P DIRETA: sem correspondência. " +
+                                                            "Nenhum download."
+                                                    })
+                                                }
+                                            } catch (_: SocketTimeoutException) {
+                                                // Retry accept only within the single search deadline.
+                                            } catch (_: IOException) {
+                                                if (listener.isClosed) break
+                                                // One malformed/unrelated peer cannot end the probe.
+                                            } finally {
+                                                activeDirectPeer = null
+                                            }
+                                        }
                                     }
+                                    readers.execute {
+                                        connection.soTimeout = 12_000
+                                        var attempts = 0
+                                        try {
+                                            while (!Thread.currentThread().isInterrupted &&
+                                                System.nanoTime() < deadline &&
+                                                inbox.isEmpty() && attempts < 2
+                                            ) {
+                                                val offer = A0IndirectSearchWire.readServerEvent(
+                                                    connection.getInputStream()
+                                                ) ?: continue
+                                                attemptedIndirect.set(true)
+                                                attempts++
+                                                try {
+                                                    Socket().use { peer ->
+                                                        activeIndirectPeer = peer
+                                                        peer.connect(
+                                                            InetSocketAddress(offer.address, offer.port), 2500
+                                                        )
+                                                        peer.soTimeout = 4000
+                                                        peer.getOutputStream().apply {
+                                                            write(A0IndirectSearchWire.pierceFirewall(offer.token))
+                                                            flush()
+                                                        }
+                                                        val observation = A0IndirectSearchWire.readIndirectReply(
+                                                            peer.getInputStream(), token, offer.username
+                                                        )
+                                                        inbox.offer(if (observation.untrustedFilenameMatches > 0) {
+                                                            "RESPOSTA P2P INDIRETA: correspondência " +
+                                                                "não verificada. Nenhum download."
+                                                        } else {
+                                                            "RESPOSTA P2P INDIRETA: sem correspondência. " +
+                                                                "Nenhum download."
+                                                        })
+                                                    }
+                                                } catch (_: IOException) {
+                                                    // Bounded fallback failed; never expose endpoint/user.
+                                                } finally {
+                                                    activeIndirectPeer = null
+                                                }
+                                            }
+                                        } catch (_: SocketTimeoutException) {
+                                            // No additional server negotiation within 12 seconds.
+                                        } catch (_: IOException) {
+                                            failedServerReader.set(true)
+                                        }
+                                    }
+                                    result = inbox.poll(12, TimeUnit.SECONDS) ?: when {
+                                        attemptedIndirect.get() ->
+                                            "NEGOCIAÇÃO INDIRETA TENTADA; NENHUMA RESPOSTA P2P " +
+                                                "RECEBIDA. Nenhum download."
+                                        failedServerReader.get() ->
+                                            "ERRO DE REDE OU PROTOCOLO APÓS BUSCA. Nenhum download."
+                                        else ->
+                                            "BUSCA ENVIADA; NENHUMA RESPOSTA P2P RECEBIDA. " +
+                                                "A rede pode bloquear conexões de entrada."
+                                    }
+                                } finally {
+                                    listener.close()
+                                    activeDirectPeer?.close()
+                                    activeIndirectPeer?.close()
+                                    readers.shutdownNow()
                                 }
                             }
                             activeListener = null
@@ -198,6 +292,8 @@ class A0ManualLoginActivity : Activity() {
     override fun onStop() {
         stopping = true
         activeListener?.close() // Interrupt any pending direct peer result.
+        activeDirectPeer?.close()
+        activeIndirectPeer?.close()
         activeSocket?.close() // Interrupt unfinished server response.
         super.onStop()
     }
@@ -209,6 +305,8 @@ class A0ManualLoginActivity : Activity() {
 
     override fun onDestroy() {
         activeListener?.close()
+        activeDirectPeer?.close()
+        activeIndirectPeer?.close()
         activeSocket?.close()
         worker.shutdownNow()
         super.onDestroy()
