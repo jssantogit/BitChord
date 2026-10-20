@@ -80,17 +80,20 @@ class OpenSubsonicAuthenticatedTranscodeDecisionTest {
     }
 
     @Test fun serverDenialAndUnsupportedHlsFailClosed() = runBlocking {
-        for (response in listOf(reply(allowed = false), reply(protocol = "hls"), reply(codec = "aac"))) {
+        for ((responseBody, expected) in listOf(
+            reply(allowed = false) to OpenSubsonicTranscodeDecisionRejection.SERVER_DENIED,
+            reply(protocol = "hls") to OpenSubsonicTranscodeDecisionRejection.UNSUPPORTED_OUTPUT,
+            reply(codec = "aac") to OpenSubsonicTranscodeDecisionRejection.UNSUPPORTED_OUTPUT,
+        )) {
             val engine = OpenSubsonicTranscodeDecisionEngine(
                 transport = object : OpenSubsonicDecisionTransport {
-                    override suspend fun post(endpoint: String, parameters: Map<String, String>, body: String) = response
+                    override suspend fun post(endpoint: String, parameters: Map<String, String>, body: String) = responseBody
                 },
             )
             val result = engine.negotiate(runtime(), variant(), capability(), config) { true }
             assertTrue(result is OpenSubsonicTranscodeDecisionOutcome.Rejected)
             assertEquals(
-                if (response.contains("false")) OpenSubsonicTranscodeDecisionRejection.SERVER_DENIED
-                else OpenSubsonicTranscodeDecisionRejection.UNSUPPORTED_OUTPUT,
+                expected,
                 (result as OpenSubsonicTranscodeDecisionOutcome.Rejected).reason,
             )
         }
