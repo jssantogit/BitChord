@@ -431,6 +431,33 @@ internal interface CanonicalCatalogDao {
     )
     fun observeProviderBrowseAssets(providerKey: String): Flow<List<CanonicalBrowseAssetRow>>
 
+    /**
+     * Multi-source canonical browse: asset ID is unique, recording ID is music
+     * identity. Never expose sourceKey/URI or group by metadata/name.
+     */
+    @Query(
+        """
+        SELECT
+            recording.id AS recordingId,
+            asset.id AS mediaAssetId,
+            asset.provider AS providerKey,
+            recording.title AS title,
+            recording.artistDisplay AS artistDisplay,
+            recording.durationMs AS durationMs,
+            asset.artworkUri AS artworkUri
+        FROM catalog_media_asset AS asset
+        INNER JOIN catalog_recording AS recording ON recording.id = asset.recordingId
+        WHERE asset.provider IN (:providerKeys)
+        ORDER BY
+            recording.artistDisplay COLLATE NOCASE,
+            recording.title COLLATE NOCASE,
+            recording.id,
+            asset.provider,
+            asset.id
+        """,
+    )
+    fun observeMultiSourceBrowseAssets(providerKeys: List<String>): Flow<List<CanonicalBrowseAssetRow>>
+
     @Query(
         """
         SELECT
