@@ -219,4 +219,18 @@
     <string name="recording_feedback_current">Rating: %1$s</string>
     <string name="recording_feedback_history">Changes: %1$d</string>
     <string name="recording_feedback_unavailable">Rating unavailable</string>
+    <string name="my_ratings_title">My ratings</string>
+    <string name="my_ratings_empty">No ratings yet. Rate a canonical song from its menu.</string>
+    <string name="my_ratings_loading">Loading recording…</string>
+    <string name="my_ratings_more">Showing the first %1$d ratings; more are saved.</string>
+    <string name="smart_collections_title">Smart collections</string>
+    <string name="smart_collections_loading">Updating collections…</string>
+    <string name="smart_collections_error">Collections unavailable. Try again.</string>
+    <string name="smart_collections_empty">No eligible recordings yet</string>
+    <string name="smart_collections_rediscovery">Rediscovery</string>
+    <string name="smart_collections_positives">Explicit favorites</string>
+    <string name="smart_collections_exploration">Explore more</string>
+    <string name="smart_collections_rediscovery_reason">Confirmed time away from listening</string>
+    <string name="smart_collections_positive_reason">Your explicit positive rating</string>
+    <string name="smart_collections_exploration_reason">Controlled exploration suggestion</string>
 </resources>

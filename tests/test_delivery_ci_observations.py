@@ -64,5 +64,40 @@ class ObservationTests(unittest.TestCase):
         with self.assertRaises(ObservationError):
             collect_observations(r)
 
+    def test_lane_classification_uses_explicit_run_source_only(self):
+        reader = Reader()
+        reader.runs[0]['head_branch'] = 'catalog/c13-test'
+        reader.runs[1]['head_branch'] = 'main'
+        observed = collect_observations(reader)
+        self.assertEqual(['pr_a', 'main'],
+                         [job['lane'] for job in observed['jobs']])
+        self.assertNotIn('catalog/c13-test', str(observed))
+        self.assertNotIn('head_branch', str(observed))
+
+    def test_lane_b_and_unknown_never_guess_from_pr_or_sha(self):
+        reader = Reader()
+        reader.runs[0]['head_branch'] = 'playback/b13'
+        reader.runs[1]['head_branch'] = 'not-the-main-branch'
+        self.assertEqual(['pr_b', 'unknown'], [
+            job['lane'] for job in collect_observations(reader)['jobs']])
+        del reader.runs[0]['head_branch']
+        self.assertEqual('unknown',
+                         collect_observations(reader)['jobs'][0]['lane'])
+        reader.runs[0]['head_branch'] = 'token=SECRET_IN_REF'
+        data = collect_observations(reader)
+        self.assertEqual('pr_c', data['jobs'][0]['lane'])
+        self.assertNotIn('SECRET_IN_REF', str(data))
+
+
+    def test_android_lane_migration_keeps_reporting_in_sync(self):
+        from pathlib import Path
+        from tools.delivery_ci_observations import _lane_for_run
+        workflow = (Path(__file__).resolve().parents[1] /
+                    '.github/workflows/check.yml').read_text()
+        self.assertIn("'bitchord-android-pr-lane-c'", workflow)
+        self.assertEqual('pr_b', _lane_for_run('pull_request', 'playback/b13'))
+        self.assertEqual('pr_c', _lane_for_run('pull_request', 'perf/d10'))
+
+
 if __name__ == '__main__':
     unittest.main()

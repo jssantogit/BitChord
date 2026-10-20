@@ -1324,4 +1324,10 @@
     <string name="wear_os_unsupported">安装到手表需要这部手机运行 Android 11 或更高版本。</string>
     <string name="wear_os_code_hint">配对码</string>
     <string name="wear_os_done">完成</string>
+    <string name="playback_recovery_connection">远程歌曲无法开始播放。请检查网络连接或服务器。</string>
+    <string name="playback_recovery_unavailable">所选远程版本目前不可用。</string>
+    <string name="playback_recovery_failed">无法打开所选远程歌曲。</string>
+    <string name="playback_recovery_retry">重试</string>
+    <string name="playback_recovery_retrying">正在重试…</string>
+    <string name="playback_recovery_dismiss">关闭</string>
 </resources>
