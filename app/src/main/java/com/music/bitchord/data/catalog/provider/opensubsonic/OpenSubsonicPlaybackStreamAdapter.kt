@@ -46,6 +46,20 @@ internal class OpenSubsonicPlaybackStreamAdapter(
     private val media3: OpenSubsonicMediaDataSourceFactory,
     private val capabilities: OpenSubsonicStreamPolicyGateway,
 ) {
+    /** Side-effect-free snapshot. No network request during UI rendering. */
+    fun previewCapabilities(
+        accountGeneration: Long,
+        providerKey: String,
+    ): OpenSubsonicProviderStreamHandoff =
+        capabilities.preview(accountGeneration, providerKey)
+
+    /** Explicit discovery only; credential store and manifest transport are Catalog-private. */
+    suspend fun refreshCapabilities(
+        accountGeneration: Long,
+        providerKey: String,
+    ): OpenSubsonicProviderStreamHandoff =
+        capabilities.refresh(accountGeneration, providerKey)
+
     fun prepareOriginal(
         recordingId: String,
         mediaAssetId: String,
