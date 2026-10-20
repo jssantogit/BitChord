@@ -18,6 +18,10 @@ import java.io.InputStream
  */
 internal object A0OneShotPublicSearchWire {
     const val TARGET_FILENAME = "Ringingsound.wav"
+    // Nicotine+ deliberately strips punctuation from global search terms:
+    // SoulseekQt may not return results for terms such as "Ringingsound.wav".
+    // Keep the exact independently CC0-reviewed filename gate unchanged.
+    const val SEARCH_TERM = "Ringingsound wav"
     private const val MAX_PEER_INIT_BYTES = 4096
     private const val MAX_PEER_SEARCH_BYTES = 1_048_576
     private const val MAX_PEER_NAME_BYTES = 128
@@ -34,7 +38,7 @@ internal object A0OneShotPublicSearchWire {
     /** Submit exactly ONE immutable open-license reference filename query. */
     fun fileSearch(token: Int): ByteArray {
         require(token > 0) { "A0 search token must be positive" }
-        val bytes = TARGET_FILENAME.toByteArray(Charsets.UTF_8)
+        val bytes = SEARCH_TERM.toByteArray(Charsets.UTF_8)
         return frame(26, intLEBytes(token) + intLEBytes(bytes.size) + bytes)
     }
 
