@@ -154,9 +154,14 @@ Proposed boundaries after approval: `AcquisitionIntent(RecordingId?)` → `Souls
 
 All five are only **proposed**; implementation and merge require separate owner/orchestration authorization. This draft branch includes only isolated A0 Kotlin protocol/staging probes, their JVM/localhost tests and this report. There is no app UI/service entrypoint, no external connection, and no modifications to Playback, Catalog, Listening, Diagnostics, legacy Downloads, manifest or Gradle dependencies.
 
-## 7. Next acceptance gate
+## 7. Next acceptance gate — real-network interoperability (BLOCKED)
 
-1. Confirm owner approval for a dedicated **physical/network** proof with test credentials and an audio file for which sharing/download permission exists. Do **not** write credentials in GitHub, Notion, CI, or logs.
-2. The native-JVM A0 sources now compile inside the existing Kotlin/Android Gradle module under CI (#825); this is **not** a running Android device or complete transport. Before any production engine selection, demonstrate device deployment on minSdk26 / target36, lifecycle and network behavior; only revisit one-APK .NET interop if opting for that alternative, which remains unproven.
-3. Retain the committed loopback protocol tests; verify Android CI result on the exact final HEAD, and record the RED run's cancellation accurately. Add further RED→GREEN acceptance tests only for a genuinely selected and approved integration engine; do not mistake localhost for the production network.
-4. Return measurements and evidence to orchestration; no A1–A5 or merge until explicitly approved.
+The Android runtime gate is **complete for locally simulated traffic**: required [Android CI #854](https://github.com/jssantogit/BitChord/actions/runs/39356503607) is GREEN at `d84999c7b0973e04058a744284219e2093e39bf7`; [emulator smoke #4](https://github.com/jssantogit/BitChord/actions/runs/39355652413) installed the devDebug APK and ran **9/9 instrumented tests on API 26 and 9/9 on API 36** at the exact code SHA `f996e2869cf2ea565510d035bc1b108bae24e8ba`. No physical hardware or public-network traffic has been exercised.
+
+The remaining A0 gate is the **permissioned real Soulseek network interoperability proof**. Its bounded test procedure, security controls, independent authorized WAV fixture, source/identity checks, expected observations and blockers are in [A0 Real Soulseek Network Acceptance Gate](2026-10-19-A0-real-soulseek-network-acceptance-gate.md).
+
+**New identity finding:** the Soulseek.NET [README](https://github.com/jpdillingham/Soulseek.NET#reserved-minor-version-ranges) lists minor versions **760–7,699,999** as reserved to slskd; A0's localhost login fixture uses `1201`, **inside that reserved range**. This fixture identifier is not suitable for a live BitChord login. Select and review an unclaimed, client-specific identity before any network attempt, considering the third-party [GPL-3.0-only license and additional terms](https://github.com/jpdillingham/Soulseek.NET/blob/master/LICENSE) where applicable to the eventual integration. Do not invent a minor version or assume that reading protocol specifications settles code-provenance obligations.
+
+**Explicit preconditions:** separate owner authorization for external network login/search/download, test-only credentials transmitted securely, an owner-controlled peer, permission to share the owner-generated WAV, independent expected size/SHA-256, an approved client identifier, a reviewed Android external-transport implementation, and a secrets-safe execution environment. The existing opt-in PR emulator workflow must **never** receive live credentials or public-network endpoints.
+
+A1–A5 and merge remain **not authorized**. Keep the PR draft and do not desynchronize other workstreams. Until genuinely observed, report `REAL_NETWORK_NOT_EXERCISED`, `NO_REAL_SOULSEEK_PEER`, `NO_REAL_P2P_AUDIO`, `NO_PHYSICAL_DEVICE` and `NO_PRODUCTION_DOWNLOADER`.
