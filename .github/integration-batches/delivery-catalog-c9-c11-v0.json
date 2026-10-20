@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 115,
+      "expected_head_sha": "fd281a4324c88f37a14543e81827e3a3b1ad6b33",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicProvider.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicStreamCapabilities.kt",
+        "app/src/test/java/com/music/bitchord/OpenSubsonicStreamCapabilityEvidenceTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 116,
+      "expected_head_sha": "c879bbfd650b6d5d2361867af2b2ecf96d6664c4",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicStreamVariant.kt",
+        "app/src/test/java/com/music/bitchord/OpenSubsonicStreamVariantContractTest.kt"
+      ],
+      "depends_on": 115,
+      "expected_base_ref": "catalog/c9-provider-stream-capability-evidence-v0"
+    },
+    {
+      "number": 122,
+      "expected_head_sha": "7529f8032481838907726803c8ececf3938fba8c",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicMedia3Access.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicMediaAccess.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicTranscodeDecision.kt",
+        "app/src/test/java/com/music/bitchord/OpenSubsonicAuthenticatedTranscodeDecisionTest.kt"
+      ],
+      "depends_on": 116,
+      "expected_base_ref": "catalog/c10-credential-safe-stream-variant-contract-v0"
+    }
+  ]
+}
