@@ -29,8 +29,10 @@ class A0ServerAssociatedTransferTest {
         ServerSocket(0,2,host).use{fakeServer->
             ServerSocket(0,1,host).use{fakePeer->
                 val pool=Executors.newFixedThreadPool(2)
+                val advertisedPort=java.util.concurrent.CompletableFuture<Int>()
+                val releaseServer=java.util.concurrent.CountDownLatch(1)
                 try {
-                    val server=pool.submit<Int> {
+                    val server=pool.submit {
                         fakeServer.accept().use{login->
                             login.soTimeout=5000
                             val waitPort=body(login)
@@ -45,9 +47,11 @@ class A0ServerAssociatedTransferTest {
                                     le(fakePeer.localPort)+le(0)+byteArrayOf(0,0)))
                                 flush()
                             }
-                            // Keep the server connection alive for the P/F transfer.
-                            Thread.sleep(1100)
-                            fPort
+                            // The authenticated server must remain connected
+                            // for the entire P/F rendezvous. A closed fake
+                            // server would make valid direct F look like EOF.
+                            advertisedPort.complete(fPort)
+                            releaseServer.await(8,TimeUnit.SECONDS)
                         }
                     }
                     val peer=pool.submit {
@@ -76,7 +80,7 @@ class A0ServerAssociatedTransferTest {
                     val serverSocket=Socket(host,fakeServer.localPort)
                     serverSocket.use{login->
                         val fileUploader=Thread {
-                            val port=server.get(4,TimeUnit.SECONDS)
+                            val port=advertisedPort.get(4,TimeUnit.SECONDS)
                             Socket(host,port).use{f->
                                 f.soTimeout=4000
                                 f.getOutputStream().apply { write(le(88)+own);flush() }
@@ -92,10 +96,15 @@ class A0ServerAssociatedTransferTest {
                         assertArrayEquals(own,result.file.readBytes())
                         fileUploader.join(4500)
                         assertFalse(fileUploader.isAlive)
+                        releaseServer.countDown()
+                        server.get(4,TimeUnit.SECONDS)
                         peer.get(4,TimeUnit.SECONDS)
                         assertFalse(temp.root.listFiles().orEmpty().any{it.name.endsWith(".partial")})
                     }
-                } finally {pool.shutdownNow()}
+                } finally {
+                    releaseServer.countDown()
+                    pool.shutdownNow()
+                }
             }
         }
     }
