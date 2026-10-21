@@ -18,11 +18,11 @@ import java.io.InputStream
  */
 internal object A0OneShotPublicSearchWire {
     const val TARGET_FILENAME = "Ringingsound.wav"
-    // User-requested broad P2P reachability probe. Nicotine+ normalizes trailing
-    // '*' out of wire search terms; wildcard syntax on Soulseek is not guaranteed.
-    // This is NOT a licensed-audio search and NEVER authorizes downloads.
-    const val REQUESTED_SEARCH = "naruto*"
-    const val SEARCH_TERM = "naruto"
+    // Artist/title search for A0 read-only network discovery.
+    // Nicotine+ strips isolated '-' punctuation before sending to SoulseekQt peers.
+    // Returned names are untrusted search claims, not automatic download rights.
+    const val REQUESTED_SEARCH = "newjeans - omg"
+    const val SEARCH_TERM = "newjeans omg"
     private const val MAX_PEER_INIT_BYTES = 4096
     private const val MAX_PEER_SEARCH_BYTES = 1_048_576
     private const val MAX_PEER_NAME_BYTES = 128
