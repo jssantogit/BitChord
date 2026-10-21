@@ -71,7 +71,7 @@ class A0ManualLoginActivity : Activity() {
              "O protocolo Soulseek envia a senha por TCP SEM TLS. " +
              "Não reutilize senhas de outros serviços.")
         text("O primeiro botão testa somente login. O segundo envia uma única " +
-             "busca diagnóstica naruto* (normalizada para naruto pelo protocolo) " +
+             "busca diagnóstica newjeans - omg (enviada como newjeans omg) " +
              "e tenta receber respostas P2P diretas ou indiretas. " +
              "Resultados não comprovam direitos autorais ou disponibilidade. " +
              "Nada será compartilhado ou baixado. Desconecte o Seeker primeiro.")
@@ -97,7 +97,7 @@ class A0ManualLoginActivity : Activity() {
         val action = Button(this).apply { text = "Testar login uma única vez" }
         page.addView(action)
         val searchAction = Button(this).apply {
-            text = "Pesquisar naruto* (sem baixar)"
+            text = "Pesquisar newjeans - omg (sem baixar)"
         }
         page.addView(searchAction)
         val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
