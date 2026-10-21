@@ -2,6 +2,8 @@ package com.music.bitchord
 
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.ExternalIdentityEntity
+import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.provider.ProviderSyncResult
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.RoomRecordingRatingStore
@@ -182,6 +184,25 @@ class OpenSubsonicRemoteRatingsTest {
             val failed = OpenSubsonicCatalogSync.sync(db, provider(songs, returnXml = true))
             assertTrue(failed is ProviderSyncResult.Failure)
             assertEquals(2, OpenSubsonicRemoteRatingReader(db) { account("scope-a") }.read().items.size)
+        } finally { db.close() }
+    }
+
+    @Test fun changedProviderAliasCannotExposeStaleCanonicalRatingBinding() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            assertTrue(OpenSubsonicCatalogSync.sync(db, provider(songs)) is ProviderSyncResult.Success)
+            val dao = db.catalogDao()
+            val asset = requireNotNull(dao.mediaAsset("opensubsonic:home", "rated"))
+            val reader = OpenSubsonicRemoteRatingReader(db) { account("scope-a") }
+            assertEquals(2, reader.read().items.size)
+            dao.upsertRecording(RecordingEntity("replacement", "Not the rated song", "Different", null))
+            dao.upsertExternalIdentity(ExternalIdentityEntity(
+                "opensubsonic:home", "recording", "rated", "replacement",
+            ))
+            assertTrue(reader.read().items.none { it.mediaAssetId == asset.id })
+            assertEquals(1, reader.read().items.size)
         } finally { db.close() }
     }
 
