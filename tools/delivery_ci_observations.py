@@ -54,6 +54,21 @@ class GitHubCIReader:
               'incomplete job page')
         return data['jobs']
 
+def _lane_for_run(event, head_branch):
+    """Map only explicitly supplied GitHub run metadata; never export a ref."""
+    if type(head_branch) is not str or not head_branch:
+        return 'unknown'
+    if event == 'push':
+        return 'main' if head_branch == 'main' else 'unknown'
+    if event == 'pull_request':
+        if head_branch.startswith(('catalog/', 'intelligence/')):
+            return 'pr_a'
+        if head_branch.startswith('playback/'):
+            return 'pr_b'
+        return 'pr_c'
+    return 'unknown'
+
+
 def collect_observations(reader, limit=25):
     """Return only source timestamps; do not invent job queue durations."""
     _need(getattr(reader, 'repository', None) == REPO, 'unsupported repository')
@@ -81,6 +96,7 @@ def collect_observations(reader, limit=25):
                 n = linked[0].get('number')
                 _need(type(n) is int and n > 0, 'invalid PR number')
                 pr = n
+            lane = _lane_for_run(run['event'], run.get('head_branch'))
             observations = reader.jobs(run_id)
             _need(type(observations) is list and len(observations) < 100,
                   'incomplete jobs')
@@ -100,7 +116,7 @@ def collect_observations(reader, limit=25):
                     None, 'success', 'failure', 'cancelled', 'skipped',
                     'timed_out', 'action_required', 'neutral'),
                     'invalid conclusion')
-                jobs.append({'run_id': run_id, 'pr_number': pr,
+                jobs.append({'run_id': run_id, 'pr_number': pr, 'lane': lane,
                              'head_sha': sha, 'created_at': job['created_at'],
                              'started_at': job.get('started_at'),
                              'completed_at': job.get('completed_at'),

@@ -1204,4 +1204,11 @@
     <string name="wear_os_code_hint">Pairing code</string>
     <string name="wear_os_done">Done</string>
     <string name="signed_by">Signed by %1$s</string>
+
+    <string name="playback_recovery_connection">A remote track could not start. Check the connection or server.</string>
+    <string name="playback_recovery_unavailable">The selected remote version is not available right now.</string>
+    <string name="playback_recovery_failed">The selected remote track could not be opened.</string>
+    <string name="playback_recovery_retry">Try again</string>
+    <string name="playback_recovery_retrying">Trying…</string>
+    <string name="playback_recovery_dismiss">Dismiss</string>
 </resources>
