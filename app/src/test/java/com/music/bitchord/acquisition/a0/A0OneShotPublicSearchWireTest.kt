@@ -17,7 +17,7 @@ class A0OneShotPublicSearchWireTest {
         assertEquals(41235, int(p))
         assertEquals(-1, p.read())
 
-        val q = A0OneShotPublicSearchWire.fileSearch(27182)
+        val q = A0OneShotPublicSearchWire.fileSearch(27182, "newjeans - omg")
         val s = ByteArrayInputStream(q)
         assertEquals(q.size - 4, int(s))
         assertEquals(26, int(s))
@@ -26,12 +26,10 @@ class A0OneShotPublicSearchWireTest {
         assertEquals(-1, s.read())
     }
 
-    @Test fun requestedArtistSongQueryPreservesIntentAndStripsPunctuationForSearch() {
-        assertEquals("newjeans - omg", A0OneShotPublicSearchWire.REQUESTED_SEARCH)
-        assertEquals("newjeans omg", A0OneShotPublicSearchWire.SEARCH_TERM)
+    @Test fun typedArtistSongQueryPreservesIntentAndStripsPunctuationForSearch() {
         // Discovery request does not affect the independently reviewed CC0-only transfer gate.
         assertEquals("Ringingsound.wav", A0OneShotPublicSearchWire.TARGET_FILENAME)
-        val wire = A0OneShotPublicSearchWire.fileSearch(120)
+        val wire = A0OneShotPublicSearchWire.fileSearch(120, "newjeans - omg")
         val q = ByteArrayInputStream(wire)
         int(q); int(q); int(q)
         assertEquals("newjeans omg", text(q))
@@ -92,7 +90,7 @@ class A0OneShotPublicSearchWireTest {
             A0OneShotPublicSearchWire.setWaitPort(port)
         }
         for (token in listOf(0, -100)) rejectIllegal {
-            A0OneShotPublicSearchWire.fileSearch(token)
+            A0OneShotPublicSearchWire.fileSearch(token, "search term")
         }
     }
 
