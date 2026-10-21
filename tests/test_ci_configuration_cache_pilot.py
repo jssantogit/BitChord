@@ -41,5 +41,14 @@ class ConfigurationCachePilotContractTests(unittest.TestCase):
         self.assertNotIn('env: GRADLE_ENCRYPTION_KEY', s)
 
 
+    def test_android_cache_directory_is_initialized_before_capture(self):
+        s = self.yaml
+        preparation = 'mkdir -p "$HOME/.config/.android/cache"'
+        cold = './gradlew --build-cache --configuration-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest'
+        self.assertIn(preparation, s)
+        self.assertLess(s.index(preparation), s.index(cold))
+        self.assertEqual(1, s.count(preparation))
+
+
 if __name__ == '__main__':
     unittest.main()
