@@ -18,6 +18,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -27,6 +28,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.diagnostics.Diagnostics
+import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.data.listening.CanonicalRatedLibrarySnapshot
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.RoomRecordingRatingStore
@@ -175,6 +178,20 @@ internal fun CanonicalMyRatingsScreen(
     }
     var editingId by remember { mutableStateOf<String?>(null) }
     val remoteState = rememberRemoteRatingsState()
+    val diagnosticTruth = remember(state, remoteState) {
+        MyRatingsRenderEvidence.from(state, remoteState).metadata()
+    }
+    LaunchedEffect(diagnosticTruth) {
+        try {
+            Diagnostics.event(
+                category = DiagnosticCategory.UI,
+                name = "my_ratings_content_state_v1",
+                metadata = diagnosticTruth,
+            )
+        } catch (_: Exception) {
+            // Diagnostics are always fail-open and never block a visible rating.
+        }
+    }
     CanonicalMyRatingsContent(
         state = state,
         remoteState = remoteState,
