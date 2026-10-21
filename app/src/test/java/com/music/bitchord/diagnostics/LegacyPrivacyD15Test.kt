@@ -18,6 +18,7 @@ class LegacyPrivacyD15Test {
         assertEquals("other", DiagnosticLegacyPrivacy.tag("private song by artist"))
         assertEquals("VideoSwitch", DiagnosticLegacyPrivacy.tag("VideoSwitch"))
         assertEquals("other", DiagnosticLegacyPrivacy.tag("Token=hidden"))
+        assertEquals("other", DiagnosticLegacyPrivacy.tag("Madonna"))
     }
 
     @Test fun ordinaryDiagnosticSignalRemainsObservableAndSanitized() {
