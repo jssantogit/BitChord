@@ -90,6 +90,29 @@ class A0IndirectSearchWireTest {
         assertEquals(1, unrelated.untrustedResultCount)
     }
 
+    @Test fun validatedIndirectReplyCanFeedSearchCandidateHandoff() {
+        var observed=0
+        val result=A0IndirectSearchWire.readIndirectReply(
+            ByteArrayInputStream(searchReply("peer",72,"Ringingsound.wav")),
+            72,"peer"
+        ) { framed, username ->
+            assertEquals("peer",username)
+            assertEquals(username,A0SoulseekSearchResponseParser.parse(framed,72).peerUsername)
+            observed++
+        }
+        assertEquals(1,observed)
+        assertEquals(1,result.untrustedResultCount)
+
+        observed=0
+        reject {
+            A0IndirectSearchWire.readIndirectReply(
+                ByteArrayInputStream(searchReply("another",72,"Ringingsound.wav")),
+                72,"peer"
+            ) { _, _ -> observed++ }
+        }
+        assertEquals(0,observed)
+    }
+
     private fun offer(
         username:String="peer", type:String="P", ip:ByteArray=byteArrayOf(4,4,8,8),
         port:Int=4815, token:Int=31415, obfuscation:Int=0,
