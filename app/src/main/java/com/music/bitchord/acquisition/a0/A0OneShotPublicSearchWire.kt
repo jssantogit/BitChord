@@ -18,11 +18,8 @@ import java.io.InputStream
  */
 internal object A0OneShotPublicSearchWire {
     const val TARGET_FILENAME = "Ringingsound.wav"
-    // Artist/title search for A0 read-only network discovery.
-    // Nicotine+ strips isolated '-' punctuation before sending to SoulseekQt peers.
-    // Returned names are untrusted search claims, not automatic download rights.
-    const val REQUESTED_SEARCH = "newjeans - omg"
-    const val SEARCH_TERM = "newjeans omg"
+    // User-typed search is normalized per request and kept only in RAM.
+    // TARGET_FILENAME remains the independent licensed-source gate.
     private const val MAX_PEER_INIT_BYTES = 4096
     private const val MAX_PEER_SEARCH_BYTES = 1_048_576
     private const val MAX_PEER_NAME_BYTES = 128
@@ -43,9 +40,9 @@ internal object A0OneShotPublicSearchWire {
     }
 
     /** Submit ONE sanitized broad discovery probe (never download or license evidence). */
-    fun fileSearch(token: Int): ByteArray {
+    fun fileSearch(token: Int, userEnteredQuery: String): ByteArray {
         require(token > 0) { "A0 search token must be positive" }
-        val bytes = SEARCH_TERM.toByteArray(Charsets.UTF_8)
+        val bytes = A0SearchQuery.normalize(userEnteredQuery).toByteArray(Charsets.UTF_8)
         return frame(26, intLEBytes(token) + intLEBytes(bytes.size) + bytes)
     }
 
