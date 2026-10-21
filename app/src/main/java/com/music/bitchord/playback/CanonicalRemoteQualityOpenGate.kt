@@ -1,11 +1,9 @@
 package com.music.bitchord.playback
 
 /**
- * B13 preparatory policy, not the Catalog HTTP/Media3 integration.
- *
- * A request decision is not a successful transcode, codec observation, or proof
- * that audio became audible. Catalog remains the sole owner of account
- * generations, advertised/verified capability evidence and authenticated opens.
+ * B13 pure intent policy. Catalog alone handles HTTP/Media3 authentication,
+ * generation and per-MediaAsset verification. A request decision is not
+ * negotiation, decoded audio or proof of audibility.
  */
 internal enum class CanonicalRemoteQualityOpenMode {
     ORIGINAL,
@@ -48,12 +46,11 @@ internal data class CanonicalRemoteQualityOpenPlan(
 }
 
 /**
- * Pure Playback-owned guard. Only a separately proven per-media capability
- * can reach REQUEST_CAPPED_MP3. The consumer must revalidate at DataSource.open
- * using a Catalog-owned generation/lease and the real per-asset decision.
- *
- * No set of accepted ceilings is manufactured here; until Catalog supplies
- * verified support the caller passes emptySet() and MP3 stays blocked.
+ * B12-style preview planning and B13 next-open request planning are distinct:
+ * the original plan() remains conservative and requires VERIFIED_MP3;
+ * prepareNextOpen() accepts a CURRENT ADVERTISED manifest only as permission
+ * to request, never as proof for the selected MediaAsset. Catalog still
+ * validates the actual decoder/asset on open; applied always remains false.
  */
 internal object CanonicalRemoteQualityOpenGate {
     fun plan(

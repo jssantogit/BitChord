@@ -170,8 +170,11 @@ internal class AndroidCanonicalRemoteQualityCatalog(context: Context) : Canonica
         return when (handoff.transcoding) {
             OpenSubsonicStreamConfidence.ADVERTISED ->
                 CanonicalRemoteTranscodeCapability.ADVERTISED_ONLY
+            // The handoff carries no MediaAsset ID or decoder-profile proof.
+            // Even a VERIFIED account-level hint cannot become B12's
+            // per-MediaAsset VERIFIED_MP3 until Catalog's actual open decision.
             OpenSubsonicStreamConfidence.VERIFIED ->
-                CanonicalRemoteTranscodeCapability.VERIFIED_MP3
+                CanonicalRemoteTranscodeCapability.ADVERTISED_ONLY
             OpenSubsonicStreamConfidence.UNSUPPORTED ->
                 CanonicalRemoteTranscodeCapability.UNSUPPORTED
             OpenSubsonicStreamConfidence.UNKNOWN ->
