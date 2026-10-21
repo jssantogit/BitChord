@@ -2,13 +2,14 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertTopPositionInRootIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import com.music.bitchord.data.listening.CanonicalRatedLibrarySnapshot
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -36,7 +37,7 @@ class CanonicalMyRatingsVisibilityTest {
             }
         }
         compose.onNodeWithText("My ratings").assertIsDisplayed()
-            .assertTopPositionInRootIsAtLeast(72.dp)
+        assertTrue(compose.onNodeWithText("My ratings").fetchSemanticsNode().boundsInRoot.top >= 72f)
         compose.onNodeWithText("No ratings yet. Rate a canonical song from its menu.")
             .assertIsDisplayed()
         compose.onNodeWithText("Close").performClick()
@@ -104,8 +105,37 @@ class CanonicalMyRatingsVisibilityTest {
             }
         }
         compose.onNodeWithText("Smart playlists").assertIsDisplayed()
-            .assertTopPositionInRootIsAtLeast(72.dp)
+        assertTrue(compose.onNodeWithText("Smart playlists").fetchSemanticsNode().boundsInRoot.top >= 72f)
         compose.onNodeWithText("Close").performClick()
         compose.runOnIdle { assertEquals(1, backs) }
+    }
+
+    @Test fun failedRoomFlowIsPresentedAsErrorWithoutCrashingComposition() {
+        compose.setContent {
+            MaterialTheme {
+                CanonicalMyRatingsScreen(
+                    onBack = {},
+                    ratingFeedOverride = flow<CanonicalRatedLibrarySnapshot> {
+                        throw IllegalStateException("simulated Room read failure")
+                    },
+                )
+            }
+        }
+        compose.onNodeWithText("Could not load ratings. Try reopening this page.")
+            .assertIsDisplayed()
+    }
+
+    @Test fun emptyRoomFlowEmitsEmptyStateAndCloseControl() {
+        compose.setContent {
+            MaterialTheme {
+                CanonicalMyRatingsScreen(
+                    onBack = {},
+                    ratingFeedOverride = flowOf(CanonicalRatedLibrarySnapshot(emptyList(), false)),
+                )
+            }
+        }
+        compose.onNodeWithText("No ratings yet. Rate a canonical song from its menu.")
+            .assertIsDisplayed()
+        compose.onNodeWithText("Close").assertIsDisplayed()
     }
 }
