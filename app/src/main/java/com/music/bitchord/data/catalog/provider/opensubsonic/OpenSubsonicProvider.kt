@@ -181,6 +181,59 @@ internal class OpenSubsonicProvider(
         )
     }
 
+    /**
+     * Public extension-manifest discovery: no account credentials sent, no
+     * caching by UI re-render and no inference from ping/health. The generation
+     * is supplied by the account lifecycle owner, not guessed from a timestamp.
+     */
+    internal suspend fun streamCapabilityEvidence(generation: Long): OpenSubsonicStreamCapabilitySnapshot {
+        require(generation >= 0) { "Generation must be nonnegative" }
+        var manifestWasRead = false
+        val evidence = try {
+            val response = request("getOpenSubsonicExtensions", authenticated = false)
+            val manifest = response.openSubsonicExtensions
+            if (manifest == null) {
+                OpenSubsonicStreamConfidence.UNKNOWN to OpenSubsonicStreamEvidenceBasis.MALFORMED_OR_INCOMPLETE
+            } else {
+                manifestWasRead = true
+                val matching = manifest.filter { it.name.equals("transcoding", ignoreCase = true) }
+                when {
+                    matching.size > 1 ->
+                        OpenSubsonicStreamConfidence.UNKNOWN to OpenSubsonicStreamEvidenceBasis.MALFORMED_OR_INCOMPLETE
+                    matching.isEmpty() ->
+                        OpenSubsonicStreamConfidence.UNSUPPORTED to OpenSubsonicStreamEvidenceBasis.MANIFEST_ABSENT
+                    matching.single().versions.any { it <= 0 } ->
+                        OpenSubsonicStreamConfidence.UNKNOWN to OpenSubsonicStreamEvidenceBasis.MALFORMED_OR_INCOMPLETE
+                    1 in matching.single().versions ->
+                        OpenSubsonicStreamConfidence.ADVERTISED to OpenSubsonicStreamEvidenceBasis.MANIFEST_V1
+                    matching.single().versions.isEmpty() ->
+                        OpenSubsonicStreamConfidence.UNKNOWN to OpenSubsonicStreamEvidenceBasis.MALFORMED_OR_INCOMPLETE
+                    else ->
+                        OpenSubsonicStreamConfidence.UNSUPPORTED to OpenSubsonicStreamEvidenceBasis.VERSION_INCOMPATIBLE
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            // API/transport messages may contain auth URLs. Never surface them.
+            OpenSubsonicStreamConfidence.UNKNOWN to OpenSubsonicStreamEvidenceBasis.NO_RESPONSE
+        }
+        val traditional = OpenSubsonicStreamCapability(
+            OpenSubsonicStreamMechanism.TRADITIONAL_STREAM_BEST_EFFORT,
+            if (manifestWasRead) OpenSubsonicStreamConfidence.ADVERTISED else OpenSubsonicStreamConfidence.UNKNOWN,
+            if (manifestWasRead) OpenSubsonicStreamEvidenceBasis.PROTOCOL_SPEC else OpenSubsonicStreamEvidenceBasis.NO_RESPONSE,
+        )
+        return OpenSubsonicStreamCapabilitySnapshot(
+            generation = generation,
+            traditional = traditional,
+            transcoding = OpenSubsonicStreamCapability(
+                OpenSubsonicStreamMechanism.EXTENSION_TRANSCODING_V1,
+                evidence.first, evidence.second,
+            ),
+            configurationIsCurrent = ::matchesSavedConfig,
+        )
+    }
+
     override suspend fun librarySnapshot(): ProviderLibrarySnapshot {
         val startNanos = System.nanoTime()
         val counts = EnumerationCounts()
