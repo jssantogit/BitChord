@@ -12,8 +12,13 @@ import com.music.bitchord.data.settings.AudioQuality
 import java.io.IOException
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /** B14-B18 contract tests: a real Media3 open is not decoder or audible proof. */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class CanonicalRemoteQualityEvidenceTest {
     private val request = CanonicalRemotePlaybackRequest("recording-1", "asset-1", "opensubsonic:test")
     private fun spec() = DataSpec(Uri.parse(CanonicalRemotePlaybackUri.encode(request)))
