@@ -14,6 +14,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -24,6 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.diagnostics.Diagnostics
+import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReaders
 import com.music.bitchord.data.listening.CanonicalRuleBasedSmartPlaylistPreview
 import com.music.bitchord.data.listening.ListeningEventDatabase
@@ -217,6 +220,33 @@ internal fun SmartPlaylistBuilderScreen(
         RuleBasedInclusionReason.AUDIBLE_RECENCY to stringResource(Res.string.smart_playlist_reason_recency),
         RuleBasedInclusionReason.TRUSTED_DURATION to stringResource(Res.string.smart_playlist_reason_duration),
     )
+
+    // D13 owns route/first-draw truth. This is only bounded content-state evidence.
+    val diagnosticTruth = remember(saved.size, preview?.size, busy, error != null) {
+        mapOf(
+            "savedCount" to saved.size.coerceIn(0, 10000).toString(),
+            "previewState" to when {
+                preview == null -> "unrequested"
+                preview!!.isEmpty() -> "empty"
+                else -> "content"
+            },
+            "previewCount" to (preview?.size?.coerceIn(0, 10000)?.toString() ?: "unknown"),
+            "editorBusy" to busy.toString(),
+            "editorError" to (error != null).toString(),
+            "visibleProven" to "unknown",
+        )
+    }
+    LaunchedEffect(diagnosticTruth) {
+        try {
+            Diagnostics.event(
+                category = DiagnosticCategory.UI,
+                name = "smart_playlist_builder_content_state_v1",
+                metadata = diagnosticTruth,
+            )
+        } catch (_: Exception) {
+            // A logging failure cannot affect saved rules or editing.
+        }
+    }
 
     ListeningLibraryPage {
     LazyColumn(
