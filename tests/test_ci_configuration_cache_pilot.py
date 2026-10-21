@@ -50,5 +50,14 @@ class ConfigurationCachePilotContractTests(unittest.TestCase):
         self.assertEqual(1, s.count(preparation))
 
 
+    def test_preflight_settles_sdk_ndk_before_first_cache_snapshot(self):
+        s = self.yaml
+        preflight = './gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest'
+        cached = './gradlew --build-cache --configuration-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest'
+        self.assertEqual(1, s.count(preflight))
+        self.assertLess(s.index(preflight), s.index(cached))
+        self.assertIn('SDK/NDK', s)
+
+
 if __name__ == '__main__':
     unittest.main()
