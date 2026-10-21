@@ -321,6 +321,15 @@ object Diagnostics {
                 ioFailures = writer.failedWrites,
                 captureRotations = store.captureRotationsSinceOpen,
             ),
+            incidentReport = DiagnosticIncidentTriage.build(
+                events = snapshot,
+                rejectedWrites = writer.droppedWrites,
+                flushComplete = flushComplete,
+            ),
+            performanceReport = DiagnosticBottleneckAnalysis.summarize(
+                events = snapshot,
+                captureEnabled = true, // explicit export; never a runtime hot-path probe
+            ),
         )
     }
 
