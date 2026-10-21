@@ -217,6 +217,17 @@
     <string name="my_ratings_loading">Carregando gravação…</string>
     <string name="my_ratings_feed_loading">Carregando avaliações…</string>
     <string name="my_ratings_error">Não foi possível carregar as avaliações. Tente reabrir esta tela.</string>
+    <string name="my_ratings_remote_source">OpenSubsonic (remoto)</string>
+    <string name="my_ratings_local_source">No dispositivo (local)</string>
+    <string name="my_ratings_remote_rating">Avaliação remota: %1$d/5</string>
+    <string name="my_ratings_remote_starred">Favorita no servidor (não é nota)</string>
+    <string name="my_ratings_remote_cleared">Avaliação remota removida</string>
+    <string name="my_ratings_conflict_local">Notas locais e remotas diferentes</string>
+    <string name="my_ratings_conflict_remote">Fontes remotas discordam</string>
+    <string name="my_ratings_remote_loading">Carregando avaliações remotas…</string>
+    <string name="my_ratings_remote_unavailable">Avaliações remotas indisponíveis</string>
+    <string name="my_ratings_remote_error">Não foi possível ler as avaliações remotas</string>
+    <string name="my_ratings_remote_partial">Algumas músicas remotas não foram associadas</string>
     <string name="my_ratings_more">Exibindo as primeiras %1$d avaliações; há outras salvas.</string>
     <string name="smart_collections_title">Coleções inteligentes</string>
     <string name="smart_collections_loading">Atualizando coleções…</string>
