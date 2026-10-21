@@ -16,7 +16,11 @@ import io.ktor.client.statement.bodyAsText
 import java.net.URI
 import java.time.OffsetDateTime
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -87,6 +91,18 @@ internal class KtorOpenSubsonicTransport(
 }
 
 /**
+ * Counts only, never source IDs, credentials or URLs. Optional collection stays
+ * Catalog-internal and cannot affect sync correctness if its observer fails.
+ */
+internal data class OpenSubsonicEnumerationMetrics(
+    val pageRequests: Int,
+    val albumRequests: Int,
+    val trackCount: Int,
+    val peakAlbumRequestsInFlight: Int,
+    val elapsedMillis: Long,
+)
+
+/**
  * OpenSubsonic/Navidrome adapter. It enumerates the remote library using ID3-
  * oriented APIs (`getAlbumList2` + `getAlbum`) and emits provider-neutral rows.
  * No canonical IDs are created here.
@@ -96,12 +112,29 @@ internal class OpenSubsonicProvider(
     private val transport: OpenSubsonicTransport = KtorOpenSubsonicTransport(config.normalizedServerUrl),
     private val pageSize: Int = 500,
     private val saltFactory: () -> String = ::defaultOpenSubsonicSalt,
+    private val maxConcurrentAlbumFetches: Int = 4,
+    private val onEnumerationMetrics: ((OpenSubsonicEnumerationMetrics) -> Unit)? = null,
 ) : RemoteCatalogProvider {
     init {
         require(pageSize in 1..500) { "OpenSubsonic pageSize must be between 1 and 500" }
+        require(maxConcurrentAlbumFetches in 1..8) { "OpenSubsonic album concurrency must be between 1 and 8" }
     }
 
     override val providerKey: String = "opensubsonic:${config.accountId}"
+
+    /** No secrets/URLs escape this boolean guard or its callers. */
+    internal fun matchesSavedConfig(saved: OpenSubsonicAccountConfig?): Boolean =
+        saved != null &&
+            saved.accountId == config.accountId &&
+            saved.normalizedServerUrl == config.normalizedServerUrl &&
+            when {
+                config.auth is OpenSubsonicAuth.ApiKey && saved.auth is OpenSubsonicAuth.ApiKey ->
+                    config.auth.value == saved.auth.value
+                config.auth is OpenSubsonicAuth.Password && saved.auth is OpenSubsonicAuth.Password ->
+                    config.auth.username == saved.auth.username &&
+                        config.auth.password == saved.auth.password
+                else -> false
+            }
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -148,36 +181,139 @@ internal class OpenSubsonicProvider(
         )
     }
 
-    override suspend fun librarySnapshot(): ProviderLibrarySnapshot {
-        val albumIds = enumerateAlbumIds()
-        val tracks = ArrayList<ProviderTrack>()
-
-        for (albumId in albumIds) {
-            val response = request(
-                endpoint = "getAlbum",
-                extraParameters = mapOf("id" to albumId),
-            )
-            val album = response.album
-                ?: throw OpenSubsonicProtocolException("getAlbum returned no album")
-            tracks += album.song.orEmpty()
-                .asSequence()
-                .filterNot(SubsonicSong::isDir)
-                .map { song -> mapTrack(song, album) }
-                .toList()
+    /**
+     * Public extension-manifest discovery: no account credentials sent, no
+     * caching by UI re-render and no inference from ping/health. The generation
+     * is supplied by the account lifecycle owner, not guessed from a timestamp.
+     */
+    internal suspend fun streamCapabilityEvidence(generation: Long): OpenSubsonicStreamCapabilitySnapshot {
+        require(generation >= 0) { "Generation must be nonnegative" }
+        var manifestWasRead = false
+        val evidence = try {
+            val response = request("getOpenSubsonicExtensions", authenticated = false)
+            val manifest = response.openSubsonicExtensions
+            if (manifest == null) {
+                OpenSubsonicStreamConfidence.UNKNOWN to OpenSubsonicStreamEvidenceBasis.MALFORMED_OR_INCOMPLETE
+            } else {
+                manifestWasRead = true
+                val matching = manifest.filter { it.name.equals("transcoding", ignoreCase = true) }
+                when {
+                    matching.size > 1 ->
+                        OpenSubsonicStreamConfidence.UNKNOWN to OpenSubsonicStreamEvidenceBasis.MALFORMED_OR_INCOMPLETE
+                    matching.isEmpty() ->
+                        OpenSubsonicStreamConfidence.UNSUPPORTED to OpenSubsonicStreamEvidenceBasis.MANIFEST_ABSENT
+                    matching.single().versions.any { it <= 0 } ->
+                        OpenSubsonicStreamConfidence.UNKNOWN to OpenSubsonicStreamEvidenceBasis.MALFORMED_OR_INCOMPLETE
+                    1 in matching.single().versions ->
+                        OpenSubsonicStreamConfidence.ADVERTISED to OpenSubsonicStreamEvidenceBasis.MANIFEST_V1
+                    matching.single().versions.isEmpty() ->
+                        OpenSubsonicStreamConfidence.UNKNOWN to OpenSubsonicStreamEvidenceBasis.MALFORMED_OR_INCOMPLETE
+                    else ->
+                        OpenSubsonicStreamConfidence.UNSUPPORTED to OpenSubsonicStreamEvidenceBasis.VERSION_INCOMPATIBLE
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            // API/transport messages may contain auth URLs. Never surface them.
+            OpenSubsonicStreamConfidence.UNKNOWN to OpenSubsonicStreamEvidenceBasis.NO_RESPONSE
         }
-
-        return ProviderLibrarySnapshot(
-            tracks = tracks,
-            complete = true,
+        val traditional = OpenSubsonicStreamCapability(
+            OpenSubsonicStreamMechanism.TRADITIONAL_STREAM_BEST_EFFORT,
+            if (manifestWasRead) OpenSubsonicStreamConfidence.ADVERTISED else OpenSubsonicStreamConfidence.UNKNOWN,
+            if (manifestWasRead) OpenSubsonicStreamEvidenceBasis.PROTOCOL_SPEC else OpenSubsonicStreamEvidenceBasis.NO_RESPONSE,
+        )
+        return OpenSubsonicStreamCapabilitySnapshot(
+            generation = generation,
+            traditional = traditional,
+            transcoding = OpenSubsonicStreamCapability(
+                OpenSubsonicStreamMechanism.EXTENSION_TRANSCODING_V1,
+                evidence.first, evidence.second,
+            ),
+            configurationIsCurrent = ::matchesSavedConfig,
         )
     }
 
-    private suspend fun enumerateAlbumIds(): List<String> {
+    override suspend fun librarySnapshot(): ProviderLibrarySnapshot {
+        val startNanos = System.nanoTime()
+        val counts = EnumerationCounts()
+        val albumIds = enumerateAlbumIds(counts)
+        val tracks = ArrayList<ProviderTrack>()
+        val seenSourceKeys = HashSet<String>()
+
+        // Allocate at most maxConcurrentAlbumFetches coroutines/results per batch.
+        // awaitAll maintains input order even when the responses arrive reversed.
+        // Any failure or cancellation aborts the entire coroutineScope: a partial
+        // response can never be tagged complete or passed to the Room sync.
+        coroutineScope {
+            for (batch in albumIds.chunked(maxConcurrentAlbumFetches)) {
+                val pages = batch.map { albumId ->
+                    async {
+                        val inFlight = counts.active.incrementAndGet()
+                        counts.peak.updateAndGet { prior -> maxOf(prior, inFlight) }
+                        counts.albumRequests.incrementAndGet()
+                        try {
+                            fetchAlbumTracks(albumId)
+                        } finally {
+                            counts.active.decrementAndGet()
+                        }
+                    }
+                }.awaitAll()
+                for (albumTracks in pages) {
+                    for (track in albumTracks) {
+                        if (!seenSourceKeys.add(track.externalTrackId)) {
+                            throw OpenSubsonicProtocolException("Duplicate source ID in album enumeration")
+                        }
+                        tracks += track
+                    }
+                }
+            }
+        }
+        // Measurement is observational only. Never let logging or callbacks
+        // change the success/failure truth of a verified complete snapshot.
+        runCatching {
+            onEnumerationMetrics?.invoke(OpenSubsonicEnumerationMetrics(
+                pageRequests = counts.pageRequests,
+                albumRequests = counts.albumRequests.get(),
+                trackCount = tracks.size,
+                peakAlbumRequestsInFlight = counts.peak.get(),
+                elapsedMillis = ((System.nanoTime() - startNanos) / 1_000_000L).coerceAtLeast(0),
+            ))
+        }
+        return ProviderLibrarySnapshot(tracks = tracks, complete = true)
+    }
+
+    private suspend fun fetchAlbumTracks(albumId: String): List<ProviderTrack> {
+        val response = request(endpoint = "getAlbum", extraParameters = mapOf("id" to albumId))
+        val album = response.album
+            ?: throw OpenSubsonicProtocolException("getAlbum returned no album")
+        if (album.id.trim() != albumId) {
+            throw OpenSubsonicProtocolException("getAlbum response did not match request")
+        }
+        val songs = album.song
+            ?: if (album.songCount == 0) emptyList() else
+                throw OpenSubsonicProtocolException("getAlbum returned no song list")
+        if (album.songCount != null && album.songCount != songs.size) {
+            throw OpenSubsonicProtocolException("getAlbum song count is inconsistent")
+        }
+        return songs.asSequence().filterNot(SubsonicSong::isDir)
+            .map { song -> mapTrack(song, album) }.toList()
+    }
+
+    private class EnumerationCounts {
+        var pageRequests: Int = 0 // single coroutine, pagination is sequential
+        val albumRequests = AtomicInteger()
+        val active = AtomicInteger()
+        val peak = AtomicInteger()
+    }
+
+    private suspend fun enumerateAlbumIds(counts: EnumerationCounts): List<String> {
         val ids = ArrayList<String>()
         val seen = LinkedHashSet<String>()
         var offset = 0
 
         while (true) {
+            counts.pageRequests += 1
             val response = request(
                 endpoint = "getAlbumList2",
                 extraParameters = mapOf(
@@ -186,20 +322,27 @@ internal class OpenSubsonicProvider(
                     "offset" to offset.toString(),
                 ),
             )
-            val page = response.albumList2?.album.orEmpty()
+            // A successful HTTP response without the expected envelope is not
+            // proof that the library is empty. Treat it as incomplete and NEVER
+            // allow an availability prune against this response.
+            val listing = response.albumList2
+                ?: throw OpenSubsonicProtocolException("getAlbumList2 returned no album list")
+            // An omitted/null nested album array is not the same as an
+            // explicitly complete empty page; never prune cached assets for it.
+            val page = listing.album
+                ?: throw OpenSubsonicProtocolException("getAlbumList2 returned no album array")
             if (page.isEmpty()) break
-
-            var newIds = 0
+            if (page.size > pageSize) {
+                throw OpenSubsonicProtocolException("Album page exceeds requested size")
+            }
             for (album in page) {
-                if (album.id.isNotBlank() && seen.add(album.id)) {
-                    ids += album.id
-                    newIds += 1
+                val id = album.id.trim()
+                if (id.isEmpty() || !seen.add(id)) {
+                    throw OpenSubsonicProtocolException("Duplicate or blank album ID in pagination")
                 }
+                ids += id
             }
             if (page.size < pageSize) break
-            if (newIds == 0) {
-                throw OpenSubsonicProtocolException("Album pagination made no progress")
-            }
             offset += page.size
         }
 
@@ -398,7 +541,8 @@ private data class SubsonicExtension(
 
 @Serializable
 private data class SubsonicAlbumList(
-    val album: List<SubsonicAlbum> = emptyList(),
+    // Keep missing/null distinct from an explicit [] on the wire.
+    val album: List<SubsonicAlbum>? = null,
 )
 
 @Serializable

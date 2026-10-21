@@ -19,6 +19,11 @@ class DiagnosticFileStore(
     }
 
     private val lock = Any()
+    private var rotationsSinceOpen = 0L
+
+    /** Observable known rotation count since store construction, not across restarts. */
+    val captureRotationsSinceOpen: Long
+        get() = synchronized(lock) { rotationsSinceOpen }
 
     fun appendCapture(line: String) {
         synchronized(lock) {
@@ -50,6 +55,10 @@ class DiagnosticFileStore(
         metadataLines: List<String>,
         recentEventLines: List<String>,
         fileName: String,
+        reportV2Input: DiagnosticReportV2Input? = null,
+        includeJsonl: Boolean = false,
+        incidentReport: DiagnosticIncidentTriage? = null,
+        performanceReport: List<DiagnosticBottleneckSummary> = emptyList(),
     ): File = synchronized(lock) {
         ensureRoot()
         val exports = exportsDir().apply { mkdirs() }
@@ -58,12 +67,13 @@ class DiagnosticFileStore(
             writer.appendLine("BitChord diagnostics report")
             writer.appendLine()
             writer.appendLine("[metadata]")
-            metadataLines.forEach(writer::appendLine)
+            metadataLines.forEach { writer.appendLine(safeSharedText(it)) }
             writer.appendLine()
             writer.appendLine("[recent-events]")
-            recentEventLines.forEach(writer::appendLine)
+            recentEventLines.forEach { writer.appendLine(safeSharedText(it)) }
 
             val capture = captureFilesLocked()
+            val capturedLines = ArrayList<String>()
             writer.appendLine()
             writer.appendLine("[persisted-capture]")
             if (capture.isEmpty()) {
@@ -71,7 +81,12 @@ class DiagnosticFileStore(
             } else {
                 capture.forEach { file ->
                     writer.appendLine("--- ${file.name} ---")
-                    file.forEachLine { writer.appendLine(it) }
+                    file.forEachLine { raw ->
+                        // Old persisted logs may predate D1's ingress sanitization.
+                        val safe = safeSharedText(raw)
+                        writer.appendLine(safe)
+                        if (reportV2Input != null) capturedLines.add(safe)
+                    }
                 }
             }
 
@@ -79,9 +94,49 @@ class DiagnosticFileStore(
             writer.appendLine("[last-crash]")
             val crash = lastCrashFile()
             if (crash.isFile) {
-                crash.forEachLine { writer.appendLine(it) }
+                crash.forEachLine { writer.appendLine(safeSharedText(it)) }
             } else {
                 writer.appendLine("<none>")
+            }
+
+            // Existing TXT section layout remains intact; v2 is an additive
+            // deterministic, bounded audit view of the same locked file snapshot.
+            reportV2Input?.let { input ->
+                val report = DiagnosticReportV2.build(input, capturedLines)
+                writer.appendLine()
+                writer.appendLine("[report-v2]")
+                writer.append(report.toHumanText())
+                if (includeJsonl) {
+                    writer.appendLine()
+                    writer.appendLine("[events-jsonl-v2]")
+                    writer.append(report.toJsonl())
+                }
+            }
+            incidentReport?.let { report ->
+                writer.appendLine()
+                writer.appendLine("[incident-triage-v3]")
+                report.toHumanLines().forEach { writer.appendLine(safeSharedText(it)) }
+                writer.appendLine()
+                writer.appendLine("[incidents-jsonl-v3]")
+                report.toJsonl().lineSequence().filter(String::isNotBlank).forEach {
+                    writer.appendLine(safeSharedText(it))
+                }
+            }
+            if (performanceReport.isNotEmpty()) {
+                writer.appendLine()
+                writer.appendLine("[measured-bottlenecks-v0]")
+                writer.appendLine("source=observed_trace_spans_only")
+                writer.appendLine("critical_path_proven=false")
+                performanceReport.take(32).forEach { sample ->
+                    writer.appendLine(safeSharedText(
+                        "feature=${sample.feature} operation=${sample.operation} phase=${sample.phase}" +
+                            " count=${sample.sampleCount} max_ns=${sample.maxObservedNanos}" +
+                            " p50_ns=${sample.p50Nanos?.toString() ?: "insufficient"}" +
+                            " p95_ns=${sample.p95Nanos?.toString() ?: "insufficient"}" +
+                            " percentile_evidence=${sample.percentileEvidence.name.lowercase()}" +
+                            " samples_dropped=${sample.samplesDropped}"
+                    ))
+                }
             }
         }
         pruneExportsLocked()
@@ -118,6 +173,7 @@ class DiagnosticFileStore(
     private fun rotateCaptureLocked() {
         val current = currentCaptureFile()
         if (!current.exists()) return
+        rotationsSinceOpen++
         val previous = previousCaptureFile()
         if (previous.exists()) previous.delete()
         if (!current.renameTo(previous)) {
@@ -141,8 +197,23 @@ class DiagnosticFileStore(
         val terminated = if (line.endsWith('\n')) line else "$line\n"
         val bytes = terminated.toByteArray(Charsets.UTF_8)
         if (bytes.size <= maxCaptureBytes) return bytes
-        return bytes.copyOf(maxCaptureBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        // Reserve a newline and stop before any incomplete UTF-8 codepoint.
+        // The old byte slice could leave an invalid multibyte suffix and
+        // produce an unterminated, unparsable forensic event.
+        var end = (maxCaptureBytes - 1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        while (end > 0 && (bytes[end].toInt() and 0xC0) == 0x80) end--
+        return bytes.copyOf(end) + byteArrayOf('\n'.code.toByte())
     }
+
+    /**
+     * Last outbound boundary, including legacy on-disk content recorded before D1.
+     * This intentionally favors privacy over preserving historic unsalted UUID
+     * trace identifiers; current causal flowId/parentSpanId use safe ref_ tokens.
+     */
+    private fun safeSharedText(line: String): String =
+        DiagnosticSanitizer.freeText(line)
+            .replace("\r", "\\r")
+            .replace("\n", "\\n")
 
     private fun safeFileName(requested: String): String {
         val sanitized = requested

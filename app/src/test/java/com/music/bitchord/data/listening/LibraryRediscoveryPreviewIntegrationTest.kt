@@ -150,6 +150,27 @@ class LibraryRediscoveryPreviewIntegrationTest {
         assertTrue(full.indexOfFirst { it.base.base.recordingId == oldBehavior } >= 5)
 
         val preview = planner.preview(full)
+        // L7 must consume the complete existing rank (after Exploration), with
+        // conservative Rediscovery eligibility and no extra model/rank stage.
+        val adaptive = AdaptiveSmartCollectionPreview(
+            pipeline = pipeline, availability = availability, rediscovery = planner,
+        ).preview()
+        assertEquals(
+            listOf(oldBehavior, oldExplicit),
+            adaptive.first { it.kind == AdaptiveCollectionKind.REDISCOVERY }
+                .items.map { it.recordingId },
+        )
+        assertTrue(
+            adaptive.first { it.kind == AdaptiveCollectionKind.EXPLICIT_POSITIVES }
+                .items.any { it.recordingId == top.first() },
+        )
+        assertFalse(
+            adaptive.first { it.kind == AdaptiveCollectionKind.REDISCOVERY }
+                .items.any { it.recordingId in setOf(startOnly, negative, unavailable, recentInteraction) },
+        )
+        assertEquals(emptyList<AdaptiveCollectionItem>(),
+            adaptive.first { it.kind == AdaptiveCollectionKind.REDISCOVERY }
+                .items.filter { it.rankPosition <= 0 })
         val presentation = LibraryRediscoveryPresentationContract().present(preview)
         assertEquals(listOf(oldBehavior, oldExplicit), presentation.map { it.recordingId })
         assertEquals(listOf(1, 2), presentation.map { it.shelfPosition })

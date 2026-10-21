@@ -51,6 +51,36 @@ class RecordingRatingStoreTest {
     }
 
     @Test
+    fun canonicalFeedbackEditorRevalidatesAvailabilityAndPreservesRoomHistory() = runTest {
+        val clock = MutableClock(1_000L)
+        val store = openStore(clock, persistent = true)
+        var available = true
+        val editor = CanonicalRecordingFeedbackEditor(
+            store = store,
+            isAvailable = { id -> id == RECORDING_A && available },
+        )
+
+        assertFalse(editor.set(RECORDING_B, 5.0))
+        assertTrue(editor.set(RECORDING_A, 5.0))
+        clock.now = 2_000L
+        assertTrue(editor.set(RECORDING_A, 4.5))
+        available = false
+        assertFalse(editor.clear(RECORDING_A))
+        assertEquals(4.5, store.currentRating(RECORDING_A)!!.value, 0.0)
+        available = true
+        assertTrue(editor.clear(RECORDING_A))
+        assertNull(store.currentRating(RECORDING_A))
+        database!!.close()
+        database = null
+        val reopened = openStore(clock, persistent = true)
+        assertEquals(
+            listOf(5.0, 4.5, null),
+            reopened.ratingHistory(RECORDING_A).map { it.newValue },
+        )
+        assertTrue(reopened.ratedRecordings().isEmpty())
+    }
+
+    @Test
     fun firstRatingCreatesCurrentStateAndHistory() = runTest {
         val clock = MutableClock(1_000L)
         val store = openStore(clock)

@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 62,
+      "expected_head_sha": "a71ab0768897978f080ac085dd4c19824eb235d6",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/listening/CanonicalRecordingFeedbackEditor.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/CanonicalRecordingFeedbackControls.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/CanonicalRediscoveryRecordingDetailsScreen.kt",
+        "app/src/test/java/com/music/bitchord/data/listening/RecordingRatingStoreTest.kt",
+        "app/src/test/java/com/music/bitchord/ui/screens/CanonicalRecordingFeedbackControlsTest.kt",
+        "sharedUi/src/commonMain/composeResources/values-pt/strings.xml",
+        "sharedUi/src/commonMain/composeResources/values/strings.xml"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 64,
+      "expected_head_sha": "c0780deed616e86165114c2c54ec0749c8e3b71e",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/sources/SourceResolutionTracing.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/Diagnostics.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/StructuredTraceDiagnostics.kt",
+        "app/src/main/java/com/music/bitchord/observability/StructuredTrace.kt",
+        "app/src/main/java/com/music/bitchord/playback/PlaybackE2ETracing.kt",
+        "app/src/test/java/com/music/bitchord/data/sources/SourceResolutionCorrelationD2Test.kt",
+        "app/src/test/java/com/music/bitchord/observability/TraceCorrelationD2Test.kt",
+        "shared/src/jvmSharedMain/kotlin/com/music/bitchord/data/TrackLog.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 65,
+      "expected_head_sha": "fbafaa9efd52e3099ec31bc91aa382109e70a096",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/playback/PlaybackFailureCascade.kt",
+        "app/src/test/java/com/music/bitchord/playback/PlaybackFailureCascadeTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    }
+  ]
+}

@@ -89,9 +89,10 @@ internal class OpenSubsonicAccountRepository(
             lastSyncSummary = existing?.lastSyncSummary,
         )
 
-        // Validate everything before either store changes. The secret goes first:
-        // a plain record must never claim a usable account when credential
-        // persistence failed.
+        // Validate everything before either store changes. Invalidate active
+        // stream leases *before* overwriting credentials, even if persistence
+        // subsequently fails. Cached catalog rows are intentionally untouched.
+        OpenSubsonicAccountRevisionClock.revoke()
         credentials.write(accountId, normalizedCredential)
         persistence.write(record)
         return record
@@ -166,6 +167,8 @@ internal class OpenSubsonicAccountRepository(
     }
 
     fun forget() {
+        // Revoke in-flight HTTP/Media3 leases before removing secrets.
+        OpenSubsonicAccountRevisionClock.revoke()
         val accountId = current()?.accountId
         try {
             if (accountId != null) credentials.clear(accountId)

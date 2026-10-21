@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 72,
+      "expected_head_sha": "980b897afa3e029c4e5ce4b2a74f2cb64edcac27",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/listening/PreferenceSmartCollectionIntegrityEvaluator.kt",
+        "app/src/test/java/com/music/bitchord/data/listening/PreferenceSmartCollectionIntegrityEvaluatorTest.kt",
+        "app/src/test/java/com/music/bitchord/data/listening/PreferenceSmartCollectionIntegrityRoomTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 77,
+      "expected_head_sha": "fdbf12db540a0263e3e940edd0521f0dcf4198f1",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicAccountController.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicCatalogSync.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicProvider.kt",
+        "app/src/test/java/com/music/bitchord/OpenSubsonicSyncRecoveryRoomTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    }
+  ]
+}

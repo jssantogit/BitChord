@@ -36,6 +36,8 @@ object StructuredTraceDiagnosticMapper {
             "outcome" to point.outcome.name.lowercase(Locale.ROOT),
             "verbosity" to point.verbosity.name.lowercase(Locale.ROOT),
         )
+        point.flowId?.let { reserved["flowId"] = it }
+        point.parentSpanId?.let { reserved["parentSpanId"] = it }
         point.stage?.let { reserved["stage"] = it }
         point.attributes.forEach { (key, value) ->
             if (key !in reserved && reserved.size < MAX_DIAGNOSTIC_METADATA_ENTRIES) {
