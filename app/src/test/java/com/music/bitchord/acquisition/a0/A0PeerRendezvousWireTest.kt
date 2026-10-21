@@ -29,6 +29,23 @@ class A0PeerRendezvousWireTest {
         assertFalse(x.obfuscated)
     }
 
+    @Test fun loopbackIsParsedForOwnedFixtureButTransportGateMustRejectItInPublicMode() {
+        val event=A0PeerRendezvousWire.readServerEvent(
+            ByteArrayInputStream(serverAddress(
+                "peer_name",byteArrayOf(127,0,0,1),41234,0,0
+            )), "peer_name", 41
+        )
+        assertTrue(event is A0PeerRendezvousWire.ServerEvent.Address)
+        val parsed=event as A0PeerRendezvousWire.ServerEvent.Address
+        assertFalse(A0PeerRendezvousWire.isRoutableIpv4(parsed.address.address))
+        try {
+            A0ServerAssociatedTransfer.requireEndpoint(
+                parsed.address,allowLoopbackForLocalTest=false
+            )
+            fail("Public runtime must reject loopback despite successfully framed response")
+        } catch (_:IOException){}
+    }
+
     @Test fun mismatchedUsernameAndUnsupportedObfuscationMustFailClosed() {
         val wrong=serverAddress("another_user",byteArrayOf(8,8,4,4),41234,0,0)
         val mismatch=A0PeerRendezvousWire.readServerEvent(ByteArrayInputStream(wrong),"peer_name",44)
