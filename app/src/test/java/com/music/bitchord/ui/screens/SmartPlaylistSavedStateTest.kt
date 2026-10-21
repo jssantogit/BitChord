@@ -45,7 +45,7 @@ class SmartPlaylistSavedStateTest {
         val definition = SavedSmartPlaylistDefinition(
             id = "canonical-rule-id",
             name = "My rule",
-            query = SmartPlaylistEditorDraft().toQuery(),
+            query = SmartPlaylistEditorDraft(minimumRating = "4").toQuery(),
         )
         val seen = mutableListOf<SmartPlaylistSavedUiState>()
         collectSmartPlaylistSavedState(flowOf(listOf(definition)), { seen += it })
