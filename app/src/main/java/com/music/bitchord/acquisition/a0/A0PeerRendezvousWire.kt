@@ -61,8 +61,12 @@ internal object A0PeerRendezvousWire {
                 val obfuscatedPort = le16(body)
                 if (body.available() != 0) malformed()
                 if (peer != expectedPeer) ServerEvent.Unrelated
+                // Framing and endpoint policy are deliberately separate:
+                // only the transport caller may allow loopback for JVM tests.
+                // Public runtime rejects all private/local/reserved endpoints
+                // via A0ServerAssociatedTransfer.requireEndpoint().
                 else if (obfuscation != 0 || obfuscatedPort != 0 ||
-                    port !in 1..65535 || !isRoutableIpv4(reversedAddress)) {
+                    port !in 1..65535 || reversedAddress.all { it.toInt() == 0 }) {
                     ServerEvent.UnsupportedAddress
                 } else ServerEvent.Address(InetAddress.getByAddress(reversedAddress), port, false)
             }
