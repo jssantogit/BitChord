@@ -110,8 +110,22 @@ internal class A0ServerAssociatedTransfer(
                     session.queueUpload(peer.getOutputStream())
                     session.acceptUpload(peer.getInputStream(),peer.getOutputStream())
                     checkNotCancelled()
-                    listener.soTimeout=remainingTimeout(deadline)
-                    listener.accept().use{f->
+                    // A direct inbound F is not guaranteed behind carrier/
+                    // residential NAT. Also accept a server-mediated code-18
+                    // F offer from this exact peer; reply PierceFirewall on
+                    // outbound F before reading FileTransferInit.
+                    A0FileChannelRendezvous.awaitFileSocket(
+                        server=authenticatedServer,
+                        listener=listener,
+                        selectedPeerUsername=peerUsername,
+                        selectedPeerAddress=resolved.address,
+                        absoluteDeadlineNanos=deadline,
+                        allowLoopbackForLocalTest=allowLoopbackForLocalTest,
+                        isCancelled={
+                            cancelled.get() || Thread.currentThread().isInterrupted
+                        },
+                        onSocketActivated={activeF=it}
+                    ).use{f->
                         activeF=f
                         f.soTimeout=remainingTimeout(deadline)
                         if(!f.inetAddress.address.contentEquals(resolved.address.address)) {
