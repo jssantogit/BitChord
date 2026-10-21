@@ -104,15 +104,24 @@ internal fun CanonicalMyRatingsScreen(
 ) {
     val context = LocalContext.current.applicationContext
     val feed = remember(context, ratingFeedOverride) {
-        ratingFeedOverride ?: RoomRecordingRatingStore(
-            ListeningEventDatabase.get(context).recordingRatingDao(),
-        ).observeRatedRecordings(limit = 500)
+        try {
+            ratingFeedOverride ?: RoomRecordingRatingStore(
+                ListeningEventDatabase.get(context).recordingRatingDao(),
+            ).observeRatedRecordings(limit = 500)
+        } catch (_: Exception) {
+            // Database opening can fail before the Flow is subscribed.
+            null
+        }
     }
     val state by produceState<MyRatingsUiState>(
-        initialValue = MyRatingsUiState.Loading,
+        initialValue = if (feed == null) MyRatingsUiState.Error else MyRatingsUiState.Loading,
         key1 = feed,
         key2 = context,
     ) {
+        if (feed == null) {
+            value = MyRatingsUiState.Error
+            return@produceState
+        }
         try {
             feed.collectLatest { snapshot ->
                 if (snapshot.items.isEmpty()) {
