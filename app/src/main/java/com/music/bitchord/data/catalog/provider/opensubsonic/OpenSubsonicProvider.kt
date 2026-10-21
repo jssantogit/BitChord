@@ -62,6 +62,8 @@ internal data class OpenSubsonicAccountConfig(
     val accountId: String,
     val serverUrl: String,
     val auth: OpenSubsonicAuth,
+    /** Opaque persisted account-instance scope; rotated on every explicit save. */
+    val ratingScopeId: String = "",
 ) {
     init {
         require(accountId.matches(Regex("[A-Za-z0-9._-]+"))) {
@@ -135,6 +137,7 @@ internal class OpenSubsonicProvider(
     internal fun matchesSavedConfig(saved: OpenSubsonicAccountConfig?): Boolean =
         saved != null &&
             saved.accountId == config.accountId &&
+            saved.ratingScopeId == config.ratingScopeId &&
             saved.normalizedServerUrl == config.normalizedServerUrl &&
             when {
                 config.auth is OpenSubsonicAuth.ApiKey && saved.auth is OpenSubsonicAuth.ApiKey ->
