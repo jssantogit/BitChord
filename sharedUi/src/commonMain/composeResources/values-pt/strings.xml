@@ -253,6 +253,9 @@
     <string name="smart_playlist_delete">Excluir</string>
     <string name="smart_playlist_reset">Limpar editor</string>
     <string name="smart_playlist_saved">Playlists inteligentes salvas</string>
+    <string name="smart_playlist_saved_loading">Carregando playlists salvas…</string>
+    <string name="smart_playlist_saved_empty">Ainda não há playlists salvas</string>
+    <string name="smart_playlist_saved_error">Não foi possível carregar as playlists salvas</string>
     <string name="smart_playlist_empty">Nenhuma gravação ou definição no momento</string>
     <string name="smart_playlist_error">Regras inválidas ou dados indisponíveis</string>
     <string name="smart_playlist_overflow">Gravações disponíveis demais para avaliar com segurança</string>
