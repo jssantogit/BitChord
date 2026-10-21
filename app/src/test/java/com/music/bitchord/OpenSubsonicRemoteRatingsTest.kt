@@ -2,7 +2,11 @@ package com.music.bitchord
 
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.ExternalIdentityEntity
+import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.provider.ProviderSyncResult
+import com.music.bitchord.data.listening.ListeningEventDatabase
+import com.music.bitchord.data.listening.RoomRecordingRatingStore
 import com.music.bitchord.data.catalog.provider.RemoteNumericRatingKind
 import com.music.bitchord.data.catalog.provider.RemoteStarredKind
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountConfig
@@ -33,6 +37,8 @@ class OpenSubsonicRemoteRatingsTest {
         songs: String,
         scope: String = "scope-a",
         fail: Boolean = false,
+        apiErrorCode: Int? = null,
+        returnXml: Boolean = false,
     ): OpenSubsonicProvider = OpenSubsonicProvider(
         config = OpenSubsonicAccountConfig(
             accountId = "home",
@@ -43,7 +49,8 @@ class OpenSubsonicRemoteRatingsTest {
         transport = object : OpenSubsonicTransport {
             override suspend fun get(endpoint: String, parameters: Map<String, String>): String {
                 assertEquals("json", parameters["f"])
-                if (fail) return """{"subsonic-response":{"status":"failed","error":{"code":40,"message":"bad password"}}}"""
+                if (fail || apiErrorCode != null) return """{"subsonic-response":{"status":"failed","error":{"code":${apiErrorCode ?: 40},"message":"unsafe server URL and token"}}}"""
+                if (returnXml && endpoint == "getAlbum") return "<subsonic-response status='ok' />"
                 return when (endpoint) {
                     "getAlbumList2" -> """{"subsonic-response":{"status":"ok","albumList2":{"album":[{"id":"album"}]}}}"""
                     "getAlbum" -> """{"subsonic-response":{"status":"ok","album":{"id":"album","songCount":4,"song":[__SONGS__]}}}"""
@@ -114,6 +121,88 @@ class OpenSubsonicRemoteRatingsTest {
             // Network is not touched by the offline reader.
             active = account("scope-a")
             assertEquals(2, reader.read().items.size)
+        } finally { db.close() }
+    }
+
+    @Test fun remoteFiveNeverMutatesLocalFourPointFiveOrItsHistory() = runBlocking {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            assertTrue(OpenSubsonicCatalogSync.sync(catalog, provider(songs))
+                is ProviderSyncResult.Success)
+            val canonical = requireNotNull(catalog.catalogDao()
+                .mediaAsset("opensubsonic:home", "rated")).recordingId
+            val store = RoomRecordingRatingStore(listening.recordingRatingDao()) { 1234L }
+            store.setRecordingRating(canonical, 4.5)
+            val updated = songs.replace("\"userRating\":4", "\"userRating\":5")
+            assertTrue(OpenSubsonicCatalogSync.sync(catalog, provider(updated))
+                is ProviderSyncResult.Success)
+            val remote = OpenSubsonicRemoteRatingReader(catalog) { account("scope-a") }
+                .read().items.single { it.recordingId == canonical }
+            assertEquals(5, remote.numeric.value)
+            assertEquals(4.5, store.currentRating(canonical)!!.value, 0.0)
+            assertEquals(listOf(4.5), store.ratingHistory(canonical).map { it.newValue })
+            assertEquals(RemoteStarredKind.STARRED, remote.starred)
+        } finally {
+            listening.close()
+            catalog.close()
+        }
+    }
+
+    @Test fun authenticatedSyncFailureDistinguishesAuthPermissionUnsupportedAndNeverErasesRatings() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            assertTrue(OpenSubsonicCatalogSync.sync(db, provider(songs)) is ProviderSyncResult.Success)
+            val reader = OpenSubsonicRemoteRatingReader(db) { account("scope-a") }
+            for ((code, category) in listOf(
+                40 to "authentication",
+                50 to "permission",
+                20 to "unsupported",
+            )) {
+                val failure = OpenSubsonicCatalogSync.sync(
+                    db, provider(songs, apiErrorCode = code),
+                ) as ProviderSyncResult.Failure
+                assertTrue("Expected $category, not a leaked server error: ${failure.reason}",
+                    failure.reason.contains(category))
+                assertFalse(failure.reason.contains("unsafe"))
+                assertEquals(2, reader.read().items.size)
+            }
+        } finally { db.close() }
+    }
+
+    @Test fun unexpectedXmlCannotBecomeAnEmptyCompleteJsonRatingSnapshot() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            assertTrue(OpenSubsonicCatalogSync.sync(db, provider(songs)) is ProviderSyncResult.Success)
+            val failed = OpenSubsonicCatalogSync.sync(db, provider(songs, returnXml = true))
+            assertTrue(failed is ProviderSyncResult.Failure)
+            assertEquals(2, OpenSubsonicRemoteRatingReader(db) { account("scope-a") }.read().items.size)
+        } finally { db.close() }
+    }
+
+    @Test fun changedProviderAliasCannotExposeStaleCanonicalRatingBinding() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            assertTrue(OpenSubsonicCatalogSync.sync(db, provider(songs)) is ProviderSyncResult.Success)
+            val dao = db.catalogDao()
+            val asset = requireNotNull(dao.mediaAsset("opensubsonic:home", "rated"))
+            val reader = OpenSubsonicRemoteRatingReader(db) { account("scope-a") }
+            assertEquals(2, reader.read().items.size)
+            dao.upsertRecording(RecordingEntity("replacement", "Not the rated song", "Different", null))
+            dao.upsertExternalIdentity(ExternalIdentityEntity(
+                "opensubsonic:home", "recording", "rated", "replacement",
+            ))
+            assertTrue(reader.read().items.none { it.mediaAssetId == asset.id })
+            assertEquals(1, reader.read().items.size)
         } finally { db.close() }
     }
 

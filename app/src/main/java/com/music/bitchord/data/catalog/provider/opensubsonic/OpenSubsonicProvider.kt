@@ -488,10 +488,7 @@ internal class OpenSubsonicProvider(
         val response = envelope.response
         if (!response.status.equals("ok", ignoreCase = true)) {
             val error = response.error
-            throw OpenSubsonicApiException(
-                code = error?.code,
-                serverMessage = error?.message,
-            )
+            throw OpenSubsonicApiException(code = error?.code)
         }
         return response
     }
@@ -542,16 +539,11 @@ internal class OpenSubsonicProvider(
 
 private class OpenSubsonicProtocolException(message: String) : IllegalStateException(message)
 
-private class OpenSubsonicApiException(
-    code: Int?,
-    serverMessage: String?,
-) : IllegalStateException(
-    buildString {
-        append("OpenSubsonic API request failed")
-        if (code != null) append(" (code $code)")
-        serverMessage?.takeIf(String::isNotBlank)?.let { message -> append(": $message") }
-    },
-)
+/** Only a code crosses this exception boundary. Server error text may contain secrets. */
+internal class OpenSubsonicApiException(
+    val code: Int?,
+) : IllegalStateException("OpenSubsonic API request failed")
+
 
 @Serializable
 private data class SubsonicEnvelope(
