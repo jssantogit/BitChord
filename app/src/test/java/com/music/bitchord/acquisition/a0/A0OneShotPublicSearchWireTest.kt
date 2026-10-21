@@ -50,6 +50,32 @@ class A0OneShotPublicSearchWireTest {
         assertFalse(result.toString().contains("Ringingsound.wav"))
     }
 
+    @Test fun validatedDirectReplyCanFeedPrivateSearchCandidateHandoff() {
+        val payload=peerInit("a_private_username","P",0)+
+            searchReply("a_private_username",27182,"secret_folder\\Ringingsound.wav")
+        var observed=0
+        val result=A0OneShotPublicSearchWire.readOneDirectPeerReply(
+            ByteArrayInputStream(payload),27182
+        ) { frame, peer ->
+            val parsed=A0SoulseekSearchResponseParser.parse(frame,27182)
+            assertEquals("a_private_username",peer)
+            assertEquals(peer,parsed.peerUsername)
+            observed++
+        }
+        assertEquals(1,observed)
+        assertEquals(1,result.untrustedResultCount)
+
+        observed=0
+        reject {
+            A0OneShotPublicSearchWire.readOneDirectPeerReply(
+                ByteArrayInputStream(peerInit("fake","P",0)+
+                    searchReply("other",27182,"secret_folder\\Ringingsound.wav")),
+                27182
+            ) { _, _ -> observed++ }
+        }
+        assertEquals(0,observed)
+    }
+
     @Test fun wrongSearchTokenOrClaimedUsernameMustNotCountAsAReply() {
         for (payload in listOf(
             peerInit("peer-A", "P", 0) + searchReply("peer-A", 123, "f\\Ringingsound.wav"),
