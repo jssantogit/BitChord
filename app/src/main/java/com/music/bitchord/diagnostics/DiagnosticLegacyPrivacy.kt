@@ -5,7 +5,12 @@ package com.music.bitchord.diagnostics
  * Typed structured traces remain the preferred high-fidelity diagnostic path.
  */
 internal object DiagnosticLegacyPrivacy {
-    private val staticTag = Regex("^[A-Za-z][A-Za-z0-9_.-]{0,47}$")
+    private val recognizedTags = setOf(
+        "App", "MainActivity", "Player", "Playback", "PlaybackService",
+        "Media3", "Queue", "Search", "VideoSwitch", "Network", "Catalog",
+        "OpenSubsonic", "Subsonic", "Room", "Ratings", "Listening", "Artwork",
+        "Diagnostics", "NowPlaying", "Downloads", "Library",
+    )
     private val sensitiveTag = Regex("(?i)(search|query|video.?switch|now.?playing.?title)")
     private val sensitiveFreeText = Regex("(?i)(\\bsearch\\s+query\\b|\\bvideo\\s+switch\\b)")
     private val keyedMediaText = Regex(
@@ -13,7 +18,7 @@ internal object DiagnosticLegacyPrivacy {
     )
 
     /** A dynamic tag is an untrusted media identifier until proven otherwise. */
-    fun tag(raw: String): String = raw.takeIf(staticTag::matches) ?: "other"
+    fun tag(raw: String): String = raw.takeIf { it in recognizedTags } ?: "other"
 
     fun message(rawTag: String, raw: String): String {
         if (sensitiveTag.containsMatchIn(rawTag) || sensitiveFreeText.containsMatchIn(raw)) {
