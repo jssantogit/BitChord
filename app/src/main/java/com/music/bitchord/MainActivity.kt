@@ -316,7 +316,11 @@ import com.music.bitchord.ui.screens.HomeScreen
 import com.music.bitchord.ui.screens.LibraryGridPage
 import com.music.bitchord.ui.screens.LibraryScreen
 import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingDetailsScreen
+import com.music.bitchord.ui.screens.CanonicalSongMenuRating
+import com.music.bitchord.ui.screens.CanonicalMyRatingsEntry
+import com.music.bitchord.ui.screens.CanonicalMyRatingsScreen
 import com.music.bitchord.ui.screens.LibraryRediscoveryShelfEntry
+import com.music.bitchord.ui.screens.AdaptiveCollectionsLibraryEntry
 import com.music.bitchord.ui.screens.MoodGenrePlaylistsScreen
 import com.music.bitchord.ui.screens.SearchScreen
 import com.music.bitchord.data.settings.SongSort
@@ -2206,6 +2210,7 @@ private fun BitChordApp(
     // See [rememberReplayState].
     // Page navigation is keyed by the canonical RecordingId, never provider/source IDs.
     var rediscoveryRecordingId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showCanonicalMyRatings by rememberSaveable { mutableStateOf(false) }
     val replayOpen = showReplay || replayStory != null || showReplayShare ||
         (selectedTab == TAB_LIBRARY && detail == null && !showSettings)
     val (replay, setReplayPeriod) = rememberReplayState(replayOpen)
@@ -2630,6 +2635,7 @@ private fun BitChordApp(
         BackHandler(enabled = libraryShowAll != null && detail == null) { libraryShowAll = null }
         BackHandler(enabled = detailActiveShelf != null) { detailActiveShelf = null }
         BackHandler(enabled = rediscoveryRecordingId != null) { rediscoveryRecordingId = null }
+        BackHandler(enabled = showCanonicalMyRatings) { showCanonicalMyRatings = false }
 
         // On a tablet the page and the player stand side by side rather than
         // one over the other: everything a phone stacks in a single column —
@@ -2667,6 +2673,7 @@ private fun BitChordApp(
                         showReplay -> "replay"
                         detail != null -> detail.browseId
                         rediscoveryRecordingId != null -> "rediscovery:" + rediscoveryRecordingId
+                        showCanonicalMyRatings -> "my_ratings"
                         else -> "$TAB_KEY$selectedTab"
                     },
                     // Tabs swap outright; everything else crossfades.
@@ -2750,7 +2757,9 @@ private fun BitChordApp(
                     val pageDetailListState = remember(key) {
                         detailListStates.getOrPut(key) { LazyListState() }
                     }
-                    if (key.startsWith("rediscovery:")) {
+                    if (key == "my_ratings") {
+                        CanonicalMyRatingsScreen(onBack = { showCanonicalMyRatings = false })
+                    } else if (key.startsWith("rediscovery:")) {
                         CanonicalRediscoveryRecordingDetailsScreen(
                             recordingId = key.removePrefix("rediscovery:"),
                             onBack = { rediscoveryRecordingId = null },
@@ -3396,10 +3405,17 @@ private fun BitChordApp(
                                 )
                             },
                             rediscovery = {
-                                LibraryRediscoveryShelfEntry(
-                                    refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
-                                    onOpenRecording = { rediscoveryRecordingId = it },
-                                )
+                                Column {
+                                    CanonicalMyRatingsEntry(onOpen = { showCanonicalMyRatings = true })
+                                    LibraryRediscoveryShelfEntry(
+                                        refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
+                                        onOpenRecording = { rediscoveryRecordingId = it },
+                                    )
+                                    AdaptiveCollectionsLibraryEntry(
+                                        refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
+                                        onOpenRecording = { rediscoveryRecordingId = it },
+                                    )
+                                }
                             },
                             onSignIn = { webSession = WebSessionMode.SIGN_IN },
                             onRetry = viewModel::loadLibrary,
@@ -3977,6 +3993,7 @@ private fun BitChordApp(
                     viewModel.clearDetail()
                     // Tab changes dismiss an open canonical Recording details page.
                     rediscoveryRecordingId = null
+                    showCanonicalMyRatings = false
                     viewModel.closeMoodGenre()
                     showSettings = false
                     showAccountScrobbling = false
@@ -4415,6 +4432,7 @@ private fun BitChordApp(
                 } else null,
                 signedIn = signedIn,
                 likeStatus = likeStatuses[song.videoId] ?: LikeStatus.INDIFFERENT,
+                canonicalRatingContent = { CanonicalSongMenuRating(song) },
                 onPlayNext = { playNext(song); songActions = null },
                 onAddToQueue = { addToQueue(song); songActions = null },
                 onStartRadio = { startRadio(song); songActions = null },

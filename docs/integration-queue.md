@@ -116,7 +116,58 @@ For each authorized PR, the controller:
    live protected main HEAD.
 6. Waits for the `check.yml` **push** run on the *exact merge SHA* to be
    `completed/success`, and for the required commit check itself to be
-   GREEN. **Only then** does the next PR become eligible.
+   GREEN. **Only then** may the next PR be merged.
+
+### Next-PR preparation overlap pilot (controlled, MAX_ITEMS=3)
+
+After GitHub confirms the current PR's merge and the exact new protected
+`main` SHA, the same serial controller may **prepare** the following
+manifest-approved PR *before* waiting for post-merge Android CI to finish.
+Preparation rechecks the exact reviewed original HEAD/base/file allowlist,
+parent dependency, workflow-file sync guard and live protected main SHA;
+it retargets and updates the next branch if necessary, which triggers
+its ordinary strict required Android PR check. This branch-only
+preparation is speculative and may consume a CI runner while the prior
+post-main check is RED or pending.
+
+**There is no speculative merge.** The previous `check.yml` main-push
+workflow AND its required exact-SHA Android check still must finish GREEN
+before the next PR's own exact HEAD/base/diff/check/mergeability can be
+revalidated and merged. Any RED, drift, unexpected changed file or timeout
+halts. If preparation fails, the controller still verifies the previous
+main push before stopping. No background thread, independent writer,
+parallel merge, bypass, extra GitHub App permission or replay mechanism
+is introduced.
+
+### Phase-level observability (stacked metrics pilot)
+
+The same protected executor emits `QUEUE_METRIC v=1` records with fixed
+low-cardinality fields `pr`, `phase`, `outcome` and `duration_ms`.
+Phases are `prepare_head`, `premerge_ci`, `protected_merge`,
+`prepare_next` and `postmain_ci`. `ok` means that specific phase
+returned successfully; `blocked` means an error occurred. Durations are
+monotonic, nonnegative and bounded by the controller's total time budget.
+
+The CLI logger attaches a UTC ISO-8601 timestamp and flushes every event
+immediately. No auth headers, credential values, media IDs, request payload,
+raw GitHub error body, dynamic labels or PR source text are emitted by this
+metric contract. The new timings distinguish phase wall-clock waiting from
+actual Gradle test execution; use GitHub job timing separately to diagnose
+runner wait, cache setup and task execution. In tests, injected logger/clock
+give deterministic zero-duration observations.
+
+No performance gain is asserted by emitting these metrics. Compare real
+protected-batch runs only after separately approved pilot integration; an
+improvement in throughput must be measured without changing mandatory
+Android pre- and post-main CI verification.
+
+This pilot does **not** increase `MAX_ITEMS=3`, the 40-minute execution
+budget, 50-minute job limit, or the one-hour App token window. Validate
+against a separately owner-approved 2–3 PR batch only after this draft
+PR is reviewed and integrated with exact-HEAD CI. Measure real wall-clock
+batch duration, time from first merge to second PR CI start, runner
+queue contention and post-main gates. No speedup or 4+ PR capacity is
+claimed before live measurements.
 
 Every surprise, conflict, RED, drift, expiration, timeout or missing CI
 **halts** the queue. Post-merge RED does not undo the already merged
