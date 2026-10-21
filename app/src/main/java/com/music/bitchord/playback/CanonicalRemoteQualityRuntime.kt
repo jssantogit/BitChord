@@ -22,6 +22,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 
 /** A pure stream candidate is not server negotiation, HTTP bytes or audible output. */
 internal enum class CanonicalRemoteStreamMode {
@@ -240,6 +241,7 @@ internal class CanonicalRemoteQualityDataSource(
     private val openJob = Job()
     @Volatile private var closed = false
     @Volatile private var active: DataSource? = null
+    private var opening = false
     @Volatile internal var latestTruth: OpenSubsonicStreamTruthSnapshot? = null
         private set
 
@@ -249,30 +251,42 @@ internal class CanonicalRemoteQualityDataSource(
 
     override fun open(dataSpec: DataSpec): Long {
         synchronized(lock) {
-            if (closed || active != null) throw IOException("Remote quality stream unavailable")
+            if (closed || opening || active != null) throw IOException("Remote quality stream unavailable")
+            opening = true
         }
         val logical = CanonicalRemotePlaybackUri.decode(dataSpec.uri.toString())
-        if (logical != request) throw IOException("Remote quality identity changed")
+        if (logical != request) {
+            synchronized(lock) { opening = false }
+            throw IOException("Remote quality identity changed")
+        }
         val prepared = try {
             runBlocking(openJob) {
-                runtime.prepare(request, preferences(), network()) {
-                    if (!closed) latestTruth = it
+                withTimeout(15_000L) {
+                    runtime.prepare(request, preferences(), network()) {
+                        if (!closed) latestTruth = it
+                    }
                 }
             }
         } catch (error: CancellationException) {
+            synchronized(lock) { opening = false }
             throw InterruptedIOException("Remote quality open cancelled")
         } catch (_: Exception) {
+            synchronized(lock) { opening = false }
             throw IOException("Remote quality stream unavailable")
         }
-        val delegate = prepared.source
-            ?: throw IOException("Remote quality unavailable: " +
+        val delegate = prepared.source ?: run {
+            synchronized(lock) { opening = false }
+            throw IOException("Remote quality unavailable: " +
                 (prepared.rejection?.name ?: "PREPARATION_UNAVAILABLE"))
+        }
         synchronized(lock) {
             if (closed || openJob.isCancelled) {
+                opening = false
                 runCatching { delegate.close() }
                 throw InterruptedIOException("Remote quality open cancelled")
             }
             active = delegate
+            opening = false
             listeners.forEach(delegate::addTransferListener)
         }
         return try {

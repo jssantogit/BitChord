@@ -34,6 +34,9 @@ class CanonicalRemoteQualityRuntimeTest {
         var bitrate: Int? = null
         var failRefresh = false
         var rotateDuringRefresh = false
+        var rotateDuringPrepare = false
+        var missingStream = false
+        var failPreparation = false
         var stream = SilentStream()
         override fun accountGeneration(): Long = revision
         override suspend fun refreshCapability(
@@ -48,13 +51,23 @@ class CanonicalRemoteQualityRuntimeTest {
             request: CanonicalRemotePlaybackRequest,
             generation: Long,
             onTruth: (OpenSubsonicStreamTruthSnapshot) -> Unit,
-        ): DataSource? { originals++; return stream }
+        ): DataSource? {
+            originals++
+            if (rotateDuringPrepare) revision++
+            if (failPreparation) throw IOException("https://private.invalid/?apiKey=SECRET")
+            return if (missingStream) null else stream
+        }
         override fun prepareMp3(
             request: CanonicalRemotePlaybackRequest,
             generation: Long,
             ceilingBps: Int,
             onTruth: (OpenSubsonicStreamTruthSnapshot) -> Unit,
-        ): DataSource? { mp3++; bitrate=ceilingBps; return stream }
+        ): DataSource? {
+            mp3++; bitrate=ceilingBps
+            if (rotateDuringPrepare) revision++
+            if (failPreparation) throw IOException("https://private.invalid/?apiKey=SECRET")
+            return if (missingStream) null else stream
+        }
     }
 
     private fun prefs(quality: AudioQuality) =
@@ -161,4 +174,76 @@ class CanonicalRemoteQualityRuntimeTest {
         assertEquals(CanonicalRemoteStreamMode.MP3_REQUESTED_UNVERIFIED, mobile.mode)
         assertEquals(0, catalog.stream.opens)
     }
+
+    @Test fun decoderOrMediaAssetDenialDoesNotFallbackToOriginal() = runTest {
+        val catalog = FakeCatalog().also { it.missingStream = true }
+        val result = CanonicalRemoteQualityRuntime(catalog).prepare(
+            track, prefs(AudioQuality.HIGH), CanonicalRemoteNetwork.WIFI,
+        )
+        assertEquals(CanonicalRemoteStreamMode.REJECTED, result.mode)
+        assertEquals(CanonicalRemoteStreamRejection.PREPARATION_UNAVAILABLE, result.rejection)
+        assertEquals(0, catalog.originals)
+        assertEquals(1, catalog.mp3)
+        assertFalse(result.applied)
+    }
+
+    @Test fun providerFailureWithCredentialsInExceptionIsSanitized() = runTest {
+        val catalog = FakeCatalog().also { it.failPreparation = true }
+        val result = CanonicalRemoteQualityRuntime(catalog).prepare(
+            track, prefs(AudioQuality.MEDIUM), CanonicalRemoteNetwork.MOBILE,
+        )
+        assertEquals(CanonicalRemoteStreamRejection.PREPARATION_UNAVAILABLE, result.rejection)
+        assertFalse(result.toString().contains("SECRET"))
+        assertFalse(result.toString().contains("apiKey", ignoreCase = true))
+        assertFalse(result.toString().contains("recording-1"))
+        assertEquals(0, catalog.originals)
+    }
+
+    @Test fun originalProviderFailureDoesNotInventAlternateProvider() = runTest {
+        val catalog = FakeCatalog().also { it.missingStream = true }
+        val result = CanonicalRemoteQualityRuntime(catalog).prepare(
+            track, prefs(AudioQuality.LOSSLESS), CanonicalRemoteNetwork.WIFI,
+        )
+        assertEquals(CanonicalRemoteStreamMode.REJECTED, result.mode)
+        assertEquals(CanonicalRemoteStreamRejection.PREPARATION_UNAVAILABLE, result.rejection)
+        assertEquals(0, catalog.mp3)
+    }
+
+    @Test fun accountSwitchAfterMp3PreparationDisposesUnopenedDelegate() = runTest {
+        val catalog = FakeCatalog().also { it.rotateDuringPrepare = true }
+        val result = CanonicalRemoteQualityRuntime(catalog).prepare(
+            track, prefs(AudioQuality.MEDIUM), CanonicalRemoteNetwork.MOBILE,
+        )
+        assertEquals(CanonicalRemoteStreamRejection.STALE_ACCOUNT, result.rejection)
+        assertEquals(1, catalog.stream.closes)
+        assertEquals(0, catalog.stream.opens)
+    }
+
+    @Test fun confirmedServerDecisionAndBytesCannotBeLabeledDecodedOrAudible() = runTest {
+        val catalog = FakeCatalog()
+        val seen = mutableListOf<OpenSubsonicStreamTruthSnapshot>()
+        val result = CanonicalRemoteQualityRuntime(catalog).prepare(
+            track, prefs(AudioQuality.MEDIUM), CanonicalRemoteNetwork.MOBILE,
+            onTruth = seen::add,
+        )
+        assertTrue(seen.isEmpty()) // Catalog must not emit truth during preparation.
+        // Only a genuine Catalog observer may later provide a snapshot:
+        val snapshot = OpenSubsonicStreamTruthSnapshot(
+            requestedMode = com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicStreamVariantMode.EXTENSION_TRANSCODE_REQUESTED,
+            requestedMaxBitrateBps = 160_000,
+            negotiation = com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicNegotiationEvidence.SERVER_DECISION,
+            transportStage = com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicTransportStage.BYTES_RECEIVED,
+            httpStatusCode = null,
+            reportedMimeType = "audio/mpeg",
+            reportedLength = 120L,
+            receivedByteCount = 120L,
+        )
+        assertNull(snapshot.actualCodec)
+        assertNull(snapshot.actualBitrateBps)
+        assertNull(snapshot.audible)
+        assertFalse(result.applied)
+        assertNull(result.negotiatedFormat)
+        assertNull(result.observedFormat)
+    }
+
 }
