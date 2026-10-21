@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import android.app.Application
+import com.music.bitchord.playback.CanonicalCollectionIntent
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -43,6 +44,30 @@ class AdaptiveCollectionsLibraryTest {
 
     private fun item(id: String, reason: AdaptiveCollectionReason) =
         AdaptiveCollectionItem(id, 1, 4.0, setOf(reason))
+
+    @Test fun smartCollectionDoesNotPlayOrEnqueueOnDisplayOnlyOnExplicitAction() {
+        val actions = mutableListOf<CanonicalCollectionIntent>()
+        val state = AdaptiveCollectionsUiState.Ready(listOf(
+            AdaptiveCollectionRows(AdaptiveCollectionKind.EXPLICIT_POSITIVES, listOf(
+                AdaptiveCollectionRow("rec-a", "Song A", "Artist",
+                    AdaptiveCollectionReason.POSITIVE_EXPLICIT_RATING),
+            )),
+        ))
+        compose.setContent {
+            AdaptiveCollectionsContent(
+                state = state, onRecordingClick = {},
+                onCollectionAction = { _, intent -> actions += intent },
+            )
+        }
+        compose.runOnIdle { assertEquals(emptyList<CanonicalCollectionIntent>(), actions) }
+        compose.onNodeWithText("Add to queue").performClick()
+        compose.runOnIdle { assertEquals(listOf(CanonicalCollectionIntent.ADD_TO_QUEUE), actions) }
+        compose.onNodeWithText("Play").performClick()
+        compose.runOnIdle {
+            assertEquals(listOf(CanonicalCollectionIntent.ADD_TO_QUEUE,
+                CanonicalCollectionIntent.PLAY_NOW), actions)
+        }
+    }
 
     @Test fun previewsHaveExactlyThreeCollectionsAndKeepCanonicalOrder() = runTest {
         val reader = AdaptiveCollectionsLibraryReader(

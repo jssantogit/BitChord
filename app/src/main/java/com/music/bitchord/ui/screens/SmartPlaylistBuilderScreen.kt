@@ -35,6 +35,7 @@ import com.music.bitchord.data.listening.RuleBasedSmartPlaylistQuery
 import com.music.bitchord.data.listening.SavedSmartPlaylistDefinition
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionRepository
+import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.smart_playlist_title
 import com.music.bitchord.sharedui.resources.smart_playlist_name
@@ -60,6 +61,8 @@ import com.music.bitchord.sharedui.resources.smart_playlist_reason_completion
 import com.music.bitchord.sharedui.resources.smart_playlist_reason_absence
 import com.music.bitchord.sharedui.resources.smart_playlist_reason_recency
 import com.music.bitchord.sharedui.resources.smart_playlist_reason_duration
+import com.music.bitchord.sharedui.resources.smart_collection_batch_play
+import com.music.bitchord.sharedui.resources.smart_collection_batch_queue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
@@ -136,7 +139,10 @@ internal fun SmartPlaylistBuilderEntry(onOpen: () -> Unit) {
 }
 
 @Composable
-internal fun SmartPlaylistBuilderScreen(onBack: () -> Unit) {
+internal fun SmartPlaylistBuilderScreen(
+    onBack: () -> Unit,
+    onSavedAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
+) {
     val context = LocalContext.current.applicationContext
     val repository = remember(context) {
         SmartPlaylistDefinitionRepository(
@@ -331,6 +337,7 @@ internal fun SmartPlaylistBuilderScreen(onBack: () -> Unit) {
             }
         }
         items(saved, key = { "saved-" + it.id }) { item ->
+            Column {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -357,6 +364,21 @@ internal fun SmartPlaylistBuilderScreen(onBack: () -> Unit) {
                 }, enabled = !busy) {
                     Text(stringResource(Res.string.smart_playlist_delete))
                 }
+            }
+            if (onSavedAction != null) {
+                Row {
+                    TextButton(onClick = {
+                        onSavedAction(item.id, CanonicalCollectionIntent.PLAY_NOW)
+                    }, enabled = !busy) {
+                        Text(stringResource(Res.string.smart_collection_batch_play))
+                    }
+                    TextButton(onClick = {
+                        onSavedAction(item.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
+                    }, enabled = !busy) {
+                        Text(stringResource(Res.string.smart_collection_batch_queue))
+                    }
+                }
+            }
             }
         }
     }
