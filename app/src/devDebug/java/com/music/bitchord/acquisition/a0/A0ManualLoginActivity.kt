@@ -48,6 +48,7 @@ class A0ManualLoginActivity : Activity() {
     @Volatile private var activeIndirectPeer: Socket? = null
     @Volatile private var stopping = false
     @Volatile private var activeTrace: A0SmokeTrace? = null
+    @Volatile private var activeTransfer: A0SessionBoundSearchTransfer? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -111,6 +112,10 @@ class A0ManualLoginActivity : Activity() {
             text = "Pesquisar termo digitado (sem baixar)"
         }
         page.addView(searchAction)
+        val transferAction = Button(this).apply {
+            text = "Testar transferência de 1 arquivo CC0 (somente se validado)"
+        }
+        page.addView(transferAction)
         val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
         page.addView(exportAction)
         text("Captura temporária iniciada automaticamente ao testar. " +
@@ -121,7 +126,8 @@ class A0ManualLoginActivity : Activity() {
         val scroll = ScrollView(this).apply { addView(page) }
         setContentView(scroll)
 
-        fun start(performSearch: Boolean) {
+        fun start(performSearch: Boolean, transferLicensed: Boolean = false) {
+            require(!transferLicensed || performSearch)
             if (!acknowledge.isChecked) {
                 status.text = "Leia e confirme o aviso de segurança."
                 return
@@ -144,7 +150,10 @@ class A0ManualLoginActivity : Activity() {
             acknowledge.isChecked = false
             action.isEnabled = false
             searchAction.isEnabled = false
-            status.text = if (performSearch) {
+            transferAction.isEnabled = false
+            status.text = if (transferLicensed) {
+                "Buscando uma referência CC0 verificada; nenhuma música não licenciada será baixada."
+            } else if (performSearch) {
                 "Autenticando e preparando uma única busca sem downloads."
             } else {
                 "Verificando uma sessão; nenhum arquivo será transferido."
@@ -221,6 +230,12 @@ class A0ManualLoginActivity : Activity() {
                                 trace.note(A0SmokeTrace.Stage.SEARCH_LISTENER_OPEN)
                                 listener.soTimeout = 12_000
                                 val token = SecureRandom().nextInt(Int.MAX_VALUE - 1) + 1
+                                val handoff = if (transferLicensed) {
+                                    A0SessionBoundSearchTransfer(
+                                        connection, username, token,
+                                        A0CommonsOriginalReference.reviewedOriginal()
+                                    ).also { activeTransfer = it }
+                                } else null
                                 connection.getOutputStream().apply {
                                     write(A0OneShotPublicSearchWire.setWaitPort(listener.localPort))
                                     write(A0OneShotPublicSearchWire.fileSearch(
@@ -257,13 +272,22 @@ class A0ManualLoginActivity : Activity() {
                                                     val observation =
                                                         A0OneShotPublicSearchWire.readOneDirectPeerReply(
                                                             peer.getInputStream(), token
-                                                        )
+                                                        ) { verifiedFrame, claimedPeer ->
+                                                            handoff?.offerSearchResult(
+                                                                verifiedFrame, claimedPeer
+                                                            )
+                                                        }
                                                     trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_ACCEPTED)
-                                                    inbox.offer(
-                                                        "RESPOSTA P2P DIRETA: " +
-                                                            "${observation.untrustedResultCount} entradas " +
-                                                            "declaradas, não verificadas. Nenhum download."
-                                                    )
+                                                    if (!transferLicensed ||
+                                                        handoff?.selectionStatus() ==
+                                                            A0SessionBoundSearchTransfer.Selection.READY
+                                                    ) {
+                                                        inbox.offer(
+                                                            "RESPOSTA P2P DIRETA: " +
+                                                                "${observation.untrustedResultCount} entradas " +
+                                                                "declaradas, não verificadas."
+                                                        )
+                                                    }
                                                 }
                                             } catch (_: SocketTimeoutException) {
                                                 if (++directWaits <= 2) trace.note(
@@ -284,7 +308,9 @@ class A0ManualLoginActivity : Activity() {
                                         }
                                     }
                                     readers.execute {
-                                        connection.soTimeout = 12_000
+                                        // A bounded socket timeout lets this reader
+                                        // relinquish server ownership before P/F routing.
+                                        connection.soTimeout = 750
                                         var attempts = 0
                                         try {
                                             while (!Thread.currentThread().isInterrupted &&
@@ -295,6 +321,8 @@ class A0ManualLoginActivity : Activity() {
                                                     A0IndirectSearchWire.readServerEvent(
                                                         connection.getInputStream()
                                                     ) { code -> trace.ignoredServerFrame(code) }
+                                                } catch (_: SocketTimeoutException) {
+                                                    continue
                                                 } catch (_: A0IndirectSearchWire.RejectedPeerOffer) {
                                                     trace.note(
                                                         A0SmokeTrace.Stage.SERVER_OFFER_REJECTED,
@@ -323,13 +351,22 @@ class A0ManualLoginActivity : Activity() {
                                                         trace.note(A0SmokeTrace.Stage.PIERCE_SENT)
                                                         val observation = A0IndirectSearchWire.readIndirectReply(
                                                             peer.getInputStream(), token, offer.username
-                                                        )
+                                                        ) { verifiedFrame, claimedPeer ->
+                                                            handoff?.offerSearchResult(
+                                                                verifiedFrame, claimedPeer
+                                                            )
+                                                        }
                                                         trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_ACCEPTED)
-                                                        inbox.offer(
-                                                            "RESPOSTA P2P INDIRETA: " +
-                                                                "${observation.untrustedResultCount} entradas " +
-                                                                "declaradas, não verificadas. Nenhum download."
-                                                        )
+                                                        if (!transferLicensed ||
+                                                            handoff?.selectionStatus() ==
+                                                                A0SessionBoundSearchTransfer.Selection.READY
+                                                        ) {
+                                                            inbox.offer(
+                                                                "RESPOSTA P2P INDIRETA: " +
+                                                                    "${observation.untrustedResultCount} entradas " +
+                                                                    "declaradas, não verificadas."
+                                                            )
+                                                        }
                                                     }
                                                 } catch (_: SocketTimeoutException) {
                                                     trace.note(
@@ -370,6 +407,9 @@ class A0ManualLoginActivity : Activity() {
                                     }
                                     val peerStatus = inbox.poll(12, TimeUnit.SECONDS)
                                     result = peerStatus ?: when {
+                                        transferLicensed ->
+                                            "NENHUM ARQUIVO CORRESPONDEU À REFERÊNCIA CC0 REVISADA. " +
+                                                "Nenhuma transferência iniciada."
                                         attemptedIndirect.get() ->
                                             "NEGOCIAÇÃO INDIRETA TENTADA; NENHUMA RESPOSTA P2P " +
                                                 "RECEBIDA. Nenhum download."
@@ -396,6 +436,38 @@ class A0ManualLoginActivity : Activity() {
                                     activeDirectPeer?.close()
                                     activeIndirectPeer?.close()
                                     readers.shutdownNow()
+                                }
+                                if (transferLicensed && !stopping) {
+                                    if (!readers.awaitTermination(2500, TimeUnit.MILLISECONDS)) {
+                                        handoff?.cancel()
+                                        throw IOException("A0 concurrent search reader did not stop")
+                                    }
+                                    if (handoff?.selectionStatus() ==
+                                        A0SessionBoundSearchTransfer.Selection.READY
+                                    ) {
+                                        handoff.markReadersStopped()
+                                        // One explicitly reviewed reference only.
+                                        // Keep verified bytes ONLY for the SHA check,
+                                        // then delete the scratch file after the proof.
+                                        val receipt = handoff.transferOnce(
+                                            getDir("a0-licensed-one-file", Context.MODE_PRIVATE)
+                                        )
+                                        try {
+                                            result = "TRANSFERÊNCIA CC0 VERIFICADA: " +
+                                                "${receipt.byteCount} bytes, SHA-256 confirmado. " +
+                                                "Arquivo temporário descartado."
+                                            finalOutcome = TraceOutcome.SUCCEEDED
+                                            finalReason = null
+                                        } finally {
+                                            receipt.file.delete()
+                                        }
+                                    } else {
+                                        finalOutcome = TraceOutcome.DEGRADED
+                                        finalReason = A0SmokeTrace.Reason.NO_PEER_REPLY
+                                    }
+                                } else if (!transferLicensed && finalOutcome ==
+                                    TraceOutcome.SUCCEEDED) {
+                                    result += " Nenhum download."
                                 }
                             }
                             activeListener = null
@@ -442,6 +514,8 @@ class A0ManualLoginActivity : Activity() {
                     trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE, TraceOutcome.FAILED, finalReason)
                     result = "ERRO NO TESTE. Nenhuma credencial foi armazenada."
                 } finally {
+                    activeTransfer?.cancel()
+                    activeTransfer = null
                     activeListener?.close()
                     activeListener = null
                     packet?.fill(0)
@@ -459,6 +533,7 @@ class A0ManualLoginActivity : Activity() {
                             status.text = result
                             action.isEnabled = true
                             searchAction.isEnabled = true
+                            transferAction.isEnabled = true
                         }
                     }
                 }
@@ -466,6 +541,7 @@ class A0ManualLoginActivity : Activity() {
         }
         action.setOnClickListener { start(false) }
         searchAction.setOnClickListener { start(true) }
+        transferAction.setOnClickListener { start(true, transferLicensed = true) }
         exportAction.setOnClickListener {
             exportAction.isEnabled = false
             worker.execute {
@@ -489,6 +565,7 @@ class A0ManualLoginActivity : Activity() {
 
     override fun onStop() {
         stopping = true
+        activeTransfer?.cancel()
         activeTrace?.note(
             A0SmokeTrace.Stage.STOP_REQUESTED,
             TraceOutcome.CANCELLED,
@@ -507,6 +584,7 @@ class A0ManualLoginActivity : Activity() {
     }
 
     override fun onDestroy() {
+        activeTransfer?.cancel()
         activeListener?.close()
         activeDirectPeer?.close()
         activeIndirectPeer?.close()
