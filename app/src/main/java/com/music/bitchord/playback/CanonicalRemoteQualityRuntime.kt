@@ -113,11 +113,6 @@ internal class CanonicalRemoteQualityRuntime(
         if (chosen == AudioQuality.LOW) {
             return reject(CanonicalRemoteStreamRejection.UNSUPPORTED_CEILING)
         }
-        val ceiling = when (chosen) {
-            AudioQuality.MEDIUM -> 160_000
-            AudioQuality.HIGH -> 320_000
-            else -> return reject(CanonicalRemoteStreamRejection.UNSUPPORTED_CEILING)
-        }
         val capability = try {
             catalog.refreshCapability(generation, request.providerKey)
         } catch (cancelled: CancellationException) {
@@ -128,15 +123,15 @@ internal class CanonicalRemoteQualityRuntime(
         if (generation != catalog.accountGeneration()) {
             return reject(CanonicalRemoteStreamRejection.STALE_ACCOUNT)
         }
-        if (capability !in setOf(
-                CanonicalRemoteTranscodeCapability.ADVERTISED_ONLY,
-                CanonicalRemoteTranscodeCapability.VERIFIED_MP3,
-            )
-        ) return reject(CanonicalRemoteStreamRejection.CAPABILITY_UNAVAILABLE)
-
-        // A public extension manifest can only advertise support. Even a
-        // previously verified account-wide signal cannot prove THIS asset.
-        // Provider performs fresh MediaAsset and MP3 decoder gates on open.
+        // B13's next-open gate is separate from B12's read-only preview:
+        // ADVERTISED permits only a pending request, not per-asset verification.
+        val openPlan = CanonicalRemoteQualityOpenGate.prepareNextOpen(
+            chosen, capability, generation,
+        )
+        if (openPlan.mode != CanonicalRemoteQualityOpenMode.REQUEST_CAPPED_MP3) {
+            return reject(CanonicalRemoteStreamRejection.CAPABILITY_UNAVAILABLE)
+        }
+        val ceiling = requireNotNull(openPlan.maxBitrateBps)
         val prepared = try {
             catalog.prepareMp3(request, generation, ceiling, onTruth)
         } catch (cancelled: CancellationException) {

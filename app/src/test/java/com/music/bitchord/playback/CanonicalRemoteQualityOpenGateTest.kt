@@ -109,4 +109,53 @@ class CanonicalRemoteQualityOpenGateTest {
         )
         assertEquals(CanonicalRemoteQualityOpenMode.ORIGINAL, networkUnknown.mode)
     }
+
+    @Test fun `advertised manifest can only prepare an unverified next-stream request`() {
+        val plan = CanonicalRemoteQualityOpenGate.prepareNextOpen(
+            AudioQuality.MEDIUM, CanonicalRemoteTranscodeCapability.ADVERTISED_ONLY, 4L,
+        )
+        assertEquals(CanonicalRemoteQualityOpenMode.REQUEST_CAPPED_MP3, plan.mode)
+        assertEquals(CanonicalRemoteQualityOpenReason.ADVERTISED_REQUEST_PENDING_MEDIA_DECISION, plan.reason)
+        assertEquals(160_000, plan.maxBitrateBps)
+        assertEquals(4L, plan.accountGeneration)
+        assertFalse(plan.applied)
+    }
+
+    @Test fun `account-wide verified hint still needs this MediaAsset decision on open`() {
+        val plan = CanonicalRemoteQualityOpenGate.prepareNextOpen(
+            AudioQuality.HIGH, CanonicalRemoteTranscodeCapability.VERIFIED_MP3, 5L,
+        )
+        assertEquals(CanonicalRemoteQualityOpenReason.ADVERTISED_REQUEST_PENDING_MEDIA_DECISION, plan.reason)
+        assertEquals(320_000, plan.maxBitrateBps)
+        assertFalse(plan.applied)
+    }
+
+    @Test fun `next-open gate rejects unsupported capability and LOW64 without fallback`() {
+        val unsupported = CanonicalRemoteQualityOpenGate.prepareNextOpen(
+            AudioQuality.HIGH, CanonicalRemoteTranscodeCapability.UNKNOWN, 6L,
+        )
+        assertEquals(CanonicalRemoteQualityOpenMode.BLOCK_UNAPPLIED, unsupported.mode)
+        assertEquals(CanonicalRemoteQualityOpenReason.CAPABILITY_NOT_AVAILABLE, unsupported.reason)
+
+        val low = CanonicalRemoteQualityOpenGate.prepareNextOpen(
+            AudioQuality.LOW, CanonicalRemoteTranscodeCapability.ADVERTISED_ONLY, 6L,
+        )
+        assertEquals(CanonicalRemoteQualityOpenMode.BLOCK_UNAPPLIED, low.mode)
+        assertEquals(CanonicalRemoteQualityOpenReason.CEILING_NOT_SUPPORTED, low.reason)
+        assertNull(low.maxBitrateBps)
+    }
+
+    @Test fun `next-open gate requires a Catalog generation for MP3 and preserves original`() {
+        val stale = CanonicalRemoteQualityOpenGate.prepareNextOpen(
+            AudioQuality.MEDIUM, CanonicalRemoteTranscodeCapability.ADVERTISED_ONLY, null,
+        )
+        assertEquals(CanonicalRemoteQualityOpenMode.BLOCK_UNAPPLIED, stale.mode)
+        assertEquals(CanonicalRemoteQualityOpenReason.GENERATION_UNAVAILABLE, stale.reason)
+        val direct = CanonicalRemoteQualityOpenGate.prepareNextOpen(
+            AudioQuality.LOSSLESS, CanonicalRemoteTranscodeCapability.UNKNOWN, null,
+        )
+        assertEquals(CanonicalRemoteQualityOpenMode.ORIGINAL, direct.mode)
+        assertFalse(direct.applied)
+    }
+
 }
