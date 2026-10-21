@@ -55,7 +55,11 @@ internal object A0OneShotPublicSearchWire {
      * Note: this does not authenticate the peer! PeerInit username is self-
      * reported; server-guided identity and indirect connect remain for A0.
      */
-    fun readOneDirectPeerReply(input: InputStream, expectedSearchToken: Int): Observation {
+    fun readOneDirectPeerReply(
+        input: InputStream,
+        expectedSearchToken: Int,
+        onValidatedReply: ((ByteArray, String) -> Unit)? = null
+    ): Observation {
         require(expectedSearchToken > 0)
         val peerInitLen = intLE(input)
         if (peerInitLen !in 14..MAX_PEER_INIT_BYTES) fail()
@@ -71,6 +75,9 @@ internal object A0OneShotPublicSearchWire {
         val response = intLEBytes(responseLen) + readExact(input, responseLen)
         val parsed = A0SoulseekSearchResponseParser.parse(response, expectedSearchToken)
         if (parsed.peerUsername != claimedUser) fail()
+        // Never expose raw bytes in tracing or UI. This optional in-process
+        // callback runs ONLY after the search token + claimed P identity match.
+        onValidatedReply?.invoke(response, claimedUser)
 
         // This is deliberately only a COUNT of untrusted peer claims, not an
         // identity or download candidate. The original source SHA is pending.
