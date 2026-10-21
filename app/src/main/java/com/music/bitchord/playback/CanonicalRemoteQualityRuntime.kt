@@ -10,6 +10,8 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountRevisionClock
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicStreamConfidence
+import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicNegotiationEvidence
+import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicTransportStage
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicStreamLeaseStatus
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicStreamPreparation
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicStreamTruthSnapshot
@@ -17,6 +19,7 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.androidOpenSubsonic
 import com.music.bitchord.data.settings.AudioQuality
 import java.io.IOException
 import java.io.InterruptedIOException
+import java.util.UUID
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -232,8 +235,11 @@ internal class CanonicalRemoteTruthGate<T> {
     private var closed = false
     private var current: T? = null
 
-    fun publish(snapshot: T) = synchronized(monitor) {
-        if (!closed) current = snapshot
+    fun publish(snapshot: T): Boolean = synchronized(monitor) {
+        if (closed) false else {
+            current = snapshot
+            true
+        }
     }
 
     fun latest(): T? = synchronized(monitor) { current }
@@ -254,6 +260,7 @@ internal class CanonicalRemoteQualityDataSource(
     private val runtime: CanonicalRemoteQualityRuntime,
     private val preferences: () -> CanonicalRemoteQualityPreferences,
     private val network: () -> CanonicalRemoteNetwork,
+    private val evidence: (CanonicalRemoteQualityEvidence) -> Unit = {},
 ) : DataSource {
     private val lock = Any()
     private val listeners = CopyOnWriteArrayList<TransferListener>()
@@ -261,7 +268,22 @@ internal class CanonicalRemoteQualityDataSource(
     @Volatile private var closed = false
     @Volatile private var active: DataSource? = null
     private var opening = false
+    private val attemptId = UUID.randomUUID().toString()
+    private var truthPair: Pair<OpenSubsonicTransportStage, OpenSubsonicNegotiationEvidence>? = null
+    private var selectedNetwork = CanonicalRemoteNetwork.UNKNOWN
     private val truthGate = CanonicalRemoteTruthGate<OpenSubsonicStreamTruthSnapshot>()
+
+    private fun emit(
+        stage: CanonicalRemoteQualityEvidenceStage,
+        prepared: CanonicalRemoteStreamPreparation? = null,
+    ) = evidence(CanonicalRemoteQualityEvidence(
+        stage = stage,
+        attemptId = attemptId,
+        network = selectedNetwork,
+        mode = prepared?.mode,
+        rejection = prepared?.rejection,
+        requestedBitrateBps = prepared?.requestedBitrateBps,
+    ))
     internal val latestTruth: OpenSubsonicStreamTruthSnapshot?
         get() = truthGate.latest()
 
@@ -274,28 +296,55 @@ internal class CanonicalRemoteQualityDataSource(
             if (closed || opening || active != null) throw IOException("Remote quality stream unavailable")
             opening = true
         }
-        val logical = CanonicalRemotePlaybackUri.decode(dataSpec.uri.toString())
+        // A malformed percent escape may throw during URL decoding; it must
+        // never strand the one-shot state as opening=true.
+        val logical = runCatching { CanonicalRemotePlaybackUri.decode(dataSpec.uri.toString()) }
+            .getOrNull()
         if (logical != request) {
             synchronized(lock) { opening = false }
+            emit(CanonicalRemoteQualityEvidenceStage.REJECTED)
             throw IOException("Remote quality identity changed")
         }
         val prepared = try {
             runBlocking(openJob) {
                 withTimeout(15_000L) {
-                    runtime.prepare(request, preferences(), network()) {
-                        truthGate.publish(it)
+                    selectedNetwork = network()
+                    runtime.prepare(request, preferences(), selectedNetwork) { snapshot ->
+                        // Deduplicate repeated byte callbacks without losing negotiation
+                        // transitions. The terminal gate and lock reject late observations.
+                        if (truthGate.publish(snapshot)) {
+                            synchronized(lock) {
+                                if (!closed) {
+                                    val pair = snapshot.transportStage to snapshot.negotiation
+                                    if (pair != truthPair) {
+                                        truthPair = pair
+                                        evidence(CanonicalRemoteQualityEvidence(
+                                            stage = CanonicalRemoteQualityEvidenceStage.CATALOG_TRUTH,
+                                            attemptId = attemptId,
+                                            network = selectedNetwork,
+                                            requestedBitrateBps = snapshot.requestedMaxBitrateBps,
+                                            negotiation = snapshot.negotiation,
+                                            transport = snapshot.transportStage,
+                                        ))
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         } catch (error: CancellationException) {
             synchronized(lock) { opening = false }
+            emit(CanonicalRemoteQualityEvidenceStage.CANCELLED)
             throw InterruptedIOException("Remote quality open cancelled")
         } catch (_: Exception) {
             synchronized(lock) { opening = false }
+            emit(CanonicalRemoteQualityEvidenceStage.FAILED)
             throw IOException("Remote quality stream unavailable")
         }
         val delegate = prepared.source ?: run {
             synchronized(lock) { opening = false }
+            emit(CanonicalRemoteQualityEvidenceStage.REJECTED, prepared)
             throw IOException("Remote quality unavailable: " +
                 (prepared.rejection?.name ?: "PREPARATION_UNAVAILABLE"))
         }
@@ -309,13 +358,17 @@ internal class CanonicalRemoteQualityDataSource(
             opening = false
             listeners.forEach(delegate::addTransferListener)
         }
+        emit(CanonicalRemoteQualityEvidenceStage.PREPARED, prepared)
         return try {
             val length = delegate.open(dataSpec)
             if (closed || openJob.isCancelled) throw InterruptedIOException("Remote quality open cancelled")
+            emit(CanonicalRemoteQualityEvidenceStage.TRANSPORT_OPENED, prepared)
             length
         } catch (error: Exception) {
             synchronized(lock) { active = null }
             runCatching { delegate.close() }
+            emit(if (error is InterruptedIOException) CanonicalRemoteQualityEvidenceStage.CANCELLED
+                else CanonicalRemoteQualityEvidenceStage.FAILED, prepared)
             when (error) {
                 is InterruptedIOException -> throw InterruptedIOException("Remote quality open interrupted")
                 else -> throw IOException("Remote quality stream unavailable")
@@ -349,7 +402,11 @@ internal class CanonicalRemoteQualityDataSource(
             active = null
             before
         }
-        previous?.close()
+        try {
+            previous?.close()
+        } finally {
+            emit(CanonicalRemoteQualityEvidenceStage.CLOSED)
+        }
     }
 
     override fun toString(): String = "CanonicalRemoteQualityDataSource(<redacted>)"
