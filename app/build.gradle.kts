@@ -425,6 +425,8 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // B14/B18: exercise real Media3 DataSpec/Android Uri on the JVM, not android.jar stubs.
     testImplementation("org.robolectric:robolectric:4.15.1")
+    // Robolectric Android 14 test environment needs Conscrypt JNI on Linux CI runners.
+    testRuntimeOnly("org.conscrypt:conscrypt-openjdk-uber:2.5.2")
     testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     // A real HTTP server for the addon tests. The addon protocol is entirely
