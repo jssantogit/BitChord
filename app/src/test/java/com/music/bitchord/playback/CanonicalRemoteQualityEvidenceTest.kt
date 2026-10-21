@@ -155,6 +155,20 @@ class CanonicalRemoteQualityEvidenceTest {
         source.close()
     }
 
+    @Test fun closeAtPreparedBoundaryMustNotOpenRevokedDelegate() {
+        val catalog = Catalog()
+        lateinit var source: CanonicalRemoteQualityDataSource
+        source = open(catalog, sink = { event ->
+            if (event.stage == CanonicalRemoteQualityEvidenceStage.PREPARED) source.close()
+        })
+        try {
+            source.open(spec())
+            fail("Cancellation must suppress the delegate.open side effect")
+        } catch (_: IOException) { }
+        assertEquals(0, catalog.stream.opens)
+        assertTrue(catalog.stream.closes > 0)
+    }
+
     @Test fun observerFailureCannotFailTheAudioTransport() {
         val catalog = Catalog()
         val source = open(catalog, sink = { throw IllegalStateException("diagnostic sink failed") })
