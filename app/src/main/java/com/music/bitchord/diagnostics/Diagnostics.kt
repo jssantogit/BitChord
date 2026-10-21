@@ -309,6 +309,7 @@ object Diagnostics {
         val snapshot = buffer.snapshot()
         return store.createExport(
             metadataLines = reportMetadataLines() +
+                DiagnosticAndroidExitProbe.summary(application) +
                 "captureFlushStatus=${DiagnosticCaptureIntegrity.flushStatus(flushComplete)}",
             recentEventLines = snapshot.map(DiagnosticFormatter::format),
             fileName = "bitchord-diagnostics-$timestamp.txt",

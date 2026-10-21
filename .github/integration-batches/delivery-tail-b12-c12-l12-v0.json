@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 129,
+      "expected_head_sha": "826c0b1bf93f3f618c97e638a59fcab008f82dab",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/playback/CanonicalRemoteQualityIntent.kt",
+        "app/src/test/java/com/music/bitchord/playback/CanonicalRemoteQualityIntentTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 126,
+      "expected_head_sha": "6418fb9f4f9ad7b83576e780bf170038fe67b2c3",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicMedia3Access.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicStreamTruth.kt",
+        "app/src/test/java/com/music/bitchord/OpenSubsonicStreamTruthTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 112,
+      "expected_head_sha": "818efc8de1f6279e3a0c20cc16b6ebf105e06d7e",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/MainActivity.kt",
+        "app/src/main/java/com/music/bitchord/data/listening/SmartPlaylistDefinitionStore.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/SmartPlaylistBuilderScreen.kt",
+        "app/src/test/java/com/music/bitchord/data/listening/SmartPlaylistDefinitionStoreTest.kt",
+        "sharedUi/src/commonMain/composeResources/values-pt/strings.xml",
+        "sharedUi/src/commonMain/composeResources/values/strings.xml"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    }
+  ]
+}
