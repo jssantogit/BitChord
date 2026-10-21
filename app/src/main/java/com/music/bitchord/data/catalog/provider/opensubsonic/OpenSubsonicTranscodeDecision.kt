@@ -129,7 +129,13 @@ internal class OpenSubsonicTranscodeStreamTicket internal constructor(
     private val runtime: OpenSubsonicRuntimeAudioRequest,
     private val serverEscapedParams: String,
 ) {
+    internal fun accountIsCurrent(): Boolean = runtime.accountIsCurrent()
+    internal fun accountRevisionIsCurrent(): Boolean = runtime.accountRevisionIsCurrent()
+
     internal fun materializeAuthenticatedDataSpec(logical: DataSpec): DataSpec {
+        if (!runtime.accountIsCurrent()) {
+            throw IOException("OpenSubsonic account changed before stream materialization")
+        }
         val uri = Uri.parse(runtime.endpointUrl.replaceSuffixOrNull(
             "/stream.view", "/getTranscodeStream.view",
         ) ?: throw IOException("Invalid private stream endpoint"))
@@ -165,6 +171,9 @@ internal class OpenSubsonicTranscodeDecisionEngine(
         fun reject(reason: OpenSubsonicTranscodeDecisionRejection) =
             OpenSubsonicTranscodeDecisionOutcome.Rejected(reason)
 
+        if (!runtime.accountIsCurrent()) {
+            return reject(OpenSubsonicTranscodeDecisionRejection.STALE_CAPABILITY)
+        }
         if (variant.mode != OpenSubsonicStreamVariantMode.EXTENSION_TRANSCODE_REQUESTED ||
             runtime.recordingId != variant.recordingId ||
             runtime.mediaAssetId != variant.mediaAssetId ||
@@ -214,6 +223,11 @@ internal class OpenSubsonicTranscodeDecisionEngine(
             // No exception body, URL, headers, auth or sourceKey may escape.
             return reject(OpenSubsonicTranscodeDecisionRejection.TRANSPORT_UNAVAILABLE)
         }
+        // The POST may suspend while a credential/endpoint is replaced.
+        // Never turn a positive response from a revoked account into a ticket.
+        if (!runtime.accountIsCurrent()) {
+            return reject(OpenSubsonicTranscodeDecisionRejection.STALE_CAPABILITY)
+        }
         val decision = try {
             val envelope = Json.parseToJsonElement(raw).jsonObject["subsonic-response"]?.jsonObject
                 ?: return reject(OpenSubsonicTranscodeDecisionRejection.MALFORMED_DECISION)
@@ -243,6 +257,9 @@ internal class OpenSubsonicTranscodeDecisionEngine(
         val escaped = try { decision["transcodeParams"]?.jsonPrimitive?.content.orEmpty() } catch (_: Throwable) { "" }
         if (!validEscapedOpaque(escaped)) {
             return reject(OpenSubsonicTranscodeDecisionRejection.MALFORMED_DECISION)
+        }
+        if (!runtime.accountIsCurrent()) {
+            return reject(OpenSubsonicTranscodeDecisionRejection.STALE_CAPABILITY)
         }
         return OpenSubsonicTranscodeDecisionOutcome.Ready(
             OpenSubsonicTranscodeStreamTicket(

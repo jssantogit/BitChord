@@ -60,6 +60,9 @@ internal class OpenSubsonicMediaAccess(
             )
         }
 
+        // Capture before reading credentials so account edits during resolution
+        // invalidate the entire attempt, including an A→B→A configuration race.
+        val revision = OpenSubsonicAccountRevisionClock.current()
         // This is the first point at which credential storage is read. A
         // missing/invalidated Keystore value therefore makes historical assets
         // unavailable without mutating their canonical identity or availability.
@@ -73,6 +76,23 @@ internal class OpenSubsonicMediaAccess(
             )
         }
 
+        val lease = OpenSubsonicStreamLifecycleLease(
+            providerKey = asset.provider,
+            generation = revision,
+            initialRevision = revision,
+            revisionNow = OpenSubsonicAccountRevisionClock::current,
+            savedConfig = accounts::savedConfig,
+            configMatches = OpenSubsonicProvider(config)::matchesSavedConfig,
+        )
+        // A revision check is sufficient immediately after savedConfig():
+        // avoid a second Keystore read during access resolution. The full
+        // configuration check occurs at the authenticated DataSource.open gate.
+        if (!lease.revisionIsCurrent()) {
+            return OpenSubsonicMediaAccessResult.Failure(
+                OpenSubsonicMediaAccessFailure.CREDENTIAL_UNAVAILABLE,
+            )
+        }
+
         return OpenSubsonicMediaAccessResult.Ready(
             OpenSubsonicRuntimeAudioRequest(
                 recordingId = asset.recordingId,
@@ -82,6 +102,7 @@ internal class OpenSubsonicMediaAccess(
                 sourceKey = sourceKey,
                 auth = config.auth,
                 saltFactory = saltFactory,
+                accountLease = lease,
             ),
         )
     }
@@ -111,8 +132,13 @@ internal class OpenSubsonicRuntimeAudioRequest internal constructor(
     private val sourceKey: String,
     private val auth: OpenSubsonicAuth,
     private val saltFactory: () -> String,
+    private val accountLease: OpenSubsonicStreamLifecycleLease? = null,
 ) {
     val directOriginal: Boolean = true
+
+    /** Private account freshness checks. Neither method exposes credentials. */
+    internal fun accountIsCurrent(): Boolean = accountLease?.isCurrent() ?: true
+    internal fun accountRevisionIsCurrent(): Boolean = accountLease?.revisionIsCurrent() ?: true
 
     internal fun materializeParameters(): Map<String, String> = linkedMapOf(
         "v" to OPEN_SUBSONIC_API_VERSION,
