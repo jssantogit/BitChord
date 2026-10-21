@@ -35,6 +35,8 @@ class OpenSubsonicRemoteRatingsTest {
         songs: String,
         scope: String = "scope-a",
         fail: Boolean = false,
+        apiErrorCode: Int? = null,
+        returnXml: Boolean = false,
     ): OpenSubsonicProvider = OpenSubsonicProvider(
         config = OpenSubsonicAccountConfig(
             accountId = "home",
@@ -45,7 +47,8 @@ class OpenSubsonicRemoteRatingsTest {
         transport = object : OpenSubsonicTransport {
             override suspend fun get(endpoint: String, parameters: Map<String, String>): String {
                 assertEquals("json", parameters["f"])
-                if (fail) return """{"subsonic-response":{"status":"failed","error":{"code":40,"message":"bad password"}}}"""
+                if (fail || apiErrorCode != null) return """{"subsonic-response":{"status":"failed","error":{"code":${apiErrorCode ?: 40},"message":"unsafe server URL and token"}}}"""
+                if (returnXml && endpoint == "getAlbum") return "<subsonic-response status='ok' />"
                 return when (endpoint) {
                     "getAlbumList2" -> """{"subsonic-response":{"status":"ok","albumList2":{"album":[{"id":"album"}]}}}"""
                     "getAlbum" -> """{"subsonic-response":{"status":"ok","album":{"id":"album","songCount":4,"song":[__SONGS__]}}}"""
@@ -145,6 +148,41 @@ class OpenSubsonicRemoteRatingsTest {
             listening.close()
             catalog.close()
         }
+    }
+
+    @Test fun authenticatedSyncFailureDistinguishesAuthPermissionUnsupportedAndNeverErasesRatings() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            assertTrue(OpenSubsonicCatalogSync.sync(db, provider(songs)) is ProviderSyncResult.Success)
+            val reader = OpenSubsonicRemoteRatingReader(db) { account("scope-a") }
+            for ((code, category) in listOf(
+                40 to "authentication",
+                50 to "permission",
+                20 to "unsupported",
+            )) {
+                val failure = OpenSubsonicCatalogSync.sync(
+                    db, provider(songs, apiErrorCode = code),
+                ) as ProviderSyncResult.Failure
+                assertTrue("Expected $category, not a leaked server error: ${failure.reason}",
+                    failure.reason.contains(category))
+                assertFalse(failure.reason.contains("unsafe"))
+                assertEquals(2, reader.read().items.size)
+            }
+        } finally { db.close() }
+    }
+
+    @Test fun unexpectedXmlCannotBecomeAnEmptyCompleteJsonRatingSnapshot() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            assertTrue(OpenSubsonicCatalogSync.sync(db, provider(songs)) is ProviderSyncResult.Success)
+            val failed = OpenSubsonicCatalogSync.sync(db, provider(songs, returnXml = true))
+            assertTrue(failed is ProviderSyncResult.Failure)
+            assertEquals(2, OpenSubsonicRemoteRatingReader(db) { account("scope-a") }.read().items.size)
+        } finally { db.close() }
     }
 
     @Test fun authFailureDoesNotClearLastCompleteRemoteSnapshot() = runBlocking {
