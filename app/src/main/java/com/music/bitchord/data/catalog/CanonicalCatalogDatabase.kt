@@ -17,13 +17,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ReleaseArtistCreditEntity::class,
         MediaAssetEntity::class,
         ExternalIdentityEntity::class,
+        RemoteRatingEvidenceEntity::class,
+        RemoteRatingCoverageEntity::class,
         MusicBrainzArtistEnrichmentEntity::class,
         MusicBrainzRecordingEnrichmentEntity::class,
         MusicBrainzRecordingArtistCreditEntity::class,
         MusicBrainzReleaseEnrichmentEntity::class,
         MusicBrainzReleaseArtistCreditEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
@@ -166,6 +168,49 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
             }
         }
 
+        internal val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `catalog_remote_rating_evidence` (
+                        `providerKey` TEXT NOT NULL,
+                        `scopeId` TEXT NOT NULL,
+                        `mediaAssetId` TEXT NOT NULL,
+                        `recordingId` TEXT NOT NULL,
+                        `numericKind` TEXT NOT NULL,
+                        `numericValue` INTEGER,
+                        `starredKind` TEXT NOT NULL,
+                        `generation` INTEGER NOT NULL,
+                        PRIMARY KEY(`providerKey`, `scopeId`, `mediaAssetId`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_catalog_remote_rating_evidence_recordingId` " +
+                        "ON `catalog_remote_rating_evidence` (`recordingId`)",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `catalog_remote_rating_coverage` (
+                        `providerKey` TEXT NOT NULL,
+                        `scopeId` TEXT NOT NULL,
+                        `generation` INTEGER NOT NULL,
+                        `enumerated` INTEGER NOT NULL,
+                        `matched` INTEGER NOT NULL,
+                        `unmatched` INTEGER NOT NULL,
+                        `absentNumeric` INTEGER NOT NULL,
+                        `clearedNumeric` INTEGER NOT NULL,
+                        `valuedNumeric` INTEGER NOT NULL,
+                        `invalidNumeric` INTEGER NOT NULL,
+                        `starred` INTEGER NOT NULL,
+                        `invalidStarred` INTEGER NOT NULL,
+                        PRIMARY KEY(`providerKey`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         @Volatile
         private var instance: CanonicalCatalogDatabase? = null
 
@@ -176,7 +221,7 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
                     CanonicalCatalogDatabase::class.java,
                     "canonical-catalog.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }
