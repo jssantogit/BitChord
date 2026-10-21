@@ -1311,4 +1311,10 @@
     <string name="wear_os_code_hint">Eşleme kodu</string>
     <string name="wear_os_done">Bitti</string>
     <string name="signed_by">%1$s tarafından imzalandı</string>
+    <string name="playback_recovery_connection">Uzak parça başlatılamadı. Bağlantıyı veya sunucuyu kontrol edin.</string>
+    <string name="playback_recovery_unavailable">Seçilen uzak sürüm şu anda kullanılamıyor.</string>
+    <string name="playback_recovery_failed">Seçilen uzak parça açılamadı.</string>
+    <string name="playback_recovery_retry">Tekrar dene</string>
+    <string name="playback_recovery_retrying">Yeniden deneniyor…</string>
+    <string name="playback_recovery_dismiss">Kapat</string>
 </resources>

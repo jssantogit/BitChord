@@ -1354,4 +1354,10 @@
     <string name="wear_os_code_hint">पेयरिंग कोड</string>
     <string name="wear_os_done">हो गया</string>
     <string name="signed_by">%1$s द्वारा हस्ताक्षरित</string>
+    <string name="playback_recovery_connection">रिमोट ट्रैक शुरू नहीं हो सका। कनेक्शन या सर्वर जाँचें।</string>
+    <string name="playback_recovery_unavailable">चुना गया रिमोट संस्करण अभी उपलब्ध नहीं है।</string>
+    <string name="playback_recovery_failed">चुना गया रिमोट ट्रैक खोला नहीं जा सका।</string>
+    <string name="playback_recovery_retry">फिर कोशिश करें</string>
+    <string name="playback_recovery_retrying">फिर कोशिश हो रही है…</string>
+    <string name="playback_recovery_dismiss">बंद करें</string>
 </resources>
