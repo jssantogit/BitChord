@@ -106,6 +106,14 @@ internal fun MediaController.playCanonicalRemote(
     )
 }
 
+/** An explicit user tap, never an automatic network-change retry. */
+internal fun MediaController.retryCanonicalFailure(entryId: String) {
+    sendCustomCommand(
+        SessionCommand(ACTION_RETRY_CANONICAL_FAILURE, Bundle.EMPTY),
+        bundleOf(EXTRA_RETRY_CANONICAL_ENTRY_ID to entryId),
+    )
+}
+
 /** Routes the player-screen AutoPlay button through the playback service. */
 fun MediaController.toggleAutoplay() {
     sendCustomCommand(

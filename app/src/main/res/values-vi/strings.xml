@@ -1271,4 +1271,10 @@
     <string name="wear_os_code_hint">Mã ghép nối</string>
     <string name="wear_os_done">Xong</string>
     <string name="signed_by">Được ký bởi %1$s</string>
+    <string name="playback_recovery_connection">Không thể bắt đầu bài hát từ máy chủ. Hãy kiểm tra kết nối hoặc máy chủ.</string>
+    <string name="playback_recovery_unavailable">Phiên bản từ xa đã chọn hiện không khả dụng.</string>
+    <string name="playback_recovery_failed">Không thể mở bài hát từ xa đã chọn.</string>
+    <string name="playback_recovery_retry">Thử lại</string>
+    <string name="playback_recovery_retrying">Đang thử lại…</string>
+    <string name="playback_recovery_dismiss">Đóng</string>
 </resources>
