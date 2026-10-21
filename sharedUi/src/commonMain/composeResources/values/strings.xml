@@ -224,6 +224,17 @@
     <string name="my_ratings_loading">Loading recording…</string>
     <string name="my_ratings_feed_loading">Loading ratings…</string>
     <string name="my_ratings_error">Could not load ratings. Try reopening this page.</string>
+    <string name="my_ratings_remote_source">OpenSubsonic (remote)</string>
+    <string name="my_ratings_local_source">On device (local)</string>
+    <string name="my_ratings_remote_rating">Remote rating: %1$d/5</string>
+    <string name="my_ratings_remote_starred">Starred on server (not a rating)</string>
+    <string name="my_ratings_remote_cleared">Remote rating cleared</string>
+    <string name="my_ratings_conflict_local">Local and remote ratings differ</string>
+    <string name="my_ratings_conflict_remote">Remote sources disagree</string>
+    <string name="my_ratings_remote_loading">Loading remote ratings…</string>
+    <string name="my_ratings_remote_unavailable">Remote ratings unavailable</string>
+    <string name="my_ratings_remote_error">Could not read remote ratings</string>
+    <string name="my_ratings_remote_partial">Some remote recordings could not be matched</string>
     <string name="my_ratings_more">Showing the first %1$d ratings; more are saved.</string>
     <string name="smart_collections_title">Smart collections</string>
     <string name="smart_collections_loading">Updating collections…</string>
