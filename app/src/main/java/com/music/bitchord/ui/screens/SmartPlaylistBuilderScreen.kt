@@ -139,6 +139,20 @@ internal fun SmartPlaylistBuilderEntry(onOpen: () -> Unit) {
 }
 
 @Composable
+internal fun SmartPlaylistBuilderHeader(onBack: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(
+            stringResource(Res.string.smart_playlist_title),
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        TextButton(onClick = onBack) {
+            Text(stringResource(Res.string.smart_playlist_close))
+        }
+    }
+}
+
+@Composable
 internal fun SmartPlaylistBuilderScreen(
     onBack: () -> Unit,
     onSavedAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
@@ -204,18 +218,13 @@ internal fun SmartPlaylistBuilderScreen(
         RuleBasedInclusionReason.TRUSTED_DURATION to stringResource(Res.string.smart_playlist_reason_duration),
     )
 
+    ListeningLibraryPage {
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         item(key = "header") {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(stringResource(Res.string.smart_playlist_title),
-                    style = MaterialTheme.typography.headlineMedium)
-                TextButton(onClick = onBack) {
-                    Text(stringResource(Res.string.smart_playlist_close))
-                }
-            }
+            SmartPlaylistBuilderHeader(onBack)
         }
         item(key = "editor") {
             Column {
@@ -381,5 +390,5 @@ internal fun SmartPlaylistBuilderScreen(
             }
             }
         }
-    }
+        }
 }
