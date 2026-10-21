@@ -390,5 +390,6 @@ internal fun SmartPlaylistBuilderScreen(
             }
             }
         }
-        }
+    }
+    }
 }
