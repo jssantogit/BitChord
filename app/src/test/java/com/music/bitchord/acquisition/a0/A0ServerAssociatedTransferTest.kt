@@ -30,7 +30,7 @@ class A0ServerAssociatedTransferTest {
             ServerSocket(0,1,host).use{fakePeer->
                 val pool=Executors.newFixedThreadPool(2)
                 try {
-                    val server=pool.submit {
+                    val server=pool.submit<Int> {
                         fakeServer.accept().use{login->
                             login.soTimeout=5000
                             val waitPort=body(login)
