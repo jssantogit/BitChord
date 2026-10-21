@@ -7,6 +7,10 @@ import com.music.bitchord.data.catalog.provider.ProviderCapabilities
 import com.music.bitchord.data.catalog.provider.ProviderHealth
 import com.music.bitchord.data.catalog.provider.ProviderLibrarySnapshot
 import com.music.bitchord.data.catalog.provider.ProviderTrack
+import com.music.bitchord.data.catalog.provider.ProviderRemoteRating
+import com.music.bitchord.data.catalog.provider.RemoteNumericRating
+import com.music.bitchord.data.catalog.provider.RemoteNumericRatingKind
+import com.music.bitchord.data.catalog.provider.RemoteStarredKind
 import com.music.bitchord.data.catalog.provider.RemoteCatalogProvider
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -24,6 +28,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
 
 internal sealed interface OpenSubsonicAuth {
     class Password(
@@ -121,6 +129,7 @@ internal class OpenSubsonicProvider(
     }
 
     override val providerKey: String = "opensubsonic:${config.accountId}"
+    internal val ratingScopeId: String get() = config.ratingScopeId
 
     /** No secrets/URLs escape this boolean guard or its callers. */
     internal fun matchesSavedConfig(saved: OpenSubsonicAccountConfig?): Boolean =
@@ -418,6 +427,10 @@ internal class OpenSubsonicProvider(
             samplingRateHz = song.samplingRate,
             artists = trackArtists,
             isrcs = IsrcNormalizer.normalizeDistinct(song.isrc.orEmpty()),
+            remoteRating = ProviderRemoteRating(
+                numeric = parseNumericRating(song.userRating),
+                starred = parseStarred(song.starred),
+            ),
         )
     }
 
@@ -478,6 +491,35 @@ internal class OpenSubsonicProvider(
             )
         }
         return response
+    }
+
+    /** Invalid wire values are quarantined, not converted into local scores. */
+    private fun parseNumericRating(value: JsonElement?): RemoteNumericRating {
+        if (value == null) return RemoteNumericRating()
+        val number = (value as? JsonPrimitive)?.takeUnless { it.isString }?.intOrNull
+        return when {
+            number == 0 -> RemoteNumericRating(RemoteNumericRatingKind.CLEARED_ZERO)
+            number != null && number in 1..5 -> RemoteNumericRating(RemoteNumericRatingKind.VALUE, number)
+            else -> RemoteNumericRating(RemoteNumericRatingKind.INVALID)
+        }
+    }
+
+    /** A dated favorite is not a numeric five-star rating. */
+    private fun parseStarred(value: JsonElement?): RemoteStarredKind {
+        if (value == null) return RemoteStarredKind.NOT_PROVIDED
+        val primitive = value as? JsonPrimitive ?: return RemoteStarredKind.INVALID
+        if (!primitive.isString) {
+            return when (primitive.booleanOrNull) {
+                true -> RemoteStarredKind.STARRED
+                false -> RemoteStarredKind.NOT_STARRED
+                null -> RemoteStarredKind.INVALID
+            }
+        }
+        return if (runCatching { OffsetDateTime.parse(primitive.content) }.isSuccess) {
+            RemoteStarredKind.STARRED
+        } else {
+            RemoteStarredKind.INVALID
+        }
     }
 
     private fun providerUri(kind: String, providerId: String): String =
@@ -592,4 +634,6 @@ private data class SubsonicSong(
     val created: String? = null,
     val musicBrainzId: String? = null,
     val isrc: List<String>? = null,
+    val userRating: JsonElement? = null,
+    val starred: JsonElement? = null,
 )
