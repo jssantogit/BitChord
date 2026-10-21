@@ -10,6 +10,7 @@ import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.diagnostics.DiagnosticsShare
 import com.music.bitchord.observability.TraceOutcome
 import android.text.InputType
+import android.text.InputFilter
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
@@ -70,11 +71,10 @@ class A0ManualLoginActivity : Activity() {
         text("Somente para uma conta exclusiva de TESTE. " +
              "O protocolo Soulseek envia a senha por TCP SEM TLS. " +
              "Não reutilize senhas de outros serviços.")
-        text("O primeiro botão testa somente login. O segundo envia uma única " +
-             "busca diagnóstica newjeans - omg (enviada como newjeans omg) " +
-             "e tenta receber respostas P2P diretas ou indiretas. " +
-             "Resultados não comprovam direitos autorais ou disponibilidade. " +
-             "Nada será compartilhado ou baixado. Desconecte o Seeker primeiro.")
+        text("O primeiro botão testa somente login. Digite qualquer termo no campo de busca " +
+             "para uma única pesquisa Soulseek. Pontuação é normalizada automaticamente. " +
+             "As respostas dos peers não comprovam direitos sobre arquivos. " +
+             "Nenhum arquivo será compartilhado ou baixado. Desconecte o Seeker primeiro.")
         val user = EditText(this).apply {
             hint = "Usuário dedicado"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
@@ -89,6 +89,17 @@ class A0ManualLoginActivity : Activity() {
             importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
         }
         page.addView(password)
+        val searchInput = EditText(this).apply {
+            hint = "O que deseja pesquisar? (ex.: newjeans - omg)"
+            setText("newjeans - omg")
+            inputType = InputType.TYPE_CLASS_TEXT or
+                InputType.TYPE_TEXT_VARIATION_NORMAL
+            isSingleLine = true
+            filters = arrayOf(InputFilter.LengthFilter(120))
+            isSaveEnabled = false // Neither the search term nor credentials persist.
+            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
+        }
+        page.addView(searchInput)
         val acknowledge = CheckBox(this).apply {
             text = "Confirmo que é uma senha exclusiva de testes e aceito " +
                 "a transmissão TCP sem TLS exigida pelo protocolo."
@@ -97,7 +108,7 @@ class A0ManualLoginActivity : Activity() {
         val action = Button(this).apply { text = "Testar login uma única vez" }
         page.addView(action)
         val searchAction = Button(this).apply {
-            text = "Pesquisar newjeans - omg (sem baixar)"
+            text = "Pesquisar termo digitado (sem baixar)"
         }
         page.addView(searchAction)
         val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
@@ -115,6 +126,16 @@ class A0ManualLoginActivity : Activity() {
                 status.text = "Leia e confirme o aviso de segurança."
                 return
             }
+            // Validate on the UI thread BEFORE login or server I/O.
+            // Never place search text in traces, diagnostics or exception messages.
+            val requestedSearch = if (performSearch) {
+                try {
+                    A0SearchQuery.normalize(searchInput.text.toString())
+                } catch (_: IllegalArgumentException) {
+                    status.text = "Pesquisa inválida: digite termos curtos, sem controles."
+                    return
+                }
+            } else null
             val username = user.text.toString()
             val secret = password.text.toString().toCharArray()
             // Clear both controls before any packet creation or network action.
@@ -202,7 +223,9 @@ class A0ManualLoginActivity : Activity() {
                                 val token = SecureRandom().nextInt(Int.MAX_VALUE - 1) + 1
                                 connection.getOutputStream().apply {
                                     write(A0OneShotPublicSearchWire.setWaitPort(listener.localPort))
-                                    write(A0OneShotPublicSearchWire.fileSearch(token))
+                                    write(A0OneShotPublicSearchWire.fileSearch(
+                                        token, checkNotNull(requestedSearch)
+                                    ))
                                     flush()
                                 }
                                 searchSubmitted = true
