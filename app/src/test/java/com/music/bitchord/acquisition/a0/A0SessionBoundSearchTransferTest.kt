@@ -99,6 +99,7 @@ class A0SessionBoundSearchTransferTest {
         ServerSocket(0,1,host).use{serverListener->
             ServerSocket(0,1,host).use{peerListener->
                 val listenerPort=ArrayBlockingQueue<Int>(1)
+                val done=java.util.concurrent.CountDownLatch(1)
                 val pool=Executors.newFixedThreadPool(2)
                 try {
                     val server=pool.submit {
@@ -117,8 +118,8 @@ class A0SessionBoundSearchTransferTest {
                                     byteArrayOf(0,0)))
                                 flush()
                             }
-                            // Owner's single authenticated socket remains open.
-                            Thread.sleep(800)
+                            // Server stays open until the verified P/F receive finishes.
+                            assertTrue(done.await(7,TimeUnit.SECONDS))
                         }
                     }
                     val uploader=pool.submit {
@@ -140,8 +141,7 @@ class A0SessionBoundSearchTransferTest {
                             assertEquals(41,le32(accept))
                             assertEquals(151,le32(accept))
                             assertEquals(1,accept.read())
-                            val port=listenerPort.poll(4,TimeUnit.SECONDS)
-                            assertNotNull(port)
+                            val port=requireNotNull(listenerPort.poll(4,TimeUnit.SECONDS))
                             Socket(host,port).use{f->
                                 f.soTimeout=4000
                                 f.getOutputStream().apply{write(le(151)+wav);flush()}
@@ -162,12 +162,13 @@ class A0SessionBoundSearchTransferTest {
                         assertArrayEquals(wav,receipt.file.readBytes())
                         assertEquals(digest,receipt.sha256Hex)
                         uploader.get(5,TimeUnit.SECONDS)
+                        done.countDown()
                         server.get(5,TimeUnit.SECONDS)
                         assertTrue(temp.root.listFiles().orEmpty().none{it.name.endsWith(".partial")})
                         try{handoff.transferOnce(temp.root);fail("must not replay")}
                         catch(_:IllegalStateException){}
                     }
-                } finally{pool.shutdownNow()}
+                } finally{done.countDown();pool.shutdownNow()}
             }
         }
     }
