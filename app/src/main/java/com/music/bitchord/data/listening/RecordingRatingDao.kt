@@ -29,6 +29,10 @@ internal interface RecordingRatingDao {
     )
     suspend fun ratedRecordings(limit: Int): List<RecordingRatingCurrentEntity>
 
+    /** Live list for the first-party My Ratings Library, not a playback event feed. */
+    @Query("SELECT * FROM recording_rating_current ORDER BY ratedAtEpochMs DESC, recordingId ASC LIMIT :limit")
+    fun observeRatedRecordings(limit: Int): Flow<List<RecordingRatingCurrentEntity>>
+
     @Query(
         """
         SELECT * FROM recording_rating_history
