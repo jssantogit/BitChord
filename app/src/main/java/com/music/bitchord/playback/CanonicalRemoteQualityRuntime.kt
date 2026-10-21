@@ -224,6 +224,27 @@ internal object CanonicalRemotePhysicalNetwork {
 }
 
 /**
+ * Atomic, terminal gate for sanitized Catalog truth callbacks. A callback
+ * racing with close() must never reinstate a snapshot after the session ends.
+ */
+internal class CanonicalRemoteTruthGate<T> {
+    private val monitor = Any()
+    private var closed = false
+    private var current: T? = null
+
+    fun publish(snapshot: T) = synchronized(monitor) {
+        if (!closed) current = snapshot
+    }
+
+    fun latest(): T? = synchronized(monitor) { current }
+
+    fun close() = synchronized(monitor) {
+        closed = true
+        current = null
+    }
+}
+
+/**
  * Actual Media3 boundary. Planning and private Catalog resolution occur only
  * from open(DataSpec); construction, queue edits and network changes do nothing.
  * close() cancels pending discovery and ignores callbacks from a closed open.
@@ -240,8 +261,9 @@ internal class CanonicalRemoteQualityDataSource(
     @Volatile private var closed = false
     @Volatile private var active: DataSource? = null
     private var opening = false
-    @Volatile internal var latestTruth: OpenSubsonicStreamTruthSnapshot? = null
-        private set
+    private val truthGate = CanonicalRemoteTruthGate<OpenSubsonicStreamTruthSnapshot>()
+    internal val latestTruth: OpenSubsonicStreamTruthSnapshot?
+        get() = truthGate.latest()
 
     override fun addTransferListener(transferListener: TransferListener) {
         listeners += transferListener
@@ -261,7 +283,7 @@ internal class CanonicalRemoteQualityDataSource(
             runBlocking(openJob) {
                 withTimeout(15_000L) {
                     runtime.prepare(request, preferences(), network()) {
-                        if (!closed) latestTruth = it
+                        truthGate.publish(it)
                     }
                 }
             }
@@ -321,13 +343,13 @@ internal class CanonicalRemoteQualityDataSource(
     override fun close() {
         val previous = synchronized(lock) {
             closed = true
+            truthGate.close()
             openJob.cancel()
             val before = active
             active = null
             before
         }
         previous?.close()
-        latestTruth = null
     }
 
     override fun toString(): String = "CanonicalRemoteQualityDataSource(<redacted>)"
