@@ -1354,4 +1354,10 @@
     <string name="wear_os_code_hint">Kopplungscode</string>
     <string name="wear_os_done">Fertig</string>
     <string name="signed_by">Signiert von %1$s</string>
+    <string name="playback_recovery_connection">Ein Remote-Titel konnte nicht starten. Verbindung oder Server prüfen.</string>
+    <string name="playback_recovery_unavailable">Die gewählte Remote-Version ist derzeit nicht verfügbar.</string>
+    <string name="playback_recovery_failed">Der gewählte Remote-Titel konnte nicht geöffnet werden.</string>
+    <string name="playback_recovery_retry">Erneut versuchen</string>
+    <string name="playback_recovery_retrying">Wird erneut versucht…</string>
+    <string name="playback_recovery_dismiss">Schließen</string>
 </resources>

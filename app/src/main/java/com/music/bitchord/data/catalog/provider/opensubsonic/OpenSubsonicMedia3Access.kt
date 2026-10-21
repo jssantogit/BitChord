@@ -30,6 +30,7 @@ import kotlinx.coroutines.runBlocking
 internal class OpenSubsonicRuntimeTransport(
     private val performanceProbe: BoundedPerformanceProbe = BoundedPerformanceProbe(),
     private val tracer: StructuredTracer? = null,
+    private val negotiateVariant: (suspend (OpenSubsonicRuntimeAudioRequest, OpenSubsonicStreamVariant) -> OpenSubsonicTranscodeDecisionOutcome)? = null,
     private val resolve: suspend (mediaAssetId: String) -> OpenSubsonicMediaAccessResult,
 ) {
     suspend fun resolveRuntime(
@@ -94,6 +95,34 @@ internal class OpenSubsonicRuntimeTransport(
         }
     }
 
+    /** Negotiate only at DataSource.open, after fresh canonical identity verification. */
+    internal suspend fun resolveRuntimeVariant(
+        recordingId: String,
+        mediaAssetId: String,
+        providerKey: String,
+        variant: OpenSubsonicStreamVariant,
+    ): OpenSubsonicTranscodeDecisionOutcome {
+        if (variant.recordingId != recordingId ||
+            variant.mediaAssetId != mediaAssetId ||
+            variant.providerKey != providerKey
+        ) return OpenSubsonicTranscodeDecisionOutcome.Rejected(
+            OpenSubsonicTranscodeDecisionRejection.INVALID_VARIANT,
+        )
+        val negotiator = negotiateVariant ?: return OpenSubsonicTranscodeDecisionOutcome.Rejected(
+            OpenSubsonicTranscodeDecisionRejection.STALE_CAPABILITY,
+        )
+        val runtime = resolveRuntime(recordingId, mediaAssetId, providerKey)
+        return try {
+            negotiator(runtime, variant)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            OpenSubsonicTranscodeDecisionOutcome.Rejected(
+                OpenSubsonicTranscodeDecisionRejection.TRANSPORT_UNAVAILABLE,
+            )
+        }
+    }
+
     private fun safeFailure(reason: OpenSubsonicMediaAccessFailure): IOException = IOException(
         when (reason) {
             OpenSubsonicMediaAccessFailure.MEDIA_ASSET_NOT_FOUND -> "Remote media asset unavailable"
@@ -122,11 +151,27 @@ internal class OpenSubsonicMediaDataSource(
     private val providerKey: String,
     private val transport: OpenSubsonicRuntimeTransport,
     private val upstreamFactory: DataSource.Factory,
+    private val variant: OpenSubsonicStreamVariant? = null,
+    private val truthObserver: ((OpenSubsonicStreamTruthSnapshot) -> Unit)? = null,
 ) : DataSource {
     private val transferListeners = CopyOnWriteArrayList<TransferListener>()
     private var upstream: DataSource? = null
     private var logicalDataSpec: DataSpec? = null
     private var transferStarted = false
+    private val truth = OpenSubsonicStreamTruthTracker()
+    private var truthAttempt: Long? = null
+
+    /** Sanitized facts only; this never contains a URL, native source ID or credential. */
+    internal val streamTruth: OpenSubsonicStreamTruthSnapshot get() = truth.snapshot
+
+    private fun publishTruth() {
+        // Observers are advisory. A diagnostics/UI callback must never abort audio I/O.
+        truthObserver?.let { observer -> runCatching { observer(truth.snapshot) } }
+    }
+
+    private fun recordTruth(action: (Long) -> Unit) {
+        truthAttempt?.let { action(it); publishTruth() }
+    }
 
     override fun addTransferListener(transferListener: TransferListener) {
         transferListeners += transferListener
@@ -135,30 +180,74 @@ internal class OpenSubsonicMediaDataSource(
     override fun open(dataSpec: DataSpec): Long {
         if (upstream != null) throw IOException("OpenSubsonic stream already open")
         logicalDataSpec = dataSpec
+        val safeIntent = variant ?: (
+            OpenSubsonicStreamVariantPlanner.original(recordingId, mediaAssetId, providerKey, 0)
+                as? OpenSubsonicStreamVariantPlan.Accepted
+            )?.variant
+        truthAttempt = safeIntent?.let { truth.begin(it) }
+        publishTruth()
         transferListeners.forEach { it.onTransferInitializing(this, dataSpec, true) }
 
-        val runtimeRequest = try {
-            runBlocking {
-                transport.resolveRuntime(
-                    recordingId = recordingId,
-                    mediaAssetId = mediaAssetId,
-                    providerKey = providerKey,
-                )
+        val authenticatedSpec = try {
+            when (variant?.mode) {
+                null, OpenSubsonicStreamVariantMode.ORIGINAL -> {
+                    val runtime = runBlocking {
+                        transport.resolveRuntime(
+                            recordingId = recordingId,
+                            mediaAssetId = mediaAssetId,
+                            providerKey = providerKey,
+                        )
+                    }
+                    runtime.materializeAuthenticatedDataSpec(dataSpec)
+                }
+                OpenSubsonicStreamVariantMode.EXTENSION_TRANSCODE_REQUESTED -> {
+                    // Extension offset is time-based, not a byte seek. Fail
+                    // closed until seeking/range behavior has been proven.
+                    if (dataSpec.position != 0L || dataSpec.length != C.LENGTH_UNSET.toLong()) {
+                        throw IOException("OpenSubsonic transcoded byte seek unsupported")
+                    }
+                    val negotiated = runBlocking {
+                        transport.resolveRuntimeVariant(
+                            recordingId, mediaAssetId, providerKey, requireNotNull(variant),
+                        )
+                    }
+                    recordTruth { truth.onDecision(it, negotiated) }
+                    when (negotiated) {
+                        is OpenSubsonicTranscodeDecisionOutcome.Ready ->
+                            negotiated.ticket.materializeAuthenticatedDataSpec(dataSpec)
+                        is OpenSubsonicTranscodeDecisionOutcome.Rejected ->
+                            throw IOException("OpenSubsonic stream variant unavailable: " + negotiated.reason)
+                    }
+                }
+                OpenSubsonicStreamVariantMode.LEGACY_STREAM_BEST_EFFORT ->
+                    throw IOException("OpenSubsonic legacy bitrate request not activated")
             }
         } catch (interrupted: InterruptedException) {
             Thread.currentThread().interrupt()
+            recordTruth { truth.onFailure(it) }
             throw InterruptedIOException("OpenSubsonic playback resolution interrupted")
+        } catch (error: Exception) {
+            recordTruth { truth.onFailure(it) }
+            throw error
         }
-
-        val authenticatedSpec = runtimeRequest.materializeAuthenticatedDataSpec(dataSpec)
         val next = upstreamFactory.createDataSource()
         upstream = next
         return try {
             val length = next.open(authenticatedSpec)
+            // DataSource does not provide a trustworthy successful HTTP status.
+            // Never infer 200/206 or decoded codec from an opened upstream.
+            recordTruth {
+                truth.onHeaders(
+                    it, 0, next.responseHeaders.filterKeys { key ->
+                        key.equals("content-type", ignoreCase = true)
+                    }, length,
+                )
+            }
             transferStarted = true
             transferListeners.forEach { it.onTransferStart(this, dataSpec, true) }
             length
         } catch (error: Exception) {
+            recordTruth { truth.onFailure(it) }
             upstream = null
             runCatching { next.close() }
             throw sanitizeTransportFailure(error)
@@ -170,6 +259,7 @@ internal class OpenSubsonicMediaDataSource(
         return try {
             val read = current.read(buffer, offset, length)
             if (read > 0) {
+                recordTruth { truth.onBytes(it, read) }
                 val spec = logicalDataSpec
                 if (spec != null) {
                     transferListeners.forEach {
@@ -179,6 +269,7 @@ internal class OpenSubsonicMediaDataSource(
             }
             read
         } catch (error: Exception) {
+            recordTruth { truth.onFailure(it) }
             throw sanitizeTransportFailure(error)
         }
     }
@@ -214,6 +305,12 @@ internal class OpenSubsonicMediaDataSource(
         if (hadStarted && spec != null) {
             transferListeners.forEach { it.onTransferEnd(this, spec, true) }
         }
+        if (closeFailure != null) {
+            recordTruth { truth.onFailure(it) }
+        } else {
+            recordTruth { truth.onClose(it) }
+        }
+        truthAttempt = null
         closeFailure?.let { throw it }
     }
 
@@ -255,6 +352,7 @@ internal class OpenSubsonicMediaDataSource(
 internal class OpenSubsonicMediaDataSourceFactory(
     private val transport: OpenSubsonicRuntimeTransport,
     private val upstreamFactory: DataSource.Factory,
+    private val truthObserver: ((OpenSubsonicStreamTruthSnapshot) -> Unit)? = null,
 ) {
     fun create(
         recordingId: String,
@@ -266,7 +364,20 @@ internal class OpenSubsonicMediaDataSourceFactory(
         providerKey = providerKey,
         transport = transport,
         upstreamFactory = upstreamFactory,
+        truthObserver = truthObserver,
     )
+
+    /** Catalog-owned B13 seam: no side effects until Media3 DataSource.open. */
+    fun createWithVariant(variant: OpenSubsonicStreamVariant): DataSource =
+        OpenSubsonicMediaDataSource(
+            recordingId = variant.recordingId,
+            mediaAssetId = variant.mediaAssetId,
+            providerKey = variant.providerKey,
+            transport = transport,
+            upstreamFactory = upstreamFactory,
+            variant = variant,
+            truthObserver = truthObserver,
+        )
 }
 
 /** Android production composition root for provider-owned Media3 transport. */
@@ -274,12 +385,61 @@ internal class OpenSubsonicMediaDataSourceFactory(
 internal fun androidOpenSubsonicMediaDataSourceFactory(
     context: Context,
 ): OpenSubsonicMediaDataSourceFactory {
-    val access = androidOpenSubsonicMediaAccess(context.applicationContext)
+    val appContext = context.applicationContext
+    val accounts = OpenSubsonicAccountRepository(
+        persistence = SharedPrefsOpenSubsonicAccountPersistence(appContext),
+        credentials = AndroidKeystoreOpenSubsonicCredentialStore(appContext),
+    )
+    val access = OpenSubsonicMediaAccess(
+        assets = RoomOpenSubsonicMediaAssetStore(appContext),
+        accounts = accounts,
+    )
+    val decision = OpenSubsonicTranscodeDecisionEngine(OkHttpOpenSubsonicDecisionTransport())
+    val safeStreamClient = Http.client.newBuilder()
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .build()
     return OpenSubsonicMediaDataSourceFactory(
         transport = OpenSubsonicRuntimeTransport(
             tracer = if (BuildConfig.DEBUG) Diagnostics.structuredTracer() else null,
+            negotiateVariant = { runtime, variant ->
+                val config = accounts.savedConfig()
+                if (config == null) {
+                    OpenSubsonicTranscodeDecisionOutcome.Rejected(
+                        OpenSubsonicTranscodeDecisionRejection.STALE_CAPABILITY,
+                    )
+                } else {
+                    val provider = OpenSubsonicProvider(config)
+                    val evidence = provider.streamCapabilityEvidence(variant.accountGeneration)
+                    val chosen = decision.negotiate(
+                        runtime, variant, evidence, config,
+                    ) { profile ->
+                        when (profile) {
+                            OpenSubsonicDecoderProfile.MP3_HTTP -> runCatching {
+                                android.media.MediaCodecList(
+                                    android.media.MediaCodecList.REGULAR_CODECS,
+                                ).codecInfos.any { info ->
+                                    !info.isEncoder && info.supportedTypes.any {
+                                        it.equals("audio/mpeg", ignoreCase = true)
+                                    }
+                                }
+                            }.getOrDefault(false)
+                        }
+                    }
+                    // Check again after the suspendable POST: a prior account
+                    // credential may never be used against a replaced host.
+                    if (!provider.matchesSavedConfig(accounts.savedConfig())) {
+                        OpenSubsonicTranscodeDecisionOutcome.Rejected(
+                            OpenSubsonicTranscodeDecisionRejection.STALE_CAPABILITY,
+                        )
+                    } else {
+                        chosen
+                    }
+                }
+            },
             resolve = access::resolve,
         ),
-        upstreamFactory = OkHttpDataSource.Factory(Http.client),
+        // Never send authenticated query material through a 3xx redirect.
+        upstreamFactory = OkHttpDataSource.Factory(safeStreamClient),
     )
 }

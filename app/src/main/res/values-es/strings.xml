@@ -1326,4 +1326,10 @@
     <string name="wear_os_code_hint">Código de vinculación</string>
     <string name="wear_os_done">Hecho</string>
     <string name="signed_by">Firmado por %1$s</string>
+    <string name="playback_recovery_connection">No se pudo iniciar una pista remota. Comprueba la conexión o el servidor.</string>
+    <string name="playback_recovery_unavailable">La versión remota seleccionada no está disponible ahora.</string>
+    <string name="playback_recovery_failed">No se pudo abrir la pista remota seleccionada.</string>
+    <string name="playback_recovery_retry">Reintentar</string>
+    <string name="playback_recovery_retrying">Reintentando…</string>
+    <string name="playback_recovery_dismiss">Descartar</string>
 </resources>

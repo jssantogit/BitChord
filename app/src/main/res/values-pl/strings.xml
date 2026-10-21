@@ -1394,4 +1394,10 @@
     <string name="wear_os_code_hint">Kod parowania</string>
     <string name="wear_os_done">Gotowe</string>
     <string name="signed_by">Podpisano przez %1$s</string>
+    <string name="playback_recovery_connection">Nie można uruchomić utworu z serwera. Sprawdź połączenie lub serwer.</string>
+    <string name="playback_recovery_unavailable">Wybrana wersja zdalna jest teraz niedostępna.</string>
+    <string name="playback_recovery_failed">Nie można otworzyć wybranego utworu zdalnego.</string>
+    <string name="playback_recovery_retry">Spróbuj ponownie</string>
+    <string name="playback_recovery_retrying">Ponawianie…</string>
+    <string name="playback_recovery_dismiss">Zamknij</string>
 </resources>
