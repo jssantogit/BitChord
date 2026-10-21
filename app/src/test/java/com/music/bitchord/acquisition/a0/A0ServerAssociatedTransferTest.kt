@@ -306,6 +306,104 @@ class A0ServerAssociatedTransferTest {
         }
     }
 
+    @Test(timeout=19000)
+    fun serverRelayedIndirectFOnSameLoginSocketCompletesBoundedLicensedTransfer() {
+        ServerSocket(0,1,host).use{fakeServer->
+            ServerSocket(0,1,host).use{fakeP->
+                ServerSocket(0,1,host).use{fakeF->
+                    val pAccepted=java.util.concurrent.CountDownLatch(1)
+                    val releaseServer=java.util.concurrent.CountDownLatch(1)
+                    val pool=Executors.newFixedThreadPool(3)
+                    try {
+                        val server=pool.submit {
+                            fakeServer.accept().use{authenticated->
+                                authenticated.soTimeout=6500
+                                val portFrame=body(authenticated)
+                                assertEquals(2,le32(portFrame))
+                                val advertisedPort=le32(portFrame)
+                                assertTrue(advertisedPort in 1..65535)
+                                val query=body(authenticated)
+                                assertEquals(3,le32(query))
+                                assertEquals("owner",field(query))
+                                authenticated.getOutputStream().apply{
+                                    write(frame(3,field("owner")+byteArrayOf(1,0,0,127)+
+                                        le(fakeP.localPort)+le(0)+byteArrayOf(0,0)))
+                                    flush()
+                                }
+                                assertTrue(pAccepted.await(5,TimeUnit.SECONDS))
+                                authenticated.getOutputStream().apply{
+                                    write(frame(18,field("owner")+field("F")+
+                                        byteArrayOf(1,0,0,127)+le(fakeF.localPort)+
+                                        le(452)+byteArrayOf(0)+le(0)+le(0)))
+                                    flush()
+                                }
+                                assertTrue(releaseServer.await(6,TimeUnit.SECONDS))
+                            }
+                        }
+                        val peer=pool.submit {
+                            fakeP.accept().use{p->
+                                p.soTimeout=5500
+                                val init=readInit(p)
+                                assertEquals(1,init.read())
+                                assertEquals("testaccount",field(init))
+                                assertEquals("P",field(init))
+                                assertEquals(0,le32(init))
+                                val queue=body(p)
+                                assertEquals(43,le32(queue))
+                                assertEquals(path,field(queue))
+                                p.getOutputStream().apply{
+                                    write(frame(40,le(1)+le(711)+field(path)+
+                                        le64(own.size.toLong())))
+                                    flush()
+                                }
+                                val accepted=body(p)
+                                assertEquals(41,le32(accepted))
+                                assertEquals(711,le32(accepted))
+                                assertEquals(1,accepted.read())
+                                pAccepted.countDown()
+                                releaseServer.await(6,TimeUnit.SECONDS)
+                            }
+                        }
+                        val file=pool.submit {
+                            fakeF.accept().use{f->
+                                f.soTimeout=5500
+                                assertArrayEquals(
+                                    le(5)+byteArrayOf(0)+le(452),
+                                    readExactly(f.getInputStream(),9)
+                                )
+                                f.getOutputStream().apply {
+                                    write(le(711)+own)
+                                    flush()
+                                }
+                                assertArrayEquals(ByteArray(8),
+                                    readExactly(f.getInputStream(),8))
+                            }
+                        }
+                        Socket(host,fakeServer.localPort).use{authenticated->
+                            val receipt=A0ServerAssociatedTransfer(
+                                allowLoopbackForLocalTest=true
+                            ).runOnce(authenticated,"testaccount","owner",
+                                reference(),listing(),temp.root)
+                            assertEquals(digest,receipt.sha256Hex)
+                            assertArrayEquals(own,receipt.file.readBytes())
+                            assertFalse(temp.root.listFiles().orEmpty().any{
+                                it.name.endsWith(".partial")
+                            })
+                        }
+                        file.get(5,TimeUnit.SECONDS)
+                        releaseServer.countDown()
+                        peer.get(5,TimeUnit.SECONDS)
+                        server.get(5,TimeUnit.SECONDS)
+                    }finally{
+                        releaseServer.countDown()
+                        pAccepted.countDown()
+                        pool.shutdownNow()
+                    }
+                }
+            }
+        }
+    }
+
     private fun reference()=A0OpenAudioCandidateGate.ReviewedReference(
         "https://example.org/test/owned","CC0-1.0","owner-tone.wav",own.size.toLong(),digest,true
     )
