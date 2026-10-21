@@ -276,14 +276,19 @@ internal class CanonicalRemoteQualityDataSource(
     private fun emit(
         stage: CanonicalRemoteQualityEvidenceStage,
         prepared: CanonicalRemoteStreamPreparation? = null,
-    ) = evidence(CanonicalRemoteQualityEvidence(
-        stage = stage,
-        attemptId = attemptId,
-        network = selectedNetwork,
-        mode = prepared?.mode,
-        rejection = prepared?.rejection,
-        requestedBitrateBps = prepared?.requestedBitrateBps,
-    ))
+    ) {
+        // Diagnostics must never turn a playable stream into a failed stream.
+        runCatching {
+            evidence(CanonicalRemoteQualityEvidence(
+                stage = stage,
+                attemptId = attemptId,
+                network = selectedNetwork,
+                mode = prepared?.mode,
+                rejection = prepared?.rejection,
+                requestedBitrateBps = prepared?.requestedBitrateBps,
+            ))
+        }
+    }
     internal val latestTruth: OpenSubsonicStreamTruthSnapshot?
         get() = truthGate.latest()
 
@@ -318,14 +323,16 @@ internal class CanonicalRemoteQualityDataSource(
                                     val pair = snapshot.transportStage to snapshot.negotiation
                                     if (pair != truthPair) {
                                         truthPair = pair
-                                        evidence(CanonicalRemoteQualityEvidence(
-                                            stage = CanonicalRemoteQualityEvidenceStage.CATALOG_TRUTH,
-                                            attemptId = attemptId,
-                                            network = selectedNetwork,
-                                            requestedBitrateBps = snapshot.requestedMaxBitrateBps,
-                                            negotiation = snapshot.negotiation,
-                                            transport = snapshot.transportStage,
-                                        ))
+                                        runCatching {
+                                            evidence(CanonicalRemoteQualityEvidence(
+                                                stage = CanonicalRemoteQualityEvidenceStage.CATALOG_TRUTH,
+                                                attemptId = attemptId,
+                                                network = selectedNetwork,
+                                                requestedBitrateBps = snapshot.requestedMaxBitrateBps,
+                                                negotiation = snapshot.negotiation,
+                                                transport = snapshot.transportStage,
+                                            ))
+                                        }
                                     }
                                 }
                             }
