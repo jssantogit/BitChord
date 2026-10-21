@@ -91,12 +91,22 @@ internal object OpenSubsonicCatalogSync {
                     if (generation != gate.latestGeneration.get() || !accountIsCurrent()) {
                         error("OpenSubsonic snapshot superseded before Room apply")
                     }
-                    CanonicalRemoteCatalogSync.applySnapshot(
+                    val result = CanonicalRemoteCatalogSync.applySnapshot(
                         providerKey = provider.providerKey,
                         snapshot = snapshot,
                         store = RoomCanonicalCatalogSyncStore(database.catalogDao()),
                         idFactory = idFactory,
                     )
+                    // Never persist partial/auth-failed/stale or cancelled snapshots.
+                    // Remote evidence and canonical assets commit atomically.
+                    OpenSubsonicRemoteRatingPersistence.apply(
+                        dao = database.catalogDao(),
+                        providerKey = provider.providerKey,
+                        scopeId = provider.ratingScopeId,
+                        generation = generation,
+                        snapshot = snapshot,
+                    )
+                    result
                 }
             }
         } catch (cancelled: CancellationException) {
