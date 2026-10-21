@@ -196,6 +196,8 @@ fun SongActionsSheet(
     presentation: SongActionsPresentation = SongActionsPresentation.Sheet,
     /** The image already displayed in Now Playing when its ⋯ menu was opened. */
     preloadedArtworkModel: Any? = null,
+    /** First-party canonical rating UI; independent from account Likes. */
+    canonicalRatingContent: (@Composable () -> Unit)? = null,
 ) {
     var pickingSleepTimer by remember { mutableStateOf(false) }
     val menu = presentation == SongActionsPresentation.Menu
@@ -295,6 +297,9 @@ fun SongActionsSheet(
             }
             GroupSeparator(palette)
         }
+
+        // L9: explicit first-party rating only when canonical identity is proven.
+        canonicalRatingContent?.invoke()
 
         DownloadRow(song, palette, isOffline, onDownload)
         WebDavUploadRow(song, palette, isOffline, onUploadToWebDav)

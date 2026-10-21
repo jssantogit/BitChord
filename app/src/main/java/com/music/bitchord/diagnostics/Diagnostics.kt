@@ -309,6 +309,7 @@ object Diagnostics {
         val snapshot = buffer.snapshot()
         return store.createExport(
             metadataLines = reportMetadataLines() +
+                DiagnosticAndroidExitProbe.summary(application) +
                 "captureFlushStatus=${DiagnosticCaptureIntegrity.flushStatus(flushComplete)}",
             recentEventLines = snapshot.map(DiagnosticFormatter::format),
             fileName = "bitchord-diagnostics-$timestamp.txt",
@@ -319,6 +320,15 @@ object Diagnostics {
                 evictedMemoryEvents = buffer.evictedCount,
                 ioFailures = writer.failedWrites,
                 captureRotations = store.captureRotationsSinceOpen,
+            ),
+            incidentReport = DiagnosticIncidentTriage.build(
+                events = snapshot,
+                rejectedWrites = writer.droppedWrites,
+                flushComplete = flushComplete,
+            ),
+            performanceReport = DiagnosticBottleneckAnalysis.summarize(
+                events = snapshot,
+                captureEnabled = true, // explicit export; never a runtime hot-path probe
             ),
         )
     }
