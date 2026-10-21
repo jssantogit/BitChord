@@ -155,6 +155,27 @@ class CanonicalRemoteQualityEvidenceTest {
         source.close()
     }
 
+    @Test fun observerFailureCannotFailTheAudioTransport() {
+        val catalog = Catalog()
+        val source = open(catalog, sink = { throw IllegalStateException("diagnostic sink failed") })
+        assertEquals(32L, source.open(spec()))
+        assertEquals(1, catalog.stream.opens)
+        source.close()
+    }
+
+    @Test fun independentDataSourceOpenAfterCloseGetsFreshTransportDecision() {
+        val catalog = Catalog()
+        val first = open(catalog)
+        first.open(spec())
+        first.close()
+        val second = open(catalog, wifi = AudioQuality.LOSSLESS)
+        second.open(spec())
+        assertEquals(1, catalog.mp3)
+        assertEquals(1, catalog.originals)
+        assertEquals(2, catalog.stream.opens)
+        second.close()
+    }
+
     @Test fun decoderInputEvidenceCannotBeMisreportedAsDecodedOutputOrAudible() {
         assertEquals("mp3", CanonicalRemoteDecoderInputEvidence.fromMime("audio/mpeg").name.lowercase())
         assertEquals("unknown", CanonicalRemoteDecoderInputEvidence.fromMime("bad/private?token=secret").name.lowercase())
