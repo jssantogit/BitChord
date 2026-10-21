@@ -366,6 +366,13 @@ internal class CanonicalRemoteQualityDataSource(
             listeners.forEach(delegate::addTransferListener)
         }
         emit(CanonicalRemoteQualityEvidenceStage.PREPARED, prepared)
+        // A close racing with the PREPARED observer must prevent the delegate
+        // from opening at all. This protects the explicit cancellation seam;
+        // provider Catalog still owns revocation when an open is already in flight.
+        if (closed || openJob.isCancelled) {
+            emit(CanonicalRemoteQualityEvidenceStage.CANCELLED, prepared)
+            throw InterruptedIOException("Remote quality open cancelled")
+        }
         return try {
             val length = delegate.open(dataSpec)
             if (closed || openJob.isCancelled) throw InterruptedIOException("Remote quality open cancelled")
