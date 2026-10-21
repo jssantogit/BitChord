@@ -212,9 +212,9 @@ object Diagnostics {
         val link = com.music.bitchord.data.TrackLog.currentCorrelation()
         event(
             category = categoryForTag(tag),
-            name = "debug_log:$tag",
+            name = "debug_log:${DiagnosticLegacyPrivacy.tag(tag)}",
             level = diagnosticLevel,
-            message = message,
+            message = DiagnosticLegacyPrivacy.message(tag, message),
             metadata = link?.let { mapOf(
                 "flowId" to it.flowId,
                 "parentSpanId" to it.parentSpanId,
