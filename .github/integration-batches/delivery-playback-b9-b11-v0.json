@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 113,
+      "expected_head_sha": "83b91deb370c0143883cb6e08a13d91b3636b248",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/playback/CanonicalCollectionIntentPlanner.kt",
+        "app/src/test/java/com/music/bitchord/playback/CanonicalCollectionIntentPlannerTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 114,
+      "expected_head_sha": "fa4dfcf42894348cabd60cf659b7c4a4d71fc418",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/playback/CanonicalBatchQueueExecution.kt",
+        "app/src/main/java/com/music/bitchord/playback/PlaybackService.kt",
+        "app/src/test/java/com/music/bitchord/playback/CanonicalBatchQueuePolicyTest.kt"
+      ],
+      "depends_on": 113,
+      "expected_base_ref": "playback/b9-canonical-collection-playback-intent-v0"
+    },
+    {
+      "number": 117,
+      "expected_head_sha": "6a5e7da42cb67014e6bc3b9d1d1a133bd9e4af13",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/MainActivity.kt",
+        "app/src/main/java/com/music/bitchord/playback/PlaybackRecoveryUx.kt",
+        "app/src/main/java/com/music/bitchord/playback/PlaybackService.kt",
+        "app/src/main/java/com/music/bitchord/playback/PlayerConnection.kt",
+        "app/src/main/java/com/music/bitchord/ui/components/PlaybackRecoveryBanner.kt",
+        "app/src/main/res/values-de/strings.xml",
+        "app/src/main/res/values-es/strings.xml",
+        "app/src/main/res/values-fr/strings.xml",
+        "app/src/main/res/values-he/strings.xml",
+        "app/src/main/res/values-hi/strings.xml",
+        "app/src/main/res/values-id/strings.xml",
+        "app/src/main/res/values-it/strings.xml",
+        "app/src/main/res/values-ja/strings.xml",
+        "app/src/main/res/values-pl/strings.xml",
+        "app/src/main/res/values-pt/strings.xml",
+        "app/src/main/res/values-ru/strings.xml",
+        "app/src/main/res/values-th/strings.xml",
+        "app/src/main/res/values-tr/strings.xml",
+        "app/src/main/res/values-vi/strings.xml",
+        "app/src/main/res/values-zh-rTW/strings.xml",
+        "app/src/main/res/values-zh/strings.xml",
+        "app/src/main/res/values/strings.xml",
+        "app/src/test/java/com/music/bitchord/playback/PlaybackRecoveryTrackerTest.kt"
+      ],
+      "depends_on": 114,
+      "expected_base_ref": "playback/b10-canonical-batch-queue-execution-v0"
+    }
+  ]
+}

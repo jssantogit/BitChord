@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 130,
+      "expected_head_sha": "c65bc1de6ade14d03f1aa760b996ccbaafe76622",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicAccount.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicMedia3Access.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicMediaAccess.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicPlaybackStreamAdapter.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicStreamLifecycle.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicTranscodeDecision.kt",
+        "app/src/test/java/com/music/bitchord/OpenSubsonicPlaybackStreamAdapterTest.kt",
+        "app/src/test/java/com/music/bitchord/OpenSubsonicStreamLifecycleTest.kt",
+        "app/src/test/java/com/music/bitchord/OpenSubsonicStreamPolicyGatewayTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 123,
+      "expected_head_sha": "1d5c819c26e0380da2392d485b55fa0e46561042",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticFailureIncidentSynthesizer.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticFunctionalLifecycleD9Test.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 124,
+      "expected_head_sha": "abd7f85ff9e6dc4be902fe435ccf87689acbc2fb",
+      "allowed_files": [
+        "app/src/dev/java/com/music/bitchord/diagnostics/DiagnosticsActivity.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticFileStore.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticIncidentTriage.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/Diagnostics.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticIncidentExportIntegrationD10Test.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticIncidentTriageD10Test.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticIntelligenceOverheadD10Test.kt",
+        "docs/DIAGNOSTICS.md"
+      ],
+      "depends_on": 123,
+      "expected_base_ref": "perf/d9-functional-recovery-lifecycles-v0"
+    }
+  ]
+}

@@ -1359,4 +1359,11 @@
     <string name="wear_os_code_hint">Código de pareamento</string>
     <string name="wear_os_done">Concluir</string>
     <string name="signed_by">Assinado por %1$s</string>
+
+    <string name="playback_recovery_connection">Uma faixa remota não começou. Verifique a conexão ou o servidor.</string>
+    <string name="playback_recovery_unavailable">A versão remota escolhida não está disponível agora.</string>
+    <string name="playback_recovery_failed">Não foi possível abrir a faixa remota escolhida.</string>
+    <string name="playback_recovery_retry">Tentar novamente</string>
+    <string name="playback_recovery_retrying">Tentando…</string>
+    <string name="playback_recovery_dismiss">Dispensar</string>
 </resources>

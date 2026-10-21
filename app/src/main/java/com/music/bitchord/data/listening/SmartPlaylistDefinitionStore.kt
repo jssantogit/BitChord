@@ -1,0 +1,129 @@
+package com.music.bitchord.data.listening
+
+import android.content.Context
+import androidx.room.Dao
+import androidx.room.Database
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+import androidx.room.Query
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.Upsert
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+
+/**
+ * User-authored local rule only: neither provider playlist nor a frozen member
+ * list. The L6 planner re-evaluates available canonical Recordings on demand.
+ */
+internal data class SavedSmartPlaylistDefinition(
+    val id: String,
+    val name: String,
+    val query: RuleBasedSmartPlaylistQuery,
+    val schemaVersion: Int = 1,
+)
+
+@Entity(tableName = "smart_playlist_definition")
+internal data class SmartPlaylistDefinitionEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val schemaVersion: Int,
+    val minimumExplicitRating: Double?,
+    val minimumCompletions: Long?,
+    val minimumDaysSinceAudible: Long?,
+    val maximumDaysSinceAudible: Long?,
+    val minimumDurationMs: Long?,
+    val limit: Int,
+)
+
+@Dao
+internal interface SmartPlaylistDefinitionDao {
+    @Upsert
+    suspend fun upsert(definition: SmartPlaylistDefinitionEntity)
+
+    @Query("SELECT * FROM smart_playlist_definition ORDER BY name COLLATE NOCASE ASC, id ASC")
+    suspend fun all(): List<SmartPlaylistDefinitionEntity>
+
+    @Query("SELECT * FROM smart_playlist_definition ORDER BY name COLLATE NOCASE ASC, id ASC")
+    fun observe(): Flow<List<SmartPlaylistDefinitionEntity>>
+
+    @Query("DELETE FROM smart_playlist_definition WHERE id = :id")
+    suspend fun remove(id: String)
+}
+
+/**
+ * Independent local database. We deliberately do NOT change ListeningEventDatabase,
+ * its migrations, playback state, or provider-owned playlist storage.
+ */
+@Database(entities = [SmartPlaylistDefinitionEntity::class], version = 1, exportSchema = false)
+internal abstract class SmartPlaylistDefinitionDatabase : RoomDatabase() {
+    abstract fun definitionDao(): SmartPlaylistDefinitionDao
+
+    internal companion object {
+        private const val DATABASE_NAME = "smart-playlist-definitions.db"
+        @Volatile private var instance: SmartPlaylistDefinitionDatabase? = null
+
+        fun get(context: Context): SmartPlaylistDefinitionDatabase =
+            instance ?: synchronized(this) {
+                instance ?: Room.databaseBuilder(
+                    context.applicationContext,
+                    SmartPlaylistDefinitionDatabase::class.java,
+                    DATABASE_NAME,
+                ).build().also { instance = it }
+            }
+    }
+}
+
+/** Saves only validated versioned query definitions; all rows remain local. */
+internal class SmartPlaylistDefinitionRepository(
+    private val dao: SmartPlaylistDefinitionDao,
+) {
+    suspend fun save(definition: SavedSmartPlaylistDefinition) {
+        require(definition.id.isNotBlank() && definition.id.length <= 100) {
+            "Smart playlist must have a local definition ID"
+        }
+        require(definition.schemaVersion == 1) { "Unsupported rule schema" }
+        val name = definition.name.trim()
+        require(name.isNotBlank() && name.length <= 80) { "Playlist name must be 1..80 characters" }
+        val query = definition.query
+        // RuleBasedSmartPlaylistQuery already validates all supported AND rules.
+        dao.upsert(SmartPlaylistDefinitionEntity(
+            id = definition.id,
+            name = name,
+            schemaVersion = definition.schemaVersion,
+            minimumExplicitRating = query.minimumExplicitRating,
+            minimumCompletions = query.minimumCompletions,
+            minimumDaysSinceAudible = query.minimumDaysSinceAudible,
+            maximumDaysSinceAudible = query.maximumDaysSinceAudible,
+            minimumDurationMs = query.minimumDurationMs,
+            limit = query.limit,
+        ))
+    }
+
+    suspend fun list(): List<SavedSmartPlaylistDefinition> = dao.all().map { it.toDomain() }
+
+    fun observe(): Flow<List<SavedSmartPlaylistDefinition>> =
+        dao.observe().map { rows -> rows.map { it.toDomain() } }
+
+    suspend fun remove(id: String) {
+        require(id.isNotBlank())
+        dao.remove(id)
+    }
+
+    private fun SmartPlaylistDefinitionEntity.toDomain(): SavedSmartPlaylistDefinition {
+        require(schemaVersion == 1 && id.isNotBlank() && name.isNotBlank()) {
+            "Unsupported or corrupt local playlist definition"
+        }
+        return SavedSmartPlaylistDefinition(
+            id = id, name = name, schemaVersion = schemaVersion,
+            query = RuleBasedSmartPlaylistQuery(
+                minimumExplicitRating = minimumExplicitRating,
+                minimumCompletions = minimumCompletions,
+                minimumDaysSinceAudible = minimumDaysSinceAudible,
+                maximumDaysSinceAudible = maximumDaysSinceAudible,
+                minimumDurationMs = minimumDurationMs,
+                limit = limit,
+            ),
+        )
+    }
+}
