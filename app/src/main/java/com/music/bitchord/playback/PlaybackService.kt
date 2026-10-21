@@ -1,6 +1,5 @@
 package com.music.bitchord.playback
 
-import com.music.bitchord.data.catalog.provider.opensubsonic.androidOpenSubsonicMediaDataSourceFactory
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.MediaAssetEntity
@@ -1717,10 +1716,22 @@ class PlaybackService : MediaLibraryService() {
         // Canonical remote traffic is intercepted before the generic resolver/chunker.
         // The provider-owned DataSource is the only component that ever sees the
         // authenticated OpenSubsonic request.
-        val openSubsonicDataSourceFactory = androidOpenSubsonicMediaDataSourceFactory(this)
+        // B13: quality choices are resolved only when Media3 opens a new logical
+        // recording. Catalog retains all credentials, decoder and per-asset
+        // transcode decisions. Construction never restarts the active stream.
+        val canonicalQualityRuntime = CanonicalRemoteQualityRuntime(
+            AndroidCanonicalRemoteQualityCatalog(this),
+        )
         val canonicalRemoteDataSourceFactory = CanonicalRemoteDataSource.Factory(
             fallbackFactory = resolvingFactory,
-            openSubsonicFactory = openSubsonicDataSourceFactory::create,
+            openSubsonicFactory = { recordingId, mediaAssetId, providerKey ->
+                CanonicalRemoteQualityDataSource(
+                    request = CanonicalRemotePlaybackRequest(recordingId, mediaAssetId, providerKey),
+                    runtime = canonicalQualityRuntime,
+                    preferences = CanonicalRemoteQualityPreferences::current,
+                    network = { CanonicalRemotePhysicalNetwork.snapshot(applicationContext) },
+                )
+            },
         )
         val defaultDataSourceFactory = SmbDataSource.RoutingFactory(
             DefaultDataSource.Factory(this, canonicalRemoteDataSourceFactory),

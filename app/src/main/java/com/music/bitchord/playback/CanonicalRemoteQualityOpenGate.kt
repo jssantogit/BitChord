@@ -1,0 +1,161 @@
+package com.music.bitchord.playback
+
+/**
+ * B13 pure intent policy. Catalog alone handles HTTP/Media3 authentication,
+ * generation and per-MediaAsset verification. A request decision is not
+ * negotiation, decoded audio or proof of audibility.
+ */
+internal enum class CanonicalRemoteQualityOpenMode {
+    ORIGINAL,
+    REQUEST_CAPPED_MP3,
+    BLOCK_UNAPPLIED,
+}
+
+internal enum class CanonicalRemoteQualityOpenReason {
+    ORIGINAL_OR_UNVERIFIED,
+    VERIFIED_REQUEST_NOT_APPLIED,
+    GENERATION_UNAVAILABLE,
+    CEILING_NOT_SUPPORTED,
+    INVALID_PREVIEW,
+    ADVERTISED_REQUEST_PENDING_MEDIA_DECISION,
+    CAPABILITY_NOT_AVAILABLE,
+}
+
+/**
+ * Immutable candidate for the next explicit stream open only.
+ * It has no recording IDs, provider locators, secrets, network side effects
+ * or mutable reference to the active Media3 player.
+ */
+internal data class CanonicalRemoteQualityOpenPlan(
+    val mode: CanonicalRemoteQualityOpenMode,
+    val reason: CanonicalRemoteQualityOpenReason,
+    val accountGeneration: Long? = null,
+    val maxBitrateBps: Int? = null,
+    val applied: Boolean = false,
+) {
+    init {
+        require(!applied) { "Preparation is never proof of applied quality" }
+        if (mode == CanonicalRemoteQualityOpenMode.REQUEST_CAPPED_MP3) {
+            require(accountGeneration != null && accountGeneration >= 0L)
+            require(maxBitrateBps != null && maxBitrateBps in 32_000..512_000)
+        } else {
+            require(maxBitrateBps == null)
+            require(accountGeneration == null)
+        }
+    }
+}
+
+/**
+ * B12-style preview planning and B13 next-open request planning are distinct:
+ * the original plan() remains conservative and requires VERIFIED_MP3;
+ * prepareNextOpen() accepts a CURRENT ADVERTISED manifest only as permission
+ * to request, never as proof for the selected MediaAsset. Catalog still
+ * validates the actual decoder/asset on open; applied always remains false.
+ */
+internal object CanonicalRemoteQualityOpenGate {
+    fun plan(
+        preview: CanonicalRemoteQualityPreview,
+        accountGeneration: Long?,
+        supportedMp3CeilingsBps: Set<Int>,
+    ): CanonicalRemoteQualityOpenPlan {
+        fun block(reason: CanonicalRemoteQualityOpenReason) =
+            CanonicalRemoteQualityOpenPlan(
+                mode = CanonicalRemoteQualityOpenMode.BLOCK_UNAPPLIED,
+                reason = reason,
+            )
+
+        // Reject even an internally inconsistent input, rather than
+        // accidentally treating previously observed/requested as applied.
+        if (preview.applied ||
+            preview.negotiatedFormat != null ||
+            preview.observedFormat != null
+        ) return block(CanonicalRemoteQualityOpenReason.INVALID_PREVIEW)
+
+        if (preview.decision != CanonicalRemoteQualityDecision.CAPABILITY_VERIFIED_INTENT) {
+            return CanonicalRemoteQualityOpenPlan(
+                mode = CanonicalRemoteQualityOpenMode.ORIGINAL,
+                reason = CanonicalRemoteQualityOpenReason.ORIGINAL_OR_UNVERIFIED,
+            )
+        }
+
+        // A forged/invalid preview is never enough to authorize a variant.
+        if (preview.requestFormat != "mp3" || preview.chosenPreference == null ||
+            preview.chosenPreference == com.music.bitchord.data.settings.AudioQuality.LOSSLESS
+        ) return block(CanonicalRemoteQualityOpenReason.INVALID_PREVIEW)
+
+        if (accountGeneration == null || accountGeneration < 0L) {
+            return block(CanonicalRemoteQualityOpenReason.GENERATION_UNAVAILABLE)
+        }
+
+        val kbps = preview.maxBitrateKbps
+            ?: return block(CanonicalRemoteQualityOpenReason.CEILING_NOT_SUPPORTED)
+        if (kbps <= 0 || kbps > 512 ||
+            kbps > preview.chosenPreference.maxKbps
+        ) return block(CanonicalRemoteQualityOpenReason.CEILING_NOT_SUPPORTED)
+
+        val bitrate = kbps * 1_000
+        if (bitrate !in 32_000..512_000 || bitrate !in supportedMp3CeilingsBps) {
+            return block(CanonicalRemoteQualityOpenReason.CEILING_NOT_SUPPORTED)
+        }
+
+        return CanonicalRemoteQualityOpenPlan(
+            mode = CanonicalRemoteQualityOpenMode.REQUEST_CAPPED_MP3,
+            reason = CanonicalRemoteQualityOpenReason.VERIFIED_REQUEST_NOT_APPLIED,
+            accountGeneration = accountGeneration,
+            maxBitrateBps = bitrate,
+            applied = false,
+        )
+    }
+
+    /**
+     * Distinct from B12's conservative read-only preview. A CURRENT public
+     * ADVERTISED manifest may justify preparing a request for the NEXT stream,
+     * but not VERIFIED_MP3 for this MediaAsset. Catalog verifies the asset
+     * at DataSource.open; requested is never 'applied' here.
+     */
+    fun prepareNextOpen(
+        preference: com.music.bitchord.data.settings.AudioQuality?,
+        capability: CanonicalRemoteTranscodeCapability,
+        accountGeneration: Long?,
+    ): CanonicalRemoteQualityOpenPlan {
+        fun reject(reason: CanonicalRemoteQualityOpenReason) =
+            CanonicalRemoteQualityOpenPlan(
+                mode = CanonicalRemoteQualityOpenMode.BLOCK_UNAPPLIED, reason = reason,
+            )
+        if (preference == null ||
+            preference == com.music.bitchord.data.settings.AudioQuality.LOSSLESS
+        ) {
+            return CanonicalRemoteQualityOpenPlan(
+                mode = CanonicalRemoteQualityOpenMode.ORIGINAL,
+                reason = CanonicalRemoteQualityOpenReason.ORIGINAL_OR_UNVERIFIED,
+            )
+        }
+        if (accountGeneration == null || accountGeneration < 0L) {
+            return reject(CanonicalRemoteQualityOpenReason.GENERATION_UNAVAILABLE)
+        }
+        if (preference == com.music.bitchord.data.settings.AudioQuality.LOW) {
+            // Persisted LOW = 64, Catalog C13 currently accepts 96/160/320;
+            // never turn a user's 64-kbps limit into 96-kbps streaming.
+            return reject(CanonicalRemoteQualityOpenReason.CEILING_NOT_SUPPORTED)
+        }
+        if (capability !in setOf(
+                CanonicalRemoteTranscodeCapability.ADVERTISED_ONLY,
+                CanonicalRemoteTranscodeCapability.VERIFIED_MP3,
+            )
+        ) return reject(CanonicalRemoteQualityOpenReason.CAPABILITY_NOT_AVAILABLE)
+
+        val bitrate = when (preference) {
+            com.music.bitchord.data.settings.AudioQuality.MEDIUM -> 160_000
+            com.music.bitchord.data.settings.AudioQuality.HIGH -> 320_000
+            else -> return reject(CanonicalRemoteQualityOpenReason.CEILING_NOT_SUPPORTED)
+        }
+        return CanonicalRemoteQualityOpenPlan(
+            mode = CanonicalRemoteQualityOpenMode.REQUEST_CAPPED_MP3,
+            reason = CanonicalRemoteQualityOpenReason.ADVERTISED_REQUEST_PENDING_MEDIA_DECISION,
+            accountGeneration = accountGeneration,
+            maxBitrateBps = bitrate,
+            applied = false,
+        )
+    }
+
+}
