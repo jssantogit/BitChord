@@ -185,4 +185,52 @@ class RemoteRatingsPresentationTest {
         assertEquals(null, rows.single().evidence.single().numericValue)
         assertTrue(rows.single().evidence.single().cleared)
     }
+
+    @Test fun brokenLocalRoomStillShowsAuthenticatedRemoteEvidenceAndLocalError() {
+        compose.setContent {
+            MaterialTheme {
+                CanonicalMyRatingsContent(
+                    state = MyRatingsUiState.Error,
+                    remoteState = RemoteRatingsUiState.Ready(listOf(
+                        RemoteRatingUiRow("rec-remote", "Remote available", "Artist", listOf(
+                            RemoteRatingUiEvidence("asset-r", 4, false, false),
+                        )),
+                    )),
+                    onBack = {}, onEdit = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Could not load ratings. Try reopening this page.").assertIsDisplayed()
+        compose.onNodeWithText("Remote rating: 4/5").assertIsDisplayed()
+    }
+
+    @Test fun partialCanonicalMatchingIsVisibleWithoutGuessingUnknownRecordings() {
+        compose.setContent {
+            MaterialTheme {
+                CanonicalMyRatingsContent(
+                    state = MyRatingsUiState.Empty,
+                    remoteState = RemoteRatingsUiState.Ready(
+                        rows = emptyList(),
+                        coverage = RemoteRatingCoverage(enumerated = 3, matched = 1, unmatched = 2),
+                    ),
+                    onBack = {}, onEdit = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Some remote recordings could not be matched").assertIsDisplayed()
+        compose.onNodeWithText("No ratings yet. Rate a canonical song from its menu.").assertIsDisplayed()
+    }
+
+    @Test fun accountReadFailureIsNotReportedAsAnEmptyRemoteLibrary() {
+        compose.setContent {
+            MaterialTheme {
+                CanonicalMyRatingsContent(
+                    state = MyRatingsUiState.Empty,
+                    remoteState = RemoteRatingsUiState.Error,
+                    onBack = {}, onEdit = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Could not read remote ratings").assertIsDisplayed()
+    }
 }
