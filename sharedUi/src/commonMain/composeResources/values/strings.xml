@@ -260,6 +260,9 @@
     <string name="smart_playlist_delete">Delete</string>
     <string name="smart_playlist_reset">Clear editor</string>
     <string name="smart_playlist_saved">Saved smart playlists</string>
+    <string name="smart_playlist_saved_loading">Loading saved playlists…</string>
+    <string name="smart_playlist_saved_empty">No saved playlists yet</string>
+    <string name="smart_playlist_saved_error">Could not load saved playlists</string>
     <string name="smart_playlist_empty">No recordings or definitions yet</string>
     <string name="smart_playlist_error">Invalid rules or unavailable data</string>
     <string name="smart_playlist_overflow">Too many available recordings to evaluate safely</string>
