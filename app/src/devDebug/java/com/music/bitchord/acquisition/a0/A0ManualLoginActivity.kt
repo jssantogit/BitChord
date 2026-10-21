@@ -72,10 +72,11 @@ class A0ManualLoginActivity : Activity() {
         text("Somente para uma conta exclusiva de TESTE. " +
              "O protocolo Soulseek envia a senha por TCP SEM TLS. " +
              "Não reutilize senhas de outros serviços.")
-        text("O primeiro botão testa somente login. Digite qualquer termo no campo de busca " +
-             "para uma única pesquisa Soulseek. Pontuação é normalizada automaticamente. " +
-             "As respostas dos peers não comprovam direitos sobre arquivos. " +
-             "Nenhum arquivo será compartilhado ou baixado. Desconecte o Seeker primeiro.")
+        text("O primeiro botão testa login; a busca digitável continua sem baixar. " +
+             "A ação separada de transferência testa NO MÁXIMO um arquivo da referência " +
+             "CC0 verificada, com tamanho e SHA-256 conhecidos; ao terminar, apaga os " +
+             "bytes de prova. Nenhum resultado comum autoriza downloads. " +
+             "O Soulseek usa TCP sem TLS. Desconecte o Seeker antes de testar.")
         val user = EditText(this).apply {
             hint = "Usuário dedicado"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
@@ -311,17 +312,32 @@ class A0ManualLoginActivity : Activity() {
                                         // A bounded socket timeout lets this reader
                                         // relinquish server ownership before P/F routing.
                                         connection.soTimeout = 750
+                                        val framedServer = A0FrameReadProgress(
+                                            connection.getInputStream()
+                                        )
                                         var attempts = 0
                                         try {
                                             while (!Thread.currentThread().isInterrupted &&
                                                 System.nanoTime() < deadline &&
                                                 inbox.isEmpty() && attempts < 2
                                             ) {
+                                                framedServer.nextFrame()
                                                 val offer = try {
                                                     A0IndirectSearchWire.readServerEvent(
-                                                        connection.getInputStream()
+                                                        framedServer
                                                     ) { code -> trace.ignoredServerFrame(code) }
                                                 } catch (_: SocketTimeoutException) {
+                                                    if (!framedServer.atFrameBoundary) {
+                                                        // A frame was only partially consumed.
+                                                        // Never hand its corrupted stream to P/F.
+                                                        failedServerReader.set(true)
+                                                        trace.note(
+                                                            A0SmokeTrace.Stage.SERVER_READ_FAILURE,
+                                                            TraceOutcome.DEGRADED,
+                                                            A0SmokeTrace.Reason.SERVER_IO_FAILURE
+                                                        )
+                                                        break
+                                                    }
                                                     continue
                                                 } catch (_: A0IndirectSearchWire.RejectedPeerOffer) {
                                                     trace.note(
@@ -442,14 +458,18 @@ class A0ManualLoginActivity : Activity() {
                                         handoff?.cancel()
                                         throw IOException("A0 concurrent search reader did not stop")
                                     }
+                                    if (failedServerReader.get()) {
+                                        handoff?.cancel()
+                                        throw IOException("A0 authenticated server frame was interrupted")
+                                    }
                                     if (handoff?.selectionStatus() ==
                                         A0SessionBoundSearchTransfer.Selection.READY
                                     ) {
-                                        handoff.markReadersStopped()
+                                        checkNotNull(handoff).markReadersStopped()
                                         // One explicitly reviewed reference only.
                                         // Keep verified bytes ONLY for the SHA check,
                                         // then delete the scratch file after the proof.
-                                        val receipt = handoff.transferOnce(
+                                        val receipt = checkNotNull(handoff).transferOnce(
                                             getDir("a0-licensed-one-file", Context.MODE_PRIVATE)
                                         )
                                         try {
@@ -459,7 +479,12 @@ class A0ManualLoginActivity : Activity() {
                                             finalOutcome = TraceOutcome.SUCCEEDED
                                             finalReason = null
                                         } finally {
-                                            receipt.file.delete()
+                                            // Verified staging may not outlive the A0 smoke.
+                                            // If cleanup fails, never describe the run as a
+                                            // fully clean success.
+                                            if (!receipt.file.delete()) {
+                                                throw IOException("A0 scratch-file cleanup failed")
+                                            }
                                         }
                                     } else {
                                         finalOutcome = TraceOutcome.DEGRADED
