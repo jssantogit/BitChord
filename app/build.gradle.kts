@@ -423,6 +423,8 @@ dependencies {
     implementation("org.bouncycastle:bcpkix-jdk18on:1.85")
 
     testImplementation("junit:junit:4.13.2")
+    // B14/B18: exercise real Media3 DataSpec/Android Uri on the JVM, not android.jar stubs.
+    testImplementation("org.robolectric:robolectric:4.15.1")
     testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     // A real HTTP server for the addon tests. The addon protocol is entirely
