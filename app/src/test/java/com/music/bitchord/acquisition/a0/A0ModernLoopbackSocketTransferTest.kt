@@ -46,7 +46,7 @@ class A0ModernLoopbackSocketTransferTest {
                         assertEquals(1, reply.read())
                         assertEquals(-1, reply.read())
                         assertTrue(ready.await(3, TimeUnit.SECONDS))
-                        Socket(InetAddress.getLoopbackAddress(), filePort[0]).use { f ->
+                        Socket(InetAddress.getByAddress(byteArrayOf(127,0,0,1)), filePort[0]).use { f ->
                             f.soTimeout = 3500
                             f.getOutputStream().write(le(72) + ownWav)
                             f.getOutputStream().flush()
@@ -72,7 +72,7 @@ class A0ModernLoopbackSocketTransferTest {
 
     @Test(timeout = 12000)
     fun nonLicensedFileMustNotEvenConnectToP() {
-        ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { peer ->
+        ServerSocket(0, 1, InetAddress.getByAddress(byteArrayOf(127,0,0,1))).use { peer ->
             peer.soTimeout = 400
             val blocked = A0ModernLoopbackSocketTransfer.receiveOwnedFixture(
                 pPort = peer.localPort,
@@ -90,7 +90,7 @@ class A0ModernLoopbackSocketTransferTest {
     fun corruptFBytesCauseNoVerifiedOrPartialFile() {
         val ready = CountDownLatch(1)
         val filePort = IntArray(1)
-        ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { peer ->
+        ServerSocket(0, 1, InetAddress.getByAddress(byteArrayOf(127,0,0,1))).use { peer ->
             val pool = Executors.newSingleThreadExecutor()
             try {
                 val uploader = pool.submit {
@@ -101,7 +101,7 @@ class A0ModernLoopbackSocketTransferTest {
                         p.getOutputStream().flush()
                         frameBody(p)
                         assertTrue(ready.await(3, TimeUnit.SECONDS))
-                        Socket(InetAddress.getLoopbackAddress(), filePort[0]).use { f ->
+                        Socket(InetAddress.getByAddress(byteArrayOf(127,0,0,1)), filePort[0]).use { f ->
                             f.soTimeout = 3500
                             val tampered = ownWav.copyOf().apply { this[lastIndex] = 81 }
                             f.getOutputStream().write(le(92) + tampered)
