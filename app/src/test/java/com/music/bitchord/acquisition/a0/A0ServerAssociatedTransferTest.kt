@@ -133,6 +133,108 @@ class A0ServerAssociatedTransferTest {
         A0ServerAssociatedTransfer.requireEndpoint(host,allowLoopbackForLocalTest=true)
     }
 
+    @Test(timeout=19000)
+    fun failedDirectConnectRequestsOneIndirectPAndOnlyAcceptsMatchingPierceToken() {
+        ServerSocket(0,1,host).use{fakeServer->
+            val pool=Executors.newSingleThreadExecutor()
+            try {
+                val remote=pool.submit {
+                    fakeServer.accept().use{server->
+                        server.soTimeout=5500
+                        val wait=body(server)
+                        assertEquals(2,le32(wait))
+                        val fPort=le32(wait)
+                        val query=body(server)
+                        assertEquals(3,le32(query))
+                        assertEquals("owner",field(query))
+                        // Port 1 is a deliberately closed direct endpoint.
+                        server.getOutputStream().apply {
+                            write(frame(3,field("owner")+byteArrayOf(1,0,0,127)+
+                                le(1)+le(0)+byteArrayOf(0,0)))
+                            flush()
+                        }
+                        val request=body(server)
+                        assertEquals(18,le32(request))
+                        val token=le32(request)
+                        assertTrue(token>0)
+                        assertEquals("owner",field(request))
+                        assertEquals("P",field(request))
+                        Socket(host,fPort).use{peer->
+                            peer.soTimeout=4000
+                            peer.getOutputStream().apply {
+                                write(le(5)+byteArrayOf(0)+le(token))
+                                flush()
+                            }
+                            val queued=body(peer)
+                            assertEquals(43,le32(queued))
+                            assertEquals(path,field(queued))
+                            peer.getOutputStream().apply {
+                                write(frame(40,le(1)+le(1001)+field(path)+
+                                    le64(own.size.toLong())))
+                                flush()
+                            }
+                            val accepted=body(peer)
+                            assertEquals(41,le32(accepted))
+                            assertEquals(1001,le32(accepted))
+                            assertEquals(1,accepted.read())
+                            Socket(host,fPort).use{file->
+                                file.soTimeout=4000
+                                file.getOutputStream().apply { write(le(1001)+own);flush() }
+                                assertArrayEquals(ByteArray(8),readExactly(file.getInputStream(),8))
+                            }
+                        }
+                    }
+                }
+                Socket(host,fakeServer.localPort).use{server->
+                    val receipt=A0ServerAssociatedTransfer(allowLoopbackForLocalTest=true)
+                        .runOnce(server,"testaccount","owner",reference(),listing(),temp.root)
+                    assertEquals(digest,receipt.sha256Hex)
+                    assertArrayEquals(own,receipt.file.readBytes())
+                    remote.get(4,TimeUnit.SECONDS)
+                    assertFalse(temp.root.listFiles().orEmpty().any{it.name.endsWith(".partial")})
+                }
+            } finally { pool.shutdownNow() }
+        }
+    }
+
+    @Test(timeout=15000)
+    fun wrongIndirectPierceTokenAbortsWithoutAnyFile() {
+        ServerSocket(0,1,host).use{fakeServer->
+            val pool=Executors.newSingleThreadExecutor()
+            try {
+                val remote=pool.submit {
+                    fakeServer.accept().use{server->
+                        server.soTimeout=4500
+                        val wait=body(server)
+                        assertEquals(2,le32(wait))
+                        val port=le32(wait)
+                        body(server)
+                        server.getOutputStream().write(frame(3,field("owner")+
+                            byteArrayOf(1,0,0,127)+le(1)+le(0)+byteArrayOf(0,0)))
+                        server.getOutputStream().flush()
+                        val indirect=body(server)
+                        assertEquals(18,le32(indirect))
+                        val token=le32(indirect)
+                        Socket(host,port).use{peer->
+                            peer.getOutputStream().write(le(5)+byteArrayOf(0)+le(token+1))
+                            peer.getOutputStream().flush()
+                        }
+                    }
+                }
+                Socket(host,fakeServer.localPort).use{server->
+                    try {
+                        A0ServerAssociatedTransfer(allowLoopbackForLocalTest=true).runOnce(
+                            server,"testaccount","owner",reference(),listing(),temp.root
+                        )
+                        fail("Incorrect PierceFirewall token is not this rendezvous")
+                    } catch (_:IOException){}
+                    remote.get(4,TimeUnit.SECONDS)
+                    assertTrue(temp.root.listFiles().isNullOrEmpty())
+                }
+            } finally {pool.shutdownNow()}
+        }
+    }
+
     private fun reference()=A0OpenAudioCandidateGate.ReviewedReference(
         "https://example.org/test/owned","CC0-1.0","owner-tone.wav",own.size.toLong(),digest,true
     )
