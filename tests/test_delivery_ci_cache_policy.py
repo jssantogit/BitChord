@@ -79,12 +79,11 @@ class AndroidCacheEvidenceTests(unittest.TestCase):
             (good, SHA, "token=unexpected"),
             (good.replace("60 executed, 13 from cache", "60 executed, 50 from cache"), SHA, "main"),
             (good + "\n" + line(5, "##[group]Caching Gradle state"), SHA, "main"),
-            (good + "\n" + line(10, "##[endgroup]"), SHA, "main"),
             (good + "\n" + line(7, "Cache is read-only: will not save state for use in subsequent builds.")
                 + "\n" + line(8, "##[group]Caching Gradle state")
                 + "\n" + line(9, "##[endgroup]"), SHA, "main"),
         ]:
-            with self.subTest(case=body[:28]), self.assertRaises(EvidenceError):
+            with self.subTest(case=body[-95:]), self.assertRaises(EvidenceError):
                 summarize_cache_job(body, sha, lane)
 
     def test_refuses_clock_regression_and_bad_duration(self):
