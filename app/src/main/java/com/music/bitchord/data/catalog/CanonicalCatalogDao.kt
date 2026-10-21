@@ -48,6 +48,11 @@ internal interface CanonicalCatalogDao {
          AND asset.provider = rating.providerKey
          AND asset.recordingId = rating.recordingId
         INNER JOIN catalog_recording AS recording ON recording.id = rating.recordingId
+        INNER JOIN catalog_external_identity AS identity
+          ON identity.provider = asset.provider
+         AND identity.entityType = 'recording'
+         AND identity.externalId = asset.sourceKey
+         AND identity.entityId = rating.recordingId
         WHERE rating.providerKey = :providerKey AND rating.scopeId = :scopeId
         ORDER BY rating.recordingId, rating.mediaAssetId
         """,
