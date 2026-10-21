@@ -22,20 +22,20 @@ class A0OneShotPublicSearchWireTest {
         assertEquals(q.size - 4, int(s))
         assertEquals(26, int(s))
         assertEquals(27182, int(s))
-        assertEquals("naruto", text(s)) // Nicotine+ strips unsupported trailing wildcard
+        assertEquals("newjeans omg", text(s)) // Nicotine+ removes punctuation before transmitting
         assertEquals(-1, s.read())
     }
 
-    @Test fun requestedNarutoWildcardIsNormalizedForReadOnlyConnectivityProbe() {
-        assertEquals("naruto*", A0OneShotPublicSearchWire.REQUESTED_SEARCH)
-        assertEquals("naruto", A0OneShotPublicSearchWire.SEARCH_TERM)
-        // CC0 rights gate stays explicit, never reassign Naruto file rights.
+    @Test fun requestedArtistSongQueryPreservesIntentAndStripsPunctuationForSearch() {
+        assertEquals("newjeans - omg", A0OneShotPublicSearchWire.REQUESTED_SEARCH)
+        assertEquals("newjeans omg", A0OneShotPublicSearchWire.SEARCH_TERM)
+        // Discovery request does not affect the independently reviewed CC0-only transfer gate.
         assertEquals("Ringingsound.wav", A0OneShotPublicSearchWire.TARGET_FILENAME)
         val wire = A0OneShotPublicSearchWire.fileSearch(120)
         val q = ByteArrayInputStream(wire)
         int(q); int(q); int(q)
-        assertEquals("naruto", text(q))
-        assertFalse(wire.toString(Charsets.ISO_8859_1).contains("naruto*"))
+        assertEquals("newjeans omg", text(q))
+        assertFalse(wire.toString(Charsets.ISO_8859_1).contains("newjeans - omg"))
     }
 
     @Test fun oneCorrelatedDirectPeerReplyCountsFilenameButNeverExposesPeerData() {
