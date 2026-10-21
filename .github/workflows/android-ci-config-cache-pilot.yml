@@ -52,6 +52,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Android SDK may create this directory after Gradle snapshots its absence.
+          # Prepare it before the first configuration-cache capture.
+          mkdir -p "$HOME/.config/.android/cache"
           cold_start=$SECONDS
           ./gradlew --build-cache --configuration-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest 2>&1 | tee "$RUNNER_TEMP/config-cache-cold.log"
           cold_seconds=$((SECONDS - cold_start))
