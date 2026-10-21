@@ -250,4 +250,10 @@
     <string name="smart_playlist_reason_absence">Tempo sem ouvir</string>
     <string name="smart_playlist_reason_recency">Audição recente</string>
     <string name="smart_playlist_reason_duration">Duração confiável</string>
+    <string name="smart_collection_batch_play">Reproduzir</string>
+    <string name="smart_collection_batch_queue">Adicionar à fila</string>
+    <string name="smart_collection_batch_added">Adicionado à fila</string>
+    <string name="smart_collection_batch_played">Iniciando reprodução</string>
+    <string name="smart_collection_batch_empty">Nenhuma gravação elegível</string>
+    <string name="smart_collection_batch_failed">Coleção indisponível ou ação de fila recusada</string>
 </resources>

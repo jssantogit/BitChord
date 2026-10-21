@@ -321,6 +321,8 @@ import com.music.bitchord.ui.screens.CanonicalMyRatingsEntry
 import com.music.bitchord.ui.screens.CanonicalMyRatingsScreen
 import com.music.bitchord.ui.screens.LibraryRediscoveryShelfEntry
 import com.music.bitchord.ui.screens.AdaptiveCollectionsLibraryEntry
+import com.music.bitchord.ui.screens.rememberSmartCollectionBatchAction
+import com.music.bitchord.ui.screens.SmartCollectionActionSource
 import com.music.bitchord.ui.screens.SmartPlaylistBuilderEntry
 import com.music.bitchord.ui.screens.SmartPlaylistBuilderScreen
 import com.music.bitchord.ui.screens.MoodGenrePlaylistsScreen
@@ -949,6 +951,7 @@ private fun BitChordApp(
         }
     }
     val controller = rememberMediaController()
+    val executeSmartCollection = rememberSmartCollectionBatchAction(controller)
     val player = rememberPlayerState(controller)
     val recoveryNotice by PlaybackRecoveryNotices.notice.collectAsStateWithLifecycle()
     // A resume in a party is performed on the instant the server schedules, not
@@ -2765,7 +2768,12 @@ private fun BitChordApp(
                     if (key == "my_ratings") {
                         CanonicalMyRatingsScreen(onBack = { showCanonicalMyRatings = false })
                     } else if (key == "smart_playlist_builder") {
-                        SmartPlaylistBuilderScreen(onBack = { showSmartPlaylistBuilder = false })
+                        SmartPlaylistBuilderScreen(
+                            onBack = { showSmartPlaylistBuilder = false },
+                            onSavedAction = { id, intent ->
+                                executeSmartCollection(SmartCollectionActionSource.SavedDefinition(id), intent)
+                            },
+                        )
                     } else if (key.startsWith("rediscovery:")) {
                         CanonicalRediscoveryRecordingDetailsScreen(
                             recordingId = key.removePrefix("rediscovery:"),
@@ -3422,6 +3430,9 @@ private fun BitChordApp(
                                     AdaptiveCollectionsLibraryEntry(
                                         refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
                                         onOpenRecording = { rediscoveryRecordingId = it },
+                                        onCollectionAction = { kind, intent ->
+                                            executeSmartCollection(SmartCollectionActionSource.Adaptive(kind), intent)
+                                        },
                                     )
                                 }
                             },

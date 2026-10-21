@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import com.music.bitchord.playback.CanonicalCollectionIntent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +39,8 @@ import com.music.bitchord.sharedui.resources.smart_collections_exploration
 import com.music.bitchord.sharedui.resources.smart_collections_rediscovery_reason
 import com.music.bitchord.sharedui.resources.smart_collections_positive_reason
 import com.music.bitchord.sharedui.resources.smart_collections_exploration_reason
+import com.music.bitchord.sharedui.resources.smart_collection_batch_play
+import com.music.bitchord.sharedui.resources.smart_collection_batch_queue
 import org.jetbrains.compose.resources.stringResource
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReader
@@ -140,7 +144,7 @@ internal class AdaptiveCollectionsLibraryReader(
     }
 }
 
-private fun persistentAdaptiveCollectionsReader(context: Context): AdaptiveCollectionsLibraryReader {
+internal fun persistentAdaptiveCollectionsReader(context: Context): AdaptiveCollectionsLibraryReader {
     val app = context.applicationContext
     val catalog = CanonicalCatalogDatabase.get(app)
     val listening = ListeningEventDatabase.get(app)
@@ -164,6 +168,8 @@ private fun persistentAdaptiveCollectionsReader(context: Context): AdaptiveColle
 
 internal data class AdaptiveCollectionsTexts(
     val title: String = "Smart collections",
+    val play: String = "Play",
+    val addToQueue: String = "Add to queue",
     val loading: String = "Updating collections…",
     val error: String = "Collections unavailable. Try again.",
     val empty: String = "No eligible recordings yet",
@@ -179,6 +185,7 @@ internal data class AdaptiveCollectionsTexts(
 internal fun AdaptiveCollectionsLibraryEntry(
     refreshToken: Any? = null,
     onOpenRecording: (String) -> Unit,
+    onCollectionAction: ((AdaptiveCollectionKind, CanonicalCollectionIntent) -> Unit)? = null,
 ) {
     val context = LocalContext.current.applicationContext
     val reader = remember(context) { persistentAdaptiveCollectionsReader(context) }
@@ -217,6 +224,8 @@ internal fun AdaptiveCollectionsLibraryEntry(
     }
     val texts = AdaptiveCollectionsTexts(
         title = stringResource(Res.string.smart_collections_title),
+        play = stringResource(Res.string.smart_collection_batch_play),
+        addToQueue = stringResource(Res.string.smart_collection_batch_queue),
         loading = stringResource(Res.string.smart_collections_loading),
         error = stringResource(Res.string.smart_collections_error),
         empty = stringResource(Res.string.smart_collections_empty),
@@ -237,7 +246,7 @@ internal fun AdaptiveCollectionsLibraryEntry(
             if (available != null) onOpenRecording(available.recordingId)
             else changes.emit(Unit)
         }
-    }, texts = texts)
+    }, texts = texts, onCollectionAction = onCollectionAction)
 }
 
 /** UI is read-only: no auto play, provider/native identity, or implicit feedback. */
@@ -246,13 +255,15 @@ internal fun AdaptiveCollectionsContent(
     state: AdaptiveCollectionsUiState,
     onRecordingClick: (String) -> Unit,
     texts: AdaptiveCollectionsTexts = AdaptiveCollectionsTexts(),
-) = AdaptiveCollectionsBody(state, { _, id -> onRecordingClick(id) }, texts)
+    onCollectionAction: ((AdaptiveCollectionKind, CanonicalCollectionIntent) -> Unit)? = null,
+) = AdaptiveCollectionsBody(state, { _, id -> onRecordingClick(id) }, texts, onCollectionAction)
 
 @Composable
 private fun AdaptiveCollectionsBody(
     state: AdaptiveCollectionsUiState,
     onRecordingClick: (AdaptiveCollectionKind, String) -> Unit,
     texts: AdaptiveCollectionsTexts,
+    onCollectionAction: ((AdaptiveCollectionKind, CanonicalCollectionIntent) -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
         Text(texts.title, style = MaterialTheme.typography.titleLarge,
@@ -269,6 +280,16 @@ private fun AdaptiveCollectionsBody(
                     AdaptiveCollectionKind.CONTROLLED_EXPLORATION -> texts.exploration
                 }, style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+                if (section.rows.isNotEmpty() && onCollectionAction != null) {
+                    Row(Modifier.padding(horizontal = 20.dp)) {
+                        TextButton(onClick = {
+                            onCollectionAction(section.kind, CanonicalCollectionIntent.PLAY_NOW)
+                        }) { Text(texts.play) }
+                        TextButton(onClick = {
+                            onCollectionAction(section.kind, CanonicalCollectionIntent.ADD_TO_QUEUE)
+                        }) { Text(texts.addToQueue) }
+                    }
+                }
                 if (section.rows.isEmpty()) {
                     Text(texts.empty, modifier = Modifier.padding(horizontal = 20.dp))
                 } else {

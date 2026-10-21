@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 127,
+      "expected_head_sha": "01c5adce17bdb9f4d468c27eb509db5338de80d7",
+      "depends_on": null,
+      "expected_base_ref": "main",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/MainActivity.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/AdaptiveCollectionsLibraryScreen.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/SmartCollectionBatchHandoff.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/SmartPlaylistBuilderScreen.kt",
+        "app/src/test/java/com/music/bitchord/ui/screens/AdaptiveCollectionsLibraryTest.kt",
+        "app/src/test/java/com/music/bitchord/ui/screens/SmartCollectionBatchHandoffTest.kt",
+        "sharedUi/src/commonMain/composeResources/values-pt/strings.xml",
+        "sharedUi/src/commonMain/composeResources/values/strings.xml"
+      ]
+    },
+    {
+      "number": 133,
+      "expected_head_sha": "a2d7fb490f72d480919dfcf590252bd7324534c3",
+      "depends_on": null,
+      "expected_base_ref": "main",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/playback/CanonicalRemoteQualityOpenGate.kt",
+        "app/src/main/java/com/music/bitchord/playback/CanonicalRemoteQualityRuntime.kt",
+        "app/src/main/java/com/music/bitchord/playback/PlaybackService.kt",
+        "app/src/test/java/com/music/bitchord/playback/CanonicalRemoteQualityOpenGateTest.kt",
+        "app/src/test/java/com/music/bitchord/playback/CanonicalRemoteQualityRuntimeTest.kt",
+        "app/src/test/java/com/music/bitchord/playback/CanonicalRemoteTruthGateTest.kt"
+      ]
+    }
+  ]
+}
