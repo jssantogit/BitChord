@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 118,
+      "expected_head_sha": "157cf9199d37e879ab9885ff0988201157be3bc9",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticJourney.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticJourneyD6Test.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 119,
+      "expected_head_sha": "5d1c5ae4bc8807b6119334fbfc833122811c7a9d",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticProcessExitForensics.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/Diagnostics.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticProcessExitD7Test.kt"
+      ],
+      "depends_on": 118,
+      "expected_base_ref": "perf/d6-causal-user-journey-v0"
+    },
+    {
+      "number": 121,
+      "expected_head_sha": "6c19d3ae5377a6c4e781dce2528c49a9cf478d6d",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticBottleneckAnalysis.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticBottleneckD8Test.kt"
+      ],
+      "depends_on": 119,
+      "expected_base_ref": "perf/d7-process-exit-forensics-v0"
+    }
+  ]
+}

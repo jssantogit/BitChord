@@ -1331,4 +1331,10 @@
     <string name="wear_os_code_hint">Kode pemasangan</string>
     <string name="wear_os_done">Selesai</string>
     <string name="signed_by">Ditandatangani oleh %1$s</string>
+    <string name="playback_recovery_connection">Lagu jarak jauh gagal diputar. Periksa koneksi atau server.</string>
+    <string name="playback_recovery_unavailable">Versi jarak jauh yang dipilih sedang tidak tersedia.</string>
+    <string name="playback_recovery_failed">Lagu jarak jauh yang dipilih tidak dapat dibuka.</string>
+    <string name="playback_recovery_retry">Coba lagi</string>
+    <string name="playback_recovery_retrying">Mencoba lagi…</string>
+    <string name="playback_recovery_dismiss">Tutup</string>
 </resources>
