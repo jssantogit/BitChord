@@ -235,6 +235,77 @@ class A0ServerAssociatedTransferTest {
         }
     }
 
+    @Test(timeout=19000)
+    fun cancelDuringPartialFClosesSocketsAndDeletesUnverifiedBytes() {
+        ServerSocket(0,1,host).use{fakeServer->
+            ServerSocket(0,1,host).use{fakePeer->
+                val dataStarted=java.util.concurrent.CountDownLatch(1)
+                val releaseSender=java.util.concurrent.CountDownLatch(1)
+                val pool=Executors.newFixedThreadPool(2)
+                val transfer=A0ServerAssociatedTransfer(allowLoopbackForLocalTest=true)
+                try {
+                    val remote=pool.submit {
+                        fakeServer.accept().use{server->
+                            server.soTimeout=5000
+                            val wait=body(server)
+                            assertEquals(2,le32(wait))
+                            val p=le32(wait)
+                            body(server)
+                            server.getOutputStream().apply{
+                                write(frame(3,field("owner")+byteArrayOf(1,0,0,127)+
+                                    le(fakePeer.localPort)+le(0)+byteArrayOf(0,0)))
+                                flush()
+                            }
+                            fakePeer.accept().use{peer->
+                                peer.soTimeout=5000
+                                readInit(peer)
+                                body(peer)
+                                peer.getOutputStream().apply{
+                                    write(frame(40,le(1)+le(117)+field(path)+
+                                        le64(own.size.toLong())))
+                                    flush()
+                                }
+                                val response=body(peer)
+                                assertEquals(41,le32(response))
+                                assertEquals(117,le32(response))
+                                assertEquals(1,response.read())
+                                Socket(host,p).use{f->
+                                    f.getOutputStream().apply{
+                                        write(le(117)+own.copyOfRange(0,24))
+                                        flush()
+                                    }
+                                    dataStarted.countDown()
+                                    releaseSender.await(4,TimeUnit.SECONDS)
+                                }
+                            }
+                        }
+                    }
+                    val result=pool.submit {
+                        Socket(host,fakeServer.localPort).use{server->
+                            transfer.runOnce(server,"testaccount","owner",
+                                reference(),listing(),temp.root)
+                        }
+                    }
+                    assertTrue(dataStarted.await(7,TimeUnit.SECONDS))
+                    transfer.cancel()
+                    releaseSender.countDown()
+                    try {
+                        result.get(5,TimeUnit.SECONDS)
+                        fail("Cancellation must not return a verified file")
+                    }catch(error:java.util.concurrent.ExecutionException){
+                        assertTrue(error.cause is IOException)
+                    }
+                    remote.get(5,TimeUnit.SECONDS)
+                    assertTrue(temp.root.listFiles().isNullOrEmpty())
+                }finally{
+                    transfer.cancel()
+                    releaseSender.countDown()
+                    pool.shutdownNow()
+                }
+            }
+        }
+    }
+
     private fun reference()=A0OpenAudioCandidateGate.ReviewedReference(
         "https://example.org/test/owned","CC0-1.0","owner-tone.wav",own.size.toLong(),digest,true
     )
