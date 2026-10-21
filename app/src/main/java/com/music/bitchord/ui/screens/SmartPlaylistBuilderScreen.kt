@@ -54,6 +54,9 @@ import com.music.bitchord.sharedui.resources.smart_playlist_edit
 import com.music.bitchord.sharedui.resources.smart_playlist_delete
 import com.music.bitchord.sharedui.resources.smart_playlist_reset
 import com.music.bitchord.sharedui.resources.smart_playlist_saved
+import com.music.bitchord.sharedui.resources.smart_playlist_saved_loading
+import com.music.bitchord.sharedui.resources.smart_playlist_saved_empty
+import com.music.bitchord.sharedui.resources.smart_playlist_saved_error
 import com.music.bitchord.sharedui.resources.smart_playlist_empty
 import com.music.bitchord.sharedui.resources.smart_playlist_error
 import com.music.bitchord.sharedui.resources.smart_playlist_overflow
@@ -69,6 +72,7 @@ import com.music.bitchord.sharedui.resources.smart_collection_batch_queue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
@@ -141,6 +145,47 @@ internal fun SmartPlaylistBuilderEntry(onOpen: () -> Unit) {
     }
 }
 
+/** Saved definitions are distinct from a failed Room observation. */
+internal sealed interface SmartPlaylistSavedUiState {
+    data object Loading : SmartPlaylistSavedUiState
+    data object Empty : SmartPlaylistSavedUiState
+    data object Error : SmartPlaylistSavedUiState
+    data class Content(val definitions: List<SavedSmartPlaylistDefinition>) : SmartPlaylistSavedUiState
+}
+
+internal suspend fun collectSmartPlaylistSavedState(
+    updates: Flow<List<SavedSmartPlaylistDefinition>>,
+    publish: (SmartPlaylistSavedUiState) -> Unit,
+) {
+    try {
+        updates.collect { definitions ->
+            publish(if (definitions.isEmpty()) SmartPlaylistSavedUiState.Empty else {
+                SmartPlaylistSavedUiState.Content(definitions)
+            })
+        }
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        publish(SmartPlaylistSavedUiState.Error)
+    }
+}
+
+@Composable
+internal fun SmartPlaylistSavedStatus(state: SmartPlaylistSavedUiState) {
+    when (state) {
+        SmartPlaylistSavedUiState.Loading ->
+            Text(stringResource(Res.string.smart_playlist_saved_loading))
+        SmartPlaylistSavedUiState.Empty ->
+            Text(stringResource(Res.string.smart_playlist_saved_empty))
+        SmartPlaylistSavedUiState.Error ->
+            Text(
+                stringResource(Res.string.smart_playlist_saved_error),
+                color = MaterialTheme.colorScheme.error,
+            )
+        is SmartPlaylistSavedUiState.Content -> Unit
+    }
+}
+
 @Composable
 internal fun SmartPlaylistBuilderHeader(onBack: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -185,18 +230,19 @@ internal fun SmartPlaylistBuilderScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var preview by remember { mutableStateOf<List<SmartPlaylistPreviewRow>?>(null) }
     var busy by remember { mutableStateOf(false) }
-    val saved by produceState<List<SavedSmartPlaylistDefinition>>(
-        initialValue = emptyList(), key1 = repository,
+    val savedState by produceState<SmartPlaylistSavedUiState>(
+        initialValue = SmartPlaylistSavedUiState.Loading, key1 = repository,
     ) {
         try {
-            repository.observe().collect { value = it }
+            collectSmartPlaylistSavedState(repository.observe()) { value = it }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            // Future/invalid rule versions fail closed; never render fabricated rules.
-            value = emptyList()
+            // Opening the query can fail before the Flow is returned.
+            value = SmartPlaylistSavedUiState.Error
         }
     }
+    val saved = (savedState as? SmartPlaylistSavedUiState.Content)?.definitions.orEmpty()
 
     fun clearForm() {
         editingId = null
@@ -222,9 +268,20 @@ internal fun SmartPlaylistBuilderScreen(
     )
 
     // D13 owns route/first-draw truth. This is only bounded content-state evidence.
-    val diagnosticTruth = remember(saved.size, preview?.size, busy, error != null) {
+    val diagnosticTruth = remember(savedState, preview?.size, busy, error != null) {
+        val savedStatus = when (savedState) {
+            SmartPlaylistSavedUiState.Loading -> "loading"
+            SmartPlaylistSavedUiState.Empty -> "empty"
+            SmartPlaylistSavedUiState.Error -> "error"
+            is SmartPlaylistSavedUiState.Content -> "content"
+        }
         mapOf(
-            "savedCount" to saved.size.coerceIn(0, 10000).toString(),
+            "savedState" to savedStatus,
+            "savedCount" to when (savedState) {
+                SmartPlaylistSavedUiState.Empty -> "0"
+                is SmartPlaylistSavedUiState.Content -> saved.size.coerceIn(0, 10000).toString()
+                else -> "unknown"
+            },
             "previewState" to when {
                 preview == null -> "unrequested"
                 preview!!.isEmpty() -> "empty"
@@ -371,9 +428,7 @@ internal fun SmartPlaylistBuilderScreen(
         item(key = "saved-heading") {
             Text(stringResource(Res.string.smart_playlist_saved),
                 style = MaterialTheme.typography.titleLarge)
-            if (saved.isEmpty()) {
-                Text(stringResource(Res.string.smart_playlist_empty))
-            }
+            SmartPlaylistSavedStatus(savedState)
         }
         items(saved, key = { "saved-" + it.id }) { item ->
             Column {
