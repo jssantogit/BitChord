@@ -48,6 +48,12 @@ jobs:
       - name: Verify strict pilot isolation contract
         run: python3 -m unittest discover -s tests -p test_ci_configuration_cache_pilot.py -v
 
+      # The first Android build can create SDK/NDK directories after Gradle
+      # snapshots them. Settle the SDK/NDK with the *same full test suite*
+      # before taking the first configuration-cache snapshot.
+      - name: Prepare SDK/NDK and task outputs without configuration cache
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+
       - name: Check strict configuration-cache storage and reuse on same runner
         shell: bash
         run: |
