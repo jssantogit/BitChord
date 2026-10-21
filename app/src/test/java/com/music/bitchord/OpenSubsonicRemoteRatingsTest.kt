@@ -3,6 +3,8 @@ package com.music.bitchord
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.provider.ProviderSyncResult
+import com.music.bitchord.data.listening.ListeningEventDatabase
+import com.music.bitchord.data.listening.RoomRecordingRatingStore
 import com.music.bitchord.data.catalog.provider.RemoteNumericRatingKind
 import com.music.bitchord.data.catalog.provider.RemoteStarredKind
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountConfig
@@ -115,6 +117,34 @@ class OpenSubsonicRemoteRatingsTest {
             active = account("scope-a")
             assertEquals(2, reader.read().items.size)
         } finally { db.close() }
+    }
+
+    @Test fun remoteFiveNeverMutatesLocalFourPointFiveOrItsHistory() = runBlocking {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            assertTrue(OpenSubsonicCatalogSync.sync(catalog, provider(songs))
+                is ProviderSyncResult.Success)
+            val canonical = requireNotNull(catalog.catalogDao()
+                .mediaAsset("opensubsonic:home", "rated")).recordingId
+            val store = RoomRecordingRatingStore(listening.recordingRatingDao()) { 1234L }
+            store.setRecordingRating(canonical, 4.5)
+            val updated = songs.replace("\"userRating\":4", "\"userRating\":5")
+            assertTrue(OpenSubsonicCatalogSync.sync(catalog, provider(updated))
+                is ProviderSyncResult.Success)
+            val remote = OpenSubsonicRemoteRatingReader(catalog) { account("scope-a") }
+                .read().items.single { it.recordingId == canonical }
+            assertEquals(5, remote.numeric.value)
+            assertEquals(4.5, store.currentRating(canonical)!!.value, 0.0)
+            assertEquals(listOf(4.5), store.ratingHistory(canonical).map { it.newValue })
+            assertEquals(RemoteStarredKind.STARRED, remote.starred)
+        } finally {
+            listening.close()
+            catalog.close()
+        }
     }
 
     @Test fun authFailureDoesNotClearLastCompleteRemoteSnapshot() = runBlocking {
