@@ -48,8 +48,8 @@ internal object A0VerifiedByteStager {
         expectedByteCount: Long,
         isCancelled: () -> Boolean = { false },
     ): Receipt {
-        require(expectedByteCount in 44..16L*1024L*1024L) {
-            "A0 observed transport must stay within 16 MiB"
+        require(expectedByteCount in 44..64L*1024L*1024L) {
+            "A0 observed transport must stay within 64 MiB"
         }
         return stageInternal(source,privateDirectory,expectedByteCount,
             null,isCancelled,{})
