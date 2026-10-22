@@ -3,7 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from tools.android_ci_ksp_dirty_probe import ProbeError, summarize_probe
+from tools.android_ci_ksp_dirty_probe import ProbeError, summarize_probe, summarize_gradle_input_reasons
 
 
 TASKS = (
@@ -124,6 +124,79 @@ class KspDirtyProbeTests(unittest.TestCase):
                 summarize_probe(gradle_log(), base, "sharedUi", "after")
 
 
+class GradleKspInputReasonContracts(unittest.TestCase):
+    def test_precise_reason_scope_without_exposing_paths_or_symbols(self):
+        log = "\n".join([
+            "> Task :app:kspDevDebugKotlin",
+            "Task ':app:kspDevDebugKotlin' is not up-to-date because:",
+            "  Input property 'classpath' file /private/patient/Token.kt has changed.",
+            "  Input property 'otherNamedSecret' file /private/patient/Auth.kt has changed.",
+            "> Task :app:kspDevDebugUnitTestKotlin UP-TO-DATE",
+            "> Task :app:compileDevDebugKotlin UP-TO-DATE",
+            "> Task :app:testDevDebugUnitTest",
+            "BUILD SUCCESSFUL in 45s",
+            "73 actionable tasks: 9 executed, 64 up-to-date",
+        ])
+        result = summarize_gradle_input_reasons(log, "sharedUi")
+        self.assertEqual("observed", result["tasks"]["app_ksp_main"]["reason_availability"])
+        self.assertEqual(["classpath_changed"], result["tasks"]["app_ksp_main"]["categories"])
+        self.assertEqual("not_applicable", result["tasks"]["app_ksp_unit"]["reason_availability"])
+        self.assertFalse(result["root_cause_proven"])
+        for secret in ("patient", "Token.kt", "Auth.kt", "otherNamedSecret", "/private/"):
+            self.assertNotIn(secret, str(result))
+
+    def test_missing_debug_reason_is_not_mistaken_for_no_change(self):
+        raw = gradle_log()
+        result = summarize_gradle_input_reasons(raw, "control")
+        self.assertEqual("unobserved", result["tasks"]["app_ksp_main"]["reason_availability"])
+        self.assertEqual([], result["tasks"]["app_ksp_main"]["categories"])
+
+    def test_ksp_source_option_and_history_categories_are_bounded(self):
+        raw = "\n".join([
+            "> Task :app:kspDevDebugKotlin",
+            "Task ':app:kspDevDebugKotlin' is not up-to-date because:",
+            "  Input property 'sourceFiles' file /secret/src.kt has been added.",
+            "  Input property 'pluginOptions' has changed.",
+            "  Output property 'destinationDirectory' has been removed.",
+            "> Task :app:kspDevDebugUnitTestKotlin",
+            "Task ':app:kspDevDebugUnitTestKotlin' is not up-to-date because:",
+            "  No history is available.",
+            "> Task :app:compileDevDebugKotlin",
+            "> Task :app:testDevDebugUnitTest",
+            "BUILD SUCCESSFUL in 12s",
+            "73 actionable tasks: 10 executed, 63 up-to-date",
+        ])
+        got = summarize_gradle_input_reasons(raw, "sharedUi")
+        self.assertEqual(["config_changed", "outputs_changed", "sources_changed"],
+                         got["tasks"]["app_ksp_main"]["categories"])
+        self.assertEqual(["history_missing"],
+                         got["tasks"]["app_ksp_unit"]["categories"])
+
+    def test_untrusted_or_ambiguous_input_reason_logs_fail_closed(self):
+        cases = [
+            gradle_log().replace("BUILD SUCCESSFUL", "BUILD FAILED"),
+            gradle_log() + "\nBUILD SUCCESSFUL in 10s",
+            gradle_log() + "\n> Task :app:kspDevDebugKotlin",
+            "\n".join([
+                "> Task :app:kspDevDebugKotlin",
+                "Task ':app:kspDevDebugKotlin' is not up-to-date because:",
+                "  Input property 'classpath' file /a changed.",
+                "Task ':app:kspDevDebugKotlin' is not up-to-date because:",
+                "  Input property 'classpath' file /b changed.",
+                "> Task :app:kspDevDebugUnitTestKotlin",
+                "> Task :app:compileDevDebugKotlin",
+                "> Task :app:testDevDebugUnitTest",
+                "BUILD SUCCESSFUL in 11s",
+                "73 actionable tasks: 9 executed, 64 up-to-date",
+            ]),
+        ]
+        for sample in cases:
+            with self.subTest(case=len(sample)), self.assertRaises(ProbeError):
+                summarize_gradle_input_reasons(sample, "sharedUi")
+        with self.assertRaises(ProbeError):
+            summarize_gradle_input_reasons(gradle_log(), "/absolute/secret")
+
+
 class KspWorkflowContracts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -146,7 +219,11 @@ class KspWorkflowContracts(unittest.TestCase):
         self.assertNotIn("secrets.", s)
         self.assertNotIn("upload-artifact", s)
         self.assertNotIn("tee ", s)
-        self.assertNotIn("--info", s)
+        self.assertIn('run_full "$RUNNER_TEMP/ksp-after.log" --info', s)
+        self.assertIn('run_full "$RUNNER_TEMP/ksp-before.log"', s)
+        self.assertNotIn('run_full "$RUNNER_TEMP/ksp-before.log" --info', s)
+        self.assertIn("KSP_SANITIZED_INPUT_REASONS", s)
+        self.assertIn("summarize_gradle_input_reasons", (ROOT / "tools/android_ci_ksp_dirty_probe.py").read_text(encoding="utf-8"))
         self.assertNotIn("--debug", s)
         self.assertNotIn("--exclude-task", s)
         self.assertNotIn(" -x ", s)
