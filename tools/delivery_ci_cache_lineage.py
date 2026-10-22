@@ -29,15 +29,15 @@ def _integer(x, minimum=0):
 
 
 def _parse_record(record):
-    _require(type(record) is dict and record.get("version") == 1)
+    _require(type(record) is dict and type(record.get("version")) is int and record["version"] == 1)
     sha = record.get("head_sha")
     _require(type(sha) is str and bool(_SHA.fullmatch(sha)))
-    _require(record.get("lane") in ("main", "pr"))
-    _require(record.get("cache_restore_status") in ("hit", "unobserved"))
+    _require(type(record.get("lane")) is str and record["lane"] in ("main", "pr"))
+    _require(type(record.get("cache_restore_status")) is str and record["cache_restore_status"] in ("hit", "unobserved"))
     family = record.get("cache_restore_workflow_family")
-    _require(family is None or family in _FAMILIES)
+    _require(family is None or (type(family) is str and family in _FAMILIES))
     _require((family is not None) == (record["cache_restore_status"] == "hit"))
-    _require(record.get("write_policy") in _WRITES)
+    _require(type(record.get("write_policy")) is str and record["write_policy"] in _WRITES)
     for field in ("gradle_seconds", "actionable_tasks", "executed_tasks",
                   "from_cache_tasks"):
         _integer(record.get(field), 1 if field in ("gradle_seconds", "actionable_tasks") else 0)
@@ -45,7 +45,7 @@ def _parse_record(record):
              record["actionable_tasks"])
     tasks = record.get("tasks")
     _require(type(tasks) is dict and tasks.keys() == _TASKS)
-    _require(all(state is None or state in _STATES for state in tasks.values()))
+    _require(all(state is None or (type(state) is str and state in _STATES) for state in tasks.values()))
     return sha
 
 
