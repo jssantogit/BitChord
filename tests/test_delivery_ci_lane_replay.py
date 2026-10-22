@@ -68,6 +68,15 @@ class LaneReplayTests(unittest.TestCase):
         self.assertIsNone(report["idealized_total_wait_reduction_seconds"])
         self.assertGreater(report["baseline_median_absolute_error_seconds"], 30)
 
+    def test_single_badly_misfit_job_vetoes_positive_replay(self):
+        reader = Reader()
+        # A median-only fit check would miss this large real-world outlier.
+        reader.jobs_by_id[107][0]["started_at"] = stamp(1200)
+        reader.jobs_by_id[107][0]["completed_at"] = stamp(1300)
+        report = replay_recent_ci(reader)
+        self.assertEqual("uncalibrated", report["status"])
+        self.assertIsNone(report["idealized_total_wait_reduction_seconds"])
+
     def test_incomplete_or_one_sided_sample_reports_no_gain(self):
         r = Reader()
         r.runs = r.runs[:4]
