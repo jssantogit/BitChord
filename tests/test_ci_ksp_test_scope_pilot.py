@@ -13,6 +13,7 @@ class KspTestScopePilotContracts(unittest.TestCase):
         build = ROOT_BUILD.read_text(encoding="utf-8")
         self.assertIn('providers.gradleProperty("bitchord.roomProcessorMainOnlyPilot")', build)
         self.assertIn('"kspDevDebug"', build)
+        self.assertIn('project(":app").dependencies.add(name, "androidx.room:room-compiler:2.8.5")', build)
         self.assertIn('dependencies.add("ksp", "androidx.room:room-compiler:2.8.5")', build)
         self.assertNotIn('tasks.named("kspDevDebugUnitTestKotlin")', build)
         self.assertNotIn('enabled = false', build)
