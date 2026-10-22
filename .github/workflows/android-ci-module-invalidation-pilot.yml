@@ -1,0 +1,112 @@
+name: Android Kotlin KSP Module Invalidation Pilot
+
+# PR-only, non-required, short-lived diagnostic. Neither source nor cache
+# policy of protected main is changed.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/android-ci-module-invalidation-pilot.yml'
+      - 'tests/test_ci_module_invalidation_pilot.py'
+      - 'tools/android_ci_invalidation_probe.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-invalidation-probe-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'infra/android-ci-module-invalidation-pilot-v0'
+    name: Kotlin KSP invalidation · ${{ matrix.mode }} (non-required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        mode: [app, shared, sharedUi, control]
+
+    steps:
+      - name: Checkout exact pilot revision
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle (read-only shared cache)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Non-secret build configuration
+        run: |
+          printf '%s\n' 'LASTFM_API_KEY=ci-placeholder' 'LASTFM_SECRET=ci-placeholder' > local.properties
+          chmod +x gradlew
+
+      - name: Validate experiment contracts
+        run: python3 -m unittest discover -s tests -p test_ci_module_invalidation_pilot.py -v
+
+      - name: Full Android suite baseline and isolated source-change probe
+        shell: bash
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          case "$MODE" in
+            app)
+              source='app/src/main/java/com/music/bitchord/data/scrobbling/PrimaryArtist.kt'
+              ;;
+            shared)
+              source='shared/src/jvmSharedMain/kotlin/com/music/bitchord/data/MonotonicClock.kt'
+              ;;
+            sharedUi)
+              source='sharedUi/src/jvmSharedMain/kotlin/com/music/bitchord/ui/player/LyricFocus.kt'
+              ;;
+            control)
+              source='app/src/main/java/com/music/bitchord/data/scrobbling/PrimaryArtist.kt'
+              ;;
+            *) echo 'Unsupported module probe'; exit 2 ;;
+          esac
+          test -f "$source"
+          git diff --quiet HEAD -- "$source"
+          trap 'git restore -- "$source"' EXIT
+
+          run_full() {
+            ./gradlew --build-cache --console=plain -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+          }
+
+          start=$SECONDS
+          run_full 2>&1 | tee "$RUNNER_TEMP/invalidation-baseline.log"
+          baseline_seconds=$((SECONDS - start))
+
+          if [[ "$MODE" != control ]]; then
+            # ABI-neutral input change only inside this disposable checkout.
+            printf '\n// Temporary Kotlin module-invalidation probe; no runtime change.\n' >> "$source"
+            if git diff --quiet HEAD -- "$source"; then
+              echo 'Expected Kotlin input change not detected'; exit 2
+            fi
+          else
+            git diff --quiet HEAD -- "$source"
+          fi
+
+          start=$SECONDS
+          run_full 2>&1 | tee "$RUNNER_TEMP/invalidation-after.log"
+          changed_seconds=$((SECONDS - start))
+
+          # No Gradle raw log artifact or cache key reaches the summary.
+          {
+            echo '### Kotlin/KSP module invalidation probe'
+            echo "Mode: $MODE"
+            echo "Baseline complete Android test suite: ${baseline_seconds}s"
+            echo "After source input (or no change for control): ${changed_seconds}s"
+            echo 'Task outcomes from the full second run:'
+            echo '```json'
+            python3 tools/android_ci_invalidation_probe.py --log "$RUNNER_TEMP/invalidation-after.log" --case "$MODE"
+            echo '```'
+            echo 'Local source edits are automatically reverted. This is a warmed-run diagnostic, not a cross-job speedup estimate.'
+          } >> "$GITHUB_STEP_SUMMARY"
