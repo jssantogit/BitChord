@@ -98,14 +98,21 @@ class LaneReplayTests(unittest.TestCase):
             lambda r: r.runs.append(dict(r.runs[0])),
             lambda r: r.jobs_by_id[100][0].update({"started_at": stamp(-1)}),
             lambda r: r.jobs_by_id[100][0].update({"completed_at": stamp(0)}),
-            lambda r: r.jobs_by_id[100][0].update({"conclusion": "failure"}),
             lambda r: r.jobs_by_id[100].append(dict(r.jobs_by_id[100][0])),
         ]
-        for mutate in cases:
+        for i, mutate in enumerate(cases):
             reader = Reader()
             mutate(reader)
-            with self.subTest(mutator=str(mutate)[:20]), self.assertRaises(LaneReplayError):
+            with self.subTest(mutator_index=i), self.assertRaises(LaneReplayError):
                 replay_recent_ci(reader)
+
+    def test_failed_job_is_excluded_and_blocks_claimed_savings(self):
+        reader = Reader()
+        reader.jobs_by_id[100][0]["conclusion"] = "failure"
+        result = replay_recent_ci(reader)
+        self.assertEqual("insufficient_sample", result["status"])
+        self.assertEqual(1, result["excluded_unfinished_or_missing_jobs"])
+        self.assertIsNone(result["idealized_total_wait_reduction_seconds"])
 
     def test_rejects_truncated_page_and_sanitizes_reader_errors(self):
         reader = Reader()
