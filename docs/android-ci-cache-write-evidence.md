@@ -41,3 +41,26 @@ Use `python3 -m tools.delivery_ci_phase_metrics --repo jssantogit/BitChord --lim
 Summaries provide medians by existing lanes (including future `pr_d` for the separate draft #152 proposal) and suppress p90 unless at least three queue-time observations exist. The `non_test_step_seconds` label describes the wallclock outside the unit-test *step*, not wasted or safely removable time; it includes necessary toolchain setup and post-run work. Likewise an observed queue delay is **not** proof that CI concurrency caused it. Use these metrics next to Gradle task-level profiles and cache-write evidence to decide whether the real bottleneck is compiler work, setup, cache persistence or scheduler pressure.
 
 Integration Queue contract tests and the existing required Android workflow must remain GREEN on the final exact SHA. This is instrumentation only; policies are unchanged, and no production speedup is claimed.
+
+## Revision-attested workload strata (P2c; no CI side effects)
+
+`tools/delivery_ci_workload.py` and `tests/test_delivery_ci_workload.py` are also included in this optional observability PR to avoid treating a documentation-only CI as equivalent to a Kotlin/KSP application change.
+
+Read the current PR diff metadata using the read-only first-party GitHub endpoint and require the **actual, exact PR HEAD SHA**:
+
+```bash
+python3 -m tools.delivery_ci_workload \
+  --repo jssantogit/BitChord \
+  --pr 141 \
+  --head-sha <exact-head-sha>
+```
+
+This tool fetches the PR header before and after the files page, refusing a changed/stale HEAD, a mismatched repository, an incomplete pagination result of 100 files, invalid filenames and unknown file statuses. Its output includes only a stable enum, fixed category counts, `changed_files`, PR number and the attested HEAD. **It does not print changed file paths, diff patches, branch names, users or tokens.**
+
+Enums: `kotlin_production`, `kotlin_tests`, `gradle_configuration`, `ci_workflows`, `ci_scripts`, `documentation`, `mixed`, `other`. Changed paths are classified locally without sharing their values; cross-category renames count both affected kinds while counting the changed file once. This makes it possible to compare comparable CI samples, but there is a crucial temporal limitation:
+
+- **Current PR files describe the current PR HEAD**, not necessarily the historic source revision represented by an old workflow run (GitHub PR CI can test a synthetic merge SHA). Pair metrics only when both the PR state/HEAD and exact run provenance are verified. Otherwise classify the run's workload as UNKNOWN and do not silently backfill it.
+- A PR with 100 or more changed files cannot be proven complete by one `per_page=100` GET and is rejected. This is intentional fail-closed behavior; an owner-approved pagination-aware extension is needed for large changes.
+- The workload class indicates file categories, not causal Gradle cache invalidation. Kotlin/KSP timings, exact Gradle cache hit counts, runner availability and main-vs-PR cache families still need to be observed, without merging unrelated distributions.
+
+The workload tool is **manual read-only diagnostics**; it adds no remote write, GitHub workflow, required check, token permissions, cache operation, upload or user-facing telemetry. Each pilot must remain draft until exact-head CI passes and owner separately approves any integration.
