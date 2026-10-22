@@ -269,6 +269,7 @@ class A0ManualLoginActivity : Activity() {
                                 // server is offering an indirect P connection.
                                 val inbox = LinkedBlockingQueue<String>(1)
                                 val attemptedIndirect = AtomicBoolean(false)
+                                val receivedValidP2pReply = AtomicBoolean(false)
                                 val failedServerReader = AtomicBoolean(false)
                                 val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(12)
                                 val readers = Executors.newFixedThreadPool(2)
@@ -289,6 +290,8 @@ class A0ManualLoginActivity : Activity() {
                                                         A0OneShotPublicSearchWire.readOneDirectPeerReply(
                                                             peer.getInputStream(), token
                                                         ) { verifiedFrame, claimedPeer ->
+                                                            receivedValidP2pReply.set(true)
+                                                            receivedValidP2pReply.set(true)
                                                             handoff?.offerSearchResult(
                                                                 verifiedFrame, claimedPeer
                                                             )
@@ -449,13 +452,21 @@ class A0ManualLoginActivity : Activity() {
                                                 "A rede pode bloquear conexões de entrada."
                                     }
                                     if (peerStatus == null) {
+                                        val noCandidate = transferObserved &&
+                                            receivedValidP2pReply.get()
                                         trace.note(
-                                            A0SmokeTrace.Stage.NO_REPLY,
+                                            if (noCandidate)
+                                                A0SmokeTrace.Stage.NO_ELIGIBLE_CANDIDATE
+                                            else A0SmokeTrace.Stage.NO_REPLY,
                                             TraceOutcome.DEGRADED,
-                                            A0SmokeTrace.Reason.NO_PEER_REPLY
+                                            if (noCandidate)
+                                                A0SmokeTrace.Reason.NO_ELIGIBLE_CANDIDATE
+                                            else A0SmokeTrace.Reason.NO_PEER_REPLY
                                         )
                                         finalOutcome = TraceOutcome.DEGRADED
-                                        finalReason = A0SmokeTrace.Reason.NO_PEER_REPLY
+                                        finalReason = if (noCandidate)
+                                            A0SmokeTrace.Reason.NO_ELIGIBLE_CANDIDATE
+                                        else A0SmokeTrace.Reason.NO_PEER_REPLY
                                     } else {
                                         finalOutcome = TraceOutcome.SUCCEEDED
                                     }
@@ -537,7 +548,9 @@ class A0ManualLoginActivity : Activity() {
                                         result="NENHUM CANDIDATO DE ÁUDIO DISPONÍVEL ATÉ 16 MiB. " +
                                             "Nenhuma transferência iniciada."
                                         finalOutcome=TraceOutcome.DEGRADED
-                                        finalReason=A0SmokeTrace.Reason.NO_PEER_REPLY
+                                        finalReason=if(receivedValidP2pReply.get())
+                                            A0SmokeTrace.Reason.NO_ELIGIBLE_CANDIDATE
+                                        else A0SmokeTrace.Reason.NO_PEER_REPLY
                                     }
                                 } else if (!transferObserved && finalOutcome ==
                                     TraceOutcome.SUCCEEDED) {
