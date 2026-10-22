@@ -90,6 +90,25 @@ class CacheLineageTests(unittest.TestCase):
                 compare_main_cache_evidence(a, b)
             self.assertNotIn("SECRET", str(caught.exception))
 
+    def test_rejects_unhashable_and_boolean_forged_evidence(self):
+        for field, value in (
+            ("version", True),
+            ("cache_restore_workflow_family", ["android_workflow"]),
+            ("write_policy", ["written"]),
+            ("lane", ["main"]),
+            ("cache_restore_status", ["hit"]),
+            ("executed_tasks", True),
+            ("gradle_seconds", False),
+        ):
+            b = snapshot(B)
+            b[field] = value
+            with self.subTest(field=field), self.assertRaises(LineageError):
+                compare_main_cache_evidence(snapshot(A), b)
+        b = snapshot(B)
+        b["tasks"]["kotlin_main"] = ["from_cache"]
+        with self.assertRaises(LineageError):
+            compare_main_cache_evidence(snapshot(A), b)
+
     def test_cannot_infer_identity_from_cache_hit_counts(self):
         # Cache hits are output-hash evidence, but not commit provenance or
         # proof of which earlier workflow produced those build outputs.
