@@ -95,7 +95,7 @@ project(":app") {
         // No KSP task is disabled, excluded, or skipped by this pilot switch.
         if (providers.gradleProperty("bitchord.roomProcessorMainOnlyPilot").orNull == "true") {
             configurations.matching { it.name == "kspDevDebug" }.configureEach {
-                dependencies.add(name, "androidx.room:room-compiler:2.8.5")
+                project(":app").dependencies.add(name, "androidx.room:room-compiler:2.8.5")
             }
         } else {
             dependencies.add("ksp", "androidx.room:room-compiler:2.8.5")
