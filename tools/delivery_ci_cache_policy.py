@@ -27,8 +27,8 @@ _READ_ONLY = "Cache is read-only: will not save state for use in subsequent buil
 # Only classify the workflow component of a valid Gradle home restore key.
 # Keys can contain sensitive metadata: the original string is NEVER returned.
 _RESTORE_FAMILY = re.compile(
-    r"^Cache hit for restore-key: gradle-home-v1\\|Linux-X64\\|"
-    r"([a-z0-9][a-z0-9-]{0,63})\\[[0-9a-f]{32}\\]-[0-9a-f]{40}$"
+    r"^Cache hit for restore-key: gradle-home-v1\|Linux-X64\|"
+    r"([a-z0-9][a-z0-9-]{0,63})\[[0-9a-f]{32}\]-[0-9a-f]{40}$"
 )
 _FAMILY_LABELS = {
     "android": "android_workflow",
