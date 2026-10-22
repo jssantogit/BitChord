@@ -69,6 +69,42 @@ internal class A0SmokeTrace private constructor(
         )
     }
 
+    /** Only known enum phases; never emit peer identity, remote path or frame data. */
+    fun transferPhase(phase:A0ServerAssociatedTransfer.Phase) {
+        if(complete.get())return
+        trace.event(
+            stage="pf_"+phase.name.lowercase(Locale.ROOT),
+            outcome=TraceOutcome.SUCCEEDED,
+            attributes=mapOf("elapsedMs" to elapsedMillis().toString())
+        )
+    }
+
+    /** Failure class only, without exception message, stacktrace or socket data. */
+    fun transferFailure(
+        lastPhase:A0ServerAssociatedTransfer.Phase?,
+        error:Throwable
+    ) {
+        if(complete.get())return
+        val failureKind=when(error) {
+            is java.io.EOFException -> "eof"
+            is java.net.SocketTimeoutException -> "timeout"
+            is java.net.ConnectException -> "connect"
+            is java.net.SocketException -> "socket"
+            is java.io.IOException -> "protocol_or_io"
+            is IllegalArgumentException -> "invalid_input"
+            else -> "other"
+        }
+        trace.event(
+            stage="pf_transfer_failure",
+            outcome=TraceOutcome.FAILED,
+            attributes=mapOf(
+                "elapsedMs" to elapsedMillis().toString(),
+                "lastPhase" to (lastPhase?.name?.lowercase(Locale.ROOT) ?: "precheck"),
+                "failureKind" to failureKind
+            )
+        )
+    }
+
     /** Redacted filter coverage: never store query, peer or file names. */
     fun candidateScreening(report:A0ObservedCandidateHandoff.Screening) {
         if(complete.get())return
