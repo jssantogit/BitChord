@@ -234,6 +234,74 @@ def summarize_gradle_input_reasons(gradle_log, case):
     }
 
 
+def summarize_gradle_log_shape(filename):
+    """Return fixed-category evidence about a private verbose Gradle log.
+
+    It is a *diagnostic* for the safe parser, not a bypass of any validation.
+    Never return raw names, paths, tokens or content.
+    """
+    try:
+        path = Path(filename)
+        _need(not path.is_symlink() and path.is_file())
+        size = path.stat().st_size
+        _need(type(size) is int and size >= 0)
+        if size > _MAX_GRADLE_LOG_BYTES:
+            return {
+                "version": 1, "size_status": "over_limit",
+                "task_shape": "not_inspected", "build_shape": "not_inspected",
+                "root_cause_proven": False,
+            }
+        raw = path.read_bytes()
+        _need(len(raw) <= _MAX_GRADLE_LOG_BYTES)
+        try:
+            lines = raw.decode("utf-8").splitlines()
+        except UnicodeError:
+            return {
+                "version": 1, "size_status": "encoding_unavailable",
+                "task_shape": "not_inspected", "build_shape": "not_inspected",
+                "root_cause_proven": False,
+            }
+        task_counts = {t: 0 for t in _TASKS}
+        failed = 0
+        succeeded = 0
+        actionable = 0
+        unsupported = False
+        for raw_line in lines:
+            line = _ANSI.sub("", raw_line).strip()
+            if line.startswith("BUILD FAILED"):
+                failed += 1
+            if line.startswith("BUILD SUCCESSFUL"):
+                succeeded += 1
+            if _TOTAL.fullmatch(line):
+                actionable += 1
+            if line.startswith("> Task "):
+                for task in _TASKS:
+                    if line == "> Task " + task or line.startswith("> Task " + task + " "):
+                        task_counts[task] += 1
+                        if line[len("> Task " + task):].strip() not in _STATES:
+                            unsupported = True
+                        break
+        if any(n > 1 for n in task_counts.values()):
+            shape = "duplicate_task_marker"
+        elif any(n == 0 for n in task_counts.values()):
+            shape = "missing_task_marker"
+        elif unsupported:
+            shape = "unsupported_task_status"
+        else:
+            shape = "valid_task_summary"
+        build = ("failed" if failed else "one_success"
+                 if succeeded == 1 and actionable == 1 else "incomplete_summary")
+        return {
+            "version": 1, "size_status": "within_limit",
+            "task_shape": shape, "build_shape": build,
+            "root_cause_proven": False,
+        }
+    except ProbeError:
+        raise
+    except Exception:
+        raise ProbeError("unsafe_or_incomplete_ksp_dirty_set_evidence") from None
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Local redacted KSP2 dirty-set summaries")
     parser.add_argument("--log", required=True)
@@ -241,8 +309,15 @@ def main(argv=None):
     parser.add_argument("--case", required=True, choices=_ALLOWED_CASES)
     parser.add_argument("--phase", required=True, choices=_ALLOWED_PHASES)
     parser.add_argument("--reason-log", action="store_true")
+    parser.add_argument("--shape-log", action="store_true")
     options = parser.parse_args(argv)
     try:
+        if options.shape_log:
+            _need(not options.reason_log)
+            report = summarize_gradle_log_shape(options.log)
+            json.dump(report, sys.stdout, sort_keys=True, indent=2)
+            sys.stdout.write("\\n")
+            return
         log_path = Path(options.log)
         _need(not log_path.is_symlink())
         _need(log_path.stat().st_size <= _MAX_GRADLE_LOG_BYTES)
