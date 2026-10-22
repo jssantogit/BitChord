@@ -49,3 +49,20 @@ On HEAD `ea97bee87aba4acf6a267da5ecca4ecd5cbadb89`, both the exact-HEAD required
 The original parser reported `partial` diagnostic availability. Every `devDebugUnitTest` log type had **zero counted lines**, but a zero alone did not distinguish a missing file from an empty one. The new per-log presence flags address that ambiguity. The exact-HEAD Android and optional matrix must be GREEN **again** after this parser enhancement before the new HEAD is marked validated.
 
 Interpretation: the control retained historical KSP logs across an up-to-date run, so log presence is not proof of fresh processing. Changed line counts in sharedUi indicate distinct diagnostic files, **not** that precisely 409 files were dirty or that source/output mapping count equals a number of sources. We still cannot attribute the exact KSP invalidation to classpath snapshot, aggregating Room output or transitive symbol dependencies without additional bounded evidence. Do not claim an end-to-end merge speedup.
+
+
+## P10 — Gradle input-change category evidence (opt-in extension)
+
+The same draft now captures task up-to-date diagnostics from the **second** full Android suite using `--info` only in the optional pilot. The **complete verbose Gradle output remains in a temporary file on the runner**, never streamed to the GitHub job log or uploaded. The Python tool parses the Gradle task diagnosis for exactly two KSP tasks, `:app:kspDevDebugKotlin` and `:app:kspDevDebugUnitTestKotlin`, and exports only the following allowlisted categories when their corresponding task-scoped Gradle diagnostic is present:
+
+- `classpath_changed`: a Gradle input property whose name denotes a classpath
+- `sources_changed`: source input properties
+- `config_changed`: compiler/processor option or argument properties
+- `outputs_changed`: Gradle output property evidence
+- `history_missing`: explicit missing prior task execution history
+
+For each KSP task it separately reports `reason_availability` of `observed`, `observed_unclassified`, `unobserved` or `not_applicable`. `unobserved` is the correct result if this Gradle/KSP version does not emit a compatible `--info` task-reason message. **Do not infer that a missing category means an input was unchanged.** Exact inputs, paths, property names beyond a classification test, source names, symbols and Gradle verbose lines are never included. Failures cause a generic sanitized error.
+
+The output explicitly sets `root_cause_proven: false`. Even a Gradle `classpath_changed` reason is *task input invalidation evidence*, not proof of which KSP symbol, Room processor, ABI declaration or file caused a reprocessing wave. Prior P9 dirty-set counters remain bounded and independently reported; the P10 report is an additional safe classification, not a speedup claim.
+
+Only the optional pilot's second invocation uses `--info`; the original required Android CI workflow and production Gradle flags remain untouched. A new exact-HEAD required Android GREEN and both optional full-suite matrix checks GREEN are required after this extension, followed by a side-by-side review of the categories and no-change control. An unsupported format must stay `unobserved`; no raw diagnostic should be copied to a PR, Notion or chat to force a conclusion.
