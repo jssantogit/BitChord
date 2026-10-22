@@ -114,6 +114,19 @@ class LaneReplayTests(unittest.TestCase):
         self.assertEqual(1, result["excluded_unfinished_or_missing_jobs"])
         self.assertIsNone(result["idealized_total_wait_reduction_seconds"])
 
+    def test_full_first_api_page_may_be_sampled_without_claiming_full_history(self):
+        reader = Reader()
+        # The API returns 100 records on a busy repository. Reading only the
+        # first 8 still yields a valid bounded, explicitly non-exhaustive sample.
+        reader.runs.extend({
+            "id": 1000 + i, "event": "push",
+            "head_sha": SHA, "head_branch": "main",
+        } for i in range(92))
+        self.assertEqual(100, len(reader.runs))
+        result = replay_recent_ci(reader, limit=8)
+        self.assertEqual("calibrated_sample_only", result["status"])
+        self.assertEqual(8, result["included_jobs"])
+
     def test_rejects_truncated_page_and_sanitizes_reader_errors(self):
         reader = Reader()
         reader.runs = reader.runs * 13  # More than a complete 100-item page.
