@@ -145,6 +145,94 @@ def summarize_probe(gradle_log, ksp_root, case, phase):
         raise ProbeError("unsafe_or_incomplete_ksp_dirty_set_evidence") from None
 
 
+# Gradle's --info task up-to-date diagnoses may include source paths,
+# configuration values, and other private identifiers. Recognize only the
+# fixed task identity and *input property kind*, never return any raw token.
+_INFO_REASONS = {
+    ":app:kspDevDebugKotlin": "app_ksp_main",
+    ":app:kspDevDebugUnitTestKotlin": "app_ksp_unit",
+}
+_INPUT_PROPERTY = re.compile(r"""^\\s+Input property ['"]([A-Za-z][A-Za-z0-9_]*)['"]\\b""")
+_OUTPUT_PROPERTY = re.compile(r"""^\\s+Output property ['"][^'"]+['"]\\b""")
+_REASON_LIMIT = 40
+
+
+def _safe_input_reason(line):
+    match = _INPUT_PROPERTY.match(line)
+    if match:
+        prop = match.group(1).lower()
+        if "classpath" in prop:
+            return "classpath_changed"
+        if prop.startswith("source") or prop.endswith("sources"):
+            return "sources_changed"
+        if ("option" in prop or "argument" in prop or "compilerplugin" in prop):
+            return "config_changed"
+    if _OUTPUT_PROPERTY.match(line):
+        return "outputs_changed"
+    if line.lstrip().lower().startswith("no history is available"):
+        return "history_missing"
+    return None
+
+
+def summarize_gradle_input_reasons(gradle_log, case):
+    """Classify Gradle's --info reason categories, without leaking inputs.
+
+    This describes Gradle task up-to-date evidence, not an independently
+    proven KSP/Room source or classpath root cause.
+    """
+    _need(type(case) is str and case in _ALLOWED_CASES)
+    duration, actionable, task_states = _parse_gradle(gradle_log)
+    _need(type(gradle_log) is str)
+    result = {}
+    for task, alias in _INFO_REASONS.items():
+        state = task_states[alias]
+        header = "Task '" + task + "' is not up-to-date because:"
+        matches = [i for i, line in enumerate(gradle_log.splitlines())
+                   if _ANSI.sub("", line).strip() == header]
+        _need(len(matches) <= 1)
+        if state != "executed":
+            _need(not matches)
+            result[alias] = {
+                "task_state": state,
+                "reason_availability": "not_applicable",
+                "categories": [],
+            }
+            continue
+        if not matches:
+            result[alias] = {
+                "task_state": state,
+                "reason_availability": "unobserved",
+                "categories": [],
+            }
+            continue
+        lines = gradle_log.splitlines()
+        categories = set()
+        for raw in lines[matches[0]+1:matches[0]+1+_REASON_LIMIT]:
+            line = _ANSI.sub("", raw)
+            if (line.startswith("> Task ") or
+                line.startswith("Task ':") or
+                line.startswith("Caching disabled for task") or
+                (line and not line[0].isspace())):
+                break
+            category = _safe_input_reason(line)
+            if category:
+                categories.add(category)
+        result[alias] = {
+            "task_state": state,
+            "reason_availability": ("observed" if categories
+                                    else "observed_unclassified"),
+            "categories": sorted(categories),
+        }
+    return {
+        "version": 1,
+        "case": case,
+        "gradle_seconds": duration,
+        "actionable_tasks": actionable,
+        "tasks": result,
+        "root_cause_proven": False,
+    }
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Local redacted KSP2 dirty-set summaries")
     parser.add_argument("--log", required=True)
