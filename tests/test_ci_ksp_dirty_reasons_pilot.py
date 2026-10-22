@@ -136,6 +136,11 @@ class KspWorkflowContracts(unittest.TestCase):
         self.assertNotIn(" -x ", s)
         self.assertIn(":app:testDevDebugUnitTest", s)
         self.assertIn("GITHUB_STEP_SUMMARY", s)
+        self.assertIn("KSP_SANITIZED_SUMMARY_BEFORE", s)
+        self.assertIn("KSP_SANITIZED_SUMMARY_AFTER", s)
+        self.assertIn('cat "$RUNNER_TEMP/summary-before.json"', s)
+        self.assertIn('cat "$RUNNER_TEMP/summary-after.json"', s)
+
         self.assertIn("tools/android_ci_ksp_dirty_probe.py", s)
         self.assertIn('trap \'git restore -- "$source"\' EXIT', s)
         self.assertIn('> "$log" 2>&1', s)
