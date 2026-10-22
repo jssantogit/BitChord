@@ -209,6 +209,8 @@ class A0ManualLoginActivity : Activity() {
                 trace.note(A0SmokeTrace.Stage.LOGIN_STARTED)
                 var finalOutcome = TraceOutcome.FAILED
                 var finalReason: A0SmokeTrace.Reason? = null
+                var transferAttempted=false
+                var lastTransferPhase:A0ServerAssociatedTransfer.Phase?=null
                 var packet: ByteArray? = null
                 var result = "Falha ao iniciar a verificação."
                 var searchSubmitted = false
@@ -530,9 +532,13 @@ class A0ManualLoginActivity : Activity() {
                                             )
                                         } else {
                                             trace.note(A0SmokeTrace.Stage.P_F_TRANSFER_STARTED)
+                                            transferAttempted=true
                                             val receipt=handoff.transferChoice(
                                                 chosen,observedScratchDirectory
-                                            )
+                                            ) { phase ->
+                                                lastTransferPhase=phase
+                                                trace.transferPhase(phase)
+                                            }
                                             try {
                                                 result="TRANSPORTE CONCLUÍDO: ${receipt.byteCount} bytes. " +
                                                     "SHA-256 observado: ${receipt.sha256Hex}. " +
@@ -581,11 +587,16 @@ class A0ManualLoginActivity : Activity() {
                         }
                     }
                 } catch (_: A0ExperimentalLoginCodec.LoginDenied) {
+                    finalOutcome=TraceOutcome.FAILED
                     finalReason = A0SmokeTrace.Reason.LOGIN_DENIED
                     trace.note(A0SmokeTrace.Stage.LOGIN_DENIED, TraceOutcome.FAILED, finalReason)
                     result = "LOGIN RECUSADO. Confira a conta e desconecte o Seeker."
-                } catch (_: SocketTimeoutException) {
-                    finalOutcome = TraceOutcome.DEGRADED
+                } catch (error: SocketTimeoutException) {
+                    if(transferAttempted) {
+                        trace.transferFailure(lastTransferPhase,error)
+                    }
+                    finalOutcome = if(transferAttempted) TraceOutcome.FAILED
+                        else TraceOutcome.DEGRADED
                     finalReason = A0SmokeTrace.Reason.READ_TIMEOUT
                     val readProgress = loginReplyProgress
                     if (!searchSubmitted && readProgress != null) {
@@ -593,17 +604,23 @@ class A0ManualLoginActivity : Activity() {
                     } else {
                         trace.note(A0SmokeTrace.Stage.SERVER_READ_TIMEOUT, TraceOutcome.DEGRADED, finalReason)
                     }
-                    result = if (searchSubmitted) {
+                    result = if(transferAttempted) {
+                        "TIMEOUT NA NEGOCIAÇÃO P/F. Nenhum arquivo concluído."
+                    } else if (searchSubmitted) {
                         "BUSCA ENVIADA; NENHUMA RESPOSTA P2P RECEBIDA. " +
                             "A rede móvel pode bloquear conexões de entrada."
                     } else {
                         "TIMEOUT. A conexão ou resposta do servidor não chegou."
                     }
-                } catch (_: IllegalArgumentException) {
+                } catch (error: IllegalArgumentException) {
+                    if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
+                    finalOutcome=TraceOutcome.FAILED
                     finalReason = A0SmokeTrace.Reason.INVALID_INPUT
                     trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE, TraceOutcome.FAILED, finalReason)
                     result = "ENTRADA INVÁLIDA. Confira usuário e senha de teste."
                 } catch (error: IOException) {
+                    if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
+                    finalOutcome=TraceOutcome.FAILED
                     val readProgress = loginReplyProgress
                     if (!searchSubmitted && readProgress != null) {
                         trace.loginResponseProblem(readProgress.phase, timedOut = false)
@@ -616,7 +633,9 @@ class A0ManualLoginActivity : Activity() {
                     }
                     trace.note(A0SmokeTrace.Stage.IO_FAILURE, TraceOutcome.FAILED, finalReason)
                     result = "ERRO DE REDE OU PROTOCOLO. Nenhum arquivo foi baixado."
-                } catch (_: RuntimeException) {
+                } catch (error: RuntimeException) {
+                    if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
+                    finalOutcome=TraceOutcome.FAILED
                     finalReason = A0SmokeTrace.Reason.UNKNOWN_FAILURE
                     trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE, TraceOutcome.FAILED, finalReason)
                     result = "ERRO NO TESTE. Nenhuma credencial foi armazenada."
