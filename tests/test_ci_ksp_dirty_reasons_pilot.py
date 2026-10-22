@@ -48,6 +48,7 @@ class KspDirtyProbeTests(unittest.TestCase):
             self.assertEqual("executed", out["tasks"]["app_ksp_main"])
             self.assertEqual("observed", out["ksp_log_availability"])
             self.assertEqual(2, out["record_lines"]["devDebug"]["dirty_set"])
+            self.assertTrue(out["log_present"]["devDebug"]["dirty_set"])
             self.assertEqual(2, out["record_lines"]["devDebugUnitTest"]["source_to_outputs"])
             self.assertFalse(out["ksp_causal_reason_proven"])
             serialized = str(out)
@@ -60,6 +61,7 @@ class KspDirtyProbeTests(unittest.TestCase):
                                   Path(tmp) / "absent", "control", "before")
             self.assertEqual("unobserved", out["ksp_log_availability"])
             self.assertEqual(0, out["record_lines"]["devDebug"]["dirty_set"])
+            self.assertFalse(out["log_present"]["devDebug"]["dirty_set"])
             self.assertEqual("up_to_date", out["tasks"]["app_ksp_main"])
             self.assertFalse(out["ksp_causal_reason_proven"])
 
@@ -72,7 +74,21 @@ class KspDirtyProbeTests(unittest.TestCase):
             out = summarize_probe(gradle_log(), base, "sharedUi", "after")
             self.assertEqual("partial", out["ksp_log_availability"])
             self.assertEqual(1, out["record_lines"]["devDebug"]["dirty_set"])
+            self.assertTrue(out["log_present"]["devDebug"]["dirty_set"])
+            self.assertFalse(out["log_present"]["devDebug"]["dirty_by_deps"])
             self.assertEqual(0, out["record_lines"]["devDebug"]["dirty_by_deps"])
+
+    def test_present_but_empty_log_is_not_equivalent_to_absence(self):
+        with TemporaryDirectory() as tmp:
+            base = Path(tmp) / "kspCaches"
+            dest = base / "devDebug" / "logs"
+            dest.mkdir(parents=True)
+            (dest / "kspDirtySet.log").write_bytes(b"")
+            out = summarize_probe(gradle_log(), base, "control", "after")
+            self.assertEqual(0, out["record_lines"]["devDebug"]["dirty_set"])
+            self.assertTrue(out["log_present"]["devDebug"]["dirty_set"])
+            self.assertFalse(out["log_present"]["devDebug"]["dirty_by_deps"])
+            self.assertEqual("partial", out["ksp_log_availability"])
 
     def test_refuses_failed_or_duplicate_or_unsafe_task_evidence(self):
         with TemporaryDirectory() as tmp:
