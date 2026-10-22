@@ -1,6 +1,7 @@
 package com.music.bitchord.acquisition.a0
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.os.Bundle
 import android.content.Intent
 import android.content.Context
@@ -48,7 +49,8 @@ class A0ManualLoginActivity : Activity() {
     @Volatile private var activeIndirectPeer: Socket? = null
     @Volatile private var stopping = false
     @Volatile private var activeTrace: A0SmokeTrace? = null
-    @Volatile private var activeTransfer: A0SessionBoundSearchTransfer? = null
+    @Volatile private var activeTransfer: A0ObservedCandidateHandoff? = null
+    @Volatile private var activeSelectionQueue: LinkedBlockingQueue<Int>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,11 +74,11 @@ class A0ManualLoginActivity : Activity() {
         text("Somente para uma conta exclusiva de TESTE. " +
              "O protocolo Soulseek envia a senha por TCP SEM TLS. " +
              "Não reutilize senhas de outros serviços.")
-        text("O primeiro botão testa login; a busca digitável continua sem baixar. " +
-             "A ação separada de transferência testa NO MÁXIMO um arquivo da referência " +
-             "CC0 verificada, com tamanho e SHA-256 conhecidos; ao terminar, apaga os " +
-             "bytes de prova. Nenhum resultado comum autoriza downloads. " +
-             "O Soulseek usa TCP sem TLS. Desconecte o Seeker antes de testar.")
+        text("A pesquisa digitável não baixa arquivos. No teste separado de transporte, " +
+             "você escolhe manualmente um arquivo público anunciado (até 16 MiB) " +
+             "para o qual tenha autorização. Os bytes ficam só temporariamente: " +
+             "tamanho e SHA-256 observado são medidos, depois apagados. " +
+             "O hash NÃO comprova autenticidade da fonte. Soulseek usa TCP sem TLS.")
         val user = EditText(this).apply {
             hint = "Usuário dedicado"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
@@ -114,7 +116,7 @@ class A0ManualLoginActivity : Activity() {
         }
         page.addView(searchAction)
         val transferAction = Button(this).apply {
-            text = "Testar transferência de 1 arquivo CC0 (somente se validado)"
+            text = "Teste de transporte: escolher 1 arquivo (até 16 MiB)"
         }
         page.addView(transferAction)
         val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
@@ -127,8 +129,8 @@ class A0ManualLoginActivity : Activity() {
         val scroll = ScrollView(this).apply { addView(page) }
         setContentView(scroll)
 
-        fun start(performSearch: Boolean, transferLicensed: Boolean = false) {
-            require(!transferLicensed || performSearch)
+        fun start(performSearch: Boolean, transferObserved: Boolean = false) {
+            require(!transferObserved || performSearch)
             if (!acknowledge.isChecked) {
                 status.text = "Leia e confirme o aviso de segurança."
                 return
@@ -152,8 +154,8 @@ class A0ManualLoginActivity : Activity() {
             action.isEnabled = false
             searchAction.isEnabled = false
             transferAction.isEnabled = false
-            status.text = if (transferLicensed) {
-                "Buscando uma referência CC0 verificada; nenhuma música não licenciada será baixada."
+            status.text = if (transferObserved) {
+                "Buscando candidatos pequenos; escolha manual obrigatória, sem download automático."
             } else if (performSearch) {
                 "Autenticando e preparando uma única busca sem downloads."
             } else {
@@ -164,7 +166,9 @@ class A0ManualLoginActivity : Activity() {
                 val captureEnabled = runCatching {
                     Diagnostics.startCapture(180_000L).active
                 }.getOrDefault(false)
-                val trace = A0SmokeTrace.start(Diagnostics.structuredTracer())
+                val trace = A0SmokeTrace.start(
+                    Diagnostics.structuredTracer(), observedTransfer = transferObserved
+                )
                 activeTrace = trace
                 val transport = runCatching {
                     val manager = getSystemService(Context.CONNECTIVITY_SERVICE)
@@ -231,10 +235,9 @@ class A0ManualLoginActivity : Activity() {
                                 trace.note(A0SmokeTrace.Stage.SEARCH_LISTENER_OPEN)
                                 listener.soTimeout = 12_000
                                 val token = SecureRandom().nextInt(Int.MAX_VALUE - 1) + 1
-                                val handoff = if (transferLicensed) {
-                                    A0SessionBoundSearchTransfer(
-                                        connection, username, token,
-                                        A0CommonsOriginalReference.reviewedOriginal()
+                                val handoff = if (transferObserved) {
+                                    A0ObservedCandidateHandoff(
+                                        connection, username, token
                                     ).also { activeTransfer = it }
                                 } else null
                                 connection.getOutputStream().apply {
@@ -279,9 +282,8 @@ class A0ManualLoginActivity : Activity() {
                                                             )
                                                         }
                                                     trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_ACCEPTED)
-                                                    if (!transferLicensed ||
-                                                        handoff?.selectionStatus() ==
-                                                            A0SessionBoundSearchTransfer.Selection.READY
+                                                    if (!transferObserved ||
+                                                        handoff?.hasCandidates() == true
                                                     ) {
                                                         inbox.offer(
                                                             "RESPOSTA P2P DIRETA: " +
@@ -373,9 +375,8 @@ class A0ManualLoginActivity : Activity() {
                                                             )
                                                         }
                                                         trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_ACCEPTED)
-                                                        if (!transferLicensed ||
-                                                            handoff?.selectionStatus() ==
-                                                                A0SessionBoundSearchTransfer.Selection.READY
+                                                        if (!transferObserved ||
+                                                            handoff?.hasCandidates() == true
                                                         ) {
                                                             inbox.offer(
                                                                 "RESPOSTA P2P INDIRETA: " +
@@ -423,8 +424,8 @@ class A0ManualLoginActivity : Activity() {
                                     }
                                     val peerStatus = inbox.poll(12, TimeUnit.SECONDS)
                                     result = peerStatus ?: when {
-                                        transferLicensed ->
-                                            "NENHUM ARQUIVO CORRESPONDEU À REFERÊNCIA CC0 REVISADA. " +
+                                        transferObserved ->
+                                            "NENHUM CANDIDATO DE ÁUDIO DISPONÍVEL ATÉ 16 MiB. " +
                                                 "Nenhuma transferência iniciada."
                                         attemptedIndirect.get() ->
                                             "NEGOCIAÇÃO INDIRETA TENTADA; NENHUMA RESPOSTA P2P " +
@@ -453,7 +454,7 @@ class A0ManualLoginActivity : Activity() {
                                     activeIndirectPeer?.close()
                                     readers.shutdownNow()
                                 }
-                                if (transferLicensed && !stopping) {
+                                if (transferObserved && !stopping) {
                                     if (!readers.awaitTermination(2500, TimeUnit.MILLISECONDS)) {
                                         handoff?.cancel()
                                         throw IOException("A0 concurrent search reader did not stop")
@@ -462,35 +463,71 @@ class A0ManualLoginActivity : Activity() {
                                         handoff?.cancel()
                                         throw IOException("A0 authenticated server frame was interrupted")
                                     }
-                                    if (handoff?.selectionStatus() ==
-                                        A0SessionBoundSearchTransfer.Selection.READY
-                                    ) {
+                                    if (handoff?.hasCandidates() == true) {
                                         checkNotNull(handoff).markReadersStopped()
-                                        // One explicitly reviewed reference only.
-                                        // Keep verified bytes ONLY for the SHA check,
-                                        // then delete the scratch file after the proof.
-                                        val receipt = checkNotNull(handoff).transferOnce(
-                                            getDir("a0-licensed-one-file", Context.MODE_PRIVATE)
-                                        )
-                                        try {
-                                            result = "TRANSFERÊNCIA CC0 VERIFICADA: " +
-                                                "${receipt.byteCount} bytes, SHA-256 confirmado. " +
-                                                "Arquivo temporário descartado."
-                                            finalOutcome = TraceOutcome.SUCCEEDED
-                                            finalReason = null
-                                        } finally {
-                                            // Verified staging may not outlive the A0 smoke.
-                                            // If cleanup fails, never describe the run as a
-                                            // fully clean success.
-                                            if (!receipt.file.delete()) {
-                                                throw IOException("A0 scratch-file cleanup failed")
+                                        val choices=handoff.choices()
+                                        trace.note(A0SmokeTrace.Stage.CANDIDATES_AVAILABLE)
+                                        val choiceQueue=LinkedBlockingQueue<Int>(1)
+                                        activeSelectionQueue=choiceQueue
+                                        runOnUiThread {
+                                            if (stopping || isFinishing || isDestroyed) {
+                                                choiceQueue.offer(-1)
+                                            } else {
+                                                status.text =
+                                                    "Selecione UM arquivo autorizado. Nenhum download automático."
+                                                val titles=choices.map { candidate ->
+                                                    "${candidate.displayName} — ${candidate.sizeBytes} bytes"
+                                                }.toTypedArray()
+                                                AlertDialog.Builder(this@A0ManualLoginActivity)
+                                                    .setTitle("Teste temporário de transporte")
+                                                    .setMessage("Escolha somente um arquivo que você tenha permissão de receber. O SHA-256 será OBSERVADO, não verificado contra a origem.")
+                                                    .setItems(titles) { _, index ->
+                                                        choiceQueue.offer(index)
+                                                    }
+                                                    .setNegativeButton("Cancelar") { _, _ ->
+                                                        choiceQueue.offer(-1)
+                                                    }
+                                                    .setOnCancelListener {
+                                                        choiceQueue.offer(-1)
+                                                    }
+                                                    .show()
+                                            }
+                                        }
+                                        val chosen=choiceQueue.poll(35,TimeUnit.SECONDS)
+                                        activeSelectionQueue=null
+                                        if (chosen==null || chosen<0 || stopping) {
+                                            result = "TESTE CANCELADO OU EXPIRADO. Nenhum arquivo recebido."
+                                            finalOutcome=TraceOutcome.CANCELLED
+                                            trace.note(
+                                                A0SmokeTrace.Stage.MANUAL_SELECTION_CANCELLED,
+                                                TraceOutcome.CANCELLED
+                                            )
+                                        } else {
+                                            trace.note(A0SmokeTrace.Stage.P_F_TRANSFER_STARTED)
+                                            val receipt=handoff.transferChoice(
+                                                chosen,getDir("a0-observed-probe",Context.MODE_PRIVATE)
+                                            )
+                                            try {
+                                                result="TRANSPORTE CONCLUÍDO: ${receipt.byteCount} bytes. " +
+                                                    "SHA-256 observado: ${receipt.sha256Hex}. " +
+                                                    "Não comprova autenticidade. Arquivo temporário apagado."
+                                                finalOutcome=TraceOutcome.SUCCEEDED
+                                                finalReason=null
+                                                trace.note(A0SmokeTrace.Stage.P_F_TRANSFER_COMPLETED)
+                                            } finally {
+                                                if (!receipt.file.delete()) {
+                                                    throw IOException("A0 observed scratch cleanup failed")
+                                                }
+                                                trace.note(A0SmokeTrace.Stage.SCRATCH_CLEANUP)
                                             }
                                         }
                                     } else {
-                                        finalOutcome = TraceOutcome.DEGRADED
-                                        finalReason = A0SmokeTrace.Reason.NO_PEER_REPLY
+                                        result="NENHUM CANDIDATO DE ÁUDIO DISPONÍVEL ATÉ 16 MiB. " +
+                                            "Nenhuma transferência iniciada."
+                                        finalOutcome=TraceOutcome.DEGRADED
+                                        finalReason=A0SmokeTrace.Reason.NO_PEER_REPLY
                                     }
-                                } else if (!transferLicensed && finalOutcome ==
+                                } else if (!transferObserved && finalOutcome ==
                                     TraceOutcome.SUCCEEDED) {
                                     result += " Nenhum download."
                                 }
@@ -539,6 +576,8 @@ class A0ManualLoginActivity : Activity() {
                     trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE, TraceOutcome.FAILED, finalReason)
                     result = "ERRO NO TESTE. Nenhuma credencial foi armazenada."
                 } finally {
+                    activeSelectionQueue?.offer(-1)
+                    activeSelectionQueue=null
                     activeTransfer?.cancel()
                     activeTransfer = null
                     activeListener?.close()
@@ -566,7 +605,7 @@ class A0ManualLoginActivity : Activity() {
         }
         action.setOnClickListener { start(false) }
         searchAction.setOnClickListener { start(true) }
-        transferAction.setOnClickListener { start(true, transferLicensed = true) }
+        transferAction.setOnClickListener { start(true, transferObserved = true) }
         exportAction.setOnClickListener {
             exportAction.isEnabled = false
             worker.execute {
@@ -590,6 +629,7 @@ class A0ManualLoginActivity : Activity() {
 
     override fun onStop() {
         stopping = true
+        activeSelectionQueue?.offer(-1)
         activeTransfer?.cancel()
         activeTrace?.note(
             A0SmokeTrace.Stage.STOP_REQUESTED,
@@ -609,6 +649,7 @@ class A0ManualLoginActivity : Activity() {
     }
 
     override fun onDestroy() {
+        activeSelectionQueue?.offer(-1)
         activeTransfer?.cancel()
         activeListener?.close()
         activeDirectPeer?.close()
