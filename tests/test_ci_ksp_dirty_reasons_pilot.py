@@ -82,7 +82,7 @@ class KspDirtyProbeTests(unittest.TestCase):
                 gradle_log() + "\nBUILD SUCCESSFUL in 3s",
                 gradle_log() + "\n> Task :app:kspDevDebugKotlin",
                 gradle_log().replace("> Task :app:kspDevDebugKotlin\n", ""),
-                gradle_log().replace("UP-TO-DATE", "BAD-STATE"),
+                gradle_log("UP-TO-DATE").replace("UP-TO-DATE", "BAD-STATE"),
             )
             for content in cases:
                 with self.subTest(log=content[-12:]), self.assertRaises(ProbeError):
