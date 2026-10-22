@@ -20,7 +20,7 @@ KSP's historical `ksp.incremental.intermodule=true` is an **experimental** flag 
 
 Three layers, all in a standalone draft branch:
 
-1. `tools/android_ci_ksp_dirty_probe.py`: strict local-only parser. It expects the **entire** required Android unit-test Gradle command to succeed and finds only four documented KSP log basenames in each of the explicit `app/build/kspCaches/devDebug/logs` and `app/build/kspCaches/devDebugUnitTest/logs` locations. The output includes fixed categories and **numbers of nonblank log records**, never filenames or source text. Missing log files are `unobserved` or `partial`, not fabricated. Log text may contain multiple records per source, so a line count is not a source-file count. A symlink, oversized/unreadable/ambiguous input or failed task aborts with a fixed generic error.
+1. `tools/android_ci_ksp_dirty_probe.py`: strict local-only parser. It expects the **entire** required Android unit-test Gradle command to succeed and finds only four documented KSP log basenames in each of the explicit `app/build/kspCaches/devDebug/logs` and `app/build/kspCaches/devDebugUnitTest/logs` locations. The output includes fixed categories, **numbers of nonblank log records** and a separate allowlisted **per-log presence boolean**, never source filenames or contents. A missing record and a present-but-empty record both count as zero lines but have different presence bits; neither constitutes proof that a KSP task skipped processing. Missing log files are `unobserved` or `partial`, not fabricated. Log text may contain multiple records per source, so a line count is not a source-file count. A symlink, oversized/unreadable/ambiguous input or failed task aborts with a fixed generic error.
 2. `tests/test_ci_ksp_dirty_reasons_pilot.py`: TDD tests for positive, absent and partial evidence; path/symbol/secret suppression; task status validation; symlink and size limits; fixed workflow permissions and exact full-test target.
 3. `.github/workflows/android-ci-ksp-dirty-reasons-pilot.yml`: optional, same-repository PR on exact pilot branch only, `contents:read`, JDK17, read-only Gradle cache, **two** independent matrix cases (`sharedUi` comment-only vs unchanged `control`). Each runs `:app:testDevDebugUnitTest` twice with `-Pksp.incremental.log=true`, sending all Gradle output to `$RUNNER_TEMP` and parsing KSP logs locally. All raw outputs stay in the ephemeral runner and are deleted by its lifecycle; none is uploaded to GitHub as an artifact. Only allowlisted JSON summary goes to `GITHUB_STEP_SUMMARY`. Temporary source comment is restored via EXIT trap. All tests remain intact; failures fail closed with no raw log leak.
 
@@ -35,3 +35,17 @@ Three layers, all in a standalone draft branch:
 ## Protected invariants
 
 Never modify required `.github/workflows/check.yml`, `gradle.properties`, Kotlin/KSP plugin versions, Room annotation code, app source code in Git, cache trust/write policy, `main`, integration queue MAX_ITEMS=3 or required post-main exact-SHA Android testing. This is a **draft-only measurement** branch; no merge is authorized by GREEN. Rollback is closing the optional pilot once its evidence is documented.
+
+
+## Evidence from the first P9 matrix on 2026-10-22
+
+On HEAD `ea97bee87aba4acf6a267da5ecca4ecd5cbadb89`, both the exact-HEAD required Android CI #39785404332 and optional two-job matrix #39785406877 finished GREEN. Job IDs control 119847562188 and sharedUi 119847562852. Observed **sanitized** counters from the completed full-suite matrix:
+
+| Scenario | Gradle initial → second | devDebug dirty-set lines initial → second | devDebug source/output record lines initial → second | app KSP main in second | app KSP unit in second | app Kotlin main in second |
+| --- | --- | --- | --- | --- | --- | --- |
+| control, no edit | 269s → 3s | 806 → 806 | 31 → 31 | UP-TO-DATE | UP-TO-DATE | UP-TO-DATE |
+| sharedUi, ABI-neutral comment | 255s → 42s | 806 → 409 | 31 → 14 | EXECUTED | EXECUTED | UP-TO-DATE |
+
+The original parser reported `partial` diagnostic availability. Every `devDebugUnitTest` log type had **zero counted lines**, but a zero alone did not distinguish a missing file from an empty one. The new per-log presence flags address that ambiguity. The exact-HEAD Android and optional matrix must be GREEN **again** after this parser enhancement before the new HEAD is marked validated.
+
+Interpretation: the control retained historical KSP logs across an up-to-date run, so log presence is not proof of fresh processing. Changed line counts in sharedUi indicate distinct diagnostic files, **not** that precisely 409 files were dirty or that source/output mapping count equals a number of sources. We still cannot attribute the exact KSP invalidation to classpath snapshot, aggregating Room output or transitive symbol dependencies without additional bounded evidence. Do not claim an end-to-end merge speedup.
