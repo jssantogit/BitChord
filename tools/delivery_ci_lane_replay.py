@@ -80,7 +80,7 @@ def replay_recent_ci(reader, limit=30):
     _need(type(limit) is int and 1 <= limit <= 30)
     try:
         runs = reader.runs_page(1)
-        _need(type(runs) is list and 0 < len(runs) < 100)
+        _need(type(runs) is list and 0 < len(runs) <= 100)
         selected = runs[:limit]
         seen = set()
         events = []
