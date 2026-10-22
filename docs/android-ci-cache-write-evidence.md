@@ -64,3 +64,19 @@ Enums: `kotlin_production`, `kotlin_tests`, `gradle_configuration`, `ci_workflow
 - The workload class indicates file categories, not causal Gradle cache invalidation. Kotlin/KSP timings, exact Gradle cache hit counts, runner availability and main-vs-PR cache families still need to be observed, without merging unrelated distributions.
 
 The workload tool is **manual read-only diagnostics**; it adds no remote write, GitHub workflow, required check, token permissions, cache operation, upload or user-facing telemetry. Each pilot must remain draft until exact-head CI passes and owner separately approves any integration.
+
+
+## P2d: cache-restore workflow-family attribution (2026-10-22)
+
+`tools/delivery_ci_cache_policy.py` now also classifies **only the workflow-family segment** of syntactically verified `setup-gradle` `Cache hit for restore-key` messages. It emits `cache_restore_status: hit|unobserved` and `cache_restore_workflow_family: android_workflow|build_smoke_apk_workflow|other_workflow|null`. Unknown/malformed hits remain **unobserved**; conflicting workflow-family records fail closed. Full cache keys, hash fragments, branch names, paths, usernames and raw source lines are never returned. `tests/test_delivery_ci_cache_policy.py` provides TDD coverage including key-leak prevention.
+
+**Observed topology, not inferred identity:**
+- Required Android CI #39754833863, job 119744102559, restored a Gradle-home cache key with `android` workflow family, then finished `BUILD SUCCESSFUL in 50s`, 73 actionable tasks: 34 executed, 39 from cache. Kotlin main and KSP main were `FROM-CACHE`.
+- Optional compiler-strategy pilot #39754833997, daemon job 119744102499, restored a Gradle-home cache key with `build-smoke-apk` workflow family, then initial build finished 3m37s, 65 executed / 8 from-cache. In-process job had the same 65/8 initial task counts, took 4m13s, and was slower after a comment-only change (35s vs 27s).
+- Historical post-main mandatory Android #1185, job 119321552697, restored an `android` family Gradle-home key but had to execute Kotlin main, KSP main and tests for source changes (3m54s, 40 executed / 33 from-cache).
+
+A restore-key workflow-family label is **not** proof of the actual producer branch, a verified build output, or whether a particular task cache entry was reused. Different task inputs/commits/toolchains still matter. There is no valid comparison of 50s versus 3m37s without matching source revision, action cache state and job context.
+
+**Cross-branch trust boundary:** GitHub Actions dependency caches are scoped to their branch/merge-ref. Cache artifacts written from a PR merge-ref cannot simply be restored by the protected `main` push after a merge. Default-branch cache can be restored by PR builds, while unrestricted promotion of PR-produced build outputs into main creates cache-poisoning risk. See [GitHub cache access restrictions](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) and [Gradle setup-gradle cache behavior](https://github.com/gradle/actions/blob/main/docs/setup-gradle.md).
+
+**Decision:** keep main's safe cache writes and required full suite unchanged. Do not turn on `cache-mode: write` for low-trust PR triggers, trust PR artifacts blindly, leak cache keys, reuse configuration-cache secrets without encryption, or skip main checks. A cross-job compilation-output cache needs its **own** proposed trusted architecture: exact source tree and toolchain attestation, controlled writer policy, restore verification, security review, and comparable *whole merge-sequence* results before approval. This PR only improves diagnostics and makes no workflow change.
