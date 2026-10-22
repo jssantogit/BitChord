@@ -86,17 +86,21 @@ def _log_counts(ksp_root):
     _need(not root.is_symlink())
     total_logs = 0
     result = {}
+    presence = {}
     for scope in _SCOPES:
         scoped = root / scope
         directory = scoped / "logs"
         _need(not scoped.is_symlink() and not directory.is_symlink())
         row = {}
+        present_row = {}
         for key, filename in _LOGS.items():
             path = directory / filename
             _need(not path.is_symlink())
             if not path.exists():
                 row[key] = 0
+                present_row[key] = False
                 continue
+            present_row[key] = True
             _need(path.is_file())
             _need(path.stat().st_size <= _MAX_LOG)
             payload = path.read_bytes()
@@ -110,10 +114,11 @@ def _log_counts(ksp_root):
             row[key] = sum(bool(item.strip()) for item in lines)
             total_logs += 1
         result[scope] = row
+        presence[scope] = present_row
     status = ("unobserved" if total_logs == 0 else
               "observed" if total_logs == len(_SCOPES) * len(_LOGS) else
               "partial")
-    return result, status
+    return result, presence, status
 
 
 def summarize_probe(gradle_log, ksp_root, case, phase):
@@ -121,7 +126,7 @@ def summarize_probe(gradle_log, ksp_root, case, phase):
     _need(type(phase) is str and phase in _ALLOWED_PHASES)
     try:
         duration, actionable, tasks = _parse_gradle(gradle_log)
-        counts, state = _log_counts(ksp_root)
+        counts, present, state = _log_counts(ksp_root)
         return {
             "version": 1, "case": case, "phase": phase,
             "gradle_seconds": duration,
@@ -129,6 +134,7 @@ def summarize_probe(gradle_log, ksp_root, case, phase):
             "tasks": tasks,
             "ksp_log_availability": state,
             "record_lines": counts,
+            "log_present": present,
             # Log line counts alone cannot distinguish classpath full
             # reprocessing from aggregating processor input invalidation.
             "ksp_causal_reason_proven": False,
