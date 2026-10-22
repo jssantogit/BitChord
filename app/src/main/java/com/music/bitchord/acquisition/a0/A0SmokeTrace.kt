@@ -32,7 +32,9 @@ internal class A0SmokeTrace private constructor(
         INDIRECT_CONNECTED, INDIRECT_CONNECT_FAILED, PIERCE_SENT,
         INDIRECT_REPLY_ACCEPTED, INDIRECT_REPLY_REJECTED,
         INDIRECT_READ_TIMEOUT, INDIRECT_IO_FAILURE,
-        NO_REPLY, SEARCH_COMPLETED, STOP_REQUESTED, SOCKETS_CLOSED,
+        NO_REPLY, SEARCH_COMPLETED, CANDIDATES_AVAILABLE,
+        MANUAL_SELECTION_CANCELLED, P_F_TRANSFER_STARTED, P_F_TRANSFER_COMPLETED,
+        SCRATCH_CLEANUP, STOP_REQUESTED, SOCKETS_CLOSED,
         LOGIN_DENIED, IO_FAILURE, UNEXPECTED_FAILURE
     }
 
@@ -132,13 +134,17 @@ internal class A0SmokeTrace private constructor(
     companion object {
         fun start(
             tracer: StructuredTracer,
-            monotonicNanos: () -> Long = System::nanoTime
+            monotonicNanos: () -> Long = System::nanoTime,
+            observedTransfer: Boolean = false
         ): A0SmokeTrace {
             val startedAt = monotonicNanos()
             val trace = tracer.startTrace(
                 feature = TraceFeature.PROVIDER,
                 operation = "a0_soulseek_one_shot",
-                attributes = mapOf("environment" to "devdebug", "mode" to "read_only")
+                attributes = mapOf(
+                    "environment" to "devdebug",
+                    "mode" to if(observedTransfer)"manual_observed_one_file" else "read_only"
+                )
             )
             return A0SmokeTrace(trace, startedAt, monotonicNanos)
         }
