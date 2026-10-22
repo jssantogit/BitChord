@@ -44,7 +44,7 @@ internal object A0LicensedOneFileSession {
      */
     fun observedSession(listing: A0OpenAudioCandidateGate.PublicPeerListing): Session {
         require(!listing.locked && listing.freeSlot &&
-            listing.reportedSize in 44L..16L*1024L*1024L &&
+            listing.reportedSize in 44L..64L*1024L*1024L &&
             A0ModernIncomingTransfer.isSafeRemoteName(listing.remoteFilename)
         ) { "A0 observed listing is unsafe or unavailable" }
         return Session(listing.remoteFilename,listing.reportedSize,null)
