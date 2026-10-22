@@ -23,7 +23,7 @@ _TASKS = {
     ":app:compileDevDebugUnitTestKotlin": "app_unit_kotlin",
     ":app:testDevDebugUnitTest": "app_unit_tests",
 }
-_CASES = ("app", "shared", "sharedUi", "control")
+_CASES = ("app", "shared", "sharedUi", "sharedAbi", "sharedUiAbi", "control")
 _STATES = {
     "": "executed",
     "FROM-CACHE": "from_cache",
