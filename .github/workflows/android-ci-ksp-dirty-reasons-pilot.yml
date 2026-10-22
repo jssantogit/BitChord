@@ -93,6 +93,7 @@ jobs:
           # --info is enabled only for the second build, with all raw
           # diagnostics redirected to runner-local temporary storage.
           run_full "$RUNNER_TEMP/ksp-after.log" --info
+          echo 'KSP_P10_STAGE_AFTER_COUNTS'
           python3 tools/android_ci_ksp_dirty_probe.py \
             --log "$RUNNER_TEMP/ksp-after.log" \
             --ksp-root app/build/kspCaches --case "$MODE" --phase after \
@@ -100,10 +101,12 @@ jobs:
 
           # Gradle task up-to-date messages can contain private file paths,
           # so parse only predefined input-kind categories before export.
+          echo 'KSP_P10_STAGE_INPUT_CLASSIFICATION'
           python3 tools/android_ci_ksp_dirty_probe.py \
             --log "$RUNNER_TEMP/ksp-after.log" \
             --ksp-root app/build/kspCaches --case "$MODE" --phase after \
             --reason-log > "$RUNNER_TEMP/summary-reasons.json"
+          echo 'KSP_P10_STAGE_ALL_SUMMARIES_READY'
 
           {
             echo '### KSP2 incremental dirty-set presence (sanitized)'
