@@ -93,6 +93,13 @@ jobs:
           # --info is enabled only for the second build, with all raw
           # diagnostics redirected to runner-local temporary storage.
           run_full "$RUNNER_TEMP/ksp-after.log" --info
+          # The structure diagnostic runs BEFORE strict parsing and does not
+          # expose any raw Gradle content, including on an error path.
+          echo 'KSP_P10_LOG_SHAPE'
+          python3 tools/android_ci_ksp_dirty_probe.py \
+            --log "$RUNNER_TEMP/ksp-after.log" \
+            --ksp-root app/build/kspCaches --case "$MODE" --phase after \
+            --shape-log
           echo 'KSP_P10_STAGE_AFTER_COUNTS'
           python3 tools/android_ci_ksp_dirty_probe.py \
             --log "$RUNNER_TEMP/ksp-after.log" \
