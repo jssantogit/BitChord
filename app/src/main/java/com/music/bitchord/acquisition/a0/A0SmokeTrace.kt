@@ -69,6 +69,28 @@ internal class A0SmokeTrace private constructor(
         )
     }
 
+    /** Redacted filter coverage: never store query, peer or file names. */
+    fun candidateScreening(report:A0ObservedCandidateHandoff.Screening) {
+        if(complete.get())return
+        fun n(value:Int)=value.coerceIn(0,100000).toString()
+        trace.event(
+            stage="candidate_screening",
+            outcome=if(report.accepted>0) TraceOutcome.SUCCEEDED
+                else TraceOutcome.DEGRADED,
+            attributes=mapOf(
+                "elapsedMs" to elapsedMillis().toString(),
+                "validatedReplies" to n(report.responses),
+                "announcedPublicFiles" to n(report.publicFiles),
+                "announcedLockedFiles" to n(report.lockedFiles),
+                "tooLarge" to n(report.tooLarge),
+                "unsupportedFormat" to n(report.unsupportedFormat),
+                "unsafePath" to n(report.unsafePath),
+                "noSlot" to n(report.noSlot),
+                "selectable" to n(report.accepted)
+            )
+        )
+    }
+
     /** Mark deliberate teardown before sockets are closed, suppressing read errors it causes. */
     fun beginSocketTeardown() {
         socketsClosing.set(true)
