@@ -58,6 +58,45 @@ class AndroidCacheEvidenceTests(unittest.TestCase):
         self.assertEqual("from_cache", output["tasks"]["ksp_main"])
         self.assertIsNone(output["tasks"]["kotlin_main"])
 
+    def test_cache_restore_family_is_allowlisted_without_leaking_full_key(self):
+        common = [
+            line(10, RUN),
+            line(11, "BUILD SUCCESSFUL in 5s"),
+            line(12, "73 actionable tasks: 40 executed, 33 from cache"),
+            line(13, "Cache is read-only: will not save state for use in subsequent builds."),
+        ]
+        keytail = "a" * 32 + "]-" + "b" * 40
+        for family, label in [
+            ("android", "android_workflow"),
+            ("build-smoke-apk", "build_smoke_apk_workflow"),
+            ("another-workflow", "other_workflow"),
+        ]:
+            with self.subTest(family=family):
+                prefix = line(0, "Cache hit for restore-key: gradle-home-v1|Linux-X64|" + family + "[" + keytail)
+                result = summarize_cache_job("\\n".join([prefix] + common), SHA, "pr")
+                self.assertEqual(label, result["cache_restore_workflow_family"])
+                self.assertEqual("hit", result["cache_restore_status"])
+                self.assertNotIn(keytail, str(result))
+                self.assertNotIn("restore-key", str(result))
+        missing = summarize_cache_job("\\n".join(common), SHA, "pr")
+        self.assertEqual("unobserved", missing["cache_restore_status"])
+        self.assertIsNone(missing["cache_restore_workflow_family"])
+
+    def test_cache_key_family_conflict_and_malformed_key_do_not_generate_false_claims(self):
+        tail = "[" + "a" * 32 + "]-" + "b" * 40
+        start = line(0, "Cache hit for restore-key: gradle-home-v1|Linux-X64|android" + tail)
+        other = line(1, "Cache hit for restore-key: gradle-home-v1|Linux-X64|build-smoke-apk" + tail)
+        body = [
+            line(2, RUN), line(3, "BUILD SUCCESSFUL in 5s"),
+            line(4, "73 actionable tasks: 40 executed, 33 from cache"),
+        ]
+        with self.assertRaises(EvidenceError):
+            summarize_cache_job("\\n".join([start, other] + body), SHA, "main")
+        malformed = line(0, "Cache hit for restore-key: PRIVATE_KEY_not_to_echo")
+        result = summarize_cache_job("\\n".join([malformed] + body), SHA, "main")
+        self.assertEqual("unobserved", result["cache_restore_status"])
+        self.assertNotIn("PRIVATE_KEY", str(result))
+
     def test_unobserved_cache_outcome_is_not_guessed_from_lane(self):
         log = "\n".join([
             line(0, RUN),
