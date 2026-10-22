@@ -501,9 +501,10 @@ class A0ManualLoginActivity : Activity() {
                                                 val titles=choices.map { candidate ->
                                                     "${candidate.displayName} — ${candidate.sizeBytes} bytes"
                                                 }.toTypedArray()
+                                                // A list dialog must not also setMessage():
+                                                // Android's content controller may hide its list.
                                                 AlertDialog.Builder(this@A0ManualLoginActivity)
-                                                    .setTitle("Teste temporário de transporte")
-                                                    .setMessage("Escolha somente um arquivo que você tenha permissão de receber. O SHA-256 será OBSERVADO, não verificado contra a origem.")
+                                                    .setTitle("Escolha um arquivo autorizado (até 16 MiB)")
                                                     .setItems(titles) { _, index ->
                                                         choiceQueue.offer(index)
                                                     }
