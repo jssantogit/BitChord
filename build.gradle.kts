@@ -90,7 +90,16 @@ project(":app") {
         pluginManager.apply("com.google.devtools.ksp")
         dependencies.add("implementation", "androidx.room:room-runtime:2.8.5")
         dependencies.add("implementation", "androidx.room:room-ktx:2.8.5")
-        dependencies.add("ksp", "androidx.room:room-compiler:2.8.5")
+        // Experimental dev-debug-only Room processor scoping. The normal
+        // compiler wiring is unchanged unless an isolated CI pilot opts in.
+        // No KSP task is disabled, excluded, or skipped by this pilot switch.
+        if (providers.gradleProperty("bitchord.roomProcessorMainOnlyPilot").orNull == "true") {
+            configurations.matching { it.name == "kspDevDebug" }.configureEach {
+                dependencies.add(name, "androidx.room:room-compiler:2.8.5")
+            }
+        } else {
+            dependencies.add("ksp", "androidx.room:room-compiler:2.8.5")
+        }
         dependencies.add("testImplementation", "org.robolectric:robolectric:4.14.1")
     }
 }
