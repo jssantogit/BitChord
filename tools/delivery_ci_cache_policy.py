@@ -24,6 +24,16 @@ _RUN = "##[group]Run ./gradlew --build-cache -Pbitchord.bundleWear=false :app:te
 _WRITE_START = "##[group]Caching Gradle state"
 _END = "##[endgroup]"
 _READ_ONLY = "Cache is read-only: will not save state for use in subsequent builds."
+# Only classify the workflow component of a valid Gradle home restore key.
+# Keys can contain sensitive metadata: the original string is NEVER returned.
+_RESTORE_FAMILY = re.compile(
+    r"^Cache hit for restore-key: gradle-home-v1\\|Linux-X64\\|"
+    r"([a-z0-9][a-z0-9-]{0,63})\\[[0-9a-f]{32}\\]-[0-9a-f]{40}$"
+)
+_FAMILY_LABELS = {
+    "android": "android_workflow",
+    "build-smoke-apk": "build_smoke_apk_workflow",
+}
 _TASKS = {
     ":app:kspDevDebugKotlin": "ksp_main",
     ":app:compileDevDebugKotlin": "kotlin_main",
@@ -64,6 +74,7 @@ def summarize_cache_job(log, head_sha, lane):
     write_count = 0
     read_only = False
     last_instant = None
+    restored_family = None
 
     for raw in lines:
         match = _TIMESTAMP.match(raw)
@@ -78,6 +89,12 @@ def summarize_cache_job(log, head_sha, lane):
         _need(last_instant is None or instant >= last_instant)
         last_instant = instant
         message = _ANSI.sub("", message).strip()
+
+        restore = _RESTORE_FAMILY.fullmatch(message)
+        if restore:
+            family = _FAMILY_LABELS.get(restore.group(1), "other_workflow")
+            _need(restored_family is None or restored_family == family)
+            restored_family = family
 
         if message == _RUN:
             _need(not started)
@@ -134,6 +151,10 @@ def summarize_cache_job(log, head_sha, lane):
         "executed_tasks": counts[1],
         "from_cache_tasks": counts[2],
         "write_policy": policy,
+        # Workflow family from a syntactically valid *reported* restore key,
+        # NOT proof of which branch created it or that PR outputs can reach main.
+        "cache_restore_status": "hit" if restored_family is not None else "unobserved",
+        "cache_restore_workflow_family": restored_family,
         "cache_write_phase_seconds": write_seconds,
         "saved_cache_entries": saved,
         "tasks": task_results,
