@@ -82,6 +82,26 @@ class A0SmokeTraceTest {
             it.contains("carrier", true) || it.contains("ssid", true) })
     }
 
+    @Test fun observedTransferFailureIsTypedAndCannotLeaveSuccessfulTraceEnd() {
+        val points=mutableListOf<StructuredTracePoint>()
+        val trace=A0SmokeTrace.start(StructuredTracer(
+            sink=StructuredTraceSink {points.add(it)}
+        ),observedTransfer=true)
+        trace.transferPhase(A0ServerAssociatedTransfer.Phase.GATE_PASSED)
+        trace.transferPhase(A0ServerAssociatedTransfer.Phase.PEER_ADDRESS_REQUESTED)
+        trace.transferFailure(
+            A0ServerAssociatedTransfer.Phase.PEER_ADDRESS_REQUESTED,
+            java.io.EOFException()
+        )
+        trace.finish(TraceOutcome.FAILED,A0SmokeTrace.Reason.SERVER_IO_FAILURE)
+        assertTrue(points.any {it.stage=="pf_peer_address_requested"})
+        val error=points.single {it.stage=="pf_transfer_failure"}
+        assertEquals("peer_address_requested",error.attributes["lastPhase"])
+        assertEquals("eof",error.attributes["failureKind"])
+        assertEquals(TraceOutcome.FAILED,points.last().outcome)
+        assertFalse(points.toString().contains("remoteFilename"))
+    }
+
     @Test fun deliberateSocketShutdownDoesNotEmitSpuriousServerReadFailure() {
         val points = mutableListOf<StructuredTracePoint>()
         val trace = A0SmokeTrace.start(
