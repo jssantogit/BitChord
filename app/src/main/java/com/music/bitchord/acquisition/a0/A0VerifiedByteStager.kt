@@ -34,18 +34,49 @@ internal object A0VerifiedByteStager {
         expectedSha256Hex: String,
         isCancelled: () -> Boolean = { false },
         onProgress: (Long) -> Unit = {},
+    ): Receipt = stageInternal(source,privateDirectory,expectedByteCount,
+        expectedSha256Hex,isCancelled,onProgress)
+
+    /**
+     * User-selected, bounded TRANSPORT probe only. No independent hash is
+     * claimed; calculate a SHA from received bytes, return an .observed scratch
+     * artifact (never .verified), and require caller to delete it.
+     */
+    fun stageObserved(
+        source: InputStream,
+        privateDirectory: File,
+        expectedByteCount: Long,
+        isCancelled: () -> Boolean = { false },
     ): Receipt {
+        require(expectedByteCount in 44..16L*1024L*1024L) {
+            "A0 observed transport must stay within 16 MiB"
+        }
+        return stageInternal(source,privateDirectory,expectedByteCount,
+            null,isCancelled,{})
+    }
+
+    private fun stageInternal(
+        source:InputStream,
+        privateDirectory:File,
+        expectedByteCount:Long,
+        expectedSha256Hex:String?,
+        isCancelled:()->Boolean,
+        onProgress:(Long)->Unit
+    ):Receipt {
         require(expectedByteCount in 44..MAX_TEST_TRANSFER_BYTES) {
             "A0 test transfer requires a bounded positive byte count"
         }
-        require(expectedSha256Hex.length == 64 && expectedSha256Hex.all {
-            it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F'
-        }) { "A0 test requires a trusted hex SHA-256" }
+        require(expectedSha256Hex == null ||
+            (expectedSha256Hex.length == 64 && expectedSha256Hex.all {
+                it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F'
+            })
+        ) { "A0 test requires a trusted hex SHA-256" }
         require(privateDirectory.isDirectory) { "A0 staging directory must exist" }
 
-        val expectedDigest = ByteArray(32) { index ->
-            val byte = expectedSha256Hex.substring(index * 2, index * 2 + 2).toInt(16)
-            byte.toByte()
+        val expectedDigest = expectedSha256Hex?.let { trusted ->
+            ByteArray(32) { index ->
+                trusted.substring(index * 2,index * 2 + 2).toInt(16).toByte()
+            }
         }
         val part = File.createTempFile("a0-", ".partial", privateDirectory)
         var committed = false
@@ -79,7 +110,8 @@ internal object A0VerifiedByteStager {
                 throw IOException("A0 local transfer cancelled")
             }
             val digest = sha256.digest()
-            if (!MessageDigest.isEqual(digest, expectedDigest)) {
+            if (expectedDigest != null &&
+                !MessageDigest.isEqual(digest, expectedDigest)) {
                 throw IOException("A0 local transfer digest mismatch")
             }
             val containerHint = when {
@@ -90,15 +122,19 @@ internal object A0VerifiedByteStager {
                     "FLAC_HEADER_ONLY"
                 start.sliceArray(0..2).contentEquals("ID3".toByteArray(Charsets.US_ASCII)) ->
                     "ID3_HEADER_ONLY"
-                else -> throw IOException("A0 fixture did not match supported audio signatures")
+                else -> if(expectedDigest != null)
+                    throw IOException("A0 fixture did not match supported audio signatures")
+                else "UNCLASSIFIED_TRANSPORT_BYTES"
             }
             // File.createTempFile generates a per-call random name; never use a peer filename.
-            val complete = File(privateDirectory, part.name.removeSuffix(".partial") + ".verified")
+            val suffix=if(expectedDigest==null)".observed" else ".verified"
+            val complete = File(privateDirectory, part.name.removeSuffix(".partial") + suffix)
             if (complete.exists()) throw IOException("A0 verified file already exists")
             // Atomic same-directory promotion: partial data never becomes a verified file.
             Files.move(part.toPath(), complete.toPath(), StandardCopyOption.ATOMIC_MOVE)
             committed = true
-            return Receipt(complete, count, expectedSha256Hex.lowercase(), containerHint)
+            return Receipt(complete,count,
+                digest.joinToString("") { "%02x".format(it.toInt() and 255) },containerHint)
         } finally {
             if (!committed) part.delete()
         }
