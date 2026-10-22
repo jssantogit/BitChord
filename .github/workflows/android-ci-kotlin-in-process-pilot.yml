@@ -1,0 +1,86 @@
+name: Android Kotlin In-Process Compiler Pilot
+
+# Non-required performance/compatibility pilot. Never changes protected main.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/android-ci-kotlin-in-process-pilot.yml'
+      - 'tests/test_ci_kotlin_in_process_pilot.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-in-process-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'infra/android-ci-kotlin-in-process-pilot-v0'
+    name: Kotlin compilation strategy · ${{ matrix.mode }} (non-required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [daemon_default, in_process]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Set up Gradle (read-only shared cache)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+      - name: Non-secret local.properties
+        run: |
+          printf '%s\n' 'LASTFM_API_KEY=ci-placeholder' 'LASTFM_SECRET=ci-placeholder' > local.properties
+          chmod +x gradlew
+      - name: Validate pilot contract
+        run: python3 -m unittest discover -s tests -p test_ci_kotlin_in_process_pilot.py -v
+      - name: Compile and test full Android target with selected Kotlin compiler strategy
+        shell: bash
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          case "$MODE" in
+            daemon_default) flags=() ;;
+            in_process) flags=(-Pkotlin.compiler.execution.strategy=in-process) ;;
+            *) echo 'Invalid Kotlin compiler strategy'; exit 2 ;;
+          esac
+          run_full() {
+            ./gradlew --build-cache --console=plain "${flags[@]}" -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+          }
+          source='app/src/main/java/com/music/bitchord/data/scrobbling/PrimaryArtist.kt'
+          test -f "$source"
+          git diff --quiet HEAD -- "$source"
+          trap 'git restore -- "$source"' EXIT
+
+          initial_start=$SECONDS
+          run_full
+          initial_seconds=$((SECONDS - initial_start))
+
+          printf '\n// Temporary Kotlin compiler-strategy probe; no runtime behavior change.\n' >> "$source"
+          if git diff --quiet HEAD -- "$source"; then
+            echo 'Expected temporary Kotlin source change not detected'; exit 2
+          fi
+
+          changed_start=$SECONDS
+          run_full
+          changed_seconds=$((SECONDS - changed_start))
+          echo "KOTLIN_COMPILER_STRATEGY_RESULT mode=$MODE initial_seconds=$initial_seconds source_change_seconds=$changed_seconds"
+          {
+            echo '### Kotlin compiler strategy pilot'
+            echo "Mode: $MODE"
+            echo "Full-suite initial compilation: ${initial_seconds}s"
+            echo "Full-suite after source edit: ${changed_seconds}s"
+            echo 'All existing Android unit tests remain mandatory in both invocations.'
+            echo 'Source edit is temporary and reverted on job EXIT.'
+            echo 'In-process mode can concentrate Kotlin, Gradle and KSP2 heap usage.'
+            echo 'One matrix pair does not establish a production performance gain.'
+          } >> "$GITHUB_STEP_SUMMARY"
