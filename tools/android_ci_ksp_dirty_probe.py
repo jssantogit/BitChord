@@ -316,7 +316,7 @@ def main(argv=None):
             _need(not options.reason_log)
             report = summarize_gradle_log_shape(options.log)
             json.dump(report, sys.stdout, sort_keys=True, indent=2)
-            sys.stdout.write("\\n")
+            sys.stdout.write("\n")
             return
         log_path = Path(options.log)
         _need(not log_path.is_symlink())
