@@ -54,19 +54,42 @@ internal class A0ServerAssociatedTransfer(
         reference: A0OpenAudioCandidateGate.ReviewedReference,
         listing: A0OpenAudioCandidateGate.PublicPeerListing,
         privateDirectory: File
+    ): A0VerifiedByteStager.Receipt = runInternal(
+        authenticatedServer,localUsername,peerUsername,reference,listing,privateDirectory)
+
+    fun runObservedOnce(
+        authenticatedServer: Socket,
+        localUsername: String,
+        peerUsername: String,
+        listing: A0OpenAudioCandidateGate.PublicPeerListing,
+        privateDirectory: File
+    ): A0VerifiedByteStager.Receipt = runInternal(
+        authenticatedServer,localUsername,peerUsername,null,listing,privateDirectory)
+
+    private fun runInternal(
+        authenticatedServer: Socket,
+        localUsername: String,
+        peerUsername: String,
+        reference: A0OpenAudioCandidateGate.ReviewedReference?,
+        listing: A0OpenAudioCandidateGate.PublicPeerListing,
+        privateDirectory: File
     ): A0VerifiedByteStager.Receipt {
         check(used.compareAndSet(false,true)){"A0 server peer transfer already attempted"}
         checkNotCancelled()
         // Rights and destination are checked before any request, socket or
         // possible link to a peer. Never treat search results as license.
-        val plan=A0LicensedOneFileSession.plan(reference,listing)
-        require(plan is A0LicensedOneFileSession.Plan.Ready) {
-            "A0 exact reviewed file gate rejected this peer listing"
+        val session=if(reference==null)
+            A0LicensedOneFileSession.observedSession(listing)
+        else {
+            val plan=A0LicensedOneFileSession.plan(reference,listing)
+            require(plan is A0LicensedOneFileSession.Plan.Ready) {
+                "A0 exact reviewed file gate rejected this peer listing"
+            }
+            plan.session
         }
         require(privateDirectory.isDirectory){"A0 needs a private test directory"}
         val peerInit=A0PeerRendezvousWire.directPeerInit(localUsername)
         val getAddress=A0PeerRendezvousWire.getPeerAddress(peerUsername)
-        val session=(plan as A0LicensedOneFileSession.Plan.Ready).session
         val deadline=System.nanoTime()+15_000_000_000L
 
         activeServer=authenticatedServer
