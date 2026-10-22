@@ -26,8 +26,26 @@ internal class A0ObservedCandidateHandoff(
         override fun toString()="A0 observed candidate (redacted)"
     }
 
+    /** Only sanitized counters. No usernames, search strings or paths. */
+    data class Screening(
+        val responses:Int,
+        val publicFiles:Int,
+        val lockedFiles:Int,
+        val tooLarge:Int,
+        val unsupportedFormat:Int,
+        val unsafePath:Int,
+        val noSlot:Int,
+        val accepted:Int
+    )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
     private val candidates=ArrayList<Choice>(12)
+    private var replies=0
+    private var publicSeen=0
+    private var lockedSeen=0
+    private var oversized=0
+    private var unsupported=0
+    private var unsafe=0
+    private var noSlotSeen=0
     private var readersStopped=false
     private var cancelled=false
     private var spent=false
@@ -44,29 +62,60 @@ internal class A0ObservedCandidateHandoff(
     @Synchronized
     fun offerParsed(result:A0SoulseekSearchResponse,claimedPeerUsername:String) {
         if(cancelled||spent||readersStopped||result.token!=searchToken ||
-            result.peerUsername!=claimedPeerUsername||!result.hasFreeUploadSlot)return
+            result.peerUsername!=claimedPeerUsername) return
         try { A0PeerRendezvousWire.getPeerAddress(result.peerUsername) }
         catch (_:IllegalArgumentException) { return }
+        replies=(replies+1).coerceAtMost(100000)
+        publicSeen=(publicSeen+result.files.size).coerceAtMost(100000)
+        lockedSeen=(lockedSeen+result.lockedFiles.size).coerceAtMost(100000)
 
         val validExtensions=setOf("mp3","flac","wav","ogg","m4a","aac","opus")
-        val locked=result.lockedFiles.map { it.remoteFilename }.toHashSet()
+        val locked=result.lockedFiles.map{it.remoteFilename}.toHashSet()
         for(file in result.files) {
-            if(candidates.size>=12)break
-            val name=file.remoteFilename
-            val ext=file.extension.lowercase().removePrefix(".")
-            if(ext !in validExtensions || name in locked ||
-                file.sizeBytes !in 44L..16L*1024L*1024L ||
-                !A0ModernIncomingTransfer.isSafeRemoteName(name) ||
-                candidates.any { it.peerUsername==result.peerUsername &&
-                    it.remotePath==name }) continue
-            val display=name.replace('\\','/').substringAfterLast('/')
-                .take(82)
+            val path=file.remoteFilename
+            // Reject unsafe metadata before any UI or disk handoff. The full
+            // untrusted remote path is never exported through diagnostics.
+            if(!A0ModernIncomingTransfer.isSafeRemoteName(path)) {
+                unsafe=(unsafe+1).coerceAtMost(100000)
+                continue
+            }
+            val basename=path.replace('\\','/').substringAfterLast('/')
+            val ext=basename.substringAfterLast('.',missingDelimiterValue="").lowercase()
+            val advertised=file.extension.lowercase().removePrefix(".")
+            if(ext !in validExtensions ||
+                (advertised.isNotEmpty() && advertised!=ext)) {
+                unsupported=(unsupported+1).coerceAtMost(100000)
+                continue
+            }
+            if(file.sizeBytes !in 44L..64L*1024L*1024L) {
+                oversized=(oversized+1).coerceAtMost(100000)
+                continue
+            }
+            if(!result.hasFreeUploadSlot || path in locked) {
+                noSlotSeen=(noSlotSeen+1).coerceAtMost(100000)
+                continue
+            }
+            if(candidates.size>=12 || candidates.any {
+                it.peerUsername==result.peerUsername && it.remotePath==path
+            })continue
             candidates.add(Choice(
-                displayName=display, sizeBytes=file.sizeBytes,
-                peerUsername=result.peerUsername,remotePath=name
+                displayName=basename.take(82),sizeBytes=file.sizeBytes,
+                peerUsername=result.peerUsername,remotePath=path
             ))
         }
     }
+
+    @Synchronized
+    fun screening():Screening=Screening(
+        responses=replies,
+        publicFiles=publicSeen,
+        lockedFiles=lockedSeen,
+        tooLarge=oversized,
+        unsupportedFormat=unsupported,
+        unsafePath=unsafe,
+        noSlot=noSlotSeen,
+        accepted=candidates.size
+    )
 
     @Synchronized
     fun choices():List<Choice> = if(cancelled||spent)emptyList() else candidates.toList()
