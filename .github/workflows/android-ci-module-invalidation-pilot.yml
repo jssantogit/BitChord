@@ -26,7 +26,7 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        mode: [app, shared, sharedUi, control]
+        mode: [app, shared, sharedUi, sharedAbi, sharedUiAbi, control]
 
     steps:
       - name: Checkout exact pilot revision
@@ -64,7 +64,13 @@ jobs:
             shared)
               source='shared/src/jvmSharedMain/kotlin/com/music/bitchord/data/MonotonicClock.kt'
               ;;
+            sharedAbi)
+              source='shared/src/jvmSharedMain/kotlin/com/music/bitchord/data/MonotonicClock.kt'
+              ;;
             sharedUi)
+              source='sharedUi/src/jvmSharedMain/kotlin/com/music/bitchord/ui/player/LyricFocus.kt'
+              ;;
+            sharedUiAbi)
               source='sharedUi/src/jvmSharedMain/kotlin/com/music/bitchord/ui/player/LyricFocus.kt'
               ;;
             control)
@@ -84,9 +90,19 @@ jobs:
           run_full 2>&1 | tee "$RUNNER_TEMP/invalidation-baseline.log"
           baseline_seconds=$((SECONDS - start))
 
-          if [[ "$MODE" != control ]]; then
-            # ABI-neutral input change only inside this disposable checkout.
+          if [[ "$MODE" == sharedAbi ]]; then
+            # Add one unused public top-level function. This changes the
+            # library ABI without altering any existing public contract.
+            # The disposable runner restores this source on EXIT.
+            printf '\n// Temporary additive public-ABI probe; not shipped.\npublic fun bitChordSharedPublicAbiProbe(): Int = 0\n' >> "$source"
+          elif [[ "$MODE" == sharedUiAbi ]]; then
+            printf '\n// Temporary additive public-ABI probe; not shipped.\npublic fun bitChordSharedUiPublicAbiProbe(): Int = 0\n' >> "$source"
+          elif [[ "$MODE" != control ]]; then
+            # Existing source-edit cases are deliberately ABI-neutral.
             printf '\n// Temporary Kotlin module-invalidation probe; no runtime change.\n' >> "$source"
+          fi
+
+          if [[ "$MODE" != control ]]; then
             if git diff --quiet HEAD -- "$source"; then
               echo 'Expected Kotlin input change not detected'; exit 2
             fi
