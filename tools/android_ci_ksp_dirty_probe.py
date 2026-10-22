@@ -40,6 +40,7 @@ _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 _DURATION = re.compile(r"^BUILD SUCCESSFUL in (?:(\d+)m(?: (\d+)s)?|(\d+)s)$")
 _TOTAL = re.compile(r"^(\d+) actionable tasks: (.+)$")
 _MAX_LOG = 1_000_000
+_MAX_GRADLE_LOG_BYTES = 32_000_000  # bounded local-only --info log
 
 
 def _need(condition):
@@ -48,7 +49,7 @@ def _need(condition):
 
 
 def _parse_gradle(log):
-    _need(type(log) is str and 0 < len(log) <= 8_000_000)
+    _need(type(log) is str and 0 < len(log) <= _MAX_GRADLE_LOG_BYTES)
     tasks = {}
     duration = None
     actionable = None
@@ -242,8 +243,11 @@ def main(argv=None):
     parser.add_argument("--reason-log", action="store_true")
     options = parser.parse_args(argv)
     try:
-        data = Path(options.log).read_bytes()
-        _need(len(data) <= 8_000_000)
+        log_path = Path(options.log)
+        _need(not log_path.is_symlink())
+        _need(log_path.stat().st_size <= _MAX_GRADLE_LOG_BYTES)
+        data = log_path.read_bytes()
+        _need(len(data) <= _MAX_GRADLE_LOG_BYTES)
         if options.reason_log:
             _need(options.phase == "after")
             report = summarize_gradle_input_reasons(data.decode("utf-8"), options.case)
