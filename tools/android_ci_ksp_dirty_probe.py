@@ -152,8 +152,8 @@ _INFO_REASONS = {
     ":app:kspDevDebugKotlin": "app_ksp_main",
     ":app:kspDevDebugUnitTestKotlin": "app_ksp_unit",
 }
-_INPUT_PROPERTY = re.compile(r"""^\\s+Input property ['"]([A-Za-z][A-Za-z0-9_]*)['"]\\b""")
-_OUTPUT_PROPERTY = re.compile(r"""^\\s+Output property ['"][^'"]+['"]\\b""")
+_INPUT_PROPERTY = re.compile(r"""^\s+Input property ['"]([A-Za-z][A-Za-z0-9_]*)['"](?=\s|$)""")
+_OUTPUT_PROPERTY = re.compile(r"""^\s+Output property ['"][^'"]+['"](?=\s|$)""")
 _REASON_LIMIT = 40
 
 
