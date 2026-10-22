@@ -17,7 +17,7 @@ internal class A0ObservedCandidateHandoff(
     private val searchToken:Int,
     allowLoopbackForLocalTest:Boolean=false
 ) {
-    data class Choice internal constructor(
+    class Choice internal constructor(
         val displayName:String,
         val sizeBytes:Long,
         internal val peerUsername:String,
