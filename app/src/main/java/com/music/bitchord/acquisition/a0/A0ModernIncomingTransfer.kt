@@ -55,8 +55,8 @@ internal object A0ModernIncomingTransfer {
         expectedRemoteFilename:String,
         expectedByteCount:Long
     ):Ticket {
-        require(expectedByteCount in 44L..16L*1024L*1024L) {
-            "A0 observed mode is capped at 16 MiB"
+        require(expectedByteCount in 44L..64L*1024L*1024L) {
+            "A0 observed mode is capped at 64 MiB"
         }
         return acceptInternal(incomingP,outgoingP,expectedRemoteFilename,
             expectedByteCount,null)
