@@ -5,7 +5,7 @@ from unittest.mock import patch
 import tools.android_ci_ksp_dirty_probe as probe
 import unittest
 
-from tools.android_ci_ksp_dirty_probe import ProbeError, summarize_probe, summarize_gradle_input_reasons
+from tools.android_ci_ksp_dirty_probe import ProbeError, summarize_probe, summarize_gradle_input_reasons, summarize_gradle_log_shape
 
 
 TASKS = (
@@ -210,6 +210,47 @@ class GradleKspInputReasonContracts(unittest.TestCase):
             summarize_gradle_input_reasons(gradle_log(), "/absolute/secret")
 
 
+class SafeGradleShapeDiagnostics(unittest.TestCase):
+    def test_shape_reports_only_fixed_counts_and_size_bands(self):
+        with TemporaryDirectory() as tmp:
+            p = Path(tmp) / "verbose.log"
+            p.write_text(gradle_log() + "\n" +
+                "Task ':app:kspDevDebugKotlin' is not up-to-date because:\n" +
+                "  Input property 'superSecret' file /private/Token.kt has changed.\n")
+            out = summarize_gradle_log_shape(p)
+            self.assertEqual("within_limit", out["size_status"])
+            self.assertEqual("valid_task_summary", out["task_shape"])
+            self.assertEqual("one_success", out["build_shape"])
+            self.assertNotIn("Token.kt", str(out))
+            self.assertNotIn("superSecret", str(out))
+            self.assertNotIn("/private", str(out))
+
+    def test_shape_distinguishes_duplicate_and_missing_without_identifiers(self):
+        with TemporaryDirectory() as tmp:
+            p = Path(tmp) / "log"
+            p.write_text(gradle_log() + "\n> Task :app:kspDevDebugKotlin")
+            out = summarize_gradle_log_shape(p)
+            self.assertEqual("duplicate_task_marker", out["task_shape"])
+            p.write_text(gradle_log().replace("> Task :app:kspDevDebugKotlin\n", ""))
+            out = summarize_gradle_log_shape(p)
+            self.assertEqual("missing_task_marker", out["task_shape"])
+
+    def test_shape_refuses_unsafe_large_or_symlinked_files(self):
+        with TemporaryDirectory() as tmp:
+            p = Path(tmp) / "log"
+            p.write_bytes(b"x" * 150)
+            with patch.object(probe, "_MAX_GRADLE_LOG_BYTES", 100):
+                result = summarize_gradle_log_shape(p)
+            self.assertEqual("over_limit", result["size_status"])
+            self.assertEqual("not_inspected", result["task_shape"])
+            victim = Path(tmp) / "secret"
+            victim.write_text("ALIAS_SECRET")
+            p.unlink()
+            p.symlink_to(victim)
+            with self.assertRaises(ProbeError) as caught:
+                summarize_gradle_log_shape(p)
+            self.assertNotIn("ALIAS_SECRET", str(caught.exception))
+
 class KspWorkflowContracts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -236,6 +277,8 @@ class KspWorkflowContracts(unittest.TestCase):
         self.assertIn('run_full "$RUNNER_TEMP/ksp-before.log"', s)
         self.assertNotIn('run_full "$RUNNER_TEMP/ksp-before.log" --info', s)
         self.assertIn("KSP_SANITIZED_INPUT_REASONS", s)
+        self.assertIn("KSP_P10_LOG_SHAPE", s)
+        self.assertIn("--shape-log", s)
         self.assertIn("KSP_P10_STAGE_AFTER_COUNTS", s)
         self.assertIn("KSP_P10_STAGE_INPUT_CLASSIFICATION", s)
         self.assertIn("KSP_P10_STAGE_ALL_SUMMARIES_READY", s)
