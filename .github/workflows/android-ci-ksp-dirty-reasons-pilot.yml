@@ -68,7 +68,8 @@ jobs:
             local log="$1"
             # KSP2 can place private source names and symbol IDs in both
             # Gradle output and kspCaches. Keep all raw output on this runner.
-            if ! ./gradlew --build-cache --console=plain -Pksp.incremental.log=true -Pbitchord.bundleWear=false :app:testDevDebugUnitTest > "$log" 2>&1; then
+            shift
+            if ! ./gradlew --build-cache --console=plain -Pksp.incremental.log=true -Pbitchord.bundleWear=false :app:testDevDebugUnitTest "$@" > "$log" 2>&1; then
               echo 'Android full suite failed. Raw Gradle logs are private to this ephemeral runner.' >&2
               return 1
             fi
@@ -89,11 +90,20 @@ jobs:
             git diff --quiet HEAD -- "$source"
           fi
 
-          run_full "$RUNNER_TEMP/ksp-after.log"
+          # --info is enabled only for the second build, with all raw
+          # diagnostics redirected to runner-local temporary storage.
+          run_full "$RUNNER_TEMP/ksp-after.log" --info
           python3 tools/android_ci_ksp_dirty_probe.py \
             --log "$RUNNER_TEMP/ksp-after.log" \
             --ksp-root app/build/kspCaches --case "$MODE" --phase after \
             > "$RUNNER_TEMP/summary-after.json"
+
+          # Gradle task up-to-date messages can contain private file paths,
+          # so parse only predefined input-kind categories before export.
+          python3 tools/android_ci_ksp_dirty_probe.py \
+            --log "$RUNNER_TEMP/ksp-after.log" \
+            --ksp-root app/build/kspCaches --case "$MODE" --phase after \
+            --reason-log > "$RUNNER_TEMP/summary-reasons.json"
 
           {
             echo '### KSP2 incremental dirty-set presence (sanitized)'
@@ -108,6 +118,10 @@ jobs:
             echo '```json'
             cat "$RUNNER_TEMP/summary-after.json"
             echo '```'
+            echo '#### Gradle task input-kind observations (not causal proof)'
+            echo '```json'
+            cat "$RUNNER_TEMP/summary-reasons.json"
+            echo '```'
             echo 'Line totals are records, not independently verified dirty-source counts.'
             echo 'An executed KSP task does not by itself prove its invalidation cause.'
           } >> "$GITHUB_STEP_SUMMARY"
@@ -118,3 +132,5 @@ jobs:
           cat "$RUNNER_TEMP/summary-before.json"
           echo 'KSP_SANITIZED_SUMMARY_AFTER'
           cat "$RUNNER_TEMP/summary-after.json"
+          echo 'KSP_SANITIZED_INPUT_REASONS'
+          cat "$RUNNER_TEMP/summary-reasons.json"
