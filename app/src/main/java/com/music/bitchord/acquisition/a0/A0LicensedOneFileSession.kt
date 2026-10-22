@@ -38,10 +38,22 @@ internal object A0LicensedOneFileSession {
         }
     }
 
+    /**
+     * Explicit single-file transport probe. Trusts ONLY that the user selected
+     * one bounded public listing; DOES NOT claim independent source integrity.
+     */
+    fun observedSession(listing: A0OpenAudioCandidateGate.PublicPeerListing): Session {
+        require(!listing.locked && listing.freeSlot &&
+            listing.reportedSize in 44L..16L*1024L*1024L &&
+            A0ModernIncomingTransfer.isSafeRemoteName(listing.remoteFilename)
+        ) { "A0 observed listing is unsafe or unavailable" }
+        return Session(listing.remoteFilename,listing.reportedSize,null)
+    }
+
     class Session internal constructor(
         private val reviewedRemotePath: String,
         private val expectedBytes: Long,
-        private val independentlyTrustedHash: String,
+        private val independentlyTrustedHash: String?,
     ) {
         private enum class Stage { READY, QUEUED, UPLOAD_ACCEPTED, CONSUMED }
         private var stage = Stage.READY
@@ -63,8 +75,11 @@ internal object A0LicensedOneFileSession {
         fun acceptUpload(incomingP: InputStream, outgoingP: OutputStream) {
             check(stage == Stage.QUEUED) { "A0 QueueUpload handshake not completed" }
             stage = Stage.CONSUMED // do not retry after malformed request or I/O failure
-            ticket = A0ModernIncomingTransfer.acceptUpload(
-                incomingP, outgoingP, reviewedRemotePath, expectedBytes, independentlyTrustedHash
+            val trusted=independentlyTrustedHash
+            ticket = if(trusted==null) A0ModernIncomingTransfer.acceptObservedUpload(
+                incomingP,outgoingP,reviewedRemotePath,expectedBytes
+            ) else A0ModernIncomingTransfer.acceptUpload(
+                incomingP,outgoingP,reviewedRemotePath,expectedBytes,trusted
             )
             stage = Stage.UPLOAD_ACCEPTED
         }
