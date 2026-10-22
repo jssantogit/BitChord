@@ -29,7 +29,7 @@ internal object A0ModernIncomingTransfer {
     internal class Ticket internal constructor(
         val token: Int,
         val expectedByteCount: Long,
-        val independentlyTrustedSha256: String
+        val independentlyTrustedSha256: String?
     )
 
     /**
@@ -46,11 +46,34 @@ internal object A0ModernIncomingTransfer {
         expectedRemoteFilename: String,
         expectedByteCount: Long,
         independentlyTrustedSha256: String
-    ): Ticket {
+    ): Ticket = acceptInternal(incomingP,outgoingP,expectedRemoteFilename,
+        expectedByteCount,independentlyTrustedSha256)
+
+    fun acceptObservedUpload(
+        incomingP:InputStream,
+        outgoingP:OutputStream,
+        expectedRemoteFilename:String,
+        expectedByteCount:Long
+    ):Ticket {
+        require(expectedByteCount in 44L..16L*1024L*1024L) {
+            "A0 observed mode is capped at 16 MiB"
+        }
+        return acceptInternal(incomingP,outgoingP,expectedRemoteFilename,
+            expectedByteCount,null)
+    }
+
+    private fun acceptInternal(
+        incomingP:InputStream,
+        outgoingP:OutputStream,
+        expectedRemoteFilename:String,
+        expectedByteCount:Long,
+        independentlyTrustedSha256:String?
+    ):Ticket {
         require(expectedByteCount in 44L..MAX_PROBE_BYTES) {
             "A0 modern probe requires a bounded exact source byte count"
         }
-        require(SHA256.matches(independentlyTrustedSha256)) {
+        require(independentlyTrustedSha256 == null ||
+            SHA256.matches(independentlyTrustedSha256)) {
             "A0 modern probe requires an independent source SHA-256"
         }
         require(isSafeRemoteName(expectedRemoteFilename)) {
@@ -77,7 +100,7 @@ internal object A0ModernIncomingTransfer {
         outgoingP.write(le32(payload.size))
         outgoingP.write(payload)
         outgoingP.flush()
-        return Ticket(token, expectedByteCount, independentlyTrustedSha256.lowercase())
+        return Ticket(token, expectedByteCount, independentlyTrustedSha256?.lowercase())
     }
 
     /**
@@ -100,16 +123,22 @@ internal object A0ModernIncomingTransfer {
         if (isCancelled()) throw IOException("A0 modern incoming transfer cancelled")
         outgoingF.write(ByteArray(8)) // raw uint64 little-endian offset 0
         outgoingF.flush()
-        return A0VerifiedByteStager.stage(
-            source = incomingF,
-            privateDirectory = privateDirectory,
-            expectedByteCount = ticket.expectedByteCount,
-            expectedSha256Hex = ticket.independentlyTrustedSha256,
-            isCancelled = isCancelled
+        val trusted=ticket.independentlyTrustedSha256
+        return if(trusted==null) A0VerifiedByteStager.stageObserved(
+            source=incomingF,
+            privateDirectory=privateDirectory,
+            expectedByteCount=ticket.expectedByteCount,
+            isCancelled=isCancelled
+        ) else A0VerifiedByteStager.stage(
+            source=incomingF,
+            privateDirectory=privateDirectory,
+            expectedByteCount=ticket.expectedByteCount,
+            expectedSha256Hex=trusted,
+            isCancelled=isCancelled
         )
     }
 
-    private fun isSafeRemoteName(name: String): Boolean {
+    internal fun isSafeRemoteName(name: String): Boolean {
         val bytes = name.toByteArray(Charsets.UTF_8)
         if (bytes.isEmpty() || bytes.size > MAX_FILENAME_BYTES ||
             name.any { it.code < 32 } || name.startsWith("/") ||
