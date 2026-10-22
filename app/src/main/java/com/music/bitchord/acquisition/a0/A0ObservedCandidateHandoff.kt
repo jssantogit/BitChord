@@ -129,7 +129,11 @@ internal class A0ObservedCandidateHandoff(
         readersStopped=true
     }
 
-    fun transferChoice(index:Int,privateDirectory:File):A0VerifiedByteStager.Receipt {
+    fun transferChoice(
+        index:Int,
+        privateDirectory:File,
+        onPhase:(A0ServerAssociatedTransfer.Phase)->Unit={}
+    ):A0VerifiedByteStager.Receipt {
         val selected:Choice
         synchronized(this){
             if(cancelled)throw IOException("A0 transfer cancelled")
@@ -144,7 +148,7 @@ internal class A0ObservedCandidateHandoff(
             authenticatedServer,localUsername,selected.peerUsername,
             A0OpenAudioCandidateGate.PublicPeerListing(
                 selected.remotePath,selected.sizeBytes,locked=false,freeSlot=true
-            ),privateDirectory
+            ),privateDirectory,onPhase
         )
     }
 
