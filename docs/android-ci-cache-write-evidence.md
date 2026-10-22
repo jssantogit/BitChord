@@ -31,3 +31,13 @@ The parser is static/read-only and intentionally does not add any required CI jo
 - User-supplied job mode does not imply caching behavior: the log itself must prove read-only, written, or unknown.
 - Parser never exports unbounded strings/cache identifiers.
 - Do not upload the original raw logs to GitHub artifacts or Notion, and do not persist secrets.
+
+## Additional step-phase breakdown (P2b; no extra CI workflow)
+
+The same draft now also includes `tools/delivery_ci_phase_metrics.py` and `tests/test_delivery_ci_phase_metrics.py`. The script reuses the existing GET-only first-party `GitHubCIReader` and queries **only** completed/in-progress required `Android · test and build` jobs. No additional Android build, GitHub Actions workflow, token permission, API writer, artifact, or telemetry upload is introduced.
+
+Use `python3 -m tools.delivery_ci_phase_metrics --repo jssantogit/BitChord --limit 25` with an ordinary GitHub read token if rate limits require it. The output is a bounded `version:1` report sorted by run ID. Each observation contains only the exact run SHA, a fixed lane label, finite/nullable second counts for GitHub job queue wait, total job, `Set up Gradle`, `Run Android unit tests`, `Post Set up Gradle`, and the difference between the job duration and Android-test **step** duration. Unknown/missing steps are null, never zero by assumption. Duplicate/malformed timestamps, unexpected repositories, inconsistent successes, impossible durations and mixed paths fail closed. Raw ref names, user IDs, logs, cache keys, environment variables and error messages never enter the output.
+
+Summaries provide medians by existing lanes (including future `pr_d` for the separate draft #152 proposal) and suppress p90 unless at least three queue-time observations exist. The `non_test_step_seconds` label describes the wallclock outside the unit-test *step*, not wasted or safely removable time; it includes necessary toolchain setup and post-run work. Likewise an observed queue delay is **not** proof that CI concurrency caused it. Use these metrics next to Gradle task-level profiles and cache-write evidence to decide whether the real bottleneck is compiler work, setup, cache persistence or scheduler pressure.
+
+Integration Queue contract tests and the existing required Android workflow must remain GREEN on the final exact SHA. This is instrumentation only; policies are unchanged, and no production speedup is claimed.
