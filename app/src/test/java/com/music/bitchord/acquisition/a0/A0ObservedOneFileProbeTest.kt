@@ -63,7 +63,7 @@ class A0ObservedOneFileProbeTest {
         for (listing in listOf(
             A0OpenAudioCandidateGate.PublicPeerListing("../unsafe.wav",300,false,true),
             A0OpenAudioCandidateGate.PublicPeerListing("Track\\song.mp3",0,false,true),
-            A0OpenAudioCandidateGate.PublicPeerListing("Track\\song.mp3",17L*1024*1024,false,true),
+            A0OpenAudioCandidateGate.PublicPeerListing("Track\\song.mp3",65L*1024*1024,false,true),
             A0OpenAudioCandidateGate.PublicPeerListing("Track\\song.mp3",300,true,true),
             A0OpenAudioCandidateGate.PublicPeerListing("Track\\song.mp3",300,false,false)
         )){
