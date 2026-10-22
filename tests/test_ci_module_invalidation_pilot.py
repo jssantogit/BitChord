@@ -61,7 +61,7 @@ class InvalidationProbeParserTests(unittest.TestCase):
             analyze_task_log(sample(), "secrets/" + "x" * 200)
         with self.assertRaises(ProbeError):
             analyze_task_log(sample().replace("UP-TO-DATE", "UNSAFE", 1), "sharedUi")
-        for mode in ("app", "shared", "sharedUi", "control"):
+        for mode in ("app", "shared", "sharedUi", "sharedAbi", "sharedUiAbi", "control"):
             self.assertEqual(mode, analyze_task_log(sample(), mode)["source_case"])
 
     def test_ksp_task_statuses_are_not_inferred_from_total_counts(self):
@@ -94,9 +94,9 @@ class InvalidationWorkflowContracts(unittest.TestCase):
         self.assertNotIn("upload-artifact", s)
         self.assertNotIn("integration-apply", s)
 
-    def test_four_independent_full_suite_cases_and_restoration(self):
+    def test_six_bounded_full_suite_cases_with_abi_and_comment_probes(self):
         s = self.workflow
-        self.assertIn("mode: [app, shared, sharedUi, control]", s)
+        self.assertIn("mode: [app, shared, sharedUi, sharedAbi, sharedUiAbi, control]", s)
         self.assertIn("max-parallel: 2", s)
         self.assertIn("fail-fast: false", s)
         for name in (
@@ -105,6 +105,14 @@ class InvalidationWorkflowContracts(unittest.TestCase):
             "sharedUi/src/jvmSharedMain/kotlin/com/music/bitchord/ui/player/LyricFocus.kt",
         ):
             self.assertIn(name, s)
+        # ABI probes add unused, public top-level declarations solely in
+        # the disposable runner, never change a pre-existing signature.
+        self.assertIn("public fun bitChordSharedPublicAbiProbe(): Int = 0", s)
+        self.assertIn("public fun bitChordSharedUiPublicAbiProbe(): Int = 0", s)
+        self.assertIn("sharedAbi)", s)
+        self.assertIn("sharedUiAbi)", s)
+        self.assertIn('if [[ "$MODE" == sharedAbi ]]', s)
+        self.assertIn('elif [[ "$MODE" == sharedUiAbi ]]', s)
         self.assertIn("case \"$MODE\" in", s)
         self.assertIn("run_full", s)
         self.assertIn(":app:testDevDebugUnitTest", s)
