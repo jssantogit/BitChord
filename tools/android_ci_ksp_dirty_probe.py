@@ -239,12 +239,17 @@ def main(argv=None):
     parser.add_argument("--ksp-root", required=True)
     parser.add_argument("--case", required=True, choices=_ALLOWED_CASES)
     parser.add_argument("--phase", required=True, choices=_ALLOWED_PHASES)
+    parser.add_argument("--reason-log", action="store_true")
     options = parser.parse_args(argv)
     try:
         data = Path(options.log).read_bytes()
         _need(len(data) <= 8_000_000)
-        report = summarize_probe(
-            data.decode("utf-8"), options.ksp_root, options.case, options.phase)
+        if options.reason_log:
+            _need(options.phase == "after")
+            report = summarize_gradle_input_reasons(data.decode("utf-8"), options.case)
+        else:
+            report = summarize_probe(
+                data.decode("utf-8"), options.ksp_root, options.case, options.phase)
     except Exception:
         parser.exit(2, "KSP DIRTY PROBE HALTED: unsafe_or_incomplete_evidence\n")
     json.dump(report, sys.stdout, sort_keys=True, indent=2)
