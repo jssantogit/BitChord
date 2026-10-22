@@ -111,3 +111,10 @@ jobs:
             echo 'Line totals are records, not independently verified dirty-source counts.'
             echo 'An executed KSP task does not by itself prove its invalidation cause.'
           } >> "$GITHUB_STEP_SUMMARY"
+
+          # Only the strictly allowlisted, redacted JSON reaches Actions
+          # job logs, so first-party GH REST can audit the counts directly.
+          echo 'KSP_SANITIZED_SUMMARY_BEFORE'
+          cat "$RUNNER_TEMP/summary-before.json"
+          echo 'KSP_SANITIZED_SUMMARY_AFTER'
+          cat "$RUNNER_TEMP/summary-after.json"
