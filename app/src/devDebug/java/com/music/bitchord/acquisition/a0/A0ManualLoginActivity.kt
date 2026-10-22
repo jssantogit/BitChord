@@ -75,7 +75,7 @@ class A0ManualLoginActivity : Activity() {
              "O protocolo Soulseek envia a senha por TCP SEM TLS. " +
              "Não reutilize senhas de outros serviços.")
         text("A pesquisa digitável não baixa arquivos. No teste separado de transporte, " +
-             "você escolhe manualmente um arquivo público anunciado (até 16 MiB) " +
+             "você escolhe manualmente um arquivo público anunciado (até 64 MiB) " +
              "para o qual tenha autorização. Os bytes ficam só temporariamente: " +
              "tamanho e SHA-256 observado são medidos, depois apagados. " +
              "O hash NÃO comprova autenticidade da fonte. Soulseek usa TCP sem TLS.")
@@ -116,7 +116,7 @@ class A0ManualLoginActivity : Activity() {
         }
         page.addView(searchAction)
         val transferAction = Button(this).apply {
-            text = "Teste de transporte: escolher 1 arquivo (até 16 MiB)"
+            text = "Teste de transporte: escolher 1 arquivo (até 64 MiB)"
         }
         page.addView(transferAction)
         val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
@@ -291,7 +291,6 @@ class A0ManualLoginActivity : Activity() {
                                                             peer.getInputStream(), token
                                                         ) { verifiedFrame, claimedPeer ->
                                                             receivedValidP2pReply.set(true)
-                                                            receivedValidP2pReply.set(true)
                                                             handoff?.offerSearchResult(
                                                                 verifiedFrame, claimedPeer
                                                             )
@@ -336,7 +335,7 @@ class A0ManualLoginActivity : Activity() {
                                         try {
                                             while (!Thread.currentThread().isInterrupted &&
                                                 System.nanoTime() < deadline &&
-                                                inbox.isEmpty() && attempts < 2
+                                                inbox.isEmpty() && attempts < 6
                                             ) {
                                                 framedServer.nextFrame()
                                                 val offer = try {
@@ -385,6 +384,7 @@ class A0ManualLoginActivity : Activity() {
                                                         val observation = A0IndirectSearchWire.readIndirectReply(
                                                             peer.getInputStream(), token, offer.username
                                                         ) { verifiedFrame, claimedPeer ->
+                                                            receivedValidP2pReply.set(true)
                                                             handoff?.offerSearchResult(
                                                                 verifiedFrame, claimedPeer
                                                             )
@@ -440,7 +440,7 @@ class A0ManualLoginActivity : Activity() {
                                     val peerStatus = inbox.poll(12, TimeUnit.SECONDS)
                                     result = peerStatus ?: when {
                                         transferObserved ->
-                                            "NENHUM CANDIDATO DE ÁUDIO DISPONÍVEL ATÉ 16 MiB. " +
+                                            "NENHUM CANDIDATO DE ÁUDIO DISPONÍVEL ATÉ 64 MiB. " +
                                                 "Nenhuma transferência iniciada."
                                         attemptedIndirect.get() ->
                                             "NEGOCIAÇÃO INDIRETA TENTADA; NENHUMA RESPOSTA P2P " +
@@ -486,6 +486,8 @@ class A0ManualLoginActivity : Activity() {
                                         handoff?.cancel()
                                         throw IOException("A0 authenticated server frame was interrupted")
                                     }
+                                    val report=handoff?.screening()
+                                    if(report!=null) trace.candidateScreening(report)
                                     if (handoff?.hasCandidates() == true) {
                                         checkNotNull(handoff).markReadersStopped()
                                         val choices=handoff.choices()
@@ -504,7 +506,7 @@ class A0ManualLoginActivity : Activity() {
                                                 // A list dialog must not also setMessage():
                                                 // Android's content controller may hide its list.
                                                 AlertDialog.Builder(this@A0ManualLoginActivity)
-                                                    .setTitle("Escolha um arquivo autorizado (até 16 MiB)")
+                                                    .setTitle("Escolha um arquivo autorizado (até 64 MiB)")
                                                     .setItems(titles) { _, index ->
                                                         choiceQueue.offer(index)
                                                     }
@@ -546,10 +548,27 @@ class A0ManualLoginActivity : Activity() {
                                             }
                                         }
                                     } else {
-                                        result="NENHUM CANDIDATO DE ÁUDIO DISPONÍVEL ATÉ 16 MiB. " +
+                                        val screened=checkNotNull(report)
+                                        val classified=A0CandidateOutcome.classify(
+                                            screened,receivedValidP2pReply.get()
+                                        )
+                                        result=if(classified ==
+                                            A0CandidateOutcome.Kind.NO_ELIGIBLE_CANDIDATE) {
+                                            "RESPOSTA P2P RECEBIDA: ${screened.responses} respostas, " +
+                                            "${screened.publicFiles} arquivos anunciados, " +
+                                            "0 elegíveis (tamanho: ${screened.tooLarge}, " +
+                                            "formato: ${screened.unsupportedFormat}, " +
+                                            "sem slot: ${screened.noSlot}, " +
+                                            "caminho inválido: ${screened.unsafePath}, " +
+                                            "bloqueados: ${screened.lockedFiles}). " +
                                             "Nenhuma transferência iniciada."
+                                        } else {
+                                            "BUSCA ENVIADA; NENHUMA RESPOSTA P2P VÁLIDA. " +
+                                            "Nenhuma transferência iniciada."
+                                        }
                                         finalOutcome=TraceOutcome.DEGRADED
-                                        finalReason=if(receivedValidP2pReply.get())
+                                        finalReason=if(classified ==
+                                            A0CandidateOutcome.Kind.NO_ELIGIBLE_CANDIDATE)
                                             A0SmokeTrace.Reason.NO_ELIGIBLE_CANDIDATE
                                         else A0SmokeTrace.Reason.NO_PEER_REPLY
                                     }
