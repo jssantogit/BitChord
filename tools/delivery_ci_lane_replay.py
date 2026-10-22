@@ -21,6 +21,7 @@ class LaneReplayError(ValueError):
 
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 _MAX_ERROR_SECONDS = 30
+_MAX_OUTLIER_SECONDS = 90
 _MIN_SAMPLES = 8
 _MIN_PER_C_GROUP = 3
 
@@ -156,7 +157,7 @@ def replay_recent_ci(reader, limit=30):
                   for e, predicted in zip(ordered, baseline_waits)]
         calibration = _median(errors)
         out["baseline_median_absolute_error_seconds"] = round(calibration, 2)
-        if calibration > _MAX_ERROR_SECONDS:
+        if calibration > _MAX_ERROR_SECONDS or max(errors) > _MAX_OUTLIER_SECONDS:
             out["status"] = "uncalibrated"
             return out
         out.update({
