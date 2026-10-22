@@ -128,9 +128,21 @@ class A0ManualLoginActivity : Activity() {
 
         val scroll = ScrollView(this).apply { addView(page) }
         setContentView(scroll)
+        val observedScratchDirectory=getDir("a0-observed-probe",Context.MODE_PRIVATE)
+        val observedScratchReady=runCatching {
+            A0ObservedScratchRecovery.clean(observedScratchDirectory)
+        }.isSuccess
+        if(!observedScratchReady) {
+            transferAction.isEnabled=false
+            status.text="Falha ao limpar arquivos temporários do teste. Transferência bloqueada."
+        }
 
         fun start(performSearch: Boolean, transferObserved: Boolean = false) {
             require(!transferObserved || performSearch)
+            if(transferObserved && !observedScratchReady) {
+                status.text="Armazenamento temporário inseguro. Nenhuma transferência permitida."
+                return
+            }
             if (!acknowledge.isChecked) {
                 status.text = "Leia e confirme o aviso de segurança."
                 return
@@ -505,7 +517,7 @@ class A0ManualLoginActivity : Activity() {
                                         } else {
                                             trace.note(A0SmokeTrace.Stage.P_F_TRANSFER_STARTED)
                                             val receipt=handoff.transferChoice(
-                                                chosen,getDir("a0-observed-probe",Context.MODE_PRIVATE)
+                                                chosen,observedScratchDirectory
                                             )
                                             try {
                                                 result="TRANSPORTE CONCLUÍDO: ${receipt.byteCount} bytes. " +
@@ -597,7 +609,7 @@ class A0ManualLoginActivity : Activity() {
                             status.text = result
                             action.isEnabled = true
                             searchAction.isEnabled = true
-                            transferAction.isEnabled = true
+                            transferAction.isEnabled = observedScratchReady
                         }
                     }
                 }
