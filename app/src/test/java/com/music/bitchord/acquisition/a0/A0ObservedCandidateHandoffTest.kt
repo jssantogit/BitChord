@@ -62,9 +62,9 @@ class A0ObservedCandidateHandoffTest {
     }
     @Test fun acceptsRealisticThirtyMegabyteFlacAndMissingExtensionMetadata() {
         val handoff=A0ObservedCandidateHandoff(Socket(),"ouruser",81,true)
-        val large=A0SoulseekSearchFile("Albums\\\\long-track.flac",
+        val large=A0SoulseekSearchFile("Albums\\long-track.flac",
             30L*1024L*1024L,"FLAC",emptyMap())
-        val missing=A0SoulseekSearchFile("Albums\\\\short-track.mp3",
+        val missing=A0SoulseekSearchFile("Albums\\short-track.mp3",
             6L*1024L*1024L,"",emptyMap())
         handoff.offerParsed(A0SoulseekSearchResponse("somepeer",81,
             listOf(large,missing),emptyList(),true,1000,0),"somepeer")
@@ -78,11 +78,11 @@ class A0ObservedCandidateHandoffTest {
         fun response(files:List<A0SoulseekSearchFile>,free:Boolean=true,
             locked:List<A0SoulseekSearchFile> = emptyList())=
             A0SoulseekSearchResponse("somepeer",81,files,locked,free,1000,0)
-        val audio=A0SoulseekSearchFile("Album\\\\sample.mp3",5L*1024*1024,"mp3",emptyMap())
+        val audio=A0SoulseekSearchFile("Album\\sample.mp3",5L*1024*1024,"mp3",emptyMap())
         handoff.offerParsed(response(listOf(audio),free=false),"somepeer")
         handoff.offerParsed(response(listOf(
-            A0SoulseekSearchFile("Album\\\\huge.flac",65L*1024*1024,"flac",emptyMap()),
-            A0SoulseekSearchFile("Album\\\\cover.jpg",20000,"jpg",emptyMap()),
+            A0SoulseekSearchFile("Album\\huge.flac",65L*1024*1024,"flac",emptyMap()),
+            A0SoulseekSearchFile("Album\\cover.jpg",20000,"jpg",emptyMap()),
             A0SoulseekSearchFile("../escape.mp3",20000,"mp3",emptyMap())
         ),locked=listOf(audio)),"somepeer")
         val report=handoff.screening()
