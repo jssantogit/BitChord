@@ -31,6 +31,20 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal class A0ServerAssociatedTransfer(
     private val allowLoopbackForLocalTest: Boolean = false
 ) {
+    enum class Phase {
+        GATE_PASSED,
+        PEER_ADDRESS_REQUESTED,
+        PEER_ADDRESS_RESOLVED,
+        P_DIRECT_ATTEMPT,
+        P_INDIRECT_REQUESTED,
+        P_ESTABLISHED,
+        QUEUE_UPLOAD_SENT,
+        TRANSFER_ACCEPTED,
+        F_WAIT_STARTED,
+        F_ESTABLISHED,
+        BYTES_RECEIVED
+    }
+
     private val used=AtomicBoolean(false)
     private val cancelled=AtomicBoolean(false)
     @Volatile private var activeServer:Socket?=null
@@ -55,16 +69,17 @@ internal class A0ServerAssociatedTransfer(
         listing: A0OpenAudioCandidateGate.PublicPeerListing,
         privateDirectory: File
     ): A0VerifiedByteStager.Receipt = runInternal(
-        authenticatedServer,localUsername,peerUsername,reference,listing,privateDirectory)
+        authenticatedServer,localUsername,peerUsername,reference,listing,privateDirectory,{})
 
     fun runObservedOnce(
         authenticatedServer: Socket,
         localUsername: String,
         peerUsername: String,
         listing: A0OpenAudioCandidateGate.PublicPeerListing,
-        privateDirectory: File
+        privateDirectory: File,
+        onPhase:(Phase)->Unit={}
     ): A0VerifiedByteStager.Receipt = runInternal(
-        authenticatedServer,localUsername,peerUsername,null,listing,privateDirectory)
+        authenticatedServer,localUsername,peerUsername,null,listing,privateDirectory,onPhase)
 
     private fun runInternal(
         authenticatedServer: Socket,
@@ -72,7 +87,8 @@ internal class A0ServerAssociatedTransfer(
         peerUsername: String,
         reference: A0OpenAudioCandidateGate.ReviewedReference?,
         listing: A0OpenAudioCandidateGate.PublicPeerListing,
-        privateDirectory: File
+        privateDirectory: File,
+        onPhase:(Phase)->Unit
     ): A0VerifiedByteStager.Receipt {
         check(used.compareAndSet(false,true)){"A0 server peer transfer already attempted"}
         checkNotCancelled()
@@ -88,6 +104,7 @@ internal class A0ServerAssociatedTransfer(
             plan.session
         }
         require(privateDirectory.isDirectory){"A0 needs a private test directory"}
+        onPhase(Phase.GATE_PASSED)
         val peerInit=A0PeerRendezvousWire.directPeerInit(localUsername)
         val getAddress=A0PeerRendezvousWire.getPeerAddress(peerUsername)
         val deadline=System.nanoTime()+15_000_000_000L
@@ -104,10 +121,13 @@ internal class A0ServerAssociatedTransfer(
                     write(getAddress)
                     flush()
                 }
+                onPhase(Phase.PEER_ADDRESS_REQUESTED)
                 val resolved=resolvePeer(authenticatedServer,peerUsername,deadline)
                 requireEndpoint(resolved.address,allowLoopbackForLocalTest)
+                onPhase(Phase.PEER_ADDRESS_RESOLVED)
                 val p = try {
                     checkNotCancelled()
+                    onPhase(Phase.P_DIRECT_ATTEMPT)
                     Socket().also{socket->
                         activeP=socket
                         try {
@@ -121,22 +141,28 @@ internal class A0ServerAssociatedTransfer(
                         }
                     }
                 } catch (_:ConnectException) {
+                    onPhase(Phase.P_INDIRECT_REQUESTED)
                     requestIndirect(authenticatedServer,listener,resolved.address,
                         peerUsername,deadline)
                 } catch (_:SocketTimeoutException) {
+                    onPhase(Phase.P_INDIRECT_REQUESTED)
                     requestIndirect(authenticatedServer,listener,resolved.address,
                         peerUsername,deadline)
                 }
                 p.use{peer->
                     activeP=peer
                     checkNotCancelled()
+                    onPhase(Phase.P_ESTABLISHED)
                     session.queueUpload(peer.getOutputStream())
+                    onPhase(Phase.QUEUE_UPLOAD_SENT)
                     session.acceptUpload(peer.getInputStream(),peer.getOutputStream())
+                    onPhase(Phase.TRANSFER_ACCEPTED)
                     checkNotCancelled()
                     // A direct inbound F is not guaranteed behind carrier/
                     // residential NAT. Also accept a server-mediated code-18
                     // F offer from this exact peer; reply PierceFirewall on
                     // outbound F before reading FileTransferInit.
+                    onPhase(Phase.F_WAIT_STARTED)
                     A0FileChannelRendezvous.awaitFileSocket(
                         server=authenticatedServer,
                         listener=listener,
@@ -150,6 +176,7 @@ internal class A0ServerAssociatedTransfer(
                         onSocketActivated={activeF=it}
                     ).use{f->
                         activeF=f
+                        onPhase(Phase.F_ESTABLISHED)
                         f.soTimeout=remainingTimeout(deadline)
                         if(!f.inetAddress.address.contentEquals(resolved.address.address)) {
                             throw IOException("A0 F peer does not match server-selected P address")
@@ -160,6 +187,7 @@ internal class A0ServerAssociatedTransfer(
                             isCancelled={cancelled.get()||Thread.currentThread().isInterrupted||
                                 System.nanoTime()>=deadline}
                         )
+                        onPhase(Phase.BYTES_RECEIVED)
                         if(cancelled.get()||Thread.currentThread().isInterrupted||
                             System.nanoTime()>=deadline) {
                             receipt.file.delete()
