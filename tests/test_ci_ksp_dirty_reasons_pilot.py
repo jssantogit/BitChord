@@ -1,6 +1,8 @@
 """Fail-closed contracts for privacy-safe KSP2 incremental attribution."""
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
+import tools.android_ci_ksp_dirty_probe as probe
 import unittest
 
 from tools.android_ci_ksp_dirty_probe import ProbeError, summarize_probe, summarize_gradle_input_reasons
@@ -171,6 +173,17 @@ class GradleKspInputReasonContracts(unittest.TestCase):
                          got["tasks"]["app_ksp_main"]["categories"])
         self.assertEqual(["history_missing"],
                          got["tasks"]["app_ksp_unit"]["categories"])
+
+    def test_info_log_has_strict_but_adequate_bounded_size_limit(self):
+        raw = gradle_log() + "\n" + ("PRIVATE_NOT_TO_EXPORT " * 30)
+        self.assertGreater(probe._MAX_GRADLE_LOG_BYTES, 8_000_000)
+        with patch.object(probe, "_MAX_GRADLE_LOG_BYTES", len(raw) + 1):
+            out = summarize_gradle_input_reasons(raw, "sharedUi")
+            self.assertEqual("unobserved", out["tasks"]["app_ksp_main"]["reason_availability"])
+        with patch.object(probe, "_MAX_GRADLE_LOG_BYTES", len(raw) - 1):
+            with self.assertRaises(ProbeError) as caught:
+                summarize_gradle_input_reasons(raw, "sharedUi")
+            self.assertNotIn("PRIVATE_NOT_TO_EXPORT", str(caught.exception))
 
     def test_untrusted_or_ambiguous_input_reason_logs_fail_closed(self):
         cases = [
