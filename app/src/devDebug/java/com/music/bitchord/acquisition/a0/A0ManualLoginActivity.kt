@@ -474,16 +474,27 @@ class A0ManualLoginActivity : Activity() {
                                     }
                                     trace.note(A0SmokeTrace.Stage.SEARCH_COMPLETED, finalOutcome)
                                 } finally {
-                                    listener.close()
-                                    activeDirectPeer?.close()
-                                    activeIndirectPeer?.close()
-                                    readers.shutdownNow()
+                                    if(transferObserved && !stopping) {
+                                        // Do not interrupt a server Socket read then
+                                        // reuse that very socket for P/F on Android.
+                                        A0SearchReaderHandoff.stop(
+                                            readers,
+                                            closeSearchSockets={
+                                                listener.close()
+                                                activeDirectPeer?.close()
+                                                activeIndirectPeer?.close()
+                                            },
+                                            timeoutMillis=5000
+                                        )
+                                        trace.note(A0SmokeTrace.Stage.SEARCH_READERS_JOINED)
+                                    } else {
+                                        listener.close()
+                                        activeDirectPeer?.close()
+                                        activeIndirectPeer?.close()
+                                        readers.shutdownNow()
+                                    }
                                 }
                                 if (transferObserved && !stopping) {
-                                    if (!readers.awaitTermination(2500, TimeUnit.MILLISECONDS)) {
-                                        handoff?.cancel()
-                                        throw IOException("A0 concurrent search reader did not stop")
-                                    }
                                     if (failedServerReader.get()) {
                                         handoff?.cancel()
                                         throw IOException("A0 authenticated server frame was interrupted")
