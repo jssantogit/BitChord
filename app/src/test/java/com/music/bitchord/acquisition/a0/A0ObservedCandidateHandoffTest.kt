@@ -60,4 +60,43 @@ class A0ObservedCandidateHandoffTest {
             fail("Cancelled")}
         catch (_:IOException){}
     }
+    @Test fun acceptsRealisticThirtyMegabyteFlacAndMissingExtensionMetadata() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"ouruser",81,true)
+        val large=A0SoulseekSearchFile("Albums\\\\long-track.flac",
+            30L*1024L*1024L,"FLAC",emptyMap())
+        val missing=A0SoulseekSearchFile("Albums\\\\short-track.mp3",
+            6L*1024L*1024L,"",emptyMap())
+        handoff.offerParsed(A0SoulseekSearchResponse("somepeer",81,
+            listOf(large,missing),emptyList(),true,1000,0),"somepeer")
+        assertEquals(2,handoff.choices().size)
+        assertEquals(2,handoff.screening().accepted)
+        assertEquals(2,handoff.screening().publicFiles)
+    }
+
+    @Test fun screeningRevealsWhyValidRepliesProduceZeroCandidatesWithoutPeerPaths() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"ouruser",81,true)
+        fun response(files:List<A0SoulseekSearchFile>,free:Boolean=true,
+            locked:List<A0SoulseekSearchFile> = emptyList())=
+            A0SoulseekSearchResponse("somepeer",81,files,locked,free,1000,0)
+        val audio=A0SoulseekSearchFile("Album\\\\sample.mp3",5L*1024*1024,"mp3",emptyMap())
+        handoff.offerParsed(response(listOf(audio),free=false),"somepeer")
+        handoff.offerParsed(response(listOf(
+            A0SoulseekSearchFile("Album\\\\huge.flac",65L*1024*1024,"flac",emptyMap()),
+            A0SoulseekSearchFile("Album\\\\cover.jpg",20000,"jpg",emptyMap()),
+            A0SoulseekSearchFile("../escape.mp3",20000,"mp3",emptyMap())
+        ),locked=listOf(audio)),"somepeer")
+        val report=handoff.screening()
+        assertEquals(2,report.responses)
+        assertEquals(4,report.publicFiles)
+        assertEquals(1,report.lockedFiles)
+        assertEquals(1,report.noSlot)
+        assertEquals(1,report.tooLarge)
+        assertEquals(1,report.unsupportedFormat)
+        assertEquals(1,report.unsafePath)
+        assertEquals(0,report.accepted)
+        assertTrue(handoff.choices().isEmpty())
+        assertFalse(report.toString().contains("sample.mp3"))
+        assertFalse(report.toString().contains("somepeer"))
+    }
+
 }
