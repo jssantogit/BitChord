@@ -80,3 +80,34 @@ A restore-key workflow-family label is **not** proof of the actual producer bran
 **Cross-branch trust boundary:** GitHub Actions dependency caches are scoped to their branch/merge-ref. Cache artifacts written from a PR merge-ref cannot simply be restored by the protected `main` push after a merge. Default-branch cache can be restored by PR builds, while unrestricted promotion of PR-produced build outputs into main creates cache-poisoning risk. See [GitHub cache access restrictions](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching) and [Gradle setup-gradle cache behavior](https://github.com/gradle/actions/blob/main/docs/setup-gradle.md).
 
 **Decision:** keep main's safe cache writes and required full suite unchanged. Do not turn on `cache-mode: write` for low-trust PR triggers, trust PR artifacts blindly, leak cache keys, reuse configuration-cache secrets without encryption, or skip main checks. A cross-job compilation-output cache needs its **own** proposed trusted architecture: exact source tree and toolchain attestation, controlled writer policy, restore verification, security review, and comparable *whole merge-sequence* results before approval. This PR only improves diagnostics and makes no workflow change.
+
+
+## P2e: conservative trusted-main cache lineage, not a new cache writer
+
+The package now includes `tools/delivery_ci_cache_lineage.py` with regression tests `tests/test_delivery_ci_cache_lineage.py`. It compares **two independently parsed, main-lane required Android job logs** as structured `summarize_cache_job(..., lane="main")` results. It is deliberately a *measurement* and not an attestation or an authorization to restore external artifacts.
+
+Example with locally supplied complete, private logs (never upload or commit the logs):
+
+```python
+from tools.delivery_ci_cache_policy import summarize_cache_job
+from tools.delivery_ci_cache_lineage import compare_main_cache_evidence
+
+earlier = summarize_cache_job(open("private-earlier.log").read(), EARLIER_EXACT_SHA, "main")
+later = summarize_cache_job(open("private-later.log").read(), LATER_EXACT_SHA, "main")
+result = compare_main_cache_evidence(earlier, later)
+# Return only allowlisted fixed labels and numeric deltas, not the input logs.
+```
+
+A comparison is `observations_only` only when the source snapshots both declare the `main` lane, have distinct syntactically valid SHAs, contain complete fixed-class compiler task evidence, explicitly observed `written` cache policy, and separately observed restored `android_workflow` family. On PR/main mixes, different restore families or unknown cache outcomes it returns `incomparable`, with nullable deltas. When task details are incomplete it returns `incomplete_task_evidence`. Invalid provenance types, counts, nonsensical values or contradictory task states fail closed. No underlying branch, actor, user path, cache key or SHA is emitted by the pair report.
+
+The numeric deltas (`from_cache_task_delta`, `executed_task_delta`, `gradle_wall_seconds_delta`) are **descriptive**, not a benefit estimate. Every result explicitly sets `cross_revision_output_reuse_proven: false`, `speedup_attributable_to_cache: false`, and `safe_to_promote_pr_cache: false`. The source logs supplied by an operator still require GitHub first-party verification of their run/job/commit provenance. Cache-key family alone proves neither producer branch nor reuse of a specific Kotlin/KSP output.
+
+### Safe architecture for any later speedup experiment
+
+1. **Keep** `gradle/actions/setup-gradle@v4`'s default read/write behavior: protected `push` to `main` may save Gradle user-home output cache after required tests; low-trust PR events read default-branch caches only. Do not grant PRs `cache-mode: write`, or make privileged `pull_request_target` / `workflow_run` cache writers. GitHub introduced `cache-mode` in September 2026 as an explicit least-privilege access control; any future policy must retain per-event access restrictions. [GitHub cache-mode announcement](https://github.blog/changelog/2026-09-10-control-github-actions-cache-access-with-cache-mode/) and [cache restrictions](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching).
+2. Separate three distinct proofs: **workflow origin** verified through first-party run/job metadata; **compiler/toolchain/config identity** (wrapper, JDK, Kotlin, KSP, AGP and Gradle input fingerprints) recorded from the checked-out revision; and **task output suitability** determined by Gradle's input-sensitive build cache, not by matching a filename or trusting a PR archive.
+3. New commits on `main` legitimately invalidate Kotlin/KSP task outputs when their inputs change. A cold compilation in that case is not a cache failure; it must not be skipped. Existing required Android tests must always execute their normal task graph on the exact post-merge SHA.
+4. A remote write-through cache, trusted pre-merge artifact promotion, or cross-job Configuration Cache persistence is **out of scope** for this read-only PR. Such systems require separate security architecture, authentication isolation, content verification, controlled producer authorization, explicit owner approval and reversible rollout. Configuration Cache may serialize secrets and must not be persisted without encryption.
+5. Promotion metrics: sample at least **three comparable sequences** of protected post-main Android runs with source-change/workload class, exact job SHA, task-level cache reuse, write/save overhead and whole queue time; check that gains persist after the next merge and that failure/OOM/privacy behavior does not regress. Quantify the **net** savings, never the isolated restore/save phase alone.
+
+No production cache key, Gradle switch, runner configuration, secret, branch protection, required check, APK or integration queue file was changed here.
