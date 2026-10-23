@@ -104,7 +104,8 @@ internal object MainThreadStallDetector {
                             name = "main_thread_stall",
                             level = DiagnosticLevel.WARN,
                             durationNanos = observation.durationNanos,
-                            metadata = mapOf("severity" to observation.severity.wireName),
+                            metadata = mapOf("severity" to observation.severity.wireName) +
+                                RuntimeUiStallCorrelation.metadata(now),
                         )
                     }
                     workerHandler.postDelayed(this, HEARTBEAT_INTERVAL_MILLIS)
