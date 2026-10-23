@@ -25,6 +25,9 @@ internal object A0PeerRendezvousWire {
     private const val MAX_SERVER_FRAME = 1_048_576
     private const val MAX_USERNAME_BYTES = 30
 
+    /** No untrusted peer or session details are retained in this exception. */
+    class SessionReplaced : IOException("A0 server session replaced")
+
     sealed class ServerEvent {
         data class Address(val address: InetAddress, val port: Int, val obfuscated: Boolean) : ServerEvent()
         object UnsupportedAddress : ServerEvent()
@@ -45,9 +48,9 @@ internal object A0PeerRendezvousWire {
         return le32Bytes(content.size) + content
     }
 
-    fun readServerEvent(input: InputStream, expectedPeer: String, pendingToken: Int): ServerEvent {
+    fun readServerEvent(input: InputStream, expectedPeer: String, pendingToken: Int? = null): ServerEvent {
         validateUsername(expectedPeer)
-        require(pendingToken > 0)
+        require(pendingToken == null || pendingToken > 0)
         val size = le32(input)
         if (size !in 4..MAX_SERVER_FRAME) malformed()
         val type = le32(input)
@@ -73,10 +76,10 @@ internal object A0PeerRendezvousWire {
             1001 -> {
                 val token = le32(body)
                 // Some peers/server versions may append optional username data.
-                if (token == pendingToken) ServerEvent.PeerUnreachable
+                if (pendingToken != null && token == pendingToken) ServerEvent.PeerUnreachable
                 else ServerEvent.Unrelated
             }
-            41 -> throw IOException("A0 server session replaced")
+            41 -> throw SessionReplaced()
             else -> ServerEvent.Unrelated
         }
     }
