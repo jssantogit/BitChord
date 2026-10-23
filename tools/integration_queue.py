@@ -249,6 +249,23 @@ class IntegrationController:
 
     def wait_premerge(self, entry, main, head, deadline):
         n = entry['number']
+        started = self.clock()
+        last_reason = None
+        last_emitted_at = None
+
+        def record(reason):
+            # Reasons are fixed enums, never server-controlled field contents.
+            # Emit immediately on transition, otherwise at most once/minute.
+            nonlocal last_reason, last_emitted_at
+            now = self.clock()
+            if (reason != last_reason or last_emitted_at is None or
+                    now - last_emitted_at >= 60):
+                elapsed = max(0, min(int(now - started),
+                                     int(self.timeout_seconds)))
+                self.log(f'QUEUE_WAIT v=1 pr={n} phase=premerge_ci '
+                         f'reason={reason} elapsed_s={elapsed}')
+                last_reason, last_emitted_at = reason, now
+
         def check():
             need(self.main_sha() == main,
                  f'PR #{n}: main changed during required CI')
@@ -258,14 +275,28 @@ class IntegrationController:
             checks = [c for c in self.api.checks(head)
                       if c.get('name') == REQUIRED]
             need(len(checks) <= 1, f'PR #{n}: duplicate Android checks')
-            if checks and checks[0].get('status') == 'completed':
-                need(checks[0].get('conclusion') == 'success',
-                     f'PR #{n}: pre-merge CI RED')
-                state = pr.get('mergeable_state')
-                need(state not in ('dirty', 'unstable'),
-                     f'PR #{n}: conflicts / unresolved review')
-                if pr.get('mergeable') is True and state == 'clean':
-                    return True
+            if not checks:
+                record('check_absent')
+                return None
+            if checks[0].get('status') != 'completed':
+                record('check_pending')
+                return None
+            need(checks[0].get('conclusion') == 'success',
+                 f'PR #{n}: pre-merge CI RED')
+            state = pr.get('mergeable_state')
+            need(state not in ('dirty', 'unstable'),
+                 f'PR #{n}: conflicts / unresolved review')
+            if pr.get('mergeable') is True and state == 'clean':
+                record('ready')
+                return True
+            if pr.get('mergeable') is None:
+                record('mergeability_unknown')
+            elif pr.get('mergeable') is not True:
+                record('mergeability_false')
+            elif state in ('blocked', 'behind', 'unknown'):
+                record('github_' + state)
+            else:
+                record('github_other')
             return None
         return self.poll(check, f'PR #{n} required CI', deadline)
 
