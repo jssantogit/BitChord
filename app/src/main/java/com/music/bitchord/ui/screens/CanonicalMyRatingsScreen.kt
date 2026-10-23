@@ -18,6 +18,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -27,6 +28,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.diagnostics.Diagnostics
+import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.data.listening.CanonicalRatedLibrarySnapshot
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.RoomRecordingRatingStore
@@ -36,6 +39,17 @@ import com.music.bitchord.sharedui.resources.my_ratings_error
 import com.music.bitchord.sharedui.resources.my_ratings_feed_loading
 import com.music.bitchord.sharedui.resources.my_ratings_more
 import com.music.bitchord.sharedui.resources.my_ratings_title
+import com.music.bitchord.sharedui.resources.my_ratings_remote_source
+import com.music.bitchord.sharedui.resources.my_ratings_local_source
+import com.music.bitchord.sharedui.resources.my_ratings_remote_rating
+import com.music.bitchord.sharedui.resources.my_ratings_remote_starred
+import com.music.bitchord.sharedui.resources.my_ratings_remote_cleared
+import com.music.bitchord.sharedui.resources.my_ratings_conflict_local
+import com.music.bitchord.sharedui.resources.my_ratings_conflict_remote
+import com.music.bitchord.sharedui.resources.my_ratings_remote_loading
+import com.music.bitchord.sharedui.resources.my_ratings_remote_unavailable
+import com.music.bitchord.sharedui.resources.my_ratings_remote_error
+import com.music.bitchord.sharedui.resources.my_ratings_remote_partial
 import com.music.bitchord.sharedui.resources.recording_feedback_current
 import com.music.bitchord.sharedui.resources.recording_feedback_edit
 import com.music.bitchord.sharedui.resources.rediscovery_close
@@ -163,8 +177,24 @@ internal fun CanonicalMyRatingsScreen(
         }
     }
     var editingId by remember { mutableStateOf<String?>(null) }
+    val remoteState = rememberRemoteRatingsState()
+    val diagnosticTruth = remember(state, remoteState) {
+        MyRatingsRenderEvidence.from(state, remoteState).metadata()
+    }
+    LaunchedEffect(diagnosticTruth) {
+        try {
+            Diagnostics.event(
+                category = DiagnosticCategory.UI,
+                name = "my_ratings_content_state_v1",
+                metadata = diagnosticTruth,
+            )
+        } catch (_: Exception) {
+            // Diagnostics are always fail-open and never block a visible rating.
+        }
+    }
     CanonicalMyRatingsContent(
         state = state,
+        remoteState = remoteState,
         onBack = onBack,
         editingId = editingId,
         onEdit = { id -> editingId = if (editingId == id) null else id },
@@ -175,10 +205,19 @@ internal fun CanonicalMyRatingsScreen(
 @Composable
 internal fun CanonicalMyRatingsContent(
     state: MyRatingsUiState,
+    remoteState: RemoteRatingsUiState = RemoteRatingsUiState.Disabled,
     onBack: () -> Unit,
     onEdit: (String) -> Unit,
     editingId: String? = null,
 ) {
+    val remoteRows = (remoteState as? RemoteRatingsUiState.Ready)?.rows.orEmpty()
+    val remoteByRecording = remoteRows.associateBy { it.recordingId }
+    val localIds = (state as? MyRatingsUiState.Content)?.items.orEmpty()
+        .mapTo(mutableSetOf()) { it.recordingId }
+    val remoteOnlyRows = remoteRows.filter { row ->
+        row.recordingId !in localIds &&
+            row.evidence.any { it.numericValue != null || it.starred }
+    }
     ListeningLibraryPage {
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
             Row(
@@ -199,7 +238,7 @@ internal fun CanonicalMyRatingsContent(
                     MyRatingsUiState.Loading -> item(key = "loading") {
                         Text(stringResource(Res.string.my_ratings_feed_loading), Modifier.padding(16.dp))
                     }
-                    MyRatingsUiState.Empty -> item(key = "empty") {
+                    MyRatingsUiState.Empty -> if (remoteOnlyRows.isEmpty()) item(key = "empty") {
                         Text(stringResource(Res.string.my_ratings_empty), Modifier.padding(16.dp))
                     }
                     MyRatingsUiState.Error -> item(key = "error") {
@@ -223,6 +262,13 @@ internal fun CanonicalMyRatingsContent(
                                     stringResource(Res.string.recording_feedback_current, rating.value.toString()),
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
+                                Text(
+                                    stringResource(Res.string.my_ratings_local_source),
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                                remoteByRecording[rating.recordingId]?.let { remote ->
+                                    RemoteRatingDetails(remote, localValue = rating.value)
+                                }
                                 if (rating.title != null) {
                                     TextButton(onClick = { onEdit(rating.recordingId) }) {
                                         Text(stringResource(Res.string.recording_feedback_edit))
@@ -243,7 +289,83 @@ internal fun CanonicalMyRatingsContent(
                         }
                     }
                 }
+                if (remoteOnlyRows.isNotEmpty()) {
+                    items(remoteOnlyRows, key = { "remote-" + it.recordingId }) { row ->
+                        Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                            Text(
+                                row.title ?: stringResource(Res.string.rediscovery_unavailable),
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            row.artistDisplay?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall)
+                            }
+                            RemoteRatingDetails(row, localValue = null)
+                        }
+                    }
+                }
+                when (remoteState) {
+                    RemoteRatingsUiState.Disabled -> Unit
+                    RemoteRatingsUiState.Loading -> item(key = "remote-loading") {
+                        Text(stringResource(Res.string.my_ratings_remote_loading), Modifier.padding(16.dp))
+                    }
+                    RemoteRatingsUiState.Unavailable -> item(key = "remote-unavailable") {
+                        Text(stringResource(Res.string.my_ratings_remote_unavailable), Modifier.padding(16.dp))
+                    }
+                    RemoteRatingsUiState.Error -> item(key = "remote-error") {
+                        Text(
+                            stringResource(Res.string.my_ratings_remote_error),
+                            Modifier.padding(16.dp),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    is RemoteRatingsUiState.Ready -> {
+                        if (remoteState.coverage.unmatched > 0) {
+                            item(key = "remote-partial") {
+                                Text(
+                                    stringResource(Res.string.my_ratings_remote_partial),
+                                    Modifier.padding(16.dp),
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
+    }
+}
+
+/** Remote evidence is descriptive and never an editor, an inferred score or a mutation. */
+@Composable
+private fun RemoteRatingDetails(row: RemoteRatingUiRow, localValue: Double?) {
+    Text(
+        stringResource(Res.string.my_ratings_remote_source),
+        style = MaterialTheme.typography.labelSmall,
+    )
+    val numericValues = row.evidence.mapNotNull { it.numericValue }
+    row.evidence.forEach { evidence ->
+        if (evidence.numericValue != null) {
+            Text(
+                stringResource(Res.string.my_ratings_remote_rating, evidence.numericValue),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+    if (row.evidence.any { it.starred }) {
+        Text(stringResource(Res.string.my_ratings_remote_starred))
+    }
+    if (row.evidence.any { it.cleared }) {
+        Text(stringResource(Res.string.my_ratings_remote_cleared))
+    }
+    if (numericValues.distinct().size > 1) {
+        Text(
+            stringResource(Res.string.my_ratings_conflict_remote),
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+    if (localValue != null && numericValues.any { it.toDouble() != localValue }) {
+        Text(
+            stringResource(Res.string.my_ratings_conflict_local),
+            color = MaterialTheme.colorScheme.error,
+        )
     }
 }
