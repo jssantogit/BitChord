@@ -75,6 +75,8 @@ internal object A4AcquiredLocalSongs {
                             videoId=uriString,
                             title=title,
                             artist=artist,
+                            thumbnailUrl=null,
+                            fromAutoplay=false,
                             durationText="${duration/60000}:${((duration/1000)%60).toString().padStart(2,'0')}",
                             albumName=album,
                             localUri=uriString,
