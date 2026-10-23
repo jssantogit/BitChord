@@ -1,0 +1,60 @@
+name: Android CI Critical Path Profile Pilot
+
+# Diagnostic experiment only. Does not replace the protected Android check,
+# publish APKs, write shared Gradle caches, or run for forks.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/android-ci-critical-path-profile.yml'
+      - 'tests/test_android_ci_profile_pilot.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-profile-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  profile:
+    if: github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'infra/android-ci-')
+    name: Android CI pilot · Gradle task profile (non-required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle (shared cache read-only)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Write local.properties
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+
+      - name: Grant Gradle wrapper execute permission
+        run: chmod +x gradlew
+
+      - name: Verify profiling pilot contract
+        run: python3 -m unittest discover -s tests -p test_android_ci_profile_pilot.py -v
+
+      - name: Profile complete Android unit test target
+        run: ./gradlew --build-cache --profile -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+
+      - name: Upload Gradle task profile (short retention)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-ci-task-profile-${{ github.event.pull_request.number }}-${{ github.sha }}
+          path: build/reports/profile/*.html
+          if-no-files-found: warn
+          retention-days: 3
