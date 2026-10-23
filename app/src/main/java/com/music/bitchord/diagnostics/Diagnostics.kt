@@ -122,6 +122,8 @@ object Diagnostics {
         metadata: Map<String, String> = emptyMap(),
         error: Throwable? = null,
         durationNanos: Long? = null,
+        /** Optional D15 context: scrub legacy exceptions without affecting typed errors. */
+        legacyErrorTag: String? = null,
     ) {
         val event = DiagnosticEvent(
             epochMillis = System.currentTimeMillis(),
@@ -134,7 +136,10 @@ object Diagnostics {
             threadName = DiagnosticSanitizer.text(Thread.currentThread().name, 128),
             durationNanos = durationNanos,
             metadata = DiagnosticSanitizer.metadata(metadata),
-            error = error?.let(::safeThrowableText),
+            error = error?.let { failure ->
+                if (legacyErrorTag != null) DiagnosticLegacyPrivacy.error(legacyErrorTag, failure)
+                else safeThrowableText(failure)
+            },
         )
         record(event)
     }
@@ -220,6 +225,7 @@ object Diagnostics {
                 "parentSpanId" to it.parentSpanId,
             ) } ?: emptyMap(),
             error = error,
+            legacyErrorTag = tag,
         )
     }
 
