@@ -270,6 +270,7 @@ class A0ManualLoginActivity : Activity() {
                                 // Separate readers prevent blocking on accept() while the
                                 // server is offering an indirect P connection.
                                 val inbox = LinkedBlockingQueue<String>(1)
+                                // Sticky completion: polling a valid reply must not restart peer reads.
                                 val readerGate = A0SearchReaderGate()
                                 val attemptedIndirect = AtomicBoolean(false)
                                 val receivedValidP2pReply = AtomicBoolean(false)
