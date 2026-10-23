@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 138,
+      "expected_head_sha": "15f7f5058f66e723b0d869b5505be0c829b56b91",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticEvidenceJourney.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticEvidenceJourneyD11Test.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 139,
+      "expected_head_sha": "32ddc678ecd6fd9f1fa53446a8342dfe2a4e547d",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/ui/screens/CanonicalMyRatingsScreen.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/SmartPlaylistBuilderScreen.kt",
+        "app/src/test/java/com/music/bitchord/ui/screens/CanonicalMyRatingsVisibilityTest.kt",
+        "sharedUi/src/commonMain/composeResources/values-pt/strings.xml",
+        "sharedUi/src/commonMain/composeResources/values/strings.xml"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 141,
+      "expected_head_sha": "10d2e43137b3317b7e75212e91d45bee29154268",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/data/catalog/CanonicalCatalogDao.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/CanonicalCatalogDatabase.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/RemoteRatingEvidenceEntities.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/CanonicalRemoteCatalogSync.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/RemoteRatingEvidence.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/AndroidOpenSubsonicAccountStore.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicAccount.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicCatalogSync.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicProvider.kt",
+        "app/src/main/java/com/music/bitchord/data/catalog/provider/opensubsonic/OpenSubsonicRemoteRatings.kt",
+        "app/src/test/java/com/music/bitchord/CanonicalCatalogArtistMigrationTest.kt",
+        "app/src/test/java/com/music/bitchord/IsrcMusicBrainzIdentityIntegrationTest.kt",
+        "app/src/test/java/com/music/bitchord/MusicBrainzEnrichmentMigrationTest.kt",
+        "app/src/test/java/com/music/bitchord/OpenSubsonicRemoteRatingsTest.kt",
+        "app/src/test/java/com/music/bitchord/RecordingArtistCreditBatchPreviewRoomTest.kt",
+        "app/src/test/java/com/music/bitchord/RecordingArtistCreditPreviewRoomTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    }
+  ]
+}

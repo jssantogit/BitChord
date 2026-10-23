@@ -18,9 +18,11 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.ConscryptMode
+import org.robolectric.annotation.Config
 
 @ConscryptMode(ConscryptMode.Mode.OFF)
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class CanonicalCatalogArtistMigrationTest {
 
     @Test
@@ -35,6 +37,7 @@ class CanonicalCatalogArtistMigrationTest {
             .addMigrations(
                 CanonicalCatalogDatabase.MIGRATION_1_2,
                 CanonicalCatalogDatabase.MIGRATION_2_3,
+                CanonicalCatalogDatabase.MIGRATION_3_4,
             )
             .allowMainThreadQueries()
             .build()
