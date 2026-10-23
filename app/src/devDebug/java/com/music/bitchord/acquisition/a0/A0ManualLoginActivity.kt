@@ -81,7 +81,9 @@ class A0ManualLoginActivity : Activity() {
              "você escolhe manualmente um arquivo público anunciado (até 64 MiB) " +
              "para o qual tenha autorização. Os bytes ficam só temporariamente: " +
              "tamanho e SHA-256 observado são medidos, depois apagados. " +
-             "O hash NÃO comprova autenticidade da fonte. Soulseek usa TCP sem TLS.")
+             "O hash NÃO comprova autenticidade da fonte. Soulseek usa TCP sem TLS. " +
+             "Existe um botão SEPARADO para salvar UMA música na biblioteca local; " +
+             "é opcional e requer confirmação de autorização.")
         val user = EditText(this).apply {
             hint = "Usuário dedicado"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
