@@ -109,6 +109,46 @@ class A0ServerAssociatedTransferTest {
         }
     }
 
+    @Test(timeout=8000)
+    fun queuedSearchOffersMustNotExhaustPeerAddressLookupBeforeServerReply() {
+        ServerSocket(0,1,host).use{fakeServer->
+            val pool=Executors.newSingleThreadExecutor()
+            try {
+                val remote=pool.submit {
+                    fakeServer.accept().use{server->
+                        server.soTimeout=4000
+                        assertEquals(2,le32(body(server)))
+                        assertEquals(3,le32(body(server)))
+                        server.getOutputStream().apply{
+                            repeat(24) { write(frame(18,byteArrayOf(1,2,3))) }
+                            write(frame(3,field("owner")+byteArrayOf(1,0,0,127)+
+                                le(41111)+le(0)+byteArrayOf(0,0)))
+                            flush()
+                        }
+                    }
+                }
+                Socket(host,fakeServer.localPort).use{server->
+                    var addressResolved=false
+                    try {
+                        A0ServerAssociatedTransfer(allowLoopbackForLocalTest=true)
+                            .runObservedOnce(server,"testaccount","owner",
+                                listing(),temp.root) { phase ->
+                                if(phase==A0ServerAssociatedTransfer.Phase.PEER_ADDRESS_RESOLVED) {
+                                    addressResolved=true
+                                    throw IllegalStateException("address resolved; fixture stop")
+                                }
+                            }
+                        fail("Fixture must stop after address resolution")
+                    } catch(e:IllegalStateException) {
+                        assertEquals("address resolved; fixture stop",e.message)
+                    }
+                    assertTrue("24 stale search offers must not block the actual address",addressResolved)
+                }
+                remote.get(4,TimeUnit.SECONDS)
+            }finally{pool.shutdownNow()}
+        }
+    }
+
     @Test(timeout=5000)
     fun noRightsPreventsServerAddressDiscoveryAndAnyNetworking() {
         ServerSocket(0,1,host).use{server->
