@@ -239,7 +239,17 @@ class A0ManualLoginActivity : Activity() {
                 var result = "Falha ao iniciar a verificação."
                 var searchSubmitted = false
                 var loginReplyProgress: A0LoginReadProgress? = null
+                var saveLedger:A3AcquisitionLedger?=null
+                var saveJobId:String?=null
                 try {
+                    if(saveToDevice) {
+                        val ledger=A3AndroidAcquisitionLedger.get(this@A0ManualLoginActivity)
+                        val id=UUID.randomUUID().toString()
+                        ledger.create(id)
+                        ledger.advance(id,A3AcquisitionLedger.Phase.SEARCHING)
+                        saveLedger=ledger
+                        saveJobId=id
+                    }
                     packet = A0ExperimentalLoginCodec.encode(username, secret)
                     trace.note(A0SmokeTrace.Stage.SERVER_CONNECT_STARTED)
                     Socket().use { connection ->
@@ -535,16 +545,30 @@ class A0ManualLoginActivity : Activity() {
                                     if (handoff?.hasCandidates() == true) {
                                         checkNotNull(handoff).markReadersStopped()
                                         val choices=handoff.choices()
+                                        val selectableIndices=choices.indices.filter { i ->
+                                            !saveToDevice || A5ManualSaveGate.safeDestinationName(
+                                                choices[i].displayName,choices[i].sizeBytes
+                                            )!=null
+                                        }
                                         trace.note(A0SmokeTrace.Stage.CANDIDATES_AVAILABLE)
+                                        if(saveToDevice)saveLedger?.advance(
+                                            checkNotNull(saveJobId),
+                                            A3AcquisitionLedger.Phase.AWAITING_SELECTION
+                                        )
                                         val choiceQueue=LinkedBlockingQueue<Int>(1)
                                         activeSelectionQueue=choiceQueue
                                         runOnUiThread {
-                                            if (stopping || isFinishing || isDestroyed) {
+                                            if (stopping || isFinishing || isDestroyed ||
+                                                selectableIndices.isEmpty()) {
+                                                if(selectableIndices.isEmpty())status.text=
+                                                    "Nenhum WAV/FLAC/MP3 compatível nesta busca para salvar."
                                                 choiceQueue.offer(-1)
                                             } else {
-                                                status.text =
-                                                    "Selecione UM arquivo autorizado. Nenhum download automático."
-                                                val titles=choices.map { candidate ->
+                                                status.text = if(saveToDevice)
+                                                    "Escolha UM arquivo autorizado para salvar como música local."
+                                                else "Selecione UM arquivo autorizado. Nenhum download automático."
+                                                val titles=selectableIndices.map { i ->
+                                                    val candidate=choices[i]
                                                     "${candidate.displayName} — ${candidate.sizeBytes} bytes"
                                                 }.toTypedArray()
                                                 // A list dialog must not also setMessage():
@@ -552,7 +576,7 @@ class A0ManualLoginActivity : Activity() {
                                                 AlertDialog.Builder(this@A0ManualLoginActivity)
                                                     .setTitle("Escolha um arquivo autorizado (até 64 MiB)")
                                                     .setItems(titles) { _, index ->
-                                                        choiceQueue.offer(index)
+                                                        choiceQueue.offer(selectableIndices[index])
                                                     }
                                                     .setNegativeButton("Cancelar") { _, _ ->
                                                         choiceQueue.offer(-1)
@@ -584,6 +608,11 @@ class A0ManualLoginActivity : Activity() {
                                                 TraceOutcome.CANCELLED
                                             )
                                         } else {
+                                            if(saveToDevice) {
+                                                val id=checkNotNull(saveJobId)
+                                                saveLedger?.advance(id,A3AcquisitionLedger.Phase.SELECTED)
+                                                saveLedger?.advance(id,A3AcquisitionLedger.Phase.TRANSFERRING)
+                                            }
                                             trace.note(A0SmokeTrace.Stage.P_F_TRANSFER_STARTED)
                                             transferAttempted=true
                                             val receipt=handoff.transferChoice(
