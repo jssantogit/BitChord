@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 140,
+      "expected_head_sha": "bc0c08a407f87c169011de33420a5d3c68cc4b31",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/diagnostics/RemoteRatingEvidence.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/RemoteRatingEvidenceD12Test.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 142,
+      "expected_head_sha": "770bd2b04bb5d84f73e82e5855b6b28bd229fe62",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticEvidenceJourney.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticNavigationWitness.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticNavigationTruthD13Test.kt"
+      ],
+      "depends_on": 140,
+      "expected_base_ref": "perf/d12-remote-rating-evidence-v0"
+    },
+    {
+      "number": 143,
+      "expected_head_sha": "307b4441c30d944c861ae5f8d3898dcec80dbad8",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/diagnostics/MainThreadStallDetector.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/RecentUiWindowCorrelation.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/RuntimePerformanceMonitor.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/UiStallCorrelationD14Test.kt"
+      ],
+      "depends_on": 142,
+      "expected_base_ref": "perf/d13-navigation-truth-v0"
+    }
+  ]
+}
