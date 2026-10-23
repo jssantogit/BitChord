@@ -69,11 +69,7 @@ internal object A4AcquiredLocalSongs {
                             videoId=uriString,
                             title=title,
                             artist=artist,
-                            durationText="${duration/60000}:${(duration/1000)%60}".let {
-                                val minutes=duration/60000
-                                val seconds=(duration/1000)%60
-                                "$minutes:${seconds.toString().padStart(2,'0')}"
-                            },
+                            durationText="${duration/60000}:${((duration/1000)%60).toString().padStart(2,'0')}",
                             albumName=album,
                             localUri=uriString,
                             localPath=null
