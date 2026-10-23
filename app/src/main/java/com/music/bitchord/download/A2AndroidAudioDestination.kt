@@ -39,9 +39,6 @@ internal object A2AndroidAudioDestination {
         val resolution=A1AndroidDownloadDestination.current(app)
         val target=(resolution as? A1DownloadDestinationPolicy.Resolution.Ready)?.target
             ?:throw IOException("A2 destination requires folder re-selection")
-        val factory=A2LocalAudioPublisher.DestinationFactory { _, _ ->
-            error("Kotlin interfaces require the createPending override below")
-        }
         return A2LocalAudioPublisher.publish(
             source,displayName,receivedBytes,observedSha256,
             object:A2LocalAudioPublisher.DestinationFactory {
@@ -50,7 +47,9 @@ internal object A2AndroidAudioDestination {
                 ):A2LocalAudioPublisher.PendingDestination =
                     when(target) {
                         is A1DownloadDestinationPolicy.Target.SharedMusic ->
-                            newMediaStoreRow(app,name,mime,target.relativePath)
+                            if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.Q)
+                                newMediaStoreRow(app,name,mime,target.relativePath)
+                            else throw IOException("A2 legacy shared media publishing requires an API26-28 adapter")
                         is A1DownloadDestinationPolicy.Target.GrantedTree ->
                             newDocumentTreeEntry(app,Uri.parse(target.treeUri),name,mime)
                     }
@@ -62,8 +61,6 @@ internal object A2AndroidAudioDestination {
     private fun newMediaStoreRow(
         context:Context,name:String,mime:String,relativePath:String
     ):A2LocalAudioPublisher.PendingDestination {
-        if(Build.VERSION.SDK_INT<Build.VERSION_CODES.Q)
-            throw IOException("A2 legacy shared media publishing requires an API26-28 adapter")
         val resolver=context.contentResolver
         val collection=MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         // Preserve existing user files instead of accepting MediaStore's
