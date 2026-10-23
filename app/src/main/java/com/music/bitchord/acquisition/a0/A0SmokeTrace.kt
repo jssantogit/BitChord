@@ -80,6 +80,19 @@ internal class A0SmokeTrace private constructor(
         )
     }
 
+    /** Aggregate-only observation. Never expose peer offers or their payloads. */
+    fun selectionDrain(discardedFrames:Int) {
+        if(complete.get())return
+        trace.event(
+            stage="selection_backlog_drained",
+            outcome=TraceOutcome.SUCCEEDED,
+            attributes=mapOf(
+                "elapsedMs" to elapsedMillis().toString(),
+                "discardedFrames" to discardedFrames.coerceIn(0,65_536).toString()
+            )
+        )
+    }
+
     /** Failure class only, without exception message, stacktrace or socket data. */
     fun transferFailure(
         lastPhase:A0ServerAssociatedTransfer.Phase?,
