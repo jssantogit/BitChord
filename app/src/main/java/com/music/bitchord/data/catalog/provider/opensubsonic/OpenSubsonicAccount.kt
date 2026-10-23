@@ -18,6 +18,7 @@ internal data class OpenSubsonicAccountRecord(
     val serverUrl: String,
     val authMode: OpenSubsonicAuthMode,
     val username: String = "",
+    val ratingScopeId: String = "",
     val lastHealthAtEpochSeconds: Long? = null,
     val lastHealthReachable: Boolean? = null,
     val lastServerType: String? = null,
@@ -80,6 +81,7 @@ internal class OpenSubsonicAccountRepository(
             serverUrl = config.normalizedServerUrl,
             authMode = draft.authMode,
             username = username,
+            ratingScopeId = UUID.randomUUID().toString(),
             lastHealthAtEpochSeconds = existing?.lastHealthAtEpochSeconds,
             lastHealthReachable = existing?.lastHealthReachable,
             lastServerType = existing?.lastServerType,
@@ -118,7 +120,7 @@ internal class OpenSubsonicAccountRepository(
                 secretReplacement = credential,
             ),
             credential = credential,
-        )
+        ).copy(ratingScopeId = account.ratingScopeId)
     }
 
     fun savedProvider(): OpenSubsonicProvider? = savedConfig()?.let(::OpenSubsonicProvider)

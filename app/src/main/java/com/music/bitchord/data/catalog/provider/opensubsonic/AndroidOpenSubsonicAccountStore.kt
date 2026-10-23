@@ -37,6 +37,7 @@ internal class SharedPrefsOpenSubsonicAccountPersistence(
             serverUrl = serverUrl,
             authMode = authMode,
             username = prefs.getString(KEY_USERNAME, "").orEmpty(),
+            ratingScopeId = prefs.getString(KEY_RATING_SCOPE, "").orEmpty(),
             lastHealthAtEpochSeconds = prefs.longOrNull(KEY_LAST_HEALTH_AT),
             lastHealthReachable = prefs.booleanOrNull(KEY_LAST_HEALTH_REACHABLE),
             lastServerType = prefs.getString(KEY_LAST_SERVER_TYPE, null),
@@ -67,6 +68,7 @@ internal class SharedPrefsOpenSubsonicAccountPersistence(
             .putString(KEY_SERVER_URL, record.serverUrl)
             .putString(KEY_AUTH_MODE, record.authMode.name)
             .putString(KEY_USERNAME, record.username)
+            .putString(KEY_RATING_SCOPE, record.ratingScopeId)
             .putNullableLong(KEY_LAST_HEALTH_AT, record.lastHealthAtEpochSeconds)
             .putNullableBoolean(KEY_LAST_HEALTH_REACHABLE, record.lastHealthReachable)
             .putNullableString(KEY_LAST_SERVER_TYPE, record.lastServerType)
@@ -102,6 +104,7 @@ internal class SharedPrefsOpenSubsonicAccountPersistence(
         const val KEY_SERVER_URL = "server_url"
         const val KEY_AUTH_MODE = "auth_mode"
         const val KEY_USERNAME = "username"
+        const val KEY_RATING_SCOPE = "rating_scope_id"
         const val KEY_LAST_HEALTH_AT = "last_health_at"
         const val KEY_LAST_HEALTH_REACHABLE = "last_health_reachable"
         const val KEY_LAST_SERVER_TYPE = "last_server_type"
