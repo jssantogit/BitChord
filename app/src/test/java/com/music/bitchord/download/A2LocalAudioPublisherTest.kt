@@ -100,7 +100,7 @@ class A2LocalAudioPublisherTest {
 
     @Test fun remotePathsAndFilenameTraversalRejectedBeforeOpeningDestination() {
         for(name in listOf("../evil.wav","subdir/song.wav","subdir\\song.wav",
-            ".", "..", "song.mp3", "song.wav.part", "hello\n.wav")) {
+            ".", "..", "song.wav.part", "hello\n.wav")) {
             val bytes=wav();val factory=RecordingFactory()
             try {
                 A2LocalAudioPublisher.publish(file(bytes),name,bytes.size.toLong(),
@@ -109,6 +109,29 @@ class A2LocalAudioPublisherTest {
             }catch(_:IllegalArgumentException){}
             assertEquals(name,0,factory.opened)
         }
+    }
+
+    @Test fun mismatchedExtensionAndAudioHeaderNeverReservesDestination() {
+        val bytes=wav();val factory=RecordingFactory()
+        try {
+            A2LocalAudioPublisher.publish(file(bytes),"not-wav.mp3",
+                bytes.size.toLong(),sha(bytes),factory)
+            fail("Container and extension mismatch must be rejected")
+        }catch(_:IOException){}
+        assertEquals(0,factory.opened)
+    }
+
+    @Test fun cancellationBeforePublicationAbortsPendingFile() {
+        val bytes=wav()
+        val factory=RecordingFactory()
+        var polls=0
+        try {
+            A2LocalAudioPublisher.publish(file(bytes),"Sample.wav",
+                bytes.size.toLong(),sha(bytes),factory) { ++polls>=2 }
+            fail("Cancellation should abort pending output")
+        }catch(_:IOException){}
+        assertTrue(factory.sink.aborted)
+        assertFalse(factory.sink.published)
     }
 
     @Test fun interruptedOutputIsAbortedAndNeverPublished() {
