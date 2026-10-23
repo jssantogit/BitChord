@@ -270,6 +270,7 @@ class A0ManualLoginActivity : Activity() {
                                 // Separate readers prevent blocking on accept() while the
                                 // server is offering an indirect P connection.
                                 val inbox = LinkedBlockingQueue<String>(1)
+                                val readerGate = A0SearchReaderGate()
                                 val attemptedIndirect = AtomicBoolean(false)
                                 val receivedValidP2pReply = AtomicBoolean(false)
                                 val failedServerReader = AtomicBoolean(false)
@@ -281,10 +282,11 @@ class A0ManualLoginActivity : Activity() {
                                         var directWaits = 0
                                         while (!Thread.currentThread().isInterrupted &&
                                             !listener.isClosed && System.nanoTime() < deadline &&
-                                            inbox.isEmpty()
+                                            readerGate.isOpen()
                                         ) {
                                             try {
                                                 listener.accept().use { peer ->
+                                                    if (!readerGate.isOpen()) return@use
                                                     trace.note(A0SmokeTrace.Stage.DIRECT_ACCEPTED)
                                                     activeDirectPeer = peer
                                                     peer.soTimeout = 4000
@@ -301,8 +303,8 @@ class A0ManualLoginActivity : Activity() {
                                                     if (!transferObserved ||
                                                         handoff?.hasCandidates() == true
                                                     ) {
-                                                        inbox.offer(
-                                                            "RESPOSTA P2P DIRETA: " +
+                                                        readerGate.publish(
+                                                            inbox, "RESPOSTA P2P DIRETA: " +
                                                                 "${observation.untrustedResultCount} entradas " +
                                                                 "declaradas, não verificadas."
                                                         )
@@ -337,7 +339,7 @@ class A0ManualLoginActivity : Activity() {
                                         try {
                                             while (!Thread.currentThread().isInterrupted &&
                                                 System.nanoTime() < deadline &&
-                                                inbox.isEmpty() && attempts < 6
+                                                readerGate.isOpen() && attempts < 6
                                             ) {
                                                 framedServer.nextFrame()
                                                 val offer = try {
@@ -366,6 +368,7 @@ class A0ManualLoginActivity : Activity() {
                                                     continue
                                                 }
                                                 if (offer == null) continue
+                                                if (!readerGate.isOpen()) break
                                                 trace.note(A0SmokeTrace.Stage.SERVER_OFFER_RECEIVED)
                                                 attemptedIndirect.set(true)
                                                 attempts++
@@ -373,6 +376,7 @@ class A0ManualLoginActivity : Activity() {
                                                     trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECT_STARTED)
                                                     Socket().use { peer ->
                                                         activeIndirectPeer = peer
+                                                        if (!readerGate.isOpen()) return@use
                                                         peer.connect(
                                                             InetSocketAddress(offer.address, offer.port), 2500
                                                         )
@@ -395,8 +399,8 @@ class A0ManualLoginActivity : Activity() {
                                                         if (!transferObserved ||
                                                             handoff?.hasCandidates() == true
                                                         ) {
-                                                            inbox.offer(
-                                                                "RESPOSTA P2P INDIRETA: " +
+                                                            readerGate.publish(
+                                                                inbox, "RESPOSTA P2P INDIRETA: " +
                                                                     "${observation.untrustedResultCount} entradas " +
                                                                     "declaradas, não verificadas."
                                                             )
@@ -440,6 +444,7 @@ class A0ManualLoginActivity : Activity() {
                                         }
                                     }
                                     val peerStatus = inbox.poll(12, TimeUnit.SECONDS)
+                                    readerGate.stop()
                                     result = peerStatus ?: when {
                                         transferObserved ->
                                             "NENHUM CANDIDATO DE ÁUDIO DISPONÍVEL ATÉ 64 MiB. " +
@@ -474,6 +479,7 @@ class A0ManualLoginActivity : Activity() {
                                     }
                                     trace.note(A0SmokeTrace.Stage.SEARCH_COMPLETED, finalOutcome)
                                 } finally {
+                                    readerGate.stop()
                                     if(transferObserved && !stopping) {
                                         // Do not interrupt a server Socket read then
                                         // reuse that very socket for P/F on Android.
