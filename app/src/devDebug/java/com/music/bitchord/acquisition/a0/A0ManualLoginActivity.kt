@@ -539,7 +539,18 @@ class A0ManualLoginActivity : Activity() {
                                                     .show()
                                             }
                                         }
-                                        val chosen=choiceQueue.poll(35,TimeUnit.SECONDS)
+                                        // Retain exclusive server-stream ownership while
+                                        // the user is choosing a file. Unrelated inbound
+                                        // search offers must not pile up and consume the
+                                        // P/F peer-address lookup budget.
+                                        val selection=A0SelectionServerDrain.awaitChoice(
+                                            connection,choiceQueue,35_000L,
+                                            isCancelled={
+                                                stopping || Thread.currentThread().isInterrupted
+                                            }
+                                        )
+                                        trace.selectionDrain(selection.discardedFrames)
+                                        val chosen=selection.index
                                         activeSelectionQueue=null
                                         if (chosen==null || chosen<0 || stopping) {
                                             result = "TESTE CANCELADO OU EXPIRADO. Nenhum arquivo recebido."
