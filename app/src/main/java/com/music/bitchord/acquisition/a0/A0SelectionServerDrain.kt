@@ -45,7 +45,7 @@ internal object A0SelectionServerDrain {
                 // Use the existing 750ms frame timeout to avoid false partial
                 // failures on slow peers; no other thread reads this socket.
                 server.soTimeout=minOf(
-                    125L,TimeUnit.NANOSECONDS.toMillis(timeLeft).coerceAtLeast(1L)
+                    750L,TimeUnit.NANOSECONDS.toMillis(timeLeft).coerceAtLeast(1L)
                 ).toInt()
                 progress.nextFrame()
                 try {
