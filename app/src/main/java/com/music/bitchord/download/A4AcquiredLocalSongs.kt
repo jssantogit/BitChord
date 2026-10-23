@@ -40,12 +40,18 @@ internal object A4AcquiredLocalSongs {
                 // durable A3 AVAILABLE entries because of an unreadable URI.
                 runCatching {
                     val mime=resolver.getType(uri)
-                    if(mime!=null && !mime.startsWith("audio/"))return@runCatching null
-                    val display=resolver.query(
-                        uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null
-                    )?.use { cursor ->
-                        if(cursor.moveToFirst())cursor.getString(0) else null
-                    }?.takeIf(String::isNotBlank)
+                    // SAF providers sometimes report a generic byte stream
+                    // even when the file is valid audio. Trust the actual
+                    // MediaMetadataRetriever decode/duration check below.
+                    if(mime!=null && !mime.startsWith("audio/") &&
+                        mime!="application/octet-stream")return@runCatching null
+                    val display=runCatching {
+                        resolver.query(
+                            uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null
+                        )?.use { cursor ->
+                            if(cursor.moveToFirst())cursor.getString(0) else null
+                        }
+                    }.getOrNull()?.takeIf(String::isNotBlank)
                     val retriever=MediaMetadataRetriever()
                     try {
                         retriever.setDataSource(context,uri)
