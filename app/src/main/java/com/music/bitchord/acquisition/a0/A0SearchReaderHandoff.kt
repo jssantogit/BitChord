@@ -31,3 +31,25 @@ internal object A0SearchReaderHandoff {
         if(!stopped)throw IOException("A0 search readers still own socket")
     }
 }
+
+/**
+ * One-shot completion is monotonic: consuming the inbox entry must NOT reopen
+ * an authenticated server reader or start another outbound peer connection.
+ *
+ * Mark complete before publishing to the inbox so a racing poll cannot drain
+ * the queue and let the reader resume searching. Never interrupt socket I/O.
+ */
+internal class A0SearchReaderGate {
+    private val completed=java.util.concurrent.atomic.AtomicBoolean(false)
+
+    fun isOpen():Boolean=!completed.get()
+
+    fun publish(inbox:java.util.concurrent.BlockingQueue<String>,summary:String):Boolean {
+        if(!completed.compareAndSet(false,true))return false
+        return inbox.offer(summary)
+    }
+
+    fun stop() {
+        completed.set(true)
+    }
+}
