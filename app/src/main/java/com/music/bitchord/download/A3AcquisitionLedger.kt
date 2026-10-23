@@ -141,7 +141,7 @@ internal class A3AcquisitionLedger(private val store:Store) {
         if(decoded.version!=VERSION || decoded.jobs.size>MAX_JOBS ||
             decoded.jobs.any { !validId(it.id) ||
                 (it.phase==Phase.AVAILABLE && (!validUri(it.contentUri.orEmpty()) ||
-                    it.byteCount==null || it.byteCount !in 1..MAX_BYTES)) ||
+                    it.byteCount==null || it.byteCount !in 1L..MAX_BYTES)) ||
                 (it.phase!=Phase.AVAILABLE &&
                     (it.contentUri!=null || it.byteCount!=null))
             } || decoded.jobs.map{it.id}.toSet().size!=decoded.jobs.size) {
@@ -159,7 +159,7 @@ internal class A3AcquisitionLedger(private val store:Store) {
         return runCatching {
             val p=URI(uri)
             p.scheme.equals("content",ignoreCase=true) &&
-                !p.rawAuthority.isNullOrBlank() && p.rawPath?.length ?: 0 > 1 &&
+                !p.rawAuthority.isNullOrBlank() && (p.rawPath?.length ?: 0) > 1 &&
                 p.rawFragment==null && p.rawUserInfo==null
         }.getOrDefault(false)
     }
