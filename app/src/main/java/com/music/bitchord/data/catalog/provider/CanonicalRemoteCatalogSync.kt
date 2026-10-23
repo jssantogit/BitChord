@@ -71,6 +71,8 @@ internal data class ProviderTrack(
     val artists: List<ProviderArtist> = emptyList(),
     /** Strong Recording-level external identity evidence, never playback identity. */
     val isrcs: List<String> = emptyList(),
+    /** Protocol evidence; identity is resolved by the canonical sync transaction. */
+    val remoteRating: ProviderRemoteRating = ProviderRemoteRating(),
 )
 
 internal data class ProviderLibrarySnapshot(

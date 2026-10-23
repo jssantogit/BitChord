@@ -26,7 +26,12 @@ class DiagnosticNavigationWitness(
     recorder: DiagnosticEvidenceJourneyRecorder,
     private val surface: NavigationSurface,
 ) {
-    private val trace = recorder.begin(EvidenceJourney.MY_RATINGS)
+    private val trace = recorder.begin(
+        when (surface) {
+            NavigationSurface.MY_RATINGS -> EvidenceJourney.MY_RATINGS
+            NavigationSurface.SMART_PLAYLIST_BUILDER -> EvidenceJourney.SMART_PLAYLIST_BUILDER
+        },
+    )
     private var requested = false
     private var targeted = false
     private var composed = false

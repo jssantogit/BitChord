@@ -23,6 +23,42 @@ internal data class ExclusiveExternalIdentityClaimResult(
 @Dao
 internal interface CanonicalCatalogDao {
 
+    /** Never used by the first-party Listening preference store. */
+    @Upsert
+    suspend fun upsertRemoteRatingEvidence(rows: List<RemoteRatingEvidenceEntity>)
+
+    @Upsert
+    suspend fun upsertRemoteRatingCoverage(coverage: RemoteRatingCoverageEntity)
+
+    @Query("DELETE FROM catalog_remote_rating_evidence WHERE providerKey = :providerKey")
+    suspend fun clearRemoteRatingEvidence(providerKey: String)
+
+    @Query("SELECT * FROM catalog_remote_rating_coverage WHERE providerKey = :providerKey AND scopeId = :scopeId LIMIT 1")
+    suspend fun remoteRatingCoverage(providerKey: String, scopeId: String): RemoteRatingCoverageEntity?
+
+    /**
+     * Join with the current canonical MediaAsset and Recording; provider-only IDs
+     * or orphaned/stale asset mappings can never be consumer identities.
+     */
+    @Query(
+        """
+        SELECT rating.* FROM catalog_remote_rating_evidence AS rating
+        INNER JOIN catalog_media_asset AS asset
+          ON asset.id = rating.mediaAssetId
+         AND asset.provider = rating.providerKey
+         AND asset.recordingId = rating.recordingId
+        INNER JOIN catalog_recording AS recording ON recording.id = rating.recordingId
+        INNER JOIN catalog_external_identity AS identity
+          ON identity.provider = asset.provider
+         AND identity.entityType = 'recording'
+         AND identity.externalId = asset.sourceKey
+         AND identity.entityId = rating.recordingId
+        WHERE rating.providerKey = :providerKey AND rating.scopeId = :scopeId
+        ORDER BY rating.recordingId, rating.mediaAssetId
+        """,
+    )
+    suspend fun reconciledRemoteRatings(providerKey: String, scopeId: String): List<RemoteRatingEvidenceEntity>
+
     @Query("SELECT * FROM catalog_recording WHERE id = :recordingId LIMIT 1")
     suspend fun recordingById(recordingId: String): RecordingEntity?
 
