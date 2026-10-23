@@ -29,4 +29,24 @@ internal object DiagnosticLegacyPrivacy {
         }
         return DiagnosticSanitizer.freeText(withoutMedia)
     }
+
+
+    private val unsafeStackSymbol = Regex("[^A-Za-z0-9_.$]")
+
+    /**
+     * Legacy Throwable.message and cause text are untyped media payloads.
+     * Keep only bounded static exception type + stack symbols, never raw messages,
+     * filenames or serialized causes. Structured trace errors are unchanged.
+     */
+    fun error(rawTag: String, throwable: Throwable): String {
+        if (sensitiveTag.containsMatchIn(rawTag)) return "legacy_payload_suppressed"
+        fun symbol(value: String, max: Int): String =
+            unsafeStackSymbol.replace(value.take(max), "_")
+        val exceptionType = symbol(throwable.javaClass.name, 128)
+        val frames = throwable.stackTrace.take(16).joinToString("\n") { frame ->
+            "at ${symbol(frame.className, 160)}.${symbol(frame.methodName, 96)}:" +
+                frame.lineNumber.coerceAtLeast(0)
+        }
+        return DiagnosticSanitizer.freeText("exception=$exceptionType\n$frames")
+    }
 }
