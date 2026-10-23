@@ -10,6 +10,8 @@ import android.net.NetworkCapabilities
 import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.diagnostics.DiagnosticsShare
 import com.music.bitchord.observability.TraceOutcome
+import com.music.bitchord.download.A3AcquisitionLedger
+import com.music.bitchord.download.A3AndroidAcquisitionLedger
 import android.text.InputType
 import android.text.InputFilter
 import android.view.View
@@ -33,6 +35,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.security.SecureRandom
+import java.util.UUID
 
 /**
  * Only compiled into app/src/devDebug, NOT into prod/dev release.
@@ -119,6 +122,15 @@ class A0ManualLoginActivity : Activity() {
             text = "Teste de transporte: escolher 1 arquivo (até 64 MiB)"
         }
         page.addView(transferAction)
+        val saveConsent=CheckBox(this).apply {
+            text="Confirmo que posso armazenar o arquivo escolhido. " +
+                "O áudio ficará em Music/BitChord ou na pasta selecionada."
+        }
+        page.addView(saveConsent)
+        val saveAction=Button(this).apply {
+            text="Baixar 1 arquivo autorizado como música local (piloto devDebug)"
+        }
+        page.addView(saveAction)
         val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
         page.addView(exportAction)
         text("Captura temporária iniciada automaticamente ao testar. " +
@@ -134,11 +146,19 @@ class A0ManualLoginActivity : Activity() {
         }.isSuccess
         if(!observedScratchReady) {
             transferAction.isEnabled=false
+            saveAction.isEnabled=false
             status.text="Falha ao limpar arquivos temporários do teste. Transferência bloqueada."
         }
 
-        fun start(performSearch: Boolean, transferObserved: Boolean = false) {
+        fun start(
+            performSearch:Boolean,transferObserved:Boolean=false,saveToDevice:Boolean=false
+        ) {
             require(!transferObserved || performSearch)
+            require(!saveToDevice || transferObserved)
+            if(saveToDevice && !A5ManualSaveGate.canSave(transferObserved,saveConsent.isChecked)) {
+                status.text="Confirme antes que tem autorização para armazenar o arquivo."
+                return
+            }
             if(transferObserved && !observedScratchReady) {
                 status.text="Armazenamento temporário inseguro. Nenhuma transferência permitida."
                 return
@@ -163,10 +183,14 @@ class A0ManualLoginActivity : Activity() {
             user.text.clear()
             password.text.clear()
             acknowledge.isChecked = false
+            saveConsent.isChecked = false
             action.isEnabled = false
             searchAction.isEnabled = false
             transferAction.isEnabled = false
-            status.text = if (transferObserved) {
+            saveAction.isEnabled = false
+            status.text = if(saveToDevice) {
+                "Buscando WAV/FLAC/MP3 autorizados; salva somente após escolha manual."
+            } else if (transferObserved) {
                 "Buscando candidatos pequenos; escolha manual obrigatória, sem download automático."
             } else if (performSearch) {
                 "Autenticando e preparando uma única busca sem downloads."
@@ -691,6 +715,7 @@ class A0ManualLoginActivity : Activity() {
                             action.isEnabled = true
                             searchAction.isEnabled = true
                             transferAction.isEnabled = observedScratchReady
+                            saveAction.isEnabled = observedScratchReady
                         }
                     }
                 }
@@ -699,6 +724,9 @@ class A0ManualLoginActivity : Activity() {
         action.setOnClickListener { start(false) }
         searchAction.setOnClickListener { start(true) }
         transferAction.setOnClickListener { start(true, transferObserved = true) }
+        saveAction.setOnClickListener {
+            start(true,transferObserved=true,saveToDevice=true)
+        }
         exportAction.setOnClickListener {
             exportAction.isEnabled = false
             worker.execute {
