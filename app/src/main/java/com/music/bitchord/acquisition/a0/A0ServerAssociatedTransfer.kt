@@ -205,23 +205,63 @@ internal class A0ServerAssociatedTransfer(
         }
     }
 
+    /** Only fixed allowlisted reasons and numeric backlog counts are exposed to diagnostics. */
+    enum class AddressFailureKind {
+        BACKLOG_LIMIT, SESSION_REPLACED, UNSUPPORTED_ADDRESS, PEER_UNREACHABLE,
+        END_OF_STREAM, TIMEOUT, SOCKET, PROTOCOL_OR_IO
+    }
+
+    class PeerAddressFailure(
+        val kind:AddressFailureKind,
+        val unrelatedFrames:Int,
+        cause:Throwable?=null
+    ): IOException("A0 peer address resolution failed: ${kind.name}",cause)
+
     private fun resolvePeer(server:Socket,peer:String,deadline:Long):
         A0PeerRendezvousWire.ServerEvent.Address {
-        repeat(12) {
+        // A user can spend seconds choosing a file while search-related
+        // code-18 peer offers accumulate on this authenticated connection.
+        // Twelve unrelated frames are NOT proof of a network failure.
+        // Bound both the number of drained frames and the existing 15s deadline.
+        val maxUnrelatedFrames=256
+        var unrelatedFrames=0
+        while(unrelatedFrames < maxUnrelatedFrames) {
             checkNotCancelled()
-            server.soTimeout=remainingTimeout(deadline)
-            when(val event=A0PeerRendezvousWire.readServerEvent(
-                server.getInputStream(),peer,pendingToken=1
-            )) {
+            val event=try {
+                server.soTimeout=remainingTimeout(deadline)
+                // No ConnectToPeer has been issued for this transfer yet.
+                // Never treat an unrelated code-1001 token as our failure.
+                A0PeerRendezvousWire.readServerEvent(
+                    server.getInputStream(),peer,pendingToken=null
+                )
+            }catch(error:A0PeerRendezvousWire.SessionReplaced) {
+                throw PeerAddressFailure(AddressFailureKind.SESSION_REPLACED,
+                    unrelatedFrames,error)
+            }catch(error:java.io.EOFException) {
+                throw PeerAddressFailure(AddressFailureKind.END_OF_STREAM,
+                    unrelatedFrames,error)
+            }catch(error:SocketTimeoutException) {
+                throw PeerAddressFailure(AddressFailureKind.TIMEOUT,
+                    unrelatedFrames,error)
+            }catch(error:java.net.SocketException) {
+                throw PeerAddressFailure(AddressFailureKind.SOCKET,
+                    unrelatedFrames,error)
+            }catch(error:IOException) {
+                throw PeerAddressFailure(AddressFailureKind.PROTOCOL_OR_IO,
+                    unrelatedFrames,error)
+            }
+            when(event) {
                 is A0PeerRendezvousWire.ServerEvent.Address -> return event
                 A0PeerRendezvousWire.ServerEvent.UnsupportedAddress ->
-                    throw IOException("A0 server reported unsupported peer address")
+                    throw PeerAddressFailure(AddressFailureKind.UNSUPPORTED_ADDRESS,
+                        unrelatedFrames)
                 A0PeerRendezvousWire.ServerEvent.PeerUnreachable ->
-                    throw IOException("A0 peer not reachable")
-                A0PeerRendezvousWire.ServerEvent.Unrelated -> Unit
+                    throw PeerAddressFailure(AddressFailureKind.PEER_UNREACHABLE,
+                        unrelatedFrames)
+                A0PeerRendezvousWire.ServerEvent.Unrelated -> unrelatedFrames++
             }
         }
-        throw IOException("A0 no peer address within bounded server frames")
+        throw PeerAddressFailure(AddressFailureKind.BACKLOG_LIMIT,unrelatedFrames)
     }
 
     private fun requestIndirect(
