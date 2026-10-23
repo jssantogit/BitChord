@@ -42,8 +42,8 @@ internal object A0SelectionServerDrain {
                 if(choice!=null)return Selection(choice,frames)
                 val timeLeft=deadline-System.nanoTime()
                 if(timeLeft<=0L)break
-                // Poll the UI at least eight times per second even on a
-                // quiet server; no concurrent thread ever reads this socket.
+                // Use the existing 750ms frame timeout to avoid false partial
+                // failures on slow peers; no other thread reads this socket.
                 server.soTimeout=minOf(
                     125L,TimeUnit.NANOSECONDS.toMillis(timeLeft).coerceAtLeast(1L)
                 ).toInt()
