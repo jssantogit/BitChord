@@ -96,7 +96,7 @@ class ObservationTests(unittest.TestCase):
                     '.github/workflows/check.yml').read_text()
         self.assertIn("'bitchord-android-pr-lane-c'", workflow)
         self.assertEqual('pr_b', _lane_for_run('pull_request', 'playback/b13'))
-        self.assertEqual('pr_c', _lane_for_run('pull_request', 'perf/d10'))
+        self.assertEqual('pr_d', _lane_for_run('pull_request', 'perf/d10'))
 
 
 if __name__ == '__main__':

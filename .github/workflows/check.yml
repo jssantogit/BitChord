@@ -18,11 +18,12 @@ jobs:
   android:
     # Keep this check context until the main ruleset is migrated separately.
     name: Android · test and build
-    # Bounded three-lane PR CI pilot, one running job in each group.
-    # A = catalog/intelligence; B = playback; C = all other PR heads.
+    # Four-lane PR CI candidate: one running job per bounded group.
+    # A = catalog/intelligence; B = playback; D = perf; C = all other PR heads.
+    # Protected main remains exact-SHA independent. Owner review required.
     # Main remains independent for each exact SHA, never cross-cancelling.
     concurrency:
-      group: ${{ github.event_name == 'pull_request' && (startsWith(github.head_ref, 'catalog/') || startsWith(github.head_ref, 'intelligence/')) && 'bitchord-android-pr-lane-a' || github.event_name == 'pull_request' && startsWith(github.head_ref, 'playback/') && 'bitchord-android-pr-lane-b' || github.event_name == 'pull_request' && 'bitchord-android-pr-lane-c' || format('bitchord-android-main-{0}', github.sha) }}
+      group: ${{ github.event_name == 'pull_request' && (startsWith(github.head_ref, 'catalog/') || startsWith(github.head_ref, 'intelligence/')) && 'bitchord-android-pr-lane-a' || github.event_name == 'pull_request' && startsWith(github.head_ref, 'playback/') && 'bitchord-android-pr-lane-b' || github.event_name == 'pull_request' && startsWith(github.head_ref, 'perf/') && 'bitchord-android-pr-lane-d' || github.event_name == 'pull_request' && 'bitchord-android-pr-lane-c' || format('bitchord-android-main-{0}', github.sha) }}
       queue: max
       cancel-in-progress: false
     runs-on: ubuntu-latest
