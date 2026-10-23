@@ -233,6 +233,7 @@ class A0ManualLoginActivity : Activity() {
                     if (captureEnabled) TraceOutcome.SUCCEEDED else TraceOutcome.DEGRADED
                 )
                 trace.note(A0SmokeTrace.Stage.LOGIN_STARTED)
+                if(saveToDevice)trace.note(A0SmokeTrace.Stage.LOCAL_SAVE_REQUESTED)
                 var finalOutcome = TraceOutcome.FAILED
                 var finalReason: A0SmokeTrace.Reason? = null
                 var transferAttempted=false
@@ -628,6 +629,7 @@ class A0ManualLoginActivity : Activity() {
                                                 if(saveToDevice) {
                                                     val id=checkNotNull(saveJobId)
                                                     saveLedger?.advance(id,A3AcquisitionLedger.Phase.STAGED)
+                                                    trace.note(A0SmokeTrace.Stage.LOCAL_SAVE_STAGED)
                                                     val name=checkNotNull(
                                                         A5ManualSaveGate.safeDestinationName(
                                                             choices[chosen].displayName,receipt.byteCount
@@ -638,6 +640,7 @@ class A0ManualLoginActivity : Activity() {
                                                         id,receipt.file,name,
                                                         receipt.byteCount,receipt.sha256Hex
                                                     ) { stopping||Thread.currentThread().isInterrupted }
+                                                    trace.note(A0SmokeTrace.Stage.LOCAL_SAVE_PUBLISHED)
                                                     result="MÚSICA LOCAL SALVA: ${saved.byteCount} bytes. " +
                                                         "Confira Biblioteca → No dispositivo. " +
                                                         "SHA-256 observado não comprova autenticidade."
@@ -760,6 +763,11 @@ class A0ManualLoginActivity : Activity() {
                             else A3AcquisitionLedger.Phase.FAILED
                         )
                     }
+                    if(saveToDevice && finalOutcome==TraceOutcome.FAILED &&
+                        (id==null || journal?.get(id)?.phase!=A3AcquisitionLedger.Phase.AVAILABLE)
+                    )trace.note(
+                        A0SmokeTrace.Stage.LOCAL_SAVE_FAILED,TraceOutcome.FAILED
+                    )
                     activeSelectionQueue?.offer(-1)
                     activeSelectionQueue=null
                     activeTransfer?.cancel()
