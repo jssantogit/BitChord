@@ -622,12 +622,30 @@ class A0ManualLoginActivity : Activity() {
                                                 trace.transferPhase(phase)
                                             }
                                             try {
-                                                result="TRANSPORTE CONCLUÍDO: ${receipt.byteCount} bytes. " +
-                                                    "SHA-256 observado: ${receipt.sha256Hex}. " +
-                                                    "Não comprova autenticidade. Arquivo temporário apagado."
+                                                trace.note(A0SmokeTrace.Stage.P_F_TRANSFER_COMPLETED)
+                                                if(saveToDevice) {
+                                                    val id=checkNotNull(saveJobId)
+                                                    saveLedger?.advance(id,A3AcquisitionLedger.Phase.STAGED)
+                                                    val name=checkNotNull(
+                                                        A5ManualSaveGate.safeDestinationName(
+                                                            choices[chosen].displayName,receipt.byteCount
+                                                        )
+                                                    )
+                                                    val saved=A3AndroidAcquisitionLedger.publishStaged(
+                                                        this@A0ManualLoginActivity,
+                                                        id,receipt.file,name,
+                                                        receipt.byteCount,receipt.sha256Hex
+                                                    ) { stopping||Thread.currentThread().isInterrupted }
+                                                    result="MÚSICA LOCAL SALVA: ${saved.byteCount} bytes. " +
+                                                        "Confira Biblioteca → No dispositivo. " +
+                                                        "SHA-256 observado não comprova autenticidade."
+                                                }else {
+                                                    result="TRANSPORTE CONCLUÍDO: ${receipt.byteCount} bytes. " +
+                                                        "SHA-256 observado: ${receipt.sha256Hex}. " +
+                                                        "Não comprova autenticidade. Arquivo temporário apagado."
+                                                }
                                                 finalOutcome=TraceOutcome.SUCCEEDED
                                                 finalReason=null
-                                                trace.note(A0SmokeTrace.Stage.P_F_TRANSFER_COMPLETED)
                                             } finally {
                                                 if (!receipt.file.delete()) {
                                                     throw IOException("A0 observed scratch cleanup failed")
@@ -714,7 +732,10 @@ class A0ManualLoginActivity : Activity() {
                         else -> A0SmokeTrace.Reason.SERVER_IO_FAILURE
                     }
                     trace.note(A0SmokeTrace.Stage.IO_FAILURE, TraceOutcome.FAILED, finalReason)
-                    result = "ERRO DE REDE OU PROTOCOLO. Nenhum arquivo foi baixado."
+                    result = if(saveToDevice && transferAttempted)
+                        "TRANSFERÊNCIA OU GRAVAÇÃO FALHOU. Confira pasta/permissões; " +
+                            "não foi confirmado salvamento no histórico."
+                    else "ERRO DE REDE OU PROTOCOLO. Nenhum arquivo foi baixado."
                 } catch (error: RuntimeException) {
                     if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
                     finalOutcome=TraceOutcome.FAILED
@@ -722,6 +743,21 @@ class A0ManualLoginActivity : Activity() {
                     trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE, TraceOutcome.FAILED, finalReason)
                     result = "ERRO NO TESTE. Nenhuma credencial foi armazenada."
                 } finally {
+                    val id=saveJobId
+                    val journal=saveLedger
+                    if(id!=null && journal!=null)runCatching {
+                        val phase=journal.get(id)?.phase
+                        if(phase!=null && phase !in setOf(
+                            A3AcquisitionLedger.Phase.AVAILABLE,
+                            A3AcquisitionLedger.Phase.INTERRUPTED,
+                            A3AcquisitionLedger.Phase.FAILED,
+                            A3AcquisitionLedger.Phase.CANCELLED
+                        )) journal.advance(
+                            id,if(finalOutcome==TraceOutcome.CANCELLED)
+                                A3AcquisitionLedger.Phase.CANCELLED
+                            else A3AcquisitionLedger.Phase.FAILED
+                        )
+                    }
                     activeSelectionQueue?.offer(-1)
                     activeSelectionQueue=null
                     activeTransfer?.cancel()
