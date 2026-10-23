@@ -215,6 +215,8 @@
     <string name="my_ratings_title">Minhas avaliações</string>
     <string name="my_ratings_empty">Ainda não há avaliações. Avalie uma música canônica pelo menu.</string>
     <string name="my_ratings_loading">Carregando gravação…</string>
+    <string name="my_ratings_feed_loading">Carregando avaliações…</string>
+    <string name="my_ratings_error">Não foi possível carregar as avaliações. Tente reabrir esta tela.</string>
     <string name="my_ratings_more">Exibindo as primeiras %1$d avaliações; há outras salvas.</string>
     <string name="smart_collections_title">Coleções inteligentes</string>
     <string name="smart_collections_loading">Atualizando coleções…</string>
