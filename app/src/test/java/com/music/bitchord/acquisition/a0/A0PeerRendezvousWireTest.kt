@@ -89,6 +89,25 @@ class A0PeerRendezvousWireTest {
         assertTrue(failure is A0PeerRendezvousWire.ServerEvent.PeerUnreachable)
     }
 
+    @Test fun addressLookupNeverClaimsAnUnissuedCantConnectToken() {
+        val reply=frame(1001,le(1))
+        assertTrue(A0PeerRendezvousWire.readServerEvent(
+            ByteArrayInputStream(reply),"peer_name",pendingToken=null
+        ) is A0PeerRendezvousWire.ServerEvent.Unrelated)
+        assertTrue(A0PeerRendezvousWire.readServerEvent(
+            ByteArrayInputStream(reply),"peer_name",pendingToken=1
+        ) is A0PeerRendezvousWire.ServerEvent.PeerUnreachable)
+    }
+
+    @Test fun sessionReplacementIsTypedWithoutPeerData() {
+        try {
+            A0PeerRendezvousWire.readServerEvent(
+                ByteArrayInputStream(frame(41,byteArrayOf())),"peer_name"
+            )
+            fail("Session replaced must fail closed")
+        }catch(_:A0PeerRendezvousWire.SessionReplaced){}
+    }
+
     @Test fun peerFirewallResponseMustMatchOnlyTheLocallyIssuedToken() {
         val msg=A0PeerRendezvousWire.readIndirectPierce(
             ByteArrayInputStream(le(5)+byteArrayOf(0)+le(91)),expectedToken=91
