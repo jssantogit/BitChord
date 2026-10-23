@@ -102,6 +102,25 @@ class A0SmokeTraceTest {
         assertFalse(points.toString().contains("remoteFilename"))
     }
 
+    @Test fun peerAddressFailureReportsOnlyAllowlistedReasonAndBoundedFrameCount() {
+        val points=mutableListOf<StructuredTracePoint>()
+        val trace=A0SmokeTrace.start(StructuredTracer(
+            sink=StructuredTraceSink { points.add(it) }
+        ),observedTransfer=true)
+        trace.transferFailure(A0ServerAssociatedTransfer.Phase.PEER_ADDRESS_REQUESTED,
+            A0ServerAssociatedTransfer.PeerAddressFailure(
+                A0ServerAssociatedTransfer.AddressFailureKind.BACKLOG_LIMIT,256
+            ))
+        trace.finish(TraceOutcome.FAILED)
+        val failure=points.single { it.stage=="pf_transfer_failure" }
+        assertEquals("backlog_limit",failure.attributes["addressFailure"])
+        assertEquals("256",failure.attributes["unrelatedFrames"])
+        assertEquals("peer_address_requested",failure.attributes["lastPhase"])
+        assertEquals("protocol_or_io",failure.attributes["failureKind"])
+        assertFalse(failure.attributes.toString().contains("remotePath"))
+        assertFalse(failure.attributes.toString().contains("peerUsername"))
+    }
+
     @Test fun deliberateSocketShutdownDoesNotEmitSpuriousServerReadFailure() {
         val points = mutableListOf<StructuredTracePoint>()
         val trace = A0SmokeTrace.start(
