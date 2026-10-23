@@ -20,6 +20,7 @@ class DiagnosticNavigationTruthD13Test {
         assertTrue(witness.snapshot().composed)
         assertFalse(witness.snapshot().firstDrawn)
         assertFalse(witness.snapshot().visibleProven)
+        assertTrue(points.any { it.operation == "evidence_my_ratings" })
         assertFalse(points.any { it.stage == "ui_visible" })
     }
 

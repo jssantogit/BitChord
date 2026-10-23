@@ -16,6 +16,7 @@ enum class EvidenceJourney(val wireName: String, val feature: TraceFeature) {
     CANONICAL_RATINGS("canonical_ratings", TraceFeature.CATALOG),
     ROOM_RATINGS("room_ratings", TraceFeature.DATABASE),
     MY_RATINGS("my_ratings", TraceFeature.UI),
+    SMART_PLAYLIST_BUILDER("smart_playlist_builder", TraceFeature.UI),
     NOW_PLAYING("now_playing", TraceFeature.UI),
 }
 

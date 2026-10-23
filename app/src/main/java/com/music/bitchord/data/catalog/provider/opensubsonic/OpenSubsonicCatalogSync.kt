@@ -1,6 +1,7 @@
 package com.music.bitchord.data.catalog.provider.opensubsonic
 
 import android.content.Context
+import io.ktor.client.plugins.ResponseException
 import androidx.room.withTransaction
 import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.CanonicalCatalogDao
@@ -75,6 +76,21 @@ internal object OpenSubsonicCatalogSync {
             provider.librarySnapshot()
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (protocol: OpenSubsonicApiException) {
+            // Subsonic status codes are finite protocol categories. Never echo
+            // server-generated error text, which may contain credentials or URLs.
+            return when (protocol.code) {
+                20, 30 -> ProviderSyncResult.Failure("OpenSubsonic protocol unsupported")
+                40 -> ProviderSyncResult.Failure("OpenSubsonic authentication failed")
+                50 -> ProviderSyncResult.Failure("OpenSubsonic permission denied")
+                else -> ProviderSyncResult.Failure("OpenSubsonic library snapshot failed")
+            }
+        } catch (response: ResponseException) {
+            return when (response.response.status.value) {
+                401 -> ProviderSyncResult.Failure("OpenSubsonic authentication failed")
+                403 -> ProviderSyncResult.Failure("OpenSubsonic permission denied")
+                else -> ProviderSyncResult.Failure("OpenSubsonic library snapshot failed")
+            }
         } catch (_: Throwable) {
             return ProviderSyncResult.Failure("OpenSubsonic library snapshot failed")
         }
@@ -91,12 +107,22 @@ internal object OpenSubsonicCatalogSync {
                     if (generation != gate.latestGeneration.get() || !accountIsCurrent()) {
                         error("OpenSubsonic snapshot superseded before Room apply")
                     }
-                    CanonicalRemoteCatalogSync.applySnapshot(
+                    val result = CanonicalRemoteCatalogSync.applySnapshot(
                         providerKey = provider.providerKey,
                         snapshot = snapshot,
                         store = RoomCanonicalCatalogSyncStore(database.catalogDao()),
                         idFactory = idFactory,
                     )
+                    // Never persist partial/auth-failed/stale or cancelled snapshots.
+                    // Remote evidence and canonical assets commit atomically.
+                    OpenSubsonicRemoteRatingPersistence.apply(
+                        dao = database.catalogDao(),
+                        providerKey = provider.providerKey,
+                        scopeId = provider.ratingScopeId,
+                        generation = generation,
+                        snapshot = snapshot,
+                    )
+                    result
                 }
             }
         } catch (cancelled: CancellationException) {
