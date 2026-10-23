@@ -41,6 +41,25 @@ class DiagnosticNavigationTruthD13Test {
         assertFalse(witness.snapshot().visibleProven)
     }
 
+    @Test fun smartPlaylistBuilderKeepsItsOwnJourneyIdentity() {
+        val points = mutableListOf<StructuredTracePoint>()
+        val witness = DiagnosticNavigationWitness(
+            DiagnosticEvidenceJourneyRecorder(StructuredTracer(sink = { points.add(it) })),
+            NavigationSurface.SMART_PLAYLIST_BUILDER,
+        )
+        witness.request()
+        witness.target(NavigationSurface.SMART_PLAYLIST_BUILDER)
+        witness.composed()
+        witness.firstDraw(400, 800)
+        witness.dispose()
+        val starts = points.filter { it.stage == null && it.operation.startsWith("evidence_") }
+        assertEquals(2, starts.size)
+        assertEquals("evidence_smart_playlist_builder", starts.first().operation)
+        assertEquals(starts.first().operation, starts.last().operation)
+        assertFalse(points.any { it.operation == "evidence_my_ratings" })
+        assertFalse(points.any { it.stage == "ui_visible" })
+    }
+
     @Test fun disposeDoesNotForgeVisibleFrameOrSuccessfulResult() {
         val points = mutableListOf<StructuredTracePoint>()
         val witness = DiagnosticNavigationWitness(
