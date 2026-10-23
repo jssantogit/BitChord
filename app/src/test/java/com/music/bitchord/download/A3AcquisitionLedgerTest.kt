@@ -37,7 +37,7 @@ class A3AcquisitionLedgerTest {
         val saved=A3AcquisitionLedger(store).get(id1)!!
         assertEquals(A3AcquisitionLedger.Phase.AVAILABLE,saved.phase)
         assertEquals("content://media/external/audio/media/52",saved.contentUri)
-        assertEquals(128,saved.byteCount)
+        assertEquals(128L,saved.byteCount)
     }
 
     @Test fun restartNeverPretendsToResumeSocketOrIncompletePublication() {
