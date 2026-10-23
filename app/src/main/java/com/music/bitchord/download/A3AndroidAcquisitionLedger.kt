@@ -2,6 +2,7 @@ package com.music.bitchord.download
 
 import android.content.Context
 import android.net.Uri
+import android.os.Looper
 import java.io.File
 
 /**
@@ -30,6 +31,9 @@ internal object A3AndroidAcquisitionLedger {
         observedDigest:String,
         isCancelled:()->Boolean={false}
     ):A2LocalAudioPublisher.Published {
+        check(Looper.myLooper()!=Looper.getMainLooper()) {
+            "A3 durable publication must run off the Android main thread"
+        }
         val app=context.applicationContext
         val coordinator=A3AcquisitionPublicationCoordinator(get(app)) { uri ->
             runCatching {
