@@ -29,6 +29,34 @@ class LegacyPrivacyD15Test {
         assertTrue(uri.contains("<uri>"))
     }
 
+    @Test fun legacyThrowableErrorDoesNotExportKeyedMediaOrPrivateUri() {
+        val failure = IllegalStateException(
+            "title=Private Song; artist=Private Artist; album=Secret Album " +
+                "GET https://private.example.test/play?token=secret"
+        )
+        val safe = DiagnosticLegacyPrivacy.error("Network", failure)
+        val exported = DiagnosticFormatter.format(
+            DiagnosticEvent(
+                100L, 100L, "session", DiagnosticLevel.ERROR, DiagnosticCategory.NETWORK,
+                "debug_log:Network", "retry_count=3", "unit", null, emptyMap(), safe,
+            ),
+        )
+        listOf("Private Song", "Private Artist", "Secret Album",
+            "private.example.test", "token=secret").forEach {
+            assertFalse("Leaked from legacy Throwable: $it", exported.contains(it))
+        }
+        assertTrue(exported.contains("IllegalStateException"))
+        assertTrue(exported.contains("retry_count=3"))
+    }
+
+    @Test fun sensitiveLegacyTagsSuppressThrowablePayloadToo() {
+        val failure = IllegalArgumentException("failed for private recording")
+        assertEquals(
+            "legacy_payload_suppressed",
+            DiagnosticLegacyPrivacy.error("VideoSwitch", failure),
+        )
+    }
+
     @Test fun ringLossRemainsExplicitAfterSaturation() {
         val ring = DiagnosticBuffer(2)
         repeat(5) { seq ->
