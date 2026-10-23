@@ -54,4 +54,27 @@ class A0SearchReaderHandoffTest {
             pool.shutdownNow()
         }
     }
+
+    @Test
+    fun publishedSearchResultKeepsReaderClosedAfterInboxIsDrained() {
+        val gate=A0SearchReaderGate()
+        val inbox=ArrayBlockingQueue<String>(1)
+        assertTrue(gate.isOpen())
+        assertTrue(gate.publish(inbox,"valid reply"))
+        assertEquals("valid reply",inbox.poll())
+        assertFalse("Consumption must not re-enable the server reader",gate.isOpen())
+        assertFalse("A late offer must not publish another result",gate.publish(inbox,"late"))
+        assertNull(inbox.poll())
+    }
+
+    @Test
+    fun stoppingTimedOutSearchRejectsLatePeerPublication() {
+        val gate=A0SearchReaderGate()
+        val inbox=ArrayBlockingQueue<String>(1)
+        gate.stop()
+        assertFalse(gate.isOpen())
+        assertFalse(gate.publish(inbox,"late response"))
+        assertNull(inbox.poll())
+    }
+
 }
