@@ -75,7 +75,7 @@ class A0SelectionServerDrainTest {
                         remote.getOutputStream().apply {
                             write(le(8)+le(18)+byteArrayOf(1));flush()
                         }
-                        Thread.sleep(650)
+                        Thread.sleep(1350)
                     }
                 }
                 Socket(loopback,listener.localPort).use { client ->
