@@ -95,14 +95,19 @@ internal class A0SmokeTrace private constructor(
             is IllegalArgumentException -> "invalid_input"
             else -> "other"
         }
+        val details=linkedMapOf(
+            "elapsedMs" to elapsedMillis().toString(),
+            "lastPhase" to (lastPhase?.name?.lowercase(Locale.ROOT) ?: "precheck"),
+            "failureKind" to failureKind
+        )
+        if (error is A0ServerAssociatedTransfer.PeerAddressFailure) {
+            details["addressFailure"] = error.kind.name.lowercase(Locale.ROOT)
+            details["unrelatedFrames"] = error.unrelatedFrames.coerceIn(0,256).toString()
+        }
         trace.event(
             stage="pf_transfer_failure",
             outcome=TraceOutcome.FAILED,
-            attributes=mapOf(
-                "elapsedMs" to elapsedMillis().toString(),
-                "lastPhase" to (lastPhase?.name?.lowercase(Locale.ROOT) ?: "precheck"),
-                "failureKind" to failureKind
-            )
+            attributes=details
         )
     }
 
