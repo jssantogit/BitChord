@@ -170,6 +170,9 @@ internal class A0SmokeTrace private constructor(
                 "unsupportedFormat" to n(report.unsupportedFormat),
                 "unsafePath" to n(report.unsafePath),
                 "noSlot" to n(report.noSlot),
+                "validBeforeLimit" to n(report.validBeforeLimit),
+                "duplicates" to n(report.duplicates),
+                "capacityDropped" to n(report.capacityDropped),
                 "selectable" to n(report.accepted)
             )
         )
