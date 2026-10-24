@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 internal class A0SmokeTrace private constructor(
     private val trace: StructuredTrace,
+    private val tracer: StructuredTracer,
     private val startNanos: Long,
     private val monotonicNanos: () -> Long
 ) {
@@ -52,6 +53,34 @@ internal class A0SmokeTrace private constructor(
     private val complete = AtomicBoolean(false)
     private val socketsClosing = AtomicBoolean(false)
     private val ignoredServerFrames = AtomicInteger(0)
+    @Volatile private var continuation: StructuredTrace? = null
+
+    /**
+     * The common tracer limits intermediate points to 64. A long Soulseek
+     * search can exhaust them BEFORE selected-file P/F and publication events.
+     * Open one correlated child for the remainder, preserving the global
+     * cap, sensitive-data filtering and the original trace's completion.
+     */
+    private fun continuationTrace():StructuredTrace {
+        continuation?.let { return it }
+        return synchronized(this) {
+            continuation ?: tracer.startTrace(
+                feature=TraceFeature.PROVIDER,
+                operation="a0_soulseek_file_outcome",
+                attributes=mapOf("environment" to "devdebug"),
+                parent=trace.context()
+            ).also { continuation=it }
+        }
+    }
+
+    private fun eventTrace(stage:Stage):StructuredTrace =
+        if(continuation!=null || stage in setOf(
+            Stage.CANDIDATES_AVAILABLE,Stage.MANUAL_SELECTION_CANCELLED,
+            Stage.P_F_TRANSFER_STARTED,Stage.P_F_TRANSFER_COMPLETED,
+            Stage.SCRATCH_CLEANUP,Stage.SOCKETS_CLOSED,
+            Stage.IO_FAILURE,Stage.UNEXPECTED_FAILURE,Stage.LOGIN_DENIED,
+            Stage.SERVER_READ_TIMEOUT,Stage.STOP_REQUESTED
+        )) continuationTrace() else trace
 
     fun note(
         stage: Stage,
@@ -63,7 +92,7 @@ internal class A0SmokeTrace private constructor(
         if (stage == Stage.SERVER_READ_FAILURE && socketsClosing.get()) return
         val attributes = linkedMapOf("elapsedMs" to elapsedMillis().toString())
         if (reason != null) attributes["reasonCode"] = reason.name.lowercase(Locale.ROOT)
-        trace.event(
+        eventTrace(stage).event(
             stage = stage.name.lowercase(Locale.ROOT),
             outcome = outcome,
             attributes = attributes
@@ -73,7 +102,7 @@ internal class A0SmokeTrace private constructor(
     /** Only known enum phases; never emit peer identity, remote path or frame data. */
     fun transferPhase(phase:A0ServerAssociatedTransfer.Phase) {
         if(complete.get())return
-        trace.event(
+        continuationTrace().event(
             stage="pf_"+phase.name.lowercase(Locale.ROOT),
             outcome=TraceOutcome.SUCCEEDED,
             attributes=mapOf("elapsedMs" to elapsedMillis().toString())
@@ -83,7 +112,7 @@ internal class A0SmokeTrace private constructor(
     /** Aggregate-only observation. Never expose peer offers or their payloads. */
     fun selectionDrain(discardedFrames:Int) {
         if(complete.get())return
-        trace.event(
+        continuationTrace().event(
             stage="selection_backlog_drained",
             outcome=TraceOutcome.SUCCEEDED,
             attributes=mapOf(
@@ -120,7 +149,7 @@ internal class A0SmokeTrace private constructor(
             details["addressFailure"] = error.kind.name.lowercase(Locale.ROOT)
             details["unrelatedFrames"] = error.unrelatedFrames.coerceIn(0,256).toString()
         }
-        trace.event(
+        continuationTrace().event(
             stage="pf_transfer_failure",
             outcome=TraceOutcome.FAILED,
             attributes=details
@@ -131,7 +160,7 @@ internal class A0SmokeTrace private constructor(
     fun candidateScreening(report:A0ObservedCandidateHandoff.Screening) {
         if(complete.get())return
         fun n(value:Int)=value.coerceIn(0,100000).toString()
-        trace.event(
+        continuationTrace().event(
             stage="candidate_screening",
             outcome=if(report.accepted>0) TraceOutcome.SUCCEEDED
                 else TraceOutcome.DEGRADED,
@@ -206,6 +235,7 @@ internal class A0SmokeTrace private constructor(
             "ignoredServerFrames" to ignoredServerFrames.get().coerceAtMost(100000).toString()
         )
         if (reason != null) attributes["reasonCode"] = reason.name.lowercase(Locale.ROOT)
+        continuation?.complete(outcome,attributes)
         trace.complete(outcome, attributes)
     }
 
@@ -227,7 +257,7 @@ internal class A0SmokeTrace private constructor(
                     "mode" to if(observedTransfer)"manual_observed_one_file" else "read_only"
                 )
             )
-            return A0SmokeTrace(trace, startedAt, monotonicNanos)
+            return A0SmokeTrace(trace, tracer, startedAt, monotonicNanos)
         }
     }
 }
