@@ -121,8 +121,13 @@ internal class A0ObservedCandidateHandoff(
             eligible=(eligible+1).coerceAtMost(100000)
             val bitrate=file.attributes[0]?.takeIf { it in 1..10000 }
             val ranking=A0CandidateRank.rank(searchPhrase,basename,bitrate)
+            // A0's original take(82) could cut off ".mp3" and hide an
+            // otherwise eligible file from the save selector.
+            val suffix=".$ext"
+            val displayName=if(basename.length<=82) basename
+                else basename.take(82-suffix.length)+suffix
             candidates.add(Choice(
-                displayName=basename.take(82),sizeBytes=file.sizeBytes,
+                displayName=displayName,sizeBytes=file.sizeBytes,
                 peerUsername=result.peerUsername,remotePath=path,
                 matchScore=ranking.score, matchSignal=ranking.match,
                 declaredBitrateKbps=bitrate
