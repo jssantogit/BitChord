@@ -43,6 +43,7 @@ import com.music.bitchord.playback.CanonicalBatchQueueRequests
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.playback.CanonicalCollectionIntentPlan
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
+import com.music.bitchord.playback.RoomCanonicalQueueResolver
 import com.music.bitchord.playback.SmartCollectionPlaybackTrace
 import com.music.bitchord.playback.androidCanonicalQueueResolver
 import com.music.bitchord.sharedui.resources.Res
@@ -255,15 +256,22 @@ internal fun uniqueVerifiedRatedRemoteAssets(
  * using its existing local/credential-backed eligibility; no auth URLs, native
  * source IDs or network calls are passed to Playback or the UI.
  */
+/**
+ * Catalog must expose local assets even when no OpenSubsonic account exists.
+ * Remote providers are account-scoped by Catalog; local media is not.
+ */
+internal fun canonicalBrowseProviderKeys(remoteProviders: Collection<String>): List<String> =
+    (remoteProviders + RoomCanonicalQueueResolver.LOCAL_PROVIDER).distinct().sorted()
+
 private suspend fun currentCanonicalBrowse(context: Context): CanonicalBrowseLibrary {
     val dao = CanonicalCatalogDatabase.get(context).catalogDao()
     val accounts = OpenSubsonicAccountRepository(
         persistence = SharedPrefsOpenSubsonicAccountPersistence(context),
         credentials = AndroidKeystoreOpenSubsonicCredentialStore(context),
     )
-    val providers = OpenSubsonicLibraryProviderConfigurationReader(accounts)
-        .configuredProviderKeys().toList().sorted()
-    if (providers.isEmpty()) return CanonicalBrowseLibrary.EMPTY
+    val providers = canonicalBrowseProviderKeys(
+        OpenSubsonicLibraryProviderConfigurationReader(accounts).configuredProviderKeys()
+    )
     val rows = dao.observeMultiSourceBrowseAssets(providers).first()
     val tracks = rows.groupBy { it.recordingId }.values.mapNotNull { group ->
         val first = group.firstOrNull() ?: return@mapNotNull null
