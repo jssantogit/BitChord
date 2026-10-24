@@ -17,6 +17,25 @@ internal object A0SearchQuery {
     private val punctuation = Regex("[^\\p{L}\\p{N}]+")
     private val whitespace = Regex("\\s+")
 
+    /**
+     * Suggestions are NEVER dispatched automatically. A user must choose the
+     * next attempt so title-only/diacritic variants cannot fan out silently.
+     * Preserve user spelling for the initial query, then offer at most two
+     * alternatives after validation.
+     */
+    fun variants(userEntered: String): List<String> {
+        val first = normalize(userEntered)
+        val variants = linkedSetOf(first)
+        val ascii = java.text.Normalizer.normalize(first, java.text.Normalizer.Form.NFKD)
+            .replace(Regex("\\p{M}+"), "")
+        if (ascii != first) variants.add(normalize(ascii))
+        val parts = userEntered.split(Regex("\\s+[-–—]\\s+"), limit = 2)
+        if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) {
+            variants.add(normalize(parts[1]))
+        }
+        return variants.take(3)
+    }
+
     fun normalize(userEntered: String): String {
         require(userEntered.length in 1..MAX_SOURCE_CHARS) { "Invalid A0 search input length" }
         require(userEntered.none { it.isISOControl() && !it.isWhitespace() }) {
