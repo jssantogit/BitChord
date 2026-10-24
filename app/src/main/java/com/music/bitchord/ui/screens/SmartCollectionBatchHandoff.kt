@@ -21,12 +21,20 @@ import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReaders
 import com.music.bitchord.data.catalog.OpenSubsonicLibraryProviderConfigurationReader
 import com.music.bitchord.data.catalog.provider.opensubsonic.AndroidKeystoreOpenSubsonicCredentialStore
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountRepository
+import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicRemoteRatingReader
+import com.music.bitchord.data.catalog.provider.opensubsonic.RemoteRatingAvailability
+import com.music.bitchord.data.catalog.provider.opensubsonic.RemoteRatingConsumerSnapshot
+import com.music.bitchord.data.catalog.provider.RemoteNumericRatingKind
 import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.listening.AdaptiveCollectionKind
 import com.music.bitchord.data.listening.CanonicalRuleBasedSmartPlaylistPreview
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.RoomListeningEventStore
 import com.music.bitchord.data.listening.RoomRecordingRatingStore
+import com.music.bitchord.data.listening.RuleBasedSmartPlaylistQuery
+import com.music.bitchord.diagnostics.DiagnosticCategory
+import com.music.bitchord.diagnostics.Diagnostics
+import java.util.UUID
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionRepository
 import com.music.bitchord.playback.ACTION_EXECUTE_CANONICAL_BATCH
@@ -35,6 +43,8 @@ import com.music.bitchord.playback.CanonicalBatchQueueRequests
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.playback.CanonicalCollectionIntentPlan
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
+import com.music.bitchord.playback.RoomCanonicalQueueResolver
+import com.music.bitchord.playback.SmartCollectionPlaybackTrace
 import com.music.bitchord.playback.androidCanonicalQueueResolver
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.smart_collection_batch_added
@@ -54,6 +64,7 @@ import kotlin.coroutines.resume
 internal sealed interface SmartCollectionActionSource {
     data class Adaptive(val kind: AdaptiveCollectionKind) : SmartCollectionActionSource
     data class SavedDefinition(val id: String) : SmartCollectionActionSource
+    data class PreviewQuery(val query: RuleBasedSmartPlaylistQuery) : SmartCollectionActionSource
 }
 
 internal sealed interface SmartCollectionBatchResult {
@@ -75,24 +86,81 @@ internal class SmartCollectionBatchHandoff(
     private val browse: suspend () -> CanonicalBrowseLibrary,
     private val planner: CanonicalCollectionIntentPlanner,
     private val submit: suspend (CanonicalCollectionIntentPlan) -> Boolean,
+    private val trace: (Map<String, String>) -> Unit = {},
+    private val verifiedRemoteAssets: suspend (SmartCollectionActionSource) -> Map<String, CanonicalBrowseMediaAsset> = { emptyMap() },
 ) {
     suspend fun execute(
         source: SmartCollectionActionSource,
         intent: CanonicalCollectionIntent,
     ): SmartCollectionBatchResult {
-        val selected = refreshIds(source) ?: return SmartCollectionBatchResult.Unavailable
-        if (selected.isEmpty()) return SmartCollectionBatchResult.Empty
-        if (selected.size > CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE) {
-            return SmartCollectionBatchResult.LimitExceeded
+        // Process-ephemeral correlation, never an account/Recording/MediaAsset identifier.
+        val attempt = UUID.randomUUID().toString().substring(0, 8)
+        val base = mapOf(
+            "attempt" to attempt,
+            "intent" to intent.name,
+            "source" to when (source) {
+                is SmartCollectionActionSource.Adaptive -> "adaptive"
+                is SmartCollectionActionSource.SavedDefinition -> "saved"
+                is SmartCollectionActionSource.PreviewQuery -> "preview"
+            },
+        )
+        fun mark(stage: String, extra: Map<String, String> = emptyMap()) {
+            // A telemetry problem must never change user-intent semantics.
+            runCatching { trace(base + mapOf("stage" to stage) + extra) }
         }
-        val ids = selected.distinct() // canonical Recording dedup, original order kept
-        val plan = planner.preview(ids, intent, browse())
-        if (plan.rejected.isNotEmpty() || plan.selections.size != ids.size) {
-            return SmartCollectionBatchResult.Rejected(plan.rejected.size)
+        mark("intent")
+        try {
+            val selected = refreshIds(source)
+            if (selected == null) {
+                mark("revalidated", mapOf("reason" to "definition_or_source_unavailable"))
+                return SmartCollectionBatchResult.Unavailable
+            }
+            mark("revalidated", mapOf("candidateCount" to selected.size.toString()))
+            if (selected.isEmpty()) {
+                mark("rejected", mapOf("reason" to "ids_zero"))
+                return SmartCollectionBatchResult.Empty
+            }
+            if (selected.size > CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE) {
+                mark("rejected", mapOf("reason" to "limit_exceeded"))
+                return SmartCollectionBatchResult.LimitExceeded
+            }
+            val ids = selected.distinct()
+            val library = browse()
+            mark("catalog", mapOf("trackCount" to library.tracks.size.toString()))
+            val scopedRemote = verifiedRemoteAssets(source)
+            mark("asset_evidence", mapOf("uniqueRatedAssets" to scopedRemote.size.toString()))
+            val plan = planner.preview(
+                ids, intent, library,
+                preferSingleLocalCopy = true,
+                verifiedRemoteAssetByRecording = scopedRemote,
+            )
+            val reasons = plan.rejected.groupingBy { it.reason.name }.eachCount()
+                .toSortedMap().entries.joinToString(",") { "${it.key}:${it.value}" }
+            mark("planned", mapOf(
+                "eligibleCount" to ids.size.toString(),
+                "selectionCount" to plan.selections.size.toString(),
+                "rejectedCount" to plan.rejected.size.toString(),
+                "rejectionCodes" to reasons.ifEmpty { "none" },
+            ))
+            if (plan.rejected.isNotEmpty() || plan.selections.size != ids.size) {
+                mark("rejected", mapOf("reason" to "planning_failed"))
+                return SmartCollectionBatchResult.Rejected(plan.rejected.size)
+            }
+            if (plan.selections.isEmpty()) {
+                mark("rejected", mapOf("reason" to "selections_zero"))
+                return SmartCollectionBatchResult.Empty
+            }
+            val sent = submit(plan.copy(traceRef = attempt))
+            mark("media3", mapOf("result" to if (sent) "command_accepted" else "command_failed"))
+            return if (sent) SmartCollectionBatchResult.Submitted
+                else SmartCollectionBatchResult.ExecutionFailed
+        } catch (cancelled: CancellationException) {
+            mark("cancelled")
+            throw cancelled
+        } catch (_: Exception) {
+            mark("exception", mapOf("reason" to "execution_exception"))
+            return SmartCollectionBatchResult.ExecutionFailed
         }
-        if (plan.selections.isEmpty()) return SmartCollectionBatchResult.Empty
-        return if (submit(plan)) SmartCollectionBatchResult.Submitted
-        else SmartCollectionBatchResult.ExecutionFailed
     }
 }
 
@@ -113,13 +181,74 @@ private suspend fun currentSmartCollectionIds(
             SmartPlaylistDefinitionDatabase.get(context).definitionDao(),
         )
         val definition = repo.list().firstOrNull { it.id == source.id } ?: return null
-        val availability = CanonicalLibraryAvailabilityReaders.persistent(context)
-        // L6 cannot silently truncate an oversized candidate population.
-        if (availability.availableRecordingIds().size > 5_000) return null
-        persistentSmartPlaylistPreview(context, availability)
-            .preview(definition.query).map { it.recordingId }
+        currentSmartPlaylistQueryIds(context, definition.query)
+    }
+    is SmartCollectionActionSource.PreviewQuery -> {
+        currentSmartPlaylistQueryIds(context, source.query)
     }
     }
+}
+
+private suspend fun currentSmartPlaylistQueryIds(
+    context: Context,
+    query: RuleBasedSmartPlaylistQuery,
+): List<String>? {
+    val availability = CanonicalLibraryAvailabilityReaders.persistent(context)
+    if (availability.availableRecordingIds().size > 5_000) return null
+    return persistentSmartPlaylistPreview(context, availability)
+        .preview(query).map { it.recordingId }
+}
+
+/**
+ * Catalog-owned source evidence only: a uniquely rated MediaAsset can break
+ * ties among multiple renditions of the same canonical Recording. This MUST
+ * use a complete current-account snapshot. No rating data is persisted locally.
+ * A stale or ambiguous remote preference never picks an asset.
+ */
+private suspend fun currentScopedRatedAssetHints(
+    context: Context,
+    source: SmartCollectionActionSource,
+): Map<String, CanonicalBrowseMediaAsset> {
+    val query = when (source) {
+        is SmartCollectionActionSource.Adaptive -> null
+        is SmartCollectionActionSource.PreviewQuery -> source.query
+        is SmartCollectionActionSource.SavedDefinition -> {
+            val repo = SmartPlaylistDefinitionRepository(
+                SmartPlaylistDefinitionDatabase.get(context).definitionDao(),
+            )
+            repo.list().firstOrNull { it.id == source.id }?.query
+        }
+    } ?: return emptyMap()
+    val minimum = query.minimumExplicitRating ?: return emptyMap()
+    val account = SharedPrefsOpenSubsonicAccountPersistence(context)
+    val reader = OpenSubsonicRemoteRatingReader(CanonicalCatalogDatabase.get(context)) {
+        account.read()
+    }
+    return uniqueVerifiedRatedRemoteAssets(reader.read(), minimum)
+}
+
+/**
+ * Only an explicit numerical value from a COMPLETE current-account rating
+ * snapshot can establish a unique remote rendition. Multiple equally rated
+ * MediaAssets, cleared/invalid/unrated evidence and account revocation cannot.
+ */
+internal fun uniqueVerifiedRatedRemoteAssets(
+    snapshot: RemoteRatingConsumerSnapshot,
+    minimum: Double,
+): Map<String, CanonicalBrowseMediaAsset> {
+    if (snapshot.availability != RemoteRatingAvailability.CACHED_COMPLETE) return emptyMap()
+    return snapshot.items.asSequence()
+        .filter {
+            it.numeric.kind == RemoteNumericRatingKind.VALUE &&
+                (it.numeric.value?.toDouble() ?: 0.0) >= minimum
+        }
+        .groupBy { it.recordingId }
+        .mapNotNull { (recording, items) ->
+            val uniqueAssets = items.map {
+                CanonicalBrowseMediaAsset(it.mediaAssetId, it.providerKey)
+            }.distinct()
+            if (uniqueAssets.size == 1) recording to uniqueAssets.single() else null
+        }.toMap()
 }
 
 /**
@@ -127,15 +256,22 @@ private suspend fun currentSmartCollectionIds(
  * using its existing local/credential-backed eligibility; no auth URLs, native
  * source IDs or network calls are passed to Playback or the UI.
  */
+/**
+ * Catalog must expose local assets even when no OpenSubsonic account exists.
+ * Remote providers are account-scoped by Catalog; local media is not.
+ */
+internal fun canonicalBrowseProviderKeys(remoteProviders: Collection<String>): List<String> =
+    (remoteProviders + RoomCanonicalQueueResolver.LOCAL_PROVIDER).distinct().sorted()
+
 private suspend fun currentCanonicalBrowse(context: Context): CanonicalBrowseLibrary {
     val dao = CanonicalCatalogDatabase.get(context).catalogDao()
     val accounts = OpenSubsonicAccountRepository(
         persistence = SharedPrefsOpenSubsonicAccountPersistence(context),
         credentials = AndroidKeystoreOpenSubsonicCredentialStore(context),
     )
-    val providers = OpenSubsonicLibraryProviderConfigurationReader(accounts)
-        .configuredProviderKeys().toList().sorted()
-    if (providers.isEmpty()) return CanonicalBrowseLibrary.EMPTY
+    val providers = canonicalBrowseProviderKeys(
+        OpenSubsonicLibraryProviderConfigurationReader(accounts).configuredProviderKeys()
+    )
     val rows = dao.observeMultiSourceBrowseAssets(providers).first()
     val tracks = rows.groupBy { it.recordingId }.values.mapNotNull { group ->
         val first = group.firstOrNull() ?: return@mapNotNull null
@@ -161,7 +297,10 @@ private suspend fun submitCanonicalBatch(
     controller: MediaController?,
     plan: CanonicalCollectionIntentPlan,
 ): Boolean {
-    val session = controller ?: return false
+    val session = controller ?: run {
+        SmartCollectionPlaybackTrace.stage(plan, "session_rejected", "controller_null")
+        return false
+    }
     val token = CanonicalBatchQueueRequests.submit(plan)
     val request = try {
         session.sendCustomCommand(
@@ -173,14 +312,20 @@ private suspend fun submitCanonicalBatch(
         throw cancelled
     } catch (_: Exception) {
         CanonicalBatchQueueRequests.take(token)
+        SmartCollectionPlaybackTrace.stage(plan, "session_rejected", "dispatch_exception")
         return false
     }
+    SmartCollectionPlaybackTrace.stage(plan, "command_dispatched")
     return try {
         suspendCancellableCoroutine { continuation ->
             request.addListener({
                 val result = runCatching {
                     request.get().resultCode == SessionResult.RESULT_SUCCESS
                 }.getOrDefault(false)
+                SmartCollectionPlaybackTrace.stage(
+                    plan, if (result) "command_accepted" else "session_rejected",
+                    if (result) "none" else "session_result_non_success",
+                )
                 if (continuation.isActive) continuation.resume(result)
             }, MoreExecutors.directExecutor())
         }
@@ -190,6 +335,7 @@ private suspend fun submitCanonicalBatch(
         throw cancelled
     } catch (_: Exception) {
         CanonicalBatchQueueRequests.take(token)
+        SmartCollectionPlaybackTrace.stage(plan, "session_rejected", "command_result_exception")
         false
     }
 }
@@ -208,6 +354,14 @@ internal fun rememberSmartCollectionBatchAction(
             browse = { currentCanonicalBrowse(context) },
             planner = CanonicalCollectionIntentPlanner(androidCanonicalQueueResolver(context)),
             submit = { plan -> submitCanonicalBatch(controller, plan) },
+            verifiedRemoteAssets = { source -> currentScopedRatedAssetHints(context, source) },
+            trace = { data ->
+                Diagnostics.event(
+                    category = DiagnosticCategory.PLAYER,
+                    name = "smart_collection_action_v1",
+                    metadata = data,
+                )
+            },
         )
     }
     val added = stringResource(Res.string.smart_collection_batch_added)
@@ -228,12 +382,14 @@ internal fun rememberSmartCollectionBatchAction(
                     working.value = false
                 }
                 val message = when (outcome) {
+                    // Command acceptance is not audible evidence. The sink must
+                    // confirm audio samples before playback can be called successful.
                     SmartCollectionBatchResult.Submitted ->
-                        if (intent == CanonicalCollectionIntent.PLAY_NOW) played else added
+                        if (intent == CanonicalCollectionIntent.PLAY_NOW) null else added
                     SmartCollectionBatchResult.Empty -> empty
                     else -> failed
                 }
-                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                if (message != null) Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
             }
         }
     }

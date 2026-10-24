@@ -204,6 +204,7 @@ internal fun SmartPlaylistBuilderHeader(onBack: () -> Unit) {
 internal fun SmartPlaylistBuilderScreen(
     onBack: () -> Unit,
     onSavedAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
+    onPreviewAction: ((RuleBasedSmartPlaylistQuery, CanonicalCollectionIntent) -> Unit)? = null,
 ) {
     val context = LocalContext.current.applicationContext
     val repository = remember(context) {
@@ -223,6 +224,7 @@ internal fun SmartPlaylistBuilderScreen(
     var editingId by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var preview by remember { mutableStateOf<List<SmartPlaylistPreviewRow>?>(null) }
+    var previewQuery by remember { mutableStateOf<RuleBasedSmartPlaylistQuery?>(null) }
     var busy by remember { mutableStateOf(false) }
     val savedState by produceState<SmartPlaylistSavedUiState>(
         initialValue = SmartPlaylistSavedUiState.Loading, key1 = repository,
@@ -242,12 +244,14 @@ internal fun SmartPlaylistBuilderScreen(
         editingId = null
         draft = SmartPlaylistEditorDraft()
         preview = null
+        previewQuery = null
         error = null
     }
     fun edit(definition: SavedSmartPlaylistDefinition) {
         editingId = definition.id
         draft = SmartPlaylistEditorDraft.from(definition)
         preview = null
+        previewQuery = null
         error = null
     }
 
@@ -313,7 +317,7 @@ internal fun SmartPlaylistBuilderScreen(
                 fun field(value: String, onValue: (String) -> Unit, label: String) {
                     OutlinedTextField(
                         value = value,
-                        onValueChange = { onValue(it); preview = null; error = null },
+                        onValueChange = { onValue(it); preview = null; previewQuery = null; error = null },
                         label = { Text(label) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
@@ -368,6 +372,7 @@ internal fun SmartPlaylistBuilderScreen(
                                 if (count > 5_000) {
                                     error = overflowText
                                     preview = null
+                                    previewQuery = null
                                 } else {
                                     val rows = withContext(Dispatchers.IO) {
                                         readOnlyPreview.preview(query).mapNotNull { item ->
@@ -382,6 +387,7 @@ internal fun SmartPlaylistBuilderScreen(
                                         }
                                     }
                                     preview = rows
+                                    previewQuery = query
                                     error = null
                                 }
                             } catch (cancelled: CancellationException) {
@@ -389,6 +395,7 @@ internal fun SmartPlaylistBuilderScreen(
                             } catch (_: Exception) {
                                 error = errorText
                                 preview = null
+                                previewQuery = null
                             } finally {
                                 busy = false
                             }
@@ -406,9 +413,31 @@ internal fun SmartPlaylistBuilderScreen(
         }
         item(key = "preview-heading") {
             if (preview != null) {
-                Text(stringResource(Res.string.smart_playlist_preview),
-                    style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(Res.string.smart_playlist_preview),
+                    style = MaterialTheme.typography.titleMedium,
+                )
                 if (preview!!.isEmpty()) Text(stringResource(Res.string.smart_playlist_empty))
+                if (onPreviewAction != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(
+                            onClick = {
+                                previewQuery?.let { onPreviewAction(it, CanonicalCollectionIntent.PLAY_NOW) }
+                            },
+                            enabled = !busy && preview!!.isNotEmpty() && previewQuery != null,
+                        ) {
+                            Text(stringResource(Res.string.smart_collection_batch_play))
+                        }
+                        TextButton(
+                            onClick = {
+                                previewQuery?.let { onPreviewAction(it, CanonicalCollectionIntent.ADD_TO_QUEUE) }
+                            },
+                            enabled = !busy && preview!!.isNotEmpty() && previewQuery != null,
+                        ) {
+                            Text(stringResource(Res.string.smart_collection_batch_queue))
+                        }
+                    }
+                }
             }
         }
         items(preview.orEmpty(), key = { "preview-" + it.recordingId }) { row ->

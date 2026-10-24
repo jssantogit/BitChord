@@ -3,6 +3,10 @@ package com.music.bitchord.playback
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.MediaAssetEntity
+import com.music.bitchord.data.catalog.OpenSubsonicLibraryProviderConfigurationReader
+import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountRepository
+import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
+import com.music.bitchord.data.catalog.provider.opensubsonic.AndroidKeystoreOpenSubsonicCredentialStore
 
 import android.app.PendingIntent
 import android.content.Context
@@ -1098,6 +1102,7 @@ class PlaybackService : MediaLibraryService() {
          */
         override fun onPlayerError(error: PlaybackException) {
             playbackE2ETraceObserver?.onError()
+            SmartCollectionPlaybackTrace.onPlayerError()
             // The player this fired on, which is by definition the one the
             // session is currently pointed at.
             val exoPlayer = player ?: return
@@ -1253,6 +1258,7 @@ class PlaybackService : MediaLibraryService() {
             eventTime: AnalyticsListener.EventTime,
             playoutStartSystemTimeMs: Long,
         ) {
+            SmartCollectionPlaybackTrace.onAudioPositionAdvancing(eventTime.mediaId())
             val cutAt = swapCutAt ?: return
             swapCutAt = null
             TrackLog.d(
@@ -5951,12 +5957,21 @@ class PlaybackService : MediaLibraryService() {
     ): PreparedCanonicalBatch? = withContext(Dispatchers.IO) {
         if (plan.selections.isEmpty()) return@withContext null
         val dao = CanonicalCatalogDatabase.get(applicationContext).catalogDao()
+        // B10 revalidates the current account/provider as well as the exact
+        // asset. A Navidrome account switch must revoke every old submission.
+        val configuredProviders = OpenSubsonicLibraryProviderConfigurationReader(
+            OpenSubsonicAccountRepository(
+                persistence = SharedPrefsOpenSubsonicAccountPersistence(applicationContext),
+                credentials = AndroidKeystoreOpenSubsonicCredentialStore(applicationContext),
+            ),
+        ).configuredProviderKeys()
         val fresh = ArrayList<CanonicalCollectionSelection>(plan.selections.size)
         val rows = ArrayList<MediaAssetEntity>(plan.selections.size)
         for (selection in plan.selections) {
             val identity = selection.identity
             val id = identity.mediaAssetId ?: return@withContext null
             val provider = identity.providerKey ?: return@withContext null
+            if (!canonicalBatchProviderAllowed(provider, configuredProviders)) return@withContext null
             val asset = dao.mediaAssetById(id) ?: return@withContext null
             val recording = dao.recordingById(identity.recordingId) ?: return@withContext null
             if (asset.recordingId != identity.recordingId || asset.provider != provider) {
@@ -6000,9 +6015,16 @@ class PlaybackService : MediaLibraryService() {
             // Consumption precedes any suspension, so stale/doubled callbacks
             // and Activity recreation cannot apply the same operation twice.
             val plan = CanonicalBatchQueueRequests.take(token) ?: return@withLock false
-            val exo = player ?: return@withLock false
+            SmartCollectionPlaybackTrace.stage(plan, "session_received")
+            val exo = player ?: run {
+                SmartCollectionPlaybackTrace.stage(plan, "session_rejected", "player_null")
+                return@withLock false
+            }
             if (ListenTogether.state.value.inParty || CastController.state.value.casting ||
-                castPlayback.active) return@withLock false
+                castPlayback.active) {
+                SmartCollectionPlaybackTrace.stage(plan, "session_rejected", "external_session")
+                return@withLock false
+            }
             val prior = captureCanonicalBatchSnapshot(exo)
             val prepared = try {
                 prepareCanonicalBatch(plan)
@@ -6010,15 +6032,24 @@ class PlaybackService : MediaLibraryService() {
                 throw cancelled
             } catch (_: Exception) {
                 null
-            } ?: return@withLock false
+            } ?: run {
+                SmartCollectionPlaybackTrace.stage(plan, "session_rejected", "asset_or_account_changed")
+                return@withLock false
+            }
 
             val live = captureCanonicalBatchSnapshot(exo)
-            val edit = CanonicalBatchQueuePolicy.decide(
+            val decision = CanonicalBatchQueuePolicy.decide(
                 plan = plan,
                 expected = prior,
                 actual = live,
                 freshSelections = prepared.freshSelections,
-            ) as? CanonicalBatchQueueDecision.Apply ?: return@withLock false
+            )
+            val edit = decision as? CanonicalBatchQueueDecision.Apply ?: run {
+                val code = (decision as? CanonicalBatchQueueDecision.Reject)?.reason?.name
+                    ?: "unknown_policy"
+                SmartCollectionPlaybackTrace.stage(plan, "session_rejected", code)
+                return@withLock false
+            }
 
             // No credential-bearing requests or URLs cross MediaSession.
             val entries = prepared.playable.mapIndexed { ordinal, resolved ->
@@ -6053,8 +6084,14 @@ class PlaybackService : MediaLibraryService() {
             }
             // One owner-thread Media3 insertion, with no setMediaItems that
             // could erase played history, active context or pending tiers.
-            if (captureCanonicalBatchSnapshot(exo) != live) return@withLock false
-            if (entries.isEmpty()) return@withLock false
+            if (captureCanonicalBatchSnapshot(exo) != live) {
+                SmartCollectionPlaybackTrace.stage(plan, "session_rejected", "timeline_changed")
+                return@withLock false
+            }
+            if (entries.isEmpty()) {
+                SmartCollectionPlaybackTrace.stage(plan, "session_rejected", "entries_zero")
+                return@withLock false
+            }
             if (!edit.startPlayback && exo.mediaItemCount == 0) {
                 exo.playWhenReady = false
             }
@@ -6062,14 +6099,20 @@ class PlaybackService : MediaLibraryService() {
                 if (edit.startPlayback) crossfade?.onSkipRequested()
                 exo.addMediaItems(edit.insertionIndex, entries)
                 if (edit.startPlayback) {
+                    SmartCollectionPlaybackTrace.expectAudible(plan, entries.first().mediaId)
                     failureCascade.onExplicitUserIntent()
                     exo.seekTo(edit.insertionIndex, 0L)
                     if (exo.playbackState == Player.STATE_IDLE) exo.prepare()
                     exo.play()
                 }
                 saveQueueSnapshotImmediately(exo)
+                SmartCollectionPlaybackTrace.stage(
+                    plan, if (edit.startPlayback) "play_requested" else "queue_applied",
+                )
                 true
             } catch (_: Exception) {
+                SmartCollectionPlaybackTrace.onPlaybackStopped()
+                SmartCollectionPlaybackTrace.stage(plan, "session_rejected", "player_command_exception")
                 // A consumed one-shot token must never be replayed after an
                 // uncertain player/platform failure; report failure to caller.
                 false

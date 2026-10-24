@@ -1,6 +1,7 @@
 package com.music.bitchord.playback
 
 import com.music.bitchord.data.catalog.CanonicalBrowseLibrary
+import com.music.bitchord.data.catalog.CanonicalBrowseMediaAsset
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import kotlinx.coroutines.CancellationException
 
@@ -39,6 +40,8 @@ internal data class CanonicalCollectionIntentPlan(
     val intent: CanonicalCollectionIntent,
     val selections: List<CanonicalCollectionSelection>,
     val rejected: List<CanonicalCollectionRejected>,
+    /** Ephemeral diagnostics only; never serialized or used as identity. */
+    val traceRef: String? = null,
 )
 
 /**
@@ -63,6 +66,8 @@ internal class CanonicalCollectionIntentPlanner(
         intent: CanonicalCollectionIntent,
         library: CanonicalBrowseLibrary,
         deduplicateByRecording: Boolean = true,
+        preferSingleLocalCopy: Boolean = false,
+        verifiedRemoteAssetByRecording: Map<String, CanonicalBrowseMediaAsset> = emptyMap(),
     ): CanonicalCollectionIntentPlan {
         val rejected = mutableListOf<CanonicalCollectionRejected>()
         val rowsById = library.tracks.groupBy(CanonicalBrowseTrack::recordingId)
@@ -95,7 +100,25 @@ internal class CanonicalCollectionIntentPlanner(
                 return@forEachIndexed
             }
             val row = matches.single()
-            val assets = row.availableAssets.distinctBy { it.mediaAssetId to it.providerKey }
+            val presentAssets = row.availableAssets.distinctBy { it.mediaAssetId to it.providerKey }
+            // Explicit smart-collection policy, never a fallback to a random rendition:
+            // one local copy outranks remote duplicates only when the local asset is
+            // unique and still resolves. Two locals or remote-only ambiguity fail closed.
+            val local = presentAssets.filter {
+                it.providerKey == RoomCanonicalQueueResolver.LOCAL_PROVIDER
+            }
+            // Only an exact current-account Catalog evidence match may disambiguate
+            // remote duplicates. An arbitrary provider or stale/nonexistent hint
+            // does not authorize media playback.
+            val hinted = verifiedRemoteAssetByRecording[recordingId]
+            val ratedRemote = hinted?.takeIf { asset ->
+                asset.providerKey.startsWith("opensubsonic:") && asset in presentAssets
+            }
+            val assets = when {
+                preferSingleLocalCopy && local.size == 1 -> local
+                ratedRemote != null -> listOf(ratedRemote)
+                else -> presentAssets
+            }
             if (assets.isEmpty()) {
                 reject(CollectionIntentRejection.NO_ASSET)
                 return@forEachIndexed
