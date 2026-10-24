@@ -116,13 +116,8 @@ private suspend fun currentSmartCollectionIds(
         val availability = CanonicalLibraryAvailabilityReaders.persistent(context)
         // L6 cannot silently truncate an oversized candidate population.
         if (availability.availableRecordingIds().size > 5_000) return null
-        val listening = ListeningEventDatabase.get(context)
-        CanonicalRuleBasedSmartPlaylistPreview(
-            availability = availability,
-            catalog = CanonicalCatalogDatabase.get(context).catalogDao(),
-            ratings = RoomRecordingRatingStore(listening.recordingRatingDao()),
-            listening = RoomListeningEventStore(listening.listeningEventDao()),
-        ).preview(definition.query).map { it.recordingId }
+        persistentSmartPlaylistPreview(context, availability)
+            .preview(definition.query).map { it.recordingId }
     }
     }
 }

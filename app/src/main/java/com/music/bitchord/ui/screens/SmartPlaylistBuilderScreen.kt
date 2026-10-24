@@ -215,14 +215,8 @@ internal fun SmartPlaylistBuilderScreen(
         CanonicalLibraryAvailabilityReaders.persistent(context)
     }
     val catalog = remember(context) { CanonicalCatalogDatabase.get(context) }
-    val readOnlyPreview = remember(context) {
-        val listening = ListeningEventDatabase.get(context)
-        CanonicalRuleBasedSmartPlaylistPreview(
-            availability = availability,
-            catalog = catalog.catalogDao(),
-            ratings = RoomRecordingRatingStore(listening.recordingRatingDao()),
-            listening = RoomListeningEventStore(listening.listeningEventDao()),
-        )
+    val readOnlyPreview = remember(context, availability) {
+        persistentSmartPlaylistPreview(context, availability)
     }
     val scope = rememberCoroutineScope()
     var draft by remember { mutableStateOf(SmartPlaylistEditorDraft()) }

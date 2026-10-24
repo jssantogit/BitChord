@@ -3,6 +3,48 @@ package com.music.bitchord.data.listening
 import com.music.bitchord.data.catalog.CanonicalCatalogDao
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReader
 
+/**
+ * Canonical, read-only numeric evidence; Catalog validates the current account scope.
+ * The caller must not interpret starred as an explicit numeric rating.
+ */
+internal enum class RemoteSmartPlaylistRatingKind { VALUE, CLEARED, NOT_PROVIDED, INVALID }
+
+internal data class RemoteSmartPlaylistRatingEvidence(
+    val recordingId: String,
+    val kind: RemoteSmartPlaylistRatingKind,
+    val value: Int? = null,
+)
+
+internal data class RemoteSmartPlaylistRatingSnapshot(
+    val complete: Boolean,
+    val evidence: List<RemoteSmartPlaylistRatingEvidence>,
+)
+
+internal fun interface RemoteSmartPlaylistRatingReader {
+    suspend fun read(): RemoteSmartPlaylistRatingSnapshot
+}
+
+/** Never copies a remote score into first-party feedback. Disagreement fails closed. */
+internal fun effectiveSmartPlaylistRating(
+    local: Double?,
+    remote: List<RemoteSmartPlaylistRatingEvidence>,
+): Double? {
+    if (remote.isEmpty()) return local
+    if (remote.any { it.kind == RemoteSmartPlaylistRatingKind.INVALID ||
+        (it.kind == RemoteSmartPlaylistRatingKind.VALUE && it.value !in 1..5) ||
+        (it.kind != RemoteSmartPlaylistRatingKind.VALUE && it.value != null)
+    }) return null
+
+    val values = remote.filter { it.kind == RemoteSmartPlaylistRatingKind.VALUE }
+        .mapNotNull { it.value }.distinct()
+    if (values.size > 1) return null
+    val cleared = remote.any { it.kind == RemoteSmartPlaylistRatingKind.CLEARED }
+    if (cleared && (values.isNotEmpty() || local != null)) return null
+    val remoteValue = values.singleOrNull()?.toDouble()
+    if (local != null && remoteValue != null && local != remoteValue) return null
+    return local ?: remoteValue
+}
+
 /** All identities and reasons are canonical/first-party; no playlist is persisted. */
 internal data class RuleBasedRecordingCandidate(
     val recordingId: String,
@@ -129,10 +171,20 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
     private val ratings: ExplicitRecordingRatingReader,
     private val listening: ListeningBehaviorReader,
     private val planner: RuleBasedSmartPlaylistPlanner = RuleBasedSmartPlaylistPlanner(),
+    private val remoteRatings: RemoteSmartPlaylistRatingReader = RemoteSmartPlaylistRatingReader {
+        RemoteSmartPlaylistRatingSnapshot(complete = false, evidence = emptyList())
+    },
 ) {
     suspend fun preview(query: RuleBasedSmartPlaylistQuery): List<RuleBasedSmartPlaylistItem> {
         val ids = availability.availableRecordingIds().distinct().sorted()
         if (ids.size > 5_000 || ids.any(String::isBlank)) return emptyList()
+        // Read one validated account snapshot for this evaluation, never once per track.
+        // A failed/changed account is unavailable, not a stale cached permission.
+        val snapshot = remoteRatings.read()
+        val remoteByRecording = if (snapshot.complete) {
+            snapshot.evidence.filter { it.recordingId.isNotBlank() }
+                .groupBy { it.recordingId }
+        } else emptyMap()
         val rows = ids.mapNotNull { id ->
             val metadata = catalog.recordingById(id) ?: return@mapNotNull null
             val summary = listening.behaviorSummary(id)
@@ -142,7 +194,10 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
                 .map { it.occurredAtEpochMs }.maxOrNull()
             RuleBasedRecordingCandidate(
                 recordingId = metadata.id,
-                explicitRating = ratings.currentRating(id)?.value,
+                explicitRating = effectiveSmartPlaylistRating(
+                    ratings.currentRating(id)?.value,
+                    remoteByRecording[id].orEmpty(),
+                ),
                 audibleCompletions = summary.completions,
                 lastAudibleAtEpochMs = audibleAt,
                 durationMs = metadata.durationMs,
