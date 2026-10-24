@@ -705,6 +705,9 @@ class A0ManualLoginActivity : Activity() {
                                                                 }
                                                                 .setNegativeButton("Voltar") { _, _ ->
                                                                     showChoices(formatFilter)
+                                                                }
+                                                                .setOnCancelListener {
+                                                                    showChoices(formatFilter)
                                                                 }.show()
                                                         }
                                                         .setNegativeButton("Cancelar") { _, _ ->
