@@ -15,13 +15,17 @@ internal class A0ObservedCandidateHandoff(
     private val authenticatedServer:Socket,
     private val localUsername:String,
     private val searchToken:Int,
-    allowLoopbackForLocalTest:Boolean=false
+    allowLoopbackForLocalTest:Boolean=false,
+    private val searchPhrase:String?=null
 ) {
     class Choice internal constructor(
         val displayName:String,
         val sizeBytes:Long,
         internal val peerUsername:String,
         internal val remotePath:String,
+        val matchScore:Int,
+        val matchSignal:A0CandidateRank.Match,
+        val declaredBitrateKbps:Int?,
     ) {
         override fun toString()="A0 observed candidate (redacted)"
     }
@@ -35,10 +39,21 @@ internal class A0ObservedCandidateHandoff(
         val unsupportedFormat:Int,
         val unsafePath:Int,
         val noSlot:Int,
-        val accepted:Int
+        val accepted:Int,
+        val validBeforeLimit:Int=0,
+        val duplicates:Int=0,
+        val capacityDropped:Int=0,
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
-    private val candidates=ArrayList<Choice>(12)
+    private val candidates=ArrayList<Choice>(48)
+    private val choiceOrder = compareByDescending<Choice> { it.matchScore }
+        .thenByDescending { it.declaredBitrateKbps ?: 0 }
+        .thenBy { it.displayName.lowercase(java.util.Locale.ROOT) }
+        .thenBy { it.peerUsername }
+        .thenBy { it.remotePath }
+    private var eligible=0
+    private var duplicateCount=0
+    private var capDropped=0
     private var replies=0
     private var publicSeen=0
     private var lockedSeen=0
@@ -95,13 +110,26 @@ internal class A0ObservedCandidateHandoff(
                 noSlotSeen=(noSlotSeen+1).coerceAtMost(100000)
                 continue
             }
-            if(candidates.size>=12 || candidates.any {
+            if(candidates.any {
                 it.peerUsername==result.peerUsername && it.remotePath==path
-            })continue
+            }) {
+                duplicateCount=(duplicateCount+1).coerceAtMost(100000)
+                continue
+            }
+            eligible=(eligible+1).coerceAtMost(100000)
+            val bitrate=file.attributes[0]?.takeIf { it in 1..10000 }
+            val ranking=A0CandidateRank.rank(searchPhrase,basename,bitrate)
             candidates.add(Choice(
                 displayName=basename.take(82),sizeBytes=file.sizeBytes,
-                peerUsername=result.peerUsername,remotePath=path
+                peerUsername=result.peerUsername,remotePath=path,
+                matchScore=ranking.score, matchSignal=ranking.match,
+                declaredBitrateKbps=bitrate
             ))
+            candidates.sortWith(choiceOrder)
+            if(candidates.size>48) {
+                candidates.removeAt(candidates.lastIndex)
+                capDropped=(capDropped+1).coerceAtMost(100000)
+            }
         }
     }
 
@@ -114,7 +142,10 @@ internal class A0ObservedCandidateHandoff(
         unsupportedFormat=unsupported,
         unsafePath=unsafe,
         noSlot=noSlotSeen,
-        accepted=candidates.size
+        accepted=candidates.size,
+        validBeforeLimit=eligible,
+        duplicates=duplicateCount,
+        capacityDropped=capDropped
     )
 
     @Synchronized
