@@ -6,7 +6,8 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -26,9 +27,11 @@ class SmartCollectionMedia3ThreadDispatchTest {
                 }
                 Triple(before, command, Thread.currentThread().name)
             }
-            assertEquals("media3-controller-looper", command)
-            assertNotEquals("media3-controller-looper", before)
-            assertNotEquals("media3-controller-looper", after)
+            // Coroutine debugging appends " @coroutine#N" to JVM thread names.
+            // Check the executor identity prefix instead of the debug suffix.
+            assertTrue(command.startsWith("media3-controller-looper"))
+            assertFalse(before.startsWith("media3-controller-looper"))
+            assertFalse(after.startsWith("media3-controller-looper"))
         }
     }
 
