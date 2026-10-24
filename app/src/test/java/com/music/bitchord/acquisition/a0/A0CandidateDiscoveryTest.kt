@@ -60,4 +60,44 @@ class A0CandidateDiscoveryTest {
         assertEquals(listOf("magnetic"), A0SearchQuery.variants("magnetic"))
         assertTrue(A0SearchQuery.variants("artist - title").size <= 3)
     }
+    @Test fun rankingIsDeterministicAcrossDifferentPeerArrivalOrder() {
+        val one = A0ObservedCandidateHandoff(
+            Socket(), "local", 177, true, searchPhrase = "ILLIT Magnetic"
+        )
+        val two = A0ObservedCandidateHandoff(
+            Socket(), "local", 177, true, searchPhrase = "ILLIT Magnetic"
+        )
+        val replies = listOf(
+            reply("c", listOf(file("B-sides.mp3"))),
+            reply("b", listOf(file("ILLIT Magnetic.mp3", 320))),
+            reply("a", listOf(file("ILLIT Magnetic live.mp3", 128))),
+        )
+        replies.forEach { one.offerParsed(it, it.peerUsername) }
+        replies.reversed().forEach { two.offerParsed(it, it.peerUsername) }
+        assertEquals(one.choices().map { it.displayName }, two.choices().map { it.displayName })
+        assertEquals("ILLIT Magnetic.mp3", one.choices().first().displayName)
+    }
+
+    @Test fun saveRouteDoesNotLetUnsupportedFormatsConsumeCandidateBudget() {
+        val handoff = A0ObservedCandidateHandoff(
+            Socket(), "local", 177, true, searchPhrase = "ILLIT Magnetic",
+            saveFormatsOnly = true
+        )
+        handoff.offerParsed(reply("peer", listOf(
+            A0SoulseekSearchFile("Music\\ILLIT Magnetic.ogg", 100000, "ogg", emptyMap()),
+            A0SoulseekSearchFile("Music\\ILLIT Magnetic.m4a", 100000, "m4a", emptyMap()),
+            file("ILLIT Magnetic.mp3")
+        )), "peer")
+        assertEquals(1, handoff.choices().size)
+        assertEquals(2, handoff.screening().unsupportedFormat)
+        assertEquals(1, handoff.screening().accepted)
+    }
+
+    @Test fun cancellationRejectsLateSearchRepliesWithoutReopeningCandidates() {
+        val handoff=A0ObservedCandidateHandoff(Socket(), "local", 177, true)
+        handoff.cancel()
+        handoff.offerParsed(reply("peer", listOf(file("ILLIT Magnetic.mp3"))), "peer")
+        assertTrue(handoff.choices().isEmpty())
+        assertEquals(0,handoff.screening().responses)
+    }
 }
