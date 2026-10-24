@@ -57,6 +57,7 @@ internal object A0FileChannelRendezvous {
         val future=acceptor.submit {
             try {
                 listener.soTimeout=200
+                var discardedUnexpectedSources=0
                 while(!done.get() && !Thread.currentThread().isInterrupted &&
                     !isCancelled() && System.nanoTime()<absoluteDeadlineNanos) {
                     val connected=try {
@@ -65,9 +66,16 @@ internal object A0FileChannelRendezvous {
                         continue
                     }
                     if(!connected.inetAddress.address.contentEquals(selectedPeerAddress.address)){
-                        connected.close()
-                        acceptError.set(IOException("A0 unsolicited F source address"))
-                        break
+                        connected.close() // NEVER admit an unrelated F socket.
+                        // Public peers may connect while the selected upload is
+                        // negotiating. One unrelated inbound attempt should
+                        // not cancel a valid selected peer rendezvous.
+                        discardedUnexpectedSources++
+                        if(discardedUnexpectedSources>=8) {
+                            acceptError.set(IOException("A0 excessive unsolicited F sources"))
+                            break
+                        }
+                        continue
                     }
                     if(!incoming.offer(connected)) {
                         connected.close()
