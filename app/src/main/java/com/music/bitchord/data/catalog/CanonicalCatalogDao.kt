@@ -48,7 +48,11 @@ internal interface CanonicalCatalogDao {
     @Query("SELECT * FROM catalog_remote_rating_coverage")
     fun observeRemoteRatingCoverage(): Flow<List<RemoteRatingCoverageEntity>>
 
-    /** One canonical batch per account. Never surfaces native keys or credentials. */
+    /**
+     * One reactive canonical batch per active provider. Room invalidates this
+     * Flow on local import/delete and provider sync, even without any rating
+     * edit or remote coverage update. Never surfaces native keys or credentials.
+     */
     @Query(
         """
         SELECT recording.id AS recordingId,
@@ -61,10 +65,10 @@ internal interface CanonicalCatalogDao {
         WHERE asset.provider = :localProvider OR asset.provider = :remoteProvider
         """,
     )
-    suspend fun ratingPresentationAssets(
+    fun observeRatingPresentationAssets(
         localProvider: String,
         remoteProvider: String,
-    ): List<CanonicalRatingAssetRow>
+    ): Flow<List<CanonicalRatingAssetRow>>
 
     /**
      * Join with the current canonical MediaAsset and Recording; provider-only IDs
