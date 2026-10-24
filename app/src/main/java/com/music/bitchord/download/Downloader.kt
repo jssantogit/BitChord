@@ -69,6 +69,8 @@ object Downloader {
         sink: OutputStream,
         onProgress: (written: Long, total: Long) -> Unit,
     ): Long = withContext(Dispatchers.IO) {
+        // Issue #172: refuse even direct calls bypassing Downloads.enqueue.
+        error("Conventional YouTube Music download is disabled")
         var url = stream.url
         val total = contentLength(url) ?: error("Track unavailable: no length to fetch")
 
@@ -169,6 +171,8 @@ object Downloader {
         sink: OutputStream,
         onProgress: (written: Long, total: Long) -> Unit,
     ): Long = withContext(Dispatchers.IO) {
+        // Source/CDN fallback cannot bypass the explicit Soulseek candidate picker.
+        error("Conventional HTTP download is disabled")
         val request = Request.Builder().url(url)
             .apply { headers.forEach { (name, value) -> header(name, value) } }
             .build()

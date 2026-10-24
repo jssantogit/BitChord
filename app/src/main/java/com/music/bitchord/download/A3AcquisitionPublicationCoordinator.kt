@@ -16,12 +16,16 @@ internal class A3AcquisitionPublicationCoordinator(
 ) {
     fun publish(
         id:String,
+        commitGuard:((()->Unit)->Unit)={ action -> action() },
         publishAlreadyStaged:()->A2LocalAudioPublisher.Published
     ):A2LocalAudioPublisher.Published {
         journal.advance(id,A3AcquisitionLedger.Phase.PUBLISHING)
         val published=publishAlreadyStaged()
         try {
-            journal.available(id,published.contentUri,published.byteCount)
+            // The caller may require an account-generation check synchronized
+            // against logout immediately before committing AVAILABLE. The
+            // output URI is rolled back if authorization was revoked during A2.
+            commitGuard { journal.available(id,published.contentUri,published.byteCount) }
         }catch(error:Exception) {
             val removed=runCatching {
                 deletePublishedUri(published.contentUri)
