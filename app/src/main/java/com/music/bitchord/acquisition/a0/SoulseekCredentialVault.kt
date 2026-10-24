@@ -68,6 +68,7 @@ internal class SoulseekCredentialVault(context: Context) {
     }.getOrNull()
 
     @Synchronized fun save(username: String, password: CharArray) {
+        SoulseekActiveSession.revoke()
         require(username.isNotBlank() && username.toByteArray(Charsets.UTF_8).size <= 256)
         require(password.isNotEmpty() && password.size <= 256)
         val userBytes = username.toByteArray(Charsets.UTF_8)
@@ -105,6 +106,7 @@ internal class SoulseekCredentialVault(context: Context) {
     }
 
     @Synchronized fun forget() {
+        SoulseekActiveSession.revoke()
         file.delete()
         // Rotate the vault key on logout so previous ciphertext is unrecoverable.
         runCatching {

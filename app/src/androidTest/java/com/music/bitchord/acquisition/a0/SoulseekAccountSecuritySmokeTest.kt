@@ -48,6 +48,24 @@ class SoulseekAccountSecuritySmokeTest {
         } finally { vault.forget() }
     }
 
+    @Test fun logoutClosesAnyInFlightAuthenticatedSocket() {
+        val vault = SoulseekCredentialVault(context)
+        vault.forget()
+        val socket = java.net.Socket()
+        try {
+            assertTrue(SoulseekActiveSession.register(
+                socket, SoulseekActiveSession.generation()
+            ))
+            vault.forget()
+            assertTrue(socket.isClosed)
+            assertFalse(SoulseekActiveSession.register(socket,
+                SoulseekActiveSession.generation() - 1))
+        } finally {
+            socket.close()
+            vault.forget()
+        }
+    }
+
     @Test fun switchingAccountsReplacesSecretAndLogoutRevokes() {
         val vault = SoulseekCredentialVault(context)
         vault.forget()

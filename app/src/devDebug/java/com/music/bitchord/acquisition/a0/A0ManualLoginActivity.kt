@@ -215,6 +215,7 @@ class A0ManualLoginActivity : Activity() {
             } else {
                 "Verificando uma sessão; nenhum arquivo será transferido."
             }
+            val accountGeneration = SoulseekActiveSession.generation()
             worker.execute {
                 // Existing Diagnostics capture and structured tracing; no raw inputs.
                 val captureEnabled = runCatching {
@@ -272,6 +273,9 @@ class A0ManualLoginActivity : Activity() {
                     packet = A0ExperimentalLoginCodec.encode(username, secret)
                     trace.note(A0SmokeTrace.Stage.SERVER_CONNECT_STARTED)
                     Socket().use { connection ->
+                        if (!SoulseekActiveSession.register(connection, accountGeneration)) {
+                            throw IOException("Soulseek account was revoked")
+                        }
                         activeSocket = connection
                         // One fixed, documented SoulseekQt server endpoint.
                         // No user-controlled URL, proxy, redirects or fallback.
@@ -588,7 +592,14 @@ class A0ManualLoginActivity : Activity() {
                                                 else "Selecione UM arquivo autorizado. Nenhum download automático."
                                                 val titles=selectableIndices.map { i ->
                                                     val candidate=choices[i]
-                                                    "${candidate.displayName} — ${candidate.sizeBytes} bytes"
+                                                    val peer = candidate.peerUsername.filter {
+                                                        it.code in 33..126
+                                                    }.take(32)
+                                                    val format = candidate.displayName
+                                                        .substringAfterLast('.', "desconhecido")
+                                                        .uppercase().take(6)
+                                                    "${candidate.displayName} — formato indicado ${format} — " +
+                                                        "${candidate.sizeBytes} bytes — peer: ${peer}"
                                                 }.toTypedArray()
                                                 // A list dialog must not also setMessage():
                                                 // Android's content controller may hide its list.
@@ -792,6 +803,7 @@ class A0ManualLoginActivity : Activity() {
                     activeListener = null
                     packet?.fill(0)
                     secret.fill('\u0000')
+                    activeSocket?.let { SoulseekActiveSession.detach(it) }
                     activeSocket?.close()
                     activeSocket = null
                     trace.note(A0SmokeTrace.Stage.SOCKETS_CLOSED)
