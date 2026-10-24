@@ -1,6 +1,7 @@
 package com.music.bitchord.playback
 
 import com.music.bitchord.data.catalog.CanonicalBrowseLibrary
+import com.music.bitchord.data.catalog.CanonicalBrowseMediaAsset
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import kotlinx.coroutines.CancellationException
 
@@ -66,6 +67,7 @@ internal class CanonicalCollectionIntentPlanner(
         library: CanonicalBrowseLibrary,
         deduplicateByRecording: Boolean = true,
         preferSingleLocalCopy: Boolean = false,
+        verifiedRemoteAssetByRecording: Map<String, CanonicalBrowseMediaAsset> = emptyMap(),
     ): CanonicalCollectionIntentPlan {
         val rejected = mutableListOf<CanonicalCollectionRejected>()
         val rowsById = library.tracks.groupBy(CanonicalBrowseTrack::recordingId)
@@ -105,7 +107,18 @@ internal class CanonicalCollectionIntentPlanner(
             val local = presentAssets.filter {
                 it.providerKey == RoomCanonicalQueueResolver.LOCAL_PROVIDER
             }
-            val assets = if (preferSingleLocalCopy && local.size == 1) local else presentAssets
+            // Only an exact current-account Catalog evidence match may disambiguate
+            // remote duplicates. An arbitrary provider or stale/nonexistent hint
+            // does not authorize media playback.
+            val hinted = verifiedRemoteAssetByRecording[recordingId]
+            val ratedRemote = hinted?.takeIf { asset ->
+                asset.providerKey.startsWith("opensubsonic:") && asset in presentAssets
+            }
+            val assets = when {
+                preferSingleLocalCopy && local.size == 1 -> local
+                ratedRemote != null -> listOf(ratedRemote)
+                else -> presentAssets
+            }
             if (assets.isEmpty()) {
                 reject(CollectionIntentRejection.NO_ASSET)
                 return@forEachIndexed
