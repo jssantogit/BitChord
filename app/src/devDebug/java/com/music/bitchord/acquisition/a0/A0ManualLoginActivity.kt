@@ -313,11 +313,12 @@ class A0ManualLoginActivity : Activity() {
                             ServerSocket(0, 1).use { listener ->
                                 activeListener = listener
                                 trace.note(A0SmokeTrace.Stage.SEARCH_LISTENER_OPEN)
-                                listener.soTimeout = 12_000
+                                listener.soTimeout = 18_000
                                 val token = SecureRandom().nextInt(Int.MAX_VALUE - 1) + 1
                                 val handoff = if (transferObserved) {
                                     A0ObservedCandidateHandoff(
-                                        connection, username, token
+                                        connection, username, token,
+                                        searchPhrase=checkNotNull(requestedSearch)
                                     ).also { transfer ->
                                         if (!SoulseekActiveSession.registerTransfer(
                                                 transfer, accountGeneration
@@ -346,7 +347,21 @@ class A0ManualLoginActivity : Activity() {
                                 val attemptedIndirect = AtomicBoolean(false)
                                 val receivedValidP2pReply = AtomicBoolean(false)
                                 val failedServerReader = AtomicBoolean(false)
-                                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(12)
+                                fun discoveryProgress() {
+                                    val report=handoff?.screening() ?: return
+                                    runOnUiThread {
+                                        if (!stopping && !isFinishing && !isDestroyed &&
+                                            readerGate.isOpen()) {
+                                            status.text="Pesquisando Soulseek: " +
+                                                report.responses + " respostas, " +
+                                                report.publicFiles + " arquivos anunciados, " +
+                                                report.accepted + " candidatos disponíveis " +
+                                                "(coleta ainda em andamento)."
+                                        }
+                                    }
+                                }
+                                // Collect peers over a fixed window; never stop at first match.
+                                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(18)
                                 val readers = Executors.newFixedThreadPool(2)
                                 try {
                                     readers.execute {
@@ -370,11 +385,10 @@ class A0ManualLoginActivity : Activity() {
                                                             handoff?.offerSearchResult(
                                                                 verifiedFrame, claimedPeer
                                                             )
+                                                            discoveryProgress()
                                                         }
                                                     trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_ACCEPTED)
-                                                    if (!transferObserved ||
-                                                        handoff?.hasCandidates() == true
-                                                    ) {
+                                                    if (!transferObserved) {
                                                         readerGate.publish(
                                                             inbox, "RESPOSTA P2P DIRETA: " +
                                                                 "${observation.untrustedResultCount} entradas " +
@@ -466,11 +480,10 @@ class A0ManualLoginActivity : Activity() {
                                                             handoff?.offerSearchResult(
                                                                 verifiedFrame, claimedPeer
                                                             )
+                                                            discoveryProgress()
                                                         }
                                                         trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_ACCEPTED)
-                                                        if (!transferObserved ||
-                                                            handoff?.hasCandidates() == true
-                                                        ) {
+                                                        if (!transferObserved) {
                                                             readerGate.publish(
                                                                 inbox, "RESPOSTA P2P INDIRETA: " +
                                                                     "${observation.untrustedResultCount} entradas " +
@@ -515,14 +528,23 @@ class A0ManualLoginActivity : Activity() {
                                             failedServerReader.set(true)
                                         }
                                     }
-                                    val peerStatus = inbox.poll(12, TimeUnit.SECONDS)
+                                    val peerStatus = inbox.poll(
+                                        if (transferObserved) 18 else 12, TimeUnit.SECONDS
+                                    )
                                     readerGate.stop()
                                     result = peerStatus ?: when {
                                         failedServerReader.get() ->
                                             "O canal do servidor foi interrompido durante a busca. " +
                                                 "Nenhuma transferência iniciada."
+                                        transferObserved && handoff?.hasCandidates() == true ->
+                                            "Coleta concluída: " +
+                                                (handoff?.screening()?.accepted ?: 0) +
+                                                " candidatos disponíveis para seleção manual."
+                                        transferObserved && receivedValidP2pReply.get() ->
+                                            "Respostas recebidas, mas nenhum arquivo passou nos filtros " +
+                                                "de formato, tamanho e disponibilidade. Nada foi baixado."
                                         transferObserved ->
-                                            "Nenhum candidato elegível encontrado nesta busca de até 12 segundos. " +
+                                            "Nenhuma resposta P2P utilizável na janela de 18 segundos. " +
                                                 "Tente outro termo ou outra rede; nada foi baixado."
                                         attemptedIndirect.get() ->
                                             "NEGOCIAÇÃO INDIRETA TENTADA; NENHUMA RESPOSTA P2P " +
@@ -533,7 +555,7 @@ class A0ManualLoginActivity : Activity() {
                                             "BUSCA ENVIADA; NENHUMA RESPOSTA P2P RECEBIDA. " +
                                                 "A rede pode bloquear conexões de entrada."
                                     }
-                                    if (peerStatus == null) {
+                                    if (peerStatus == null && handoff?.hasCandidates() != true) {
                                         val cause = A0CandidateOutcome.classify(
                                             handoff?.screening() ?: A0ObservedCandidateHandoff.Screening(
                                                 0,0,0,0,0,0,0,0
