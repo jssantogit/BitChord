@@ -1,6 +1,8 @@
 package com.music.bitchord.playback
 
 import android.os.SystemClock
+import android.os.Handler
+import android.os.Looper
 import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.diagnostics.Diagnostics
 
@@ -34,6 +36,10 @@ internal class SmartCollectionAudibleCorrelator(
 
     fun onPlaybackError() = complete("player_error")
     fun onPlaybackStopped() = complete("playback_stopped")
+    fun expireIfOverdue() {
+        val current = pending ?: return
+        if (nowMillis() - current.started >= timeoutMillis) complete("timed_out")
+    }
 
     private fun complete(stage: String) {
         val current = pending ?: return
@@ -47,6 +53,7 @@ internal class SmartCollectionAudibleCorrelator(
  * Plans carry an ephemeral traceRef and are never serialized to the Session Bundle.
  */
 internal object SmartCollectionPlaybackTrace {
+    private val timeoutHandler = Handler(Looper.getMainLooper())
     private val audible = SmartCollectionAudibleCorrelator(
         nowMillis = SystemClock::elapsedRealtime,
         report = { attempt, stage ->
@@ -63,6 +70,7 @@ internal object SmartCollectionPlaybackTrace {
             plan.traceRef != null && !mediaId.isNullOrBlank()
         ) {
             audible.begin(plan.traceRef, mediaId)
+            timeoutHandler.postDelayed({ audible.expireIfOverdue() }, 30_000L)
             stage(plan, "awaiting_audio_samples")
         }
     }
