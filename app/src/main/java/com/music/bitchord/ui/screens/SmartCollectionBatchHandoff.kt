@@ -39,6 +39,7 @@ import com.music.bitchord.playback.CanonicalBatchQueueRequests
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.playback.CanonicalCollectionIntentPlan
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
+import com.music.bitchord.playback.SmartCollectionPlaybackTrace
 import com.music.bitchord.playback.androidCanonicalQueueResolver
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.smart_collection_batch_added
@@ -227,7 +228,10 @@ private suspend fun submitCanonicalBatch(
     controller: MediaController?,
     plan: CanonicalCollectionIntentPlan,
 ): Boolean {
-    val session = controller ?: return false
+    val session = controller ?: run {
+        SmartCollectionPlaybackTrace.stage(plan, "session_rejected", "controller_null")
+        return false
+    }
     val token = CanonicalBatchQueueRequests.submit(plan)
     val request = try {
         session.sendCustomCommand(
@@ -239,14 +243,20 @@ private suspend fun submitCanonicalBatch(
         throw cancelled
     } catch (_: Exception) {
         CanonicalBatchQueueRequests.take(token)
+        SmartCollectionPlaybackTrace.stage(plan, "session_rejected", "dispatch_exception")
         return false
     }
+    SmartCollectionPlaybackTrace.stage(plan, "command_dispatched")
     return try {
         suspendCancellableCoroutine { continuation ->
             request.addListener({
                 val result = runCatching {
                     request.get().resultCode == SessionResult.RESULT_SUCCESS
                 }.getOrDefault(false)
+                SmartCollectionPlaybackTrace.stage(
+                    plan, if (result) "command_accepted" else "session_rejected",
+                    if (result) "none" else "session_result_non_success",
+                )
                 if (continuation.isActive) continuation.resume(result)
             }, MoreExecutors.directExecutor())
         }
@@ -256,6 +266,7 @@ private suspend fun submitCanonicalBatch(
         throw cancelled
     } catch (_: Exception) {
         CanonicalBatchQueueRequests.take(token)
+        SmartCollectionPlaybackTrace.stage(plan, "session_rejected", "command_result_exception")
         false
     }
 }
@@ -301,12 +312,14 @@ internal fun rememberSmartCollectionBatchAction(
                     working.value = false
                 }
                 val message = when (outcome) {
+                    // Command acceptance is not audible evidence. The sink must
+                    // confirm audio samples before playback can be called successful.
                     SmartCollectionBatchResult.Submitted ->
-                        if (intent == CanonicalCollectionIntent.PLAY_NOW) played else added
+                        if (intent == CanonicalCollectionIntent.PLAY_NOW) null else added
                     SmartCollectionBatchResult.Empty -> empty
                     else -> failed
                 }
-                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                if (message != null) Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
             }
         }
     }
