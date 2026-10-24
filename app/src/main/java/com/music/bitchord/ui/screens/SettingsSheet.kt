@@ -550,6 +550,13 @@ fun SettingsScreen(
                     subtitle = "Music/BitChord".takeIf { exportDownloads },
                 )
             }
+            // A1 only reserves the destination for a FUTURE Soulseek publisher.
+            // It must not change the existing offline download save path.
+            val acquisitionDestinationTitle =
+                stringResource(R.string.acquisition_destination_title)
+            row(acquisitionDestinationTitle, "soulseek", "folder", "pasta") {
+                A1AcquisitionDestinationSettingsRow()
+            }
         }
 
         SearchableSettingsGroup(search, header = stringResource(R.string.playback)) {

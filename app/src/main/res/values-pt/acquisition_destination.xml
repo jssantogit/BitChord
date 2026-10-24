@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="acquisition_destination_title">Pasta de downloads Soulseek (em preparação)</string>
+    <string name="acquisition_destination_default">Padrão: Music/BitChord. A pasta será usada quando os downloads persistentes Soulseek estiverem disponíveis.</string>
+    <string name="acquisition_destination_chosen">Pasta personalizada registrada. Será usada apenas pelos futuros downloads Soulseek.</string>
+    <string name="acquisition_destination_revoked">A permissão da pasta foi perdida ou ela mudou. Escolha novamente antes de baixar.</string>
+    <string name="acquisition_destination_reset">Usar Music/BitChord</string>
+    <string name="acquisition_destination_reset_subtitle">Restaurar o destino dos futuros downloads Soulseek para a pasta padrão.</string>
+    <string name="acquisition_destination_failure">Não foi possível salvar a pasta e manter a permissão de leitura e gravação. A escolha anterior não mudou.</string>
+</resources>

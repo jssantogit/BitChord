@@ -1,0 +1,42 @@
+# A0-only one-shot provenance proof: never ships media and never uses secrets.
+# Runs only when this workflow file changes on the isolated A0 branch.
+name: A0 CC0 Original Reference Proof
+
+on:
+  push:
+    branches:
+      - acquisition/a0-embedded-soulseek-feasibility-v0
+    paths:
+      - .github/workflows/a0-cc0-original-proof.yml
+
+permissions: {}
+
+jobs:
+  verify-original:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch independently licensed Commons original and print hash + byte count
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This is the original Wikimedia URL (NOT an audio transcode or Soulseek listing).
+          # No credentials, checkout, PR code execution, remote script execution or artifact.
+          curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+            --retry 2 --connect-timeout 12 --max-time 65 \
+            --output "$RUNNER_TEMP/a0-commons-original.wav" \
+            'https://upload.wikimedia.org/wikipedia/commons/0/0f/Ringingsound.wav'
+          python3 - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          p = Path(os.environ["RUNNER_TEMP"]) / "a0-commons-original.wav"
+          data = p.read_bytes()
+          if not 44 <= len(data) <= 64 * 1024 * 1024:
+              raise RuntimeError("Original file is outside A0 proof bounds")
+          if data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+              raise RuntimeError("Original Commons media is not expected RIFF/WAVE")
+          print("A0_CC0_ORIGINAL_REFERENCE size_bytes=%d sha256=%s container=RIFF_WAVE" % (
+              len(data), hashlib.sha256(data).hexdigest()))
+          p.unlink()
+          PY
