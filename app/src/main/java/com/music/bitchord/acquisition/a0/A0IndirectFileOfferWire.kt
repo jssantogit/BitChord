@@ -18,6 +18,9 @@ internal object A0IndirectFileOfferWire {
     private const val MAX_SERVER_FRAME = 1_048_576
     private const val MAX_FIELD_BYTES = 128
 
+    /** Sanitized error class; never include remote offer fields in logs. */
+    class MalformedFileOffer : IOException("A0 invalid or unsupported F offer")
+
     sealed class Event {
         data class Offer(val address: InetAddress, val port: Int, val token: Int) : Event()
         object Unrelated : Event()
@@ -47,11 +50,14 @@ internal object A0IndirectFileOfferWire {
             obfuscated!=0 || obfuscatedPort!=0
         ) malformed()
 
-        if(connType!="F") return Event.Unrelated
-        if(username!=selectedPeerUsername ||
-            !ip.contentEquals(selectedServerPeerAddress.address)) {
-            malformed()
-        }
+        // Search-related code-18 offers may arrive after selection, even
+        // though the selected user has already queued a single P/F request.
+        // Ignore unrelated senders without ever opening their sockets.
+        // A claimed offer FROM the selected peer at the wrong server-address
+        // still fails closed; never follow its endpoint.
+        if(connType!="F" || username!=selectedPeerUsername)
+            return Event.Unrelated
+        if(!ip.contentEquals(selectedServerPeerAddress.address)) malformed()
         return Event.Offer(
             address=InetAddress.getByAddress(ip),port=port,token=token
         )
@@ -76,5 +82,5 @@ internal object A0IndirectFileOfferWire {
         }
         return b
     }
-    private fun malformed():Nothing=throw IOException("A0 invalid or unsupported F offer")
+    private fun malformed():Nothing=throw MalformedFileOffer()
 }

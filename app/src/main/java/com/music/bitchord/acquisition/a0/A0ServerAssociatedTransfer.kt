@@ -107,7 +107,7 @@ internal class A0ServerAssociatedTransfer(
         onPhase(Phase.GATE_PASSED)
         val peerInit=A0PeerRendezvousWire.directPeerInit(localUsername)
         val getAddress=A0PeerRendezvousWire.getPeerAddress(peerUsername)
-        val deadline=System.nanoTime()+15_000_000_000L
+        val deadline=A0TransferDeadlines.negotiate(System.nanoTime())
 
         activeServer=authenticatedServer
         try {
@@ -177,7 +177,9 @@ internal class A0ServerAssociatedTransfer(
                     ).use{f->
                         activeF=f
                         onPhase(Phase.F_ESTABLISHED)
-                        f.soTimeout=remainingTimeout(deadline)
+                        // Do not reuse the 15s P/F negotiation clock for bytes.
+                        val receiveDeadline=A0TransferDeadlines.receive(System.nanoTime())
+                        f.soTimeout=4000
                         if(!f.inetAddress.address.contentEquals(resolved.address.address)) {
                             throw IOException("A0 F peer does not match server-selected P address")
                         }
@@ -185,11 +187,13 @@ internal class A0ServerAssociatedTransfer(
                         val receipt=session.receiveFile(
                             f.getInputStream(),f.getOutputStream(),privateDirectory,
                             isCancelled={cancelled.get()||Thread.currentThread().isInterrupted||
-                                System.nanoTime()>=deadline}
+                                A0TransferDeadlines.isExpired(
+                                    receiveDeadline,System.nanoTime())}
                         )
                         onPhase(Phase.BYTES_RECEIVED)
                         if(cancelled.get()||Thread.currentThread().isInterrupted||
-                            System.nanoTime()>=deadline) {
+                            A0TransferDeadlines.isExpired(
+                                receiveDeadline,System.nanoTime())) {
                             receipt.file.delete()
                             throw IOException("A0 transfer cancelled or expired")
                         }

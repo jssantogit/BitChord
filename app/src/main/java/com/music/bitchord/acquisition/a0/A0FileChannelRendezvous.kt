@@ -29,6 +29,8 @@ import java.util.concurrent.atomic.AtomicReference
  * Neither peer usernames nor IPs nor tokens nor remote paths are logged.
  */
 internal object A0FileChannelRendezvous {
+    class TruncatedControlFrame : IOException("A0 truncated server F control message")
+
     fun awaitFileSocket(
         server: Socket,
         listener: ServerSocket,
@@ -102,7 +104,7 @@ internal object A0FileChannelRendezvous {
                 }catch (_:SocketTimeoutException) {
                     // The server stream cannot be resumed after partial framing.
                     if(!readProgress.atFrameBoundary)
-                        throw IOException("A0 truncated server F control message")
+                        throw TruncatedControlFrame()
                     continue
                 }
                 if(evt is A0IndirectFileOfferWire.Event.Offer) {

@@ -41,6 +41,26 @@ class A0IndirectFileOfferWireTest {
         }
     }
 
+    @Test fun completeUnrelatedPeerFOffersAreIgnoredWithoutSelectingTheirSocket() {
+        val event=A0IndirectFileOfferWire.readServerEvent(
+            ByteArrayInputStream(frame(
+                "other_peer","F",byteArrayOf(1,0,0,127),38891,84
+            )),"owned_peer",local
+        )
+        assertEquals(A0IndirectFileOfferWire.Event.Unrelated,event)
+    }
+
+    @Test fun matchingPeerWithUnexpectedAddressRemainsRejected() {
+        try {
+            A0IndirectFileOfferWire.readServerEvent(
+                ByteArrayInputStream(frame(
+                    "owned_peer","F",byteArrayOf(2,0,0,127),38891,84
+                )),"owned_peer",local
+            )
+            fail("A different IP must not authorize selected peer's F socket")
+        }catch (_:IOException){}
+    }
+
     @Test fun ignoresOtherCompleteServerFramesButFailsOnTruncatedOrOversized() {
         assertEquals(A0IndirectFileOfferWire.Event.Unrelated,
             A0IndirectFileOfferWire.readServerEvent(

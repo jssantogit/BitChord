@@ -121,6 +121,26 @@ class A0SmokeTraceTest {
         assertFalse(failure.attributes.toString().contains("peerUsername"))
     }
 
+    @Test fun FControlFailuresHaveSafeSpecificCodesInsteadOfProtocolOrIo() {
+        val points=mutableListOf<StructuredTracePoint>()
+        val trace=A0SmokeTrace.start(StructuredTracer(
+            sink=StructuredTraceSink {points.add(it)}
+        ),observedTransfer=true)
+        trace.transferFailure(A0ServerAssociatedTransfer.Phase.F_WAIT_STARTED,
+            A0IndirectFileOfferWire.MalformedFileOffer())
+        trace.transferFailure(A0ServerAssociatedTransfer.Phase.F_WAIT_STARTED,
+            A0FileChannelRendezvous.TruncatedControlFrame())
+        trace.transferFailure(A0ServerAssociatedTransfer.Phase.F_ESTABLISHED,
+            A0ModernIncomingTransfer.FileTokenMismatch())
+        trace.finish(TraceOutcome.FAILED)
+        val codes=points.filter {it.stage=="pf_transfer_failure"}
+            .map { it.attributes["failureKind"] }
+        assertEquals(listOf(
+            "invalid_f_offer","partial_f_control_frame","f_token_mismatch"
+        ),codes)
+        assertFalse(points.toString().contains("peerUsername"))
+    }
+
     @Test fun deliberateSocketShutdownDoesNotEmitSpuriousServerReadFailure() {
         val points = mutableListOf<StructuredTracePoint>()
         val trace = A0SmokeTrace.start(
