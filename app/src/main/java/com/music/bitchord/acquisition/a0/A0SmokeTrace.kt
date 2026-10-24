@@ -100,6 +100,9 @@ internal class A0SmokeTrace private constructor(
     ) {
         if(complete.get())return
         val failureKind=when(error) {
+            is A0IndirectFileOfferWire.MalformedFileOffer -> "invalid_f_offer"
+            is A0FileChannelRendezvous.TruncatedControlFrame -> "partial_f_control_frame"
+            is A0ModernIncomingTransfer.FileTokenMismatch -> "f_token_mismatch"
             is java.io.EOFException -> "eof"
             is java.net.SocketTimeoutException -> "timeout"
             is java.net.ConnectException -> "connect"
