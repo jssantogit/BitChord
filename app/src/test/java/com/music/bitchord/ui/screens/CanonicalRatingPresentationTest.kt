@@ -102,6 +102,36 @@ class CanonicalRatingPresentationTest {
     }
 
     @Test
+    fun recordingBadgeIsAvailableOnlyWhenItsMediaAssetsAgree() {
+        val same = buildCanonicalRatingPresentation(
+            assets = listOf(
+                asset("r", "a", "local-mediastore", "content://music/a"),
+                asset("r", "b", "local-mediastore", "content://music/b"),
+            ),
+            localValues = mapOf("r" to 4.5),
+            remote = emptyList(),
+            activeProvider = null,
+            activeScope = null,
+        )
+        assertEquals(4.5, same.byRecordingId["r"]?.localValue!!, 0.0)
+
+        val ambiguous = buildCanonicalRatingPresentation(
+            assets = listOf(
+                asset("r", "a", provider),
+                asset("r", "b", provider),
+            ),
+            localValues = emptyMap(),
+            remote = listOf(
+                CanonicalRemoteRatingInput("r", "a", provider, scope, 5, false),
+                CanonicalRemoteRatingInput("r", "b", provider, scope, 3, false),
+            ),
+            activeProvider = provider,
+            activeScope = scope,
+        )
+        assertFalse(ambiguous.byRecordingId.containsKey("r"))
+    }
+
+    @Test
     fun invalidNumbersNeverBecomeStars() {
         val result = buildCanonicalRatingPresentation(
             assets = listOf(asset()),
