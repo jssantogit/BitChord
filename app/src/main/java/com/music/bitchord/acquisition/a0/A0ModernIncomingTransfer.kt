@@ -21,6 +21,8 @@ import java.io.OutputStream
  * (direction 1 upload), FileTransferInit, FileOffset.
  */
 internal object A0ModernIncomingTransfer {
+    class FileTokenMismatch : IOException("A0 F transfer token mismatch")
+
     private const val MAX_FRAME_BYTES = 4096
     private const val MAX_FILENAME_BYTES = 1024
     private const val MAX_PROBE_BYTES = 64L * 1024L * 1024L
@@ -119,7 +121,7 @@ internal object A0ModernIncomingTransfer {
         privateDirectory: File,
         isCancelled: () -> Boolean = { false }
     ): A0VerifiedByteStager.Receipt {
-        if (readLE32(incomingF) != ticket.token) malformed()
+        if (readLE32(incomingF) != ticket.token) throw FileTokenMismatch()
         if (isCancelled()) throw IOException("A0 modern incoming transfer cancelled")
         outgoingF.write(ByteArray(8)) // raw uint64 little-endian offset 0
         outgoingF.flush()
