@@ -39,6 +39,8 @@ internal data class CanonicalCollectionIntentPlan(
     val intent: CanonicalCollectionIntent,
     val selections: List<CanonicalCollectionSelection>,
     val rejected: List<CanonicalCollectionRejected>,
+    /** Ephemeral diagnostics only; never serialized or used as identity. */
+    val traceRef: String? = null,
 )
 
 /**
