@@ -69,6 +69,7 @@ import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import com.music.bitchord.ui.components.CanonicalSongRatingStars
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -3290,6 +3291,10 @@ fun NowPlayingScreen(
                                             // waits a beat before it joins in.
                                             startDelayMillis = if (titleOverflowing) MARQUEE_ARTIST_STAGGER_MS else 0L,
                                             onOpenArtist = onOpenArtist,
+                                        )
+                                        CanonicalSongRatingStars(
+                                            song = song,
+                                            color = Color.White.copy(alpha = 0.84f),
                                         )
                                     }
                                 }
