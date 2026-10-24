@@ -33,6 +33,10 @@ internal interface RecordingRatingDao {
     @Query("SELECT * FROM recording_rating_current ORDER BY ratedAtEpochMs DESC, recordingId ASC LIMIT :limit")
     fun observeRatedRecordings(limit: Int): Flow<List<RecordingRatingCurrentEntity>>
 
+    /** Read-only all-current batch for UI badges; Room invalidates on local edits. */
+    @Query("SELECT * FROM recording_rating_current")
+    fun observeAllCurrentRatings(): Flow<List<RecordingRatingCurrentEntity>>
+
     @Query(
         """
         SELECT * FROM recording_rating_history
