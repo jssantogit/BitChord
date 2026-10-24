@@ -1,8 +1,6 @@
 package com.music.bitchord.ui.components
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -12,7 +10,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.my_ratings_local_source
@@ -45,6 +42,7 @@ data class RatingDisplay(
 data class CanonicalRatingDisplaySnapshot(
     val bySongKey: Map<String, RatingDisplay> = emptyMap(),
     val byMediaAssetId: Map<String, RatingDisplay> = emptyMap(),
+    val byRecordingId: Map<String, RatingDisplay> = emptyMap(),
 ) {
     fun forSong(song: Song): RatingDisplay? =
         bySongKey[song.videoId]
