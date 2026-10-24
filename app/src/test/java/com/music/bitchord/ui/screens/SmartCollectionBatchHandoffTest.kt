@@ -205,4 +205,94 @@ class SmartCollectionBatchHandoffTest {
             it["stage"] == "planned" && it["rejectionCodes"] == "AMBIGUOUS_ASSET:1"
         })
     }
+
+    @Test fun uniqueCurrentAccountRatedRemoteAssetResolvesRemoteOnlyMultiAssetRecording() = runBlocking {
+        val submitted = mutableListOf<CanonicalCollectionIntentPlan>()
+        val candidates = listOf(
+            CanonicalBrowseMediaAsset("unrated-copy", "opensubsonic:account"),
+            CanonicalBrowseMediaAsset("rated-copy", "opensubsonic:account"),
+        )
+        val resolver = Resolver()
+        val handoff = SmartCollectionBatchHandoff(
+            refreshIds = { listOf("rated-recording") },
+            browse = {
+                CanonicalBrowseLibrary(listOf(CanonicalBrowseTrack(
+                    recordingId = "rated-recording", title = "Track", artistDisplay = "Artist",
+                    durationMs = 180_000L, artworkUri = null, availableAssets = candidates,
+                )))
+            },
+            planner = CanonicalCollectionIntentPlanner(resolver),
+            submit = { submitted += it; true },
+            verifiedRemoteAssets = {
+                mapOf("rated-recording" to candidates.last()) // scoped, unique 5/5 evidence
+            },
+        )
+        assertEquals(
+            SmartCollectionBatchResult.Submitted,
+            handoff.execute(
+                SmartCollectionActionSource.SavedDefinition("minimum-five"),
+                CanonicalCollectionIntent.PLAY_NOW,
+            ),
+        )
+        assertEquals("rated-copy", submitted.single().selections.single().identity.mediaAssetId)
+    }
+
+    @Test fun unknownOrUnscopedRatedAssetCannotBreakAmbiguity() = runBlocking {
+        val actual = listOf(
+            CanonicalBrowseMediaAsset("asset-one", "opensubsonic:active"),
+            CanonicalBrowseMediaAsset("asset-two", "opensubsonic:active"),
+        )
+        var calls = 0
+        val handoff = SmartCollectionBatchHandoff(
+            refreshIds = { listOf("rated-recording") },
+            browse = {
+                CanonicalBrowseLibrary(listOf(CanonicalBrowseTrack(
+                    recordingId = "rated-recording", title = "Track", artistDisplay = "Artist",
+                    durationMs = 180_000L, artworkUri = null, availableAssets = actual,
+                )))
+            },
+            planner = CanonicalCollectionIntentPlanner(Resolver()),
+            submit = { calls++; true },
+            verifiedRemoteAssets = { mapOf(
+                "rated-recording" to CanonicalBrowseMediaAsset("foreign-account", "opensubsonic:old"),
+            ) },
+        )
+        assertTrue(
+            handoff.execute(
+                SmartCollectionActionSource.SavedDefinition("minimum-five"),
+                CanonicalCollectionIntent.PLAY_NOW,
+            ) is SmartCollectionBatchResult.Rejected,
+        )
+        assertEquals(0, calls)
+    }
+
+    @Test fun twoLocalCopiesRemainAmbiguousEvenWithSingleRemoteHint() = runBlocking {
+        var calls = 0
+        val handoff = SmartCollectionBatchHandoff(
+            refreshIds = { listOf("rated-recording") },
+            browse = {
+                CanonicalBrowseLibrary(listOf(CanonicalBrowseTrack(
+                    recordingId = "rated-recording", title = "Track", artistDisplay = "Artist",
+                    durationMs = 180_000L, artworkUri = null,
+                    availableAssets = listOf(
+                        CanonicalBrowseMediaAsset("local-one", "local-mediastore"),
+                        CanonicalBrowseMediaAsset("local-two", "local-mediastore"),
+                        CanonicalBrowseMediaAsset("rated-remote", "opensubsonic:active"),
+                    ),
+                )))
+            },
+            planner = CanonicalCollectionIntentPlanner(Resolver()),
+            submit = { calls++; true },
+            // A uniquely rated remote rendition is safe even with ambiguous
+            // local copies; it is not permission to choose one arbitrary local.
+            verifiedRemoteAssets = { mapOf(
+                "rated-recording" to CanonicalBrowseMediaAsset("rated-remote", "opensubsonic:active"),
+            ) },
+        )
+        assertEquals(
+            SmartCollectionBatchResult.Submitted,
+            handoff.execute(SmartCollectionActionSource.SavedDefinition("rule"), CanonicalCollectionIntent.PLAY_NOW),
+        )
+        assertEquals(1, calls)
+    }
 }
