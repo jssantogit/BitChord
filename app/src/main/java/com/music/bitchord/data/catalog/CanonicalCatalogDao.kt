@@ -8,6 +8,14 @@ import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
+internal data class CanonicalRatingAssetRow(
+    val recordingId: String,
+    val mediaAssetId: String,
+    val providerKey: String,
+    val uri: String?,
+    val path: String?,
+)
+
 internal data class CanonicalArtistCreditRow(
     val artistId: String,
     val artistName: String,
@@ -35,6 +43,28 @@ internal interface CanonicalCatalogDao {
 
     @Query("SELECT * FROM catalog_remote_rating_coverage WHERE providerKey = :providerKey AND scopeId = :scopeId LIMIT 1")
     suspend fun remoteRatingCoverage(providerKey: String, scopeId: String): RemoteRatingCoverageEntity?
+
+    /** Room invalidation is a cache revision signal, not a per-song query. */
+    @Query("SELECT * FROM catalog_remote_rating_coverage")
+    fun observeRemoteRatingCoverage(): Flow<List<RemoteRatingCoverageEntity>>
+
+    /** One canonical batch per account. Never surfaces native keys or credentials. */
+    @Query(
+        """
+        SELECT recording.id AS recordingId,
+               asset.id AS mediaAssetId,
+               asset.provider AS providerKey,
+               asset.uri AS uri,
+               asset.path AS path
+        FROM catalog_media_asset AS asset
+        INNER JOIN catalog_recording AS recording ON recording.id = asset.recordingId
+        WHERE asset.provider = :localProvider OR asset.provider = :remoteProvider
+        """,
+    )
+    suspend fun ratingPresentationAssets(
+        localProvider: String,
+        remoteProvider: String,
+    ): List<CanonicalRatingAssetRow>
 
     /**
      * Join with the current canonical MediaAsset and Recording; provider-only IDs
