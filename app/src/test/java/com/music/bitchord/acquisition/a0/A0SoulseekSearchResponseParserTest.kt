@@ -102,6 +102,23 @@ class A0SoulseekSearchResponseParserTest {
         assertEquals("café.mp3", result.files.single().remoteFilename)
     }
 
+    @Test
+    fun acceptsMoreThan128BoundedResultsWithoutDiscardingWholePeerReply() {
+        val entry = fileField("Albums\\ILLIT Magnetic.mp3", 4096, "mp3", mapOf(0 to 320))
+        val payload = ByteArrayOutputStream().apply {
+            write(str("fixture-peer"))
+            write(i32(42))
+            write(i32(129))
+            repeat(129) { write(entry) }
+            write(1) // has free upload slot
+            write(i32(1_000)) // speed
+            write(i32(0)) // queue length
+        }.toByteArray()
+        val parsed = A0SoulseekSearchResponseParser.parse(compressedFrame(payload), 42)
+        assertEquals(129, parsed.files.size)
+        assertTrue(parsed.hasFreeUploadSlot)
+    }
+
     private fun responseFrame(
         token: Int,
         file: ByteArray = fileField("fixture.wav", 4096, "wav", emptyMap()),
