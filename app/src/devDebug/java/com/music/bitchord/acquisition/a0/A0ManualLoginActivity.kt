@@ -518,9 +518,12 @@ class A0ManualLoginActivity : Activity() {
                                     val peerStatus = inbox.poll(12, TimeUnit.SECONDS)
                                     readerGate.stop()
                                     result = peerStatus ?: when {
-                                        transferObserved ->
-                                            "NENHUM CANDIDATO DE ÁUDIO DISPONÍVEL ATÉ 64 MiB. " +
+                                        failedServerReader.get() ->
+                                            "O canal do servidor foi interrompido durante a busca. " +
                                                 "Nenhuma transferência iniciada."
+                                        transferObserved ->
+                                            "Nenhum candidato elegível encontrado nesta busca de até 12 segundos. " +
+                                                "Tente outro termo ou outra rede; nada foi baixado."
                                         attemptedIndirect.get() ->
                                             "NEGOCIAÇÃO INDIRETA TENTADA; NENHUMA RESPOSTA P2P " +
                                                 "RECEBIDA. Nenhum download."
@@ -531,21 +534,32 @@ class A0ManualLoginActivity : Activity() {
                                                 "A rede pode bloquear conexões de entrada."
                                     }
                                     if (peerStatus == null) {
-                                        val noCandidate = transferObserved &&
-                                            receivedValidP2pReply.get()
-                                        trace.note(
-                                            if (noCandidate)
-                                                A0SmokeTrace.Stage.NO_ELIGIBLE_CANDIDATE
-                                            else A0SmokeTrace.Stage.NO_REPLY,
-                                            TraceOutcome.DEGRADED,
-                                            if (noCandidate)
+                                        val cause = A0CandidateOutcome.classify(
+                                            handoff?.screening() ?: A0ObservedCandidateHandoff.Screening(
+                                                0,0,0,0,0,0,0,0
+                                            ),
+                                            validatedPeerReply = receivedValidP2pReply.get(),
+                                            serverReaderFailed = failedServerReader.get()
+                                        )
+                                        val reason = when(cause) {
+                                            A0CandidateOutcome.Kind.SERVER_READER_FAILURE ->
+                                                A0SmokeTrace.Reason.SERVER_IO_FAILURE
+                                            A0CandidateOutcome.Kind.NO_ELIGIBLE_CANDIDATE ->
                                                 A0SmokeTrace.Reason.NO_ELIGIBLE_CANDIDATE
-                                            else A0SmokeTrace.Reason.NO_PEER_REPLY
+                                            else -> A0SmokeTrace.Reason.NO_PEER_REPLY
+                                        }
+                                        trace.note(
+                                            when(cause) {
+                                                A0CandidateOutcome.Kind.SERVER_READER_FAILURE ->
+                                                    A0SmokeTrace.Stage.SERVER_READ_FAILURE
+                                                A0CandidateOutcome.Kind.NO_ELIGIBLE_CANDIDATE ->
+                                                    A0SmokeTrace.Stage.NO_ELIGIBLE_CANDIDATE
+                                                else -> A0SmokeTrace.Stage.NO_REPLY
+                                            },
+                                            TraceOutcome.DEGRADED,reason
                                         )
                                         finalOutcome = TraceOutcome.DEGRADED
-                                        finalReason = if (noCandidate)
-                                            A0SmokeTrace.Reason.NO_ELIGIBLE_CANDIDATE
-                                        else A0SmokeTrace.Reason.NO_PEER_REPLY
+                                        finalReason = reason
                                     } else {
                                         finalOutcome = TraceOutcome.SUCCEEDED
                                     }
@@ -724,8 +738,8 @@ class A0ManualLoginActivity : Activity() {
                                             "bloqueados: ${screened.lockedFiles}). " +
                                             "Nenhuma transferência iniciada."
                                         } else {
-                                            "BUSCA ENVIADA; NENHUMA RESPOSTA P2P VÁLIDA. " +
-                                            "Nenhuma transferência iniciada."
+                                            "Não houve resposta útil de peers dentro do prazo. " +
+                                            "Verifique a rede ou tente outra pesquisa; nada foi baixado."
                                         }
                                         finalOutcome=TraceOutcome.DEGRADED
                                         finalReason=if(classified ==
@@ -787,10 +801,25 @@ class A0ManualLoginActivity : Activity() {
                         else -> A0SmokeTrace.Reason.SERVER_IO_FAILURE
                     }
                     trace.note(A0SmokeTrace.Stage.IO_FAILURE, TraceOutcome.FAILED, finalReason)
-                    result = if(saveToDevice && transferAttempted)
-                        "TRANSFERÊNCIA OU GRAVAÇÃO FALHOU. Confira pasta/permissões; " +
-                            "não foi confirmado salvamento no histórico."
-                    else "ERRO DE REDE OU PROTOCOLO. Nenhum arquivo foi baixado."
+                    result = when {
+                        transferAttempted && error is A0IndirectFileOfferWire.MalformedFileOffer ->
+                            "A oferta do canal F não corresponde ao protocolo esperado. " +
+                                "O peer foi recusado por segurança; tente outro candidato."
+                        transferAttempted &&
+                            A0TransferFailureAdvice.classify(error,lastTransferPhase) ==
+                            A0TransferFailureAdvice.Kind.SERVER_ADDRESS_PROTOCOL ->
+                            "Falha na resposta do servidor ao localizar o peer. " +
+                                "Nenhum arquivo foi publicado; tente novamente."
+                        transferAttempted &&
+                            A0TransferFailureAdvice.classify(error,lastTransferPhase) ==
+                            A0TransferFailureAdvice.Kind.CONNECTION_INTERRUPTED ->
+                            "A conexão P/F foi interrompida. Nenhum arquivo concluído; " +
+                                "verifique a rede ou escolha outro candidato."
+                        saveToDevice && transferAttempted ->
+                            "TRANSFERÊNCIA OU PUBLICAÇÃO NÃO CONFIRMADA. " +
+                                "Verifique a pasta e suas permissões antes de tentar novamente."
+                        else -> "ERRO DE REDE OU PROTOCOLO. Nenhum arquivo foi baixado."
+                    }
                 } catch (error: RuntimeException) {
                     if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
                     finalOutcome=TraceOutcome.FAILED

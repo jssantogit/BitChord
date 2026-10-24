@@ -17,6 +17,14 @@ class A0CandidateOutcomeTest {
         assertEquals(A0CandidateOutcome.Kind.NO_PEER_REPLY,
             A0CandidateOutcome.classify(report(0,0),validatedPeerReply=false))
     }
+    @Test fun brokenServerStreamMustNotBeReportedAsSilentPeer() {
+        assertEquals(A0CandidateOutcome.Kind.SERVER_READER_FAILURE,
+            A0CandidateOutcome.classify(report(0,0),
+                validatedPeerReply=false,serverReaderFailed=true))
+        assertEquals(A0CandidateOutcome.Kind.SERVER_READER_FAILURE,
+            A0CandidateOutcome.classify(report(1,1),
+                validatedPeerReply=true,serverReaderFailed=true))
+    }
     @Test fun selectedCandidateIsReady() {
         assertEquals(A0CandidateOutcome.Kind.CANDIDATES_READY,
             A0CandidateOutcome.classify(report(1,1),validatedPeerReply=true))

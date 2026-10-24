@@ -24,6 +24,13 @@ import java.util.concurrent.TimeUnit
 class SoulseekLocalPublicationSmokeTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
+    @Test fun destinationSettingsNoLongerClaimFeatureIsUpcoming() {
+        assertFalse(context.getString(com.music.bitchord.R.string.acquisition_destination_title)
+            .contains("prepara", ignoreCase = true))
+        assertTrue(context.getString(com.music.bitchord.R.string.acquisition_quality_separate)
+            .contains("Soulseek", ignoreCase = true))
+    }
+
     @Test fun forgedSafGrantIsRejectedAndDefaultDestinationRemainsSelected() {
         assertTrue(A1AndroidDownloadDestination.reset(context))
         try {
@@ -63,8 +70,8 @@ class SoulseekLocalPublicationSmokeTest {
             savedUri = Uri.parse(result.contentUri)
             assertEquals(bytes.size.toLong(), result.byteCount)
             assertEquals(digest, result.sha256Hex)
-            assertEquals("content", savedUri.scheme)
-            val offlineBytes = context.contentResolver.openInputStream(savedUri)!!.use { it.readBytes() }
+            assertEquals("content", savedUri?.scheme)
+            val offlineBytes = context.contentResolver.openInputStream(checkNotNull(savedUri))!!.use { it.readBytes() }
             assertArrayEquals(bytes, offlineBytes)
         } finally {
             savedUri?.let { context.contentResolver.delete(it, null, null) }

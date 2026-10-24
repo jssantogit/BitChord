@@ -534,7 +534,8 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = Icons.Rounded.Download,
                     title = downloadQualityTitle,
-                    subtitle = stringResource(R.string.download_quality_subtitle, downloadQuality.perTrack),
+                    subtitle = stringResource(R.string.download_quality_subtitle, downloadQuality.perTrack) +
+                        " · " + stringResource(R.string.acquisition_quality_separate),
                     value = downloadQuality.localizedLabel(),
                     onClick = { pickingDownloadQuality = true },
                 )
