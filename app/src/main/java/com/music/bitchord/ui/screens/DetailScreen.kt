@@ -161,6 +161,7 @@ import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.ROW_DIVIDER_INSET
 import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
 import com.music.bitchord.ui.components.SongRow
+import com.music.bitchord.ui.components.CanonicalSongRatingStars
 import com.music.bitchord.ui.components.SearchPlayingBars
 import com.music.bitchord.ui.components.libraryGrid
 import com.music.bitchord.ui.components.lightweightLiquidGlass
@@ -1964,6 +1965,7 @@ private fun CompactSongRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            CanonicalSongRatingStars(song, color = palette.onBackgroundVariant)
         }
         if (downloadedTint != null) {
             DownloadedBadge(song.videoId, downloadedTint)
@@ -2024,6 +2026,7 @@ private fun SuggestedSongRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            CanonicalSongRatingStars(song, color = palette.onBackgroundVariant)
         }
         if (downloadedTint != null) {
             DownloadedBadge(song.videoId, downloadedTint)
