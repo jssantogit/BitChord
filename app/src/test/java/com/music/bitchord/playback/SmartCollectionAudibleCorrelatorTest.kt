@@ -10,7 +10,7 @@ class SmartCollectionAudibleCorrelatorTest {
         val events = mutableListOf<String>()
         val observer = SmartCollectionAudibleCorrelator(
             nowMillis = { now },
-            report = { attempt, stage -> events += "$"+"{attempt}:$"+"{stage}" },
+            report = { attempt, stage -> events += "${attempt}:${stage}" },
         )
         observer.begin("attempt1", "media-one")
         assertEquals(emptyList<String>(), events)
@@ -27,7 +27,7 @@ class SmartCollectionAudibleCorrelatorTest {
         val events = mutableListOf<String>()
         val observer = SmartCollectionAudibleCorrelator(
             nowMillis = { now },
-            report = { attempt, stage -> events += "$"+"{attempt}:$"+"{stage}" },
+            report = { attempt, stage -> events += "${attempt}:${stage}" },
         )
         observer.begin("play1", "track1")
         observer.onPlaybackError()
@@ -43,7 +43,7 @@ class SmartCollectionAudibleCorrelatorTest {
         val events = mutableListOf<String>()
         val observer = SmartCollectionAudibleCorrelator(
             nowMillis = { 100L },
-            report = { attempt, stage -> events += "$"+"{attempt}:$"+"{stage}" },
+            report = { attempt, stage -> events += "${attempt}:${stage}" },
         )
         observer.begin("older", "old-media")
         observer.begin("newer", "new-media")
