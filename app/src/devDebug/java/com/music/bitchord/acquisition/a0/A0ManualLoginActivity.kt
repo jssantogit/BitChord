@@ -310,7 +310,7 @@ class A0ManualLoginActivity : Activity() {
                             result = "LOGIN CONFIRMADO. Sessão encerrada, sem buscas ou downloads."
                             finalOutcome = TraceOutcome.SUCCEEDED
                         } else {
-                            ServerSocket(0, 1).use { listener ->
+                            ServerSocket(0, 32).use { listener ->
                                 activeListener = listener
                                 trace.note(A0SmokeTrace.Stage.SEARCH_LISTENER_OPEN)
                                 listener.soTimeout = 18_000
@@ -318,7 +318,8 @@ class A0ManualLoginActivity : Activity() {
                                 val handoff = if (transferObserved) {
                                     A0ObservedCandidateHandoff(
                                         connection, username, token,
-                                        searchPhrase=checkNotNull(requestedSearch)
+                                        searchPhrase=checkNotNull(requestedSearch),
+                                        saveFormatsOnly=saveToDevice
                                     ).also { transfer ->
                                         if (!SoulseekActiveSession.registerTransfer(
                                                 transfer, accountGeneration
@@ -541,8 +542,16 @@ class A0ManualLoginActivity : Activity() {
                                                 (handoff?.screening()?.accepted ?: 0) +
                                                 " candidatos disponíveis para seleção manual."
                                         transferObserved && receivedValidP2pReply.get() ->
-                                            "Respostas recebidas, mas nenhum arquivo passou nos filtros " +
-                                                "de formato, tamanho e disponibilidade. Nada foi baixado."
+                                            handoff?.screening()?.let { report ->
+                                                "Recebidas " + report.responses + " respostas com " +
+                                                    report.publicFiles + " arquivos públicos e " +
+                                                    report.lockedFiles + " bloqueados. " +
+                                                    "Descartados: " + report.unsupportedFormat +
+                                                    " por formato, " + report.tooLarge +
+                                                    " por tamanho, " + report.noSlot +
+                                                    " por falta de slot, " + report.unsafePath +
+                                                    " por nome inválido. Nenhum candidato selecionável."
+                                            } ?: "Respostas sem candidatos elegíveis; nada foi baixado."
                                         transferObserved ->
                                             "Nenhuma resposta P2P utilizável na janela de 18 segundos. " +
                                                 "Tente outro termo ou outra rede; nada foi baixado."
@@ -671,7 +680,8 @@ class A0ManualLoginActivity : Activity() {
                                                         candidate.displayName + " — " + format + bitrate +
                                                             " — " + candidate.sizeBytes + " bytes" +
                                                             " — score " + candidate.matchScore +
-                                                            " (" + match + ")" + " — peer: " + peer
+                                                            " (" + match + ")" +
+                                                            " — slot livre anunciado — peer: " + peer
                                                     }.toTypedArray()
                                                     AlertDialog.Builder(this@A0ManualLoginActivity)
                                                         .setTitle("Candidatos (" + visible.size +
