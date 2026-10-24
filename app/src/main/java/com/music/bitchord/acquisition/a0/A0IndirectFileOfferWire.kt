@@ -18,6 +18,9 @@ internal object A0IndirectFileOfferWire {
     private const val MAX_SERVER_FRAME = 1_048_576
     private const val MAX_FIELD_BYTES = 128
 
+    /** Sanitized error class; never include remote offer fields in logs. */
+    class MalformedFileOffer : IOException("A0 invalid or unsupported F offer")
+
     sealed class Event {
         data class Offer(val address: InetAddress, val port: Int, val token: Int) : Event()
         object Unrelated : Event()
@@ -79,5 +82,5 @@ internal object A0IndirectFileOfferWire {
         }
         return b
     }
-    private fun malformed():Nothing=throw IOException("A0 invalid or unsupported F offer")
+    private fun malformed():Nothing=throw MalformedFileOffer()
 }
