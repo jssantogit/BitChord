@@ -1,4 +1,6 @@
 package com.music.bitchord.ui.screens
+import com.music.bitchord.ui.components.CanonicalRatingStars
+import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 
 import android.content.Context
 import androidx.compose.foundation.clickable
@@ -304,6 +306,7 @@ private fun AdaptiveCollectionsBody(
                                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     Text(row.artistDisplay, style = MaterialTheme.typography.bodySmall,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    CanonicalRatingStars(LocalCanonicalRatingDisplay.current.byRecordingId[row.recordingId])
                                     Text(when (row.reason) {
                                         AdaptiveCollectionReason.CONFIRMED_AUDIBLE_ABSENCE -> texts.rediscoveryReason
                                         AdaptiveCollectionReason.POSITIVE_EXPLICIT_RATING -> texts.positivesReason
