@@ -1,6 +1,15 @@
 package com.music.bitchord.ui.components
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.StarHalf
+import androidx.compose.material3.Icon
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -64,40 +73,53 @@ fun CanonicalRatingStars(
 
     val localName = stringResource(Res.string.my_ratings_local_source)
     val remoteName = stringResource(Res.string.my_ratings_remote_source)
-    val local = rating.localValue?.let { value ->
-        val display = if (value % 1.0 == 0.0) value.toInt().toString() else value.toString()
-        "★ $display/5 · $localName"
-    }
-    val remote = rating.remoteValue?.let { "★ $it/5 · $remoteName" }
-    val description = listOfNotNull(local, remote).joinToString("; ")
+    val local = rating.localValue
+    val remote = rating.remoteValue
+    val description = listOfNotNull(
+        local?.let { "$local/5 · $localName" },
+        remote?.let { "$remote/5 · $remoteName" },
+    ).joinToString("; ")
     Column(
         modifier = modifier.semantics(mergeDescendants = true) {
             contentDescription = description
         },
     ) {
-        // Different values get different lines so both origins remain readable
-        // at large font scales; equal values keep the narrow one-line variant.
-        if (rating.localValue != null && rating.remoteValue != null &&
-            rating.localValue == rating.remoteValue.toDouble()
-        ) {
-            Text(
-                "★ ${rating.remoteValue}/5 · $localName · $remoteName",
-                color = color,
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        // One line when origins agree, otherwise two independent rated lines.
+        if (local != null && remote != null && local == remote.toDouble()) {
+            RatingStarsLine(local, "$localName · $remoteName", color)
         } else {
-            listOfNotNull(local, remote).forEach { label ->
-                Text(
-                    text = label,
-                    color = color,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            local?.let { RatingStarsLine(it, localName, color) }
+            remote?.let { RatingStarsLine(it.toDouble(), remoteName, color) }
         }
+    }
+}
+
+@Composable
+private fun RatingStarsLine(value: Double, source: String, color: Color) {
+    val numeric = if (value % 1.0 == 0.0) value.toInt().toString() else value.toString()
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(1.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        repeat(5) { index ->
+            Icon(
+                imageVector = when {
+                    value >= index + 1.0 -> Icons.Rounded.Star
+                    value >= index + 0.5 -> Icons.Rounded.StarHalf
+                    else -> Icons.Rounded.StarBorder
+                },
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(12.dp),
+            )
+        }
+        Text(
+            text = "$numeric/5 · $source",
+            color = color,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
