@@ -276,7 +276,7 @@ internal fun rememberSmartCollectionBatchAction(
             submit = { plan -> submitCanonicalBatch(controller, plan) },
             trace = { data ->
                 Diagnostics.event(
-                    category = DiagnosticCategory.PLAYBACK,
+                    category = DiagnosticCategory.PLAYER,
                     name = "smart_collection_action_v1",
                     metadata = data,
                 )
