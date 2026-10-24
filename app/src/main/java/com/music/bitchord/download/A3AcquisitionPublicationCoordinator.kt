@@ -16,8 +16,8 @@ internal class A3AcquisitionPublicationCoordinator(
 ) {
     fun publish(
         id:String,
-        publishAlreadyStaged:()->A2LocalAudioPublisher.Published,
-        commitGuard:((()->Unit)->Unit)={ action -> action() }
+        commitGuard:((()->Unit)->Unit)={ action -> action() },
+        publishAlreadyStaged:()->A2LocalAudioPublisher.Published
     ):A2LocalAudioPublisher.Published {
         journal.advance(id,A3AcquisitionLedger.Phase.PUBLISHING)
         val published=publishAlreadyStaged()
