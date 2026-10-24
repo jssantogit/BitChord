@@ -44,6 +44,8 @@ import com.music.bitchord.data.sources.StructuredSourceResolutionTraceReporter
 import com.music.bitchord.data.stats.ArtistFacts
 import com.music.bitchord.data.stats.ListeningStats
 import com.music.bitchord.download.Downloads
+import com.music.bitchord.download.A4AcquiredLocalSongs
+import com.music.bitchord.data.LocalMediaRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -72,6 +74,15 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         }
         Diagnostics.span(DiagnosticCategory.STARTUP, "app_ui_install") {
             com.music.bitchord.ui.AppUi.install(com.music.bitchord.ui.AndroidAppUiHost)
+        }
+        // A4: contribute finished, locally stored Soulseek URIs to the existing
+        // Local Music browse, preserving any previous extension callback.
+        // The callback itself runs on Dispatchers.IO only when local music is
+        // requested; application startup does not query the SAF provider.
+        val previousLocalMusic = LocalMediaRepository.extraLocalMusic
+        LocalMediaRepository.extraLocalMusic = { context, songs ->
+            val prior = previousLocalMusic?.invoke(context, songs) ?: songs
+            A4AcquiredLocalSongs.append(context, prior)
         }
         // The shared data layer keeps its existing API. On Android debug builds
         // it now feeds the structured diagnostics recorder rather than a second,
