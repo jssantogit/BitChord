@@ -640,31 +640,71 @@ class A0ManualLoginActivity : Activity() {
                                                 status.text = if(saveToDevice)
                                                     "Escolha UM arquivo autorizado para salvar como música local."
                                                 else "Selecione UM arquivo autorizado. Nenhum download automático."
-                                                val titles=selectableIndices.map { i ->
-                                                    val candidate=choices[i]
-                                                    val peer = candidate.peerUsername.filter {
-                                                        it.code in 33..126
-                                                    }.take(32)
-                                                    val format = candidate.displayName
-                                                        .substringAfterLast('.', "desconhecido")
-                                                        .uppercase().take(6)
-                                                    "${candidate.displayName} — formato indicado ${format} — " +
-                                                        "${candidate.sizeBytes} bytes — peer: ${peer}"
-                                                }.toTypedArray()
-                                                // A list dialog must not also setMessage():
-                                                // Android's content controller may hide its list.
-                                                AlertDialog.Builder(this@A0ManualLoginActivity)
-                                                    .setTitle("Escolha um arquivo autorizado (até 64 MiB)")
-                                                    .setItems(titles) { _, index ->
-                                                        choiceQueue.offer(selectableIndices[index])
+                                                // Filters affect only presentation; the full
+                                                // bounded ranked set stays in memory for retry.
+                                                fun showChoices(formatFilter:String?=null) {
+                                                    val visible=selectableIndices.filter { i ->
+                                                        formatFilter == null ||
+                                                            choices[i].displayName
+                                                                .substringAfterLast('.',"")
+                                                                .equals(formatFilter,ignoreCase=true)
                                                     }
-                                                    .setNegativeButton("Cancelar") { _, _ ->
-                                                        choiceQueue.offer(-1)
-                                                    }
-                                                    .setOnCancelListener {
-                                                        choiceQueue.offer(-1)
-                                                    }
-                                                    .show()
+                                                    val titles=visible.map { i ->
+                                                        val candidate=choices[i]
+                                                        val peer=candidate.peerUsername.filter {
+                                                            it.code in 33..126
+                                                        }.take(32)
+                                                        val format=candidate.displayName
+                                                            .substringAfterLast('.', "desconhecido")
+                                                            .uppercase().take(6)
+                                                        val match=when(candidate.matchSignal) {
+                                                            A0CandidateRank.Match.ALL_TERMS ->
+                                                                "todos os termos"
+                                                            A0CandidateRank.Match.SOME_TERMS ->
+                                                                "parte dos termos"
+                                                            A0CandidateRank.Match.NO_TERMS ->
+                                                                "sem correspondência forte"
+                                                        }
+                                                        val bitrate=candidate.declaredBitrateKbps?.let {
+                                                            " — " + it + " kbps declarados"
+                                                        }.orEmpty()
+                                                        candidate.displayName + " — " + format + bitrate +
+                                                            " — " + candidate.sizeBytes + " bytes" +
+                                                            " — score " + candidate.matchScore +
+                                                            " (" + match + ")" + " — peer: " + peer
+                                                    }.toTypedArray()
+                                                    AlertDialog.Builder(this@A0ManualLoginActivity)
+                                                        .setTitle("Candidatos (" + visible.size +
+                                                            "/" + selectableIndices.size + ", até 64 MiB)")
+                                                        .setItems(titles) { _, index ->
+                                                            choiceQueue.offer(visible[index])
+                                                        }
+                                                        .setNeutralButton("Filtrar formato") { _, _ ->
+                                                            val labels=arrayOf(
+                                                                "Todos","MP3","FLAC","WAV",
+                                                                "OGG","M4A","AAC","OPUS"
+                                                            )
+                                                            val filters=arrayOf<String?>(
+                                                                null,"mp3","flac","wav",
+                                                                "ogg","m4a","aac","opus"
+                                                            )
+                                                            AlertDialog.Builder(this@A0ManualLoginActivity)
+                                                                .setTitle("Filtrar (reversível)")
+                                                                .setItems(labels) { _, index ->
+                                                                    showChoices(filters[index])
+                                                                }
+                                                                .setNegativeButton("Voltar") { _, _ ->
+                                                                    showChoices(formatFilter)
+                                                                }.show()
+                                                        }
+                                                        .setNegativeButton("Cancelar") { _, _ ->
+                                                            choiceQueue.offer(-1)
+                                                        }
+                                                        .setOnCancelListener {
+                                                            choiceQueue.offer(-1)
+                                                        }.show()
+                                                }
+                                                showChoices()
                                             }
                                         }
                                         // Retain exclusive server-stream ownership while
@@ -975,6 +1015,28 @@ class A0ManualLoginActivity : Activity() {
             }
             page.addView(retry, page.childCount - 1)
             retry.setOnClickListener { if (action.isEnabled) confirmSearch() }
+            val alternative=Button(this).apply {
+                text="Tentar variação da pesquisa"
+            }
+            page.addView(alternative,page.childCount - 1)
+            alternative.setOnClickListener {
+                if (!action.isEnabled) return@setOnClickListener
+                val suggestions=runCatching {
+                    A0SearchQuery.variants(searchInput.text.toString()).drop(1)
+                }.getOrDefault(emptyList())
+                if (suggestions.isEmpty()) {
+                    status.text="Edite o termo acima e use Pesquisar candidatos novamente."
+                } else {
+                    AlertDialog.Builder(this)
+                        .setTitle("Tentar outra consulta (manual)")
+                        .setItems(suggestions.toTypedArray()) { _, index ->
+                            searchInput.setText(suggestions[index])
+                            confirmSearch()
+                        }
+                        .setNegativeButton("Cancelar",null)
+                        .show()
+                }
+            }
             confirmSearch()
         }
     }
