@@ -51,4 +51,18 @@ class SmartCollectionAudibleCorrelatorTest {
         observer.onAudioPositionAdvancing("new-media")
         assertEquals(listOf("older:superseded", "newer:audible"), events)
     }
+
+    @Test fun lackOfAudioSamplesTimesOutWithoutFabricatingAudible() {
+        var now = 500L
+        val events = mutableListOf<String>()
+        val observer = SmartCollectionAudibleCorrelator(
+            nowMillis = { now },
+            report = { attempt, stage -> events += "${attempt}:${stage}" },
+        )
+        observer.begin("quiet", "no-samples")
+        now = 30_501L
+        observer.expireIfOverdue()
+        observer.onAudioPositionAdvancing("no-samples")
+        assertEquals(listOf("quiet:timed_out"), events)
+    }
 }
