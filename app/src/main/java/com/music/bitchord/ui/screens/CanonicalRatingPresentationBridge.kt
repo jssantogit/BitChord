@@ -106,9 +106,9 @@ private data class ScopedRatingPresentation(
 )
 
 /**
- * Exactly one Room-local Flow, one Room remote cache-revision Flow, and one
- * account preference Flow. Reads are batched on IO and never triggered by
- * scrolling, song-row recomposition, Now Playing or a menu open.
+ * Local ratings, current account's canonical MediaAssets and remote cache
+ * revision are independently observed. CPU projection and remote cached reads
+ * run on IO; scrolling and Now Playing never execute N+1 Room queries.
  */
 @Composable
 internal fun rememberCanonicalRatingDisplay(): CanonicalRatingDisplaySnapshot {
@@ -125,12 +125,24 @@ internal fun rememberCanonicalRatingDisplay(): CanonicalRatingDisplaySnapshot {
     val localRows by localFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val revisionFlow = remember(catalog) { catalog.catalogDao().observeRemoteRatingCoverage() }
     val revisions by revisionFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val activeProvider = account?.let { "opensubsonic:${it.accountId}" }
+        ?: "__no_active_opensubsonic_account__"
+    val assetFlow = remember(catalog, activeProvider) {
+        catalog.catalogDao().observeRatingPresentationAssets(
+            localProvider = "local-mediastore",
+            remoteProvider = activeProvider,
+        )
+    }
+    val assets by assetFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    // Either an asset change (import/deletion) or a remote rating cache update
+    // refreshes the projection. No UI row owns a Room query.
+    val catalogRevision = remember(assets, revisions) { assets to revisions }
 
     val result by produceState(
         initialValue = ScopedRatingPresentation(null, CanonicalRatingDisplaySnapshot()),
         key1 = account,
         key2 = localRows,
-        key3 = revisions,
+        key3 = catalogRevision,
     ) {
         value = try {
             withContext(Dispatchers.IO) {
@@ -159,10 +171,6 @@ internal fun rememberCanonicalRatingDisplay(): CanonicalRatingDisplaySnapshot {
                             )
                         }
                     } else emptyList()
-                    val assets = catalog.catalogDao().ratingPresentationAssets(
-                        localProvider = "local-mediastore",
-                        remoteProvider = activeProvider ?: "__no_active_opensubsonic_account__",
-                    )
                     val assembled = buildCanonicalRatingPresentation(
                         assets = assets,
                         localValues = localRows.associate { it.recordingId to it.ratingValue },
