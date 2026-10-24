@@ -83,6 +83,40 @@ class A3AcquisitionPublicationCoordinatorTest {
         assertEquals(A3AcquisitionLedger.Phase.PUBLISHING,journal.get(id)?.phase)
     }
 
+    @Test fun accountRevocationAfterBytesWrittenDeletesPublishedUriBeforeAvailable() {
+        val store=MemoryStore();val journal=staged(store)
+        val deleted=mutableListOf<String>()
+        val coordinator=A3AcquisitionPublicationCoordinator(journal) {
+            deleted+=it;true
+        }
+        var authorized=true
+        try {
+            coordinator.publish(id, publishAlreadyStaged={
+                authorized=false // Logout or account swap during the A2 copy.
+                result()
+            }, commitGuard={ commit ->
+                if (!authorized) throw IOException("Soulseek account revoked")
+                commit()
+            })
+            fail("Revoked account must not publish AVAILABLE")
+        } catch(_:IOException) {}
+        assertEquals(listOf(uri),deleted)
+        assertEquals(A3AcquisitionLedger.Phase.PUBLISHING,journal.get(id)?.phase)
+        assertNull(journal.get(id)?.contentUri)
+    }
+
+    @Test fun commitGuardAllowsAuthorizedPublication() {
+        val store=MemoryStore();val journal=staged(store)
+        val coordinator=A3AcquisitionPublicationCoordinator(journal) { true }
+        var checked=false
+        coordinator.publish(id,publishAlreadyStaged={result()},commitGuard={commit ->
+            checked=true
+            commit()
+        })
+        assertTrue(checked)
+        assertEquals(A3AcquisitionLedger.Phase.AVAILABLE,journal.get(id)?.phase)
+    }
+
     @Test fun duplicatePublicationOnAvailableJobCannotTouchStorage() {
         val store=MemoryStore();val journal=staged(store)
         val coordinator=A3AcquisitionPublicationCoordinator(journal) { true }

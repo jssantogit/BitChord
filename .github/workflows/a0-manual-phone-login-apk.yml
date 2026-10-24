@@ -17,8 +17,8 @@ concurrency:
 
 jobs:
   apk:
-    if: github.event.pull_request.number == 171 && github.event.pull_request.head.repo.full_name == github.repository
-    name: A0 · secretless devDebug APK
+    if: (github.event.pull_request.number == 171 || github.event.pull_request.number == 173) && github.event.pull_request.head.repo.full_name == github.repository
+    name: Soulseek · secretless devDebug APK
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:

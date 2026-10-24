@@ -176,6 +176,11 @@ object Downloads {
      *   only thing that has to say *why* forty tracks are in the queue.
      */
     fun enqueue(context: Context, song: Song, from: String? = null) {
+        // A closed legacy route is safer than a cosmetic UI change: stale actions,
+        // notification intents and permission callbacks may still call enqueue.
+        DownloadSession.queued(song, from)
+        fail(song.videoId, "YouTube Music acquisition disabled; use manual Soulseek")
+        return
         val id = song.videoId
         if (!AppSettings.downloadsAllowedNow) {
             // Distinct from the duplicate-tap no-op below: nothing is in flight
@@ -1093,6 +1098,8 @@ object Downloads {
      *   a mid-download refusal and has to ask for the same rung it started on.
      */
     private suspend fun routeFor(context: Context, track: Song, quality: DownloadQuality): Route {
+        // Defense in depth against previously queued jobs and direct worker paths.
+        error("Conventional download resolution is disabled; Soulseek requires manual selection")
         fromSources(track, quality)?.let { (stream, storable) ->
             // A manifest is an index, not audio. Whichever kind it is, fetching
             // it as a file writes the index into something named `.flac` —

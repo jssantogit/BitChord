@@ -62,6 +62,9 @@ class A0ManualLoginActivity : Activity() {
             WindowManager.LayoutParams.FLAG_SECURE
         )
 
+        // Launched by the in-app song Download action, not the old A0 tool entry.
+        val fromSongDownload = intent.hasExtra("bitchord.soulseek.manual.query")
+
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 48, 48, 48)
@@ -73,11 +76,17 @@ class A0ManualLoginActivity : Activity() {
             it.setPadding(0, 12, 0, 12)
             page.addView(it)
         }
-        text("BitChord A0 — teste de conectividade P2P Soulseek")
-        text("Somente para uma conta exclusiva de TESTE. " +
-             "O protocolo Soulseek envia a senha por TCP SEM TLS. " +
-             "Não reutilize senhas de outros serviços.")
-        text("A pesquisa digitável não baixa arquivos. No teste separado de transporte, " +
+        text(if (fromSongDownload) "Baixar com Soulseek" else
+            "BitChord A0 — teste de conectividade P2P Soulseek")
+        text(if (fromSongDownload)
+            "Busque arquivos usando sua conta configurada em Configurações → Downloads. " +
+                "A pesquisa não baixa arquivos automaticamente: você deverá escolher um " +
+                "candidato e confirmar que tem autorização para salvá-lo."
+        else
+            "Somente para uma conta exclusiva de TESTE. " +
+                "O protocolo Soulseek envia a senha por TCP SEM TLS. " +
+                "Não reutilize senhas de outros serviços.")
+        if (!fromSongDownload) text("A pesquisa digitável não baixa arquivos. No teste separado de transporte, " +
              "você escolhe manualmente um arquivo público anunciado (até 64 MiB) " +
              "para o qual tenha autorização. Os bytes ficam só temporariamente: " +
              "tamanho e SHA-256 observado são medidos, depois apagados. " +
@@ -91,6 +100,12 @@ class A0ManualLoginActivity : Activity() {
             importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
         }
         page.addView(user)
+        val accountVault = SoulseekCredentialVault(this)
+        val previouslySaved = accountVault.read()
+        if (previouslySaved != null) {
+            user.setText(previouslySaved.username)
+            previouslySaved.erase()
+        }
         val password = EditText(this).apply {
             hint = "Senha exclusiva de testes"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -100,7 +115,8 @@ class A0ManualLoginActivity : Activity() {
         page.addView(password)
         val searchInput = EditText(this).apply {
             hint = "O que deseja pesquisar? (ex.: newjeans - omg)"
-            setText("newjeans - omg")
+            setText(intent.getStringExtra("bitchord.soulseek.manual.query")
+                ?.take(120).orEmpty())
             inputType = InputType.TYPE_CLASS_TEXT or
                 InputType.TYPE_TEXT_VARIATION_NORMAL
             isSingleLine = true
@@ -135,7 +151,7 @@ class A0ManualLoginActivity : Activity() {
         page.addView(saveAction)
         val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
         page.addView(exportAction)
-        text("Captura temporária iniciada automaticamente ao testar. " +
+        if (!fromSongDownload) text("Captura temporária iniciada automaticamente ao testar. " +
             "Depois do resultado, exporte os logs. Revise o relatório antes de compartilhar. " +
             "Não envie credenciais, capturas de rede ou logcat bruto.")
         val status = text("Nenhuma conexão iniciada.")
@@ -180,7 +196,16 @@ class A0ManualLoginActivity : Activity() {
                 }
             } else null
             val username = user.text.toString()
-            val secret = password.text.toString().toCharArray()
+            val savedAccount = if (password.text.isEmpty()) accountVault.read() else null
+            val secret = if (savedAccount?.username == username) {
+                savedAccount.password.copyOf()
+            } else password.text.toString().toCharArray()
+            savedAccount?.erase()
+            if (username.isBlank() || secret.isEmpty()) {
+                secret.fill('\u0000')
+                status.text = "Configure ou conecte sua conta em Configurações → Downloads → Soulseek."
+                return
+            }
             // Clear both controls before any packet creation or network action.
             user.text.clear()
             password.text.clear()
@@ -199,6 +224,7 @@ class A0ManualLoginActivity : Activity() {
             } else {
                 "Verificando uma sessão; nenhum arquivo será transferido."
             }
+            val accountGeneration = SoulseekActiveSession.generation()
             worker.execute {
                 // Existing Diagnostics capture and structured tracing; no raw inputs.
                 val captureEnabled = runCatching {
@@ -256,6 +282,9 @@ class A0ManualLoginActivity : Activity() {
                     packet = A0ExperimentalLoginCodec.encode(username, secret)
                     trace.note(A0SmokeTrace.Stage.SERVER_CONNECT_STARTED)
                     Socket().use { connection ->
+                        if (!SoulseekActiveSession.register(connection, accountGeneration)) {
+                            throw IOException("Soulseek account was revoked")
+                        }
                         activeSocket = connection
                         // One fixed, documented SoulseekQt server endpoint.
                         // No user-controlled URL, proxy, redirects or fallback.
@@ -289,7 +318,12 @@ class A0ManualLoginActivity : Activity() {
                                 val handoff = if (transferObserved) {
                                     A0ObservedCandidateHandoff(
                                         connection, username, token
-                                    ).also { activeTransfer = it }
+                                    ).also { transfer ->
+                                        if (!SoulseekActiveSession.registerTransfer(
+                                                transfer, accountGeneration
+                                            )) throw IOException("Soulseek account revoked")
+                                        activeTransfer = transfer
+                                    }
                                 } else null
                                 connection.getOutputStream().apply {
                                     write(A0OneShotPublicSearchWire.setWaitPort(listener.localPort))
@@ -484,9 +518,12 @@ class A0ManualLoginActivity : Activity() {
                                     val peerStatus = inbox.poll(12, TimeUnit.SECONDS)
                                     readerGate.stop()
                                     result = peerStatus ?: when {
-                                        transferObserved ->
-                                            "NENHUM CANDIDATO DE ÁUDIO DISPONÍVEL ATÉ 64 MiB. " +
+                                        failedServerReader.get() ->
+                                            "O canal do servidor foi interrompido durante a busca. " +
                                                 "Nenhuma transferência iniciada."
+                                        transferObserved ->
+                                            "Nenhum candidato elegível encontrado nesta busca de até 12 segundos. " +
+                                                "Tente outro termo ou outra rede; nada foi baixado."
                                         attemptedIndirect.get() ->
                                             "NEGOCIAÇÃO INDIRETA TENTADA; NENHUMA RESPOSTA P2P " +
                                                 "RECEBIDA. Nenhum download."
@@ -497,21 +534,32 @@ class A0ManualLoginActivity : Activity() {
                                                 "A rede pode bloquear conexões de entrada."
                                     }
                                     if (peerStatus == null) {
-                                        val noCandidate = transferObserved &&
-                                            receivedValidP2pReply.get()
-                                        trace.note(
-                                            if (noCandidate)
-                                                A0SmokeTrace.Stage.NO_ELIGIBLE_CANDIDATE
-                                            else A0SmokeTrace.Stage.NO_REPLY,
-                                            TraceOutcome.DEGRADED,
-                                            if (noCandidate)
+                                        val cause = A0CandidateOutcome.classify(
+                                            handoff?.screening() ?: A0ObservedCandidateHandoff.Screening(
+                                                0,0,0,0,0,0,0,0
+                                            ),
+                                            validatedPeerReply = receivedValidP2pReply.get(),
+                                            serverReaderFailed = failedServerReader.get()
+                                        )
+                                        val reason = when(cause) {
+                                            A0CandidateOutcome.Kind.SERVER_READER_FAILURE ->
+                                                A0SmokeTrace.Reason.SERVER_IO_FAILURE
+                                            A0CandidateOutcome.Kind.NO_ELIGIBLE_CANDIDATE ->
                                                 A0SmokeTrace.Reason.NO_ELIGIBLE_CANDIDATE
-                                            else A0SmokeTrace.Reason.NO_PEER_REPLY
+                                            else -> A0SmokeTrace.Reason.NO_PEER_REPLY
+                                        }
+                                        trace.note(
+                                            when(cause) {
+                                                A0CandidateOutcome.Kind.SERVER_READER_FAILURE ->
+                                                    A0SmokeTrace.Stage.SERVER_READ_FAILURE
+                                                A0CandidateOutcome.Kind.NO_ELIGIBLE_CANDIDATE ->
+                                                    A0SmokeTrace.Stage.NO_ELIGIBLE_CANDIDATE
+                                                else -> A0SmokeTrace.Stage.NO_REPLY
+                                            },
+                                            TraceOutcome.DEGRADED,reason
                                         )
                                         finalOutcome = TraceOutcome.DEGRADED
-                                        finalReason = if (noCandidate)
-                                            A0SmokeTrace.Reason.NO_ELIGIBLE_CANDIDATE
-                                        else A0SmokeTrace.Reason.NO_PEER_REPLY
+                                        finalReason = reason
                                     } else {
                                         finalOutcome = TraceOutcome.SUCCEEDED
                                     }
@@ -572,7 +620,14 @@ class A0ManualLoginActivity : Activity() {
                                                 else "Selecione UM arquivo autorizado. Nenhum download automático."
                                                 val titles=selectableIndices.map { i ->
                                                     val candidate=choices[i]
-                                                    "${candidate.displayName} — ${candidate.sizeBytes} bytes"
+                                                    val peer = candidate.peerUsername.filter {
+                                                        it.code in 33..126
+                                                    }.take(32)
+                                                    val format = candidate.displayName
+                                                        .substringAfterLast('.', "desconhecido")
+                                                        .uppercase().take(6)
+                                                    "${candidate.displayName} — formato indicado ${format} — " +
+                                                        "${candidate.sizeBytes} bytes — peer: ${peer}"
                                                 }.toTypedArray()
                                                 // A list dialog must not also setMessage():
                                                 // Android's content controller may hide its list.
@@ -638,8 +693,17 @@ class A0ManualLoginActivity : Activity() {
                                                     val saved=A3AndroidAcquisitionLedger.publishStaged(
                                                         this@A0ManualLoginActivity,
                                                         id,receipt.file,name,
-                                                        receipt.byteCount,receipt.sha256Hex
-                                                    ) { stopping||Thread.currentThread().isInterrupted }
+                                                        receipt.byteCount,receipt.sha256Hex,
+                                                        isCancelled={
+                                                            stopping || Thread.currentThread().isInterrupted ||
+                                                                !SoulseekActiveSession.isCurrent(accountGeneration)
+                                                        },
+                                                        commitGuard={ commit ->
+                                                            SoulseekActiveSession.commitIfCurrent(
+                                                                accountGeneration, commit
+                                                            )
+                                                        }
+                                                    )
                                                     trace.note(A0SmokeTrace.Stage.LOCAL_SAVE_PUBLISHED)
                                                     result="MÚSICA LOCAL SALVA: ${saved.byteCount} bytes. " +
                                                         "Confira Biblioteca → No dispositivo. " +
@@ -674,8 +738,8 @@ class A0ManualLoginActivity : Activity() {
                                             "bloqueados: ${screened.lockedFiles}). " +
                                             "Nenhuma transferência iniciada."
                                         } else {
-                                            "BUSCA ENVIADA; NENHUMA RESPOSTA P2P VÁLIDA. " +
-                                            "Nenhuma transferência iniciada."
+                                            "Não houve resposta útil de peers dentro do prazo. " +
+                                            "Verifique a rede ou tente outra pesquisa; nada foi baixado."
                                         }
                                         finalOutcome=TraceOutcome.DEGRADED
                                         finalReason=if(classified ==
@@ -737,10 +801,25 @@ class A0ManualLoginActivity : Activity() {
                         else -> A0SmokeTrace.Reason.SERVER_IO_FAILURE
                     }
                     trace.note(A0SmokeTrace.Stage.IO_FAILURE, TraceOutcome.FAILED, finalReason)
-                    result = if(saveToDevice && transferAttempted)
-                        "TRANSFERÊNCIA OU GRAVAÇÃO FALHOU. Confira pasta/permissões; " +
-                            "não foi confirmado salvamento no histórico."
-                    else "ERRO DE REDE OU PROTOCOLO. Nenhum arquivo foi baixado."
+                    result = when {
+                        transferAttempted && error is A0IndirectFileOfferWire.MalformedFileOffer ->
+                            "A oferta do canal F não corresponde ao protocolo esperado. " +
+                                "O peer foi recusado por segurança; tente outro candidato."
+                        transferAttempted &&
+                            A0TransferFailureAdvice.classify(error,lastTransferPhase) ==
+                            A0TransferFailureAdvice.Kind.SERVER_ADDRESS_PROTOCOL ->
+                            "Falha na resposta do servidor ao localizar o peer. " +
+                                "Nenhum arquivo foi publicado; tente novamente."
+                        transferAttempted &&
+                            A0TransferFailureAdvice.classify(error,lastTransferPhase) ==
+                            A0TransferFailureAdvice.Kind.CONNECTION_INTERRUPTED ->
+                            "A conexão P/F foi interrompida. Nenhum arquivo concluído; " +
+                                "verifique a rede ou escolha outro candidato."
+                        saveToDevice && transferAttempted ->
+                            "TRANSFERÊNCIA OU PUBLICAÇÃO NÃO CONFIRMADA. " +
+                                "Verifique a pasta e suas permissões antes de tentar novamente."
+                        else -> "ERRO DE REDE OU PROTOCOLO. Nenhum arquivo foi baixado."
+                    }
                 } catch (error: RuntimeException) {
                     if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
                     finalOutcome=TraceOutcome.FAILED
@@ -770,12 +849,16 @@ class A0ManualLoginActivity : Activity() {
                     )
                     activeSelectionQueue?.offer(-1)
                     activeSelectionQueue=null
-                    activeTransfer?.cancel()
+                    activeTransfer?.let { transfer ->
+                        SoulseekActiveSession.detachTransfer(transfer)
+                        transfer.cancel()
+                    }
                     activeTransfer = null
                     activeListener?.close()
                     activeListener = null
                     packet?.fill(0)
                     secret.fill('\u0000')
+                    activeSocket?.let { SoulseekActiveSession.detach(it) }
                     activeSocket?.close()
                     activeSocket = null
                     trace.note(A0SmokeTrace.Stage.SOCKETS_CLOSED)
@@ -788,6 +871,11 @@ class A0ManualLoginActivity : Activity() {
                         if (!stopping && !isFinishing && !isDestroyed) {
                             status.text = result
                             action.isEnabled = true
+                            val availableAccount = accountVault.read()
+                            if (availableAccount != null) {
+                                user.setText(availableAccount.username)
+                                availableAccount.erase()
+                            }
                             searchAction.isEnabled = true
                             transferAction.isEnabled = observedScratchReady
                             saveAction.isEnabled = observedScratchReady
@@ -820,6 +908,52 @@ class A0ManualLoginActivity : Activity() {
                     }
                 }
             }
+        }
+        if (fromSongDownload) {
+            // The old A0 diagnostic actions remain available only to internal
+            // test callers. A normal Download tap immediately enters a guided
+            // search, not a second login form or a technical transport menu.
+            listOf<View>(
+                user, password, acknowledge, action, searchAction,
+                transferAction, saveConsent, saveAction, exportAction,
+            ).forEach { it.visibility = View.GONE }
+
+            fun confirmSearch() {
+                val saved = accountVault.read()
+                if (saved == null) {
+                    status.text = "Configure sua conta em Configurações → Downloads → Soulseek."
+                    AlertDialog.Builder(this)
+                        .setTitle("Conta Soulseek necessária")
+                        .setMessage("Conecte e salve uma conta dedicada em Configurações → Downloads → Soulseek antes de pesquisar.")
+                        .setPositiveButton("Entendi") { _, _ -> finish() }
+                        .setOnCancelListener { finish() }
+                        .show()
+                    return
+                }
+                user.setText(saved.username)
+                saved.erase()
+                AlertDialog.Builder(this)
+                    .setTitle("Pesquisar candidatos Soulseek")
+                    .setMessage(
+                        "Esta pesquisa usa TCP sem TLS com sua conta de testes. " +
+                        "Confirme que tem autorização para armazenar o arquivo que escolher. " +
+                        "Nada será baixado até você selecionar um candidato."
+                    )
+                    .setPositiveButton("Pesquisar candidatos") { _, _ ->
+                        acknowledge.isChecked = true
+                        saveConsent.isChecked = true
+                        start(true, transferObserved = true, saveToDevice = true)
+                    }
+                    .setNegativeButton("Cancelar") { _, _ -> finish() }
+                    .setOnCancelListener { finish() }
+                    .show()
+            }
+            val retry = Button(this).apply {
+                text = "Pesquisar candidatos"
+            }
+            page.addView(retry, page.childCount - 1)
+            retry.setOnClickListener { if (action.isEnabled) confirmSearch() }
+            confirmSearch()
         }
     }
 
