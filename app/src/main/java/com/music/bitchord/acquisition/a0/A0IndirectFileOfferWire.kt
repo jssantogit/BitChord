@@ -47,11 +47,14 @@ internal object A0IndirectFileOfferWire {
             obfuscated!=0 || obfuscatedPort!=0
         ) malformed()
 
-        if(connType!="F") return Event.Unrelated
-        if(username!=selectedPeerUsername ||
-            !ip.contentEquals(selectedServerPeerAddress.address)) {
-            malformed()
-        }
+        // Search-related code-18 offers may arrive after selection, even
+        // though the selected user has already queued a single P/F request.
+        // Ignore unrelated senders without ever opening their sockets.
+        // A claimed offer FROM the selected peer at the wrong server-address
+        // still fails closed; never follow its endpoint.
+        if(connType!="F" || username!=selectedPeerUsername)
+            return Event.Unrelated
+        if(!ip.contentEquals(selectedServerPeerAddress.address)) malformed()
         return Event.Offer(
             address=InetAddress.getByAddress(ip),port=port,token=token
         )
