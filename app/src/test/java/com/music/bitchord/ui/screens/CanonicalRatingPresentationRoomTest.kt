@@ -4,7 +4,6 @@ import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.MediaAssetEntity
 import com.music.bitchord.data.catalog.RecordingEntity
-import kotlinx.coroutines.Channel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
