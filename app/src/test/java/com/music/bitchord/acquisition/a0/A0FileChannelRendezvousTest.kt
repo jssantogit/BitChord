@@ -93,6 +93,49 @@ class A0FileChannelRendezvousTest {
         }
     }
 
+    @Test(timeout=6500)
+    fun unrelatedInboundFSourceIsRejectedWithoutAbortingSelectedPeer() {
+        val unrelatedHost=InetAddress.getByAddress(byteArrayOf(127,0,0,2))
+        ServerSocket(0,1,host).use { fakeServer ->
+            ServerSocket(0,2,host).use { listener ->
+                val pool=Executors.newFixedThreadPool(2)
+                try {
+                    val server=pool.submit {
+                        fakeServer.accept().use { Thread.sleep(1200) }
+                    }
+                    val peers=pool.submit {
+                        Socket().use { unsolicited ->
+                            unsolicited.bind(java.net.InetSocketAddress(unrelatedHost,0))
+                            unsolicited.connect(java.net.InetSocketAddress(
+                                host,listener.localPort))
+                            unsolicited.getOutputStream().write(le(1234))
+                        }
+                        Thread.sleep(120)
+                        Socket(host,listener.localPort).use { selected ->
+                            selected.getOutputStream().apply {write(le(901));flush()}
+                            Thread.sleep(350)
+                        }
+                    }
+                    Socket(host,fakeServer.localPort).use { login ->
+                        A0FileChannelRendezvous.awaitFileSocket(
+                            server=login,
+                            listener=listener,
+                            selectedPeerUsername="source_peer",
+                            selectedPeerAddress=host,
+                            absoluteDeadlineNanos=System.nanoTime()+
+                                TimeUnit.SECONDS.toNanos(3),
+                            allowLoopbackForLocalTest=true
+                        ).use { accepted ->
+                            assertArrayEquals(le(901),readExactly(accepted,4))
+                        }
+                    }
+                    peers.get(3,TimeUnit.SECONDS)
+                    server.get(3,TimeUnit.SECONDS)
+                }finally{pool.shutdownNow()}
+            }
+        }
+    }
+
     @Test(timeout=7500)
     fun partialServerFOfferTimeoutFailsClosedEvenIfDirectPeerAppearsLater() {
         ServerSocket(0,1,host).use{fakeServer ->
