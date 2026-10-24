@@ -63,6 +63,7 @@ internal class CanonicalCollectionIntentPlanner(
         intent: CanonicalCollectionIntent,
         library: CanonicalBrowseLibrary,
         deduplicateByRecording: Boolean = true,
+        preferSingleLocalCopy: Boolean = false,
     ): CanonicalCollectionIntentPlan {
         val rejected = mutableListOf<CanonicalCollectionRejected>()
         val rowsById = library.tracks.groupBy(CanonicalBrowseTrack::recordingId)
@@ -95,7 +96,14 @@ internal class CanonicalCollectionIntentPlanner(
                 return@forEachIndexed
             }
             val row = matches.single()
-            val assets = row.availableAssets.distinctBy { it.mediaAssetId to it.providerKey }
+            val presentAssets = row.availableAssets.distinctBy { it.mediaAssetId to it.providerKey }
+            // Explicit smart-collection policy, never a fallback to a random rendition:
+            // one local copy outranks remote duplicates only when the local asset is
+            // unique and still resolves. Two locals or remote-only ambiguity fail closed.
+            val local = presentAssets.filter {
+                it.providerKey == RoomCanonicalQueueResolver.LOCAL_PROVIDER
+            }
+            val assets = if (preferSingleLocalCopy && local.size == 1) local else presentAssets
             if (assets.isEmpty()) {
                 reject(CollectionIntentRejection.NO_ASSET)
                 return@forEachIndexed
