@@ -141,6 +141,41 @@ class A0SmokeTraceTest {
         assertFalse(points.toString().contains("peerUsername"))
     }
 
+    @Test fun terminalFileStagesRemainVisibleAfterRootHits64PointBudget() {
+        val points=mutableListOf<StructuredTracePoint>()
+        val trace=A0SmokeTrace.start(StructuredTracer(
+            sink=StructuredTraceSink {points.add(it)},
+            maxIntermediatePoints=64
+        ),observedTransfer=true)
+        // Reproduces the observed Galaxy A54 search backlog: 64 slots
+        // consumed by connection retries before any local publication.
+        repeat(75) {
+            trace.note(A0SmokeTrace.Stage.SERVER_OFFER_REJECTED,
+                TraceOutcome.DEGRADED)
+        }
+        trace.note(A0SmokeTrace.Stage.CANDIDATES_AVAILABLE)
+        trace.note(A0SmokeTrace.Stage.P_F_TRANSFER_STARTED)
+        trace.transferPhase(A0ServerAssociatedTransfer.Phase.BYTES_RECEIVED)
+        trace.note(A0SmokeTrace.Stage.P_F_TRANSFER_COMPLETED)
+        trace.note(A0SmokeTrace.Stage.SCRATCH_CLEANUP)
+        trace.note(A0SmokeTrace.Stage.SOCKETS_CLOSED)
+        trace.finish(TraceOutcome.SUCCEEDED)
+
+        val stages=points.mapNotNull {it.stage}
+        for(stage in listOf("candidates_available","p_f_transfer_started",
+            "pf_bytes_received","p_f_transfer_completed",
+            "scratch_cleanup","sockets_closed")) {
+            assertTrue("Physical transfer stage truncated: $stage",stage in stages)
+        }
+        val root=points.first {it.kind==TracePointKind.TRACE_START}
+        val continued=points.first {it.stage=="p_f_transfer_started"}
+        assertEquals(root.flowId,continued.flowId)
+        assertNotEquals(root.traceId,continued.traceId)
+        assertEquals(2,points.count {it.kind==TracePointKind.TRACE_END})
+        assertTrue(points.filter {it.kind==TracePointKind.TRACE_END}
+            .all {it.outcome==TraceOutcome.SUCCEEDED})
+    }
+
     @Test fun deliberateSocketShutdownDoesNotEmitSpuriousServerReadFailure() {
         val points = mutableListOf<StructuredTracePoint>()
         val trace = A0SmokeTrace.start(
