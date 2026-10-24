@@ -29,7 +29,8 @@ internal object A3AndroidAcquisitionLedger {
         safeName:String,
         byteCount:Long,
         observedDigest:String,
-        isCancelled:()->Boolean={false}
+        isCancelled:()->Boolean={false},
+        commitGuard:((()->Unit)->Unit)={ action -> action() }
     ):A2LocalAudioPublisher.Published {
         check(Looper.myLooper()!=Looper.getMainLooper()) {
             "A3 durable publication must run off the Android main thread"
@@ -40,11 +41,15 @@ internal object A3AndroidAcquisitionLedger {
                 app.contentResolver.delete(Uri.parse(uri),null,null)>0
             }.getOrDefault(false)
         }
-        return coordinator.publish(jobId) {
-            A2AndroidAudioDestination.publishPrivateReceipt(
-                app,privateFile,safeName,byteCount,observedDigest,isCancelled
-            )
-        }
+        return coordinator.publish(
+            jobId,
+            publishAlreadyStaged={
+                A2AndroidAudioDestination.publishPrivateReceipt(
+                    app,privateFile,safeName,byteCount,observedDigest,isCancelled
+                )
+            },
+            commitGuard=commitGuard,
+        )
     }
 
     fun get(context:Context):A3AcquisitionLedger {
