@@ -21,6 +21,9 @@ import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReaders
 import com.music.bitchord.data.catalog.OpenSubsonicLibraryProviderConfigurationReader
 import com.music.bitchord.data.catalog.provider.opensubsonic.AndroidKeystoreOpenSubsonicCredentialStore
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountRepository
+import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicRemoteRatingReader
+import com.music.bitchord.data.catalog.provider.opensubsonic.RemoteRatingAvailability
+import com.music.bitchord.data.catalog.provider.RemoteNumericRatingKind
 import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.listening.AdaptiveCollectionKind
 import com.music.bitchord.data.listening.CanonicalRuleBasedSmartPlaylistPreview
@@ -82,6 +85,7 @@ internal class SmartCollectionBatchHandoff(
     private val planner: CanonicalCollectionIntentPlanner,
     private val submit: suspend (CanonicalCollectionIntentPlan) -> Boolean,
     private val trace: (Map<String, String>) -> Unit = {},
+    private val verifiedRemoteAssets: suspend (SmartCollectionActionSource) -> Map<String, CanonicalBrowseMediaAsset> = { emptyMap() },
 ) {
     suspend fun execute(
         source: SmartCollectionActionSource,
@@ -121,8 +125,12 @@ internal class SmartCollectionBatchHandoff(
             val ids = selected.distinct()
             val library = browse()
             mark("catalog", mapOf("trackCount" to library.tracks.size.toString()))
+            val scopedRemote = verifiedRemoteAssets(source)
+            mark("asset_evidence", mapOf("uniqueRatedAssets" to scopedRemote.size.toString()))
             val plan = planner.preview(
-                ids, intent, library, preferSingleLocalCopy = true,
+                ids, intent, library,
+                preferSingleLocalCopy = true,
+                verifiedRemoteAssetByRecording = scopedRemote,
             )
             val reasons = plan.rejected.groupingBy { it.reason.name }.eachCount()
                 .toSortedMap().entries.joinToString(",") { "${it.key}:${it.value}" }
@@ -187,6 +195,47 @@ private suspend fun currentSmartPlaylistQueryIds(
     if (availability.availableRecordingIds().size > 5_000) return null
     return persistentSmartPlaylistPreview(context, availability)
         .preview(query).map { it.recordingId }
+}
+
+/**
+ * Catalog-owned source evidence only: a uniquely rated MediaAsset can break
+ * ties among multiple renditions of the same canonical Recording. This MUST
+ * use a complete current-account snapshot. No rating data is persisted locally.
+ * A stale or ambiguous remote preference never picks an asset.
+ */
+private suspend fun currentScopedRatedAssetHints(
+    context: Context,
+    source: SmartCollectionActionSource,
+): Map<String, CanonicalBrowseMediaAsset> {
+    val query = when (source) {
+        is SmartCollectionActionSource.Adaptive -> null
+        is SmartCollectionActionSource.PreviewQuery -> source.query
+        is SmartCollectionActionSource.SavedDefinition -> {
+            val repo = SmartPlaylistDefinitionRepository(
+                SmartPlaylistDefinitionDatabase.get(context).definitionDao(),
+            )
+            repo.list().firstOrNull { it.id == source.id }?.query
+        }
+    } ?: return emptyMap()
+    val minimum = query.minimumExplicitRating ?: return emptyMap()
+    val account = SharedPrefsOpenSubsonicAccountPersistence(context)
+    val reader = OpenSubsonicRemoteRatingReader(CanonicalCatalogDatabase.get(context)) {
+        account.read()
+    }
+    val snapshot = reader.read()
+    if (snapshot.availability != RemoteRatingAvailability.CACHED_COMPLETE) return emptyMap()
+    return snapshot.items.asSequence()
+        .filter {
+            it.numeric.kind == RemoteNumericRatingKind.VALUE &&
+                (it.numeric.value?.toDouble() ?: 0.0) >= minimum
+        }
+        .groupBy { it.recordingId }
+        .mapNotNull { (recording, items) ->
+            val uniqueAssets = items.map {
+                CanonicalBrowseMediaAsset(it.mediaAssetId, it.providerKey)
+            }.distinct()
+            if (uniqueAssets.size == 1) recording to uniqueAssets.single() else null
+        }.toMap()
 }
 
 /**
@@ -285,6 +334,7 @@ internal fun rememberSmartCollectionBatchAction(
             browse = { currentCanonicalBrowse(context) },
             planner = CanonicalCollectionIntentPlanner(androidCanonicalQueueResolver(context)),
             submit = { plan -> submitCanonicalBatch(controller, plan) },
+            verifiedRemoteAssets = { source -> currentScopedRatedAssetHints(context, source) },
             trace = { data ->
                 Diagnostics.event(
                     category = DiagnosticCategory.PLAYER,
