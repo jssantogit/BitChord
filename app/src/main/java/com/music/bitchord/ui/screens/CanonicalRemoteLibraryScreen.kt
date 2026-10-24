@@ -59,6 +59,8 @@ import com.music.bitchord.playback.CanonicalRemotePlaybackMetadata
 import com.music.bitchord.playback.CanonicalRemotePlaybackRequest
 import com.music.bitchord.playback.playCanonicalRemote
 import com.music.bitchord.playback.rememberMediaController
+import com.music.bitchord.ui.components.CanonicalRatingStars
+import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.player.awaitRecoverableCanonicalArtwork
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -265,6 +267,11 @@ private fun CanonicalTrackRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+            CanonicalRatingStars(
+                track.availableAssets.firstOrNull()?.mediaAssetId?.let {
+                    LocalCanonicalRatingDisplay.current.byMediaAssetId[it]
+                },
             )
         }
         formatDuration(track.durationMs)?.let { duration ->
