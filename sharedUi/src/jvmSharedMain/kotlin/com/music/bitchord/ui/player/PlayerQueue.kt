@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.player
 
+import com.music.bitchord.ui.components.CanonicalSongRatingStars
+
 import com.music.bitchord.sharedui.resources.*
 import com.music.bitchord.ui.components.ExplicitSongTitle
 
@@ -795,6 +797,7 @@ private fun InlineQueueRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            CanonicalSongRatingStars(song, color = Color.White.copy(alpha = 0.8f))
         }
         if (isCurrent) {
             Icon(
