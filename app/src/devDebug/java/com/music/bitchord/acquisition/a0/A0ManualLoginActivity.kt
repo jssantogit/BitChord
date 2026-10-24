@@ -309,7 +309,12 @@ class A0ManualLoginActivity : Activity() {
                                 val handoff = if (transferObserved) {
                                     A0ObservedCandidateHandoff(
                                         connection, username, token
-                                    ).also { activeTransfer = it }
+                                    ).also { transfer ->
+                                        if (!SoulseekActiveSession.registerTransfer(
+                                                transfer, accountGeneration
+                                            )) throw IOException("Soulseek account revoked")
+                                        activeTransfer = transfer
+                                    }
                                 } else null
                                 connection.getOutputStream().apply {
                                     write(A0OneShotPublicSearchWire.setWaitPort(listener.localPort))
@@ -665,8 +670,17 @@ class A0ManualLoginActivity : Activity() {
                                                     val saved=A3AndroidAcquisitionLedger.publishStaged(
                                                         this@A0ManualLoginActivity,
                                                         id,receipt.file,name,
-                                                        receipt.byteCount,receipt.sha256Hex
-                                                    ) { stopping||Thread.currentThread().isInterrupted }
+                                                        receipt.byteCount,receipt.sha256Hex,
+                                                        isCancelled={
+                                                            stopping || Thread.currentThread().isInterrupted ||
+                                                                !SoulseekActiveSession.isCurrent(accountGeneration)
+                                                        },
+                                                        commitGuard={ commit ->
+                                                            SoulseekActiveSession.commitIfCurrent(
+                                                                accountGeneration, commit
+                                                            )
+                                                        }
+                                                    )
                                                     trace.note(A0SmokeTrace.Stage.LOCAL_SAVE_PUBLISHED)
                                                     result="MÚSICA LOCAL SALVA: ${saved.byteCount} bytes. " +
                                                         "Confira Biblioteca → No dispositivo. " +
@@ -797,7 +811,10 @@ class A0ManualLoginActivity : Activity() {
                     )
                     activeSelectionQueue?.offer(-1)
                     activeSelectionQueue=null
-                    activeTransfer?.cancel()
+                    activeTransfer?.let { transfer ->
+                        SoulseekActiveSession.detachTransfer(transfer)
+                        transfer.cancel()
+                    }
                     activeTransfer = null
                     activeListener?.close()
                     activeListener = null
