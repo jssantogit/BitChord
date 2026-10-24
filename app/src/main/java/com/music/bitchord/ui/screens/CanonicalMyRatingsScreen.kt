@@ -1,5 +1,8 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.ui.components.CanonicalRatingStars
+import com.music.bitchord.ui.components.RatingDisplay
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -262,6 +265,7 @@ internal fun CanonicalMyRatingsContent(
                                     stringResource(Res.string.recording_feedback_current, rating.value.toString()),
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
+                                CanonicalRatingStars(RatingDisplay(localValue = rating.value))
                                 Text(
                                     stringResource(Res.string.my_ratings_local_source),
                                     style = MaterialTheme.typography.labelSmall,
@@ -347,6 +351,11 @@ private fun RemoteRatingDetails(row: RemoteRatingUiRow, localValue: Double?) {
             Text(
                 stringResource(Res.string.my_ratings_remote_rating, evidence.numericValue),
                 style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        if (evidence.numericValue != null) {
+            CanonicalRatingStars(
+                RatingDisplay(remoteValue = evidence.numericValue),
             )
         }
     }
