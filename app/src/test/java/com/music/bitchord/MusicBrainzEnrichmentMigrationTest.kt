@@ -25,7 +25,7 @@ class MusicBrainzEnrichmentMigrationTest {
         createVersionTwoDatabase(file)
 
         val database = Room.databaseBuilder(context, CanonicalCatalogDatabase::class.java, name)
-            .addMigrations(CanonicalCatalogDatabase.MIGRATION_2_3)
+            .addMigrations(CanonicalCatalogDatabase.MIGRATION_2_3, CanonicalCatalogDatabase.MIGRATION_3_4)
             .allowMainThreadQueries()
             .build()
         val sql = database.openHelper.writableDatabase

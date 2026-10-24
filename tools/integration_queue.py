@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fail-closed, serial BitChord integration controller; no writes in plan mode."""
 import argparse
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -66,6 +67,21 @@ def validate_manifest(manifest, repository):
              f'PR #{n}: base/dependency mismatch')
         seen.add(n)
     return items
+
+
+def workflow_sync_guard(files, behind):
+    """Reject App update-branch on stale workflow-file PRs before PUT 403.
+
+    The App deliberately lacks workflow-write permission. The owner must first
+    synchronize such branches outside this restricted writer, then recheck
+    exact HEAD, file allowlist and full Android CI. This is not a bypass.
+    """
+    need(type(behind) is int and behind >= 0, 'Unknown divergence; cannot sync')
+    need(type(files) is list and all(type(path) is str for path in files),
+         'Invalid files for workflow sync')
+    need(not (behind > 0 and any(
+        path.startswith('.github/workflows/') for path in files)),
+        'workflow_file_sync_requires_manual_preparation')
 
 
 class GitHubREST:
@@ -233,6 +249,23 @@ class IntegrationController:
 
     def wait_premerge(self, entry, main, head, deadline):
         n = entry['number']
+        started = self.clock()
+        last_reason = None
+        last_emitted_at = None
+
+        def record(reason):
+            # Reasons are fixed enums, never server-controlled field contents.
+            # Emit immediately on transition, otherwise at most once/minute.
+            nonlocal last_reason, last_emitted_at
+            now = self.clock()
+            if (reason != last_reason or last_emitted_at is None or
+                    now - last_emitted_at >= 60):
+                elapsed = max(0, min(int(now - started),
+                                     int(self.timeout_seconds)))
+                self.log(f'QUEUE_WAIT v=1 pr={n} phase=premerge_ci '
+                         f'reason={reason} elapsed_s={elapsed}')
+                last_reason, last_emitted_at = reason, now
+
         def check():
             need(self.main_sha() == main,
                  f'PR #{n}: main changed during required CI')
@@ -242,14 +275,28 @@ class IntegrationController:
             checks = [c for c in self.api.checks(head)
                       if c.get('name') == REQUIRED]
             need(len(checks) <= 1, f'PR #{n}: duplicate Android checks')
-            if checks and checks[0].get('status') == 'completed':
-                need(checks[0].get('conclusion') == 'success',
-                     f'PR #{n}: pre-merge CI RED')
-                state = pr.get('mergeable_state')
-                need(state not in ('dirty', 'unstable'),
-                     f'PR #{n}: conflicts / unresolved review')
-                if pr.get('mergeable') is True and state == 'clean':
-                    return True
+            if not checks:
+                record('check_absent')
+                return None
+            if checks[0].get('status') != 'completed':
+                record('check_pending')
+                return None
+            need(checks[0].get('conclusion') == 'success',
+                 f'PR #{n}: pre-merge CI RED')
+            state = pr.get('mergeable_state')
+            need(state not in ('dirty', 'unstable'),
+                 f'PR #{n}: conflicts / unresolved review')
+            if pr.get('mergeable') is True and state == 'clean':
+                record('ready')
+                return True
+            if pr.get('mergeable') is None:
+                record('mergeability_unknown')
+            elif pr.get('mergeable') is not True:
+                record('mergeability_false')
+            elif state in ('blocked', 'behind', 'unknown'):
+                record('github_' + state)
+            else:
+                record('github_other')
             return None
         return self.poll(check, f'PR #{n} required CI', deadline)
 
@@ -277,6 +324,49 @@ class IntegrationController:
             return None
         return self.poll(check, f'post-merge CI {merged_sha}', deadline)
 
+    def measured(self, n, phase, operation):
+        """Log bounded, low-cardinality phase evidence without changing the gate."""
+        started = self.clock()
+        outcome = 'blocked'
+        try:
+            result = operation()
+            outcome = 'ok'
+            return result
+        finally:
+            elapsed = max(0.0, min(float(self.clock() - started),
+                                    float(self.timeout_seconds)))
+            self.log(f'QUEUE_METRIC v=1 pr={n} phase={phase} '
+                     f'outcome={outcome} duration_ms={int(elapsed * 1000)}')
+
+    def prepare_entry(self, entry, main, merged, deadline):
+        """Prepare an approved PR for CI, but NEVER merge here.
+
+        On the next item this may run while the previous main push is testing.
+        All manifest, dependency, file and protected-main gates still apply.
+        The resulting HEAD is rechecked immediately before any later merge.
+        """
+        need(self.clock() < deadline, 'Queue budget exceeded')
+        n = entry['number']
+        need(self.main_sha() == main,
+             f'PR #{n}: main changed outside queue')
+        pr = self.checked_pr(
+            entry, entry['expected_base_ref'], initial=True)
+        dependency = entry['depends_on']
+        if dependency is not None:
+            need(dependency in merged,
+                 f'PR #{n}: parent must merge earlier in same batch')
+            self.api.update_base(n, 'main')
+            pr = self.checked_pr(entry, 'main', initial=False)
+        head = pr['head']['sha']
+        compare = self.api.compare('main', head)
+        workflow_sync_guard(entry['allowed_files'], compare.get('behind_by'))
+        if compare['behind_by'] > 0:
+            self.api.update_branch(n, head)
+            head = self.wait_head_update(n, head, main, deadline)
+        need(self.api.compare('main', head).get('behind_by') == 0,
+             f'PR #{n}: still behind main after sync')
+        return head
+
     def run(self, manifest, mode, expected_main_sha):
         entries = validate_manifest(manifest, self.repository)
         need(mode in ('plan', 'execute'), 'Invalid mode')
@@ -298,44 +388,66 @@ class IntegrationController:
 
         deadline = self.clock() + self.timeout_seconds
         merged = set()
-        for entry in entries:
-            need(self.clock() < deadline, 'Queue budget exceeded')
+        prepared = None
+        for index, entry in enumerate(entries):
             n = entry['number']
-            need(self.main_sha() == main,
-                 f'PR #{n}: main changed outside queue')
-            pr = self.checked_pr(
-                entry, entry['expected_base_ref'], initial=True)
-            dependency = entry['depends_on']
-            if dependency is not None:
-                need(dependency in merged,
-                     f'PR #{n}: parent must merge earlier in same batch')
-                self.api.update_base(n, 'main')
-                pr = self.checked_pr(entry, 'main', initial=False)
-            head = pr['head']['sha']
-            compare = self.api.compare('main', head)
-            need(type(compare.get('behind_by')) is int,
-                 'Unknown divergence; cannot sync')
-            if compare['behind_by'] > 0:
-                self.api.update_branch(n, head)
-                head = self.wait_head_update(n, head, main, deadline)
-            need(self.api.compare('main', head).get('behind_by') == 0,
-                 f'PR #{n}: still behind main after sync')
-            self.wait_premerge(entry, main, head, deadline)
+            if prepared is not None:
+                prepared_number, prepared_main, head = prepared
+                need(prepared_number == n and prepared_main == main,
+                     f'PR #{n}: stale prepared batch entry')
+                prepared = None
+            else:
+                head = self.measured(
+                    n, 'prepare_head',
+                    lambda: self.prepare_entry(entry, main, merged, deadline))
+            # Exact HEAD, allowed files, base SHA, mergeable state and Android
+            # GREEN are ALWAYS revalidated immediately before this merge.
+            self.measured(
+                n, 'premerge_ci',
+                lambda: self.wait_premerge(entry, main, head, deadline))
             need(self.main_sha() == main,
                  f'PR #{n}: main changed before merge')
             self.log(f'MERGE #{n}: head={head}, main={main}')
-            result = self.api.merge(n, head)
+            result = self.measured(
+                n, 'protected_merge', lambda: self.api.merge(n, head))
             new_main = result.get('sha')
             need(result.get('merged') is True and
                  isinstance(new_main, str) and SHA.fullmatch(new_main),
                  f'PR #{n}: GitHub did not confirm merge')
             need(self.main_sha() == new_main,
                  f'PR #{n}: merged SHA not main HEAD')
+
+            # Start the next *approved* PR's synchronization and CI while
+            # Android post-merge CI on new_main is running. The preparation
+            # never performs a merge; its result is only a tentative HEAD.
+            # A RED/unknown prior main CI still blocks ALL future merges.
+            preparation_error = None
+            if index + 1 < len(entries):
+                following = entries[index + 1]
+                try:
+                    next_head = self.measured(
+                        following['number'], 'prepare_next',
+                        lambda: self.prepare_entry(
+                            following, new_main, merged | {n}, deadline))
+                    prepared = (following['number'], new_main, next_head)
+                    self.log(f"PREPARED #{following['number']}: "
+                             f"head={next_head}, main={new_main}; "
+                             "merge blocked until post-main GREEN")
+                except (StopIntegration, ValueError, KeyError) as error:
+                    # Do not skip the previous merge's required post-main
+                    # verification if speculative preparation was refused.
+                    preparation_error = error
+                    self.log(f"PREPARATION HALTED #{following['number']}: "
+                             "will verify post-main CI before stopping")
             self.log(f'POST-CI #{n}: waiting for {new_main}')
-            self.wait_postmerge(new_main, deadline)
+            self.measured(
+                n, 'postmain_ci',
+                lambda: self.wait_postmerge(new_main, deadline))
             merged.add(n)
             main = new_main
             self.log(f'GREEN #{n}: new main={main}')
+            if preparation_error is not None:
+                raise preparation_error
         self.log(f'BATCH GREEN: {len(merged)} PRs; main={main}')
 
 
@@ -361,9 +473,13 @@ def main():
     path = Path('.github/integration-batches') / (args.batch + '.json')
     need(path.is_file(), 'Approved batch manifest not found')
     batch = json.loads(path.read_text(encoding='utf-8'))
+    def realtime_log(message):
+        stamp = datetime.now(timezone.utc).isoformat(timespec='milliseconds')
+        print(f'{stamp} {message}', flush=True)
+
     IntegrationController(
         GitHubREST('jssantogit/BitChord', token),
-        'jssantogit/BitChord').run(
+        'jssantogit/BitChord', logger=realtime_log).run(
             batch, mode=args.mode, expected_main_sha=args.expected_main_sha)
 
 

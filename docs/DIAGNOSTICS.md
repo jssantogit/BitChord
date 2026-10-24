@@ -128,3 +128,87 @@ Use `dumpsys` only for platform state that the application report cannot provide
 ## Performance rule
 
 Do not optimize a component because its source looks expensive. Use these spans and, when necessary, the optional Android-level startup/frame measurements to identify a measured bottleneck first. Then change one bounded cause and compare before/after data.
+
+
+## Diagnostic Intelligence D6–D10 (draft stack)
+
+This is additive to the D1–D5 / O1–O2 pipeline. Only the dev Diagnostics
+Activity exposes controls. No remote telemetry, second logger or automatic
+persistent capture is introduced.
+
+### Reconstructing a journey (D6)
+
+The read-only `DiagnosticJourneyReconstructor` projects the existing
+`StructuredTracer` flow/stage/outcome evidence into a journey. An observed
+stage does **not** prove adjacent stages. The last confirmed successful stage
+and the first unobserved expected stage are reported separately. Missing
+`trace_end` means terminal outcome **UNKNOWN**, even if another event looks
+successful. Cancellation is not failure. Session selection and point budgets
+are bounded, and correlation is explicit through ephemeral `ref_` handles.
+This does not assert coverage of every screen or provider callback.
+
+Coverage matrix (expected evidence, not an assertion that every path emits it):
+
+| Journey | Available existing evidence | Unknown/missing until observed |
+| --- | --- | --- |
+| Playback/Queue | StructuredTracer flow, Media3/source stages | Hardware audio, any absent async boundary |
+| Catalog/artwork | source/provider and typed D3 fallback events | Uninstrumented cache/network callback or reason |
+| Listening UI | UI intent and existing recommendation trace | Persisted rating/completion without explicit event |
+
+Cross-front call-site expansion requires agreement with the owners of
+Playback, Catalog and Listening.
+
+### Platform failures (D7)
+
+The watchdog records stalls **after recovery**. It cannot classify a process
+killed during a stall as ANR. A retained uncaught-exception snapshot proves
+only that the handler observed the exception. On API 30+ the bounded,
+best-effort `ApplicationExitInfo` read runs only when exporting; the reported
+historical reason is not automatically correlated with a specific flow or
+current process. API 26 and unavailable platform data remain unsupported or
+UNKNOWN. No heavy stack collection or extra uncaught exception hooks.
+
+### Bottlenecks (D8)
+
+`DiagnosticBottleneckAnalysis` analyzes at most 1,024 already captured span
+events in an explicit snapshot, up to 32 operation/phase groups and 128
+measurements per group. Queue, execution and external waits are separate when
+typed phase evidence exists; otherwise phase is unclassified. p50/p95 are
+INSUFFICIENT below 20 samples or after sampling truncation. Max is an
+observed sample, not a kernel-level attribution. Never sum overlapping spans
+as critical-path latency. New continuous probes are not enabled.
+
+### Functional lifecycles (D9)
+
+The D3 typed breadcrumbs remain the input. A burst of 66 identical artwork
+fallbacks can be represented as one warning **cluster**, not 66 independent
+proven incidents or one proven root cause. A trusted `attemptRef` separates
+explicit attempts. Without an attempt marker, `attemptBoundaryKnown=false`.
+Only explicit failed/recovered terminal evidence resolves a terminal outcome;
+fallback, missing retry and an absent terminal leave UNKNOWN. No retries are
+performed by Diagnostics and no raw media identifiers are exported.
+
+### Incident triage and shared report (D10)
+
+The dev Diagnostics Activity provides local incident filters for feature,
+outcome, flow and a ten-minute window, plus a manual reproduction marker.
+The marker is a bounded app event, not a synthetic failure. The normal
+**Share report** operation preserves all legacy TXT sections and report-v2
+schema and adds `[incident-triage-v3]`, `[incidents-jsonl-v3]` and\n`[measured-bottlenecks-v0]` with bounded counts, measured maxima, p50/p95\nonly when enough valid samples exist, explicit truncation, and\n`critical_path_proven=false`. Incident JSONL includes only validated\nephemeral flow references when available.
+Incident JSONL uses fixed typed fields, explicit unknown causality and
+timestamps; arbitrary message/metadata values are never copied. The current
+v3 projection uses the **in-memory snapshot only**. The persisted capture
+still appears in its legacy section and v2 dedup view; unobserved earlier
+segments cannot be reconstructed or backfilled. The export says when writer
+drops or an incomplete flush are known. A WARN/ERROR line count is not a
+count of independently proven causal incidents.
+
+### Validation limits
+
+The deterministic JVM test fixtures exercise known vs missing boundaries,
+unsupported API, stall vs ANR classification, percentile sufficiency,
+parallel timing, retry isolation, artwork bursts, filters and privacy.
+CI JVM results do not prove Android hardware overhead or physical playback.
+The newly added post-capture projections allocate only during export/UI
+inspection; impact on actual device and full cross-front journey coverage
+remain to be measured with separate authorization.

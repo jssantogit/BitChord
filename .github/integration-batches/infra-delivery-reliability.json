@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 92,
+      "expected_head_sha": "b8018bd5d814ea18a478074b37a6fb46edaa4717",
+      "allowed_files": [
+        "docs/delivery-di5-ci-observations.md",
+        "tests/test_delivery_ci_observations.py",
+        "tools/delivery_ci_observations.py"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 93,
+      "expected_head_sha": "0cee5afabe4eb4c583086cfedb45aa2b7da30ba8",
+      "allowed_files": [
+        "docs/delivery-di6-workflow-sync-guard.md",
+        "tests/test_workflow_sync_guard.py",
+        "tools/integration_queue.py"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    }
+  ]
+}

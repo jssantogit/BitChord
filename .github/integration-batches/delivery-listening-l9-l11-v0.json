@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 109,
+      "expected_head_sha": "593db4644f47fde0ddee54975d4474fad9cc65f2",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/MainActivity.kt",
+        "app/src/main/java/com/music/bitchord/ui/components/SongActionsSheet.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/CanonicalSongFeedbackTarget.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/CanonicalSongMenuRating.kt",
+        "app/src/test/java/com/music/bitchord/ui/screens/CanonicalSongFeedbackTargetTest.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 110,
+      "expected_head_sha": "808849bd9f08f3ee76b7c723b7cc8df7bc975994",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/MainActivity.kt",
+        "app/src/main/java/com/music/bitchord/data/listening/RecordingRatingDao.kt",
+        "app/src/main/java/com/music/bitchord/data/listening/RecordingRatingStore.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/CanonicalMyRatingsScreen.kt",
+        "app/src/test/java/com/music/bitchord/data/listening/CanonicalRatedLibraryFlowTest.kt",
+        "sharedUi/src/commonMain/composeResources/values-pt/strings.xml",
+        "sharedUi/src/commonMain/composeResources/values/strings.xml"
+      ],
+      "depends_on": 109,
+      "expected_base_ref": "intelligence/l9-canonical-song-rating-ux-v0"
+    },
+    {
+      "number": 111,
+      "expected_head_sha": "011e5f622248b98bb2fd0243d2530138fdbf18df",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/MainActivity.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/AdaptiveCollectionsLibraryScreen.kt",
+        "app/src/test/java/com/music/bitchord/ui/screens/AdaptiveCollectionsLibraryTest.kt",
+        "sharedUi/src/commonMain/composeResources/values-pt/strings.xml",
+        "sharedUi/src/commonMain/composeResources/values/strings.xml"
+      ],
+      "depends_on": 110,
+      "expected_base_ref": "intelligence/l10-my-ratings-library-v0"
+    }
+  ]
+}

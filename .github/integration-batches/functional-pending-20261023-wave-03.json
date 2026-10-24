@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "repository": "jssantogit/BitChord",
+  "target": "main",
+  "items": [
+    {
+      "number": 144,
+      "expected_head_sha": "c3fcd71f2655f1238b9da2c96917f5a4a01be578",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/diagnostics/DiagnosticLegacyPrivacy.kt",
+        "app/src/main/java/com/music/bitchord/diagnostics/Diagnostics.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/DiagnosticPrivacyOverheadD15Test.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/LegacyDebugLogErrorD15Test.kt",
+        "app/src/test/java/com/music/bitchord/diagnostics/LegacyPrivacyD15Test.kt"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    },
+    {
+      "number": 147,
+      "expected_head_sha": "23f48c5640056d0168b13a0cd53b94e87b99b8e0",
+      "allowed_files": [
+        "app/src/main/java/com/music/bitchord/ui/screens/CanonicalMyRatingsScreen.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/MyRatingsRenderEvidence.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/RemoteRatingsPresentation.kt",
+        "app/src/main/java/com/music/bitchord/ui/screens/SmartPlaylistBuilderScreen.kt",
+        "app/src/test/java/com/music/bitchord/ui/screens/MyRatingsRenderEvidenceTest.kt",
+        "app/src/test/java/com/music/bitchord/ui/screens/RemoteRatingsPresentationTest.kt",
+        "app/src/test/java/com/music/bitchord/ui/screens/SmartPlaylistSavedStateTest.kt",
+        "sharedUi/src/commonMain/composeResources/values-pt/strings.xml",
+        "sharedUi/src/commonMain/composeResources/values/strings.xml"
+      ],
+      "depends_on": null,
+      "expected_base_ref": "main"
+    }
+  ]
+}

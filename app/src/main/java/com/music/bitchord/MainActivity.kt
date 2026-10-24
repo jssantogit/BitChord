@@ -230,6 +230,9 @@ import androidx.media3.session.MediaController
 import com.music.bitchord.playback.QualityUpgrade
 import com.music.bitchord.playback.rememberMediaController
 import com.music.bitchord.playback.rememberPlayerState
+import com.music.bitchord.playback.PlaybackRecoveryNotices
+import com.music.bitchord.playback.retryCanonicalFailure
+import com.music.bitchord.ui.components.PlaybackRecoveryBanner
 import com.music.bitchord.playback.setQueueDragActive
 import com.music.bitchord.ui.MainViewModel
 import com.music.bitchord.ui.SearchSource
@@ -313,7 +316,15 @@ import com.music.bitchord.ui.screens.HomeScreen
 import com.music.bitchord.ui.screens.LibraryGridPage
 import com.music.bitchord.ui.screens.LibraryScreen
 import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingDetailsScreen
+import com.music.bitchord.ui.screens.CanonicalSongMenuRating
+import com.music.bitchord.ui.screens.CanonicalMyRatingsEntry
+import com.music.bitchord.ui.screens.CanonicalMyRatingsScreen
 import com.music.bitchord.ui.screens.LibraryRediscoveryShelfEntry
+import com.music.bitchord.ui.screens.AdaptiveCollectionsLibraryEntry
+import com.music.bitchord.ui.screens.rememberSmartCollectionBatchAction
+import com.music.bitchord.ui.screens.SmartCollectionActionSource
+import com.music.bitchord.ui.screens.SmartPlaylistBuilderEntry
+import com.music.bitchord.ui.screens.SmartPlaylistBuilderScreen
 import com.music.bitchord.ui.screens.MoodGenrePlaylistsScreen
 import com.music.bitchord.ui.screens.SearchScreen
 import com.music.bitchord.data.settings.SongSort
@@ -940,7 +951,9 @@ private fun BitChordApp(
         }
     }
     val controller = rememberMediaController()
+    val executeSmartCollection = rememberSmartCollectionBatchAction(controller)
     val player = rememberPlayerState(controller)
+    val recoveryNotice by PlaybackRecoveryNotices.notice.collectAsStateWithLifecycle()
     // A resume in a party is performed on the instant the server schedules, not
     // when it was pressed, and nothing about the player moves in between — so
     // the transport spends that round trip drawn as though the tap never landed.
@@ -2202,6 +2215,8 @@ private fun BitChordApp(
     // See [rememberReplayState].
     // Page navigation is keyed by the canonical RecordingId, never provider/source IDs.
     var rediscoveryRecordingId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showCanonicalMyRatings by rememberSaveable { mutableStateOf(false) }
+    var showSmartPlaylistBuilder by rememberSaveable { mutableStateOf(false) }
     val replayOpen = showReplay || replayStory != null || showReplayShare ||
         (selectedTab == TAB_LIBRARY && detail == null && !showSettings)
     val (replay, setReplayPeriod) = rememberReplayState(replayOpen)
@@ -2274,6 +2289,7 @@ private fun BitChordApp(
                         it.memberId == playback.startedBy
                     }?.displayName?.takeIf(String::isNotBlank)
             }
+        Box(Modifier.fillMaxSize()) {
         NowPlayingScreen(
             song = displayedSong,
             playedBy = playedBy,
@@ -2525,6 +2541,18 @@ private fun BitChordApp(
                 }
             },
         )
+        recoveryNotice?.let { notice ->
+            PlaybackRecoveryBanner(
+                notice = notice,
+                onRetry = { controller?.retryCanonicalFailure(notice.entryId) },
+                onDismiss = { PlaybackRecoveryNotices.dismiss(notice.entryId) },
+                retryEnabled = controller != null && !controlsLocked,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 58.dp, start = 18.dp, end = 18.dp),
+            )
+        }
+        }
     }
 
     Box(
@@ -2613,6 +2641,8 @@ private fun BitChordApp(
         BackHandler(enabled = libraryShowAll != null && detail == null) { libraryShowAll = null }
         BackHandler(enabled = detailActiveShelf != null) { detailActiveShelf = null }
         BackHandler(enabled = rediscoveryRecordingId != null) { rediscoveryRecordingId = null }
+        BackHandler(enabled = showCanonicalMyRatings) { showCanonicalMyRatings = false }
+        BackHandler(enabled = showSmartPlaylistBuilder) { showSmartPlaylistBuilder = false }
 
         // On a tablet the page and the player stand side by side rather than
         // one over the other: everything a phone stacks in a single column —
@@ -2650,6 +2680,8 @@ private fun BitChordApp(
                         showReplay -> "replay"
                         detail != null -> detail.browseId
                         rediscoveryRecordingId != null -> "rediscovery:" + rediscoveryRecordingId
+                        showCanonicalMyRatings -> "my_ratings"
+                        showSmartPlaylistBuilder -> "smart_playlist_builder"
                         else -> "$TAB_KEY$selectedTab"
                     },
                     // Tabs swap outright; everything else crossfades.
@@ -2733,7 +2765,16 @@ private fun BitChordApp(
                     val pageDetailListState = remember(key) {
                         detailListStates.getOrPut(key) { LazyListState() }
                     }
-                    if (key.startsWith("rediscovery:")) {
+                    if (key == "my_ratings") {
+                        CanonicalMyRatingsScreen(onBack = { showCanonicalMyRatings = false })
+                    } else if (key == "smart_playlist_builder") {
+                        SmartPlaylistBuilderScreen(
+                            onBack = { showSmartPlaylistBuilder = false },
+                            onSavedAction = { id, intent ->
+                                executeSmartCollection(SmartCollectionActionSource.SavedDefinition(id), intent)
+                            },
+                        )
+                    } else if (key.startsWith("rediscovery:")) {
                         CanonicalRediscoveryRecordingDetailsScreen(
                             recordingId = key.removePrefix("rediscovery:"),
                             onBack = { rediscoveryRecordingId = null },
@@ -3379,10 +3420,21 @@ private fun BitChordApp(
                                 )
                             },
                             rediscovery = {
-                                LibraryRediscoveryShelfEntry(
-                                    refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
-                                    onOpenRecording = { rediscoveryRecordingId = it },
-                                )
+                                Column {
+                                    CanonicalMyRatingsEntry(onOpen = { showCanonicalMyRatings = true })
+                                    SmartPlaylistBuilderEntry(onOpen = { showSmartPlaylistBuilder = true })
+                                    LibraryRediscoveryShelfEntry(
+                                        refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
+                                        onOpenRecording = { rediscoveryRecordingId = it },
+                                    )
+                                    AdaptiveCollectionsLibraryEntry(
+                                        refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
+                                        onOpenRecording = { rediscoveryRecordingId = it },
+                                        onCollectionAction = { kind, intent ->
+                                            executeSmartCollection(SmartCollectionActionSource.Adaptive(kind), intent)
+                                        },
+                                    )
+                                }
                             },
                             onSignIn = { webSession = WebSessionMode.SIGN_IN },
                             onRetry = viewModel::loadLibrary,
@@ -3960,6 +4012,8 @@ private fun BitChordApp(
                     viewModel.clearDetail()
                     // Tab changes dismiss an open canonical Recording details page.
                     rediscoveryRecordingId = null
+                    showCanonicalMyRatings = false
+                    showSmartPlaylistBuilder = false
                     viewModel.closeMoodGenre()
                     showSettings = false
                     showAccountScrobbling = false
@@ -3989,6 +4043,15 @@ private fun BitChordApp(
                         .onSizeChanged { floatingBarsHeight.intValue = it.height },
                 ) {
                     QueueActionNoticeHost(queueNotice)
+                    recoveryNotice?.let { notice ->
+                        PlaybackRecoveryBanner(
+                            notice = notice,
+                            onRetry = { controller?.retryCanonicalFailure(notice.entryId) },
+                            onDismiss = { PlaybackRecoveryNotices.dismiss(notice.entryId) },
+                            retryEnabled = controller != null && !controlsLocked,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        )
+                    }
                     // Liquid glass replaces the two stacked bars with the single
                     // component they are stacked to imitate: the now playing
                     // controls dock into the tab bar rather than riding above it,
@@ -4032,6 +4095,15 @@ private fun BitChordApp(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     QueueActionNoticeHost(queueNotice)
+                    recoveryNotice?.let { notice ->
+                        PlaybackRecoveryBanner(
+                            notice = notice,
+                            onRetry = { controller?.retryCanonicalFailure(notice.entryId) },
+                            onDismiss = { PlaybackRecoveryNotices.dismiss(notice.entryId) },
+                            retryEnabled = controller != null && !controlsLocked,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        )
+                    }
                     player.song?.let { song ->
                         MiniPlayer(
                             song = song,
@@ -4380,6 +4452,7 @@ private fun BitChordApp(
                 } else null,
                 signedIn = signedIn,
                 likeStatus = likeStatuses[song.videoId] ?: LikeStatus.INDIFFERENT,
+                canonicalRatingContent = { CanonicalSongMenuRating(song) },
                 onPlayNext = { playNext(song); songActions = null },
                 onAddToQueue = { addToQueue(song); songActions = null },
                 onStartRadio = { startRadio(song); songActions = null },

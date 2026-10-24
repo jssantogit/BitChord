@@ -84,6 +84,22 @@ object Diagnostics {
             )
             restoreDiagnosticMode(app)
             restoreCaptureWindow(app)
+            // Local-only, best-effort typed recovery events. Never blocks source work.
+            DiagnosticFailureBreadcrumbs.sink = DiagnosticFailureSink { breadcrumb ->
+                event(
+                    category = breadcrumb.category,
+                    name = "failure_recovery",
+                    level = if (breadcrumb.outcome == DiagnosticRecoveryOutcome.RECOVERED) {
+                        DiagnosticLevel.INFO
+                    } else {
+                        DiagnosticLevel.WARN
+                    },
+                    metadata = mapOf(
+                        "reasonCode" to breadcrumb.reason.wireName,
+                        "recoveryOutcome" to breadcrumb.outcome.wireName,
+                    ),
+                )
+            }
             installCrashHandler()
             installed = true
             event(
@@ -106,6 +122,8 @@ object Diagnostics {
         metadata: Map<String, String> = emptyMap(),
         error: Throwable? = null,
         durationNanos: Long? = null,
+        /** Optional D15 context: scrub legacy exceptions without affecting typed errors. */
+        legacyErrorTag: String? = null,
     ) {
         val event = DiagnosticEvent(
             epochMillis = System.currentTimeMillis(),
@@ -118,7 +136,10 @@ object Diagnostics {
             threadName = DiagnosticSanitizer.text(Thread.currentThread().name, 128),
             durationNanos = durationNanos,
             metadata = DiagnosticSanitizer.metadata(metadata),
-            error = error?.let(::safeThrowableText),
+            error = error?.let { failure ->
+                if (legacyErrorTag != null) DiagnosticLegacyPrivacy.error(legacyErrorTag, failure)
+                else safeThrowableText(failure)
+            },
         )
         record(event)
     }
@@ -193,12 +214,18 @@ object Diagnostics {
             else -> DiagnosticLevel.ERROR
         }
         if (!diagnosticMode.allowsLegacy(diagnosticLevel)) return
+        val link = com.music.bitchord.data.TrackLog.currentCorrelation()
         event(
             category = categoryForTag(tag),
-            name = "debug_log:$tag",
+            name = "debug_log:${DiagnosticLegacyPrivacy.tag(tag)}",
             level = diagnosticLevel,
-            message = message,
+            message = DiagnosticLegacyPrivacy.message(tag, message),
+            metadata = link?.let { mapOf(
+                "flowId" to it.flowId,
+                "parentSpanId" to it.parentSpanId,
+            ) } ?: emptyMap(),
             error = error,
+            legacyErrorTag = tag,
         )
     }
 
@@ -283,19 +310,39 @@ object Diagnostics {
      */
     fun createExport(): File {
         val store = checkNotNull(fileStore) { "Diagnostics.install must be called first" }
-        writer.awaitWritesIssuedBeforeCall(timeoutMillis = 2_000L)
+        val flushComplete = writer.awaitWritesIssuedBeforeCall(timeoutMillis = 2_000L)
         val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+        val snapshot = buffer.snapshot()
         return store.createExport(
-            metadataLines = reportMetadataLines(),
-            recentEventLines = buffer.snapshot().map(DiagnosticFormatter::format),
+            metadataLines = reportMetadataLines() +
+                DiagnosticAndroidExitProbe.summary(application) +
+                "captureFlushStatus=${DiagnosticCaptureIntegrity.flushStatus(flushComplete)}",
+            recentEventLines = snapshot.map(DiagnosticFormatter::format),
             fileName = "bitchord-diagnostics-$timestamp.txt",
+            reportV2Input = DiagnosticReportV2Input(
+                recentEvents = snapshot,
+                flushComplete = flushComplete,
+                rejectedWrites = writer.droppedWrites,
+                evictedMemoryEvents = buffer.evictedCount,
+                ioFailures = writer.failedWrites,
+                captureRotations = store.captureRotationsSinceOpen,
+            ),
+            incidentReport = DiagnosticIncidentTriage.build(
+                events = snapshot,
+                rejectedWrites = writer.droppedWrites,
+                flushComplete = flushComplete,
+            ),
+            performanceReport = DiagnosticBottleneckAnalysis.summarize(
+                events = snapshot,
+                captureEnabled = true, // explicit export; never a runtime hot-path probe
+            ),
         )
     }
 
     private fun record(event: DiagnosticEvent) {
-        buffer.append(event)
-        val line = DiagnosticFormatter.format(event)
-        if (BuildConfig.DEBUG) logcat(event.level, line)
+        val numbered = buffer.append(event)
+        val line = DiagnosticFormatter.format(numbered)
+        if (BuildConfig.DEBUG) logcat(numbered.level, line)
         if (isCaptureActive(event.epochMillis)) {
             writer.offer { fileStore?.appendCapture(line) }
         }

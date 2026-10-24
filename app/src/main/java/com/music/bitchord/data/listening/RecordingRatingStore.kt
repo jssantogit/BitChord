@@ -52,6 +52,12 @@ internal interface ExplicitRecordingRatingReader {
     suspend fun explicitRatingSignal(recordingId: String): ExplicitRecordingRatingSignal
 }
 
+/** Bounded reactive view: hasMore is explicit, never silently drops ratings. */
+internal data class CanonicalRatedLibrarySnapshot(
+    val items: List<RecordingRating>,
+    val hasMore: Boolean,
+)
+
 internal interface RecordingRatingStore : ExplicitRecordingRatingReader {
     suspend fun setRecordingRating(recordingId: String, value: Double)
     suspend fun clearRecordingRating(recordingId: String)
@@ -94,6 +100,14 @@ internal class RoomRecordingRatingStore(
     override suspend fun ratingHistory(recordingId: String): List<RecordingRatingChange> {
         validateRecordingId(recordingId)
         return dao.history(recordingId).map { it.toDomain() }
+    }
+
+    /** No new table or first-party rating copies; Room invalidates on every set/clear. */
+    fun observeRatedRecordings(limit: Int = 500): Flow<CanonicalRatedLibrarySnapshot> {
+        require(limit in 1..1_000) { "Rating library limit must be in 1..1000" }
+        return dao.observeRatedRecordings(limit + 1).map { rows ->
+            CanonicalRatedLibrarySnapshot(rows.take(limit).map { it.toDomain() }, rows.size > limit)
+        }
     }
 
     override suspend fun ratedRecordings(limit: Int): List<RecordingRating> {

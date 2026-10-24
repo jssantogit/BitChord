@@ -56,6 +56,14 @@ internal object RuntimePerformanceMonitor : RuntimePerformanceUiContext.Sink {
     private var frameBudgetNanos: Long = frameBudgetNanosForRefreshRate(DEFAULT_REFRESH_RATE_HZ)
 
     private val session = RuntimePerformanceSession(surfaces.currentContext) { snapshot ->
+        RuntimeUiStallCorrelation.record(
+            context = snapshot.context,
+            refreshRateHz = refreshRateHz,
+            frameBudgetNanos = frameBudgetNanos,
+            frames = snapshot.totalFrames,
+            overBudget = snapshot.overBudgetFrames,
+            atNanos = android.os.SystemClock.elapsedRealtimeNanos(),
+        )
         Diagnostics.event(
             category = DiagnosticCategory.UI,
             name = "runtime_frame_window",

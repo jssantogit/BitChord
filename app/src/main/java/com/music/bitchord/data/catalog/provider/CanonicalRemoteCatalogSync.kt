@@ -1,5 +1,10 @@
 package com.music.bitchord.data.catalog.provider
 
+import com.music.bitchord.diagnostics.DiagnosticCategory
+import com.music.bitchord.diagnostics.DiagnosticFailureBreadcrumbs
+import com.music.bitchord.diagnostics.DiagnosticFailureReason
+import com.music.bitchord.diagnostics.DiagnosticRecoveryOutcome
+
 import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.ExternalIdentityEntity
 import com.music.bitchord.data.catalog.MediaAssetEntity
@@ -66,6 +71,8 @@ internal data class ProviderTrack(
     val artists: List<ProviderArtist> = emptyList(),
     /** Strong Recording-level external identity evidence, never playback identity. */
     val isrcs: List<String> = emptyList(),
+    /** Protocol evidence; identity is resolved by the canonical sync transaction. */
+    val remoteRating: ProviderRemoteRating = ProviderRemoteRating(),
 )
 
 internal data class ProviderLibrarySnapshot(
@@ -182,6 +189,11 @@ internal object CanonicalRemoteCatalogSync {
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Throwable) {
+            DiagnosticFailureBreadcrumbs.record(
+                DiagnosticCategory.CATALOG,
+                DiagnosticFailureReason.PROVIDER_SNAPSHOT_FAILED,
+                DiagnosticRecoveryOutcome.FALLBACK,
+            )
             // The store has not been touched yet. A transient provider outage must
             // therefore leave the previously synced offline catalog unchanged.
             return ProviderSyncResult.Failure("Provider library snapshot failed")
@@ -197,6 +209,11 @@ internal object CanonicalRemoteCatalogSync {
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Throwable) {
+            DiagnosticFailureBreadcrumbs.record(
+                DiagnosticCategory.CATALOG,
+                DiagnosticFailureReason.CATALOG_APPLY_FAILED,
+                DiagnosticRecoveryOutcome.FAILED,
+            )
             ProviderSyncResult.Failure("Canonical catalog apply failed")
         }
     }
