@@ -66,6 +66,24 @@ class SoulseekAccountSecuritySmokeTest {
         }
     }
 
+    @Test fun revokedAccountRejectsTransportAndDurableCommit() {
+        val handoff = A0ObservedCandidateHandoff(java.net.Socket(), "fixture-A", 1)
+        val generation = SoulseekActiveSession.generation()
+        assertTrue(SoulseekActiveSession.registerTransfer(handoff, generation))
+        SoulseekActiveSession.revoke()
+        assertFalse(SoulseekActiveSession.isCurrent(generation))
+        try {
+            handoff.transferChoice(0, context.cacheDir)
+            fail("Revoked transfer must be cancelled before choosing a peer")
+        } catch (_: java.io.IOException) { }
+        try {
+            SoulseekActiveSession.commitIfCurrent(generation) {
+                fail("Revoked account must not commit AVAILABLE")
+            }
+            fail("Revocation guard must reject a stale generation")
+        } catch (_: java.io.IOException) { }
+    }
+
     @Test fun switchingAccountsReplacesSecretAndLogoutRevokes() {
         val vault = SoulseekCredentialVault(context)
         vault.forget()
