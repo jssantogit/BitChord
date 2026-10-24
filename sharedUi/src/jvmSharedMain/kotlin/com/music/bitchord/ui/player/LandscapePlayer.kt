@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.player
 
+import com.music.bitchord.ui.components.CanonicalSongRatingStars
+
 import com.music.bitchord.sharedui.resources.*
 
 import androidx.compose.animation.Crossfade
@@ -457,6 +459,7 @@ internal fun LandscapeCredits(
                     startDelayMillis = if (titleOverflowing) MARQUEE_ARTIST_STAGGER_MS else 0L,
                     onOpenArtist = onOpenArtist,
                 )
+                CanonicalSongRatingStars(song, color = Color.White.copy(alpha = 0.84f))
             }
         }
         Spacer(Modifier.width(10.dp))
