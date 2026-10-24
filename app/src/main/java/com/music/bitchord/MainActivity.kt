@@ -215,6 +215,8 @@ import com.music.bitchord.download.DownloadStore
 import com.music.bitchord.download.MediaTagger
 import com.music.bitchord.download.DownloadTarget
 import com.music.bitchord.download.Downloads
+import com.music.bitchord.download.SoulseekDownloadRouting
+import com.music.bitchord.ui.screens.SoulseekAccountSettingsScreen
 import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.ConfirmationAlert
@@ -2051,110 +2053,42 @@ private fun BitChordApp(
     // it decomposed into — see [Downloads.rememberCollection]. Null for a single
     // track, which is not a release however many of them are asked for one at a
     // time.
-    val startDownload: (List<Song>, DownloadTarget?) -> Unit = { requested, from ->
-        val saved = Downloads.saved.value
-        // Already on disk, and already queued or running: neither needs asking
-        // again. What's left is what a tap on "Download" actually means.
-        //
-        // The release's cover is stamped onto any row that hasn't got one, as a
-        // last check before the tap becomes a file.
-        //
-        // An album page bills its artwork once, in the header — its track rows
-        // carry no thumbnail at all, see [InnertubeParser.parseResponsiveListItem]
-        // — and a row that reaches [MediaTagger.artworkFor] with a null url is a
-        // track saved with no cover in the file and none in [SavedSongMetadata]
-        // either, so nothing downstream can draw one afterwards.
-        // `MainViewModel.withArtwork` normally fills those in as a page loads and
-        // covers the usual route here; this is the backstop for a list that
-        // reached this function some other way, and it is worth having precisely
-        // because the failure is silent and permanent — the file is written
-        // without a cover, and re-downloading adopts the untagged copy rather
-        // than replacing it.
-        val songs = requested
-            .filter { it.videoId !in saved }
-            .map { song ->
-                val cover = from?.thumbnailUrl
-                if (song.thumbnailUrl.isNullOrBlank() && !cover.isNullOrBlank()) {
-                    song.copy(thumbnailUrl = cover)
-                } else {
-                    song
+    // Issue #172: no YT Music acquisition, even for album/playlist actions.
+    // Each supported request opens a manual Soulseek search; the picker alone
+    // can authorize a specific file, and only in devDebug.
+    val startDownload: (List<Song>, DownloadTarget?) -> Unit = { requested, _ ->
+        val song = requested.singleOrNull()
+        val decision = SoulseekDownloadRouting.route(
+            artist = song?.artist.orEmpty(),
+            title = song?.title.orEmpty(),
+            count = requested.size,
+            pilotAvailable = BuildConfig.FLAVOR == "dev" && BuildConfig.DEBUG,
+        )
+        when (decision) {
+            is SoulseekDownloadRouting.Decision.ManualSearch -> {
+                val intent = Intent().setClassName(
+                    context.packageName,
+                    "com.music.bitchord.acquisition.a0.A0ManualLoginActivity",
+                ).putExtra("bitchord.soulseek.manual.query", decision.query)
+                runCatching { context.startActivity(intent) }.onFailure {
+                    Toast.makeText(
+                        context, "Seletor Soulseek indisponível nesta instalação.",
+                        Toast.LENGTH_LONG,
+                    ).show()
                 }
             }
-        // Asked here as well as inside [Downloads.enqueue] — not instead of it.
-        // Enqueue is the invariant and has to refuse whoever calls it, including
-        // the storage-permission continuation below, which resumes long enough
-        // after this check for the connection to have changed under it. This is
-        // the one place that knows the tap was for forty tracks and can say so
-        // once, rather than leaving forty identical failed rows to be read.
-        val blocked = songs.isNotEmpty() && !AppSettings.downloadsAllowedNow
-        if (songs.isNotEmpty() && !blocked) {
-            val needsStorage = AppSettings.exportDownloads.value && DownloadStore.needsLegacyPermission() &&
-                ContextCompat.checkSelfPermission(
+            SoulseekDownloadRouting.Decision.BulkNotSupported ->
+                Toast.makeText(
                     context,
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                ) != PackageManager.PERMISSION_GRANTED
-
-            // Asked for here rather than at launch because here is where it means
-            // something: a download is the first thing this app does that the user
-            // is expected to walk away from.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                ContextCompat.checkSelfPermission(
+                    "Download em lote indisponível: escolha uma música por vez no Soulseek.",
+                    Toast.LENGTH_LONG,
+                ).show()
+            SoulseekDownloadRouting.Decision.Unavailable ->
+                Toast.makeText(
                     context,
-                    Manifest.permission.POST_NOTIFICATIONS,
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
-
-            if (needsStorage) {
-                downloadPending = songs
-                downloadPendingFrom = from
-                storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-            } else {
-                songs.forEach { Downloads.enqueue(context, it, from?.title) }
-                if (from != null) Downloads.markRequested(from.id, songs.map { it.videoId })
-            }
-        }
-        // Recorded for everything that was asked for, not just what still has to
-        // be fetched: a release whose tracks are already on the device is still
-        // that release, and the point of the record is to group them. Skipped
-        // only when the whole batch was refused, since then there will be
-        // nothing on disk for it to group.
-        if (from != null && !blocked) {
-            Downloads.rememberCollection(from, requested)
-            // A collection cover is not part of any audio file. Cache the
-            // header image separately so its Downloads card still has artwork
-            // with no connection, then atomically replace the remote URL in
-            // the persisted collection record.
-            if (!from.thumbnailUrl.isNullOrBlank()) {
-                scope.launch(Dispatchers.IO) {
-                    MediaTagger.cacheArtwork(context.applicationContext, from.thumbnailUrl)
-                        ?.let { Downloads.rememberCollectionArtwork(from.id, it) }
-                }
-            }
-        }
-        when {
-            // The row's own icon reports a queued download, so a single tap
-            // normally needs no toast — but a refused one leaves the row exactly
-            // as it was, and a button that visibly does nothing is worse than a
-            // long message. So this one is said whatever the count.
-            blocked -> Toast.makeText(
-                context,
-                context.getString(R.string.wifi_only_download_refusal),
-                Toast.LENGTH_LONG,
-            ).show()
-            requested.size > 1 -> {
-                val message = if (songs.isEmpty()) {
-                    context.getString(R.string.already_downloaded)
-                } else {
-                    context.resources.getQuantityString(
-                        R.plurals.downloading_song_count,
-                        songs.size,
-                        songs.size,
-                    )
-                }
-                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-            }
+                    "Download Soulseek indisponível nesta variante ou música sem artista/título.",
+                    Toast.LENGTH_LONG,
+                ).show()
         }
     }
     /**
@@ -2610,10 +2544,13 @@ private fun BitChordApp(
             showEqualizer = false
             if (settingsSubScreen == "equalizer") settingsSubScreen = null
         }
+        BackHandler(enabled = settingsSubScreen == "soulseek") {
+            settingsSubScreen = null
+        }
         // One back step out of Settings, or out of any tab but Home, lands on
         // Home rather than exiting — only Home itself hands back to the system,
         // which is what actually closes/minimizes the app.
-        BackHandler(enabled = showSettings && !showSpotify && !showAccountScrobbling && !showSources && !showListenTogether && !showWearOs && !showEqualizer && !showReplay) {
+        BackHandler(enabled = showSettings && settingsSubScreen == null && !showSpotify && !showAccountScrobbling && !showSources && !showListenTogether && !showWearOs && !showEqualizer && !showReplay) {
             showSettings = false
             // Only when Settings was the whole of what was on screen. Opened
             // over Replay or over a release page, closing it reveals that again
@@ -2945,6 +2882,7 @@ private fun BitChordApp(
                                 settingsSubScreen = "sources"
                                 showSources = true
                             },
+                            onSoulseek = { settingsSubScreen = "soulseek" },
                             onListenTogether = {
                                 settingsSubScreen = "listen_together"
                                 showListenTogether = true
@@ -3489,6 +3427,14 @@ private fun BitChordApp(
                                 onOpenSpotify = { showSpotify = true },
                                 contentPadding = listPadding,
                             )
+                        }
+                    }
+                    "soulseek" -> {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.background,
+                        ) {
+                            SoulseekAccountSettingsScreen(contentPadding = listPadding)
                         }
                     }
                     "sources" -> {

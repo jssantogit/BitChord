@@ -29,6 +29,7 @@ internal object A3AndroidAcquisitionLedger {
         safeName:String,
         byteCount:Long,
         observedDigest:String,
+        commitGuard:((()->Unit)->Unit)={ action -> action() },
         isCancelled:()->Boolean={false}
     ):A2LocalAudioPublisher.Published {
         check(Looper.myLooper()!=Looper.getMainLooper()) {
@@ -40,11 +41,15 @@ internal object A3AndroidAcquisitionLedger {
                 app.contentResolver.delete(Uri.parse(uri),null,null)>0
             }.getOrDefault(false)
         }
-        return coordinator.publish(jobId) {
-            A2AndroidAudioDestination.publishPrivateReceipt(
-                app,privateFile,safeName,byteCount,observedDigest,isCancelled
-            )
-        }
+        return coordinator.publish(
+            jobId,
+            publishAlreadyStaged={
+                A2AndroidAudioDestination.publishPrivateReceipt(
+                    app,privateFile,safeName,byteCount,observedDigest,isCancelled
+                )
+            },
+            commitGuard=commitGuard,
+        )
     }
 
     fun get(context:Context):A3AcquisitionLedger {
