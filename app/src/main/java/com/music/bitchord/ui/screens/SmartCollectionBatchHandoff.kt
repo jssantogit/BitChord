@@ -139,7 +139,7 @@ internal class SmartCollectionBatchHandoff(
                 mark("rejected", mapOf("reason" to "selections_zero"))
                 return SmartCollectionBatchResult.Empty
             }
-            val sent = submit(plan)
+            val sent = submit(plan.copy(traceRef = attempt))
             mark("media3", mapOf("result" to if (sent) "command_accepted" else "command_failed"))
             return if (sent) SmartCollectionBatchResult.Submitted
                 else SmartCollectionBatchResult.ExecutionFailed
