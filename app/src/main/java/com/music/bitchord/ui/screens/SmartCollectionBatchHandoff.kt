@@ -23,6 +23,7 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.AndroidKeystoreOpen
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountRepository
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicRemoteRatingReader
 import com.music.bitchord.data.catalog.provider.opensubsonic.RemoteRatingAvailability
+import com.music.bitchord.data.catalog.provider.opensubsonic.RemoteRatingConsumerSnapshot
 import com.music.bitchord.data.catalog.provider.RemoteNumericRatingKind
 import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.listening.AdaptiveCollectionKind
@@ -222,7 +223,18 @@ private suspend fun currentScopedRatedAssetHints(
     val reader = OpenSubsonicRemoteRatingReader(CanonicalCatalogDatabase.get(context)) {
         account.read()
     }
-    val snapshot = reader.read()
+    return uniqueVerifiedRatedRemoteAssets(reader.read(), minimum)
+}
+
+/**
+ * Only an explicit numerical value from a COMPLETE current-account rating
+ * snapshot can establish a unique remote rendition. Multiple equally rated
+ * MediaAssets, cleared/invalid/unrated evidence and account revocation cannot.
+ */
+internal fun uniqueVerifiedRatedRemoteAssets(
+    snapshot: RemoteRatingConsumerSnapshot,
+    minimum: Double,
+): Map<String, CanonicalBrowseMediaAsset> {
     if (snapshot.availability != RemoteRatingAvailability.CACHED_COMPLETE) return emptyMap()
     return snapshot.items.asSequence()
         .filter {
