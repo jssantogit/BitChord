@@ -5971,7 +5971,7 @@ class PlaybackService : MediaLibraryService() {
             val identity = selection.identity
             val id = identity.mediaAssetId ?: return@withContext null
             val provider = identity.providerKey ?: return@withContext null
-            if (provider !in configuredProviders) return@withContext null
+            if (!canonicalBatchProviderAllowed(provider, configuredProviders)) return@withContext null
             val asset = dao.mediaAssetById(id) ?: return@withContext null
             val recording = dao.recordingById(identity.recordingId) ?: return@withContext null
             if (asset.recordingId != identity.recordingId || asset.provider != provider) {
