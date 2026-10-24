@@ -48,7 +48,7 @@ internal fun buildCanonicalRatingPresentation(
         remote.asSequence().filter {
             it.providerKey == activeProvider &&
                 it.scopeId == activeScope &&
-                it.numericValue in 1..5
+                it.numericValue != null && it.numericValue in 1..5
         }.associateBy { it.mediaAssetId }
     } else emptyMap()
 
@@ -87,9 +87,16 @@ internal fun buildCanonicalRatingPresentation(
             asset.path?.takeIf(String::isNotBlank)?.let { bySong[it] = display }
         }
     }
+    // Smart playlists and adaptive collections expose a RecordingId rather than
+    // a chosen MediaAssetId. Do not guess if two assets disagree.
+    val byRecording = assets.groupBy { it.recordingId }.mapNotNull { (id, rows) ->
+        val distinct = rows.mapNotNull { byAsset[it.mediaAssetId] }.distinct()
+        if (distinct.size == 1) id to distinct.single() else null
+    }.toMap()
     return CanonicalRatingDisplaySnapshot(
         bySongKey = bySong,
         byMediaAssetId = byAsset,
+        byRecordingId = byRecording,
     )
 }
 
