@@ -29,8 +29,8 @@ internal object A3AndroidAcquisitionLedger {
         safeName:String,
         byteCount:Long,
         observedDigest:String,
-        isCancelled:()->Boolean={false},
-        commitGuard:((()->Unit)->Unit)={ action -> action() }
+        commitGuard:((()->Unit)->Unit)={ action -> action() },
+        isCancelled:()->Boolean={false}
     ):A2LocalAudioPublisher.Published {
         check(Looper.myLooper()!=Looper.getMainLooper()) {
             "A3 durable publication must run off the Android main thread"
