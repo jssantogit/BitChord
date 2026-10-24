@@ -27,6 +27,10 @@ import com.music.bitchord.data.listening.CanonicalRuleBasedSmartPlaylistPreview
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.RoomListeningEventStore
 import com.music.bitchord.data.listening.RoomRecordingRatingStore
+import com.music.bitchord.data.listening.RuleBasedSmartPlaylistQuery
+import com.music.bitchord.diagnostics.DiagnosticCategory
+import com.music.bitchord.diagnostics.Diagnostics
+import java.util.UUID
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionRepository
 import com.music.bitchord.playback.ACTION_EXECUTE_CANONICAL_BATCH
@@ -54,6 +58,7 @@ import kotlin.coroutines.resume
 internal sealed interface SmartCollectionActionSource {
     data class Adaptive(val kind: AdaptiveCollectionKind) : SmartCollectionActionSource
     data class SavedDefinition(val id: String) : SmartCollectionActionSource
+    data class PreviewQuery(val query: RuleBasedSmartPlaylistQuery) : SmartCollectionActionSource
 }
 
 internal sealed interface SmartCollectionBatchResult {
@@ -75,24 +80,76 @@ internal class SmartCollectionBatchHandoff(
     private val browse: suspend () -> CanonicalBrowseLibrary,
     private val planner: CanonicalCollectionIntentPlanner,
     private val submit: suspend (CanonicalCollectionIntentPlan) -> Boolean,
+    private val trace: (Map<String, String>) -> Unit = {},
 ) {
     suspend fun execute(
         source: SmartCollectionActionSource,
         intent: CanonicalCollectionIntent,
     ): SmartCollectionBatchResult {
-        val selected = refreshIds(source) ?: return SmartCollectionBatchResult.Unavailable
-        if (selected.isEmpty()) return SmartCollectionBatchResult.Empty
-        if (selected.size > CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE) {
-            return SmartCollectionBatchResult.LimitExceeded
+        // Process-ephemeral correlation, never an account/Recording/MediaAsset identifier.
+        val attempt = UUID.randomUUID().toString().substring(0, 8)
+        val base = mapOf(
+            "attempt" to attempt,
+            "intent" to intent.name,
+            "source" to when (source) {
+                is SmartCollectionActionSource.Adaptive -> "adaptive"
+                is SmartCollectionActionSource.SavedDefinition -> "saved"
+                is SmartCollectionActionSource.PreviewQuery -> "preview"
+            },
+        )
+        fun mark(stage: String, extra: Map<String, String> = emptyMap()) {
+            // A telemetry problem must never change user-intent semantics.
+            runCatching { trace(base + mapOf("stage" to stage) + extra) }
         }
-        val ids = selected.distinct() // canonical Recording dedup, original order kept
-        val plan = planner.preview(ids, intent, browse())
-        if (plan.rejected.isNotEmpty() || plan.selections.size != ids.size) {
-            return SmartCollectionBatchResult.Rejected(plan.rejected.size)
+        mark("intent")
+        try {
+            val selected = refreshIds(source)
+            if (selected == null) {
+                mark("revalidated", mapOf("reason" to "definition_or_source_unavailable"))
+                return SmartCollectionBatchResult.Unavailable
+            }
+            mark("revalidated", mapOf("candidateCount" to selected.size.toString()))
+            if (selected.isEmpty()) {
+                mark("rejected", mapOf("reason" to "ids_zero"))
+                return SmartCollectionBatchResult.Empty
+            }
+            if (selected.size > CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE) {
+                mark("rejected", mapOf("reason" to "limit_exceeded"))
+                return SmartCollectionBatchResult.LimitExceeded
+            }
+            val ids = selected.distinct()
+            val library = browse()
+            mark("catalog", mapOf("trackCount" to library.tracks.size.toString()))
+            val plan = planner.preview(
+                ids, intent, library, preferSingleLocalCopy = true,
+            )
+            val reasons = plan.rejected.groupingBy { it.reason.name }.eachCount()
+                .toSortedMap().entries.joinToString(",") { "${it.key}:${it.value}" }
+            mark("planned", mapOf(
+                "eligibleCount" to ids.size.toString(),
+                "selectionCount" to plan.selections.size.toString(),
+                "rejectedCount" to plan.rejected.size.toString(),
+                "rejectionCodes" to reasons.ifEmpty { "none" },
+            ))
+            if (plan.rejected.isNotEmpty() || plan.selections.size != ids.size) {
+                mark("rejected", mapOf("reason" to "planning_failed"))
+                return SmartCollectionBatchResult.Rejected(plan.rejected.size)
+            }
+            if (plan.selections.isEmpty()) {
+                mark("rejected", mapOf("reason" to "selections_zero"))
+                return SmartCollectionBatchResult.Empty
+            }
+            val sent = submit(plan)
+            mark("media3", mapOf("result" to if (sent) "command_accepted" else "command_failed"))
+            return if (sent) SmartCollectionBatchResult.Submitted
+                else SmartCollectionBatchResult.ExecutionFailed
+        } catch (cancelled: CancellationException) {
+            mark("cancelled")
+            throw cancelled
+        } catch (_: Exception) {
+            mark("exception", mapOf("reason" to "execution_exception"))
+            return SmartCollectionBatchResult.ExecutionFailed
         }
-        if (plan.selections.isEmpty()) return SmartCollectionBatchResult.Empty
-        return if (submit(plan)) SmartCollectionBatchResult.Submitted
-        else SmartCollectionBatchResult.ExecutionFailed
     }
 }
 
@@ -113,13 +170,22 @@ private suspend fun currentSmartCollectionIds(
             SmartPlaylistDefinitionDatabase.get(context).definitionDao(),
         )
         val definition = repo.list().firstOrNull { it.id == source.id } ?: return null
-        val availability = CanonicalLibraryAvailabilityReaders.persistent(context)
-        // L6 cannot silently truncate an oversized candidate population.
-        if (availability.availableRecordingIds().size > 5_000) return null
-        persistentSmartPlaylistPreview(context, availability)
-            .preview(definition.query).map { it.recordingId }
+        currentSmartPlaylistQueryIds(context, definition.query)
+    }
+    is SmartCollectionActionSource.PreviewQuery -> {
+        currentSmartPlaylistQueryIds(context, source.query)
     }
     }
+}
+
+private suspend fun currentSmartPlaylistQueryIds(
+    context: Context,
+    query: RuleBasedSmartPlaylistQuery,
+): List<String>? {
+    val availability = CanonicalLibraryAvailabilityReaders.persistent(context)
+    if (availability.availableRecordingIds().size > 5_000) return null
+    return persistentSmartPlaylistPreview(context, availability)
+        .preview(query).map { it.recordingId }
 }
 
 /**
@@ -208,6 +274,13 @@ internal fun rememberSmartCollectionBatchAction(
             browse = { currentCanonicalBrowse(context) },
             planner = CanonicalCollectionIntentPlanner(androidCanonicalQueueResolver(context)),
             submit = { plan -> submitCanonicalBatch(controller, plan) },
+            trace = { data ->
+                Diagnostics.event(
+                    category = DiagnosticCategory.PLAYBACK,
+                    name = "smart_collection_action_v1",
+                    metadata = data,
+                )
+            },
         )
     }
     val added = stringResource(Res.string.smart_collection_batch_added)
