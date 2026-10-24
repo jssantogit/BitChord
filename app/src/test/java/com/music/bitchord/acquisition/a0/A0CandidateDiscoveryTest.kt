@@ -100,4 +100,14 @@ class A0CandidateDiscoveryTest {
         assertTrue(handoff.choices().isEmpty())
         assertEquals(0,handoff.screening().responses)
     }
+    @Test fun longRemoteFilenameKeepsExtensionForManualSave() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT Magnetic",saveFormatsOnly=true)
+        val longName="ILLIT Magnetic " + "very-long-release-name-".repeat(6) + ".mp3"
+        handoff.offerParsed(reply("peer",listOf(file(longName))),"peer")
+        val choice=handoff.choices().single()
+        assertTrue(choice.displayName.endsWith(".mp3"))
+        assertNotNull(A5ManualSaveGate.safeDestinationName(choice.displayName,choice.sizeBytes))
+    }
+
 }
