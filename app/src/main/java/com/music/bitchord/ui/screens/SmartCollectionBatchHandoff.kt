@@ -52,6 +52,7 @@ import com.music.bitchord.sharedui.resources.smart_collection_batch_failed
 import com.music.bitchord.sharedui.resources.smart_collection_batch_empty
 import com.music.bitchord.sharedui.resources.smart_collection_batch_played
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -292,6 +293,17 @@ private suspend fun currentCanonicalBrowse(context: Context): CanonicalBrowseLib
     return CanonicalBrowseLibrary(tracks)
 }
 
+/**
+ * The collection planner intentionally runs on Dispatchers.IO. MediaController
+ * methods, however, must run on the Controller's application looper. This
+ * boundary switches only the synchronous command dispatch, not Room reads or
+ * the asynchronous wait for Media3's result.
+ */
+internal suspend fun <T> onMediaControllerThread(
+    dispatcher: CoroutineDispatcher,
+    command: () -> T,
+): T = withContext(dispatcher) { command() }
+
 /** Actual Media3 result is awaited; command rejection is never shown as queued. */
 private suspend fun submitCanonicalBatch(
     controller: MediaController?,
@@ -303,16 +315,26 @@ private suspend fun submitCanonicalBatch(
     }
     val token = CanonicalBatchQueueRequests.submit(plan)
     val request = try {
-        session.sendCustomCommand(
-            SessionCommand(ACTION_EXECUTE_CANONICAL_BATCH, Bundle.EMPTY),
-            bundleOf(EXTRA_CANONICAL_BATCH_TOKEN to token),
-        )
+        // Controller is created by the UI on the Android main looper. Access
+        // from this coroutine's IO dispatcher throws Media3 wrong-thread state.
+        onMediaControllerThread(Dispatchers.Main.immediate) {
+            session.sendCustomCommand(
+                SessionCommand(ACTION_EXECUTE_CANONICAL_BATCH, Bundle.EMPTY),
+                bundleOf(EXTRA_CANONICAL_BATCH_TOKEN to token),
+            )
+        }
     } catch (cancelled: CancellationException) {
         CanonicalBatchQueueRequests.take(token)
         throw cancelled
-    } catch (_: Exception) {
+    } catch (error: Exception) {
         CanonicalBatchQueueRequests.take(token)
-        SmartCollectionPlaybackTrace.stage(plan, "session_rejected", "dispatch_exception")
+        // Typed, privacy-safe cause: never emit exception messages or stacks.
+        val reason = if (error is IllegalStateException) {
+            "dispatch_illegal_state"
+        } else {
+            "dispatch_exception"
+        }
+        SmartCollectionPlaybackTrace.stage(plan, "session_rejected", reason)
         return false
     }
     SmartCollectionPlaybackTrace.stage(plan, "command_dispatched")
