@@ -62,6 +62,9 @@ class A0ManualLoginActivity : Activity() {
             WindowManager.LayoutParams.FLAG_SECURE
         )
 
+        // Launched by the in-app song Download action, not the old A0 tool entry.
+        val fromSongDownload = intent.hasExtra("bitchord.soulseek.manual.query")
+
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 48, 48, 48)
@@ -73,11 +76,17 @@ class A0ManualLoginActivity : Activity() {
             it.setPadding(0, 12, 0, 12)
             page.addView(it)
         }
-        text("BitChord A0 — teste de conectividade P2P Soulseek")
-        text("Somente para uma conta exclusiva de TESTE. " +
-             "O protocolo Soulseek envia a senha por TCP SEM TLS. " +
-             "Não reutilize senhas de outros serviços.")
-        text("A pesquisa digitável não baixa arquivos. No teste separado de transporte, " +
+        text(if (fromSongDownload) "Baixar com Soulseek" else
+            "BitChord A0 — teste de conectividade P2P Soulseek")
+        text(if (fromSongDownload)
+            "Busque arquivos usando sua conta configurada em Configurações → Downloads. " +
+                "A pesquisa não baixa arquivos automaticamente: você deverá escolher um " +
+                "candidato e confirmar que tem autorização para salvá-lo."
+        else
+            "Somente para uma conta exclusiva de TESTE. " +
+                "O protocolo Soulseek envia a senha por TCP SEM TLS. " +
+                "Não reutilize senhas de outros serviços.")
+        if (!fromSongDownload) text("A pesquisa digitável não baixa arquivos. No teste separado de transporte, " +
              "você escolhe manualmente um arquivo público anunciado (até 64 MiB) " +
              "para o qual tenha autorização. Os bytes ficam só temporariamente: " +
              "tamanho e SHA-256 observado são medidos, depois apagados. " +
@@ -142,7 +151,7 @@ class A0ManualLoginActivity : Activity() {
         page.addView(saveAction)
         val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
         page.addView(exportAction)
-        text("Captura temporária iniciada automaticamente ao testar. " +
+        if (!fromSongDownload) text("Captura temporária iniciada automaticamente ao testar. " +
             "Depois do resultado, exporte os logs. Revise o relatório antes de compartilhar. " +
             "Não envie credenciais, capturas de rede ou logcat bruto.")
         val status = text("Nenhuma conexão iniciada.")
@@ -870,6 +879,52 @@ class A0ManualLoginActivity : Activity() {
                     }
                 }
             }
+        }
+        if (fromSongDownload) {
+            // The old A0 diagnostic actions remain available only to internal
+            // test callers. A normal Download tap immediately enters a guided
+            // search, not a second login form or a technical transport menu.
+            listOf<View>(
+                user, password, acknowledge, action, searchAction,
+                transferAction, saveConsent, saveAction, exportAction,
+            ).forEach { it.visibility = View.GONE }
+
+            fun confirmSearch() {
+                val saved = accountVault.read()
+                if (saved == null) {
+                    status.text = "Configure sua conta em Configurações → Downloads → Soulseek."
+                    AlertDialog.Builder(this)
+                        .setTitle("Conta Soulseek necessária")
+                        .setMessage("Conecte e salve uma conta dedicada em Configurações → Downloads → Soulseek antes de pesquisar.")
+                        .setPositiveButton("Entendi") { _, _ -> finish() }
+                        .setOnCancelListener { finish() }
+                        .show()
+                    return
+                }
+                user.setText(saved.username)
+                saved.erase()
+                AlertDialog.Builder(this)
+                    .setTitle("Pesquisar candidatos Soulseek")
+                    .setMessage(
+                        "Esta pesquisa usa TCP sem TLS com sua conta de testes. " +
+                        "Confirme que tem autorização para armazenar o arquivo que escolher. " +
+                        "Nada será baixado até você selecionar um candidato."
+                    )
+                    .setPositiveButton("Pesquisar candidatos") { _, _ ->
+                        acknowledge.isChecked = true
+                        saveConsent.isChecked = true
+                        start(true, transferObserved = true, saveToDevice = true)
+                    }
+                    .setNegativeButton("Cancelar") { _, _ -> finish() }
+                    .setOnCancelListener { finish() }
+                    .show()
+            }
+            val retry = Button(this).apply {
+                text = "Pesquisar candidatos"
+            }
+            page.addView(retry, page.childCount - 1)
+            retry.setOnClickListener { if (action.isEnabled) confirmSearch() }
+            confirmSearch()
         }
     }
 
