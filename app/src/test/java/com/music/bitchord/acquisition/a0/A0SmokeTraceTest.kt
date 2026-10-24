@@ -141,6 +141,39 @@ class A0SmokeTraceTest {
         assertFalse(points.toString().contains("peerUsername"))
     }
 
+    @Test fun physicalSavePublishedSurvives64IntermediateEventsFromSearch() {
+        val points=mutableListOf<StructuredTracePoint>()
+        val smoke=A0SmokeTrace.start(StructuredTracer(
+            sink=StructuredTraceSink {points.add(it)},
+            maxIntermediatePoints=64
+        ),observedTransfer=true)
+        repeat(75) {
+            smoke.note(A0SmokeTrace.Stage.SERVER_OFFER_REJECTED,
+                TraceOutcome.DEGRADED)
+        }
+        smoke.note(A0SmokeTrace.Stage.CANDIDATES_AVAILABLE)
+        smoke.note(A0SmokeTrace.Stage.P_F_TRANSFER_STARTED)
+        smoke.transferPhase(A0ServerAssociatedTransfer.Phase.BYTES_RECEIVED)
+        smoke.note(A0SmokeTrace.Stage.LOCAL_SAVE_STAGED)
+        smoke.note(A0SmokeTrace.Stage.LOCAL_SAVE_PUBLISHED)
+        smoke.note(A0SmokeTrace.Stage.SCRATCH_CLEANUP)
+        smoke.note(A0SmokeTrace.Stage.SOCKETS_CLOSED)
+        smoke.finish(TraceOutcome.SUCCEEDED)
+
+        val stages=points.mapNotNull {it.stage}
+        for(stage in listOf("candidates_available","p_f_transfer_started",
+            "pf_bytes_received","local_save_staged","local_save_published",
+            "scratch_cleanup","sockets_closed")) {
+            assertTrue("A5 publish evidence must survive search saturation: $stage",
+                stage in stages)
+        }
+        val first=points.first {it.kind==TracePointKind.TRACE_START}
+        val published=points.first {it.stage=="local_save_published"}
+        assertEquals(first.flowId,published.flowId)
+        assertNotEquals(first.traceId,published.traceId)
+        assertEquals(2,points.count {it.kind==TracePointKind.TRACE_END})
+    }
+
     @Test fun deliberateSocketShutdownDoesNotEmitSpuriousServerReadFailure() {
         val points = mutableListOf<StructuredTracePoint>()
         val trace = A0SmokeTrace.start(
