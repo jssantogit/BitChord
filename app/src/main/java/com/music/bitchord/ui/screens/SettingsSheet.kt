@@ -186,6 +186,7 @@ fun SettingsScreen(
     onLyricsSources: () -> Unit,
     onTranslationLanguage: () -> Unit,
     onSources: () -> Unit,
+    onSoulseek: () -> Unit,
     onListenTogether: () -> Unit,
     onWearOs: () -> Unit,
     onSpotifyCanvasAuth: () -> Unit,
@@ -519,6 +520,15 @@ fun SettingsScreen(
         // it be fetched" — and those two questions only make sense read
         // together, which is what puts them side by side here.
         SearchableSettingsGroup(search, header = stringResource(R.string.downloads)) {
+            row("Soulseek", "conta", "pesquisa", "baixar") {
+                SettingsRow(
+                    icon = Icons.Rounded.Cloud,
+                    title = "Soulseek",
+                    subtitle = "Conta e downloads manuais (experimental)",
+                    trailing = { Chevron() },
+                    onClick = onSoulseek,
+                )
+            }
             val downloadQualityTitle = stringResource(R.string.download_quality)
             row(downloadQualityTitle, "offline", "lossless") {
                 SettingsRow(

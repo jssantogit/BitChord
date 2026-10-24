@@ -91,6 +91,12 @@ class A0ManualLoginActivity : Activity() {
             importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
         }
         page.addView(user)
+        val accountVault = SoulseekCredentialVault(this)
+        val previouslySaved = accountVault.read()
+        if (previouslySaved != null) {
+            user.setText(previouslySaved.username)
+            previouslySaved.erase()
+        }
         val password = EditText(this).apply {
             hint = "Senha exclusiva de testes"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
@@ -100,7 +106,8 @@ class A0ManualLoginActivity : Activity() {
         page.addView(password)
         val searchInput = EditText(this).apply {
             hint = "O que deseja pesquisar? (ex.: newjeans - omg)"
-            setText("newjeans - omg")
+            setText(intent.getStringExtra("bitchord.soulseek.manual.query")
+                ?.take(120).orEmpty())
             inputType = InputType.TYPE_CLASS_TEXT or
                 InputType.TYPE_TEXT_VARIATION_NORMAL
             isSingleLine = true
@@ -180,7 +187,16 @@ class A0ManualLoginActivity : Activity() {
                 }
             } else null
             val username = user.text.toString()
-            val secret = password.text.toString().toCharArray()
+            val savedAccount = if (password.text.isEmpty()) accountVault.read() else null
+            val secret = if (savedAccount?.username == username) {
+                savedAccount.password.copyOf()
+            } else password.text.toString().toCharArray()
+            savedAccount?.erase()
+            if (username.isBlank() || secret.isEmpty()) {
+                secret.fill('\u0000')
+                status.text = "Configure ou conecte sua conta em Configurações → Downloads → Soulseek."
+                return
+            }
             // Clear both controls before any packet creation or network action.
             user.text.clear()
             password.text.clear()
@@ -788,6 +804,11 @@ class A0ManualLoginActivity : Activity() {
                         if (!stopping && !isFinishing && !isDestroyed) {
                             status.text = result
                             action.isEnabled = true
+                            val availableAccount = accountVault.read()
+                            if (availableAccount != null) {
+                                user.setText(availableAccount.username)
+                                availableAccount.erase()
+                            }
                             searchAction.isEnabled = true
                             transferAction.isEnabled = observedScratchReady
                             saveAction.isEnabled = observedScratchReady
