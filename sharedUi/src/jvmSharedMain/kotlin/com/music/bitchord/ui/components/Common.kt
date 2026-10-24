@@ -589,6 +589,7 @@ private fun SongRowContent(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            CanonicalSongRatingStars(song, color = subtitleColor)
         }
         if (downloadedTint != null) {
             DownloadedBadge(song.videoId, downloadedTint)
