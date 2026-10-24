@@ -16,7 +16,8 @@ internal class A0ObservedCandidateHandoff(
     private val localUsername:String,
     private val searchToken:Int,
     allowLoopbackForLocalTest:Boolean=false,
-    private val searchPhrase:String?=null
+    private val searchPhrase:String?=null,
+    private val saveFormatsOnly:Boolean=false
 ) {
     class Choice internal constructor(
         val displayName:String,
@@ -84,7 +85,8 @@ internal class A0ObservedCandidateHandoff(
         publicSeen=(publicSeen+result.files.size).coerceAtMost(100000)
         lockedSeen=(lockedSeen+result.lockedFiles.size).coerceAtMost(100000)
 
-        val validExtensions=setOf("mp3","flac","wav","ogg","m4a","aac","opus")
+        val validExtensions=if(saveFormatsOnly) setOf("mp3","flac","wav")
+            else setOf("mp3","flac","wav","ogg","m4a","aac","opus")
         val locked=result.lockedFiles.map{it.remoteFilename}.toHashSet()
         for(file in result.files) {
             val path=file.remoteFilename
