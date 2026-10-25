@@ -96,6 +96,30 @@ class MusicBrainzOfflineEditionsTest {
         } finally { db.close() }
     }
 
+    @Test fun artistDiscographyCacheIsBoundToArtistMbidNotHomonymousArtistName() = runBlocking {
+        val db = database()
+        try {
+            val index = MusicBrainzCatalogIndex(db)
+            val illit = "6b128dd7-e998-4edb-a4f5-400fef190445"
+            val namesake = "fa741e5c-1a5d-4a7a-a041-9d8061bd18fb"
+            val anotherGroup = "6cdf5ba6-70f1-4bf6-82b6-f9c821a7ec5a"
+            index.persistArtists(listOf(
+                MusicBrainzArtistHit(illit, "ILLIT", "Korean group", "KR"),
+                MusicBrainzArtistHit(namesake, "ILLIT", "Different artist", "US"),
+            ))
+            val first = MusicBrainzReleaseGroupHit(group, "SUPER REAL ME", "EP", "2024-03-25", "ILLIT")
+            val second = MusicBrainzReleaseGroupHit(anotherGroup, "Namesake release", "Album", null, "ILLIT")
+            index.persistArtistGroups(illit, listOf(first))
+            index.persistArtistGroups(namesake, listOf(second))
+
+            assertEquals(listOf(first), index.cachedArtistGroups(illit))
+            assertEquals(listOf(second), index.cachedArtistGroups(namesake))
+            index.persistArtistGroups(illit, emptyList())
+            assertEquals(listOf(first), index.cachedArtistGroups(illit))
+            assertTrue(index.cachedArtistGroups("not-a-valid-mbid").isEmpty())
+        } finally { db.close() }
+    }
+
     private fun database() = Room.inMemoryDatabaseBuilder(
         RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
     ).allowMainThreadQueries().build()
