@@ -196,6 +196,34 @@ internal class A0SmokeTrace private constructor(
         )
     }
 
+    /**
+     * #177 manual ranking telemetry: counts and enum version only, never
+     * album text, peer identity, filenames or user input. Kept in a separate
+     * event so the existing 24-key transport diagnostic remains intact.
+     */
+    fun canonicalCandidateScreening(
+        report:A0ObservedCandidateHandoff.Screening,
+        presetKey:String,
+    ) {
+        if(complete.get())return
+        fun n(value:Int)=value.coerceIn(0,100000).toString()
+        val acceptedPreset=setOf("ANY","HI_RES","LOSSLESS","HIGH_QUALITY",
+            "HIGH_EFFICIENCY","MP3_256","FLAC_24_96")
+        continuationTrace().event(
+            stage="canonical_candidate_screening",
+            outcome=TraceOutcome.SUCCEEDED,
+            attributes=mapOf(
+                "policyVersion" to "identity-v1-manual",
+                "qualityPreset" to presetKey.takeIf { it in acceptedPreset }.orEmpty(),
+                "total" to n(report.accepted),
+                "albumMatches" to n(report.albumMatches),
+                "albumUnknown" to n(report.albumUnknown),
+                "albumConflicts" to n(report.albumConflicts),
+                "qualityMismatches" to n(report.qualityMismatches),
+            ),
+        )
+    }
+
     /** No peer/path/query data. Measures offers dropped by the bounded P pool. */
     fun peerSearchBackpressure(dropped:Int) {
         if(complete.get())return
