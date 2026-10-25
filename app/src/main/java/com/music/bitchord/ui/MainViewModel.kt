@@ -2133,7 +2133,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val trendingRows = try {
                     val dao = CanonicalCatalogDatabase.get(app).catalogDao()
                     val available = dao.musicBrainzRecordingMbidsWithAssets(popularMbids).toSet()
-                    popularMbids.asSequence()
+                    popularMbids
                         .filter { it in available && (CanonicalSearchKind.RECORDING to it) !in seen }
                         .mapNotNull { mbid ->
                             val id = dao.entityIdForExternalIdentity("musicbrainz", "recording", mbid)
