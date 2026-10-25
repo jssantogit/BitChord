@@ -174,6 +174,7 @@ internal class A0SmokeTrace private constructor(
                 "duplicates" to n(report.duplicates),
                 "capacityDropped" to n(report.capacityDropped),
                 "perPeerDropped" to n(report.perPeerDropped),
+                "claimBudgetDropped" to n(report.claimBudgetDropped),
                 "strongMatches" to n(report.strongMatches),
                 "weakMatches" to n(report.weakMatches),
                 "lowQuality" to n(report.lowQuality),
