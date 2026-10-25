@@ -1,16 +1,16 @@
 package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.music.bitchord.ui.components.ActionRow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -65,19 +66,27 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 internal fun CanonicalRecordingFeedbackEntry(recordingId: String) {
     var editing by remember(recordingId) { mutableStateOf(false) }
-    TextButton(onClick = { editing = true }) {
-        Icon(Icons.Rounded.Star, contentDescription = null, modifier = Modifier.size(18.dp))
-        Text(
-            text = stringResource(Res.string.recording_feedback_edit),
-            modifier = Modifier.padding(start = 6.dp),
-        )
-    }
+    CanonicalRecordingFeedbackAction(onClick = { editing = true })
     if (editing) {
         CanonicalRecordingRatingDialog(
             recordingId = recordingId,
             onDismiss = { editing = false },
         )
     }
+}
+
+/**
+ * Reuse the action sheet's exact layout contract (20/22dp icon, 18dp gap,
+ * bodyLarge text, row height and alignment). A TextButton here had its own
+ * typography and paddings and looked out of place beside Radio/Queue actions.
+ */
+@Composable
+internal fun CanonicalRecordingFeedbackAction(onClick: () -> Unit) {
+    ActionRow(
+        icon = Icons.Rounded.Star,
+        label = stringResource(Res.string.recording_feedback_edit),
+        onClick = onClick,
+    )
 }
 
 /** The player never guesses a provider-native ID or track title for a local rating. */
@@ -196,14 +205,26 @@ internal fun CanonicalRecordingFeedbackPanel(
         onDismissRequest = { if (!saving) onDismiss() },
         title = { Text(stringResource(Res.string.recording_feedback_dialog_title)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // The icons ARE the score: no duplicate "3.5 / 5" underneath.
+                // Keep the selected numeric value for screen readers only.
                 Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = "${selected} stars selected" },
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     repeat(5) { i ->
                         val index = i.toDouble()
-                        Box(modifier = Modifier.size(width = 44.dp, height = 52.dp), contentAlignment = Alignment.Center) {
+                        Box(
+                            modifier = Modifier.size(width = 42.dp, height = 48.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
                             Icon(
                                 imageVector = when {
                                     selected >= index + 1.0 -> Icons.Rounded.Star
@@ -212,19 +233,29 @@ internal fun CanonicalRecordingFeedbackPanel(
                                 },
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(40.dp),
+                                modifier = Modifier.size(38.dp),
                             )
                             Row(Modifier.fillMaxSize()) {
                                 Box(
                                     modifier = Modifier.weight(1f).fillMaxHeight()
-                                        .clickable(enabled = !saving) { selected = (index + 0.5).coerceAtLeast(1.0) }
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            enabled = !saving,
+                                            onClick = { selected = (index + 0.5).coerceAtLeast(1.0) },
+                                        )
                                         .semantics {
                                             contentDescription = "${(index + 0.5).coerceAtLeast(1.0)} stars"
                                         },
                                 )
                                 Box(
                                     modifier = Modifier.weight(1f).fillMaxHeight()
-                                        .clickable(enabled = !saving) { selected = index + 1.0 }
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            enabled = !saving,
+                                            onClick = { selected = index + 1.0 },
+                                        )
                                         .semantics {
                                             contentDescription = "${i + 1} stars"
                                         },
@@ -233,13 +264,6 @@ internal fun CanonicalRecordingFeedbackPanel(
                         }
                     }
                 }
-                Text(
-                    text = if (selected > 0.0) "${selected} / 5" else "— / 5",
-                    modifier = Modifier.semantics {
-                        contentDescription = "${selected} stars selected"
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                )
                 if (denied) {
                     Text(
                         stringResource(Res.string.recording_feedback_unavailable),
