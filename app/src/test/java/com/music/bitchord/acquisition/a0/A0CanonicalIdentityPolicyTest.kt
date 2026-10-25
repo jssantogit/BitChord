@@ -101,8 +101,13 @@ class A0CanonicalIdentityPolicyTest {
     }
 
     @Test fun adequateIndependentEvidenceCanBeStrongButNeverVerifiedAudio() {
+        val verifiedTarget=request(catalog=true)
+        val anchored=A0CanonicalAcquisitionResolver.Resolution(
+            A0CanonicalAcquisitionResolver.Status.CONFIRMED_RELATION,
+            verifiedTarget.ids
+        )
         val decision=A0CanonicalIdentityPolicy.assess(
-            request(catalog=true), exact, A0CanonicalAlbumPolicy.Claim("Blue Sky"), strong
+            verifiedTarget, anchored, A0CanonicalAlbumPolicy.Claim("Blue Sky"), strong
         )
         assertEquals(A0CanonicalIdentityPolicy.Verdict.COMPATIBLE_STRONG_UNVERIFIED, decision.verdict)
         assertFalse(decision.provesAudioMaster)
@@ -112,6 +117,25 @@ class A0CanonicalIdentityPolicyTest {
     @Test fun manualSearchCannotBePromotedByAResolutionForAnUnrelatedCatalogTarget() {
         val decision=A0CanonicalIdentityPolicy.assess(
             request(), exact, A0CanonicalAlbumPolicy.Claim("Blue Sky"), strong
+        )
+        assertEquals(A0CanonicalIdentityPolicy.Verdict.INCONCLUSIVE_MANUAL, decision.verdict)
+        assertTrue(A0CanonicalIdentityPolicy.Reason.CANONICAL_INCOMPLETE in decision.reasons)
+    }
+
+    @Test fun canonicalRelationResolvedForAnotherReleaseCannotBeBorrowed() {
+        val requested=request(catalog=true)
+        val unrelated=A0CanonicalAcquisitionIntent.confirmedCatalog(
+            title="Blue Sky", requestedAlbum="Blue Sky",
+            ids=A0CanonicalAcquisitionIntent.CanonicalIds(
+                recordingMbid="11111111-1111-4111-8111-111111111111",
+                releaseMbid="44444444-4444-4444-8444-444444444444"
+            )
+        )
+        val borrowed=A0CanonicalAcquisitionResolver.Resolution(
+            A0CanonicalAcquisitionResolver.Status.CONFIRMED_RELATION, unrelated.ids
+        )
+        val decision=A0CanonicalIdentityPolicy.assess(
+            requested, borrowed, A0CanonicalAlbumPolicy.Claim("Blue Sky"), strong
         )
         assertEquals(A0CanonicalIdentityPolicy.Verdict.INCONCLUSIVE_MANUAL, decision.verdict)
         assertTrue(A0CanonicalIdentityPolicy.Reason.CANONICAL_INCOMPLETE in decision.reasons)
