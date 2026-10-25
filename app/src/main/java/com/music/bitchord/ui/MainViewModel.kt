@@ -13,9 +13,12 @@ import com.music.bitchord.auth.sessionId
 import com.music.bitchord.auth.adjacentProfile
 import com.music.bitchord.data.AppUpdateChecker
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
+import com.music.bitchord.ui.screens.CanonicalCatalogDetailPage
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import com.music.bitchord.data.LocalMediaRepository
@@ -227,6 +230,109 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val canonicalResults: StateFlow<UiState<List<CanonicalCatalogSearchRow>>?> = _canonicalResults.asStateFlow()
     private var canonicalSearchJob: Job? = null
     private val musicBrainzSearch by lazy { MusicBrainzCatalogSearch() }
+    private val musicBrainzGraph by lazy { MusicBrainzCatalogGraph() }
+    private val _canonicalDetail = MutableStateFlow<UiState<CanonicalCatalogDetailPage>?>(null)
+    val canonicalDetail: StateFlow<UiState<CanonicalCatalogDetailPage>?> = _canonicalDetail.asStateFlow()
+    private var canonicalBrowseJob: Job? = null
+    private val canonicalPath = mutableListOf<CanonicalCatalogSearchRow>()
+
+    fun openCanonicalCatalogEntry(row: CanonicalCatalogSearchRow) {
+        if (_searchSource.value != SearchSource.CANONICAL ||
+            row.kind == CanonicalSearchKind.RECORDING) return
+        canonicalPath.add(row)
+        showCanonicalCatalogEntry(row)
+    }
+
+    fun backCanonicalCatalogEntry() {
+        if (_searchSource.value != SearchSource.CANONICAL) return
+        canonicalBrowseJob?.cancel()
+        if (canonicalPath.isNotEmpty()) canonicalPath.removeAt(canonicalPath.lastIndex)
+        if (canonicalPath.isEmpty()) {
+            _canonicalDetail.value = null
+            _searchScrollReset.value += 1
+        } else showCanonicalCatalogEntry(canonicalPath.last())
+    }
+
+    private fun clearCanonicalCatalogNavigation() {
+        canonicalBrowseJob?.cancel()
+        canonicalPath.clear()
+        _canonicalDetail.value = null
+    }
+
+    private fun showCanonicalCatalogEntry(entry: CanonicalCatalogSearchRow) {
+        canonicalBrowseJob?.cancel()
+        _canonicalDetail.value = UiState.Loading
+        _searchScrollReset.value += 1
+        canonicalBrowseJob = viewModelScope.launch {
+            val output: UiState<CanonicalCatalogDetailPage> = when (entry.kind) {
+                CanonicalSearchKind.ARTIST -> when (
+                    val result = musicBrainzGraph.browseReleaseGroupsForArtist(entry.musicBrainzId)
+                ) {
+                    is MusicBrainzCatalogGraphResult.Success -> UiState.Success(
+                        CanonicalCatalogDetailPage(entry.title,
+                            "Release groups · showing ${result.value.items.size} of ${result.value.total}",
+                            result.value.items.map { hit -> CanonicalCatalogSearchRow(
+                                hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
+                                hit.artistDisplay ?: hit.primaryType,
+                            ) },
+                        ),
+                    )
+                    is MusicBrainzCatalogGraphResult.Failure -> UiState.Error("Unable to load artist discography")
+                }
+                CanonicalSearchKind.RELEASE_GROUP -> when (
+                    val result = musicBrainzGraph.browseGroupReleases(entry.musicBrainzId)
+                ) {
+                    is MusicBrainzCatalogGraphResult.Success -> UiState.Success(
+                        CanonicalCatalogDetailPage(entry.title,
+                            "Releases/editions · showing ${result.value.items.size} of ${result.value.total}",
+                            result.value.items.map { hit -> CanonicalCatalogSearchRow(
+                                hit.musicBrainzId, CanonicalSearchKind.RELEASE, hit.title,
+                                listOfNotNull(hit.country, hit.releaseDate).joinToString(" · "),
+                            ) },
+                        ),
+                    )
+                    is MusicBrainzCatalogGraphResult.Failure -> UiState.Error("Unable to load release editions")
+                }
+                CanonicalSearchKind.RELEASE -> when (
+                    val result = musicBrainzGraph.lookupRelease(entry.musicBrainzId)
+                ) {
+                    is MusicBrainzCatalogGraphResult.Success -> {
+                        val details = result.value
+                        val available = try {
+                            withContext(Dispatchers.IO) {
+                                val db = CanonicalCatalogDatabase.get(getApplication<Application>())
+                                MusicBrainzCatalogIndex(db).persistReleaseDetail(details)
+                                db.catalogDao().musicBrainzRecordingMbidsWithAssets(
+                                    details.tracks.map { it.recordingMbid },
+                                ).toSet()
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            emptySet()
+                        }
+                        UiState.Success(CanonicalCatalogDetailPage(
+                            title = details.title,
+                            summary = listOfNotNull(details.country, details.releaseDate)
+                                .joinToString(" · "),
+                            rows = details.tracks.map { track -> CanonicalCatalogSearchRow(
+                                musicBrainzId = track.recordingMbid,
+                                kind = CanonicalSearchKind.RECORDING,
+                                title = "${track.mediumNumber}.${track.trackNumber}  ${track.title}",
+                                subtitle = details.artistDisplay,
+                                hasCatalogedAsset = track.recordingMbid in available,
+                            ) },
+                        ))
+                    }
+                    is MusicBrainzCatalogGraphResult.Failure -> UiState.Error("Unable to load release tracks")
+                }
+                CanonicalSearchKind.RECORDING -> return@launch
+            }
+            if (_searchSource.value == SearchSource.CANONICAL && canonicalPath.lastOrNull() == entry) {
+                _canonicalDetail.value = output
+            }
+        }
+    }
 
     /** The words typed into the Addons search before, newest first. */
     val addonSearchHistory: StateFlow<List<String>> = SearchHistory.addonRecent
@@ -1976,6 +2082,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // A stale metadata result must not appear under a new query.
             canonicalSearchJob?.cancel()
             _canonicalResults.value = null
+            clearCanonicalCatalogNavigation()
         }
         // The Library source answers from the device on every keystroke (see
         // [libraryResults]); YouTube's completions have nothing to add to it.
@@ -2013,11 +2120,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun runCanonicalCatalogSearch(query: String) {
         canonicalSearchJob?.cancel()
+        clearCanonicalCatalogNavigation()
         _searchScrollReset.value += 1
         _canonicalResults.value = UiState.Loading
         canonicalSearchJob = viewModelScope.launch {
             val recordings = musicBrainzSearch.searchRecordings(query, limit = 25)
             val groups = musicBrainzSearch.searchReleaseGroups(query, limit = 15)
+            val editions = musicBrainzSearch.searchReleases(query, limit = 15)
             val artists = musicBrainzSearch.searchArtists(query, limit = 15)
             if (_searchSource.value != SearchSource.CANONICAL || _query.value.trim() != query) {
                 return@launch
@@ -2062,6 +2171,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         ))
                     }
                 }
+                if (editions is MusicBrainzCatalogSearchResult.Success) {
+                    editions.page.items.forEach { hit ->
+                        add(CanonicalCatalogSearchRow(
+                            musicBrainzId = hit.musicBrainzId,
+                            kind = CanonicalSearchKind.RELEASE,
+                            title = hit.title,
+                            subtitle = listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
+                                .joinToString(" · "),
+                        ))
+                    }
+                }
                 if (artists is MusicBrainzCatalogSearchResult.Success) {
                     artists.page.items.forEach { hit ->
                         add(CanonicalCatalogSearchRow(
@@ -2076,6 +2196,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _canonicalResults.value = if (
                 recordings is MusicBrainzCatalogSearchResult.Failure &&
                 groups is MusicBrainzCatalogSearchResult.Failure &&
+                editions is MusicBrainzCatalogSearchResult.Failure &&
                 artists is MusicBrainzCatalogSearchResult.Failure
             ) {
                 val cached = try {
@@ -2150,6 +2271,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_searchSource.value == source) return
         _searchSource.value = source
         if (source != SearchSource.CANONICAL) {
+            clearCanonicalCatalogNavigation()
             canonicalSearchJob?.cancel()
             _canonicalResults.value = null
         }

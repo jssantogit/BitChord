@@ -3311,6 +3311,9 @@ private fun BitChordApp(
                             searchingAddons = searchSource == SearchSource.ADDONS,
                             searchingCanonical = searchSource == SearchSource.CANONICAL,
                             canonicalResults = viewModel.canonicalResults.collectAsStateWithLifecycle().value,
+                            canonicalDetail = viewModel.canonicalDetail.collectAsStateWithLifecycle().value,
+                            onCanonicalOpen = viewModel::openCanonicalCatalogEntry,
+                            onCanonicalBack = viewModel::backCanonicalCatalogEntry,
                             onCanonicalPlay = { mbid ->
                                 executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.PLAY_NOW)
                             },

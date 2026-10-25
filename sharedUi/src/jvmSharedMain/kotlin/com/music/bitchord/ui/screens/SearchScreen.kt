@@ -93,7 +93,7 @@ import java.util.Locale
  * Search-only MusicBrainz identity. This model deliberately contains no Song,
  * videoId or playback URI; tapping a metadata match cannot start a YT stream.
  */
-enum class CanonicalSearchKind { RECORDING, RELEASE_GROUP, ARTIST }
+enum class CanonicalSearchKind { RECORDING, RELEASE_GROUP, RELEASE, ARTIST }
 
 data class CanonicalCatalogSearchRow(
     val musicBrainzId: String,
@@ -102,6 +102,13 @@ data class CanonicalCatalogSearchRow(
     val subtitle: String?,
     val hasCatalogedAsset: Boolean = false,
     val fromOfflineCache: Boolean = false,
+)
+
+/** One navigable step; its rows are metadata identities, not video IDs. */
+data class CanonicalCatalogDetailPage(
+    val title: String,
+    val summary: String?,
+    val rows: List<CanonicalCatalogSearchRow>,
 )
 
 @Composable
@@ -163,6 +170,9 @@ fun SearchScreen(
     /** Public MusicBrainz discovery shows metadata-only rows with no play actions. */
     searchingCanonical: Boolean = false,
     canonicalResults: UiState<List<CanonicalCatalogSearchRow>>? = null,
+    canonicalDetail: UiState<CanonicalCatalogDetailPage>? = null,
+    onCanonicalOpen: (CanonicalCatalogSearchRow) -> Unit = {},
+    onCanonicalBack: () -> Unit = {},
     /** Only called for MBIDs that have a cataloged asset; Playback revalidates. */
     onCanonicalPlay: (String) -> Unit = {},
     onCanonicalAddToQueue: (String) -> Unit = {},
@@ -272,7 +282,8 @@ fun SearchScreen(
         ) {
             when {
                 searchingCanonical -> canonicalMusicBrainzResults(
-                    canonicalResults, onCanonicalPlay, onCanonicalAddToQueue,
+                    canonicalResults, canonicalDetail, onCanonicalOpen, onCanonicalBack,
+                    onCanonicalPlay, onCanonicalAddToQueue,
                 )
                 searchingLibrary || searchingAddons -> librarySearchResults(
                     query = query.trim(),
@@ -421,10 +432,32 @@ fun SearchScreen(
  */
 private fun LazyListScope.canonicalMusicBrainzResults(
     results: UiState<List<CanonicalCatalogSearchRow>>?,
+    detail: UiState<CanonicalCatalogDetailPage>?,
+    onOpen: (CanonicalCatalogSearchRow) -> Unit,
+    onBack: () -> Unit,
     onPlay: (String) -> Unit,
     onAddToQueue: (String) -> Unit,
 ) {
-    when (results) {
+    if (detail != null) {
+        item(key = "musicbrainz:navigation") {
+            Column(Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 12.dp)) {
+                OutlinedButton(onClick = onBack) { Text("Back") }
+                if (detail is UiState.Success) {
+                    Text(detail.data.title, style = MaterialTheme.typography.titleLarge)
+                    detail.data.summary?.let {
+                        Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+    val rows = when (detail) {
+        is UiState.Success -> UiState.Success(detail.data.rows)
+        is UiState.Error -> UiState.Error(detail.message)
+        UiState.Loading -> UiState.Loading
+        null -> results
+    }
+    when (rows) {
         null -> item(key = "musicbrainz:hint") {
             MessageState("Search the MusicBrainz catalog. Results are metadata, not audio.")
         }
@@ -432,17 +465,21 @@ private fun LazyListScope.canonicalMusicBrainzResults(
         is UiState.Error -> item(key = "musicbrainz:error") {
             MessageState(results.message)
         }
-        is UiState.Success -> if (results.data.isEmpty()) {
+        is UiState.Success -> if (rows.data.isEmpty()) {
             item(key = "musicbrainz:empty") { MessageState("No MusicBrainz entries found.") }
         } else {
             itemsIndexed(
-                items = results.data,
+                items = rows.data,
                 key = { _, row -> "mb:${row.kind}:${row.musicBrainzId}" },
             ) { index, row ->
                 Column(
-                    modifier = Modifier.fillMaxWidth().padding(
-                        start = PAGE_GUTTER, end = PAGE_GUTTER, top = 12.dp, bottom = 12.dp,
-                    ),
+                    modifier = Modifier.fillMaxWidth()
+                        .then(if (row.kind != CanonicalSearchKind.RECORDING) {
+                            Modifier.clickable { onOpen(row) }
+                        } else Modifier)
+                        .padding(
+                            start = PAGE_GUTTER, end = PAGE_GUTTER, top = 12.dp, bottom = 12.dp,
+                        ),
                 ) {
                     Text(
                         text = row.title,
@@ -456,7 +493,8 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                             append(when (row.kind) {
                                 CanonicalSearchKind.RECORDING -> "Recording"
                                 CanonicalSearchKind.RELEASE_GROUP -> "Release group"
-                                CanonicalSearchKind.ARTIST -> "Artist"
+                                CanonicalSearchKind.RELEASE -> "Release edition · view tracks"
+                                CanonicalSearchKind.ARTIST -> "Artist · view discography"
                             })
                             row.subtitle?.takeIf { it.isNotBlank() }?.let {
                                 append(" · "); append(it)
@@ -495,7 +533,7 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                         }
                     }
                 }
-                if (index < results.data.lastIndex) {
+                if (index < rows.data.lastIndex) {
                     HorizontalDivider(
                         modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
                         thickness = 0.5.dp,
