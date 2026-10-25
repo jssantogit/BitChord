@@ -348,4 +348,20 @@ class A0CandidateDiscoveryTest {
         assertEquals(1,collector.screening().simulatedSuggested)
         assertEquals(0,collector.claimPreview().preferredIndex)
     }
+
+    @Test fun misleadingUnicodeCandidateStaysManualButCannotBecomeStrong() {
+        val collector=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",expectedDurationSeconds=161)
+        val name="ILLIT Magnetic\u202E.mp3"
+        collector.offerParsed(reply("peer",listOf(
+            A0SoulseekSearchFile("Music/ILLIT/"+name,6_400_000L,"mp3",
+                mapOf(0 to 320,1 to 161))
+        )),"peer")
+        assertEquals(1,collector.choices().size)
+        assertEquals(A0CandidatePreflight.Confidence.REVIEW,
+            collector.choices().single().preflight.confidence)
+        assertEquals(1,collector.screening().preflightReview)
+        assertEquals(0,collector.screening().simulatedSuggested)
+        assertEquals(1,collector.screening().simulatedNoStrong)
+    }
 }
