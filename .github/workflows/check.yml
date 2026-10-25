@@ -49,6 +49,9 @@ jobs:
       - name: Grant Gradle wrapper execute permission
         run: chmod +x gradlew
 
+      - name: Verify Soulseek offline benchmark (stdlib only)
+        run: python3 -m unittest discover -s tools/benchmarks/soulseek -p 'test_*.py' -v
+
       - name: Run Android unit tests
         run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
 
