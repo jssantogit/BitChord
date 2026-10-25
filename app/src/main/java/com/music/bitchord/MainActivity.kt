@@ -323,6 +323,8 @@ import com.music.bitchord.ui.screens.CanonicalMyRatingsEntry
 import com.music.bitchord.ui.screens.CanonicalMyRatingsScreen
 import com.music.bitchord.ui.screens.LibraryRediscoveryShelfEntry
 import com.music.bitchord.ui.screens.AdaptiveCollectionsLibraryEntry
+import com.music.bitchord.playback.CanonicalCollectionIntent
+import com.music.bitchord.ui.screens.rememberMusicBrainzCatalogAction
 import com.music.bitchord.ui.screens.rememberSmartCollectionBatchAction
 import com.music.bitchord.ui.screens.SmartCollectionActionSource
 import com.music.bitchord.ui.screens.SmartPlaylistBuilderEntry
@@ -954,6 +956,7 @@ private fun BitChordApp(
     }
     val controller = rememberMediaController()
     val executeSmartCollection = rememberSmartCollectionBatchAction(controller)
+    val executeMusicBrainzCatalog = rememberMusicBrainzCatalogAction(controller)
     val player = rememberPlayerState(controller)
     val recoveryNotice by PlaybackRecoveryNotices.notice.collectAsStateWithLifecycle()
     // A resume in a party is performed on the instant the server schedules, not
@@ -3308,6 +3311,12 @@ private fun BitChordApp(
                             searchingAddons = searchSource == SearchSource.ADDONS,
                             searchingCanonical = searchSource == SearchSource.CANONICAL,
                             canonicalResults = viewModel.canonicalResults.collectAsStateWithLifecycle().value,
+                            onCanonicalPlay = { mbid ->
+                                executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.PLAY_NOW)
+                            },
+                            onCanonicalAddToQueue = { mbid ->
+                                executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.ADD_TO_QUEUE)
+                            },
                             addonResults = addonResults,
                             addonHistory = viewModel.addonSearchHistory.collectAsStateWithLifecycle().value,
                             onAddonHistoryClick = { term ->

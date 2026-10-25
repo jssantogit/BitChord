@@ -163,6 +163,9 @@ fun SearchScreen(
     /** Public MusicBrainz discovery shows metadata-only rows with no play actions. */
     searchingCanonical: Boolean = false,
     canonicalResults: UiState<List<CanonicalCatalogSearchRow>>? = null,
+    /** Only called for MBIDs that have a cataloged asset; Playback revalidates. */
+    onCanonicalPlay: (String) -> Unit = {},
+    onCanonicalAddToQueue: (String) -> Unit = {},
     /** The Addons source's tracks for the submitted query; null until one is submitted. */
     addonResults: UiState<List<Song>>? = null,
     /** Words searched in the Addons tab before, newest first; shown while the field is empty. */
@@ -268,7 +271,9 @@ fun SearchScreen(
             contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
         ) {
             when {
-                searchingCanonical -> canonicalMusicBrainzResults(canonicalResults)
+                searchingCanonical -> canonicalMusicBrainzResults(
+                    canonicalResults, onCanonicalPlay, onCanonicalAddToQueue,
+                )
                 searchingLibrary || searchingAddons -> librarySearchResults(
                     query = query.trim(),
                     results = if (searchingAddons) addonResults else libraryResults,
@@ -416,6 +421,8 @@ fun SearchScreen(
  */
 private fun LazyListScope.canonicalMusicBrainzResults(
     results: UiState<List<CanonicalCatalogSearchRow>>?,
+    onPlay: (String) -> Unit,
+    onAddToQueue: (String) -> Unit,
 ) {
     when (results) {
         null -> item(key = "musicbrainz:hint") {
@@ -473,6 +480,19 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        // Never offer actions to metadata-only matches. Existing
+                        // MediaAssets still undergo account/identity checks in
+                        // the canonical planner and again at DataSource.open.
+                        if (row.hasCatalogedAsset) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = { onPlay(row.musicBrainzId) }) {
+                                    Text("Play")
+                                }
+                                OutlinedButton(onClick = { onAddToQueue(row.musicBrainzId) }) {
+                                    Text("Add to queue")
+                                }
+                            }
+                        }
                     }
                 }
                 if (index < results.data.lastIndex) {

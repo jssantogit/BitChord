@@ -416,3 +416,53 @@ internal fun rememberSmartCollectionBatchAction(
         }
     }
 }
+
+
+/**
+ * Search discovery and Playback are deliberately separate: an MBID may exist
+ * without an audio asset. A tap enters the existing B9/B10 canonical planner,
+ * which filters configured providers and revalidates at Media3 execution.
+ * No YouTube video IDs, fallback streams or native account URLs are created.
+ */
+@Composable
+internal fun rememberMusicBrainzCatalogAction(
+    controller: MediaController?,
+): (String, CanonicalCollectionIntent) -> Unit {
+    val context = LocalContext.current.applicationContext
+    val scope = rememberCoroutineScope()
+    val working = remember { mutableStateOf(false) }
+    val gate = remember(context) {
+        MusicBrainzCatalogPlaybackGate(
+            trustedRecordingId = { mbid ->
+                CanonicalCatalogDatabase.get(context).catalogDao()
+                    .entityIdForExternalIdentity("musicbrainz", "recording", mbid)
+            },
+            browse = { currentCanonicalBrowse(context) },
+            planner = CanonicalCollectionIntentPlanner(androidCanonicalQueueResolver(context)),
+        )
+    }
+    val added = stringResource(Res.string.smart_collection_batch_added)
+    val failed = stringResource(Res.string.smart_collection_batch_failed)
+    return { mbid, intent ->
+        if (!working.value) {
+            working.value = true
+            scope.launch {
+                val submitted = try {
+                    withContext(Dispatchers.IO) {
+                        val plan = gate.plan(mbid, intent) ?: return@withContext false
+                        submitCanonicalBatch(controller, plan)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    false
+                } finally {
+                    working.value = false
+                }
+                if (!submitted || intent != CanonicalCollectionIntent.PLAY_NOW) {
+                    Toast.makeText(context, if (submitted) added else failed, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+}
