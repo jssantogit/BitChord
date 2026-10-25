@@ -33,6 +33,7 @@ internal object A0CandidateRank {
         return folded.split(Regex("[^\\p{L}\\p{N}]+")).filter(String::isNotBlank)
     }
 
+    @Suppress("UNUSED_PARAMETER")
     fun rank(
         searchPhrase:String?, name:String, declaredBitrateKbps:Int?,
         remotePath:String?=null, format:String?=null,
@@ -176,11 +177,9 @@ internal object A0CandidateRank {
                 warnings.add(Warning.SIZE_SUSPICIOUS)
             }
         }
-        if(queueLength!=null)score-=when {
-            queueLength>25 -> 8
-            queueLength>0 -> 3
-            else -> 0
-        }
+        // The queue belongs to the source, not the recording. It must never
+        // change the musical score. Keep queueLength in the signature for
+        // compatibility with existing rank callers and baseline fixtures.
         return Ranking(score.coerceIn(0,100),match,quality,warnings)
     }
 }
