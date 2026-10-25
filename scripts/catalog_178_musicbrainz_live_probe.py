@@ -13,6 +13,7 @@ import argparse
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 import json
+import os
 from pathlib import Path
 import statistics
 import sys
@@ -209,9 +210,13 @@ def main() -> int:
     parser.add_argument("--interval", type=float, default=1.1)
     args = parser.parse_args()
     client = PublicMusicBrainz(interval=args.interval)
+    started_at = datetime.now(timezone.utc).isoformat()
     checks = collect_checks(client)
     stats = {
-        "started_at_utc": datetime.now(timezone.utc).isoformat(),
+        "started_at_utc": started_at,
+        "completed_at_utc": datetime.now(timezone.utc).isoformat(),
+        "head_sha": os.environ.get("CATALOG_HEAD_SHA") or None,
+        "github_run_id": os.environ.get("GITHUB_RUN_ID") or None,
         "scope": "PUBLIC_MUSICBRAINZ_API_ONLY",
         "not_executed": "Room/Media3/Android UI/Navidrome/physical device and remaining issue #178 matrix cases",
         "checks": checks,
