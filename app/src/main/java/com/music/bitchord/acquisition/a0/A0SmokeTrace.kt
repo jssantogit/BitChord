@@ -208,7 +208,7 @@ internal class A0SmokeTrace private constructor(
         if(complete.get())return
         fun n(value:Int)=value.coerceIn(0,100000).toString()
         val acceptedPreset=setOf("ANY","HI_RES","LOSSLESS","HIGH_QUALITY",
-            "HIGH_EFFICIENCY","MP3_256","FLAC_24_96")
+            "HIGH_EFFICIENCY","MP3_256","FLAC_24_96","CUSTOM")
         continuationTrace().event(
             stage="canonical_candidate_screening",
             outcome=TraceOutcome.SUCCEEDED,
