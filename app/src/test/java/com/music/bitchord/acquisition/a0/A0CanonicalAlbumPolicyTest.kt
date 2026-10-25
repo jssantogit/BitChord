@@ -22,7 +22,7 @@ class A0CanonicalAlbumPolicyTest {
             A0CanonicalAlbumPolicy.Claim("Blue Sky")
         )
         assertEquals(A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED,result.status)
-        assertNotEquals(A0CanonicalAlbumPolicy.Status.VERIFIED_EDITION,result.status)
+        assertEquals(A0CanonicalAlbumPolicy.Reason.MATCHING_NAME_IS_UNVERIFIED,result.reason)
     }
 
     @Test fun missingAlbumEvidencePreservesManualCandidateWithoutPromotingIt() {
