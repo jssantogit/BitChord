@@ -165,4 +165,42 @@ class A0CandidateQualityTest {
                     format="mp3",sizeBytes=6_400_000L).confidence)
         }
     }
+
+    @Test fun artistNameInsideSongTitleIsNotIndependentArtistEvidence() {
+        val query="Queen - Queen Of Hearts"
+        for(path in listOf(
+            "Music/Other/Queen Of Hearts.mp3",
+            "Music/Queen Of Hearts/Queen Of Hearts.mp3"
+        )) {
+            val rank=A0CandidateRank.rank(query,"Queen Of Hearts.mp3",320,
+                remotePath=path,format="mp3",
+                declaredDurationSeconds=161,expectedDurationSeconds=161,
+                sizeBytes=6_400_000L)
+            assertTrue("Unconfirmed artist: "+path,
+                A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in rank.warnings)
+            val assessed=A0CandidatePreflight.assess(query,rank,320,
+                declaredDurationSeconds=161,expectedDurationSeconds=161,
+                format="mp3",sizeBytes=6_400_000L)
+            assertNotEquals(A0CandidatePreflight.Confidence.STRONG,assessed.confidence)
+        }
+    }
+
+    @Test fun explicitArtistEvidenceStillAllowsSongTitlesContainingArtistName() {
+        val query="Queen - Queen Of Hearts"
+        for((name,path) in listOf(
+            "Queen Of Hearts.mp3" to "Music/Queen/Queen Of Hearts.mp3",
+            "Queen - Queen Of Hearts.mp3" to "Music/Other/Queen - Queen Of Hearts.mp3"
+        )) {
+            val rank=A0CandidateRank.rank(query,name,320,
+                remotePath=path,format="mp3",
+                declaredDurationSeconds=161,expectedDurationSeconds=161,
+                sizeBytes=6_400_000L)
+            assertFalse("Explicit artist: "+name,
+                A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in rank.warnings)
+            assertEquals(A0CandidatePreflight.Confidence.STRONG,
+                A0CandidatePreflight.assess(query,rank,320,
+                    declaredDurationSeconds=161,expectedDurationSeconds=161,
+                    format="mp3",sizeBytes=6_400_000L).confidence)
+        }
+    }
 }
