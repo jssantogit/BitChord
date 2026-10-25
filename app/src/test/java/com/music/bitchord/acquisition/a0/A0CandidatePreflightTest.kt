@@ -87,4 +87,22 @@ class A0CandidatePreflightTest {
             A0CandidatePreflight.Weighted(inspect(duration=null),95),
             A0CandidatePreflight.Weighted(inspect(name="ILLIT Magnetic remix.mp3"),50))))
     }
+    @Test fun claimedOneThousandKbpsMp3IsUnsafe() {
+        val result=inspect(bitrate=1000)
+        assertEquals(A0CandidatePreflight.Confidence.UNSAFE,result.confidence)
+        assertTrue(A0CandidatePreflight.Reason.ENCODING_CONFLICT in result.reasons)
+    }
+
+    @Test fun eightBitLosslessClaimRequiresReview() {
+        val rank=A0CandidateRank.rank("ILLIT - Magnetic","ILLIT Magnetic.flac",null,
+            remotePath="Music\\\\ILLIT\\\\ILLIT Magnetic.flac",format="flac",
+            declaredDurationSeconds=161,expectedDurationSeconds=161,
+            declaredSampleRateHz=44100,declaredBitDepth=8,sizeBytes=24_000_000)
+        val assessed=A0CandidatePreflight.assess("ILLIT - Magnetic",rank,null,
+            declaredDurationSeconds=161,expectedDurationSeconds=161,
+            format="flac",sizeBytes=24_000_000,
+            declaredSampleRateHz=44100,declaredBitDepth=8)
+        assertEquals(A0CandidatePreflight.Confidence.REVIEW,assessed.confidence)
+    }
+
 }
