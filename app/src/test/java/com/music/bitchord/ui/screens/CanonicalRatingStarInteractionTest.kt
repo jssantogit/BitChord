@@ -2,6 +2,13 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.hasClickAction
+import com.music.bitchord.data.model.Song
+import com.music.bitchord.ui.components.CanonicalSongRatingStars
+import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
+import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
@@ -47,6 +54,42 @@ class CanonicalRatingStarInteractionTest {
             }
         }
         compose.onNodeWithContentDescription("4.5/5", substring = true).performClick()
+        compose.runOnIdle { assertEquals(1, opens) }
+    }
+
+    @Test fun nowPlayingRemoteOnlyIsReadOnlyUntilFirstNativeScoreFromMenu() {
+        val song = Song(videoId = "content://media/song", title = "Test", artist = "Artist", thumbnailUrl = null)
+        var opens = 0
+        compose.setContent {
+            MaterialTheme {
+                CompositionLocalProvider(
+                    LocalCanonicalRatingDisplay provides CanonicalRatingDisplaySnapshot(
+                        bySongKey = mapOf(song.videoId to RatingDisplay(remoteValue = 4)),
+                    ),
+                ) {
+                    CanonicalSongRatingStars(song = song, onClick = { opens++ })
+                }
+            }
+        }
+        compose.onNodeWithContentDescription("4/5", substring = true).assert(!hasClickAction())
+        compose.runOnIdle { assertEquals(0, opens) }
+    }
+
+    @Test fun firstNativeScoreActivatesDirectNowPlayingEditor() {
+        val song = Song(videoId = "content://media/song", title = "Test", artist = "Artist", thumbnailUrl = null)
+        var opens = 0
+        compose.setContent {
+            MaterialTheme {
+                CompositionLocalProvider(
+                    LocalCanonicalRatingDisplay provides CanonicalRatingDisplaySnapshot(
+                        bySongKey = mapOf(song.videoId to RatingDisplay(localValue = 3.5)),
+                    ),
+                ) {
+                    CanonicalSongRatingStars(song = song, onClick = { opens++ })
+                }
+            }
+        }
+        compose.onNodeWithContentDescription("3.5/5", substring = true).performClick()
         compose.runOnIdle { assertEquals(1, opens) }
     }
 }
