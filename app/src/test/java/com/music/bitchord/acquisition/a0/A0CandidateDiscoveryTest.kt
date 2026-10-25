@@ -215,8 +215,10 @@ class A0CandidateDiscoveryTest {
         assertEquals(A0PeerAvailability.Tier.CONGESTED,choices[1].peerAvailability.tier)
         assertEquals(1,collector.screening().peersReady)
         assertEquals(1,collector.screening().peersCongested)
-        assertEquals(1,collector.screening().simulatedAmbiguous)
-        assertEquals(0,collector.screening().simulatedSuggested)
+        assertEquals(1,collector.screening().simulatedSuggested)
+        assertEquals(0,collector.screening().simulatedAmbiguous)
+        assertEquals(1,collector.screening().claimsDistinct)
+        assertEquals(1,collector.screening().claimsRepeated)
         assertFalse(collector.screening().toString().contains("slow"))
     }
 
@@ -241,6 +243,31 @@ class A0CandidateDiscoveryTest {
             choices[1].preflight.confidence)
         assertEquals(1,collector.screening().simulatedSuggested)
         assertEquals(0,collector.screening().simulatedAmbiguous)
+    }
+
+    @Test fun impossibleAdvertisedBitrateOutsideParserSoftRangeIsNotSilentlyUnknown() {
+        val collector=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",expectedDurationSeconds=161)
+        collector.offerParsed(reply("peer",listOf(
+            A0SoulseekSearchFile("Music\\ILLIT Magnetic.mp3",6_400_000L,"mp3",
+                mapOf(0 to 2_000_000,1 to 161))
+        )),"peer")
+        val observed=collector.choices().single()
+        assertEquals(A0CandidatePreflight.Confidence.UNSAFE,observed.preflight.confidence)
+        assertTrue(A0CandidatePreflight.Reason.ENCODING_CONFLICT in observed.preflight.reasons)
+    }
+
+    @Test fun differentDeclaredSizeRemainsDistinctAndShadowAbstains() {
+        val collector=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",expectedDurationSeconds=161)
+        for((i,size) in listOf(6_400_000L,6_400_001L).withIndex())
+            collector.offerParsed(reply("peer$i",listOf(
+                A0SoulseekSearchFile("Music\\ILLIT Magnetic.mp3",size,"mp3",
+                    mapOf(0 to 320,1 to 161))
+            )),"peer$i")
+        assertEquals(2,collector.screening().claimsDistinct)
+        assertEquals(0,collector.screening().claimsRepeated)
+        assertEquals(1,collector.screening().simulatedAmbiguous)
     }
 
 }
