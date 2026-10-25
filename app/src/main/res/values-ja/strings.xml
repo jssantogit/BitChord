@@ -1338,4 +1338,25 @@
     <string name="playback_recovery_retry">再試行</string>
     <string name="playback_recovery_retrying">再試行中…</string>
     <string name="playback_recovery_dismiss">閉じる</string>
+    <string name="canonical_discovery_header">カタログを探す</string>
+    <string name="canonical_discovery_setting_title">カタログ中心のホームと探索</string>
+    <string name="canonical_discovery_setting_subtitle">保存済みの音楽とMusicBrainzをホームと探索で使用します。YouTube Musicが無効な場合もこのモードを使用します。</string>
+    <string name="canonical_discovery_home_title">あなたの音楽</string>
+    <string name="canonical_discovery_explore_title">カタログを探索</string>
+    <string name="canonical_discovery_description">端末に保存したコレクションを表示するか、MusicBrainzで検索します。メタデータがあっても再生できる音源があるとは限りません。</string>
+    <string name="canonical_discovery_search">MusicBrainzで検索</string>
+    <string name="canonical_discovery_open_library">ライブラリを開く</string>
+    <string name="canonical_discovery_downloaded_collections">ダウンロード済みコレクション</string>
+    <string name="canonical_discovery_local_playlists">端末に保存したプレイリスト</string>
+    <string name="canonical_discovery_empty_collections">この端末にはまだコレクションが保存されていません。</string>
+    <string name="canonical_discovery_catalog_cache">端末に保存したカタログ</string>
+    <string name="canonical_discovery_cache_loading">保存済みカタログを読み込み中…</string>
+    <string name="canonical_discovery_cache_error">保存済みのMusicBrainzカタログを読み込めませんでした。</string>
+    <string name="canonical_discovery_cache_empty">保存済みのMusicBrainz項目はありません。検索して公開メタデータを探してください。</string>
+    <string name="canonical_discovery_metadata_only">メタデータのみ・登録済み音源なし</string>
+    <string name="canonical_discovery_asset_available">音源を登録済み・再生時にアクセスを確認</string>
+    <string name="canonical_discovery_cached_offline">オフライン保存済み</string>
+    <string name="canonical_discovery_retry">再試行</string>
+    <string name="canonical_discovery_refresh">保存済みカタログを更新</string>
+    <string name="legacy_library_youtube_disabled">このオンラインライブラリを読み込むには設定でYouTube Musicを有効にしてください。ローカルのプレイリストとコレクションは引き続き利用できます。</string>
 </resources>
