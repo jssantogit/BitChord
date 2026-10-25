@@ -797,8 +797,14 @@ private fun InlineQueueRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            CanonicalSongRatingStars(song, color = Color.White.copy(alpha = 0.8f))
         }
+        // The weighted credits surrender width to a fixed trailing star strip.
+        // ExplicitSongTitle ellipsizes earlier instead of pushing stars away.
+        CanonicalSongRatingStars(
+            song = song,
+            modifier = Modifier.padding(start = 8.dp, end = 6.dp),
+            color = Color.White.copy(alpha = 0.8f),
+        )
         if (isCurrent) {
             Icon(
                 Icons.Rounded.GraphicEq,
