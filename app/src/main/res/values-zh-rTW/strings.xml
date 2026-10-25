@@ -1330,4 +1330,25 @@
     <string name="playback_recovery_retry">重試</string>
     <string name="playback_recovery_retrying">正在重試…</string>
     <string name="playback_recovery_dismiss">關閉</string>
+    <string name="canonical_discovery_header">探索音樂目錄</string>
+    <string name="canonical_discovery_setting_title">使用目錄的首頁與探索</string>
+    <string name="canonical_discovery_setting_subtitle">在首頁和探索中使用已儲存的音樂與 MusicBrainz。停用 YouTube Music 時也會使用此模式。</string>
+    <string name="canonical_discovery_home_title">你的音樂</string>
+    <string name="canonical_discovery_explore_title">探索目錄</string>
+    <string name="canonical_discovery_description">瀏覽此裝置已儲存的合輯，或搜尋 MusicBrainz。目錄中有中繼資料不代表音訊一定可以播放。</string>
+    <string name="canonical_discovery_search">搜尋 MusicBrainz</string>
+    <string name="canonical_discovery_open_library">開啟音樂庫</string>
+    <string name="canonical_discovery_downloaded_collections">已下載的合輯</string>
+    <string name="canonical_discovery_local_playlists">裝置已儲存的播放清單</string>
+    <string name="canonical_discovery_empty_collections">此裝置尚未儲存任何合輯。</string>
+    <string name="canonical_discovery_catalog_cache">裝置已儲存的目錄</string>
+    <string name="canonical_discovery_cache_loading">正在載入已儲存的目錄…</string>
+    <string name="canonical_discovery_cache_error">無法讀取已儲存的 MusicBrainz 目錄。</string>
+    <string name="canonical_discovery_cache_empty">尚未儲存 MusicBrainz 項目。請搜尋目錄來瀏覽公開中繼資料。</string>
+    <string name="canonical_discovery_metadata_only">僅中繼資料 · 尚無已登錄音訊</string>
+    <string name="canonical_discovery_asset_available">音訊已登錄 · 播放時會驗證存取權限</string>
+    <string name="canonical_discovery_cached_offline">已離線儲存</string>
+    <string name="canonical_discovery_retry">重試</string>
+    <string name="canonical_discovery_refresh">重新整理已儲存的目錄</string>
+    <string name="legacy_library_youtube_disabled">請在設定中啟用 YouTube Music，以載入此線上音樂庫。本機播放清單與合輯仍可使用。</string>
 </resources>
