@@ -2,6 +2,13 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.assertDoesNotExist
+import com.music.bitchord.ui.components.ActionRow
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Radio
+
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -95,5 +102,44 @@ class CanonicalRecordingFeedbackControlsTest {
         compose.onNodeWithContentDescription("2.5 stars selected").assertIsDisplayed()
         compose.onNodeWithText("Save rating").performClick()
         compose.runOnIdle { assertEquals(listOf(2.5), values) }
+    }
+
+    @Test fun modalDisplaysOnlyCenteredStarsNotRedundantNumbers() {
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecordingFeedbackPanel(
+                    rating = 3.5,
+                    onSave = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("3.5 stars selected").assertIsDisplayed()
+        compose.onNodeWithText("3.5 / 5").assertDoesNotExist()
+        compose.onNodeWithText("— / 5").assertDoesNotExist()
+        compose.onNodeWithText("Clear rating").assertDoesNotExist()
+    }
+
+    @Test fun editRatingUsesSameMenuTextAlignmentAsOtherActions() {
+        compose.setContent {
+            MaterialTheme {
+                Column {
+                    CanonicalRecordingFeedbackAction(onClick = {})
+                    ActionRow(
+                        icon = Icons.Rounded.Radio,
+                        label = "Start radio",
+                        onClick = {},
+                    )
+                }
+            }
+        }
+        val edit = compose.onNodeWithText("Edit rating")
+        val radio = compose.onNodeWithText("Start radio")
+        edit.assertIsDisplayed()
+        radio.assertIsDisplayed()
+        assertEquals(
+            radio.getUnclippedBoundsInRoot().left,
+            edit.getUnclippedBoundsInRoot().left,
+        )
     }
 }
