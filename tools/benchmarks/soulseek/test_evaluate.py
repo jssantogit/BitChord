@@ -133,6 +133,14 @@ class OfflineBenchmarkTest(unittest.TestCase):
         with self.assertRaises(BenchmarkInputError):
             score_model([c], {"c": p})
 
+    def test_public_input_fingerprint_excludes_sealed_gold_labels(self):
+        original = make_case("blind-01", {"a": "EXACT_EDITION"})
+        changed_truth = make_case("blind-01", {"a": "WRONG_EDITION_VERSION"})
+        self.assertEqual(case_fingerprint(original), case_fingerprint(changed_truth))
+        changed_offer = make_case("blind-01", {"a": "EXACT_EDITION"})
+        changed_offer["observations"][0]["bitrate_kbps"] = 96
+        self.assertNotEqual(case_fingerprint(original), case_fingerprint(changed_offer))
+
     def test_comparison_report_does_not_export_peer_filename_or_query(self):
         picks = {"c1": make_prediction(self.case1, ["correct", "remaster"], "correct")}
         report = compare([self.case1], picks, picks, allow_synthetic=True)
