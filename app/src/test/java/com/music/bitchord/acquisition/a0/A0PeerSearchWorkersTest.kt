@@ -34,21 +34,23 @@ class A0PeerSearchWorkersTest {
     @Test(timeout=5000)
     fun queueRejectsExcessiveOffersAndCleanupIsTerminal() {
         val gate=CountDownLatch(1)
-        val started=CountDownLatch(3)
+        val started=CountDownLatch(8)
         val workers=A0PeerSearchWorkers({ action ->
             started.countDown()
             gate.await(2,TimeUnit.SECONDS)
             action()
         })
         try {
-            repeat(3) { assertTrue(workers.submit {}) }
+            // Up to 36 server offers may arrive almost simultaneously.
+            // All must be admitted without expanding the peer socket budget.
+            repeat(8) { assertTrue(workers.submit {}) }
             assertTrue(started.await(2,TimeUnit.SECONDS))
-            repeat(6) { assertTrue(workers.submit {}) }
+            repeat(28) { assertTrue(workers.submit {}) }
+            repeat(4) { assertTrue(workers.submit {}) }
             assertFalse(workers.submit {})
         } finally {
             gate.countDown()
             assertTrue(workers.stop(2000))
         }
         assertFalse(workers.submit {})
-    }
-}
+    }}
