@@ -181,6 +181,9 @@ fun SearchScreen(
     onCanonicalBack: () -> Unit = {},
     onCanonicalLoadMore: () -> Unit = {},
     canonicalLoadingMore: Boolean = false,
+    onCanonicalSearchLoadMore: () -> Unit = {},
+    canonicalSearchHasMore: Boolean = false,
+    canonicalSearchLoadingMore: Boolean = false,
     /** Only called for MBIDs that have a cataloged asset; Playback revalidates. */
     onCanonicalPlay: (String) -> Unit = {},
     onCanonicalAddToQueue: (String) -> Unit = {},
@@ -292,6 +295,8 @@ fun SearchScreen(
                 searchingCanonical -> canonicalMusicBrainzResults(
                     canonicalResults, canonicalDetail, onCanonicalOpen, onCanonicalBack,
                     onCanonicalLoadMore, canonicalLoadingMore,
+                    onCanonicalSearchLoadMore, canonicalSearchHasMore,
+                    canonicalSearchLoadingMore,
                     onCanonicalPlay, onCanonicalAddToQueue,
                 )
                 searchingLibrary || searchingAddons -> librarySearchResults(
@@ -446,6 +451,9 @@ private fun LazyListScope.canonicalMusicBrainzResults(
     onBack: () -> Unit,
     onLoadMore: () -> Unit,
     loadingMore: Boolean,
+    onSearchLoadMore: () -> Unit,
+    searchHasMore: Boolean,
+    searchLoadingMore: Boolean,
     onPlay: (String) -> Unit,
     onAddToQueue: (String) -> Unit,
 ) {
@@ -567,6 +575,18 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
                     ) { Text(if (loadingMore) "Loading more…" else "Load more editions") }
                 }
+            }
+        }
+    }
+    if (detail == null && results is UiState.Success && searchHasMore) {
+        item(key = "musicbrainz:search:load-more") {
+            OutlinedButton(
+                onClick = onSearchLoadMore,
+                enabled = !searchLoadingMore,
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
+            ) {
+                Text(if (searchLoadingMore) "Loading more…" else "Load more catalog results")
             }
         }
     }
