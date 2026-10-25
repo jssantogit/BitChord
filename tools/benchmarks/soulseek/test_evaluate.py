@@ -109,6 +109,13 @@ class OfflineBenchmarkTest(unittest.TestCase):
         with self.assertRaises(BenchmarkInputError):
             compare(self.cases, lhs, rhs, allow_synthetic=True)
 
+    def test_real_corpus_flag_alone_is_not_an_independent_truth_audit(self):
+        case = make_case("unreviewed-real", {"a": "EXACT_EDITION"}, dataset="real")
+        case["observations"][0]["truth_evidence"] = "private_source_unreviewed"
+        pred = make_prediction(case, ["a"], "a")
+        with self.assertRaises(BenchmarkInputError):
+            compare([case], {"unreviewed-real": pred}, {"unreviewed-real": pred})
+
     def test_refuses_to_publish_synthetic_results_as_real(self):
         picks = {"c1": make_prediction(self.case1, ["correct", "remaster"], "correct")}
         with self.assertRaises(BenchmarkInputError):
