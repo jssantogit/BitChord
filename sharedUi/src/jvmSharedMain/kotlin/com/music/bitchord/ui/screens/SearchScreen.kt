@@ -106,6 +106,19 @@ data class CanonicalCatalogSearchRow(
     val trackMbid: String? = null,
 )
 
+/**
+ * Indexed Server result. A canonical recording may have one or several server
+ * assets, but the UI receives only a verified opaque mediaAssetId/providerKey,
+ * not the private provider's URL, track id or authentication credentials.
+ */
+data class CanonicalServerSearchRow(
+    val recordingId: String,
+    val mediaAssetId: String,
+    val providerKey: String,
+    val title: String,
+    val artistDisplay: String,
+)
+
 /** One navigable step; its rows are metadata identities, not video IDs. */
 data class CanonicalCatalogDetailPage(
     val title: String,
