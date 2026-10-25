@@ -491,15 +491,19 @@ internal interface CanonicalCatalogDao {
     @Query(
         """
         SELECT identity.externalId AS musicBrainzId,
-            artist.name AS name, info.disambiguation AS disambiguation,
-            info.country AS country
+            COALESCE(NULLIF(info.name, ''), artist.name) AS name,
+            info.disambiguation AS disambiguation, info.country AS country
         FROM catalog_external_identity identity
         JOIN catalog_artist artist ON artist.id = identity.entityId
         LEFT JOIN musicbrainz_artist_enrichment info
             ON info.artistId = artist.id AND info.mbid = identity.externalId
         WHERE identity.provider = 'musicbrainz' AND identity.entityType = 'artist'
-          AND instr(lower(artist.name), lower(:query)) > 0
-        ORDER BY artist.name COLLATE NOCASE, identity.externalId
+          AND (
+            instr(lower(artist.name), lower(:query)) > 0
+            OR instr(lower(info.name), lower(:query)) > 0
+          )
+        ORDER BY COALESCE(NULLIF(info.name, ''), artist.name) COLLATE NOCASE,
+                 identity.externalId
         LIMIT :limit
         """,
     )
