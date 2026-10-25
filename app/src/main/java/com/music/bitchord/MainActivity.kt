@@ -319,8 +319,8 @@ import com.music.bitchord.ui.screens.HomeScreen
 import com.music.bitchord.ui.screens.LibraryGridPage
 import com.music.bitchord.ui.screens.LibraryScreen
 import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingDetailsScreen
-import com.music.bitchord.ui.screens.CanonicalDiscoveryScreen
-import com.music.bitchord.ui.screens.CanonicalDiscoverySurface
+import com.music.bitchord.ui.canonicalExistingHomeShelves
+import com.music.bitchord.ui.canonicalBrowseCardId
 import com.music.bitchord.ui.screens.CanonicalSongMenuRating
 import com.music.bitchord.ui.screens.CanonicalMyRatingsEntry
 import com.music.bitchord.ui.screens.CanonicalMyRatingsScreen
@@ -925,6 +925,27 @@ private fun BitChordApp(
             browseId = playlist.browseId,
         )
     }
+
+    // Feed content is provider-neutral. MusicBrainz is a metadata source,
+    // not a second Home/Explore screen; continue using HomeScreen's cards.
+    val cachedCanonicalRows =
+        (canonicalDiscoveryCatalog as? UiState.Success)?.data.orEmpty()
+    val canonicalHomeShelves = canonicalExistingHomeShelves(
+        downloaded = downloadedReleases.map { collection ->
+            ShelfItem(
+                title = collection.title,
+                subtitle = collection.subtitle,
+                thumbnailUrl = collection.thumbnailUrl,
+                videoId = null,
+                browseId = Downloads.pageIdFor(collection.id),
+            )
+        },
+        playlists = localPlaylistItems,
+        metadata = cachedCanonicalRows,
+        downloadedHeading = stringResource(R.string.canonical_discovery_downloaded_collections),
+        playlistHeading = stringResource(R.string.canonical_discovery_local_playlists),
+        cachedHeading = stringResource(R.string.canonical_discovery_catalog_cache),
+    )
     // What a browse id is recorded under in Downloads.collections, when it names
     // a release downloaded whole — see BrowseTarget.downloadId. A downloaded
     // playlist's own page and its card both carry the id under the
@@ -2077,6 +2098,34 @@ private fun BitChordApp(
         selectedTab = TAB_SEARCH
         searchFocusRequested = true
     }
+    val onCanonicalShelfClick: (ShelfItem, String) -> Unit = { item, _ ->
+        val cached = cachedCanonicalRows.firstOrNull {
+            canonicalBrowseCardId(it) == item.browseId
+        }
+        if (cached != null) {
+            viewModel.onQueryChange("")
+            viewModel.setSearchSource(SearchSource.CANONICAL)
+            selectedTab = TAB_SEARCH
+            viewModel.openCanonicalCatalogEntry(cached)
+        } else {
+            item.browseId?.let { id ->
+                val collection = downloadedReleases.firstOrNull {
+                    Downloads.pageIdFor(it.id) == id
+                }
+                viewModel.openDetail(
+                    browseId = id,
+                    title = item.title,
+                    subtitle = item.subtitle,
+                    thumbnailUrl = item.thumbnailUrl,
+                    type = when {
+                        collection?.playlist == true || id.startsWith("local:playlist:") ->
+                            BrowseType.PLAYLIST
+                        else -> BrowseType.ALBUM
+                    },
+                )
+            }
+        }
+    }
     // Shared by the Library tab itself and by a shelf's "Show all" page, so a
     // card opens the same way from either.
     val onLibraryItemClick: (ShelfItem) -> Unit = { item ->
@@ -3155,50 +3204,20 @@ private fun BitChordApp(
                         )
                     } else when (key.removePrefix(TAB_KEY).toIntOrNull() ?: selectedTab) {
                         TAB_HOME -> if (usesCanonicalDiscovery) {
-                            CanonicalDiscoveryScreen(
-                                surface = CanonicalDiscoverySurface.HOME,
-                                catalog = canonicalDiscoveryCatalog,
-                                downloadedCollections = downloadedReleases,
-                                localPlaylists = localPlaylists,
-                                onSearchCatalog = openCanonicalSearch,
-                                onOpenLibrary = { selectedTab = TAB_LIBRARY },
-                                onOpenDownloadedCollection = { collection ->
-                                    viewModel.openDetail(
-                                        browseId = Downloads.pageIdFor(collection.id),
-                                        title = collection.title,
-                                        subtitle = collection.subtitle,
-                                        thumbnailUrl = collection.thumbnailUrl,
-                                        type = if (collection.playlist) BrowseType.PLAYLIST else BrowseType.ALBUM,
-                                    )
-                                },
-                                onOpenLocalPlaylist = { playlist ->
-                                    viewModel.openDetail(
-                                        browseId = playlist.browseId,
-                                        title = playlist.title,
-                                        subtitle = localPlaylistItems.firstOrNull {
-                                            it.browseId == playlist.browseId
-                                        }?.subtitle.orEmpty(),
-                                        thumbnailUrl = playlist.songs.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }
-                                            ?.thumbnailUrl,
-                                        type = BrowseType.PLAYLIST,
-                                    )
-                                },
-                                onOpenCatalogEntry = { row ->
-                                    viewModel.onQueryChange("")
-                                    viewModel.setSearchSource(SearchSource.CANONICAL)
-                                    selectedTab = TAB_SEARCH
-                                    viewModel.openCanonicalCatalogEntry(row)
-                                },
-                                onRetryCatalog = viewModel::loadCanonicalDiscoveryCatalog,
-                                onRefresh = { viewModel.refresh(MainViewModel.Feed.HOME) },
+                            HomeScreen(
+                                state = UiState.Success(canonicalHomeShelves),
+                                listState = homeListState,
+                                onItemClick = onCanonicalShelfClick,
+                                onRetry = viewModel::loadCanonicalDiscoveryCatalog,
                                 refreshing = MainViewModel.Feed.HOME in refreshing,
-                                onPlayRecording = { mbid ->
-                                    executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.PLAY_NOW)
-                                },
-                                onQueueRecording = { mbid ->
-                                    executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.ADD_TO_QUEUE)
-                                },
+                                onRefresh = { viewModel.refresh(MainViewModel.Feed.HOME) },
+                                pullState = homePull,
                                 contentPadding = listPadding,
+                                title = stringResource(R.string.listen_now),
+                                signedIn = true,
+                                leadHero = true,
+                                currentSong = player.song,
+                                isPlaying = player.isPlaying,
                             )
                         } else HomeScreen(
                             state = homeState,
@@ -3238,50 +3257,20 @@ private fun BitChordApp(
                             recentlyPlayedLoading = homeRecentlyPlayedLoading,
                         )
                         TAB_EXPLORE -> if (usesCanonicalDiscovery) {
-                            CanonicalDiscoveryScreen(
-                                surface = CanonicalDiscoverySurface.EXPLORE,
-                                catalog = canonicalDiscoveryCatalog,
-                                downloadedCollections = downloadedReleases,
-                                localPlaylists = localPlaylists,
-                                onSearchCatalog = openCanonicalSearch,
-                                onOpenLibrary = { selectedTab = TAB_LIBRARY },
-                                onOpenDownloadedCollection = { collection ->
-                                    viewModel.openDetail(
-                                        browseId = Downloads.pageIdFor(collection.id),
-                                        title = collection.title,
-                                        subtitle = collection.subtitle,
-                                        thumbnailUrl = collection.thumbnailUrl,
-                                        type = if (collection.playlist) BrowseType.PLAYLIST else BrowseType.ALBUM,
-                                    )
-                                },
-                                onOpenLocalPlaylist = { playlist ->
-                                    viewModel.openDetail(
-                                        browseId = playlist.browseId,
-                                        title = playlist.title,
-                                        subtitle = localPlaylistItems.firstOrNull {
-                                            it.browseId == playlist.browseId
-                                        }?.subtitle.orEmpty(),
-                                        thumbnailUrl = playlist.songs.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }
-                                            ?.thumbnailUrl,
-                                        type = BrowseType.PLAYLIST,
-                                    )
-                                },
-                                onOpenCatalogEntry = { row ->
-                                    viewModel.onQueryChange("")
-                                    viewModel.setSearchSource(SearchSource.CANONICAL)
-                                    selectedTab = TAB_SEARCH
-                                    viewModel.openCanonicalCatalogEntry(row)
-                                },
-                                onRetryCatalog = viewModel::loadCanonicalDiscoveryCatalog,
-                                onRefresh = { viewModel.refresh(MainViewModel.Feed.EXPLORE) },
+                            HomeScreen(
+                                state = UiState.Success(canonicalHomeShelves),
+                                listState = exploreListState,
+                                onItemClick = onCanonicalShelfClick,
+                                onRetry = viewModel::loadCanonicalDiscoveryCatalog,
                                 refreshing = MainViewModel.Feed.EXPLORE in refreshing,
-                                onPlayRecording = { mbid ->
-                                    executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.PLAY_NOW)
-                                },
-                                onQueueRecording = { mbid ->
-                                    executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.ADD_TO_QUEUE)
-                                },
+                                onRefresh = { viewModel.refresh(MainViewModel.Feed.EXPLORE) },
+                                pullState = explorePull,
                                 contentPadding = listPadding,
+                                title = stringResource(R.string.explore),
+                                signedIn = true,
+                                leadHero = false,
+                                currentSong = player.song,
+                                isPlaying = player.isPlaying,
                             )
                         } else selectedMoodGenre?.let { category ->
                             MoodGenrePlaylistsScreen(
