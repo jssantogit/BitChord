@@ -38,9 +38,25 @@ def _fraction(numerator: int, denominator: int) -> dict[str, int]:
     return {"numerator": numerator, "denominator": denominator}
 
 
+def blind_case(case: dict[str, Any]) -> dict[str, Any]:
+    """Projection given to rankers: no truth labels or annotation evidence.
+
+    Gold stays ONLY with the benchmark judge. Changes in labels cannot
+    change model-visible fingerprints or accidentally leak into ranking.
+    """
+    return {
+        **{key: value for key, value in case.items() if key != "observations"},
+        "observations": [
+            {key: value for key, value in offer.items()
+             if key not in {"truth", "truth_evidence"}}
+            for offer in case["observations"]
+        ],
+    }
+
+
 def case_fingerprint(case: dict[str, Any]) -> str:
-    """Hash the entire, immutable input INCLUDING its gold labels."""
-    payload = json.dumps(case, sort_keys=True, separators=(",", ":"),
+    """Input-only hash, deliberately blinded to gold labels."""
+    payload = json.dumps(blind_case(case), sort_keys=True, separators=(",", ":"),
                          ensure_ascii=False, allow_nan=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
