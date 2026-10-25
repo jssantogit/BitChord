@@ -66,6 +66,42 @@ class MusicBrainzReleaseGraphIndexTest {
         } finally { db.close() }
     }
 
+    @Test fun cachedRecordingEvidenceDoesNotOverwriteExistingCanonicalLocalMetadata() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val recording = "e614e432-ca77-41c1-82c1-4e3a24ebbb0c"
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val index = MusicBrainzCatalogIndex(db)
+            val id = index.persistRecordings(listOf(
+                com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit(
+                    recording, "Preserved local title", "Local credits", 99_000L,
+                ),
+            ))[recording]!!
+            val detail = MusicBrainzCatalogReleaseDetail(release, null, "SUPER REAL ME", "ILLIT",
+                "XW", "2024-03-25", listOf(
+                    MusicBrainzCatalogTrack(
+                        trackMbid = "14f273b6-813b-4239-b0f8-c4b839b902c6",
+                        recordingMbid = recording,
+                        title = "Magnetic (edition)",
+                        mediumNumber = 1, trackNumber = 2, durationMs = 160_000L,
+                        recordingTitle = "Magnetic (sped up)",
+                        recordingDurationMs = 123_000L,
+                    ),
+                ),
+            )
+            index.persistReleaseDetail(detail)
+            assertEquals("Preserved local title", db.catalogDao().recordingById(id)!!.title)
+            assertEquals(99_000L, db.catalogDao().recordingById(id)!!.durationMs)
+            val cached = index.cachedRelease(release)!!.tracks.single()
+            assertEquals("Magnetic (edition)", cached.title)
+            assertEquals(160_000L, cached.durationMs)
+            assertEquals("Magnetic (sped up)", cached.recordingTitle)
+            assertEquals(123_000L, cached.recordingDurationMs)
+        } finally { db.close() }
+    }
+
     @Test fun releaseGroupAndEditionsArePersistedWithoutAudioOrTrackIdentityCollisions() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(
             RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
