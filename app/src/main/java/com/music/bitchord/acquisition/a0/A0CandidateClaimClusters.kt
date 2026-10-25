@@ -17,7 +17,11 @@ internal object A0CandidateClaimClusters {
         val durationSeconds:Int?,
         val sampleRateHz:Int?,
         val bitDepth:Int?,
-    )
+    ) {
+        // Metadata may contain the user's query and a remote filename. Never
+        // include raw claim material in diagnostics or accidental exceptions.
+        override fun toString()="A0Claim(redacted)"
+    }
 
     data class Entry(
         val claim:Claim,
