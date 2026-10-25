@@ -27,6 +27,10 @@ class A0UnifiedDownloadQualityTest {
             assess(A0CanonicalAcquisitionIntent.Codec.MP3,"mp3",256))
         assertEquals(A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED,
             assess(A0CanonicalAcquisitionIntent.Codec.MP3,"mp3",320))
+        val high=A0DownloadQualityPolicy.evaluate(profile,
+            A0DownloadQualityPolicy.Offer(A0CanonicalAcquisitionIntent.Codec.AAC_ADTS,"aac",256),
+            supported + A0CanonicalAcquisitionIntent.Codec.AAC_ADTS)
+        assertEquals(A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED,high.status)
     }
 
     @Test fun customCodecAndBitrateAreRealTypedConstraints() {
