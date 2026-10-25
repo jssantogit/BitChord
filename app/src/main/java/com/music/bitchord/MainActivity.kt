@@ -1828,15 +1828,22 @@ private fun BitChordApp(
      * without spending the request is what lets the second run serve it.
      */
     val linkRequest by MusicLink.pending.collectAsStateWithLifecycle()
-    LaunchedEffect(linkRequest, controller) {
+    LaunchedEffect(linkRequest, controller, usesCanonicalDiscovery, discoverySourceConfigs) {
         val request = linkRequest ?: return@LaunchedEffect
         // Nothing here can be served without somewhere to play it — even the
         // branches that only push a page are a beat away from a tap on one of
         // its rows, and half-serving a request would spend it.
         val session = controller ?: return@LaunchedEffect
+        val legacyAllowed = shouldRunLegacyYoutubeVersionLookup(
+            usesCanonicalDiscovery, discoverySourceConfigs,
+        )
         when (request) {
             is LinkRequest.Track -> {
-                val song = YtMusicRepository.trackLinks(request.videoId).getOrNull()
+                // A legacy videoId cannot be promoted into a MusicBrainz MBID.
+                // In catalog mode, reject without contacting YouTube.
+                val song = if (legacyAllowed) {
+                    YtMusicRepository.trackLinks(request.videoId).getOrNull()
+                } else null
                 if (song == null) {
                     Toast.makeText(
                         context,
@@ -1854,12 +1861,25 @@ private fun BitChordApp(
                 }
             }
             is LinkRequest.Page -> {
-                dismissPlayer()
-                // Titled by the page itself once it lands — a link carries a
-                // browse id and nothing else. See MainViewModel.openDetail.
-                viewModel.openDetail(request.browseId, title = "")
+                if (!legacyAllowed) {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.couldnt_open_link),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                } else {
+                    dismissPlayer()
+                    // Legacy browse ids are opaque and are not canonical MBIDs.
+                    viewModel.openDetail(request.browseId, title = "")
+                }
             }
             is LinkRequest.Search -> {
+                if (!legacyAllowed) {
+                    dismissPlayer()
+                    selectedTab = TAB_SEARCH
+                    viewModel.setSearchSource(SearchSource.CANONICAL)
+                    viewModel.searchFor(request.query)
+                } else {
                 val songs = if (!request.play) null else {
                     YtMusicRepository.search(request.query, SearchFilter.SONGS).getOrNull()
                         ?.filterIsInstance<SearchResult.Track>()
@@ -1874,6 +1894,7 @@ private fun BitChordApp(
                     dismissPlayer()
                     selectedTab = TAB_SEARCH
                     viewModel.searchFor(request.query)
+                }
                 }
             }
             // "Play music", nothing named. The playback service restores its
