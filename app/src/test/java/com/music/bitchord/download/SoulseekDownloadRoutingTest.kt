@@ -76,4 +76,12 @@ class SoulseekDownloadRoutingTest {
         assertEquals(SoulseekDownloadRouting.Decision.ManualSearch("ILLIT - Magnetic"),
             SoulseekDownloadRouting.route("ILLIT", "Magnetic", 1, true))
     }
+
+    @Test fun durationHintIsBoundedAndNeverMistakenForArtist() {
+        assertEquals(161,SoulseekDownloadRouting.durationSeconds("2:41"))
+        assertEquals(3661,SoulseekDownloadRouting.durationSeconds("1:01:01"))
+        assertNull(SoulseekDownloadRouting.durationSeconds("unknown"))
+        assertNull(SoulseekDownloadRouting.durationSeconds("999:00"))
+        assertNull(SoulseekDownloadRouting.durationSeconds("0:03"))
+    }
 }
