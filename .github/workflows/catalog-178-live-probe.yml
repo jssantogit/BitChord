@@ -1,9 +1,14 @@
 name: Catalog #178 — Live MusicBrainz Evidence
 
-# Explicit-only: avoid re-probing a public rate-limited API at every PR push.
-# The first PR execution (#40203783906) archived verified API_LIVE evidence.
+# Explicit or probe-script-only validation on the isolated #178 branch.
+# Push path matching uses the committed files, unlike cumulative PR diffs:
+# unrelated Android commits never re-probe a rate-limited public API.
 on:
   workflow_dispatch:
+  push:
+    branches: [fix/178-musicbrainz-canonical-foundation]
+    paths:
+      - scripts/catalog_178_musicbrainz_live_probe.py
 
 permissions:
   contents: read
