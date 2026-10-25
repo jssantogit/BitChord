@@ -298,4 +298,7 @@
     <string name="canonical_loading_more">Loading…</string>
     <string name="canonical_server_heading">From your servers</string>
     <string name="canonical_server_track_hint">Available through a configured server · tap to play</string>
+    <string name="search_server_hint">Search connected servers and enabled addons</string>
+    <string name="search_server_empty">Search songs indexed from connected servers or available addons.</string>
+    <string name="search_server_no_results">No server or addon matches “%1$s”.</string>
 </resources>
