@@ -26,11 +26,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MusicBrainzReleaseArtistCreditEntity::class,
         CatalogReleaseGroupEntity::class,
         CatalogReleaseGroupEditionEntity::class,
+        CatalogMusicBrainzArtistGroupEntity::class,
         CatalogMusicBrainzTrackEntity::class,
         MusicBrainzCoverArtCacheEntity::class,
         CatalogReleaseTrackSourceEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
@@ -326,6 +327,27 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
             }
         }
 
+        /** Additive MusicBrainz artist discography evidence; no legacy rows are changed. */
+        internal val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `catalog_musicbrainz_artist_group` (
+                        `artistId` TEXT NOT NULL,
+                        `releaseGroupId` TEXT NOT NULL,
+                        PRIMARY KEY(`artistId`, `releaseGroupId`),
+                        FOREIGN KEY(`artistId`) REFERENCES `catalog_artist`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`releaseGroupId`) REFERENCES `catalog_release_group`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_catalog_musicbrainz_artist_group_releaseGroupId` " +
+                        "ON `catalog_musicbrainz_artist_group` (`releaseGroupId`)",
+                )
+            }
+        }
+
         @Volatile
         private var instance: CanonicalCatalogDatabase? = null
 
@@ -338,7 +360,7 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
-                        MIGRATION_4_5, MIGRATION_5_6,
+                        MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7,
                     )
                     .build()
                     .also { instance = it }
