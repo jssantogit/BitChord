@@ -331,4 +331,21 @@ class A0CandidateDiscoveryTest {
         assertEquals("ILLIT - Magnetic.mp3",choices.first().displayName)
         assertEquals(A0PeerAvailability.Tier.CONGESTED,choices.first().peerAvailability.tier)
     }
+
+    @Test fun sourceQueueOnlyBreaksTiesForExactlyEquivalentDeclarations() {
+        val collector=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",expectedDurationSeconds=161)
+        val same=A0SoulseekSearchFile("Music\\ILLIT Magnetic.mp3",
+            6_400_000L,"mp3",mapOf(0 to 320,1 to 161))
+        collector.offerParsed(A0SoulseekSearchResponse("peer-a",177,listOf(same),
+            emptyList(),true,850_000,2),"peer-a")
+        collector.offerParsed(A0SoulseekSearchResponse("peer-z",177,listOf(same),
+            emptyList(),true,80_000,0),"peer-z")
+        val options=collector.choices()
+        assertEquals(2,options.size)
+        assertEquals("peer-z",options.first().peerUsername)
+        assertEquals(1,collector.screening().claimsDistinct)
+        assertEquals(1,collector.screening().simulatedSuggested)
+        assertEquals(0,collector.claimPreview().preferredIndex)
+    }
 }
