@@ -2159,6 +2159,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _addonResults.value = null
             canonicalSearchJob?.cancel()
             _canonicalResults.value = null
+            clearCanonicalCatalogNavigation()
             // The list is about to switch from search results to recent
             // searches (or the empty state) — without this it can keep
             // whatever scroll offset the results list was left at, landing

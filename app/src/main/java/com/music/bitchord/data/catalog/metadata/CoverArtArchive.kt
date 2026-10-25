@@ -108,7 +108,13 @@ internal class CoverArtArchive(
 
     private suspend fun fetch(type: String, mbid: String): String? {
         val now = nowEpochMs()
-        val cached = store.read(type, mbid)
+        val cached = try {
+            store.read(type, mbid)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null // A damaged/unavailable cache must not break discovery.
+        }
         if (cached != null &&
             now >= cached.fetchedAtEpochMs &&
             now - cached.fetchedAtEpochMs < if (cached.artworkUri == null) NEGATIVE_TTL_MS else POSITIVE_TTL_MS
@@ -143,7 +149,13 @@ internal class CoverArtArchive(
             404 -> null
             else -> return null
         }
-        store.write(MusicBrainzCoverArtCacheEntry(type, mbid, uri, now))
+        try {
+            store.write(MusicBrainzCoverArtCacheEntry(type, mbid, uri, now))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Cache failure never changes the art already fetched from CAA.
+        }
         return uri
     }
 
