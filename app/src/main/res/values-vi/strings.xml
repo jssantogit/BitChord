@@ -1298,4 +1298,5 @@
     <string name="canonical_discovery_retry">Thử lại</string>
     <string name="canonical_discovery_refresh">Làm mới danh mục đã lưu</string>
     <string name="legacy_library_youtube_disabled">Bật YouTube Music trong Cài đặt để tải thư viện trực tuyến này. Danh sách phát và bộ sưu tập trên thiết bị vẫn khả dụng.</string>
+    <string name="spotify_import_youtube_required">Việc nhập danh sách phát Spotify hiện vẫn cần đối chiếu qua YouTube Music. Hãy bật YouTube Music và tắt khám phá ưu tiên danh mục.</string>
 </resources>

@@ -1351,4 +1351,5 @@
     <string name="canonical_discovery_retry">重試</string>
     <string name="canonical_discovery_refresh">重新整理已儲存的目錄</string>
     <string name="legacy_library_youtube_disabled">請在設定中啟用 YouTube Music，以載入此線上音樂庫。本機播放清單與合輯仍可使用。</string>
+    <string name="spotify_import_youtube_required">匯入 Spotify 播放清單目前仍需要透過 YouTube Music 比對歌曲。請啟用 YouTube Music 並關閉以目錄為優先的探索模式。</string>
 </resources>
