@@ -194,8 +194,18 @@ internal fun rememberCanonicalRatingDisplay(): CanonicalRatingDisplaySnapshot {
                 } else {
                     val activeProvider = account?.let { "opensubsonic:${it.accountId}" }
                     val activeScope = account?.ratingScopeId
-                    val snapshot = reader.read()
-                    val remote = if (snapshot.availability == RemoteRatingAvailability.CACHED_COMPLETE &&
+                    // A remote cache failure must NOT blank a user-owned Room
+                    // rating. Local presentation remains available offline
+                    // even if Navidrome, account credentials or remote cache
+                    // hydration fail independently of the canonical Catalog.
+                    val snapshot = try {
+                        reader.read()
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        null
+                    }
+                    val remote = if (snapshot?.availability == RemoteRatingAvailability.CACHED_COMPLETE &&
                         !activeScope.isNullOrBlank() &&
                         snapshot.items.all {
                             it.providerKey == activeProvider && it.scopeId == activeScope
