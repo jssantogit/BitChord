@@ -40,4 +40,16 @@ class A0CandidateQualityTest {
         val unknown=A0CandidateRank.rank("ILLIT - Magnetic","ILLIT Magnetic.flac",null,format="flac")
         assertEquals(A0CandidateRank.Quality.UNKNOWN_ADVERTISED,unknown.quality)
     }
+    @Test fun requestedLiveVersionIsNotFlaggedAsUnwantedRemix() {
+        val studio=A0CandidateRank.rank("Artist - Song", "Artist Song live.mp3",320,format="mp3")
+        val requested=A0CandidateRank.rank("Artist - Song live", "Artist Song live.mp3",320,format="mp3")
+        assertTrue(A0CandidateRank.Warning.VERSION_MISMATCH in studio.warnings)
+        assertFalse(A0CandidateRank.Warning.VERSION_MISMATCH in requested.warnings)
+    }
+    @Test fun impossibleClaimedMp3BitrateDoesNotCountAsHighQuality() {
+        val fake=A0CandidateRank.rank("Artist - Song","Artist Song.mp3",1000,format="mp3")
+        assertNotEquals(A0CandidateRank.Quality.HIGH_ADVERTISED,fake.quality)
+        assertTrue(A0CandidateRank.Warning.ENCODING_CONFLICT in fake.warnings)
+    }
+
 }
