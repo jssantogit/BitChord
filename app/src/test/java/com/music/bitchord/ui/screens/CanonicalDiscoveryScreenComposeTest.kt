@@ -5,6 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performClick
 import com.music.bitchord.data.model.UiState
 import com.music.bitchord.data.spotify.LocalPlaylist
@@ -131,6 +134,9 @@ class CanonicalDiscoveryScreenComposeTest {
                 )
             }
         }
+        // Home starts with download/playlist sections. The cached artist is
+        // still reachable after scrolling the actual LazyColumn.
+        compose.onNodeWithTag("canonical-discovery-list").performScrollToNode(hasText("ILLIT"))
         compose.onNodeWithText("ILLIT").performClick()
         compose.runOnIdle {
             assertEquals(
