@@ -6,6 +6,7 @@ from pathlib import Path
 
 from evaluate import (
     BenchmarkInputError,
+    blind_case,
     case_fingerprint,
     compare,
     load_cases,
@@ -132,6 +133,13 @@ class OfflineBenchmarkTest(unittest.TestCase):
         p = make_prediction(c, ["a", "a"], "a")
         with self.assertRaises(BenchmarkInputError):
             score_model([c], {"c": p})
+
+    def test_blind_projection_never_exposes_gold_to_rankers(self):
+        case = make_case("blind", {"a": "EXACT_EDITION"})
+        public = blind_case(case)
+        self.assertNotIn("truth", json.dumps(public))
+        self.assertEqual(case_fingerprint(case), case_fingerprint(public))
+        self.assertEqual(public["observations"][0]["offer_id"], "a")
 
     def test_checked_in_manifest_is_synthetic_and_stratified(self):
         cases = load_cases(Path(__file__).parent / "synthetic-cases.jsonl")
