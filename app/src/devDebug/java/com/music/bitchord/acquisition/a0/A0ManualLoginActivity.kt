@@ -696,7 +696,7 @@ class A0ManualLoginActivity : Activity() {
                                         val choices=handoff.choices()
                                         // Observational hint only. Never initiates a transfer;
                                         // A0 still requires an explicit user-selected index.
-                                        val suggestedIndex=handoff.claimPreview().preferredIndex
+                                        val suggestedIndex=handoff.manualSuggestionIndex()
                                         val selectableIndices=choices.indices.filter { i ->
                                             !saveToDevice || A5ManualSaveGate.safeDestinationName(
                                                 choices[i].displayName,choices[i].sizeBytes
