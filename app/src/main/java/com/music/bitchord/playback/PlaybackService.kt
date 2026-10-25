@@ -120,6 +120,7 @@ import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.data.model.QueueTier
 import com.music.bitchord.data.sources.SourceRegistry
+import com.music.bitchord.data.catalog.allowedCanonicalLyricsSources
 import com.music.bitchord.download.Downloads
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArraySet
@@ -7708,7 +7709,11 @@ class PlaybackService : MediaLibraryService() {
                     artist = currentSong.artist,
                     durationMs = trackDurationMs,
                     album = currentSong.albumName,
-                    sources = AppSettings.lyricsSources.value,
+                    sources = allowedCanonicalLyricsSources(
+                        requested = AppSettings.lyricsSources.value,
+                        canonicalDiscovery = AppSettings.canonicalDiscoveryEnabled.value,
+                        configs = SourceRegistry.configs.value,
+                    ),
                     order = AppSettings.lyricsSourceOrder.value,
                     prioritizeSyllableSync = AppSettings.prioritizeSyllableSync.value,
                 )
