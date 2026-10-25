@@ -123,6 +123,8 @@ data class CanonicalServerSearchRow(
     val providerKey: String,
     val title: String,
     val artistDisplay: String,
+    /** Trusted provider artwork, never an audio stream or provider-native key. */
+    val artworkUri: String? = null,
 )
 
 /** One navigable step; its rows are metadata identities, not video IDs. */
