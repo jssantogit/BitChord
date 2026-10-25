@@ -32,7 +32,7 @@ class MusicBrainzCatalogSearchTest {
         )
         val result = search.searchRecordings("  ILLIT   Magnetic  ", limit = 25, offset = 25)
         assertTrue(result is MusicBrainzCatalogSearchResult.Success)
-        val page = (result as MusicBrainzCatalogSearchResult.Success).page
+        val page = (result as MusicBrainzCatalogSearchResult.Success<com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit>).page
         assertEquals(2, page.items.size)
         assertEquals(2, page.total)
         assertEquals(25, page.offset)
@@ -72,8 +72,8 @@ class MusicBrainzCatalogSearchTest {
                 }
         }
         val search = MusicBrainzCatalogSearch(MusicBrainzClient(transport = transport))
-        val artists = search.searchArtists("aespa") as MusicBrainzCatalogSearchResult.Success
-        val groups = search.searchReleaseGroups("SUPER REAL ME") as MusicBrainzCatalogSearchResult.Success
+        val artists = search.searchArtists("aespa") as MusicBrainzCatalogSearchResult.Success<com.music.bitchord.data.catalog.metadata.MusicBrainzArtistHit>
+        val groups = search.searchReleaseGroups("SUPER REAL ME") as MusicBrainzCatalogSearchResult.Success<com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit>
         assertEquals("b51c672b-85e0-48fe-8648-470a2422229f", artists.page.items.single().musicBrainzId)
         assertEquals("529f87a1-1081-48a4-8ee1-3c08de229858", groups.page.items.single().musicBrainzId)
         assertEquals("EP", groups.page.items.single().primaryType)
