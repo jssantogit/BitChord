@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -199,9 +203,14 @@ internal fun CanonicalMyRatingsScreen(
         state = state,
         remoteState = remoteState,
         onBack = onBack,
-        editingId = editingId,
-        onEdit = { id -> editingId = if (editingId == id) null else id },
+        onEdit = { id -> editingId = id },
     )
+    editingId?.let { canonicalId ->
+        CanonicalRecordingRatingDialog(
+            recordingId = canonicalId,
+            onDismiss = { editingId = null },
+        )
+    }
 }
 
 /** Pure state rendering: testable without a real provider, account or Room singleton. */
@@ -211,7 +220,6 @@ internal fun CanonicalMyRatingsContent(
     remoteState: RemoteRatingsUiState = RemoteRatingsUiState.Disabled,
     onBack: () -> Unit,
     onEdit: (String) -> Unit,
-    editingId: String? = null,
 ) {
     val remoteRows = (remoteState as? RemoteRatingsUiState.Ready)?.rows.orEmpty()
     val remoteByRecording = remoteRows.associateBy { it.recordingId }
@@ -278,10 +286,12 @@ internal fun CanonicalMyRatingsContent(
                                 }
                                 if (rating.title != null) {
                                     TextButton(onClick = { onEdit(rating.recordingId) }) {
-                                        Text(stringResource(Res.string.recording_feedback_edit))
-                                    }
-                                    if (editingId == rating.recordingId) {
-                                        CanonicalRecordingFeedbackEntry(rating.recordingId)
+                                        Icon(Icons.Rounded.Star, contentDescription = null,
+                                            modifier = Modifier.size(18.dp))
+                                        Text(
+                                            stringResource(Res.string.recording_feedback_edit),
+                                            modifier = Modifier.padding(start = 6.dp),
+                                        )
                                     }
                                 }
                             }
@@ -316,6 +326,18 @@ internal fun CanonicalMyRatingsContent(
                                 MyRatingTrailingStars(localValue = null, remote = row)
                             }
                             RemoteRatingDetails(row, localValue = null)
+                            // Remote evidence is read-only; this edits a separate LOCAL
+                            // score for the same verified canonical RecordingId.
+                            if (row.title != null) {
+                                TextButton(onClick = { onEdit(row.recordingId) }) {
+                                    Icon(Icons.Rounded.Star, contentDescription = null,
+                                        modifier = Modifier.size(18.dp))
+                                    Text(
+                                        stringResource(Res.string.recording_feedback_edit),
+                                        modifier = Modifier.padding(start = 6.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
