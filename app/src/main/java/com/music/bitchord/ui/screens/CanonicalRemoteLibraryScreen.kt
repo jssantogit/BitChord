@@ -268,19 +268,24 @@ private fun CanonicalTrackRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        // One narrow trailing column: score above time, title ellipsized early.
+        Column(
+            modifier = Modifier.padding(start = 8.dp),
+            horizontalAlignment = Alignment.End,
+        ) {
             CanonicalRatingStars(
                 track.availableAssets.firstOrNull()?.mediaAssetId?.let {
                     LocalCanonicalRatingDisplay.current.byMediaAssetId[it]
                 },
             )
-        }
-        formatDuration(track.durationMs)?.let { duration ->
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = duration,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            formatDuration(track.durationMs)?.let { duration ->
+                Text(
+                    text = duration,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
