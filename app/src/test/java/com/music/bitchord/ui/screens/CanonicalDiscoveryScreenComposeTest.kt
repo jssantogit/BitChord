@@ -108,6 +108,37 @@ class CanonicalDiscoveryScreenComposeTest {
         }
     }
 
+    @Test fun homeRendersOfflineCatalogAndNavigatesArtistWithoutYoutubeFallback() {
+        val opened = mutableListOf<String>()
+        compose.setContent {
+            MaterialTheme {
+                CanonicalDiscoveryScreen(
+                    surface = CanonicalDiscoverySurface.HOME,
+                    catalog = UiState.Success(listOf(artist)),
+                    downloadedCollections = emptyList(),
+                    localPlaylists = emptyList(),
+                    onSearchCatalog = {},
+                    onOpenLibrary = {},
+                    onOpenDownloadedCollection = {},
+                    onOpenLocalPlaylist = {},
+                    onOpenCatalogEntry = { opened += "${it.kind}:${it.musicBrainzId}" },
+                    onRetryCatalog = {},
+                    onRefresh = {},
+                    refreshing = false,
+                    onPlayRecording = {},
+                    onQueueRecording = {},
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(),
+                )
+            }
+        }
+        compose.onNodeWithText("ILLIT").performClick()
+        compose.runOnIdle {
+            assertEquals(
+                listOf("ARTIST:6b128dd7-e998-4edb-a4f5-400fef190445"), opened,
+            )
+        }
+    }
+
     @Test fun metadataOnlyRecordingHasNoPlaybackActionsButCatalogedAssetUsesDelegatedGate() {
         val recordingMbid = "e614e432-ca77-41c1-82c1-4e3a24ebbb0c"
         val actions = mutableListOf<String>()
