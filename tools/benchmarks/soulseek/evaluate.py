@@ -302,9 +302,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--right", type=Path)
     parser.add_argument("--allow-synthetic", action="store_true")
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--export-blind", type=Path,
+                        help="Export scorer input JSONL WITHOUT ground-truth labels")
     args = parser.parse_args(argv)
     try:
         cases = load_cases(args.cases)
+        if args.export_blind is not None:
+            if args.left is not None or args.right is not None or args.output is not None:
+                raise BenchmarkInputError("blind_export_must_be_isolated")
+            with args.export_blind.open("w", encoding="utf-8") as output_stream:
+                for case in cases:
+                    output_stream.write(json.dumps(blind_case(case), ensure_ascii=False,
+                                                   separators=(",", ":")) + "\\n")
+            print(json.dumps({"export": "blind_input", "n_cases": len(cases)}))
+            return 0
         if args.left is None and args.right is None:
             result = {"schema_version": 1, "n_cases": len(cases),
                       "dataset_kind": sorted({c["dataset_kind"] for c in cases}),
