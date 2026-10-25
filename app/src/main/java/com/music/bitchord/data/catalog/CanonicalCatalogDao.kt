@@ -683,6 +683,38 @@ internal interface CanonicalCatalogDao {
     fun observeProviderBrowseAssets(providerKey: String): Flow<List<CanonicalBrowseAssetRow>>
 
     /**
+     * On-device server search covers every synchronized OpenSubsonic account
+     * (Navidrome, compatible services) and any future Jellyfin provider.
+     * Unlike provider-specific playback APIs, the projection never exposes
+     * URLs, tokens, provider-native IDs, or a synthetic videoId.
+     */
+    @Query(
+        """
+        SELECT
+            recording.id AS recordingId,
+            asset.id AS mediaAssetId,
+            asset.provider AS providerKey,
+            recording.title AS title,
+            recording.artistDisplay AS artistDisplay,
+            recording.durationMs AS durationMs,
+            asset.artworkUri AS artworkUri
+        FROM catalog_media_asset AS asset
+        INNER JOIN catalog_recording AS recording ON recording.id = asset.recordingId
+        WHERE (asset.provider LIKE 'opensubsonic:%' OR asset.provider LIKE 'jellyfin:%')
+          AND (instr(lower(recording.title), lower(:query)) > 0
+               OR instr(lower(recording.artistDisplay), lower(:query)) > 0)
+        ORDER BY recording.artistDisplay COLLATE NOCASE,
+                 recording.title COLLATE NOCASE,
+                 recording.id, asset.provider, asset.id
+        LIMIT :limit
+        """,
+    )
+    suspend fun searchCanonicalRemoteServerAssets(
+        query: String,
+        limit: Int,
+    ): List<CanonicalBrowseAssetRow>
+
+    /**
      * Multi-source canonical browse: asset ID is unique, recording ID is music
      * identity. Never expose sourceKey/URI or group by metadata/name.
      */
