@@ -12,6 +12,7 @@ from evaluate import (
     load_cases,
     load_predictions,
     score_model,
+    wilson_interval,
 )
 
 
@@ -56,6 +57,17 @@ class OfflineBenchmarkTest(unittest.TestCase):
             "unknown": "UNKNOWN_UNVERIFIABLE", "wrong": "WRONG_ARTIST_OR_RECORDING"})
         self.case3 = make_case("c3", {}, "empty")
         self.cases = [self.case1, self.case2, self.case3]
+
+    def test_wilson_intervals_have_explicit_zero_denominator_handling(self):
+        self.assertIsNone(wilson_interval(0, 0))
+        low, high = wilson_interval(1, 1)
+        self.assertGreater(low, 0.20)
+        self.assertLess(low, 0.21)
+        self.assertEqual(high, 1.0)
+        low, high = wilson_interval(0, 10)
+        self.assertEqual(low, 0.0)
+        self.assertGreater(high, 0.27)
+        self.assertLess(high, 0.28)
 
     def test_metrics_do_not_count_unknown_as_correct_or_wrong(self):
         picks = {
