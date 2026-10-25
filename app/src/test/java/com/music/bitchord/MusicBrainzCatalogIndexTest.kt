@@ -99,6 +99,34 @@ class MusicBrainzCatalogIndexTest {
     }
 
     @Test
+    fun homeCatalogPrioritizesActualMediaAssetsBeforeMetadataOnlyRecordings() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            var serial = 0
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "recording-${++serial}" })
+            val metadataOnly = MusicBrainzRecordingHit(
+                "e614e432-ca77-41c1-82c1-4e3a24ebbb0c", "A metadata-only song", "A artist", 160000,
+            )
+            val playable = MusicBrainzRecordingHit(
+                "3e619ba2-34f0-4649-83d8-05483e2fabe5", "Z stored song", "Z artist", 124000,
+            )
+            val identities = index.persistRecordings(listOf(metadataOnly, playable))
+            val dao = db.catalogDao()
+            assertEquals(metadataOnly.musicBrainzId, dao.searchKnownMusicBrainzRecordings("", 1)
+                .single().musicBrainzId)
+            dao.upsertMediaAsset(MediaAssetEntity(
+                "asset-z", identities[playable.musicBrainzId]!!, "local-mediastore", "store-123",
+                "content://media/external/audio/media/123", null, null, null, null,
+            ))
+            assertEquals(playable.musicBrainzId, dao.searchKnownMusicBrainzRecordings("", 1)
+                .single().musicBrainzId)
+            assertEquals(2, dao.searchKnownMusicBrainzRecordings("", 20).size)
+        } finally { db.close() }
+    }
+
+    @Test
     fun invalidMbidCannotBeClaimedByPublicIndex() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(
             RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
