@@ -848,9 +848,15 @@ object AppSettings {
                 bitDepth=prefs.getInt(KEY_CUSTOM_DOWNLOAD_BIT_DEPTH,0).takeIf { it>0 },
             )
         }.getOrDefault(DownloadCustomOptions())
-        // Synchronize legacy source consumers with the one visible selection.
-        if(previousUnified!=null) downloadQuality.value=
-            downloadQualityProfile.value.legacyQuality(downloadCustomOptions.value)
+        // A legacy app may have written separate source settings. Collapse
+        // them exactly once to the visible canonical choice, without erasing
+        // unrelated Wi-Fi or storage preferences.
+        val fallback=downloadQualityProfile.value.legacyQuality(downloadCustomOptions.value)
+        downloadQuality.value=fallback
+        if(previousUnified==null) prefs.edit()
+            .putString(KEY_DOWNLOAD_QUALITY_PROFILE_V2,downloadQualityProfile.value.name)
+            .putString(KEY_QUALITY_DOWNLOAD,fallback.name)
+            .apply()
         wifiOnlyDownloads.value = prefs.getBoolean(KEY_WIFI_ONLY_DOWNLOADS, true)
         exportDownloads.value = prefs.getBoolean(KEY_EXPORT_DOWNLOADS, false)
         crossfadeSeconds.value = prefs.getInt(KEY_CROSSFADE, 0)
