@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.MusicBrainzArtistEnrichmentEntity
+import com.music.bitchord.data.catalog.MusicBrainzRecordingEnrichmentEntity
 import com.music.bitchord.data.catalog.MusicBrainzReleaseEnrichmentEntity
 import com.music.bitchord.data.catalog.CatalogReleaseGroupEntity
 import com.music.bitchord.data.catalog.CatalogReleaseGroupEditionEntity
@@ -323,6 +324,27 @@ internal class MusicBrainzCatalogIndex(
                 val recordingId = recordingIds[track.recordingMbid.lowercase(Locale.ROOT)]
                 if (!MBID.matches(trackMbid) || recordingId == null ||
                     track.mediumNumber <= 0 || track.trackNumber <= 0) return@forEach
+                // An edition-specific Track title may differ from its nested
+                // Recording. Cache source-specific Recording facts without
+                // mutating the user's canonical local/Navidrome metadata.
+                val recordingMbid = track.recordingMbid.trim().lowercase(Locale.ROOT)
+                val previousEvidence = dao.musicBrainzRecordingEnrichment(recordingId)
+                check(previousEvidence == null || previousEvidence.mbid.equals(recordingMbid, true)) {
+                    "Recording enrichment MBID conflicts with the claimed Recording identity"
+                }
+                val recordingTitle = track.recordingTitle?.trim()?.takeIf(String::isNotEmpty)
+                val recordingCredit = track.recordingArtistDisplay?.trim()?.takeIf(String::isNotEmpty)
+                if (recordingTitle != null || track.recordingDurationMs != null ||
+                    recordingCredit != null
+                ) {
+                    dao.upsertMusicBrainzRecordingEnrichment(MusicBrainzRecordingEnrichmentEntity(
+                        recordingId = recordingId, mbid = recordingMbid,
+                        title = recordingTitle ?: previousEvidence?.title,
+                        durationMs = track.recordingDurationMs ?: previousEvidence?.durationMs,
+                        artistDisplay = recordingCredit ?: previousEvidence?.artistDisplay,
+                        fetchedAtEpochMs = System.currentTimeMillis(),
+                    ))
+                }
                 val existingTrack = dao.catalogMusicBrainzTrack(trackMbid)
                 check(existingTrack == null ||
                     (existingTrack.releaseId == releaseId && existingTrack.recordingId == recordingId)) {
