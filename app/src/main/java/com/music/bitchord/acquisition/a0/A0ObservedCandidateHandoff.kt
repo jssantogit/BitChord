@@ -212,6 +212,7 @@ internal class A0ObservedCandidateHandoff(
             // allowing 48 identical claims would hide other song versions.
             // This is strictly claimed metadata equality, never a hash.
             val sameClaim=candidates.withIndex().filter {
+                it.value.preflight==preflight &&
                 A0CandidateClaimClusters.sameClaim(it.value.claim,
                     A0CandidateClaimClusters.Claim(
                         filename=basename,format=ext,sizeBytes=file.sizeBytes,
