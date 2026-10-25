@@ -166,7 +166,7 @@ internal fun CanonicalRecordingFeedbackPanel(
     saving: Boolean = false,
     denied: Boolean = false,
 ) {
-    var selected by remember { mutableDoubleStateOf(rating?.takeIf { it in 1.0..5.0 } ?: 0.0) }
+    var selected by remember(rating) { mutableDoubleStateOf(rating?.takeIf { it in 1.0..5.0 } ?: 0.0) }
     AlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
         title = { Text(stringResource(Res.string.recording_feedback_dialog_title)) },
