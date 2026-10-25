@@ -67,7 +67,12 @@ internal object A0CanonicalAlbumPolicy {
             // affirmative claim that the file belongs to a different album.
             return Assessment(Status.INCONCLUSIVE_MANUAL, Reason.ALBUM_HINT_GENERIC)
         }
-        if (observed != expected) {
+        // "Album - Single" is a common display descriptor, not a distinct
+        // MusicBrainz Release claim. Never use this weak name equivalence as
+        // evidence of an exact edition or acoustic master.
+        val singleDescriptor = claim.source == ClaimSource.DIRECTORY_HINT &&
+            observed == "$expected single"
+        if (observed != expected && !singleDescriptor) {
             // Incompatible with the album *claim*. The actual file is not
             // proven wrong; the manual choice still remains available.
             return Assessment(Status.CONFLICTING_CLAIM, Reason.ALBUM_CLAIM_CONFLICT)
