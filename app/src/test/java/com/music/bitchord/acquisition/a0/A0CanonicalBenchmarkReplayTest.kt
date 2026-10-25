@@ -177,7 +177,7 @@ class A0CanonicalBenchmarkReplayTest {
         },Charsets.UTF_8)
         assertEquals(18,file.readLines().size)
         val albumFile=File(root,"bitchord-album-gate-v1.jsonl")
-        albumFile.writeText(dataset.joinToString(separator="\\n",postfix="\\n") {
+        albumFile.writeText(dataset.joinToString(separator="\n",postfix="\n") {
             evaluateAlbumGated(it).toString()
         },Charsets.UTF_8)
         assertEquals(18,albumFile.readLines().size)
