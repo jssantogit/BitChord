@@ -7,5 +7,8 @@ package com.music.bitchord.acquisition.a0
  * be entered. The account Settings screen has its own secure-window policy.
  */
 internal object A0ScreenCapturePolicy {
-    fun requiresSecureWindow(fromSongDownload:Boolean):Boolean = !fromSongDownload
+    fun requiresSecureWindow(
+        fromSongDownload:Boolean,
+        credentialsVisible:Boolean=!fromSongDownload
+    ):Boolean = credentialsVisible
 }
