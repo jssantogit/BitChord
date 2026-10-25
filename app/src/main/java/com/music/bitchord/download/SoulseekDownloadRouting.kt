@@ -32,6 +32,19 @@ internal object SoulseekDownloadRouting {
         return cleaned.takeIf { it.isNotBlank() && key !in unknownArtistLabels }
     }
 
+    /** A weak optional duration hint; never sent in a Soulseek query. */
+    fun durationSeconds(display:String?):Int? {
+        val components=display?.trim()?.split(':') ?: return null
+        if (components.size !in 2..3 || components.any {
+                it.isEmpty() || it.length>3 || it.any(Char::isLetter)
+            })return null
+        val numbers=components.map { it.toIntOrNull() ?: return null }
+        if (numbers.any { it<0 } || numbers.last()>59 ||
+            (numbers.size==3 && numbers[1]>59))return null
+        val result=numbers.fold(0L) {acc,value -> acc*60L+value }
+        return result.toInt().takeIf { result in 15L..7200L }
+    }
+
     fun route(
         artist:String, title:String, count:Int, pilotAvailable:Boolean,
         creditedArtists:List<String> = emptyList()
