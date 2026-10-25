@@ -13,7 +13,8 @@ internal object A4LocalPhysicalIdentity {
         val uri=runCatching { URI(raw) }.getOrNull() ?: return raw
         if(!uri.scheme.equals("content",ignoreCase=true)) return raw
         val authority=uri.authority?.lowercase() ?: return raw
-        val path=runCatching { URLDecoder.decode(uri.rawPath.orEmpty(),StandardCharsets.UTF_8.name()) }
+        val path=runCatching { URLDecoder.decode(uri.rawPath.orEmpty().replace("+","%2B"),
+            StandardCharsets.UTF_8.name()) }
             .getOrDefault(uri.path.orEmpty())
         if(authority=="media") {
             val parts=path.trim('/').split('/')
