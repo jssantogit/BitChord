@@ -110,6 +110,30 @@ class ListeningEventStorePersistenceTest {
         )
     }
 
+    @Test
+    fun homeTrendingUsesOnlyRepeatedRecentPlaybackStarts() = runTest {
+        database = openDatabase()
+        val dao = requireNotNull(database).listeningEventDao()
+        dao.insertSession(ListeningSessionEntity("s-trend", 1000L, 12000L, null))
+        suspend fun insert(id: String, recording: String, whenMs: Long, kind: String) {
+            dao.insertEvent(ListeningEventEntity(
+                id = id, sessionId = "s-trend", recordingId = recording,
+                mediaAssetId = null, assetProvider = null,
+                occurredAtEpochMs = whenMs, type = kind,
+                listenedDurationMs = null, recordingDurationMs = null,
+                endCause = null, selectionIntent = null,
+                selectionOrigin = null, recommendationOrigin = null,
+            ))
+        }
+        insert("old", "song-a", 1000L, "PLAYBACK_STARTED")
+        insert("a1", "song-a", 8000L, "PLAYBACK_STARTED")
+        insert("a2", "song-a", 9000L, "PLAYBACK_STARTED")
+        insert("a3", "song-a", 11000L, "PLAYBACK_COMPLETED")
+        insert("b1", "song-b", 10000L, "PLAYBACK_STARTED")
+        val result = dao.recentPopularRecordings(sinceEpochMs = 5000L, limit = 12)
+        assertEquals(listOf(RecentPopularRecordingRow("song-a", 2)), result)
+    }
+
     private fun openDatabase(): ListeningEventDatabase =
         Room.databaseBuilder(context, ListeningEventDatabase::class.java, TEST_DATABASE)
             .allowMainThreadQueries()
