@@ -2091,11 +2091,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: Exception) {
                 UiState.Error(text(R.string.canonical_discovery_cache_error))
             }
-            if (canonicalDiscoveryCatalogEpoch.isCurrent(generation) &&
-                isCanonicalDiscoverySelected()
-            ) {
-                _canonicalDiscoveryCatalog.value = state
-            }
+            // Keep the catalog in Loading until independent local + Server
+            // candidates have been read. Publishing an empty metadata cache
+            // first used to flash a false "no catalog" screen on YT opt-out,
+            // even when available server audio was about to populate Home.
             // MediaStore is scanned off-main and independent of the MusicBrainz
             // cache: a fresh YT-off installation must not render a blank Home
             // just because no public MBID has been looked up yet.
@@ -2144,6 +2143,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 isCanonicalDiscoverySelected()
             ) {
                 _canonicalHomeRemotePicks.value = remotePicks
+                _canonicalDiscoveryCatalog.value = state
             }
 
             val popularMbids = try {
