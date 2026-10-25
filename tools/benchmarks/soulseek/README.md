@@ -23,6 +23,23 @@ to run these examples.
   rankings in the Android module's `build/benchmark/soulseek` folder.
   The current preflight is *not* the planned MusicBrainz identity engine.
 
+## Running from GitHub Actions while PR #181 is still draft
+
+The workflow `.github/workflows/acquisition-offline-benchmark.yml` was
+introduced **only on the PR branch**, so GitHub cannot show its
+`workflow_dispatch` **Run workflow** button until that file exists on the
+repository's default branch. Do **not** merge PR #181 to work around this.
+
+For the one-time validation before merge, a branch- and path-scoped `push`
+trigger runs the synthetic comparison **only when that workflow YAML file
+changes on `acquisition/issue-177-soulseek-discovery`**. Find its completed
+run under Actions > All workflows or from the run URL in PR #181. It is a
+GitHub Actions workflow run, **not** physical Android smoke or real-audio
+accuracy proof. Other file changes won't trigger this additional build.
+
+After the workflow lands on the default branch through the normal protected
+merge process, the `Run workflow` button is available for manual invocations.
+
 ## Run on a developer machine
 
 Requirements: Python 3.10+, Git and the BitChord Android Gradle environment.
