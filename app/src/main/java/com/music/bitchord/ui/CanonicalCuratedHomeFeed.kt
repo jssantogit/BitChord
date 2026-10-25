@@ -5,9 +5,20 @@ import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 
-/** Never treat a playlist/video identifier as a usable local URI. */
-internal fun canonicalLocalPickCardId(song: Song): String = "local:pick:${song.videoId}"
+/** A card is keyed by the exact local asset, never by a recycled legacy video handle. */
+internal fun canonicalLocalPickCardId(song: Song): String {
+    require(isPlayableLocalPick(song)) { "Home picks require a verified local URI" }
+    // Keep a stable navigation key without exposing a device filename/content URI
+    // to the shared ShelfItem layout or persisting an untrusted videoId.
+    val bytes = MessageDigest.getInstance("SHA-256")
+        .digest(song.localUri!!.toByteArray(StandardCharsets.UTF_8))
+    return "local:pick:" + bytes.joinToString("") {
+        (it.toInt() and 0xff).toString(16).padStart(2, '0')
+    }
+}
 
 internal fun isPlayableLocalPick(song: Song): Boolean =
     song.localUri?.let { it.startsWith("content://") || it.startsWith("file://") } == true
