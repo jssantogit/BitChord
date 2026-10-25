@@ -3,7 +3,7 @@ package com.music.bitchord.ui.screens
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.semantics.SemanticsActions
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.components.CanonicalSongRatingStars
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performClick
 import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.RatingDisplay
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -70,8 +71,12 @@ class CanonicalRatingStarInteractionTest {
                 }
             }
         }
-        compose.onNodeWithContentDescription("4/5", substring = true).assert(!hasClickAction())
-        compose.runOnIdle { assertEquals(0, opens) }
+        val stars = compose.onNodeWithContentDescription("4/5", substring = true)
+            .fetchSemanticsNode()
+        compose.runOnIdle {
+            assertNull(stars.config.getOrNull(SemanticsActions.OnClick))
+            assertEquals(0, opens)
+        }
     }
 
     @Test fun firstNativeScoreActivatesDirectNowPlayingEditor() {
