@@ -9,7 +9,6 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.data.settings.AppSettings
-import com.music.bitchord.data.settings.SoulseekQualityPreset
 import com.music.bitchord.diagnostics.DiagnosticsShare
 import com.music.bitchord.observability.TraceOutcome
 import com.music.bitchord.download.A3AcquisitionLedger
@@ -21,8 +20,6 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
-import android.widget.Spinner
-import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -143,17 +140,9 @@ class A0ManualLoginActivity : Activity() {
             importantForAutofill=View.IMPORTANT_FOR_AUTOFILL_NO
         }
         page.addView(albumInput)
-        text("Qualidade desejada: declaração do peer, não áudio verificado")
-        val qualityLabels=SoulseekQualityPreset.entries.map { it.label }
-        val qualityPicker=Spinner(this).apply {
-            adapter=ArrayAdapter(this@A0ManualLoginActivity,
-                android.R.layout.simple_spinner_item, qualityLabels).also {
-                it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            }
-            isSaveEnabled=false
-            setSelection(AppSettings.soulseekQualityPreset.value.ordinal)
-        }
-        page.addView(qualityPicker)
+        val currentProfile=AppSettings.downloadQualityProfile.value
+        text("Qualidade: ${currentProfile.label}. Ajustar em Configurações → Downloads. " +
+            "Resultados do peer não comprovam a qualidade acústica.")
         val acknowledge = CheckBox(this).apply {
             text = "Confirmo que é uma senha exclusiva de testes e aceito " +
                 "a transmissão TCP sem TLS exigida pelo protocolo."
@@ -220,12 +209,10 @@ class A0ManualLoginActivity : Activity() {
             // local ranking. Only the normalized term is sent over Soulseek.
             val enteredSearch=if(performSearch) searchInput.text.toString() else null
             val albumConstraint=albumInput.text.toString().trim().takeIf(String::isNotBlank)
-            val preset=SoulseekQualityPreset.entries.getOrElse(
-                qualityPicker.selectedItemPosition) { SoulseekQualityPreset.ANY }
-            // Changing Soulseek quality never mutates legacy DownloadQuality
-            // or initiates an automatic transfer.
-            AppSettings.setSoulseekQualityPreset(preset)
-            val selectedQuality=A0SoulseekQualityProfiles.snapshot(preset)
+            // Single Downloads quality setting is shared by all providers.
+            val preset=AppSettings.downloadQualityProfile.value
+            val selectedQuality=A0SoulseekQualityProfiles.snapshot(
+                preset,AppSettings.downloadCustomOptions.value)
             if(albumConstraint!=null && runCatching {
                 A0CanonicalAcquisitionIntent.manual("Busca manual",requestedAlbum=albumConstraint)
             }.isFailure) {
@@ -269,7 +256,8 @@ class A0ManualLoginActivity : Activity() {
             transferAction.isEnabled = false
             saveAction.isEnabled = false
             status.text = if(saveToDevice) {
-                "Buscando WAV/FLAC/MP3 autorizados; salva somente após escolha manual."
+                "Pesquisando arquivos autorizados para ${preset.label}; " +
+                    "somente formatos compatíveis serão sugeridos para seleção."
             } else if (transferObserved) {
                 "Buscando candidatos pequenos; escolha manual obrigatória, sem download automático."
             } else if (performSearch) {
@@ -705,6 +693,13 @@ class A0ManualLoginActivity : Activity() {
                                                 choices[i].displayName,choices[i].sizeBytes
                                             )!=null
                                         }
+                                        // Only supported compatible advertised files are in
+                                        // the default list. Other claims require an explicit
+                                        // manual "inspect others" action, never silently win.
+                                        val profileIndices=selectableIndices.filter { i ->
+                                            choices[i].qualityEvidence.status==
+                                                A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED
+                                        }
                                         trace.note(A0SmokeTrace.Stage.CANDIDATES_AVAILABLE)
                                         if(saveToDevice)saveLedger?.advance(
                                             checkNotNull(saveJobId),
@@ -725,8 +720,11 @@ class A0ManualLoginActivity : Activity() {
                                                 // Filters affect only presentation; the full
                                                 // bounded ranked set stays in memory for retry.
                                                 fun showChoices(formatFilter:String?=null,
-                                                    qualityFilter:Int=0) {
-                                                    val visible=selectableIndices.filter { i ->
+                                                    qualityFilter:Int=0,
+                                                    inspectOthers:Boolean=false) {
+                                                    val scoped=if(inspectOthers) selectableIndices
+                                                        else profileIndices
+                                                    val visible=scoped.filter { i ->
                                                         val file=choices[i]
                                                         val ext=file.displayName.substringAfterLast('.', "")
                                                         val formatOk=formatFilter==null ||
@@ -741,6 +739,29 @@ class A0ManualLoginActivity : Activity() {
                                                             else -> true
                                                         }
                                                         formatOk && qualityOk
+                                                    }
+                                                    if(visible.isEmpty()) {
+                                                        AlertDialog.Builder(this@A0ManualLoginActivity)
+                                                            .setTitle("Nenhum candidato atende à qualidade")
+                                                            .setMessage(
+                                                                "O Soulseek pesquisa por texto e só anuncia " +
+                                                                    "o formato após a resposta. Nenhum arquivo " +
+                                                                    "declarou o perfil ${preset.label}. " +
+                                                                    "É possível inspecionar outros formatos, " +
+                                                                    "sem alterar a preferência global.")
+                                                            .setPositiveButton("Inspecionar outros") { _, _ ->
+                                                                showChoices(inspectOthers=true)
+                                                            }
+                                                            .setPositiveButton(
+                                                            if(inspectOthers) "Perfil desejado" else "Inspecionar outros"
+                                                        ) { _, _ -> showChoices(
+                                                            inspectOthers=!inspectOthers) }
+                                                        .setNegativeButton("Cancelar") { _, _ ->
+                                                                choiceQueue.offer(-1)
+                                                            }
+                                                            .setOnCancelListener { choiceQueue.offer(-1) }
+                                                            .show()
+                                                        return
                                                     }
                                                     val titles=visible.map { i ->
                                                         val candidate=choices[i]
@@ -865,7 +886,8 @@ class A0ManualLoginActivity : Activity() {
                                                     }.toTypedArray()
                                                     AlertDialog.Builder(this@A0ManualLoginActivity)
                                                         .setTitle("Candidatos (" + visible.size +
-                                                            "/" + selectableIndices.size + ", até 64 MiB)")
+                                                            "/" + selectableIndices.size + ", até 64 MiB)" +
+                                                            (if(inspectOthers) " · fora do perfil" else " · ${preset.label}"))
                                                         .setItems(titles) { _, index ->
                                                             choiceQueue.offer(visible[index])
                                                         }
