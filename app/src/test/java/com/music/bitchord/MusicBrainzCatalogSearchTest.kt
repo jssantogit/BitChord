@@ -41,6 +41,7 @@ class MusicBrainzCatalogSearchTest {
         assertEquals(listOf("ILLIT", "ILLIT"), page.items.map { it.artistDisplay })
         assertEquals("recording", calls.single().first)
         assertEquals("ILLIT Magnetic", calls.single().second["query"])
+        assertEquals("true", calls.single().second["dismax"])
         assertEquals("25", calls.single().second["limit"])
         assertEquals("25", calls.single().second["offset"])
         assertTrue(calls.single().third.startsWith("Bitchord/"))

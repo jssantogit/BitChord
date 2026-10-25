@@ -162,6 +162,8 @@ internal class MusicBrainzCatalogSearch(
             client.get(path, mapOf(
                 "fmt" to "json",
                 "query" to query,
+                // User input is ordinary text, never unescaped Lucene syntax.
+                "dismax" to "true",
                 "limit" to limit.toString(),
                 "offset" to offset.toString(),
             ))
