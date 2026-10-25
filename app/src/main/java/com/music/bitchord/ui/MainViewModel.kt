@@ -1946,7 +1946,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     )
 
     private fun canResolveLegacySpotifyViaYoutube(): Boolean =
-        !isCanonicalDiscoverySelected() && isYouTubeSourceEnabled(SourceRegistry.configs.value)
+        canRunLegacyYoutubeCatalogLookup()
+
+    /** Canonical opt-in is a metadata boundary even while playback YT remains enabled. */
+    private fun canRunLegacyYoutubeCatalogLookup(): Boolean =
+        shouldRunLegacyYoutubeVersionLookup(
+            canonicalMode = isCanonicalDiscoverySelected(),
+            configs = SourceRegistry.configs.value,
+        )
 
     private fun legacyDiscoveryGate() = LegacyDiscoveryRequestGate(
         useCanonicalDiscovery = isCanonicalDiscoverySelected(),
@@ -3796,7 +3803,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 local != null -> local
                 resolved == BrowseType.ARTIST -> {
                     runLegacyYoutubeBrowseIfEnabled(
-                        enabled = { isYouTubeSourceEnabled(SourceRegistry.configs.value) },
+                        enabled = { canRunLegacyYoutubeCatalogLookup() },
                     ) { YtMusicRepository.artistPage(browseId) }?.fold(
                         onSuccess = { page ->
                             sections = page.sections
@@ -3817,7 +3824,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 else -> {
                     runLegacyYoutubeBrowseIfEnabled(
-                        enabled = { isYouTubeSourceEnabled(SourceRegistry.configs.value) },
+                        enabled = { canRunLegacyYoutubeCatalogLookup() },
                     ) { YtMusicRepository.browseSongs(browseId) }?.fold(
                         onSuccess = { page ->
                             // Free here — the page that returned these rows is
@@ -3859,7 +3866,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // page is committed. Never publish legacy metadata in that race.
             // Cached/downloaded tracks already shown above remain visible.
             val safeState = if (local == null &&
-                !isYouTubeSourceEnabled(SourceRegistry.configs.value)
+                !canRunLegacyYoutubeCatalogLookup()
             ) UiState.Error(text(R.string.legacy_library_youtube_disabled)) else state
             // Update by id — the user may have pushed another page meanwhile.
             // A page showing its downloaded copy takes only a real listing: a
@@ -3888,7 +3895,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             // Only once the first page is on screen: [fillIn] appends to it,
             // and has nothing to append to before this.
-            if (isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
+            if (canRunLegacyYoutubeCatalogLookup()) {
                 more?.let { fillIn(browseId, it, thumbnailUrl ?: artwork) }
             }
         }
@@ -4129,7 +4136,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             var next: String? = token
             while (next != null) {
                 val fetched = runLegacyYoutubeBrowseIfEnabled(
-                    enabled = { isYouTubeSourceEnabled(SourceRegistry.configs.value) },
+                    enabled = ::canRunLegacyYoutubeCatalogLookup,
                 ) { YtMusicRepository.moreSongs(next).getOrNull() } ?: return@launch
                 // Repository calls may finish after cancellation. Do not let
                 // an in-flight UI page append after the playback service has
