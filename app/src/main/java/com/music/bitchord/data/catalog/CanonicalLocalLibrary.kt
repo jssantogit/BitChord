@@ -74,7 +74,8 @@ internal object CanonicalLocalLibrary {
                     ),
                 )
 
-                dao.deleteReleaseTracksForRecording(recordingId)
+                // Never remove associations backed by MusicBrainz/remote providers.
+                dao.deleteLocalOnlyReleaseTracksForRecording(recordingId, LOCAL_TAGS_PROVIDER)
                 candidate.albumTitle?.let { albumTitle ->
                     val releaseEvidenceKey = localReleaseEvidenceKey(
                         albumTitle = albumTitle,
