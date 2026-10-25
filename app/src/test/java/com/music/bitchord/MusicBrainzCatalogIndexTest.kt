@@ -127,6 +127,30 @@ class MusicBrainzCatalogIndexTest {
     }
 
     @Test
+    fun musicBrainzArtistNameIsSearchableWithoutOverwritingLocalArtistAlias() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val mbid = "6b128dd7-e998-4edb-a4f5-400fef190445"
+            val ids = MusicBrainzCatalogIndex(db).persistArtists(listOf(
+                com.music.bitchord.data.catalog.metadata.MusicBrainzArtistHit(
+                    mbid, "ILLIT", "South Korean girl group", "KR",
+                ),
+            ))
+            val artistId = ids[mbid]!!
+            db.catalogDao().upsertArtist(com.music.bitchord.data.catalog.ArtistEntity(
+                artistId, "My local alias",
+            ))
+            assertEquals("My local alias", db.catalogDao().artistById(artistId)!!.name)
+            val remote = db.catalogDao().searchKnownMusicBrainzArtists("ILLIT", 10).single()
+            assertEquals("ILLIT", remote.name)
+            assertEquals(mbid, remote.musicBrainzId)
+            assertEquals("South Korean girl group", remote.disambiguation)
+        } finally { db.close() }
+    }
+
+    @Test
     fun invalidMbidCannotBeClaimedByPublicIndex() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(
             RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
