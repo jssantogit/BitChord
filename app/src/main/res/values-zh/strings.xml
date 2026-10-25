@@ -1355,11 +1355,4 @@
     <string name="search_origin_general">通用</string>
     <string name="search_origin_server">服务器</string>
     <string name="search_origin_local">本地</string>
-    <string name="artist_signatures">艺术家签名</string>
-    <string name="artist_signatures_subtitle">Apple Music 没有标题标志时显示手写签名</string>
-    <string name="artist_signatures_url">签名 API 地址</string>
-    <string name="artist_signatures_url_hint">https://signatures.example.com</string>
-    <string name="artist_signatures_unconfigured">尚未配置，请点按设置 API 地址</string>
-    <string name="artist_signatures_test_failed">无法通过此地址连接 API</string>
-    <string name="signed_by">由 %1$s 签名</string>
 </resources>
