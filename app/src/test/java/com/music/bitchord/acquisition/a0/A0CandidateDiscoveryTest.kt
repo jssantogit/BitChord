@@ -358,8 +358,12 @@ class A0CandidateDiscoveryTest {
                 mapOf(0 to 320,1 to 161))
         )),"peer")
         assertEquals(1,collector.choices().size)
+        val choice=collector.choices().single()
+        assertEquals("ILLIT Magnetic_.mp3",choice.displayName)
+        assertTrue(choice.remotePath.contains('\u202E'))
+        assertNotNull(A5ManualSaveGate.safeDestinationName(choice.displayName,choice.sizeBytes))
         assertEquals(A0CandidatePreflight.Confidence.REVIEW,
-            collector.choices().single().preflight.confidence)
+            choice.preflight.confidence)
         assertEquals(1,collector.screening().preflightReview)
         assertEquals(0,collector.screening().simulatedSuggested)
         assertEquals(1,collector.screening().simulatedNoStrong)
