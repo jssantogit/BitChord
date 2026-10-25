@@ -82,9 +82,11 @@ internal class A0ObservedCandidateHandoff(
         // Badly formatted untrusted/search text must not crash the collector.
         // An invalid album claim loses confidence; it never grants one.
         runCatching {
+            val pieces=searchPhrase?.split(Regex("\\s+[-–—]\\s+"),limit=2).orEmpty()
             A0CanonicalAcquisitionIntent.manual(
-                title=searchPhrase?.split(Regex("\\s+[-–—]\\s+"),limit=2)
-                    ?.lastOrNull()?.takeIf(String::isNotBlank) ?: "Manual search",
+                title=pieces.lastOrNull()?.takeIf(String::isNotBlank) ?: "Manual search",
+                artistCredits=if(pieces.size==2 && pieces[0].isNotBlank())
+                    listOf(pieces[0]) else emptyList(),
                 requestedAlbum=requestedAlbum,
             )
         }.getOrElse { A0CanonicalAcquisitionIntent.manual(title="Pesquisa manual") }
@@ -375,6 +377,15 @@ internal class A0ObservedCandidateHandoff(
                 it.claim,it.preflight,it.matchScore,it.peerAvailability
             )
         })
+
+    /**
+     * Never display a legacy v4 "most suggested" label when the caller added
+     * edition/quality constraints that the legacy preflight never evaluated.
+     * Candidates are still ranked for a HUMAN, not auto-selected.
+     */
+    @Synchronized
+    fun manualSuggestionIndex():Int? =
+        if(albumOrQualitySelected) null else claimPreview().preferredIndex
 
     @Synchronized
     fun choices():List<Choice> = if(cancelled||spent)emptyList() else candidates.toList()
