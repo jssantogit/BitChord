@@ -33,6 +33,9 @@ internal object A0CandidateRank {
         return folded.split(Regex("[^\\p{L}\\p{N}]+")).filter(String::isNotBlank)
     }
 
+    private fun containsPhrase(haystack:List<String>,phrase:List<String>):Boolean=
+        phrase.isNotEmpty() && haystack.windowed(phrase.size).any { it==phrase }
+
     @Suppress("UNUSED_PARAMETER")
     fun rank(
         searchPhrase:String?, name:String, declaredBitrateKbps:Int?,
@@ -42,10 +45,13 @@ internal object A0CandidateRank {
         sizeBytes:Long?=null, queueLength:Int?=null
     ):Ranking {
         val parts=searchPhrase.orEmpty().split(Regex("\\s+[-–—]\\s+"),limit=2)
-        val titleWords=tokens(if(parts.size==2)parts[1] else searchPhrase.orEmpty()).distinct()
-        val artistWords=if(parts.size==2) tokens(parts[0]).distinct() else emptyList()
+        val titleSequence=tokens(if(parts.size==2)parts[1] else searchPhrase.orEmpty())
+        val artistSequence=if(parts.size==2) tokens(parts[0]) else emptyList()
+        val titleWords=titleSequence.distinct()
+        val artistWords=artistSequence.distinct()
         val stem=name.substringBeforeLast('.',name)
-        val fileWords=tokens(stem).toSet()
+        val fileTokens=tokens(stem)
+        val fileWords=fileTokens.toSet()
         val parentSegments=remotePath.orEmpty().replace('\\','/')
             .split('/').dropLast(1)
         val folderWords=parentSegments.flatMap(::tokens).toSet()
@@ -142,6 +148,19 @@ internal object A0CandidateRank {
                 score-=7
                 warnings.add(Warning.IDENTITY_AMBIGUOUS)
             }
+        }
+        // Token sets are useful for recall, but not sufficient evidence for
+        // unattended selection: "Tears Your Save" is not "Save Your Tears",
+        // and "Do.mp3" is not "Do Do Do". Preserve manual discovery, require
+        // REVIEW when complete words occur in the wrong order/repetition.
+        val titleOrdered=containsPhrase(fileTokens,titleSequence)
+        val artistOrdered=artistSequence.isEmpty() ||
+            containsPhrase(fileTokens,artistSequence) ||
+            parentSegments.any { containsPhrase(tokens(it),artistSequence) }
+        if(match==Match.ALL_TERMS && (!titleOrdered || !artistOrdered)) {
+            score-=9
+            if(Warning.IDENTITY_AMBIGUOUS !in warnings)
+                warnings.add(Warning.IDENTITY_AMBIGUOUS)
         }
         val requestedWords=tokens(searchPhrase.orEmpty()).toSet()
         // A live/remix/acoustic recording is a mismatch only if that version
