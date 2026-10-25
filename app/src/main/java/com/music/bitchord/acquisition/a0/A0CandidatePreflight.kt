@@ -16,6 +16,7 @@ internal object A0CandidatePreflight {
         TITLE_MISMATCH,
         ARTIST_UNCONFIRMED,
         ARTIST_CONFLICT,
+        IDENTITY_AMBIGUOUS,
         VERSION_CONFLICT,
         DURATION_UNCONFIRMED,
         DURATION_CONFLICT,
@@ -59,6 +60,9 @@ internal object A0CandidatePreflight {
         }
         if(!hasArtistAndTitle) reasons.add(Reason.ARTIST_UNCONFIRMED)
 
+        if(A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in ranking.warnings) {
+            reasons.add(Reason.IDENTITY_AMBIGUOUS)
+        }
         if(A0CandidateRank.Warning.ARTIST_CONFLICT in ranking.warnings) {
             reasons.add(Reason.ARTIST_CONFLICT)
             hard.add(Reason.ARTIST_CONFLICT)
