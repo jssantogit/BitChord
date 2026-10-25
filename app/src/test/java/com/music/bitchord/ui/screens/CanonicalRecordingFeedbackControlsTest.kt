@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
-import androidx.compose.ui.test.assertDoesNotExist
 import com.music.bitchord.ui.components.ActionRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Radio
