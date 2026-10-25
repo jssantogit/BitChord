@@ -11,16 +11,19 @@ internal object A4AvailableLocalUriSelection {
     fun choose(
         entries:List<A3AcquisitionLedger.Entry>,
         alreadyScanned:Set<String>,
+        alreadyIdentities:Set<String> = emptySet(),
+        identityOf:(String)->String = { it },
         canRead:(String)->Boolean
     ):List<String> {
-        val seen=alreadyScanned.toMutableSet()
+        val seen=alreadyScanned.map(identityOf).toMutableSet()
+        seen.addAll(alreadyIdentities)
         return entries.asSequence()
             .filter { it.phase==A3AcquisitionLedger.Phase.AVAILABLE }
             .mapNotNull { it.contentUri }
             .filter { it.startsWith("content://") }
-            .filter { it !in seen }
+            .filter { identityOf(it) !in seen }
             .filter { uri -> runCatching { canRead(uri) }.getOrDefault(false) }
-            .filter { seen.add(it) }
+            .filter { seen.add(identityOf(it)) }
             .toList()
     }
 }
