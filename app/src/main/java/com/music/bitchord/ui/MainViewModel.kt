@@ -516,6 +516,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     val result = musicBrainzGraph.browseGroupReleases(entry.musicBrainzId)
                 ) {
                     is MusicBrainzCatalogGraphResult.Success -> {
+                        try {
+                            withContext(Dispatchers.IO) {
+                                MusicBrainzCatalogIndex(
+                                    CanonicalCatalogDatabase.get(getApplication<Application>()),
+                                ).persistGroupEditions(entry.musicBrainzId, result.value.items)
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { /* A network page remains usable if its offline index fails. */ }
                         val artwork = withContext(Dispatchers.IO) {
                             coverArtArchive.findCover(null, entry.musicBrainzId)
                         }
@@ -530,7 +539,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             totalCount = result.value.total,
                         ))
                     }
-                    is MusicBrainzCatalogGraphResult.Failure -> UiState.Error("Unable to load release editions")
+                    is MusicBrainzCatalogGraphResult.Failure -> {
+                        val cached = withContext(Dispatchers.IO) {
+                            MusicBrainzCatalogIndex(
+                                CanonicalCatalogDatabase.get(getApplication<Application>()),
+                            ).cachedGroupReleases(entry.musicBrainzId)
+                        }
+                        if (cached.isEmpty()) UiState.Error("Unable to load release editions")
+                        else UiState.Success(CanonicalCatalogDetailPage(
+                            title = entry.title,
+                            summary = "Saved editions · offline catalog",
+                            rows = cached.map { hit -> CanonicalCatalogSearchRow(
+                                hit.musicBrainzId, CanonicalSearchKind.RELEASE, hit.title,
+                                listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
+                                    .joinToString(" · "),
+                                fromOfflineCache = true,
+                            ) },
+                        ))
+                    }
                 }
                 CanonicalSearchKind.RELEASE -> when (
                     val result = musicBrainzGraph.lookupRelease(entry.musicBrainzId)
@@ -568,7 +594,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             ) },
                         ))
                     }
-                    is MusicBrainzCatalogGraphResult.Failure -> UiState.Error("Unable to load release tracks")
+                    is MusicBrainzCatalogGraphResult.Failure -> {
+                        val cached = withContext(Dispatchers.IO) {
+                            val db = CanonicalCatalogDatabase.get(getApplication<Application>())
+                            val detail = MusicBrainzCatalogIndex(db).cachedRelease(entry.musicBrainzId)
+                            val available = detail?.let {
+                                db.catalogDao().musicBrainzRecordingMbidsWithAssets(
+                                    it.tracks.map { track -> track.recordingMbid },
+                                ).toSet()
+                            } ?: emptySet()
+                            detail to available
+                        }
+                        val details = cached.first
+                        if (details == null) UiState.Error("Unable to load release tracks")
+                        else UiState.Success(CanonicalCatalogDetailPage(
+                            title = details.title,
+                            summary = "Saved release · offline catalog",
+                            rows = details.tracks.map { track -> CanonicalCatalogSearchRow(
+                                musicBrainzId = track.recordingMbid,
+                                kind = CanonicalSearchKind.RECORDING,
+                                title = "${track.mediumNumber}.${track.trackNumber}  ${track.title}",
+                                subtitle = track.artistDisplay ?: details.artistDisplay,
+                                hasCatalogedAsset = track.recordingMbid in cached.second,
+                                fromOfflineCache = true,
+                                trackMbid = track.trackMbid,
+                            ) },
+                        ))
+                    }
                 }
                 CanonicalSearchKind.RECORDING -> return@launch
             }
