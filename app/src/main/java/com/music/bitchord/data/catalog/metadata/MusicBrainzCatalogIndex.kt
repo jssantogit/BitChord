@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.MusicBrainzArtistEnrichmentEntity
+import com.music.bitchord.data.catalog.MusicBrainzReleaseEnrichmentEntity
 import com.music.bitchord.data.catalog.CatalogReleaseGroupEntity
 import com.music.bitchord.data.catalog.CatalogReleaseGroupEditionEntity
 import com.music.bitchord.data.catalog.CatalogReleaseTrackSourceEntity
@@ -136,6 +137,88 @@ internal class MusicBrainzCatalogIndex(
             indexed
         }
 
+    /** Edition search evidence uses the existing source-specific v3 cache. */
+    suspend fun persistReleases(hits: List<MusicBrainzReleaseHit>): Map<String, String> =
+        database.withTransaction {
+            val dao = database.catalogDao()
+            val indexed = linkedMapOf<String, String>()
+            for (hit in hits) {
+                val mbid = hit.musicBrainzId.trim().lowercase(Locale.ROOT)
+                if (!MBID.matches(mbid) || hit.title.isBlank() || mbid in indexed) continue
+                val existing = dao.entityIdForExternalIdentity("musicbrainz", "release", mbid)
+                val releaseId = if (existing != null) {
+                    check(dao.releaseById(existing) != null) { "Orphaned release claim" }
+                    existing
+                } else {
+                    val created = idFactory()
+                    dao.upsertRelease(ReleaseEntity(created, hit.title.trim(), hit.artistDisplay, null))
+                    claim(dao, "release", mbid, created)
+                    created
+                }
+                val previous = dao.musicBrainzReleaseEnrichment(releaseId)
+                dao.upsertMusicBrainzReleaseEnrichment(MusicBrainzReleaseEnrichmentEntity(
+                    releaseId = releaseId, mbid = mbid,
+                    title = hit.title.trim(),
+                    artistDisplay = hit.artistDisplay?.takeIf(String::isNotBlank) ?: previous?.artistDisplay,
+                    releaseDate = hit.releaseDate?.takeIf(String::isNotBlank) ?: previous?.releaseDate,
+                    country = hit.country?.takeIf(String::isNotBlank) ?: previous?.country,
+                    status = previous?.status, fetchedAtEpochMs = System.currentTimeMillis(),
+                ))
+                indexed[mbid] = releaseId
+            }
+            indexed
+        }
+
+    /** A browse response owns positive associations, never an exhaustive prune. */
+    suspend fun persistGroupEditions(groupMbid: String, hits: List<MusicBrainzReleaseHit>) {
+        val normalized = groupMbid.trim().lowercase(Locale.ROOT)
+        if (!MBID.matches(normalized)) return
+        database.withTransaction {
+            val dao = database.catalogDao()
+            val groupId = dao.entityIdForExternalIdentity("musicbrainz", "release-group", normalized)
+                ?: return@withTransaction
+            check(dao.catalogReleaseGroup(groupId) != null) { "Orphaned release-group claim" }
+            persistReleases(hits).values.forEach { releaseId ->
+                dao.upsertCatalogReleaseGroupEdition(CatalogReleaseGroupEditionEntity(groupId, releaseId))
+            }
+        }
+    }
+
+    suspend fun cachedGroupReleases(groupMbid: String): List<MusicBrainzReleaseHit> =
+        database.withTransaction {
+            val dao = database.catalogDao()
+            val normalized = groupMbid.trim().lowercase(Locale.ROOT).takeIf(MBID::matches)
+                ?: return@withTransaction emptyList()
+            val groupId = dao.entityIdForExternalIdentity("musicbrainz", "release-group", normalized)
+                ?: return@withTransaction emptyList()
+            dao.catalogGroupEditions(groupId).mapNotNull { edition ->
+                val mbid = dao.externalIdentitiesForEntity("musicbrainz", "release", edition.releaseId)
+                    .singleOrNull()?.externalId ?: return@mapNotNull null
+                val release = dao.releaseById(edition.releaseId) ?: return@mapNotNull null
+                val info = dao.musicBrainzReleaseEnrichment(edition.releaseId)
+                MusicBrainzReleaseHit(mbid, release.title, info?.country, info?.releaseDate,
+                    info?.artistDisplay ?: release.artistDisplay)
+            }
+        }
+
+    /** A release seen in search alone does not prove a downloaded tracklist. */
+    suspend fun cachedRelease(mbid: String): MusicBrainzCatalogReleaseDetail? = database.withTransaction {
+        val dao = database.catalogDao()
+        val normalized = mbid.trim().lowercase(Locale.ROOT).takeIf(MBID::matches)
+            ?: return@withTransaction null
+        val releaseId = dao.entityIdForExternalIdentity("musicbrainz", "release", normalized)
+            ?: return@withTransaction null
+        val release = dao.releaseById(releaseId) ?: return@withTransaction null
+        val tracks = dao.cachedMusicBrainzTracks(releaseId)
+        if (tracks.isEmpty()) return@withTransaction null
+        // Reject divergent identities instead of displaying an arbitrary recording.
+        if (tracks.map { it.trackMbid }.distinct().size != tracks.size) return@withTransaction null
+        val info = dao.musicBrainzReleaseEnrichment(releaseId)
+        MusicBrainzCatalogReleaseDetail(normalized,
+            dao.musicBrainzGroupMbidsForRelease(releaseId).singleOrNull(), release.title,
+            info?.artistDisplay ?: release.artistDisplay, info?.country, info?.releaseDate, tracks)
+    }
+
     /**
      * Canonical ReleaseGroup/Release/Track graph is independent of audio
      * availability and YouTube. MBIDs must never become provider sourceKeys.
@@ -192,6 +275,8 @@ internal class MusicBrainzCatalogIndex(
                 claim(dao, "release", releaseMbid, created)
                 created
             }
+            persistReleases(listOf(MusicBrainzReleaseHit(releaseMbid, detail.title,
+                detail.country, detail.releaseDate, detail.artistDisplay)))
             if (groupId != null) {
                 dao.upsertCatalogReleaseGroupEdition(CatalogReleaseGroupEditionEntity(
                     releaseGroupId = groupId, releaseId = releaseId,

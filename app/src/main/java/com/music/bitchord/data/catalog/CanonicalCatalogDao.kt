@@ -514,6 +514,49 @@ internal interface CanonicalCatalogDao {
         query: String, limit: Int,
     ): List<com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit>
 
+    @Query("""
+        SELECT identity.externalId AS musicBrainzId, edition.title AS title,
+            edition.artistDisplay AS artistDisplay, info.country AS country,
+            info.releaseDate AS releaseDate
+        FROM catalog_external_identity identity
+        JOIN catalog_release edition ON edition.id = identity.entityId
+        LEFT JOIN musicbrainz_release_enrichment info
+            ON info.releaseId = edition.id AND info.mbid = identity.externalId
+        WHERE identity.provider = 'musicbrainz' AND identity.entityType = 'release'
+            AND (instr(lower(edition.title), lower(:query)) > 0
+                OR instr(lower(edition.artistDisplay), lower(:query)) > 0)
+        ORDER BY edition.title COLLATE NOCASE, identity.externalId
+        LIMIT :limit
+    """)
+    suspend fun searchKnownMusicBrainzReleases(
+        query: String, limit: Int,
+    ): List<com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit>
+
+    @Query("""
+        SELECT identity.externalId FROM catalog_release_group_edition edition
+        JOIN catalog_external_identity identity ON identity.entityId = edition.releaseGroupId
+        WHERE edition.releaseId = :releaseId AND identity.provider = 'musicbrainz'
+            AND identity.entityType = 'release-group'
+        ORDER BY identity.externalId
+    """)
+    suspend fun musicBrainzGroupMbidsForRelease(releaseId: String): List<String>
+
+    @Query("""
+        SELECT track.trackMbid AS trackMbid, identity.externalId AS recordingMbid,
+            track.title AS title, track.mediumNumber AS mediumNumber,
+            track.trackNumber AS trackNumber, track.durationMs AS durationMs,
+            recording.artistDisplay AS artistDisplay
+        FROM catalog_musicbrainz_track track
+        JOIN catalog_recording recording ON recording.id = track.recordingId
+        JOIN catalog_external_identity identity ON identity.entityId = recording.id
+        WHERE track.releaseId = :releaseId AND identity.provider = 'musicbrainz'
+            AND identity.entityType = 'recording'
+        ORDER BY track.mediumNumber, track.trackNumber, track.trackMbid
+    """)
+    suspend fun cachedMusicBrainzTracks(
+        releaseId: String,
+    ): List<com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogTrack>
+
     /** Persisted MusicBrainz recordings are queryable even without any asset. */
     @Query(
         """
