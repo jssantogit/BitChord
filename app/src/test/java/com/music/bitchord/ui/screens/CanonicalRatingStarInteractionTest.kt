@@ -14,7 +14,7 @@ import androidx.compose.ui.test.performClick
 import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.RatingDisplay
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -74,7 +74,7 @@ class CanonicalRatingStarInteractionTest {
         val stars = compose.onNodeWithContentDescription("4/5", substring = true)
             .fetchSemanticsNode()
         compose.runOnIdle {
-            assertNull(stars.config.getOrNull(SemanticsActions.OnClick))
+            assertFalse(stars.config.contains(SemanticsActions.OnClick))
             assertEquals(0, opens)
         }
     }
