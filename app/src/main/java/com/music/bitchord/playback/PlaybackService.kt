@@ -1475,6 +1475,16 @@ class PlaybackService : MediaLibraryService() {
             }
             val videoId = dataSpec.uri.getQueryParameter("v")
                 ?: return@Resolver dataSpec
+            // SourceRegistry opt-out also governs the last mile of playback.
+            // Without this guard, a legacy playlist's opaque videoId could
+            // still call InnerTube directly even after Search/Home stopped.
+            // Source-backed and local/authorized remote MediaAssets are handled
+            // above or by DefaultDataSource, and are not blocked here.
+            if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
+                throw java.io.IOException(
+                    "YouTube source disabled: legacy video ID requires an authorized audio asset",
+                )
+            }
             // An explicit rollback is not a preference for a different
             // candidate: it means this exact YouTube rendition, immediately.
             // Answer it before StreamChoice, the module race and a pending
