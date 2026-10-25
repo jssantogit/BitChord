@@ -76,6 +76,17 @@ internal interface CanonicalCatalogDao {
     @Query("SELECT * FROM catalog_release_track WHERE recordingId = :recordingId ORDER BY releaseId")
     suspend fun catalogReleaseTracksForRecording(recordingId: String): List<ReleaseTrackEntity>
 
+    @Upsert suspend fun upsertMusicBrainzArtistGroup(entity: CatalogMusicBrainzArtistGroupEntity)
+
+    @Query("""
+        SELECT groupEntity.*
+        FROM catalog_musicbrainz_artist_group AS association
+        JOIN catalog_release_group AS groupEntity ON groupEntity.id = association.releaseGroupId
+        WHERE association.artistId = :artistId
+        ORDER BY groupEntity.firstReleaseDate DESC, groupEntity.title COLLATE NOCASE, groupEntity.id
+    """)
+    suspend fun musicBrainzGroupsForArtist(artistId: String): List<CatalogReleaseGroupEntity>
+
     @Upsert suspend fun upsertCatalogReleaseGroup(entity: CatalogReleaseGroupEntity)
     @Upsert suspend fun upsertCatalogReleaseGroupEdition(entity: CatalogReleaseGroupEditionEntity)
     @Upsert suspend fun upsertCatalogMusicBrainzTrack(entity: CatalogMusicBrainzTrackEntity)
