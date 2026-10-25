@@ -325,7 +325,9 @@ import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingDetailsScreen
 import com.music.bitchord.ui.canonicalExistingHomeShelves
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
 import com.music.bitchord.ui.canonicalLocalPickCardId
+import com.music.bitchord.ui.canonicalRemotePickCardId
 import com.music.bitchord.ui.isPlayableLocalPick
+import com.music.bitchord.ui.isTrustedHomeServerAsset
 import com.music.bitchord.ui.canonicalBrowseCardId
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import com.music.bitchord.ui.screens.CanonicalSongMenuRating
@@ -752,6 +754,7 @@ private fun BitChordApp(
     val discoverySourceConfigs by SourceRegistry.configs.collectAsStateWithLifecycle()
     val canonicalDiscoveryCatalog by viewModel.canonicalDiscoveryCatalog.collectAsStateWithLifecycle()
     val canonicalHomeLocalPicks by viewModel.canonicalHomeLocalPicks.collectAsStateWithLifecycle()
+    val canonicalHomeRemotePicks by viewModel.canonicalHomeRemotePicks.collectAsStateWithLifecycle()
     val canonicalTrendingMbids by viewModel.canonicalTrendingRecordingMbids.collectAsStateWithLifecycle()
     val canonicalTrendingLocalSongs by viewModel.canonicalTrendingLocalSongs.collectAsStateWithLifecycle()
     val homeLoadingMore by viewModel.homeLoadingMore.collectAsStateWithLifecycle()
@@ -955,6 +958,7 @@ private fun BitChordApp(
         },
         metadata = cachedCanonicalRows,
         localPicks = canonicalHomeLocalPicks,
+        remotePicks = canonicalHomeRemotePicks,
         trendingRecordingMbids = canonicalTrendingMbids,
         trendingLocalPicks = canonicalTrendingLocalSongs,
         releasesHeading = stringResource(R.string.shelf_new_releases),
@@ -2128,6 +2132,9 @@ private fun BitChordApp(
         val selectedLocal = canonicalHomeLocalPicks.firstOrNull {
             isPlayableLocalPick(it) && canonicalLocalPickCardId(it) == item.browseId
         }
+        val selectedRemote = canonicalHomeRemotePicks.firstOrNull {
+            isTrustedHomeServerAsset(it) && canonicalRemotePickCardId(it) == item.browseId
+        }
         val cached = cachedCanonicalRows.firstOrNull {
             canonicalBrowseCardId(it) == item.browseId
         }
@@ -2135,6 +2142,18 @@ private fun BitChordApp(
             playFrom(
                 listOf(selectedLocal), 0,
                 QueueSource(shelfTitle, PlaybackSourceType.HOME),
+            )
+        } else if (selectedRemote != null) {
+            controller?.playCanonicalRemote(
+                request = CanonicalRemotePlaybackRequest(
+                    recordingId = selectedRemote.recordingId,
+                    mediaAssetId = selectedRemote.mediaAssetId,
+                    providerKey = selectedRemote.providerKey,
+                ),
+                metadata = CanonicalRemotePlaybackMetadata(
+                    title = selectedRemote.title,
+                    artistDisplay = selectedRemote.artistDisplay,
+                ),
             )
         } else if (cached?.kind == CanonicalSearchKind.RECORDING &&
             cached.hasCatalogedAsset
