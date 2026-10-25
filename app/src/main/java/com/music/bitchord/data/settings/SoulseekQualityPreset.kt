@@ -5,7 +5,7 @@ package com.music.bitchord.data.settings
  * existing providers never inherit a new codec gate or fallback policy.
  * Unknown previous values fail closed to a neutral MANUAL ranking preference.
  */
-internal enum class SoulseekQualityPreset(
+enum class SoulseekQualityPreset(
     val label: String,
     val explanation: String,
 ) {
