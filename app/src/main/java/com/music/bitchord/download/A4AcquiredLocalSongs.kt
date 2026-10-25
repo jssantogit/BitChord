@@ -3,6 +3,8 @@ package com.music.bitchord.download
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import com.music.bitchord.data.model.Song
 import kotlinx.coroutines.Dispatchers
@@ -33,7 +35,18 @@ internal object A4AcquiredLocalSongs {
                 .map(A4LocalPhysicalIdentity::pathKey).toSet()
             val uris=A4AvailableLocalUriSelection.choose(
                 entries,alreadyScanned=already,alreadyIdentities=alreadyPaths,
-                identityOf=A4LocalPhysicalIdentity::key
+                identityOf={ raw ->
+                    val original=A4LocalPhysicalIdentity.key(raw)
+                    // Android 10+: official provider mapping is the safest
+                    // MediaStore ↔ SAF equivalence, even if DATA is unavailable.
+                    if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.Q &&
+                        !original.startsWith("media:")) {
+                        val equivalent=runCatching {
+                            MediaStore.getMediaUri(context,Uri.parse(raw))
+                        }.getOrNull()
+                        equivalent?.toString()?.let(A4LocalPhysicalIdentity::key) ?: original
+                    } else original
+                }
             ) { raw ->
                 runCatching {
                     resolver.openFileDescriptor(Uri.parse(raw),"r")?.use { descriptor ->
