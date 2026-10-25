@@ -80,6 +80,9 @@ internal fun CanonicalRecordingFeedbackEntry(recordingId: String) {
     }
 }
 
+/** The player never guesses a provider-native ID or track title for a local rating. */
+private data class RatingTargetResolution(val pending: Boolean, val recordingId: String?)
+
 /** A player Song is NOT a RecordingId: verify the actual rendition before editing. */
 @Composable
 internal fun CanonicalSongRatingDialog(song: Song, onDismiss: () -> Unit) {
@@ -88,12 +91,17 @@ internal fun CanonicalSongRatingDialog(song: Song, onDismiss: () -> Unit) {
     // proof. Unrated local files and cached canonical Navidrome songs can be
     // edited with no provider lookup. Resolver remains a strict fallback.
     val cachedId = LocalCanonicalRatingDisplay.current.recordingIdForSong(song)
-    val recordingId by produceState<String?>(cachedId, context, song.videoId, cachedId) {
+    val resolution by produceState(
+        initialValue = RatingTargetResolution(pending = cachedId == null, recordingId = cachedId),
+        key1 = context,
+        key2 = song,
+        key3 = cachedId,
+    ) {
         if (cachedId != null) {
-            value = cachedId
+            value = RatingTargetResolution(false, cachedId)
             return@produceState
         }
-        value = try {
+        val resolvedId = try {
             withContext(Dispatchers.IO) {
                 CanonicalSongFeedbackTarget(androidCanonicalQueueResolver(context)).recordingId(song)
             }
@@ -102,18 +110,26 @@ internal fun CanonicalSongRatingDialog(song: Song, onDismiss: () -> Unit) {
         } catch (_: Exception) {
             null // no heuristic matching by provider ID, title or artist
         }
+        value = RatingTargetResolution(false, resolvedId)
     }
-    if (recordingId == null) {
+    val id = resolution.recordingId
+    if (id != null) {
+        CanonicalRecordingRatingDialog(recordingId = id, onDismiss = onDismiss)
+    } else {
         AlertDialog(
             onDismissRequest = onDismiss,
             title = { Text(stringResource(Res.string.recording_feedback_dialog_title)) },
-            text = { Text(stringResource(Res.string.recording_feedback_unavailable)) },
+            text = {
+                if (resolution.pending) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                } else {
+                    Text(stringResource(Res.string.recording_feedback_unavailable))
+                }
+            },
             confirmButton = {
                 TextButton(onClick = onDismiss) { Text(stringResource(Res.string.cancel)) }
             },
         )
-    } else {
-        CanonicalRecordingRatingDialog(recordingId = recordingId!!, onDismiss = onDismiss)
     }
 }
 
@@ -187,7 +203,7 @@ internal fun CanonicalRecordingFeedbackPanel(
                 ) {
                     repeat(5) { i ->
                         val index = i.toDouble()
-                        Box(modifier = Modifier.size(width = 49.dp, height = 56.dp), contentAlignment = Alignment.Center) {
+                        Box(modifier = Modifier.size(width = 44.dp, height = 52.dp), contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = when {
                                     selected >= index + 1.0 -> Icons.Rounded.Star
@@ -196,7 +212,7 @@ internal fun CanonicalRecordingFeedbackPanel(
                                 },
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(42.dp),
+                                modifier = Modifier.size(40.dp),
                             )
                             Row(Modifier.fillMaxSize()) {
                                 Box(
