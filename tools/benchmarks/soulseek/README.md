@@ -76,6 +76,41 @@ report **all observed offer IDs**; rankings may omit ineligible offers. Files
 provided to either ranker exclude `truth` and `truth_evidence`. Only the
 final independent evaluator sees ground-truth labels.
 
+## Album compatibility prototype (not the live downloader)
+
+The original `preflight-v4` output remains frozen in
+`app/build/benchmark/soulseek/bitchord-preflight-v4.jsonl`.
+A second **pure benchmark-only** policy now runs on the same inputs and writes
+`bitchord-album-gate-v1.jsonl` without altering the A0 manual selector.
+
+It evaluates a requested album against **untrusted peer text and the nearest
+folder hint**. Distinctive competing album names are a conflict **of claims**;
+they are not proof that the audio is another master. If album context is
+missing, generic (`Music`, `Downloads`, `Lossless`, artist folders), or
+visually deceptive, it is inconclusive and stays in the manual list.
+A matching folder is still **unverified**; an exact MusicBrainz Release MBID
+can never be proven by a peer album title alone.
+
+The album gate makes no P/F or download decision. Matching album evidence
+does not override an UNSAFE technical/identity claim, and source
+availability does not repair album incompatibility. This prototype is not
+connected to #178's canonical catalog yet; do not describe it as
+MusicBrainz-integrated or validated on real peers.
+
+The workflow `Acquisition Offline Benchmark` produces:
+- `synthetic-report.json`: original BitChord v4 vs pinned Flux;
+- `synthetic-album-gate-report.json`: v4 + untrusted album gate vs Flux;
+- `synthetic-v4-vs-album-gate.json`: paired policy trade-off;
+- three score-only JSONL files, plus an Actions run summary.
+
+Results from the first 18 invented scenarios (preliminary comparison) showed
+v4 with 9 exact-labelled first choices, one wrong-version promotion and
+four abstentions; the first album gate with 10 exact-labelled, zero
+wrong-version promotions and eight abstentions. **These numbers are synthetic
+regression observations, not field performance; they are not a launch target.**
+Do not eliminate abstentions by reading the gold labels into the ranker.
+The gate is deliberately conservative until real evidence exists.
+
 ## Manifest schema v1
 
 One JSON object per line:
