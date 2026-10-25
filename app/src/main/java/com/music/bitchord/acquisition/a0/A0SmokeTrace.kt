@@ -186,7 +186,7 @@ internal class A0SmokeTrace private constructor(
                 "simulationSuggested" to n(report.simulatedSuggested),
                 "simulationAmbiguous" to n(report.simulatedAmbiguous),
                 "simulationNoStrong" to n(report.simulatedNoStrong),
-                "policyVersion" to "preflight-v1",
+                "policyVersion" to A0CandidatePreflight.POLICY_VERSION,
                 "selectable" to n(report.accepted)
             )
         )
