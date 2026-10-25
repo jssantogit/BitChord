@@ -80,4 +80,12 @@ class A0CandidateClaimClustersTest {
         val result=A0CandidateClaimClusters.preview(listOf(one,two))
         assertEquals(1,result.distinctClaims)
     }
+    @Test fun identicalFileClaimsWithDifferentPreflightRisksAreNotSameEvidence() {
+        val result=A0CandidateClaimClusters.preview(listOf(
+            entry(assessment=strong),entry(assessment=review)))
+        assertEquals(2,result.distinctClaims)
+        assertEquals(0,result.repeatedClaims)
+        assertEquals(A0CandidatePreflight.SimulationStatus.SUGGESTED,result.status)
+    }
+
 }
