@@ -214,8 +214,10 @@ fun SearchScreen(
     libraryResults: UiState<List<Song>>? = null,
     /** Files on the device are a running order to play through, not a station seed. */
     onLibrarySongClick: (List<Song>, Int) -> Unit = onSongClick,
+    /** An authorized addon song never inherits local MediaStore provenance. */
+    onAddonSongClick: (List<Song>, Int) -> Unit = onLibrarySongClick,
     /**
-     * The YouTube / Library switcher, full width at the head of the page. Up
+     * The user-facing General / Server / Local switcher, full width at the head of the page. Up
      * only while the field is empty: once something is typed the page is
      * about the results, and the switcher would just push them down.
      */
@@ -341,7 +343,7 @@ fun SearchScreen(
                     onAddonHistoryClear = onAddonHistoryClear,
                     currentSong = currentSong,
                     isPlaying = isPlaying,
-                    onSongClick = onLibrarySongClick,
+                    onSongClick = if (searchingAddons) onAddonSongClick else onLibrarySongClick,
                     onSongLongPress = onSongLongPress,
                     onSongSwipe = onSongSwipe,
                 )
@@ -489,7 +491,7 @@ fun SearchScreen(
                     onAddonHistoryClear = {},
                     currentSong = currentSong,
                     isPlaying = isPlaying,
-                    onSongClick = onLibrarySongClick,
+                    onSongClick = onAddonSongClick,
                     onSongLongPress = onSongLongPress,
                     onSongSwipe = onSongSwipe,
                 )
