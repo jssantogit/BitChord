@@ -1366,4 +1366,25 @@
     <string name="playback_recovery_retry">Tentar novamente</string>
     <string name="playback_recovery_retrying">Tentando…</string>
     <string name="playback_recovery_dismiss">Dispensar</string>
+    <string name="canonical_discovery_header">Descoberta do catálogo</string>
+    <string name="canonical_discovery_setting_title">Início e Explorar com catálogo</string>
+    <string name="canonical_discovery_setting_subtitle">Use músicas salvas e MusicBrainz no Início e em Explorar. Este modo também é usado quando o YouTube Music está desativado.</string>
+    <string name="canonical_discovery_home_title">Suas músicas</string>
+    <string name="canonical_discovery_explore_title">Explore o catálogo</string>
+    <string name="canonical_discovery_description">Explore coleções salvas no dispositivo ou pesquise no MusicBrainz. Metadados do catálogo não garantem áudio reproduzível.</string>
+    <string name="canonical_discovery_search">Pesquisar no MusicBrainz</string>
+    <string name="canonical_discovery_open_library">Abrir biblioteca</string>
+    <string name="canonical_discovery_downloaded_collections">Coleções baixadas</string>
+    <string name="canonical_discovery_local_playlists">Playlists salvas no dispositivo</string>
+    <string name="canonical_discovery_empty_collections">Nenhuma coleção foi salva neste dispositivo ainda.</string>
+    <string name="canonical_discovery_catalog_cache">Catálogo salvo no dispositivo</string>
+    <string name="canonical_discovery_cache_loading">Carregando catálogo salvo…</string>
+    <string name="canonical_discovery_cache_error">Não foi possível ler o catálogo MusicBrainz salvo.</string>
+    <string name="canonical_discovery_cache_empty">Ainda não há itens MusicBrainz salvos. Pesquise no catálogo para explorar metadados públicos.</string>
+    <string name="canonical_discovery_metadata_only">Somente metadados · sem áudio catalogado</string>
+    <string name="canonical_discovery_asset_available">Áudio catalogado · o acesso será verificado ao reproduzir</string>
+    <string name="canonical_discovery_cached_offline">Salvo offline</string>
+    <string name="canonical_discovery_retry">Tentar novamente</string>
+    <string name="canonical_discovery_refresh">Atualizar catálogo salvo</string>
+    <string name="legacy_library_youtube_disabled">Ative o YouTube Music nas configurações para carregar esta biblioteca online. Playlists e coleções locais continuam disponíveis.</string>
 </resources>
