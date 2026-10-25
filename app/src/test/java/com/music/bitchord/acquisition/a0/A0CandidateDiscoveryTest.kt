@@ -178,4 +178,22 @@ class A0CandidateDiscoveryTest {
         assertEquals(0,handoff.screening().preflightStrong)
     }
 
+    @Test fun conflictingArtistRemainsSelectableManuallyButCannotLeadStrongCandidate() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",expectedDurationSeconds=161)
+        val misplaced=A0SoulseekSearchFile(
+            "Music\\ILLIT\\Other Artist - Magnetic.mp3",6_400_000L,"mp3",
+            mapOf(0 to 320,1 to 161))
+        val official=A0SoulseekSearchFile(
+            "Music\\ILLIT\\ILLIT - Magnetic.mp3",6_400_000L,"mp3",
+            mapOf(0 to 320,1 to 161))
+        handoff.offerParsed(reply("a",listOf(misplaced)),"a")
+        handoff.offerParsed(reply("b",listOf(official)),"b")
+        assertEquals(2,handoff.choices().size)
+        assertEquals(A0CandidatePreflight.Confidence.STRONG,
+            handoff.choices()[0].preflight.confidence)
+        assertEquals(A0CandidatePreflight.Confidence.UNSAFE,
+            handoff.choices()[1].preflight.confidence)
+    }
+
 }
