@@ -11,7 +11,7 @@ import org.junit.Test
  * Update pack version and review expected labels explicitly when policy changes.
  */
 class A0CandidateCalibrationV1Test {
-    private val version="preflight-v1"
+    private val version=A0CandidatePreflight.POLICY_VERSION
     private val STRONG=A0CandidatePreflight.Confidence.STRONG
     private val REVIEW=A0CandidatePreflight.Confidence.REVIEW
     private val UNSAFE=A0CandidatePreflight.Confidence.UNSAFE
