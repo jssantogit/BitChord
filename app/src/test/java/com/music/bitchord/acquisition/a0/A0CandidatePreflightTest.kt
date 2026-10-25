@@ -59,7 +59,10 @@ class A0CandidatePreflightTest {
 
     @Test fun lowOrMissingBitrateCannotBeStrong() {
         assertEquals(A0CandidatePreflight.Confidence.REVIEW,inspect(bitrate=null).confidence)
-        assertEquals(A0CandidatePreflight.Confidence.REVIEW,inspect(bitrate=128).confidence)
+        // 128 kbps at 161s needs roughly 2.6 MB; keep file size consistent
+        // to exercise the low-quality REVIEW branch, not a size conflict.
+        assertEquals(A0CandidatePreflight.Confidence.REVIEW,
+            inspect(bitrate=128,size=2_576_000).confidence)
     }
 
     @Test fun flacWithDeclaredAudioAttributesCanBeStrongButUnverified() {
