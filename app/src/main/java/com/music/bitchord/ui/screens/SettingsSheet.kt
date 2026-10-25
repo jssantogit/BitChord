@@ -1703,10 +1703,10 @@ fun SettingsScreen(
                             }
                         }
                     }
-                    if(customFormat in setOf("aac","m4a")) {
+                    if(customFormat=="m4a") {
                         Text(
-                            "AAC/M4A ainda não estão habilitados no salvamento piloto " +
-                                "Soulseek. Outras fontes só usarão se oferecerem.",
+                            "M4A (AAC/ALAC) ainda não é validado pelo salvamento " +
+                                "piloto Soulseek. AAC .aac (ADTS) é suportado quando anunciado.",
                             color=MaterialTheme.colorScheme.onSurfaceVariant,
                             style=MaterialTheme.typography.bodySmall,
                         )
