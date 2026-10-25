@@ -12,6 +12,10 @@ import com.music.bitchord.auth.profileId
 import com.music.bitchord.auth.sessionId
 import com.music.bitchord.auth.adjacentProfile
 import com.music.bitchord.data.AppUpdateChecker
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
+import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
+import com.music.bitchord.ui.screens.CanonicalSearchKind
 import com.music.bitchord.data.LocalMediaRepository
 import com.music.bitchord.data.LikeState
 import com.music.bitchord.data.YtMusicRepository
@@ -100,7 +104,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /** What the Search tab searches: YouTube Music, or the Local Music folder on this device. */
-enum class SearchSource { YOUTUBE, LIBRARY, ADDONS }
+enum class SearchSource { YOUTUBE, LIBRARY, ADDONS, CANONICAL }
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -213,6 +217,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _addonResults = MutableStateFlow<UiState<List<Song>>?>(null)
     val addonResults: StateFlow<UiState<List<Song>>?> = _addonResults.asStateFlow()
     private var addonSearchJob: Job? = null
+
+    /** Public MusicBrainz identities are not Song/videoId and cannot be queued. */
+    private val _canonicalResults = MutableStateFlow<UiState<List<CanonicalCatalogSearchRow>>?>(null)
+    val canonicalResults: StateFlow<UiState<List<CanonicalCatalogSearchRow>>?> = _canonicalResults.asStateFlow()
+    private var canonicalSearchJob: Job? = null
+    private val musicBrainzSearch by lazy { MusicBrainzCatalogSearch() }
 
     /** The words typed into the Addons search before, newest first. */
     val addonSearchHistory: StateFlow<List<String>> = SearchHistory.addonRecent
@@ -1943,6 +1953,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _results.value = null
             addonSearchJob?.cancel()
             _addonResults.value = null
+            canonicalSearchJob?.cancel()
+            _canonicalResults.value = null
             // The list is about to switch from search results to recent
             // searches (or the empty state) — without this it can keep
             // whatever scroll offset the results list was left at, landing
@@ -1952,6 +1964,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         // Reset the submission gate so typeahead pipelines fire again.
         searchSubmitted = false
+        if (_searchSource.value == SearchSource.CANONICAL) {
+            // A stale metadata result must not appear under a new query.
+            canonicalSearchJob?.cancel()
+            _canonicalResults.value = null
+        }
         // The Library source answers from the device on every keystroke (see
         // [libraryResults]); YouTube's completions have nothing to add to it.
         if (_searchSource.value != SearchSource.YOUTUBE) return
@@ -1974,7 +1991,68 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             runAddonSearch(q)
             return
         }
+        if (_searchSource.value == SearchSource.CANONICAL) {
+            runCanonicalCatalogSearch(q)
+            return
+        }
         runSearch(anonymous = false)
+    }
+
+    /**
+     * Independent MusicBrainz search. Each page is metadata-only: never map an
+     * MBID into Song.videoId (that would route it through YouTube playback).
+     * A provider-owned MediaAsset lookup must be wired before enabling play.
+     */
+    private fun runCanonicalCatalogSearch(query: String) {
+        canonicalSearchJob?.cancel()
+        _searchScrollReset.value += 1
+        _canonicalResults.value = UiState.Loading
+        canonicalSearchJob = viewModelScope.launch {
+            val recordings = musicBrainzSearch.searchRecordings(query, limit = 25)
+            val groups = musicBrainzSearch.searchReleaseGroups(query, limit = 15)
+            val artists = musicBrainzSearch.searchArtists(query, limit = 15)
+            if (_searchSource.value != SearchSource.CANONICAL || _query.value.trim() != query) {
+                return@launch
+            }
+            val rows = buildList {
+                if (recordings is MusicBrainzCatalogSearchResult.Success) {
+                    recordings.page.items.forEach { hit ->
+                        add(CanonicalCatalogSearchRow(
+                            musicBrainzId = hit.musicBrainzId,
+                            kind = CanonicalSearchKind.RECORDING,
+                            title = hit.title,
+                            subtitle = hit.artistDisplay,
+                        ))
+                    }
+                }
+                if (groups is MusicBrainzCatalogSearchResult.Success) {
+                    groups.page.items.forEach { hit ->
+                        add(CanonicalCatalogSearchRow(
+                            musicBrainzId = hit.musicBrainzId,
+                            kind = CanonicalSearchKind.RELEASE_GROUP,
+                            title = hit.title,
+                            subtitle = hit.artistDisplay ?: hit.primaryType,
+                        ))
+                    }
+                }
+                if (artists is MusicBrainzCatalogSearchResult.Success) {
+                    artists.page.items.forEach { hit ->
+                        add(CanonicalCatalogSearchRow(
+                            musicBrainzId = hit.musicBrainzId,
+                            kind = CanonicalSearchKind.ARTIST,
+                            title = hit.name,
+                            subtitle = hit.disambiguation ?: hit.country,
+                        ))
+                    }
+                }
+            }.distinctBy { it.kind to it.musicBrainzId }
+            _canonicalResults.value = if (
+                recordings is MusicBrainzCatalogSearchResult.Failure &&
+                groups is MusicBrainzCatalogSearchResult.Failure &&
+                artists is MusicBrainzCatalogSearchResult.Failure
+            ) UiState.Error("MusicBrainz catalog is unavailable")
+            else UiState.Success(rows)
+        }
     }
 
     /**
@@ -2020,6 +2098,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setSearchSource(source: SearchSource) {
         if (_searchSource.value == source) return
         _searchSource.value = source
+        if (source != SearchSource.CANONICAL) {
+            canonicalSearchJob?.cancel()
+            _canonicalResults.value = null
+        }
         _suggestions.value = emptyList()
         _typeaheadResults.value = emptyList()
         _searchScrollReset.value += 1
@@ -2027,6 +2109,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             SearchSource.LIBRARY -> loadLibrarySongs()
             SearchSource.YOUTUBE -> submitSearch()
             SearchSource.ADDONS -> if (_query.value.isNotBlank()) submitSearch()
+            SearchSource.CANONICAL -> if (_query.value.isNotBlank()) submitSearch()
         }
     }
 
