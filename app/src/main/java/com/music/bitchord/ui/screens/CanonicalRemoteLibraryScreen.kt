@@ -24,7 +24,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +38,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +67,10 @@ import com.music.bitchord.playback.playCanonicalRemote
 import com.music.bitchord.playback.rememberMediaController
 import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
+import com.music.bitchord.sharedui.resources.Res
+import com.music.bitchord.sharedui.resources.canonical_rating_song_options
+import com.music.bitchord.sharedui.resources.recording_feedback_edit
+import org.jetbrains.compose.resources.stringResource as sharedStringResource
 import com.music.bitchord.ui.player.awaitRecoverableCanonicalArtwork
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -93,6 +103,9 @@ internal fun CanonicalRemoteLibraryScreen(
     }
     val libraryFlow = remember(repository, providerKey) { repository.observe(providerKey) }
     val library by libraryFlow.collectAsStateWithLifecycle(initialValue = CanonicalBrowseLibrary.EMPTY)
+    // A menu action edits only the BitChord score tied to the canonical
+    // RecordingId. It never calls the OpenSubsonic remote rating endpoint.
+    var editingRecordingId by remember { mutableStateOf<String?>(null) }
 
     BackHandler(onBack = onClose)
 
@@ -126,7 +139,18 @@ internal fun CanonicalRemoteLibraryScreen(
                         )
                     }
                 },
+                onTrackEditRating = { track ->
+                    if (track.availableAssets.any { it.providerKey == providerKey }) {
+                        editingRecordingId = track.recordingId
+                    }
+                },
                 modifier = Modifier.fillMaxSize(),
+            )
+        }
+        editingRecordingId?.let { id ->
+            CanonicalRecordingRatingDialog(
+                recordingId = id,
+                onDismiss = { editingRecordingId = null },
             )
         }
     }
@@ -203,6 +227,7 @@ private fun TrackList(
     tracks: List<CanonicalBrowseTrack>,
     artworkLoader: OpenSubsonicArtworkLoader,
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
+    onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (tracks.isEmpty()) {
@@ -221,6 +246,7 @@ private fun TrackList(
                 track = track,
                 artworkLoader = artworkLoader,
                 onClick = { onTrackPlay(track) },
+                onEditRating = { onTrackEditRating(track) },
             )
             HorizontalDivider(
                 modifier = Modifier.padding(start = 84.dp),
@@ -236,6 +262,7 @@ private fun CanonicalTrackRow(
     track: CanonicalBrowseTrack,
     artworkLoader: OpenSubsonicArtworkLoader,
     onClick: () -> Unit,
+    onEditRating: () -> Unit,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -287,6 +314,38 @@ private fun CanonicalTrackRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+        CanonicalCatalogRatingMenu(onEdit = onEditRating)
+    }
+}
+
+/**
+ * The first native score belongs in the three-dot menu even when the song
+ * has zero stars. This action is deliberately independent from remote scores
+ * and from the identity provider used to populate this catalog.
+ */
+@Composable
+internal fun CanonicalCatalogRatingMenu(onEdit: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                Icons.Rounded.MoreVert,
+                contentDescription = sharedStringResource(Res.string.canonical_rating_song_options),
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text(sharedStringResource(Res.string.recording_feedback_edit)) },
+                leadingIcon = { Icon(Icons.Rounded.Star, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onEdit()
+                },
+            )
         }
     }
 }
