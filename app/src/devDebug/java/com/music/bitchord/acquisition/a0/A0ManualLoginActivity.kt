@@ -58,13 +58,15 @@ class A0ManualLoginActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE
-        )
-
         // Launched by the in-app song Download action, not the old A0 tool entry.
         val fromSongDownload = intent.hasExtra("bitchord.soulseek.manual.query")
+        // The song search/candidates view has no visible credentials; allow
+        // screenshots for QA. Legacy username/password tools stay protected.
+        if (A0ScreenCapturePolicy.requiresSecureWindow(fromSongDownload)) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
 
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -152,7 +154,7 @@ class A0ManualLoginActivity : Activity() {
         page.addView(saveAction)
         val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
         page.addView(exportAction)
-        if (!fromSongDownload) text("Captura temporária iniciada automaticamente ao testar. " +
+        if (!fromSongDownload) text("Captura temporária se não existir uma captura manual ativa. " +
             "Depois do resultado, exporte os logs. Revise o relatório antes de compartilhar. " +
             "Não envie credenciais, capturas de rede ou logcat bruto.")
         val status = text("Nenhuma conexão iniciada.")
@@ -231,9 +233,10 @@ class A0ManualLoginActivity : Activity() {
             val accountGeneration = SoulseekActiveSession.generation()
             worker.execute {
                 // Existing Diagnostics capture and structured tracing; no raw inputs.
-                val captureEnabled = runCatching {
-                    Diagnostics.startCapture(180_000L).active
-                }.getOrDefault(false)
+                val featureCapture = runCatching {
+                    Diagnostics.beginFeatureCapture(180_000L)
+                }.getOrNull()
+                val captureEnabled = featureCapture?.active == true
                 val trace = A0SmokeTrace.start(
                     Diagnostics.structuredTracer(), observedTransfer = transferObserved
                 )
@@ -992,7 +995,12 @@ class A0ManualLoginActivity : Activity() {
                     trace.note(A0SmokeTrace.Stage.SOCKETS_CLOSED)
                     trace.finish(finalOutcome, finalReason)
                     activeTrace = null
-                    if (captureEnabled) runCatching { Diagnostics.stopCapture() }
+                    // Release only the temporary capture this feature owns.
+                    // A pre-existing or subsequently restarted manual capture
+                    // must remain active with its original expiry.
+                    featureCapture?.let { owned ->
+                        runCatching { Diagnostics.endFeatureCapture(owned) }
+                    }
                 }
                 if (!stopping && !isFinishing && !isDestroyed) {
                     runOnUiThread {
