@@ -1710,6 +1710,14 @@ private fun BitChordApp(
             viewModel.openDetail(browseId, name, credit, artwork, type)
             return
         }
+        // Name-only Replay navigation must not silently restart InnerTube
+        // discovery when independent catalog mode has been selected.
+        if (!shouldRunLegacyYoutubeVersionLookup(usesCanonicalDiscovery, discoverySourceConfigs)) {
+            selectedTab = TAB_SEARCH
+            viewModel.setSearchSource(SearchSource.CANONICAL)
+            viewModel.searchFor(listOfNotNull(name, subtitle).joinToString(" "))
+            return
+        }
         scope.launch {
             val filter = if (type == BrowseType.ARTIST) {
                 SearchFilter.ARTISTS
@@ -2195,14 +2203,22 @@ private fun BitChordApp(
     // mini player still costs nothing.
     val playerShowing = showNowPlaying
     var links by remember { mutableStateOf<Song?>(null) }
-    LaunchedEffect(player.song?.videoId, playerShowing) {
+    LaunchedEffect(
+        player.song?.videoId, playerShowing, usesCanonicalDiscovery, discoverySourceConfigs,
+    ) {
         links = null
         linksLoading = false
-        if (!playerShowing) return@LaunchedEffect
+        if (!playerShowing ||
+            !shouldRunLegacyYoutubeVersionLookup(usesCanonicalDiscovery, discoverySourceConfigs)
+        ) return@LaunchedEffect
         val current = player.song ?: return@LaunchedEffect
         if (current.albumId != null && current.artistId != null) return@LaunchedEffect
         linksLoading = true
-        links = YtMusicRepository.trackLinks(current.videoId).getOrNull()
+        val resolved = YtMusicRepository.trackLinks(current.videoId).getOrNull()
+        // Ignore even an uncancellable legacy network response after opt-out.
+        if (shouldRunLegacyYoutubeVersionLookup(usesCanonicalDiscovery, discoverySourceConfigs)) {
+            links = resolved
+        }
         linksLoading = false
     }
     val playerSong = player.song?.let { current ->
@@ -2406,6 +2422,12 @@ private fun BitChordApp(
                         null,
                         BrowseType.ARTIST,
                     )
+                } else if (!shouldRunLegacyYoutubeVersionLookup(
+                    usesCanonicalDiscovery, discoverySourceConfigs,
+                )) {
+                    selectedTab = TAB_SEARCH
+                    viewModel.setSearchSource(SearchSource.CANONICAL)
+                    viewModel.searchFor(name)
                 } else {
                     scope.launch {
                         val found = YtMusicRepository.findArtistPageId(name).getOrNull()
