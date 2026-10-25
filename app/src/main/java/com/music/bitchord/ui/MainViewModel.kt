@@ -308,6 +308,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _canonicalTrendingRecordingMbids = MutableStateFlow<List<String>>(emptyList())
     val canonicalTrendingRecordingMbids: StateFlow<List<String>> =
         _canonicalTrendingRecordingMbids.asStateFlow()
+
+    /** Local top plays from real Listening events joined to MediaStore URIs. */
+    private val _canonicalTrendingLocalSongs = MutableStateFlow<List<Song>>(emptyList())
+    val canonicalTrendingLocalSongs: StateFlow<List<Song>> =
+        _canonicalTrendingLocalSongs.asStateFlow()
     private val canonicalDiscoveryCatalogEpoch = DiscoveryRequestEpoch()
     private var canonicalDiscoveryCatalogJob: Job? = null
 
@@ -2112,13 +2117,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val listening = ListeningEventDatabase.get(app).listeningEventDao()
                 val dao = CanonicalCatalogDatabase.get(app).catalogDao()
                 val since = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
-                listening.recentPopularRecordings(sinceEpochMs = since, limit = 40)
-                    .mapNotNull { entry ->
-                        dao.externalIdentitiesForEntity(
-                            provider = "musicbrainz", entityType = "recording",
-                            entityId = entry.recordingId,
-                        ).firstOrNull()?.externalId
-                    }
+                val popular = listening.recentPopularRecordings(
+                    sinceEpochMs = since, limit = 40,
+                )
+                // The local Room join is by canonical RecordingId and actual
+                // persisted URI, never by artist/title/legacy YouTube handle.
+                val localByRecording = dao.localRows(
+                    localProvider = "local-mediastore",
+                    youtubeProvider = "youtube", recordingEntityType = "recording",
+                ).groupBy { it.recordingId }
+                val songsByUri = picks.associateBy { it.localUri }
+                val trendingLocal = popular.mapNotNull { entry ->
+                    localByRecording[entry.recordingId].orEmpty()
+                        .firstNotNullOfOrNull { asset ->
+                            songsByUri[asset.uri]?.takeIf {
+                                com.music.bitchord.ui.isPlayableLocalPick(it)
+                            }
+                        }
+                }.distinctBy { it.localUri }
+                if (canonicalDiscoveryCatalogEpoch.isCurrent(generation) &&
+                    isCanonicalDiscoverySelected()
+                ) {
+                    _canonicalTrendingLocalSongs.value = trendingLocal
+                }
+                popular.mapNotNull { entry ->
+                    dao.externalIdentitiesForEntity(
+                        provider = "musicbrainz", entityType = "recording",
+                        entityId = entry.recordingId,
+                    ).firstOrNull()?.externalId
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
