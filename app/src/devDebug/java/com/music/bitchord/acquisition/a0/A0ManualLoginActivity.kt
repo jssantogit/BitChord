@@ -768,6 +768,8 @@ class A0ManualLoginActivity : Activity() {
                                                                     "duração divergente"
                                                                 A0CandidatePreflight.Reason.SIZE_CONFLICT ->
                                                                     "tamanho improvável"
+                                                                A0CandidatePreflight.Reason.ENCODING_CONFLICT ->
+                                                                    "codificação inconsistente"
                                                                 A0CandidatePreflight.Reason.QUALITY_UNCONFIRMED ->
                                                                     "qualidade não confirmada"
                                                             } }
