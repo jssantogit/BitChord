@@ -82,4 +82,37 @@ class A0CanonicalAlbumPolicyTest {
         )
         assertFalse(data.authorizesTransfer)
     }
+
+    @Test fun artistOrGenericDownloadFoldersAreNotWrongAlbumEvidence() {
+        val target=A0CanonicalAlbumPolicy.Target("Blue Sky",expectedArtist="Mira")
+        for(folder in listOf("Mira","Music","Downloads","General",
+            "Unknown Album","Other","FLAC","Lossless")) {
+            val result=policy.assess(target,policy.Claim(folder,
+                policy.ClaimSource.DIRECTORY_HINT))
+            assertEquals("Folder: "+folder,
+                A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL,result.status)
+            assertEquals(A0CanonicalAlbumPolicy.Reason.ALBUM_HINT_GENERIC,
+                result.reason)
+        }
+    }
+
+    @Test fun distinctiveWrongAlbumFolderRemainsAConflictingUntrustedHint() {
+        val result=policy.assess(
+            A0CanonicalAlbumPolicy.Target("Blue Sky",expectedArtist="Mira"),
+            A0CanonicalAlbumPolicy.Claim("Greatest Hits",
+                A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT)
+        )
+        assertEquals(A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM,result.status)
+        assertFalse(result.authorizesTransfer)
+    }
+
+    @Test fun formattingControlsCannotMasqueradeAsMatchingAlbumName() {
+        val target=A0CanonicalAlbumPolicy.Target("Blue Sky")
+        for(name in listOf("Blue\\u202E Sky","Blue\\u200B Sky")) {
+            val display=name.replace("\\u202E","\u202E").replace("\\u200B","\u200B")
+            val result=policy.assess(target,A0CanonicalAlbumPolicy.Claim(display))
+            assertEquals(A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL,result.status)
+            assertEquals(A0CanonicalAlbumPolicy.Reason.UNTRUSTED_FORMAT_CONTROL,result.reason)
+        }
+    }
 }
