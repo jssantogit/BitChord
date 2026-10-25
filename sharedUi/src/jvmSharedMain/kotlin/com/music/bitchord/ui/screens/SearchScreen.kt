@@ -200,6 +200,9 @@ fun SearchScreen(
     /** Only called for MBIDs that have a cataloged asset; Playback revalidates. */
     onCanonicalPlay: (String) -> Unit = {},
     onCanonicalAddToQueue: (String) -> Unit = {},
+    /** Canonical remote assets, not source-owned stream URLs. */
+    serverResults: UiState<List<CanonicalServerSearchRow>>? = null,
+    onServerPlay: (CanonicalServerSearchRow) -> Unit = {},
     /** The Addons source's tracks for the submitted query; null until one is submitted. */
     addonResults: UiState<List<Song>>? = null,
     /** Words searched in the Addons tab before, newest first; shown while the field is empty. */
@@ -324,7 +327,11 @@ fun SearchScreen(
                     canonicalSearchLoadingMore,
                     onCanonicalPlay, onCanonicalAddToQueue,
                 )
-                searchingLibrary || searchingAddons -> librarySearchResults(
+                searchingLibrary || searchingAddons -> if (
+                    searchingLibrary ||
+                    serverResults !is UiState.Success || serverResults.data.isEmpty() ||
+                    addonResults !is UiState.Success || addonResults.data.isNotEmpty()
+                ) librarySearchResults(
                     query = query.trim(),
                     results = if (searchingAddons) addonResults else libraryResults,
                     addons = searchingAddons,
@@ -459,6 +466,33 @@ fun SearchScreen(
                         )
                     }
                 }
+            }
+            if (!searchingLibrary && query.isNotBlank() &&
+                (searchingCanonical || (!searchingAddons && results != null))
+            ) {
+                // General contains both public metadata and authorized server
+                // renditions. A server result uses the same canonical queue
+                // contract, never a videoId derived from an MBID.
+                canonicalServerSearchRows(serverResults, onServerPlay)
+            }
+            if (searchingAddons && query.isNotBlank()) {
+                canonicalServerSearchRows(serverResults, onServerPlay)
+            }
+            if (searchingCanonical && (addonResults as? UiState.Success)?.data?.isNotEmpty() == true) {
+                librarySearchResults(
+                    query = query.trim(),
+                    results = addonResults,
+                    addons = true,
+                    addonHistory = emptyList(),
+                    onAddonHistoryClick = {},
+                    onAddonHistoryRemove = {},
+                    onAddonHistoryClear = {},
+                    currentSong = currentSong,
+                    isPlaying = isPlaying,
+                    onSongClick = onLibrarySongClick,
+                    onSongLongPress = onSongLongPress,
+                    onSongSwipe = onSongSwipe,
+                )
             }
         }
     }
@@ -635,6 +669,45 @@ fun canonicalRowsForFilter(
             row.kind == CanonicalSearchKind.RELEASE || row.kind == CanonicalSearchKind.RELEASE_GROUP
         SearchFilter.ARTISTS -> row.kind == CanonicalSearchKind.ARTIST
         SearchFilter.VIDEOS, SearchFilter.PLAYLISTS -> false
+    }
+}
+
+/** Searchable files provided by configured servers, with live access checked at play. */
+private fun LazyListScope.canonicalServerSearchRows(
+    rows: UiState<List<CanonicalServerSearchRow>>?,
+    onPlay: (CanonicalServerSearchRow) -> Unit,
+) {
+    val results = (rows as? UiState.Success)?.data.orEmpty()
+    if (results.isEmpty()) return
+    item(key = "server:heading") {
+        Text(
+            text = stringResource(Res.string.canonical_server_heading),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 14.dp),
+            style = MaterialTheme.typography.titleMedium,
+        )
+    }
+    itemsIndexed(
+        items = results,
+        key = { _, row -> "server:${row.recordingId}:${row.providerKey}" },
+    ) { _, row ->
+        Column(
+            modifier = Modifier.fillMaxWidth()
+                .clickable { onPlay(row) }
+                .padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
+        ) {
+            Text(row.title, style = MaterialTheme.typography.titleMedium)
+            Text(row.artistDisplay, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                stringResource(Res.string.canonical_server_track_hint),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+        HorizontalDivider(
+            modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline,
+        )
     }
 }
 
