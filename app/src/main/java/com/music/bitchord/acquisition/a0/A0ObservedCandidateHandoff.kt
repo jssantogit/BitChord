@@ -80,6 +80,12 @@ internal class A0ObservedCandidateHandoff(
         }
     }.thenByDescending { it.matchScore }
         .thenByDescending { it.declaredBitrateKbps ?: 0 }
+        // Availability is a source property, not musical identity. Its
+        // priority applies only within equal metadata AND equal risk.
+        .thenComparator { a,b ->
+            A0CandidateClaimClusters.compareEvidence(
+                a.claim,a.preflight,b.claim,b.preflight)
+        }
         .thenByDescending { A0PeerAvailability.priority(it.peerAvailability) }
         .thenBy { it.displayName.lowercase(java.util.Locale.ROOT) }
         .thenBy { it.peerUsername }
