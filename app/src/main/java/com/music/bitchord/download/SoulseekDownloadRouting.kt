@@ -62,4 +62,38 @@ internal object SoulseekDownloadRouting {
         }
         return Decision.ManualSearch(query)
     }
+
+    /**
+     * Read-only bridge for future #178 catalogue-aware ranking. Manual search
+     * never mints Recording/Release MBIDs, even with album/artist text.
+     * Existing route() and the actual transfer authorization are unchanged.
+     */
+    class PreparedManualSearch(
+        val query: String,
+        val snapshot: com.music.bitchord.acquisition.a0.A0CanonicalAcquisitionIntent,
+    ) {
+        override fun toString(): String = "PreparedManualSearch(redacted)"
+    }
+
+    fun prepareManual(
+        artist: String, title: String, count: Int, pilotAvailable: Boolean,
+        creditedArtists: List<String> = emptyList(),
+        requestedAlbum: String? = null,
+        expectedDurationSeconds: Int? = null,
+        quality: com.music.bitchord.acquisition.a0.A0CanonicalAcquisitionIntent.QualityProfileSnapshot =
+            com.music.bitchord.acquisition.a0.A0CanonicalAcquisitionIntent.QualityProfileSnapshot(),
+    ): PreparedManualSearch? {
+        val routed = route(artist, title, count, pilotAvailable, creditedArtists)
+        if (routed !is Decision.ManualSearch) return null
+        val confirmedDisplayCredit = creditedArtists.firstNotNullOfOrNull(::credit) ?: credit(artist)
+        val snapshot = com.music.bitchord.acquisition.a0.A0CanonicalAcquisitionIntent.manual(
+            title = text(title).take(120),
+            artistCredits = listOfNotNull(confirmedDisplayCredit),
+            requestedAlbum = requestedAlbum?.let(::text),
+            expectedDurationSeconds = expectedDurationSeconds,
+            quality = quality,
+        )
+        return PreparedManualSearch(routed.query, snapshot)
+    }
+
 }
