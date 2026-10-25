@@ -1697,7 +1697,15 @@ fun SettingsScreen(
                         modifier=Modifier.padding(top=14.dp))
                     Row(modifier=Modifier.horizontalScroll(rememberScrollState())) {
                         listOf("mp3","flac","wav","aac","m4a").forEach { format ->
-                            TextButton(onClick={customFormat=format}) {
+                            TextButton(onClick={
+                                customFormat=format
+                                if(format in setOf("flac","wav")) {
+                                    customBitrate=""
+                                } else {
+                                    customRate=""
+                                    customDepth=""
+                                }
+                            }) {
                                 Text((if(format==customFormat) "✓ " else "")+
                                     format.uppercase())
                             }
@@ -1711,27 +1719,30 @@ fun SettingsScreen(
                             style=MaterialTheme.typography.bodySmall,
                         )
                     }
-                    OutlinedTextField(
-                        value=customBitrate,
-                        onValueChange={customBitrate=it.filter(Char::isDigit).take(4)},
-                        label={Text("Bitrate mínimo (kbps; vazio = automático)")},
-                        singleLine=true,
-                        modifier=Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value=customRate,
-                        onValueChange={customRate=it.filter(Char::isDigit).take(3)},
-                        label={Text("Frequência mínima (kHz; vazio = automática)")},
-                        singleLine=true,
-                        modifier=Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value=customDepth,
-                        onValueChange={customDepth=it.filter(Char::isDigit).take(2)},
-                        label={Text("Profundidade mínima (bits; vazio = automática)")},
-                        singleLine=true,
-                        modifier=Modifier.fillMaxWidth(),
-                    )
+                    if(customFormat in setOf("mp3","aac","m4a")) {
+                        OutlinedTextField(
+                            value=customBitrate,
+                            onValueChange={customBitrate=it.filter(Char::isDigit).take(4)},
+                            label={Text("Bitrate mínimo (kbps; vazio = automático)")},
+                            singleLine=true,
+                            modifier=Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        OutlinedTextField(
+                            value=customRate,
+                            onValueChange={customRate=it.filter(Char::isDigit).take(3)},
+                            label={Text("Frequência mínima (kHz; vazio = automática)")},
+                            singleLine=true,
+                            modifier=Modifier.fillMaxWidth(),
+                        )
+                        OutlinedTextField(
+                            value=customDepth,
+                            onValueChange={customDepth=it.filter(Char::isDigit).take(2)},
+                            label={Text("Profundidade mínima (bits; vazio = automática)")},
+                            singleLine=true,
+                            modifier=Modifier.fillMaxWidth(),
+                        )
+                    }
                     val bitrate=customBitrate.toIntOrNull()
                     val rate=customRate.toIntOrNull()?.times(1000)
                     val depth=customDepth.toIntOrNull()
@@ -1750,7 +1761,12 @@ fun SettingsScreen(
                         enabled=valid,
                         onClick={
                             AppSettings.setDownloadCustomOptions(
-                                DownloadCustomOptions(customFormat,bitrate,rate,depth))
+                                DownloadCustomOptions(
+                                    customFormat,
+                                    bitrate.takeIf { customFormat in setOf("mp3","aac","m4a") },
+                                    rate.takeIf { customFormat in setOf("flac","wav") },
+                                    depth.takeIf { customFormat in setOf("flac","wav") }
+                                ))
                             pickingDownloadQuality=false
                         }
                     ) { Text("Salvar configuração personalizada") }
