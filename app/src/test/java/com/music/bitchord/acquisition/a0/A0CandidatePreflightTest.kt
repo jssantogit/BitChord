@@ -110,4 +110,17 @@ class A0CandidatePreflightTest {
         assertEquals(A0CandidatePreflight.Confidence.REVIEW,assessed.confidence)
     }
 
+    @Test fun conflictingFilenameCreditMakesCandidateUnsafeDespiteMatchingFolder() {
+        val ranking=A0CandidateRank.rank(
+            "ILLIT - Magnetic","Other Artist - Magnetic.mp3",320,
+            remotePath="Music\\ILLIT\\Other Artist - Magnetic.mp3",format="mp3",
+            declaredDurationSeconds=161,expectedDurationSeconds=161,sizeBytes=6_400_000L)
+        val candidate=A0CandidatePreflight.assess(
+            "ILLIT - Magnetic",ranking,320,
+            declaredDurationSeconds=161,expectedDurationSeconds=161,
+            format="mp3",sizeBytes=6_400_000L)
+        assertEquals(A0CandidatePreflight.Confidence.UNSAFE,candidate.confidence)
+        assertTrue(A0CandidatePreflight.Reason.ARTIST_CONFLICT in candidate.reasons)
+    }
+
 }
