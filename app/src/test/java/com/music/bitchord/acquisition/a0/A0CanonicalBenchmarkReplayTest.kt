@@ -93,7 +93,7 @@ class A0CanonicalBenchmarkReplayTest {
                 JsonPrimitive(it.field("offer_id"))
             }))
             put("ranked_offer_ids",JsonArray(ranked.map { JsonPrimitive(it.id) }))
-            put("recommended_offer_id",recommendation?.let(::JsonPrimitive) ?: JsonNull)
+            put("recommended_offer_id",recommendation?.let { JsonPrimitive(it) } ?: JsonNull)
             put("model_version","preflight_v4")
             put("recommendation_policy","strong_only")
         }
