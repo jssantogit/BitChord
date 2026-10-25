@@ -44,6 +44,22 @@ internal object A0PeerAvailability {
         return Assessment(tier,reasons,queue,speed?.div(1024))
     }
 
+    /**
+     * A positive result means the first source looks more favorable.
+     * Apply ONLY after identical claim and identical preflight assessment:
+     * these are untrusted observations, never an ETA or transfer approval.
+     */
+    fun compareSource(a:Assessment,b:Assessment):Int {
+        val tier=priority(a).compareTo(priority(b))
+        if(tier!=0)return tier
+        // Prefer known shorter queues before unverified speed. Unknown
+        // metrics sort last within their tier, never invalidate the source.
+        val queue=(b.queueLength ?: Int.MAX_VALUE)
+            .compareTo(a.queueLength ?: Int.MAX_VALUE)
+        if(queue!=0)return queue
+        return (a.speedKiBps ?: -1).compareTo(b.speedKiBps ?: -1)
+    }
+
     /** Only a tie-breaker after the identity/quality rank. */
     fun priority(a:Assessment)=when(a.tier) {
         Tier.READY -> 3
