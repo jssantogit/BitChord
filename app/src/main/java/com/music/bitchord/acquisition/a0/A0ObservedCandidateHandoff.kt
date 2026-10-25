@@ -35,6 +35,7 @@ internal class A0ObservedCandidateHandoff(
         val declaredBitDepth:Int?,
         val preflight:A0CandidatePreflight.Assessment,
         val peerAvailability:A0PeerAvailability.Assessment,
+        internal val claim:A0CandidateClaimClusters.Claim,
     ) {
         override fun toString()="A0 observed candidate (redacted)"
     }
@@ -65,6 +66,8 @@ internal class A0ObservedCandidateHandoff(
         val simulatedSuggested:Int=0,
         val simulatedAmbiguous:Int=0,
         val simulatedNoStrong:Int=0,
+        val claimsDistinct:Int=0,
+        val claimsRepeated:Int=0,
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
     private val candidates=ArrayList<Choice>(48)
@@ -150,18 +153,22 @@ internal class A0ObservedCandidateHandoff(
             // Cap untrusted identity storage, never persist it or print it.
             if(seen.size>8192) seen.clear()
             eligible=(eligible+1).coerceAtMost(100000)
-            val bitrate=file.attributes[0]?.takeIf { it in 32..1536 }
+            // Preserve out-of-range claims for the codec conflict gate: dropping
+            // an impossible MP3 bitrate would quietly downgrade UNSAFE to
+            // REVIEW/UNKNOWN. Only the UI exposure is bounded.
+            val bitrateRaw=file.attributes[0]
+            val bitrate=bitrateRaw?.takeIf { it in 32..1536 }
             val duration=file.attributes[1]?.takeIf { it in 1..14400 }
             val sampleRate=file.attributes[4]?.takeIf { it in 8000..384000 }
             val bitDepth=file.attributes[5]?.takeIf { it in 8..32 }
             val ranking=A0CandidateRank.rank(
-                searchPhrase,basename,bitrate,remotePath=path,format=ext,
+                searchPhrase,basename,bitrateRaw,remotePath=path,format=ext,
                 declaredDurationSeconds=duration,expectedDurationSeconds=expectedDurationSeconds,
                 declaredSampleRateHz=sampleRate,declaredBitDepth=bitDepth,
                 sizeBytes=file.sizeBytes,queueLength=result.queueLength
             )
             val preflight=A0CandidatePreflight.assess(
-                searchPhrase,ranking,bitrate,
+                searchPhrase,ranking,bitrateRaw,
                 declaredDurationSeconds=duration,expectedDurationSeconds=expectedDurationSeconds,
                 format=ext,sizeBytes=file.sizeBytes,
                 declaredSampleRateHz=sampleRate,declaredBitDepth=bitDepth
@@ -184,7 +191,12 @@ internal class A0ObservedCandidateHandoff(
                 declaredBitrateKbps=bitrate,quality=ranking.quality,
                 warnings=ranking.warnings,declaredDurationSeconds=duration,
                 declaredSampleRateHz=sampleRate,declaredBitDepth=bitDepth,
-                preflight=preflight,peerAvailability=peerAvailability
+                preflight=preflight,peerAvailability=peerAvailability,
+                claim=A0CandidateClaimClusters.Claim(
+                    filename=basename,format=ext,sizeBytes=file.sizeBytes,
+                    bitrateKbps=bitrateRaw,durationSeconds=duration,
+                    sampleRateHz=sampleRate,bitDepth=bitDepth
+                )
             ))
             candidates.sortWith(choiceOrder)
             // A single enthusiastic peer cannot displace every other source.
@@ -205,9 +217,7 @@ internal class A0ObservedCandidateHandoff(
     fun screening():Screening {
         // A decision *simulation*, only one sanitized outcome per search.
         // Never yields transfer authority or stores candidate identities.
-        val preview=A0CandidatePreflight.simulate(candidates.map {
-            A0CandidatePreflight.Weighted(it.preflight,it.matchScore)
-        })
+        val preview=claimPreview()
         return Screening(
         responses=replies,
         publicFiles=publicSeen,
@@ -251,9 +261,21 @@ internal class A0ObservedCandidateHandoff(
         },
         simulatedSuggested=if(preview.status==A0CandidatePreflight.SimulationStatus.SUGGESTED) 1 else 0,
         simulatedAmbiguous=if(preview.status==A0CandidatePreflight.SimulationStatus.AMBIGUOUS) 1 else 0,
-        simulatedNoStrong=if(preview.status==A0CandidatePreflight.SimulationStatus.NO_STRONG) 1 else 0
+        simulatedNoStrong=if(preview.status==A0CandidatePreflight.SimulationStatus.NO_STRONG) 1 else 0,
+        claimsDistinct=preview.distinctClaims,
+        claimsRepeated=preview.repeatedClaims
         )
     }
+
+    // Pure shadow suggestion. Never called from transferChoice() or any
+    // side-effectful operation. Candidate data remains in-memory only.
+    @Synchronized
+    fun claimPreview():A0CandidateClaimClusters.Preview=
+        A0CandidateClaimClusters.preview(candidates.map {
+            A0CandidateClaimClusters.Entry(
+                it.claim,it.preflight,it.matchScore,it.peerAvailability
+            )
+        })
 
     @Synchronized
     fun choices():List<Choice> = if(cancelled||spent)emptyList() else candidates.toList()
