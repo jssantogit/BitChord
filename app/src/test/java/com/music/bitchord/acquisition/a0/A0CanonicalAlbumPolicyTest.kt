@@ -87,8 +87,8 @@ class A0CanonicalAlbumPolicyTest {
         val target=A0CanonicalAlbumPolicy.Target("Blue Sky",expectedArtist="Mira")
         for(folder in listOf("Mira","Music","Downloads","General",
             "Unknown Album","Other","FLAC","Lossless")) {
-            val result=policy.assess(target,policy.Claim(folder,
-                policy.ClaimSource.DIRECTORY_HINT))
+            val result=policy.assess(target,A0CanonicalAlbumPolicy.Claim(folder,
+                A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
             assertEquals("Folder: "+folder,
                 A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL,result.status)
             assertEquals(A0CanonicalAlbumPolicy.Reason.ALBUM_HINT_GENERIC,
