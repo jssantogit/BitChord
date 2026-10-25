@@ -278,6 +278,7 @@ private fun CanonicalTrackRow(
                 track.availableAssets.firstOrNull()?.mediaAssetId?.let {
                     LocalCanonicalRatingDisplay.current.byMediaAssetId[it]
                 },
+                color = MaterialTheme.colorScheme.onSurface,
             )
             formatDuration(track.durationMs)?.let { duration ->
                 Text(
