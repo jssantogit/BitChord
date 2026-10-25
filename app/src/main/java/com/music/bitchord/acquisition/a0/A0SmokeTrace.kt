@@ -173,8 +173,19 @@ internal class A0SmokeTrace private constructor(
                 "validBeforeLimit" to n(report.validBeforeLimit),
                 "duplicates" to n(report.duplicates),
                 "capacityDropped" to n(report.capacityDropped),
+                "perPeerDropped" to n(report.perPeerDropped),
                 "selectable" to n(report.accepted)
             )
+        )
+    }
+
+    /** No peer/path/query data. Measures offers dropped by the bounded P pool. */
+    fun peerSearchBackpressure(dropped:Int) {
+        if(complete.get())return
+        continuationTrace().event(
+            stage="peer_search_backpressure",
+            outcome=if(dropped>0)TraceOutcome.DEGRADED else TraceOutcome.SUCCEEDED,
+            attributes=mapOf("droppedOffers" to dropped.coerceIn(0,100000).toString())
         )
     }
 
