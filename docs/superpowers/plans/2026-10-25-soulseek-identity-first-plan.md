@@ -69,9 +69,10 @@ Benchmark:
 
 **Interfaces:**
 - Produce immutable CanonicalAcquisitionIntent with recordingMbid:String?, releaseMbid:String?, releaseGroupMbid:String?, artistCredits:List<String>, title:String, requestedAlbum:String?, strictExactRelease:Boolean, requestedVersion:Set<VersionTag>, expectedDurationSeconds:Int?, origin:AcquisitionOrigin, qualityProfileSnapshot:QualityProfileSnapshot.
+- Define VersionTag, AcquisitionOrigin and **the minimal immutable QualityProfileSnapshot type in this same Task 1** (preset key + explicit supported custom constraints placeholder); Task 4 adds validated codec-aware policy, but must NOT redefine the snapshot or change its serialization without a migration test. Consumers in Tasks 2–6 use the same snapshot type and signature.
 - Producer must expose structured explicit known/missing/ambiguous flags, not infer MBIDs from text. Existing plain-text manual entry remains supported and cannot assert an exact release by accident.
 
-- [ ] Step 1: Add failing unit tests: explicit album survives intent creation; title-only has no fictitious canonical MBID; unknown artist stays unknown; credit placeholders excluded; old route decision behaviour unchanged.
+- [ ] Step 1: Add failing unit tests: explicit album survives intent creation; title-only has no fictitious canonical MBID; unknown artist stays unknown; credit placeholders excluded; immutable typed quality-profile snapshot preserves required constraints; old route decision behaviour unchanged.
 - [ ] Step 2: Run :app:testDevDebugUnitTest with --tests for A0CanonicalAcquisitionIntentTest and SoulseekDownloadRoutingTest; expect explicit RED.
 - [ ] Step 3: Implement immutable snapshot and bridge only. Do not replace the #178 database or modify media playback.
 - [ ] Step 4: Run same tests GREEN plus existing routing tests.
