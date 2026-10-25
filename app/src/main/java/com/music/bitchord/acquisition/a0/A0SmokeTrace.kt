@@ -180,6 +180,13 @@ internal class A0SmokeTrace private constructor(
                 "preflightStrong" to n(report.preflightStrong),
                 "preflightReview" to n(report.preflightReview),
                 "preflightUnsafe" to n(report.preflightUnsafe),
+                "peerReady" to n(report.peersReady),
+                "peerUnknown" to n(report.peersUnknown),
+                "peerCongested" to n(report.peersCongested),
+                "simulationSuggested" to n(report.simulatedSuggested),
+                "simulationAmbiguous" to n(report.simulatedAmbiguous),
+                "simulationNoStrong" to n(report.simulatedNoStrong),
+                "policyVersion" to "preflight-v1",
                 "selectable" to n(report.accepted)
             )
         )
