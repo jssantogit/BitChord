@@ -54,6 +54,28 @@ def blind_case(case: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def wilson_interval(k: int, n: int, z: float = 1.96) -> tuple[float, float] | None:
+    """95% score interval for a Bernoulli proportion, not a proof of truth."""
+    if not (isinstance(k, int) and isinstance(n, int)) or k < 0 or n < 0 or k > n:
+        raise BenchmarkInputError("invalid_proportion")
+    if n == 0:
+        return None
+    from math import sqrt
+    observed = k / n
+    denominator = 1 + z*z/n
+    centre = (observed + z*z/(2*n)) / denominator
+    half = z * sqrt((observed*(1-observed) + z*z/(4*n))/n) / denominator
+    return max(0.0, centre-half), min(1.0, centre+half)
+
+
+def _intervals(scores: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: wilson_interval(scores[key]["numerator"], scores[key]["denominator"])
+        for key in ("exact_precision_at_1", "recommendation_coverage",
+                    "correct_coverage", "exact_recall_at_5")
+    }
+
+
 def case_fingerprint(case: dict[str, Any]) -> str:
     """Input-only hash, deliberately blinded to gold labels."""
     payload = json.dumps(blind_case(case), sort_keys=True, separators=(",", ":"),
@@ -284,6 +306,8 @@ def compare(cases: list[dict[str, Any]], left: dict, right: dict,
         "right_recommendation_policy": sorted({p["recommendation_policy"] for p in right.values()}),
         "left": score_model(cases, left),
         "right": score_model(cases, right),
+        "left_wilson_95": _intervals(score_model(cases, left)),
+        "right_wilson_95": _intervals(score_model(cases, right)),
         "paired": _paired(cases, left, right),
         "strata": strata,
         "warning": ("synthetic_truth_not_measured_music_accuracy" if kind == "synthetic" else
