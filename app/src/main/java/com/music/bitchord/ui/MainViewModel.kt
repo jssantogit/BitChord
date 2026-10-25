@@ -326,6 +326,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _canonicalResults = MutableStateFlow<UiState<List<CanonicalCatalogSearchRow>>?>(null)
     val canonicalResults: StateFlow<UiState<List<CanonicalCatalogSearchRow>>?> = _canonicalResults.asStateFlow()
     private var canonicalSearchJob: Job? = null
+    private var canonicalSearchPagingJob: Job? = null
+    private var canonicalSearchPageCursors: CanonicalSearchPageCursors? = null
+    private val _canonicalSearchHasMore = MutableStateFlow(false)
+    val canonicalSearchHasMore: StateFlow<Boolean> = _canonicalSearchHasMore.asStateFlow()
+    private val _canonicalSearchLoadingMore = MutableStateFlow(false)
+    val canonicalSearchLoadingMore: StateFlow<Boolean> = _canonicalSearchLoadingMore.asStateFlow()
+
+    private fun resetCanonicalSearchPagination() {
+        canonicalSearchPagingJob?.cancel()
+        canonicalSearchPageCursors = null
+        _canonicalSearchHasMore.value = false
+        _canonicalSearchLoadingMore.value = false
+    }
+
     private val musicBrainzSearch by lazy { MusicBrainzCatalogSearch() }
     private val musicBrainzGraph by lazy { MusicBrainzCatalogGraph() }
     private val coverArtArchive by lazy {
@@ -437,6 +451,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         suggestRequests.tryEmit("")
         addonSearchJob?.cancel()
         canonicalSearchJob?.cancel()
+        resetCanonicalSearchPagination()
         canonicalBrowseJob?.cancel()
         canonicalPagingJob?.cancel()
         _suggestions.value = emptyList()
@@ -2593,6 +2608,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             addonSearchJob?.cancel()
             _addonResults.value = null
             canonicalSearchJob?.cancel()
+            resetCanonicalSearchPagination()
             _canonicalResults.value = null
             clearCanonicalCatalogNavigation()
             // The list is about to switch from search results to recent
@@ -2607,6 +2623,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_searchSource.value == SearchSource.CANONICAL) {
             // A stale metadata result must not appear under a new query.
             canonicalSearchJob?.cancel()
+            resetCanonicalSearchPagination()
             _canonicalResults.value = null
             clearCanonicalCatalogNavigation()
         }
@@ -2648,6 +2665,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun runCanonicalCatalogSearch(query: String) {
         canonicalSearchJob?.cancel()
+        resetCanonicalSearchPagination()
         clearCanonicalCatalogNavigation()
         _searchScrollReset.value += 1
         _canonicalResults.value = UiState.Loading
@@ -2754,6 +2772,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
             }.distinctBy { it.kind to it.musicBrainzId }
+            val pageCursors = CanonicalSearchPageCursors.initial(
+                query, recordings, groups, editions, artists,
+            )
+            canonicalSearchPageCursors = pageCursors
+            _canonicalSearchHasMore.value = pageCursors.hasMore
             _canonicalResults.value = if (
                 recordings is MusicBrainzCatalogSearchResult.Failure &&
                 groups is MusicBrainzCatalogSearchResult.Failure &&
@@ -2806,6 +2829,117 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (cached.isEmpty()) UiState.Error("MusicBrainz unavailable and no local matches")
                 else UiState.Success(cached)
             } else UiState.Success(rows)
+        }
+    }
+
+
+    /** Each entity type continues independently; failures retain its raw offset for retry. */
+    fun loadMoreCanonicalSearchResults() {
+        val cursor = canonicalSearchPageCursors ?: return
+        if (_searchSource.value != SearchSource.CANONICAL ||
+            _query.value.trim() != cursor.query ||
+            _canonicalDetail.value != null ||
+            _canonicalSearchLoadingMore.value ||
+            !cursor.hasMore ||
+            _canonicalResults.value !is UiState.Success
+        ) return
+        _canonicalSearchLoadingMore.value = true
+        canonicalSearchPagingJob?.cancel()
+        canonicalSearchPagingJob = viewModelScope.launch {
+            try {
+                val recordings = cursor.recordings?.let {
+                    musicBrainzSearch.searchRecordings(cursor.query, limit = 25, offset = it)
+                }
+                val groups = cursor.groups?.let {
+                    musicBrainzSearch.searchReleaseGroups(cursor.query, limit = 15, offset = it)
+                }
+                val editions = cursor.releases?.let {
+                    musicBrainzSearch.searchReleases(cursor.query, limit = 15, offset = it)
+                }
+                val artists = cursor.artists?.let {
+                    musicBrainzSearch.searchArtists(cursor.query, limit = 15, offset = it)
+                }
+                if (_searchSource.value != SearchSource.CANONICAL ||
+                    _query.value.trim() != cursor.query ||
+                    canonicalSearchPageCursors !== cursor || _canonicalDetail.value != null
+                ) return@launch
+
+                val assetMbids = try {
+                    withContext(Dispatchers.IO) {
+                        val db = CanonicalCatalogDatabase.get(getApplication<Application>())
+                        val index = MusicBrainzCatalogIndex(db)
+                        if (groups is MusicBrainzCatalogSearchResult.Success) {
+                            index.persistReleaseGroups(groups.page.items)
+                        }
+                        if (editions is MusicBrainzCatalogSearchResult.Success) {
+                            index.persistReleases(editions.page.items)
+                        }
+                        if (artists is MusicBrainzCatalogSearchResult.Success) {
+                            index.persistArtists(artists.page.items)
+                        }
+                        if (recordings is MusicBrainzCatalogSearchResult.Success) {
+                            index.persistRecordings(recordings.page.items)
+                            db.catalogDao().musicBrainzRecordingMbidsWithAssets(
+                                recordings.page.items.map { it.musicBrainzId },
+                            ).toSet()
+                        } else emptySet()
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    emptySet()
+                }
+                if (_searchSource.value != SearchSource.CANONICAL ||
+                    _query.value.trim() != cursor.query || canonicalSearchPageCursors !== cursor ||
+                    _canonicalDetail.value != null
+                ) return@launch
+                val additional = buildList {
+                    if (recordings is MusicBrainzCatalogSearchResult.Success) {
+                        recordings.page.items.forEach { hit ->
+                            add(CanonicalCatalogSearchRow(
+                                hit.musicBrainzId, CanonicalSearchKind.RECORDING, hit.title,
+                                hit.artistDisplay, hasCatalogedAsset = hit.musicBrainzId in assetMbids,
+                            ))
+                        }
+                    }
+                    if (groups is MusicBrainzCatalogSearchResult.Success) {
+                        groups.page.items.forEach { hit ->
+                            add(CanonicalCatalogSearchRow(
+                                hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
+                                hit.artistDisplay ?: hit.primaryType,
+                            ))
+                        }
+                    }
+                    if (editions is MusicBrainzCatalogSearchResult.Success) {
+                        editions.page.items.forEach { hit ->
+                            add(CanonicalCatalogSearchRow(
+                                hit.musicBrainzId, CanonicalSearchKind.RELEASE, hit.title,
+                                listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
+                                    .joinToString(" · "),
+                            ))
+                        }
+                    }
+                    if (artists is MusicBrainzCatalogSearchResult.Success) {
+                        artists.page.items.forEach { hit ->
+                            add(CanonicalCatalogSearchRow(
+                                hit.musicBrainzId, CanonicalSearchKind.ARTIST, hit.name,
+                                hit.disambiguation ?: hit.country,
+                            ))
+                        }
+                    }
+                }
+                val existing = (_canonicalResults.value as? UiState.Success)?.data ?: return@launch
+                _canonicalResults.value = UiState.Success(
+                    (existing + additional).distinctBy { it.kind to it.musicBrainzId },
+                )
+                val advanced = cursor.advance(recordings, groups, editions, artists)
+                canonicalSearchPageCursors = advanced
+                _canonicalSearchHasMore.value = advanced.hasMore
+            } finally {
+                if (canonicalSearchPageCursors === cursor ||
+                    canonicalSearchPageCursors?.query == cursor.query
+                ) _canonicalSearchLoadingMore.value = false
+            }
         }
     }
 
