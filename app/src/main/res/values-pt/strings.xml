@@ -1387,4 +1387,5 @@
     <string name="canonical_discovery_retry">Tentar novamente</string>
     <string name="canonical_discovery_refresh">Atualizar catálogo salvo</string>
     <string name="legacy_library_youtube_disabled">Ative o YouTube Music nas configurações para carregar esta biblioteca online. Playlists e coleções locais continuam disponíveis.</string>
+    <string name="spotify_import_youtube_required">A importação de playlists do Spotify ainda depende da busca no YouTube Music. Ative o YouTube Music e desative a descoberta pelo catálogo para importar.</string>
 </resources>

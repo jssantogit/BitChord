@@ -1381,4 +1381,5 @@
     <string name="canonical_discovery_retry">फिर कोशिश करें</string>
     <string name="canonical_discovery_refresh">सेव कैटलॉग रीफ़्रेश करें</string>
     <string name="legacy_library_youtube_disabled">ऑनलाइन लाइब्रेरी लोड करने के लिए सेटिंग में YouTube Music चालू करें। स्थानीय प्लेलिस्ट और संग्रह उपलब्ध रहेंगे।</string>
+    <string name="spotify_import_youtube_required">Spotify प्लेलिस्ट आयात करने के लिए अभी YouTube Music से मिलान आवश्यक है। YouTube Music चालू करें और कैटलॉग-आधारित खोज बंद करें।</string>
 </resources>

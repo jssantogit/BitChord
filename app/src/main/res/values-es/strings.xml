@@ -1353,4 +1353,5 @@
     <string name="canonical_discovery_retry">Reintentar</string>
     <string name="canonical_discovery_refresh">Actualizar catálogo guardado</string>
     <string name="legacy_library_youtube_disabled">Activa YouTube Music en Ajustes para cargar esta biblioteca en línea. Las listas y colecciones locales siguen disponibles.</string>
+    <string name="spotify_import_youtube_required">La importación de listas de Spotify aún necesita buscar coincidencias en YouTube Music. Activa YouTube Music y desactiva la exploración basada en el catálogo.</string>
 </resources>
