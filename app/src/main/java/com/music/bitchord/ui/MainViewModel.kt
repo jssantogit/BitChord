@@ -336,6 +336,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 title = "${track.mediumNumber}.${track.trackNumber}  ${track.title}",
                                 subtitle = details.artistDisplay,
                                 hasCatalogedAsset = track.recordingMbid in available,
+                                trackMbid = track.trackMbid,
                             ) },
                         ))
                     }
