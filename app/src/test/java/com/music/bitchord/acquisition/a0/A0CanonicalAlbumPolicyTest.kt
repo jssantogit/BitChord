@@ -115,4 +115,14 @@ class A0CanonicalAlbumPolicyTest {
             assertEquals(A0CanonicalAlbumPolicy.Reason.UNTRUSTED_FORMAT_CONTROL,result.reason)
         }
     }
+    @Test fun discAndVinylPartFoldersAreNotDistinctAlbumProof() {
+        val target=A0CanonicalAlbumPolicy.Target("Blue Sky",expectedArtist="Mira")
+        for(name in listOf("Disc 1","Disc 02","CD1","CD 2","Disk 3","Vinyl A","01")) {
+            val answer=A0CanonicalAlbumPolicy.assess(target,A0CanonicalAlbumPolicy.Claim(
+                name,A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
+            assertEquals("Generic: "+name,A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL,
+                answer.status)
+        }
+    }
+
 }
