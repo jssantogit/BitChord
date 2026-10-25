@@ -8,6 +8,11 @@ class A0ScreenCapturePolicyTest {
         assertFalse(A0ScreenCapturePolicy.requiresSecureWindow(fromSongDownload=true))
     }
 
+    @Test fun legacySearchAfterCredentialsClearedPermitsScreenshots() {
+        assertFalse(A0ScreenCapturePolicy.requiresSecureWindow(
+            fromSongDownload=false, credentialsVisible=false))
+    }
+
     @Test fun legacyAccountPasswordLoginStillBlocksScreenshots() {
         assertTrue(A0ScreenCapturePolicy.requiresSecureWindow(fromSongDownload=false))
     }
