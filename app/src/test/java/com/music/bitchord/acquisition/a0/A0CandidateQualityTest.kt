@@ -52,4 +52,29 @@ class A0CandidateQualityTest {
         assertTrue(A0CandidateRank.Warning.ENCODING_CONFLICT in fake.warnings)
     }
 
+    @Test fun conflictingFilenameArtistCannotBorrowArtistFromParentFolder() {
+        val candidate=A0CandidateRank.rank(
+            "ILLIT - Magnetic", "Other Artist - Magnetic.mp3",320,
+            remotePath="Music\\ILLIT\\Other Artist - Magnetic.mp3", format="mp3",
+            declaredDurationSeconds=161, expectedDurationSeconds=161,
+            sizeBytes=6_400_000L
+        )
+        assertTrue(A0CandidateRank.Warning.ARTIST_CONFLICT in candidate.warnings)
+    }
+
+    @Test fun trackNumberPrefixIsNotConflictingArtist() {
+        val candidate=A0CandidateRank.rank(
+            "ILLIT - Magnetic", "01 - Magnetic.mp3",320,
+            remotePath="Music\\ILLIT\\01 - Magnetic.mp3",format="mp3")
+        assertEquals(A0CandidateRank.Match.ALL_TERMS,candidate.match)
+        assertFalse(A0CandidateRank.Warning.ARTIST_CONFLICT in candidate.warnings)
+    }
+
+    @Test fun artistTokensSplitAcrossUnrelatedFoldersAreNotAConfirmedArtist() {
+        val candidate=A0CandidateRank.rank(
+            "New Jeans - OMG", "OMG.mp3",320,
+            remotePath="Music\\New\\Jeans\\OMG.mp3",format="mp3")
+        assertNotEquals(A0CandidateRank.Match.ALL_TERMS,candidate.match)
+    }
+
 }
