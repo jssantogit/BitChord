@@ -571,7 +571,7 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                                     Text(stringResource(Res.string.play))
                                 }
                                 OutlinedButton(onClick = { onAddToQueue(row.musicBrainzId) }) {
-                                    Text(stringResource(Res.string.add_to_queue))
+                                    Text(stringResource(Res.string.smart_collection_batch_queue))
                                 }
                             }
                         }
