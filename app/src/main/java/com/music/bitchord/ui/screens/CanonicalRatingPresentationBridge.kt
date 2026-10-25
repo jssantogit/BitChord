@@ -87,6 +87,42 @@ internal fun buildCanonicalRatingPresentation(
             asset.path?.takeIf(String::isNotBlank)?.let { bySong[it] = display }
         }
     }
+    // Build an *identity* projection independent of whether a song is rated:
+    // a local user can score a canonical recording for the first time without
+    // asking Navidrome (or any network) for metadata. Only current-account
+    // verified MediaAsset rows participate, never titles or external IDs.
+    val recordingBySongKey = LinkedHashMap<String, String>()
+    val ambiguousKeys = HashSet<String>()
+    fun recordKey(key: String?, recordingId: String) {
+        if (key.isNullOrBlank() || key in ambiguousKeys) return
+        val existing = recordingBySongKey[key]
+        if (existing != null && existing != recordingId) {
+            recordingBySongKey.remove(key)
+            ambiguousKeys.add(key)
+        } else {
+            recordingBySongKey[key] = recordingId
+        }
+    }
+    assets.forEach { asset ->
+        when {
+            asset.providerKey == "local-mediastore" -> {
+                recordKey(asset.uri, asset.recordingId)
+                recordKey(asset.path, asset.recordingId)
+            }
+            asset.providerKey == activeProvider && !activeScope.isNullOrBlank() -> {
+                recordKey(
+                    CanonicalRemotePlaybackUri.encode(
+                        CanonicalRemotePlaybackRequest(
+                            recordingId = asset.recordingId,
+                            mediaAssetId = asset.mediaAssetId,
+                            providerKey = asset.providerKey,
+                        ),
+                    ),
+                    asset.recordingId,
+                )
+            }
+        }
+    }
     // Smart playlists and adaptive collections expose a RecordingId rather than
     // a chosen MediaAssetId. Do not guess if two assets disagree.
     val byRecording = assets.groupBy { it.recordingId }.mapNotNull { (id, rows) ->
@@ -97,6 +133,7 @@ internal fun buildCanonicalRatingPresentation(
         bySongKey = bySong,
         byMediaAssetId = byAsset,
         byRecordingId = byRecording,
+        recordingIdBySongKey = recordingBySongKey,
     )
 }
 
