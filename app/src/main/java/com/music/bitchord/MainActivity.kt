@@ -2061,6 +2061,7 @@ private fun BitChordApp(
         val decision = SoulseekDownloadRouting.route(
             artist = song?.artist.orEmpty(),
             title = song?.title.orEmpty(),
+            creditedArtists = song?.artists?.map { it.name }.orEmpty(),
             count = requested.size,
             pilotAvailable = BuildConfig.FLAVOR == "dev" && BuildConfig.DEBUG,
         )
