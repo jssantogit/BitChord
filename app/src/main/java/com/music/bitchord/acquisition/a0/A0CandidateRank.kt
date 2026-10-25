@@ -81,7 +81,10 @@ internal object A0CandidateRank {
             Quality.LOW_ADVERTISED -> -12
             Quality.UNKNOWN_ADVERTISED -> if (lossless) 6 else 0
         }
-        var score=titleScore+artistScore+qualityScore
+        // Existing manual handoffs without a query retain neutral ranking.
+        // No user intent means no evidence to prefer a peer by advertised codec.
+        var score=titleScore+artistScore+
+            if(titleWords.isEmpty() && artistWords.isEmpty()) 0 else qualityScore
         val warnings=mutableListOf<Warning>()
         val nameWords=fileWords
         if (setOf("live","remix","karaoke","instrumental","nightcore",
