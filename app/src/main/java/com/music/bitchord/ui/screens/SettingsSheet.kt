@@ -1735,9 +1735,9 @@ fun SettingsScreen(
                     val bitrate=customBitrate.toIntOrNull()
                     val rate=customRate.toIntOrNull()?.times(1000)
                     val depth=customDepth.toIntOrNull()
-                    val valid=(customBitrate.isBlank() || bitrate in 32..1536) &&
-                        (customRate.isBlank() || rate in 8000..384000) &&
-                        (customDepth.isBlank() || depth in 8..32) &&
+                    val valid=(customBitrate.isBlank() || (bitrate!=null && bitrate in 32..1536)) &&
+                        (customRate.isBlank() || (rate!=null && rate in 8000..384000)) &&
+                        (customDepth.isBlank() || (depth!=null && depth in 8..32)) &&
                         ((customFormat!="mp3" && customFormat!="aac") ||
                             (customRate.isBlank() && customDepth.isBlank()))
                     if(!valid) Text(
