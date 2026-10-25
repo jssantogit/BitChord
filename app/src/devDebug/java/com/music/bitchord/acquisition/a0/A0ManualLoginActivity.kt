@@ -760,6 +760,8 @@ class A0ManualLoginActivity : Activity() {
                                                                     "título/artista divergentes"
                                                                 A0CandidatePreflight.Reason.ARTIST_UNCONFIRMED ->
                                                                     "artista sem confirmação"
+                                                                A0CandidatePreflight.Reason.ARTIST_CONFLICT ->
+                                                                    "artista divergente no arquivo"
                                                                 A0CandidatePreflight.Reason.VERSION_CONFLICT ->
                                                                     "versão alternativa"
                                                                 A0CandidatePreflight.Reason.DURATION_UNCONFIRMED ->
