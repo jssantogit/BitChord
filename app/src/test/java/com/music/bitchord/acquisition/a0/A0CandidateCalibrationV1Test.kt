@@ -120,7 +120,7 @@ class A0CandidateCalibrationV1Test {
     }
 
     @Test fun packIdentityIsStableAndHasAllThreeRiskCategories() {
-        assertEquals("preflight-v1",version)
+        assertEquals("calibration-v1",version)
         assertEquals(36,pack.size)
         assertEquals(pack.size,pack.map { it.id }.distinct().size)
         assertEquals(16,pack.count { it.expected==STRONG })
