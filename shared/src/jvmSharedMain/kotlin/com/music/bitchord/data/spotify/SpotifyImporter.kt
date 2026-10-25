@@ -238,6 +238,8 @@ object SpotifyImporter {
     suspend fun resolveToSongs(
         tracks: List<SpotifyImportTrack>,
         onProgress: (completed: Int, total: Int) -> Unit,
+        /** Live source policy, checked before and after each network lookup. */
+        allowYoutubeMatching: () -> Boolean = { true },
     ): Pair<List<Song>, List<SpotifyImportTrack>> = coroutineScope {
         val total = tracks.size
         val completedCount = AtomicInteger(0)
@@ -246,10 +248,17 @@ object SpotifyImporter {
         val deferredResults = tracks.map { track ->
             async(Dispatchers.IO) {
                 semaphore.withPermit {
+                    if (!allowYoutubeMatching()) {
+                        val done = completedCount.incrementAndGet()
+                        onProgress(done, total)
+                        return@withPermit Pair<Song?, SpotifyImportTrack?>(null, track)
+                    }
                     val query = "${track.title} ${track.artist}".trim()
                     val searchResult = YtMusicRepository.search(query, SearchFilter.SONGS).getOrNull()
-                    val matchedSong = searchResult?.filterIsInstance<SearchResult.Track>()
-                        ?.firstOrNull()?.song
+                    // Discard responses that completed after source opt-out.
+                    val matchedSong = if (allowYoutubeMatching()) {
+                        searchResult?.filterIsInstance<SearchResult.Track>()?.firstOrNull()?.song
+                    } else null
 
                     val done = completedCount.incrementAndGet()
                     onProgress(done, total)

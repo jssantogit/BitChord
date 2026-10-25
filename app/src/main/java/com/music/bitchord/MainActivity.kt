@@ -4855,6 +4855,12 @@ private fun BitChordApp(
             SpotifyImportAlert(
                 hazeState = hazeState,
                 signedIn = signedIn,
+                allowYoutubeMatching = {
+                    shouldRunLegacyYoutubeVersionLookup(
+                        canonicalMode = AppSettings.canonicalDiscoveryEnabled.value,
+                        configs = SourceRegistry.configs.value,
+                    )
+                },
                 onImported = { title, privacy, songs ->
                     viewModel.createPlaylistWithVideoIds(
                         title,
