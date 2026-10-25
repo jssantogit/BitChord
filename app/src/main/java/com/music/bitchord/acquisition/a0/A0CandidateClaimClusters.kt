@@ -59,6 +59,26 @@ internal object A0CandidateClaimClusters {
         bitDepth=claim.bitDepth,
     )
 
+    /**
+     * Stable evidence comparison for the manual selector. Source availability
+     * may break a tie only AFTER equal claims and equal risk assessments.
+     * All raw metadata stays in memory; never log these comparison keys.
+     */
+    fun compareEvidence(
+        first:Claim,firstRisk:A0CandidatePreflight.Assessment,
+        second:Claim,secondRisk:A0CandidatePreflight.Assessment,
+    ):Int {
+        val byClaim=compareValuesBy(key(first),key(second),
+            { it.filename },{ it.format },{ it.sizeBytes },
+            { it.bitrateKbps },{ it.durationSeconds },
+            { it.sampleRateHz },{ it.bitDepth })
+        if(byClaim!=0) return byClaim
+        // Confidence is already ordered by the caller. Distinct typed
+        // reasons still represent distinct risk populations.
+        return firstRisk.reasons.joinToString(",") { it.name }
+            .compareTo(secondRisk.reasons.joinToString(",") { it.name })
+    }
+
     /** For the bounded collector: equality of claims, NOT audio identity. */
     fun sameClaim(a:Claim,b:Claim):Boolean=key(a)==key(b)
 
