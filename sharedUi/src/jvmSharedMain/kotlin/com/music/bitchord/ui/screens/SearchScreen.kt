@@ -277,7 +277,7 @@ fun SearchScreen(
                     placeholder = if (searchingLibrary) {
                         stringResource(Res.string.search_library_hint)
                     } else if (searchingAddons) {
-                        stringResource(Res.string.search_addons_hint)
+                        stringResource(Res.string.search_server_hint)
                     } else {
                         stringResource(Res.string.search_hint)
                     },
@@ -748,7 +748,7 @@ private fun LazyListScope.librarySearchResults(
             recentAddonSearches(addonHistory, onAddonHistoryClick, onAddonHistoryRemove, onAddonHistoryClear)
         } else item(key = "library:empty") {
             MessageState(
-                stringResource(if (addons) Res.string.search_addons_empty else Res.string.search_library_empty),
+                stringResource(if (addons) Res.string.search_server_empty else Res.string.search_library_empty),
             )
         }
         UiState.Loading -> songListSkeleton(keyPrefix = "skeleton:search:library")
@@ -757,7 +757,7 @@ private fun LazyListScope.librarySearchResults(
             item(key = "library:no-match") {
                 MessageState(
                     if (addons) {
-                        stringResource(Res.string.search_addons_no_results, query)
+                        stringResource(Res.string.search_server_no_results, query)
                     } else {
                         stringResource(Res.string.search_library_no_results, query)
                     },
