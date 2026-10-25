@@ -144,5 +144,9 @@ fun CanonicalSongRatingStars(
     onClick: (() -> Unit)? = null,
 ) {
     val rating = LocalCanonicalRatingDisplay.current.forSong(song)
-    CanonicalRatingStars(rating, modifier, color, onClick = onClick)
+    // Before the first *native* rating, the three-dot song menu is the only
+    // entry to the local editor. Remote evidence stays visible but read-only.
+    // Once Room supplies a local score, touching these stars may edit it.
+    val nativeEdit = onClick?.takeIf { rating?.localValue != null }
+    CanonicalRatingStars(rating, modifier, color, onClick = nativeEdit)
 }
