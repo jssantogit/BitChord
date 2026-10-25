@@ -3297,6 +3297,7 @@ private fun BitChordApp(
                                         stringResource(R.string.search_source_youtube),
                                         stringResource(R.string.library),
                                         stringResource(R.string.search_source_addons),
+                                        "MusicBrainz",
                                     ),
                                     selectedIndex = searchSource.ordinal,
                                     onSelect = { index -> onSearchSourceChange(SearchSource.entries[index]) },
@@ -3305,6 +3306,8 @@ private fun BitChordApp(
                             searchingLibrary = searchSource == SearchSource.LIBRARY,
                             libraryResults = libraryResults,
                             searchingAddons = searchSource == SearchSource.ADDONS,
+                            searchingCanonical = searchSource == SearchSource.CANONICAL,
+                            canonicalResults = viewModel.canonicalResults.collectAsStateWithLifecycle().value,
                             addonResults = addonResults,
                             addonHistory = viewModel.addonSearchHistory.collectAsStateWithLifecycle().value,
                             onAddonHistoryClick = { term ->
