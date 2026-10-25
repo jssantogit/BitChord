@@ -49,7 +49,8 @@ class A0ManualLoginActivity : Activity() {
     @Volatile private var activeSocket: Socket? = null
     @Volatile private var activeListener: ServerSocket? = null
     @Volatile private var activeDirectPeer: Socket? = null
-    @Volatile private var activeIndirectPeer: Socket? = null
+    private val activeIndirectPeers=java.util.concurrent.ConcurrentHashMap.newKeySet<Socket>()
+    @Volatile private var activePeerWorkers:A0PeerSearchWorkers?=null
     @Volatile private var stopping = false
     @Volatile private var activeTrace: A0SmokeTrace? = null
     @Volatile private var activeTransfer: A0ObservedCandidateHandoff? = null
@@ -315,11 +316,15 @@ class A0ManualLoginActivity : Activity() {
                                 trace.note(A0SmokeTrace.Stage.SEARCH_LISTENER_OPEN)
                                 listener.soTimeout = 18_000
                                 val token = SecureRandom().nextInt(Int.MAX_VALUE - 1) + 1
+                                val expectedDuration=intent.getIntExtra(
+                                    "bitchord.soulseek.manual.duration_seconds",0
+                                ).takeIf { it in 15..7200 }
                                 val handoff = if (transferObserved) {
                                     A0ObservedCandidateHandoff(
                                         connection, username, token,
                                         searchPhrase=checkNotNull(requestedSearch),
-                                        saveFormatsOnly=saveToDevice
+                                        saveFormatsOnly=saveToDevice,
+                                        expectedDurationSeconds=expectedDuration
                                     ).also { transfer ->
                                         if (!SoulseekActiveSession.registerTransfer(
                                                 transfer, accountGeneration
@@ -363,6 +368,11 @@ class A0ManualLoginActivity : Activity() {
                                 }
                                 // Collect peers over a fixed window; never stop at first match.
                                 val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(18)
+                                // The server reader only parses frames; indirect peer
+                                // handshakes run concurrently on peer-only sockets.
+                                val peerWorkers=A0PeerSearchWorkers()
+                                activePeerWorkers=peerWorkers
+                                val peerOfferBackpressure=java.util.concurrent.atomic.AtomicInteger(0)
                                 val readers = Executors.newFixedThreadPool(2)
                                 try {
                                     readers.execute {
@@ -426,7 +436,7 @@ class A0ManualLoginActivity : Activity() {
                                         try {
                                             while (!Thread.currentThread().isInterrupted &&
                                                 System.nanoTime() < deadline &&
-                                                readerGate.isOpen() && attempts < 6
+                                                readerGate.isOpen() && attempts < 36
                                             ) {
                                                 framedServer.nextFrame()
                                                 val offer = try {
@@ -459,59 +469,52 @@ class A0ManualLoginActivity : Activity() {
                                                 trace.note(A0SmokeTrace.Stage.SERVER_OFFER_RECEIVED)
                                                 attemptedIndirect.set(true)
                                                 attempts++
-                                                try {
-                                                    trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECT_STARTED)
-                                                    Socket().use { peer ->
-                                                        activeIndirectPeer = peer
-                                                        if (!readerGate.isOpen()) return@use
-                                                        peer.connect(
-                                                            InetSocketAddress(offer.address, offer.port), 2500
-                                                        )
-                                                        peer.soTimeout = 4000
-                                                        trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECTED)
-                                                        peer.getOutputStream().apply {
-                                                            write(A0IndirectSearchWire.pierceFirewall(offer.token))
-                                                            flush()
+                                                if (!peerWorkers.submit {
+                                                    try {
+                                                        trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECT_STARTED)
+                                                        Socket().use { peer ->
+                                                            activeIndirectPeers.add(peer)
+                                                            try {
+                                                                if (stopping || !readerGate.isOpen()) return@use
+                                                                peer.connect(
+                                                                    InetSocketAddress(offer.address,offer.port),1800
+                                                                )
+                                                                peer.soTimeout=2300
+                                                                trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECTED)
+                                                                peer.getOutputStream().apply {
+                                                                    write(A0IndirectSearchWire.pierceFirewall(offer.token))
+                                                                    flush()
+                                                                }
+                                                                trace.note(A0SmokeTrace.Stage.PIERCE_SENT)
+                                                                val observation=A0IndirectSearchWire.readIndirectReply(
+                                                                    peer.getInputStream(),token,offer.username
+                                                                ) { frame, claimedPeer ->
+                                                                    receivedValidP2pReply.set(true)
+                                                                    handoff?.offerSearchResult(frame,claimedPeer)
+                                                                    discoveryProgress()
+                                                                }
+                                                                trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_ACCEPTED)
+                                                                if (!transferObserved) {
+                                                                    readerGate.publish(inbox,
+                                                                        "RESPOSTA P2P INDIRETA: " +
+                                                                        "${observation.untrustedResultCount} entradas declaradas.")
+                                                                }
+                                                            } finally {
+                                                                activeIndirectPeers.remove(peer)
+                                                            }
                                                         }
-                                                        trace.note(A0SmokeTrace.Stage.PIERCE_SENT)
-                                                        val observation = A0IndirectSearchWire.readIndirectReply(
-                                                            peer.getInputStream(), token, offer.username
-                                                        ) { verifiedFrame, claimedPeer ->
-                                                            receivedValidP2pReply.set(true)
-                                                            handoff?.offerSearchResult(
-                                                                verifiedFrame, claimedPeer
-                                                            )
-                                                            discoveryProgress()
-                                                        }
-                                                        trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_ACCEPTED)
-                                                        if (!transferObserved) {
-                                                            readerGate.publish(
-                                                                inbox, "RESPOSTA P2P INDIRETA: " +
-                                                                    "${observation.untrustedResultCount} entradas " +
-                                                                    "declaradas, não verificadas."
-                                                            )
-                                                        }
+                                                    } catch (_: SocketTimeoutException) {
+                                                        trace.note(A0SmokeTrace.Stage.INDIRECT_READ_TIMEOUT,
+                                                            TraceOutcome.DEGRADED,A0SmokeTrace.Reason.READ_TIMEOUT)
+                                                    } catch (_: ConnectException) {
+                                                        trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECT_FAILED,
+                                                            TraceOutcome.DEGRADED,A0SmokeTrace.Reason.CONNECT_FAILED)
+                                                    } catch (_: IOException) {
+                                                        trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_REJECTED,
+                                                            TraceOutcome.DEGRADED,A0SmokeTrace.Reason.PEER_IO_FAILURE)
                                                     }
-                                                } catch (_: SocketTimeoutException) {
-                                                    trace.note(
-                                                        A0SmokeTrace.Stage.INDIRECT_READ_TIMEOUT,
-                                                        TraceOutcome.DEGRADED,
-                                                        A0SmokeTrace.Reason.READ_TIMEOUT
-                                                    )
-                                                } catch (_: ConnectException) {
-                                                    trace.note(
-                                                        A0SmokeTrace.Stage.INDIRECT_CONNECT_FAILED,
-                                                        TraceOutcome.DEGRADED,
-                                                        A0SmokeTrace.Reason.CONNECT_FAILED
-                                                    )
-                                                } catch (_: IOException) {
-                                                    trace.note(
-                                                        A0SmokeTrace.Stage.INDIRECT_REPLY_REJECTED,
-                                                        TraceOutcome.DEGRADED,
-                                                        A0SmokeTrace.Reason.PEER_IO_FAILURE
-                                                    )
-                                                } finally {
-                                                    activeIndirectPeer = null
+                                                }) {
+                                                    peerOfferBackpressure.incrementAndGet()
                                                 }
                                             }
                                         } catch (_: SocketTimeoutException) {
@@ -605,15 +608,23 @@ class A0ManualLoginActivity : Activity() {
                                             closeSearchSockets={
                                                 listener.close()
                                                 activeDirectPeer?.close()
-                                                activeIndirectPeer?.close()
                                             },
                                             timeoutMillis=5000
                                         )
+                                        // The only remaining work owns separate P sockets.
+                                        // Close them before P/F takes the server connection.
+                                        activeIndirectPeers.toList().forEach { runCatching { it.close() } }
+                                        if (!peerWorkers.stop(4500)) {
+                                            throw IOException("A0 indirect peer tasks still active")
+                                        }
+                                        activePeerWorkers=null
                                         trace.note(A0SmokeTrace.Stage.SEARCH_READERS_JOINED)
                                     } else {
                                         listener.close()
                                         activeDirectPeer?.close()
-                                        activeIndirectPeer?.close()
+                                        activeIndirectPeers.toList().forEach { runCatching { it.close() } }
+                                        peerWorkers.cancel()
+                                        activePeerWorkers=null
                                         readers.shutdownNow()
                                     }
                                 }
@@ -929,6 +940,9 @@ class A0ManualLoginActivity : Activity() {
                         transfer.cancel()
                     }
                     activeTransfer = null
+                    activePeerWorkers?.cancel()
+                    activePeerWorkers=null
+                    activeIndirectPeers.toList().forEach { runCatching { it.close() } }
                     activeListener?.close()
                     activeListener = null
                     packet?.fill(0)
@@ -1065,7 +1079,8 @@ class A0ManualLoginActivity : Activity() {
         )
         activeListener?.close() // Interrupt any pending direct peer result.
         activeDirectPeer?.close()
-        activeIndirectPeer?.close()
+        activePeerWorkers?.cancel()
+        activeIndirectPeers.toList().forEach { runCatching { it.close() } }
         activeSocket?.close() // Interrupt unfinished server response.
         super.onStop()
     }
@@ -1080,7 +1095,8 @@ class A0ManualLoginActivity : Activity() {
         activeTransfer?.cancel()
         activeListener?.close()
         activeDirectPeer?.close()
-        activeIndirectPeer?.close()
+        activePeerWorkers?.cancel()
+        activeIndirectPeers.toList().forEach { runCatching { it.close() } }
         activeSocket?.close()
         worker.shutdownNow()
         super.onDestroy()
