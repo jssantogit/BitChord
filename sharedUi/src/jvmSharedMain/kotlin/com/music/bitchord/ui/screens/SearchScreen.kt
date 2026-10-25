@@ -676,6 +676,15 @@ fun canonicalRowsForFilter(
     }
 }
 
+/** A Server asset uses the same native search row as other browseable content. */
+fun canonicalServerRowAsBrowseItem(row: CanonicalServerSearchRow): BrowseItem = BrowseItem(
+    browseId = "server:asset:${row.mediaAssetId}",
+    title = row.title,
+    subtitle = row.artistDisplay,
+    thumbnailUrl = row.artworkUri,
+    type = BrowseType.OTHER,
+)
+
 /** Searchable files provided by configured servers, with live access checked at play. */
 private fun LazyListScope.canonicalServerSearchRows(
     rows: UiState<List<CanonicalServerSearchRow>>?,
@@ -692,21 +701,12 @@ private fun LazyListScope.canonicalServerSearchRows(
     }
     itemsIndexed(
         items = results,
-        key = { _, row -> "server:${row.recordingId}:${row.providerKey}" },
+        key = { _, row -> "server:${row.mediaAssetId}" },
     ) { _, row ->
-        Column(
-            modifier = Modifier.fillMaxWidth()
-                .clickable { onPlay(row) }
-                .padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
-        ) {
-            Text(row.title, style = MaterialTheme.typography.titleMedium)
-            Text(row.artistDisplay, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                stringResource(Res.string.canonical_server_track_hint),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall,
-            )
-        }
+        BrowseRow(
+            item = canonicalServerRowAsBrowseItem(row),
+            onClick = { onPlay(row) },
+        )
         HorizontalDivider(
             modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
             thickness = 0.5.dp,
