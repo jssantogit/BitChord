@@ -142,7 +142,7 @@ class OfflineBenchmarkTest(unittest.TestCase):
         self.assertEqual(public["observations"][0]["offer_id"], "a")
 
     def test_checked_in_manifest_is_synthetic_and_stratified(self):
-        cases = load_cases(Path(__file__).parent / "synthetic-cases.jsonl")
+        cases = load_cases(Path(__file__).resolve().parents[3] / "app/src/test/resources/soulseek/synthetic-cases.jsonl")
         self.assertEqual(len(cases), 18)
         self.assertEqual(
             {name: sum(c["stratum"] == name for c in cases)
