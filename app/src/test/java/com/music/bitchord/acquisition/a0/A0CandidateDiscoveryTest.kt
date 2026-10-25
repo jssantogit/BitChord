@@ -291,4 +291,18 @@ class A0CandidateDiscoveryTest {
         assertEquals(5,collector.screening().claimsRepeated)
     }
 
+    @Test fun identicalFilenameFromConflictingFoldersStaysSeparateInShadowEvidence() {
+        val collector=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",expectedDurationSeconds=161)
+        val attrs=mapOf(0 to 320,1 to 161)
+        collector.offerParsed(reply("a",listOf(
+            A0SoulseekSearchFile("Music\\ILLIT\\Magnetic.mp3",6_400_000L,"mp3",attrs))),"a")
+        collector.offerParsed(reply("b",listOf(
+            A0SoulseekSearchFile("Music\\Other\\Magnetic.mp3",6_400_000L,"mp3",attrs))),"b")
+        assertEquals(2,collector.choices().size)
+        assertEquals(2,collector.screening().claimsDistinct)
+        assertEquals(0,collector.screening().claimsRepeated)
+        assertEquals(1,collector.screening().simulatedSuggested)
+    }
+
 }
