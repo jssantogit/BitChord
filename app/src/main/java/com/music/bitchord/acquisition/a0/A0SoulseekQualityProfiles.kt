@@ -1,12 +1,62 @@
 package com.music.bitchord.acquisition.a0
 
 import com.music.bitchord.data.settings.SoulseekQualityPreset
+import com.music.bitchord.data.settings.DownloadQualityProfile
+import com.music.bitchord.data.settings.DownloadCustomOptions
 
 /**
  * Consumes the dedicated Android Settings choice without touching the legacy
  * DownloadQuality enum. No quality hint authorizes or initiates a transfer.
  */
 internal object A0SoulseekQualityProfiles {
+    /**
+     * Current single Downloads preference. Soulseek's A5 publisher cannot save
+     * AAC/ALAC/M4A yet: never claim a preset makes those formats available.
+     * HIGH_QUALITY here intentionally means MP3 320; FLAC is NOT a result
+     * satisfying the requested lossy delivery target.
+     */
+    fun snapshot(profile:DownloadQualityProfile,custom:DownloadCustomOptions=DownloadCustomOptions()):
+        A0CanonicalAcquisitionIntent.QualityProfileSnapshot {
+        return when(profile) {
+            DownloadQualityProfile.HI_RES ->
+                A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
+                    preset=A0CanonicalAcquisitionIntent.QualityPreset.HI_RES,strict=true)
+            DownloadQualityProfile.LOSSLESS ->
+                A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
+                    preset=A0CanonicalAcquisitionIntent.QualityPreset.LOSSLESS,strict=true)
+            DownloadQualityProfile.HIGH_QUALITY ->
+                A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
+                    preset=A0CanonicalAcquisitionIntent.QualityPreset.CUSTOM,
+                    allowedCodecs=setOf(A0CanonicalAcquisitionIntent.Codec.MP3),
+                    minBitrateKbps=320,strict=true)
+            DownloadQualityProfile.CUSTOM -> {
+                val codec=when(custom.format) {
+                    "mp3" -> A0CanonicalAcquisitionIntent.Codec.MP3
+                    "flac" -> A0CanonicalAcquisitionIntent.Codec.FLAC
+                    "wav" -> A0CanonicalAcquisitionIntent.Codec.PCM_WAV
+                    else -> null
+                }
+                // A requested unsupported custom codec must not expand into
+                // every supported format. Empty codecs in CUSTOM means any,
+                // so use a deliberately unreachable typed bound instead.
+                if(codec==null) A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
+                    preset=A0CanonicalAcquisitionIntent.QualityPreset.HIGH_EFFICIENCY,
+                    strict=true)
+                else A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
+                    preset=A0CanonicalAcquisitionIntent.QualityPreset.CUSTOM,
+                    allowedCodecs=setOf(codec),
+                    minBitrateKbps=custom.bitrateKbps?.takeIf {
+                        codec==A0CanonicalAcquisitionIntent.Codec.MP3 },
+                    minSampleRateHz=custom.sampleRateHz?.takeIf {
+                        codec!=A0CanonicalAcquisitionIntent.Codec.MP3 },
+                    minBitDepth=custom.bitDepth?.takeIf {
+                        codec!=A0CanonicalAcquisitionIntent.Codec.MP3 },
+                    strict=true,
+                )
+            }
+        }
+    }
+
     fun snapshot(value: SoulseekQualityPreset):
         A0CanonicalAcquisitionIntent.QualityProfileSnapshot {
         return when(value) {
