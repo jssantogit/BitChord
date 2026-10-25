@@ -1965,8 +1965,13 @@ private fun CompactSongRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            CanonicalSongRatingStars(song, color = palette.onBackgroundVariant)
         }
+        // The weighted title/artist block truncates before trailing stars.
+        CanonicalSongRatingStars(
+            song = song,
+            modifier = Modifier.padding(start = 8.dp),
+            color = palette.onBackgroundVariant,
+        )
         if (downloadedTint != null) {
             DownloadedBadge(song.videoId, downloadedTint)
         }
@@ -2026,8 +2031,13 @@ private fun SuggestedSongRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            CanonicalSongRatingStars(song, color = palette.onBackgroundVariant)
         }
+        // The weighted title/artist block truncates before trailing stars.
+        CanonicalSongRatingStars(
+            song = song,
+            modifier = Modifier.padding(start = 8.dp),
+            color = palette.onBackgroundVariant,
+        )
         if (downloadedTint != null) {
             DownloadedBadge(song.videoId, downloadedTint)
         }
