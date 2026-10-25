@@ -64,7 +64,7 @@ class MusicBrainzCatalogGraphTest {
         val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport = object : MusicBrainzTransport {
             override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String {
                 calls++
-                return """{"id":"541adf5a-48d4-4f7b-a7bb-afd3cea5af27","media":[{"tracks":[
+                return """{"id":"541adf5a-48d4-4f7b-a7bb-afd3cea5af27","title":"SUPER REAL ME","media":[{"tracks":[
                     {"id":"incorrect","recording":{"id":"invalid"}}]}]}"""
             }
         }))
