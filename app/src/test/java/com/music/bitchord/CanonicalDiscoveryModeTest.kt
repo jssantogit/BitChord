@@ -5,6 +5,7 @@ import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.ui.DiscoveryRequestEpoch
 import com.music.bitchord.ui.LegacyDiscoveryRequest
 import com.music.bitchord.ui.LegacyDiscoveryRequestGate
+import com.music.bitchord.ui.runLegacyYoutubeBrowseIfEnabled
 import com.music.bitchord.ui.shouldUseCanonicalDiscovery
 import com.music.bitchord.ui.defaultDiscoverySearchSource
 import com.music.bitchord.ui.SearchSource
@@ -159,5 +160,26 @@ class CanonicalDiscoveryModeTest {
         assertTrue(shouldRunLegacyYoutubeVersionLookup(canonicalMode = false, configs = enabled))
         // No setting means existing installation behavior remains unchanged.
         assertTrue(shouldRunLegacyYoutubeVersionLookup(canonicalMode = false, configs = emptyList()))
+    }
+
+    @Test fun disabledYoutubeRejectsLegacyDetailLookupBeforeRequestAndDoesNotLeakStaleResponses() = runBlocking {
+        var requests = 0
+        var active = false
+        val blocked = runLegacyYoutubeBrowseIfEnabled({ active }) {
+            requests++
+            "artist page"
+        }
+        assertEquals(null, blocked)
+        assertEquals(0, requests)
+        active = true
+        val stale = runLegacyYoutubeBrowseIfEnabled({ active }) {
+            requests++
+            active = false // opt-out while the suspend request was in progress
+            "late browse"
+        }
+        assertEquals(null, stale)
+        assertEquals(1, requests)
+        active = true
+        assertEquals("allowed", runLegacyYoutubeBrowseIfEnabled({ active }) { "allowed" })
     }
 }
