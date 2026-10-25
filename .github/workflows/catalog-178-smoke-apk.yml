@@ -1,0 +1,56 @@
+name: Catalog #178 — Android Smoke APK
+
+# One-off APK capture for the Android-only migration. The workflow changes
+# are scoped to PR #183; ordinary code pushes do not produce duplicate APKs.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/catalog-178-smoke-apk.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-smoke-apk:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.number == 183
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout exact candidate SHA
+        uses: actions/checkout@v4
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure local build environment
+        run: |
+          echo "LASTFM_API_KEY=" > local.properties
+          echo "LASTFM_SECRET=" >> local.properties
+          echo "sdk.dir=$ANDROID_HOME" >> local.properties
+          chmod +x gradlew
+
+      - name: Build installable dev debug APK
+        run: ./gradlew --no-daemon --build-cache -Pbitchord.bundleWear=false :app:assembleDevDebug
+
+      - name: Record APK checksum and exact commit
+        run: |
+          printf 'commit=%s\n' "$GITHUB_SHA" > catalog-178-build.txt
+          find app/build/outputs/apk/dev/debug -name '*.apk' -print -exec sha256sum '{}' \; >> catalog-178-build.txt
+
+      - name: Upload smoke candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-178-android-dev-debug
+          path: |
+            app/build/outputs/apk/dev/debug/*.apk
+            catalog-178-build.txt
+          if-no-files-found: error
+          retention-days: 14
