@@ -51,7 +51,8 @@ internal object A0SoulseekQualityProfiles {
                         codec !in setOf(A0CanonicalAcquisitionIntent.Codec.MP3,
                             A0CanonicalAcquisitionIntent.Codec.AAC_ADTS) },
                     minBitDepth=custom.bitDepth?.takeIf {
-                        codec!=A0CanonicalAcquisitionIntent.Codec.MP3 },
+                        codec in setOf(A0CanonicalAcquisitionIntent.Codec.FLAC,
+                            A0CanonicalAcquisitionIntent.Codec.PCM_WAV) },
                     strict=true,
                 )
             }
