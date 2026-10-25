@@ -20,6 +20,7 @@ internal object A0DownloadQualityPolicy {
         CONTAINER_CODEC_CONFLICT, UNSUPPORTED_CODEC, PRESET_NOT_SUPPORTED,
         REQUESTED_CODEC_CONFLICT, INSUFFICIENT_TECHNICAL_CLAIMS,
         ADVERTISED_QUALITY_BELOW_REQUIREMENT, INVALID_CODEC_CONSTRAINT,
+        IMPOSSIBLE_TECHNICAL_CLAIM,
     }
 
     class Offer(
@@ -62,6 +63,14 @@ internal object A0DownloadQualityPolicy {
             return Assessment(Status.UNAVAILABLE, Reason.PRESET_NOT_SUPPORTED)
         }
         val codec = offer.codecClaim
+        // A profile threshold cannot turn physically implausible peer
+        // metadata into strong quality evidence.
+        if ((offer.sampleRateHz != null && offer.sampleRateHz !in 8_000..384_000) ||
+            (offer.bitDepth != null && offer.bitDepth !in 8..32) ||
+            (codec == A0CanonicalAcquisitionIntent.Codec.MP3 &&
+                offer.bitrateKbps != null && offer.bitrateKbps !in 32..320)) {
+            return uncertain(Reason.IMPOSSIBLE_TECHNICAL_CLAIM)
+        }
         val lossless = codec == A0CanonicalAcquisitionIntent.Codec.FLAC ||
             codec == A0CanonicalAcquisitionIntent.Codec.PCM_WAV
 
