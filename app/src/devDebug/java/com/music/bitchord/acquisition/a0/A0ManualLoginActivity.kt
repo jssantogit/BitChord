@@ -762,6 +762,8 @@ class A0ManualLoginActivity : Activity() {
                                                                     "artista sem confirmação"
                                                                 A0CandidatePreflight.Reason.ARTIST_CONFLICT ->
                                                                     "artista divergente no arquivo"
+                                                                A0CandidatePreflight.Reason.IDENTITY_AMBIGUOUS ->
+                                                                    "termos extras não identificados"
                                                                 A0CandidatePreflight.Reason.VERSION_CONFLICT ->
                                                                     "versão alternativa"
                                                                 A0CandidatePreflight.Reason.DURATION_UNCONFIRMED ->
