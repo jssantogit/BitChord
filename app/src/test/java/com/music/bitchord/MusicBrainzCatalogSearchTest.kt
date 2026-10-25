@@ -118,4 +118,26 @@ class MusicBrainzCatalogSearchTest {
         val second = MusicBrainzClient()
         assertSame(first.rateLimiter, second.rateLimiter)
     }
+
+    @Test fun duplicateMbidsWithDifferentMetadataConsumeRowsButDisplayOneIdentity() = runBlocking {
+        val group = "529f87a1-1081-48a4-8ee1-3c08de229858"
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"count":20,"offset":0,"release-groups":[
+                    {"id":"$group","title":"SUPER REAL ME"},
+                    {"id":"$group","title":"SUPER REAL ME (alternate metadata)"}
+                ]}"""
+            },
+        ))
+        val page = (search.searchReleaseGroups("SUPER REAL ME") as
+            MusicBrainzCatalogSearchResult.Success<
+                com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
+            >).page
+        assertEquals(listOf(group), page.items.map { it.musicBrainzId })
+        assertEquals(2, page.consumedCount)
+        assertEquals(2, page.nextOffset)
+    }
+
 }
