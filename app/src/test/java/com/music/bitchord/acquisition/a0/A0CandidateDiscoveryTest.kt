@@ -196,4 +196,46 @@ class A0CandidateDiscoveryTest {
             handoff.choices()[1].preflight.confidence)
     }
 
+    @Test fun sameRecordingDifferentPeersPrefersReadySourceWithoutChangingIdentity() {
+        val collector=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",expectedDurationSeconds=161)
+        val same=A0SoulseekSearchFile("Music\\ILLIT Magnetic.mp3",
+            6_400_000L,"mp3",mapOf(0 to 320,1 to 161))
+        collector.offerParsed(A0SoulseekSearchResponse("slow",177,listOf(same),
+            emptyList(),true,4_096,40),"slow")
+        collector.offerParsed(A0SoulseekSearchResponse("fast",177,listOf(same),
+            emptyList(),true,256_000,0),"fast")
+        val choices=collector.choices()
+        assertEquals(2,choices.size)
+        assertEquals(A0CandidatePreflight.Confidence.STRONG,
+            choices[0].preflight.confidence)
+        assertEquals(choices[0].preflight,choices[1].preflight)
+        assertEquals(choices[0].matchScore,choices[1].matchScore)
+        assertEquals(A0PeerAvailability.Tier.READY,choices[0].peerAvailability.tier)
+        assertEquals(A0PeerAvailability.Tier.CONGESTED,choices[1].peerAvailability.tier)
+        assertEquals(1,collector.screening().peersReady)
+        assertEquals(1,collector.screening().peersCongested)
+    }
+
+    @Test fun fasterPeerNeverOutranksARecordingWithStrongerMusicalConfidence() {
+        val collector=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",expectedDurationSeconds=161)
+        collector.offerParsed(A0SoulseekSearchResponse("fast",177,listOf(
+            A0SoulseekSearchFile("Music\\ILLIT Magnetic live.mp3",
+                6_400_000L,"mp3",mapOf(0 to 320,1 to 161))),
+            emptyList(),true,256_000,0),"fast")
+        collector.offerParsed(A0SoulseekSearchResponse("slow",177,listOf(
+            A0SoulseekSearchFile("Music\\ILLIT Magnetic.mp3",
+                6_400_000L,"mp3",mapOf(0 to 320,1 to 161))),
+            emptyList(),true,4_096,40),"slow")
+        val choices=collector.choices()
+        assertEquals(2,choices.size)
+        assertEquals(A0CandidatePreflight.Confidence.STRONG,
+            choices[0].preflight.confidence)
+        assertEquals(A0PeerAvailability.Tier.CONGESTED,
+            choices[0].peerAvailability.tier)
+        assertEquals(A0CandidatePreflight.Confidence.UNSAFE,
+            choices[1].preflight.confidence)
+    }
+
 }
