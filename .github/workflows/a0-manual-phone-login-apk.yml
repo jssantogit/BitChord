@@ -5,6 +5,11 @@ on:
     types: [opened, synchronize]
     paths:
       - "app/src/devDebug/**"
+      - "app/src/main/java/com/music/bitchord/acquisition/a0/**"
+      - "app/src/main/java/com/music/bitchord/data/settings/SoulseekQualityPreset.kt"
+      - "app/src/main/java/com/music/bitchord/data/settings/AppSettings.kt"
+      - "app/src/main/java/com/music/bitchord/ui/screens/SettingsSheet.kt"
+      - "app/src/main/java/com/music/bitchord/MainActivity.kt"
       - "app/src/main/java/com/music/bitchord/acquisition/a0/A0ExperimentalLoginCodec.kt"
       - ".github/workflows/a0-manual-phone-login-apk.yml"
 
