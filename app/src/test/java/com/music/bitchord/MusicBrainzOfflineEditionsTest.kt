@@ -49,10 +49,13 @@ class MusicBrainzOfflineEditionsTest {
                     MusicBrainzCatalogTrack(track, recording, "Magnetic", 1, 2, 160000, "ILLIT"),
                 ))
             index.persistReleaseDetail(detail)
-            assertEquals(detail, index.cachedRelease(worldwide))
+            val complete = detail.copy(tracks = detail.tracks.map {
+                it.copy(recordingTitle = it.title, recordingDurationMs = it.durationMs)
+            })
+            assertEquals(complete, index.cachedRelease(worldwide))
             index.persistGroupEditions(group, emptyList())
             assertEquals(listOf(worldwide), index.cachedGroupReleases(group).map { it.musicBrainzId })
-            assertEquals(detail, index.cachedRelease(worldwide))
+            assertEquals(complete, index.cachedRelease(worldwide))
             assertTrue(db.catalogDao().musicBrainzRecordingMbidsWithAssets(listOf(recording)).isEmpty())
             assertNull(index.cachedRelease("not-an-mbid"))
         } finally { db.close() }
