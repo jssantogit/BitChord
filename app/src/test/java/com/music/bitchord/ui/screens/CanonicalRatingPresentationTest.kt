@@ -199,4 +199,29 @@ class CanonicalRatingPresentationTest {
         val song = Song(videoId = "content://media/shared", title = "A", artist = "B", thumbnailUrl = null)
         assertNull(result.recordingIdForSong(song))
     }
+
+    @Test
+    fun firstLocalRatingOfCatalogRecordingAppearsInEveryVerifiedSourceWithoutProviderWrite() {
+        val catalogAssets = listOf(
+            asset("canonical-mb-recording", "device-a", "local-mediastore", "content://media/music/901"),
+            asset("canonical-mb-recording", "navidrome-a", provider),
+        )
+        val before = buildCanonicalRatingPresentation(
+            assets = catalogAssets, localValues = emptyMap(), remote = emptyList(),
+            activeProvider = provider, activeScope = scope,
+        )
+        assertTrue(before.byMediaAssetId.isEmpty())
+        assertEquals("canonical-mb-recording",
+            before.recordingIdBySongKey["content://media/music/901"])
+        val after = buildCanonicalRatingPresentation(
+            assets = catalogAssets,
+            localValues = mapOf("canonical-mb-recording" to 3.5),
+            remote = emptyList(),
+            activeProvider = provider, activeScope = scope,
+        )
+        assertEquals(3.5, after.byMediaAssetId["device-a"]?.localValue)
+        assertEquals(3.5, after.byMediaAssetId["navidrome-a"]?.localValue)
+        assertNull(after.byMediaAssetId["navidrome-a"]?.remoteValue)
+        assertEquals(3.5, after.byRecordingId["canonical-mb-recording"]?.localValue)
+    }
 }
