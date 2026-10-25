@@ -137,4 +137,20 @@ class A0CandidatePreflightTest {
         assertTrue(A0CandidatePreflight.Reason.IDENTITY_AMBIGUOUS in result.reasons)
     }
 
+    @Test fun simulationReturnsTypedAbstentionWithoutTransferring() {
+        val strong=inspect()
+        val review=inspect(duration=null)
+        assertEquals(A0CandidatePreflight.SimulationStatus.NO_STRONG,
+            A0CandidatePreflight.simulate(listOf(A0CandidatePreflight.Weighted(review,100))).status)
+        assertEquals(A0CandidatePreflight.SimulationStatus.AMBIGUOUS,
+            A0CandidatePreflight.simulate(listOf(
+                A0CandidatePreflight.Weighted(strong,90),
+                A0CandidatePreflight.Weighted(strong,89))).status)
+        val decision=A0CandidatePreflight.simulate(listOf(
+            A0CandidatePreflight.Weighted(review,99),
+            A0CandidatePreflight.Weighted(strong,90)))
+        assertEquals(A0CandidatePreflight.SimulationStatus.SUGGESTED,decision.status)
+        assertEquals(1,decision.index)
+    }
+
 }
