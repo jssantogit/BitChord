@@ -2312,7 +2312,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 editions is MusicBrainzCatalogSearchResult.Failure &&
                 artists is MusicBrainzCatalogSearchResult.Failure
             ) {
-                val cached = try {
+                val cached: List<CanonicalCatalogSearchRow> = try {
                     withContext(Dispatchers.IO) {
                         val dao = CanonicalCatalogDatabase
                             .get(getApplication<Application>()).catalogDao()
@@ -2320,7 +2320,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         val available = dao.musicBrainzRecordingMbidsWithAssets(
                             known.map { it.musicBrainzId },
                         ).toSet()
-                        buildList {
+                        buildList<CanonicalCatalogSearchRow> {
                             known.forEach { hit -> add(CanonicalCatalogSearchRow(
                                 musicBrainzId = hit.musicBrainzId,
                                 kind = CanonicalSearchKind.RECORDING,
