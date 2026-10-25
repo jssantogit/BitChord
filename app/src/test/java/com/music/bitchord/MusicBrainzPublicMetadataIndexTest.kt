@@ -17,6 +17,34 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 @RunWith(RobolectricTestRunner::class)
 class MusicBrainzPublicMetadataIndexTest {
+    @Test fun offlineArtistsWithSameNameKeepDistinctMbidsAndDisambiguation() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            var count = 0
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "artist-${++count}" })
+            val korean = "b51c672b-85e0-48fe-8648-470a2422229f"
+            val namesake = "11111111-2222-3333-4444-555555555555"
+            index.persistArtists(listOf(
+                MusicBrainzArtistHit(korean, "aespa", "South Korean girl group", "KR"),
+                MusicBrainzArtistHit(namesake, "aespa", "Unrelated namesake", "US"),
+            ))
+            val found = db.catalogDao().searchKnownMusicBrainzArtists("aespa", 25)
+                .associateBy { it.musicBrainzId }
+            assertEquals(2, found.size)
+            assertEquals("South Korean girl group", found[korean]?.disambiguation)
+            assertEquals("KR", found[korean]?.country)
+            assertEquals("Unrelated namesake", found[namesake]?.disambiguation)
+            // A later sparse hit does not clear the earlier trustworthy text.
+            index.persistArtists(listOf(MusicBrainzArtistHit(korean, "aespa", null, null)))
+            val restored = db.catalogDao().searchKnownMusicBrainzArtists("aespa", 25)
+                .associateBy { it.musicBrainzId }
+            assertEquals("South Korean girl group", restored[korean]?.disambiguation)
+            assertEquals("KR", restored[korean]?.country)
+            assertEquals(2, count)
+        } finally { db.close() }
+    }
+
     @Test fun artistAndReleaseGroupAreSearchableOfflineByStrongMbidsOnly() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()

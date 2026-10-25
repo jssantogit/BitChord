@@ -3,6 +3,7 @@ package com.music.bitchord.data.catalog.metadata
 import androidx.room.withTransaction
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.ArtistEntity
+import com.music.bitchord.data.catalog.MusicBrainzArtistEnrichmentEntity
 import com.music.bitchord.data.catalog.CatalogReleaseGroupEntity
 import com.music.bitchord.data.catalog.CatalogReleaseGroupEditionEntity
 import com.music.bitchord.data.catalog.CatalogReleaseTrackSourceEntity
@@ -81,14 +82,32 @@ internal class MusicBrainzCatalogIndex(
                 val mbid = hit.musicBrainzId.trim().lowercase(Locale.ROOT)
                 if (!MBID.matches(mbid) || hit.name.isBlank() || mbid in indexed) return@forEach
                 val existing = dao.entityIdForExternalIdentity("musicbrainz", "artist", mbid)
-                if (existing != null) {
-                    if (dao.artistById(existing) != null) indexed[mbid] = existing
+                val artistId = if (existing != null) {
+                    if (dao.artistById(existing) == null) return@forEach // Orphaned claim: fail closed.
+                    existing
                 } else {
                     val created = idFactory()
                     dao.upsertArtist(ArtistEntity(created, hit.name.trim()))
                     claim(dao, "artist", mbid, created)
-                    indexed[mbid] = created
+                    created
                 }
+                // Name is not a strong identity: preserve disambiguation in the
+                // existing source-specific cache, including offline namesakes.
+                // A subsequent sparse response never erases richer evidence.
+                val previous = dao.musicBrainzArtistEnrichment(artistId)
+                dao.upsertMusicBrainzArtistEnrichment(MusicBrainzArtistEnrichmentEntity(
+                    artistId = artistId,
+                    mbid = mbid,
+                    name = previous?.name ?: hit.name.trim(),
+                    sortName = previous?.sortName,
+                    disambiguation = hit.disambiguation?.trim()?.takeIf(String::isNotEmpty)
+                        ?: previous?.disambiguation,
+                    country = hit.country?.trim()?.takeIf(String::isNotEmpty)
+                        ?: previous?.country,
+                    area = previous?.area,
+                    fetchedAtEpochMs = System.currentTimeMillis(),
+                ))
+                indexed[mbid] = artistId
             }
             indexed
         }
