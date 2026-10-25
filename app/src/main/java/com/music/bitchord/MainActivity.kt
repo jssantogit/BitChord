@@ -753,6 +753,7 @@ private fun BitChordApp(
     val canonicalDiscoveryCatalog by viewModel.canonicalDiscoveryCatalog.collectAsStateWithLifecycle()
     val canonicalHomeLocalPicks by viewModel.canonicalHomeLocalPicks.collectAsStateWithLifecycle()
     val canonicalTrendingMbids by viewModel.canonicalTrendingRecordingMbids.collectAsStateWithLifecycle()
+    val canonicalTrendingLocalSongs by viewModel.canonicalTrendingLocalSongs.collectAsStateWithLifecycle()
     val homeLoadingMore by viewModel.homeLoadingMore.collectAsStateWithLifecycle()
     val homeRecentlyPlayedLoading by viewModel.homeRecentlyPlayedLoading.collectAsStateWithLifecycle()
 
@@ -955,6 +956,7 @@ private fun BitChordApp(
         metadata = cachedCanonicalRows,
         localPicks = canonicalHomeLocalPicks,
         trendingRecordingMbids = canonicalTrendingMbids,
+        trendingLocalPicks = canonicalTrendingLocalSongs,
         releasesHeading = stringResource(R.string.shelf_new_releases),
         picksHeading = stringResource(R.string.shelf_quick_picks),
         trendingHeading = stringResource(R.string.shelf_trending),
