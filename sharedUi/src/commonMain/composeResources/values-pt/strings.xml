@@ -289,4 +289,6 @@
     <string name="canonical_more_editions">Mais edições</string>
     <string name="canonical_more_results">Mais resultados</string>
     <string name="canonical_loading_more">Carregando…</string>
+    <string name="canonical_server_heading">Dos seus servidores</string>
+    <string name="canonical_server_track_hint">Disponível em um servidor configurado · toque para reproduzir</string>
 </resources>
