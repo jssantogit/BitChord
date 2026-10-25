@@ -148,7 +148,7 @@ class IsrcMusicBrainzIdentityIntegrationTest {
 
         database.openHelper.readableDatabase.query("PRAGMA user_version").use { cursor ->
             assertTrue(cursor.moveToFirst())
-            assertEquals(4, cursor.getInt(0))
+            assertEquals(5, cursor.getInt(0))
         }
         database.close()
         context.deleteDatabase(databaseName)
