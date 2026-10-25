@@ -88,6 +88,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
@@ -129,6 +130,63 @@ internal fun effectiveSearchSource(
     configs.any { it.kind == SourceKind.YOUTUBE && !it.enabled }
 ) SearchSource.CANONICAL else requested
 
+/** Home and Explore keep the legacy feed until the user opts in or disables YouTube. */
+internal fun shouldUseCanonicalDiscovery(
+    explicitlyEnabled: Boolean,
+    configs: List<SourceConfig>,
+): Boolean = explicitlyEnabled || configs.any {
+    it.kind == SourceKind.YOUTUBE && !it.enabled
+}
+
+internal fun isYouTubeSourceEnabled(configs: List<SourceConfig>): Boolean = configs.none {
+    it.kind == SourceKind.YOUTUBE && !it.enabled
+}
+
+internal fun shouldPrefetchLegacyYouTubeAccountData(
+    signedIn: Boolean,
+    canonicalDiscoveryEnabled: Boolean,
+    configs: List<SourceConfig>,
+): Boolean = signedIn && !shouldUseCanonicalDiscovery(canonicalDiscoveryEnabled, configs)
+
+internal fun defaultDiscoverySearchSource(
+    explicitlyEnabled: Boolean,
+    configs: List<SourceConfig>,
+): SearchSource = if (shouldUseCanonicalDiscovery(explicitlyEnabled, configs)) {
+    SearchSource.CANONICAL
+} else {
+    SearchSource.YOUTUBE
+}
+
+internal enum class LegacyDiscoveryRequest {
+    HOME,
+    HOME_SUPPLEMENT,
+    RECENTLY_PLAYED,
+    MOODS_AND_GENRES,
+    MOOD_GENRE_ARTWORK,
+    MOOD_GENRE_SHELVES,
+}
+
+/** The legacy endpoint closure is never invoked while independent discovery is active. */
+internal class LegacyDiscoveryRequestGate(private val useCanonicalDiscovery: Boolean) {
+    suspend fun <T> run(
+        @Suppress("UNUSED_PARAMETER") request: LegacyDiscoveryRequest,
+        legacyRequest: suspend () -> T,
+    ): T? = if (useCanonicalDiscovery) null else legacyRequest()
+}
+
+/** A monotonically increasing token makes uncancellable old responses harmless. */
+internal class DiscoveryRequestEpoch {
+    private val current = AtomicLong(0L)
+
+    fun next(): Long = current.incrementAndGet()
+
+    fun current(): Long = current.get()
+
+    fun invalidateAndNext(): Long = current.incrementAndGet()
+
+    fun isCurrent(generation: Long): Boolean = generation == current.get()
+}
+
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val authStore = AuthStore(app)
@@ -168,10 +226,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _homeRecentlyPlayedLoading = MutableStateFlow(false)
     val homeRecentlyPlayedLoading: StateFlow<Boolean> = _homeRecentlyPlayedLoading.asStateFlow()
-    private val homeLoadGeneration = AtomicLong(0L)
+    private val homeLoadGeneration = DiscoveryRequestEpoch()
+    private var homeLoadJob: Job? = null
+    private var homePagingJob: Job? = null
+    private var homeRefreshJob: Job? = null
 
     private val _explore = MutableStateFlow<UiState<List<MoodGenreSection>>>(UiState.Loading)
     val explore: StateFlow<UiState<List<MoodGenreSection>>> = _explore.asStateFlow()
+    private val exploreLoadGeneration = DiscoveryRequestEpoch()
+    private var exploreLoadJob: Job? = null
+    private var exploreRefreshJob: Job? = null
+    private var moodGenreRequestJob: Job? = null
+    private var moodGenreArtworkJob: Job? = null
+    private val _usesCanonicalDiscovery = MutableStateFlow(isCanonicalDiscoverySelected())
+    val usesCanonicalDiscovery: StateFlow<Boolean> = _usesCanonicalDiscovery.asStateFlow()
+    private val _canonicalDiscoveryCatalog = MutableStateFlow<UiState<List<CanonicalCatalogSearchRow>>>(
+        UiState.Loading,
+    )
+    val canonicalDiscoveryCatalog: StateFlow<UiState<List<CanonicalCatalogSearchRow>>> =
+        _canonicalDiscoveryCatalog.asStateFlow()
+    private val canonicalDiscoveryCatalogEpoch = DiscoveryRequestEpoch()
+    private var canonicalDiscoveryCatalogJob: Job? = null
 
     private val _selectedMoodGenre = MutableStateFlow<MoodGenre?>(null)
     val selectedMoodGenre: StateFlow<MoodGenre?> = _selectedMoodGenre.asStateFlow()
@@ -228,9 +303,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val typeaheadResults: StateFlow<List<SearchResult>> = _typeaheadResults.asStateFlow()
 
     /** Where the Search tab looks — see [setSearchSource]. */
-    private val _searchSource = MutableStateFlow(
-        effectiveSearchSource(SearchSource.YOUTUBE, SourceRegistry.configs.value),
-    )
+    private var searchSourceExplicitlySelected = false
+    private var suggestPipelineJob: Job? = null
+    private var typeaheadPipelineJob: Job? = null
+    private val _searchSource = MutableStateFlow(defaultDiscoverySearchSource(
+        AppSettings.canonicalDiscoveryEnabled.value,
+        SourceRegistry.configs.value,
+    ))
     val searchSource: StateFlow<SearchSource> = _searchSource.asStateFlow()
 
     /**
@@ -257,6 +336,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _canonicalDetail = MutableStateFlow<UiState<CanonicalCatalogDetailPage>?>(null)
     val canonicalDetail: StateFlow<UiState<CanonicalCatalogDetailPage>?> = _canonicalDetail.asStateFlow()
     private var canonicalBrowseJob: Job? = null
+    private var searchPagingJob: Job? = null
     private val _canonicalLoadingMore = MutableStateFlow(false)
     val canonicalLoadingMore: StateFlow<Boolean> = _canonicalLoadingMore.asStateFlow()
     private var canonicalPagingJob: Job? = null
@@ -339,6 +419,49 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _canonicalLoadingMore.value = false
         canonicalPath.clear()
         _canonicalDetail.value = null
+    }
+
+    /** Cancel the old namespace before the new source starts answering the same query. */
+    private fun cancelSearchSourceRequests() {
+        newestRequestId.incrementAndGet()
+        searchSession = null
+        searchPagingJob?.cancel()
+        _searchLoadingMore.value = false
+        suggestPipelineJob?.cancel()
+        typeaheadPipelineJob?.cancel()
+        suggestPipelineJob = null
+        typeaheadPipelineJob = null
+        // collectLatest uses this blank request to cancel an outstanding YT call
+        // without sending another query to YouTube.
+        searchRequests.tryEmit(SearchRequest("", _filter.value, newestRequestId.get()))
+        suggestRequests.tryEmit("")
+        addonSearchJob?.cancel()
+        canonicalSearchJob?.cancel()
+        canonicalBrowseJob?.cancel()
+        canonicalPagingJob?.cancel()
+        _suggestions.value = emptyList()
+        _typeaheadResults.value = emptyList()
+        _canonicalResults.value = null
+        _addonResults.value = null
+        clearCanonicalCatalogNavigation()
+    }
+
+    private fun switchSearchSource(source: SearchSource, rerunCurrentQuery: Boolean = true) {
+        if (_searchSource.value == source) return
+        _searchSource.value = source
+        cancelSearchSourceRequests()
+        _results.value = null
+        _searchScrollReset.value += 1
+        when (source) {
+            SearchSource.LIBRARY -> loadLibrarySongs()
+            SearchSource.YOUTUBE,
+            SearchSource.ADDONS,
+            SearchSource.CANONICAL -> if (rerunCurrentQuery && _query.value.isNotBlank()) submitSearch()
+        }
+        if (source == SearchSource.YOUTUBE) {
+            suggestPipelineJob = startSuggestPipeline()
+            typeaheadPipelineJob = startTypeaheadMediaPipeline()
+        }
     }
 
     private fun showCanonicalCatalogEntry(entry: CanonicalCatalogSearchRow) {
@@ -753,6 +876,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _account = MutableStateFlow<Account?>(null)
     val account: StateFlow<Account?> = _account.asStateFlow()
+    private var accountLoadJob: Job? = null
+    private var accountReloadJob: Job? = null
 
     /**
      * The channels this login can act as. Empty until the picker asks for
@@ -764,6 +889,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _channelsLoading = MutableStateFlow(false)
     val channelsLoading: StateFlow<Boolean> = _channelsLoading.asStateFlow()
+    private var channelsLoadJob: Job? = null
 
     /**
      * The chosen channel's [AccountChannel.key], or null while the app is
@@ -790,9 +916,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _history = MutableStateFlow<UiState<List<Song>>>(UiState.Loading)
     val history: StateFlow<UiState<List<Song>>> = _history.asStateFlow()
+    private var historyLoadJob: Job? = null
+    private var historyStateBeforeLoad: UiState<List<Song>>? = null
 
     private val _library = MutableStateFlow<UiState<LibraryPage>>(UiState.Loading)
     val library: StateFlow<UiState<LibraryPage>> = _library.asStateFlow()
+    private var libraryLoadJob: Job? = null
+    private var libraryRefreshJob: Job? = null
+    private var libraryStateBeforeLoad: UiState<LibraryPage>? = null
+    private var libraryStale = false
+
+    enum class Feed { HOME, EXPLORE, LIBRARY }
+
+    private val _refreshing = MutableStateFlow(emptySet<Feed>())
+    val refreshing: StateFlow<Set<Feed>> = _refreshing.asStateFlow()
 
     /** In-memory cache is partitioned by account and profile; it is never shared. */
     private data class ListenerSnapshot(
@@ -1106,15 +1243,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _playlistsLoading = MutableStateFlow(false)
     val playlistsLoading: StateFlow<Boolean> = _playlistsLoading.asStateFlow()
+    private var playlistsLoadJob: Job? = null
 
     /** Re-fetched rather than cached for the session: playlists are edited here. */
     fun loadPlaylists() {
-        if (!_signedIn.value || _playlistsLoading.value) return
+        if (!_signedIn.value || !isYouTubeSourceEnabled(SourceRegistry.configs.value) ||
+            _playlistsLoading.value
+        ) return
         val identity = listenerKey()
         _playlistsLoading.value = true
-        viewModelScope.launch {
-            YtMusicRepository.userPlaylists().onSuccess { if (identity == listenerKey()) _playlists.value = it }
-            if (identity == listenerKey()) _playlistsLoading.value = false
+        playlistsLoadJob = viewModelScope.launch {
+            try {
+                YtMusicRepository.userPlaylists().onSuccess {
+                    if (identity == listenerKey() && isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
+                        _playlists.value = it
+                    }
+                }
+            } finally {
+                if (identity == listenerKey()) _playlistsLoading.value = false
+            }
         }
     }
 
@@ -1624,29 +1771,186 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun requireSignIn(): Boolean = _signedIn.value
 
-    /**
-     * Whether the library needs re-fetching. Set by every write above and
-     * acted on when the tab is next opened, for the same reason [homeStale]
-     * exists: rearranging a page under whoever is reading it is worse than
-     * showing it a moment out of date.
-     */
-    private var libraryStale = false
-
     /** Call when the library tab becomes visible. */
     fun onLibraryShown() {
         loadPlaylists()
+        if (!isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
+            if (_library.value is UiState.Loading) {
+                _library.value = UiState.Error(text(R.string.legacy_library_youtube_disabled))
+            }
+            return
+        }
+        if (_signedIn.value && _library.value is UiState.Loading && libraryLoadJob?.isActive != true) {
+            loadLibrary()
+            return
+        }
         if (!libraryStale) return
         libraryStale = false
         if (_library.value is UiState.Success) refresh(Feed.LIBRARY)
     }
 
-    init {
-        startSearchPipeline()
-        startSuggestPipeline()
-        startTypeaheadMediaPipeline()
+    private fun isCanonicalDiscoverySelected(): Boolean = shouldUseCanonicalDiscovery(
+        explicitlyEnabled = AppSettings.canonicalDiscoveryEnabled.value,
+        configs = SourceRegistry.configs.value,
+    )
+
+    private fun legacyDiscoveryGate() = LegacyDiscoveryRequestGate(
+        useCanonicalDiscovery = isCanonicalDiscoverySelected(),
+    )
+
+    fun loadCanonicalDiscoveryCatalog() {
+        if (!isCanonicalDiscoverySelected()) return
+        if (canonicalDiscoveryCatalogJob?.isActive == true) return
+        val generation = canonicalDiscoveryCatalogEpoch.next()
+        canonicalDiscoveryCatalogJob?.cancel()
+        _canonicalDiscoveryCatalog.value = UiState.Loading
+        canonicalDiscoveryCatalogJob = viewModelScope.launch(Dispatchers.IO) {
+            val state = try {
+                val dao = CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao()
+                val recordings = dao.searchKnownMusicBrainzRecordings("", limit = 20)
+                val available = dao.musicBrainzRecordingMbidsWithAssets(
+                    recordings.map { it.musicBrainzId },
+                ).toSet()
+                val rows = buildList {
+                    dao.searchKnownMusicBrainzArtists("", limit = 12).forEach { hit ->
+                        add(CanonicalCatalogSearchRow(
+                            hit.musicBrainzId, CanonicalSearchKind.ARTIST, hit.name,
+                            hit.disambiguation ?: hit.country, fromOfflineCache = true,
+                        ))
+                    }
+                    dao.searchKnownMusicBrainzGroups("", limit = 12).forEach { hit ->
+                        add(CanonicalCatalogSearchRow(
+                            hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
+                            hit.artistDisplay ?: hit.primaryType, fromOfflineCache = true,
+                        ))
+                    }
+                    dao.searchKnownMusicBrainzReleases("", limit = 12).forEach { hit ->
+                        add(CanonicalCatalogSearchRow(
+                            hit.musicBrainzId, CanonicalSearchKind.RELEASE, hit.title,
+                            listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
+                                .joinToString(" · "),
+                            fromOfflineCache = true,
+                        ))
+                    }
+                    recordings.forEach { hit ->
+                        add(CanonicalCatalogSearchRow(
+                            hit.musicBrainzId, CanonicalSearchKind.RECORDING, hit.title,
+                            hit.artistDisplay,
+                            hasCatalogedAsset = hit.musicBrainzId in available,
+                            fromOfflineCache = true,
+                        ))
+                    }
+                }.distinctBy { it.kind to it.musicBrainzId }
+                UiState.Success(rows)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                UiState.Error(text(R.string.canonical_discovery_cache_error))
+            }
+            if (canonicalDiscoveryCatalogEpoch.isCurrent(generation) &&
+                isCanonicalDiscoverySelected()
+            ) {
+                _canonicalDiscoveryCatalog.value = state
+            }
+        }
+    }
+
+    private fun onCanonicalDiscoveryModeChanged(enabled: Boolean) {
+        _usesCanonicalDiscovery.value = enabled
+        cancelDiscoveryRequests()
+        _home.value = UiState.Loading
+        _explore.value = UiState.Loading
+        _moodGenreShelves.value = UiState.Loading
+        _selectedMoodGenre.value = null
+        if (enabled) loadCanonicalDiscoveryCatalog()
         loadHome()
         loadExplore()
-        if (_signedIn.value) {
+    }
+
+    /** Stop all work owned by the old mode and invalidate responses already on the wire. */
+    private fun cancelDiscoveryRequests() {
+        homeLoadJob?.cancel()
+        homePagingJob?.cancel()
+        homeRefreshJob?.cancel()
+        exploreLoadJob?.cancel()
+        exploreRefreshJob?.cancel()
+        moodGenreRequestJob?.cancel()
+        moodGenreArtworkJob?.cancel()
+        canonicalDiscoveryCatalogJob?.cancel()
+        homeLoadGeneration.invalidateAndNext()
+        exploreLoadGeneration.invalidateAndNext()
+        canonicalDiscoveryCatalogEpoch.invalidateAndNext()
+        homeContinuation = null
+        homeSeenTitles.clear()
+        _homeLoadingMore.value = false
+        _homePendingShelves.value = 0
+        _homeRecentlyPlayedLoading.value = false
+        _refreshing.value = _refreshing.value - Feed.HOME - Feed.EXPLORE
+    }
+
+    /** Stop account/library prefetch after YouTube is opted out, preserving cached rows. */
+    private fun cancelLegacyYouTubeAccountRequests() {
+        accountLoadJob?.cancel()
+        accountReloadJob?.cancel()
+        libraryLoadJob?.cancel()
+        libraryRefreshJob?.cancel()
+        playlistsLoadJob?.cancel()
+        channelsLoadJob?.cancel()
+        likedSyncJob?.cancel()
+        historyLoadJob?.cancel()
+        if (_library.value is UiState.Loading) {
+            _library.value = libraryStateBeforeLoad
+                ?.takeUnless { it is UiState.Loading }
+                ?: UiState.Error(text(R.string.legacy_library_youtube_disabled))
+        }
+        libraryStateBeforeLoad = null
+        if (_history.value is UiState.Loading) {
+            historyStateBeforeLoad?.let { _history.value = it }
+        }
+        historyStateBeforeLoad = null
+        libraryStale = true
+        _playlistsLoading.value = false
+        _channelsLoading.value = false
+        _refreshing.value = _refreshing.value - Feed.LIBRARY
+    }
+
+    init {
+        startSearchPipeline()
+        if (_searchSource.value == SearchSource.YOUTUBE) {
+            suggestPipelineJob = startSuggestPipeline()
+            typeaheadPipelineJob = startTypeaheadMediaPipeline()
+        }
+        viewModelScope.launch {
+            combine(
+                AppSettings.canonicalDiscoveryEnabled,
+                SourceRegistry.configs,
+            ) { explicitlyEnabled, configs -> explicitlyEnabled to configs }
+                .distinctUntilChanged().collect { (explicitlyEnabled, configs) ->
+                if (!isYouTubeSourceEnabled(configs)) {
+                    cancelLegacyYouTubeAccountRequests()
+                }
+                val enabled = shouldUseCanonicalDiscovery(explicitlyEnabled, configs)
+                if (_usesCanonicalDiscovery.value != enabled) {
+                    onCanonicalDiscoveryModeChanged(enabled)
+                }
+                val nextSearchSource = if (searchSourceExplicitlySelected) {
+                    effectiveSearchSource(_searchSource.value, configs)
+                } else {
+                    defaultDiscoverySearchSource(explicitlyEnabled, configs)
+                }
+                if (nextSearchSource != _searchSource.value) {
+                    switchSearchSource(nextSearchSource)
+                }
+            }
+        }
+        loadHome()
+        loadExplore()
+        if (shouldPrefetchLegacyYouTubeAccountData(
+                signedIn = _signedIn.value,
+                canonicalDiscoveryEnabled = AppSettings.canonicalDiscoveryEnabled.value,
+                configs = SourceRegistry.configs.value,
+            )
+        ) {
             loadLibrary()
             loadAccount()
             loadPlaylists()
@@ -1718,11 +2022,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_home.value is UiState.Success) refresh(Feed.HOME)
     }
 
-    private fun loadAccount() {
+    fun loadAccount() {
+        if (!_signedIn.value || !isYouTubeSourceEnabled(SourceRegistry.configs.value)) return
         val identity = listenerKey()
-        viewModelScope.launch {
+        accountLoadJob = viewModelScope.launch {
             val account = YtMusicRepository.account().getOrNull()
-            if (identity != listenerKey()) return@launch
+            if (identity != listenerKey() || !isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
+                return@launch
+            }
             _account.value = account
             // A channel picked in the in-app browser arrives as ids and nothing
             // else — the page's `ytcfg` never says what the channel is called.
@@ -1750,16 +2057,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * A feed that can be pulled down to refresh. Tracked per feed rather than
-     * as one flag: a pull on Library while Home is still refreshing in the
-     * background shouldn't leave the wrong tab showing a loader.
-     */
-    enum class Feed { HOME, EXPLORE, LIBRARY }
-
-    private val _refreshing = MutableStateFlow(emptySet<Feed>())
-    val refreshing: StateFlow<Set<Feed>> = _refreshing.asStateFlow()
-
-    /**
      * Re-fetches [feed] in place. Unlike the `load*` entry points this leaves
      * the current content on screen rather than dropping back to the loading
      * state — a refresh that swapped the page for a spinner would be a worse
@@ -1768,25 +2065,48 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun refresh(feed: Feed) {
         if (feed in _refreshing.value) return
         if (feed == Feed.LIBRARY && !_signedIn.value) return
+        if (feed == Feed.LIBRARY && !isYouTubeSourceEnabled(SourceRegistry.configs.value)) return
         val identity = listenerKey()
         _refreshing.value = _refreshing.value + feed
-        viewModelScope.launch {
-            when (feed) {
-                Feed.HOME -> refreshHome(identity)
-                Feed.EXPLORE -> fetchExplore()
-                Feed.LIBRARY -> fetchLibrary(identity)
+        val job = viewModelScope.launch {
+            try {
+                when (feed) {
+                    Feed.HOME -> if (isCanonicalDiscoverySelected()) {
+                        loadCanonicalDiscoveryCatalog()
+                    } else refreshHome(identity)
+                    Feed.EXPLORE -> if (isCanonicalDiscoverySelected()) {
+                        loadCanonicalDiscoveryCatalog()
+                    } else fetchExplore(exploreLoadGeneration.next())
+                    Feed.LIBRARY -> fetchLibrary(identity)
+                }
+            } finally {
+                _refreshing.value = _refreshing.value - feed
             }
-            _refreshing.value = _refreshing.value - feed
+        }
+        when (feed) {
+            Feed.HOME -> homeRefreshJob = job
+            Feed.EXPLORE -> exploreRefreshJob = job
+            Feed.LIBRARY -> libraryRefreshJob = job
         }
     }
 
     fun loadExplore() {
         _explore.value = UiState.Loading
-        viewModelScope.launch { fetchExplore() }
+        if (isCanonicalDiscoverySelected()) {
+            loadCanonicalDiscoveryCatalog()
+            return
+        }
+        val generation = exploreLoadGeneration.next()
+        exploreLoadJob?.cancel()
+        exploreLoadJob = viewModelScope.launch { fetchExplore(generation) }
     }
 
-    private suspend fun fetchExplore() {
-        val state = YtMusicRepository.moodAndGenres().fold(
+    private suspend fun fetchExplore(generation: Long) {
+        if (isCanonicalDiscoverySelected()) return
+        val result = legacyDiscoveryGate().run(LegacyDiscoveryRequest.MOODS_AND_GENRES) {
+            YtMusicRepository.moodAndGenres()
+        } ?: return
+        val state = result.fold(
             onSuccess = { sections ->
                 if (sections.isEmpty()) {
                     UiState.Error(text(R.string.nothing_to_explore))
@@ -1796,8 +2116,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             },
             onFailure = { UiState.Error(it.friendly()) },
         )
+        if (!exploreLoadGeneration.isCurrent(generation) || isCanonicalDiscoverySelected()) return
         _explore.value = state
-        (state as? UiState.Success)?.data?.let(::loadMoodGenreArtwork)
+        (state as? UiState.Success)?.data?.let { loadMoodGenreArtwork(it, generation) }
     }
 
     /**
@@ -1805,15 +2126,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * number at a time from the shelves they open, so the grid gains real art
      * without saturating the browse client or delaying the category list.
      */
-    private fun loadMoodGenreArtwork(sections: List<MoodGenreSection>) {
-        viewModelScope.launch {
+    private fun loadMoodGenreArtwork(sections: List<MoodGenreSection>, generation: Long) {
+        if (isCanonicalDiscoverySelected() || !exploreLoadGeneration.isCurrent(generation)) return
+        moodGenreArtworkJob?.cancel()
+        moodGenreArtworkJob = viewModelScope.launch {
             val limiter = Semaphore(4)
             coroutineScope {
                 sections.flatMap(MoodGenreSection::items).forEach { item ->
                     launch {
                         val artwork = limiter.withPermit {
-                            YtMusicRepository.moodGenreArtwork(item.browseId, item.params).getOrNull()
+                            val result = legacyDiscoveryGate().run(
+                                LegacyDiscoveryRequest.MOOD_GENRE_ARTWORK,
+                            ) { YtMusicRepository.moodGenreArtwork(item.browseId, item.params) }
+                            result?.getOrNull()
                         } ?: return@launch
+                        if (!exploreLoadGeneration.isCurrent(generation) || isCanonicalDiscoverySelected()) {
+                            return@launch
+                        }
                         val current = (_explore.value as? UiState.Success)?.data ?: return@launch
                         _explore.value = UiState.Success(current.map { section ->
                             section.copy(items = section.items.map { currentItem ->
@@ -1831,21 +2160,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun openMoodGenre(item: MoodGenre) {
+        if (isCanonicalDiscoverySelected()) return
         _selectedMoodGenre.value = item
         _moodGenreShelves.value = UiState.Loading
-        viewModelScope.launch {
-            _moodGenreShelves.value = YtMusicRepository.moodGenreShelves(item.browseId, item.params).fold(
+        val generation = exploreLoadGeneration.next()
+        moodGenreRequestJob?.cancel()
+        moodGenreRequestJob = viewModelScope.launch {
+            val result = legacyDiscoveryGate().run(LegacyDiscoveryRequest.MOOD_GENRE_SHELVES) {
+                YtMusicRepository.moodGenreShelves(item.browseId, item.params)
+            } ?: return@launch
+            val state = result.fold(
                 onSuccess = { shelves ->
                     if (shelves.isEmpty()) UiState.Error(text(R.string.nothing_to_explore))
                     else UiState.Success(shelves)
                 },
                 onFailure = { UiState.Error(it.friendly()) },
             )
+            if (exploreLoadGeneration.isCurrent(generation) && !isCanonicalDiscoverySelected()) {
+                _moodGenreShelves.value = state
+            }
         }
     }
 
     fun closeMoodGenre(): Boolean {
         if (_selectedMoodGenre.value == null) return false
+        moodGenreRequestJob?.cancel()
+        exploreLoadGeneration.invalidateAndNext()
         _selectedMoodGenre.value = null
         return true
     }
@@ -1857,20 +2197,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadHome() {
         val identity = listenerKey()
-        val generation = homeLoadGeneration.incrementAndGet()
+        val generation = homeLoadGeneration.next()
+        homeLoadJob?.cancel()
+        homePagingJob?.cancel()
         _home.value = UiState.Loading
         homeContinuation = null
         homeSeenTitles.clear()
         _homeLoadingMore.value = false
-        _homeRecentlyPlayedLoading.value = _signedIn.value
+        _homeRecentlyPlayedLoading.value = _signedIn.value && !isCanonicalDiscoverySelected()
+        if (isCanonicalDiscoverySelected()) {
+            _home.value = UiState.Success(emptyList())
+            _homePendingShelves.value = 0
+            loadCanonicalDiscoveryCatalog()
+            return
+        }
         // The core feed plus one browse per supplement. Recently played is left
         // out: it has its own skeleton at the head of the page rather than the
         // one at the tail.
         _homePendingShelves.value = 1 + YtMusicRepository.HOME_SUPPLEMENT_BROWSE_IDS.size
-        viewModelScope.launch {
+        homeLoadJob = viewModelScope.launch {
             launch {
                 try {
-                    YtMusicRepository.home()
+                    val result = legacyDiscoveryGate().run(LegacyDiscoveryRequest.HOME) {
+                        YtMusicRepository.home()
+                    } ?: return@launch
+                    result
                         .onSuccess { feed ->
                             if (!isCurrentHomeLoad(identity, generation)) return@onSuccess
                             homeContinuation = feed.continuation
@@ -1887,7 +2238,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (_signedIn.value) {
                 launch {
-                    YtMusicRepository.homeRecentlyPlayed()
+                    val result = legacyDiscoveryGate().run(LegacyDiscoveryRequest.RECENTLY_PLAYED) {
+                        YtMusicRepository.homeRecentlyPlayed()
+                    } ?: return@launch
+                    result
                         .onSuccess { shelf ->
                             if (isCurrentHomeLoad(identity, generation)) {
                                 _homeRecentlyPlayedLoading.value = false
@@ -1902,7 +2256,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             YtMusicRepository.HOME_SUPPLEMENT_BROWSE_IDS.forEach { browseId ->
                 launch {
                     try {
-                        YtMusicRepository.homeSupplement(browseId).onSuccess { shelves ->
+                        val result = legacyDiscoveryGate().run(LegacyDiscoveryRequest.HOME_SUPPLEMENT) {
+                            YtMusicRepository.homeSupplement(browseId)
+                        } ?: return@launch
+                        result.onSuccess { shelves ->
                             if (isCurrentHomeLoad(identity, generation)) publishHomeShelves(shelves)
                         }
                     } finally {
@@ -1923,7 +2280,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun isCurrentHomeLoad(identity: String?, generation: Long) =
-        identity == listenerKey() && generation == homeLoadGeneration.get()
+        identity == listenerKey() && homeLoadGeneration.isCurrent(generation) &&
+            !isCanonicalDiscoverySelected()
 
     private fun publishHomeShelves(shelves: List<HomeShelf>, prepend: Boolean = false) {
         val existing = (_home.value as? UiState.Success)?.data.orEmpty()
@@ -1944,9 +2302,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Refreshes the core feed without blanking the current Play page first. */
     private suspend fun refreshHome(identity: String?) = coroutineScope {
-        val recent = if (_signedIn.value) async { YtMusicRepository.homeRecentlyPlayed() } else null
-        YtMusicRepository.home().onSuccess { feed ->
-            if (identity != listenerKey()) return@onSuccess
+        if (isCanonicalDiscoverySelected()) {
+            loadCanonicalDiscoveryCatalog()
+            return@coroutineScope
+        }
+        homeLoadJob?.cancel()
+        homePagingJob?.cancel()
+        _homePendingShelves.value = 0
+        _homeLoadingMore.value = false
+        val generation = homeLoadGeneration.next()
+        val recent = if (_signedIn.value) async {
+            legacyDiscoveryGate().run(LegacyDiscoveryRequest.RECENTLY_PLAYED) {
+                YtMusicRepository.homeRecentlyPlayed()
+            }
+        } else null
+        val home = legacyDiscoveryGate().run(LegacyDiscoveryRequest.HOME) {
+            YtMusicRepository.home()
+        } ?: return@coroutineScope
+        home.onSuccess { feed ->
+            if (identity != listenerKey() || !homeLoadGeneration.isCurrent(generation) ||
+                isCanonicalDiscoverySelected()
+            ) return@onSuccess
             homeContinuation = feed.continuation
             homeSeenTitles.clear()
             val shelves = feed.shelves.withoutRepeatsOf(emptyList())
@@ -1954,7 +2330,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (shelves.isNotEmpty()) _home.value = UiState.Success(shelves)
         }
         recent?.await()?.onSuccess { shelf ->
-            if (identity == listenerKey()) shelf?.let { publishHomeShelves(listOf(it), prepend = true) }
+            if (identity == listenerKey() && homeLoadGeneration.isCurrent(generation) &&
+                !isCanonicalDiscoverySelected()
+            ) shelf?.let { publishHomeShelves(listOf(it), prepend = true) }
         }
     }
 
@@ -1964,35 +2342,57 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * loaded — [homeContinuation] covers all three by construction.
      */
     fun loadMoreHome() {
+        if (isCanonicalDiscoverySelected()) return
         val token = homeContinuation ?: return
         if (_homeLoadingMore.value) return
         val identity = listenerKey()
+        val generation = homeLoadGeneration.current()
         _homeLoadingMore.value = true
-        viewModelScope.launch {
-            YtMusicRepository.moreHome(token).onSuccess { feed ->
-                if (identity == listenerKey()) {
-                    val existing = (_home.value as? UiState.Success)?.data ?: emptyList()
-                    val added = feed.shelves.withoutRepeatsOf(existing)
-                        .filter { homeSeenTitles.add(it.title.lowercase(Locale.ROOT)) }
-                    // A page with nothing new signals the feed has looped back on
-                    // itself rather than run dry with a token still attached —
-                    // treat it the same as exhausted so scrolling can't spin here.
-                    homeContinuation = feed.continuation.takeIf { added.isNotEmpty() }
-                    if (added.isNotEmpty()) _home.value = UiState.Success(existing + added)
+        homePagingJob?.cancel()
+        homePagingJob = viewModelScope.launch {
+            try {
+                val result = legacyDiscoveryGate().run(LegacyDiscoveryRequest.HOME) {
+                    YtMusicRepository.moreHome(token)
+                } ?: return@launch
+                result.onSuccess { feed ->
+                    if (identity == listenerKey() && homeLoadGeneration.isCurrent(generation) &&
+                        !isCanonicalDiscoverySelected()
+                    ) {
+                        val existing = (_home.value as? UiState.Success)?.data ?: emptyList()
+                        val added = feed.shelves.withoutRepeatsOf(existing)
+                            .filter { homeSeenTitles.add(it.title.lowercase(Locale.ROOT)) }
+                        // A page with nothing new signals the feed has looped back on
+                        // itself rather than run dry with a token still attached —
+                        // treat it the same as exhausted so scrolling can't spin here.
+                        homeContinuation = feed.continuation.takeIf { added.isNotEmpty() }
+                        if (added.isNotEmpty()) _home.value = UiState.Success(existing + added)
+                    }
+                }
+            } finally {
+                if (identity == listenerKey() && homeLoadGeneration.isCurrent(generation)) {
+                    _homeLoadingMore.value = false
                 }
             }
-            if (identity == listenerKey()) _homeLoadingMore.value = false
         }
     }
 
     fun loadLibrary() {
-        if (!_signedIn.value) return
+        if (!_signedIn.value || !isYouTubeSourceEnabled(SourceRegistry.configs.value)) return
+        if (libraryLoadJob?.isActive == true) return
         val identity = listenerKey()
+        libraryLoadJob?.cancel()
+        libraryStateBeforeLoad = libraryStateBeforeLoad ?: _library.value
         _library.value = UiState.Loading
-        viewModelScope.launch { fetchLibrary(identity) }
+        libraryLoadJob = viewModelScope.launch {
+            fetchLibrary(identity)
+            if (identity == listenerKey() && isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
+                libraryStateBeforeLoad = null
+            }
+        }
     }
 
     private suspend fun fetchLibrary(identity: String?) {
+        if (!_signedIn.value || !isYouTubeSourceEnabled(SourceRegistry.configs.value)) return
         val next = YtMusicRepository.library().fold(
             onSuccess = { page ->
                 // Liked Music is published with just its first page on the tab;
@@ -2005,7 +2405,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             },
             onFailure = { UiState.Error(it.friendly()) },
         )
-        if (identity == listenerKey()) _library.value = next
+        if (identity == listenerKey() && isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
+            _library.value = next
+        }
     }
 
     /**
@@ -2022,10 +2424,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * go on seeding the old account's likes into the new one's session.
      */
     private fun syncLikedMusic(identity: String?, token: String) {
+        if (identity != listenerKey() || !isYouTubeSourceEnabled(SourceRegistry.configs.value)) return
         likedSyncJob?.cancel()
         likedSyncJob = viewModelScope.launch {
             YtMusicRepository.syncLikedMusic(token) { next ->
-                if (identity != listenerKey()) null else YtMusicRepository.moreSongs(next).getOrNull()
+                if (identity != listenerKey() || !isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
+                    null
+                } else {
+                    YtMusicRepository.moreSongs(next).getOrNull()
+                }
             }
         }
     }
@@ -2044,9 +2451,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _history.value = UiState.Error(text(R.string.history_sign_in_required))
             return
         }
+        if (!isYouTubeSourceEnabled(SourceRegistry.configs.value)) return
         val identity = listenerKey()
+        historyLoadJob?.cancel()
+        historyStateBeforeLoad = historyStateBeforeLoad ?: _history.value
         _history.value = UiState.Loading
-        viewModelScope.launch {
+        historyLoadJob = viewModelScope.launch {
             val next = YtMusicRepository.history().fold(
                 onSuccess = { songs ->
                     if (songs.isEmpty()) UiState.Error(text(R.string.history_empty))
@@ -2054,7 +2464,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 },
                 onFailure = { UiState.Error(it.friendly()) },
             )
-            if (identity == listenerKey()) _history.value = next
+            if (identity == listenerKey() && isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
+                _history.value = next
+                historyStateBeforeLoad = null
+            }
         }
     }
 
@@ -2145,8 +2558,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * a blank placeholder.
      */
     fun searchFor(term: String) {
-        _searchSource.value = effectiveSearchSource(_searchSource.value, SourceRegistry.configs.value)
         _query.value = term
+        val allowed = effectiveSearchSource(_searchSource.value, SourceRegistry.configs.value)
+        if (allowed != _searchSource.value) switchSearchSource(allowed, rerunCurrentQuery = false)
         searchSubmitted = true
         _suggestions.value = emptyList()
         _typeaheadResults.value = emptyList()
@@ -2167,13 +2581,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onQueryChange(newValue: String) {
         val effective = effectiveSearchSource(_searchSource.value, SourceRegistry.configs.value)
-        if (effective != _searchSource.value) {
-            _searchSource.value = effective
-            _results.value = null
-            _suggestions.value = emptyList()
-            _typeaheadResults.value = emptyList()
-        }
         _query.value = newValue
+        if (effective != _searchSource.value) {
+            switchSearchSource(effective, rerunCurrentQuery = false)
+        }
         if (newValue.isBlank()) {
             searchSubmitted = false
             _suggestions.value = emptyList()
@@ -2212,7 +2623,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * full search, and records the term in history for future recall.
      */
     fun submitSearch() {
-        _searchSource.value = effectiveSearchSource(_searchSource.value, SourceRegistry.configs.value)
+        val allowed = effectiveSearchSource(_searchSource.value, SourceRegistry.configs.value)
+        if (allowed != _searchSource.value) switchSearchSource(allowed, rerunCurrentQuery = false)
         val q = _query.value.trim()
         if (q.isEmpty() || _searchSource.value == SearchSource.LIBRARY) return
         searchSubmitted = true
@@ -2421,22 +2833,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun setSearchSource(source: SearchSource) {
         val allowed = effectiveSearchSource(source, SourceRegistry.configs.value)
-        if (_searchSource.value == allowed) return
-        _searchSource.value = allowed
-        if (source != SearchSource.CANONICAL) {
-            clearCanonicalCatalogNavigation()
-            canonicalSearchJob?.cancel()
-            _canonicalResults.value = null
-        }
-        _suggestions.value = emptyList()
-        _typeaheadResults.value = emptyList()
-        _searchScrollReset.value += 1
-        when (allowed) {
-            SearchSource.LIBRARY -> loadLibrarySongs()
-            SearchSource.YOUTUBE -> submitSearch()
-            SearchSource.ADDONS -> if (_query.value.isNotBlank()) submitSearch()
-            SearchSource.CANONICAL -> if (_query.value.isNotBlank()) submitSearch()
-        }
+        searchSourceExplicitlySelected = true
+        switchSearchSource(allowed)
     }
 
     /**
@@ -2543,6 +2941,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun startSearchPipeline() = viewModelScope.launch {
         searchRequests
             .collectLatest { request ->
+                if (request.query.isBlank()) {
+                    searchSession = null
+                    _searchLoadingMore.value = false
+                    _results.value = null
+                    return@collectLatest
+                }
                 val key = cacheKey(request.query, request.filter)
                 // Something to look at immediately: the exact answer if this
                 // query has been run before, otherwise the closest earlier
@@ -2567,6 +2971,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // see [SourceResolver.substituteForYouTube] — which upgrades
                 // the ones it holds without any of them having to be a
                 // separate row to pick between.
+                if (_searchSource.value != SearchSource.YOUTUBE ||
+                    request.requestId != newestRequestId.get()
+                ) return@collectLatest
                 val result = YtMusicRepository.searchPage(request.query, request.filter, request.anonymous)
                 // A search that has been superseded shouldn't land on screen,
                 // whether it succeeded or failed.
@@ -2589,7 +2996,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val token = session.continuation ?: return
         if (_searchLoadingMore.value) return
         _searchLoadingMore.value = true
-        viewModelScope.launch {
+        searchPagingJob?.cancel()
+        searchPagingJob = viewModelScope.launch {
             val next = YtMusicRepository.searchContinuation(token, session.filter)
             val stillCurrent = searchSession == session && session.requestId == newestRequestId.get()
             if (stillCurrent) {
@@ -2634,11 +3042,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         suggestRequests
             .debounce(SUGGEST_DEBOUNCE_MS)
             .collectLatest { input ->
-                if (!stillWanted(input)) return@collectLatest
+                if (_searchSource.value != SearchSource.YOUTUBE || input.isBlank() ||
+                    !stillWanted(input)
+                ) return@collectLatest
                 val fetched = YtMusicRepository.searchSuggestions(input).getOrNull()
                     ?: return@collectLatest
                 // Asked again on the way back; the field is live throughout.
-                if (!stillWanted(input)) return@collectLatest
+                if (_searchSource.value != SearchSource.YOUTUBE || !stillWanted(input)) {
+                    return@collectLatest
+                }
                 _suggestions.value = listOf(input) +
                     fetched.filterNot { it.equals(input, ignoreCase = true) }
             }
@@ -2658,6 +3070,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _typeaheadResults.value = emptyList()
                     return@collectLatest
                 }
+                if (_searchSource.value != SearchSource.YOUTUBE) {
+                    _typeaheadResults.value = emptyList()
+                    return@collectLatest
+                }
                 // Only show media results while the user is still typing — not
                 // reading committed search results. The query-text check on its
                 // own isn't enough: a late suggestion callback can repopulate
@@ -2669,7 +3085,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 val result = YtMusicRepository.searchTypeahead(input).getOrNull()
                 // If the field moved on, drop the result silently.
-                if (_query.value != input) {
+                if (_query.value != input || _searchSource.value != SearchSource.YOUTUBE) {
                     _typeaheadResults.value = emptyList()
                     return@collectLatest
                 }
@@ -3484,17 +3900,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      *   itself reports which channel is active.
      */
     fun loadChannels(force: Boolean = false) {
-        if (!_signedIn.value) return
+        if (!_signedIn.value || !isYouTubeSourceEnabled(SourceRegistry.configs.value)) return
         if (_channelsLoading.value) return
         if (!force && _channels.value.isNotEmpty()) return
-        viewModelScope.launch {
+        channelsLoadJob = viewModelScope.launch {
             _channelsLoading.value = true
-            YtMusicRepository.accountChannels()
-                .onSuccess {
-                    _channels.value = it
-                    persistDetectedProfiles(it)
-                }
-            _channelsLoading.value = false
+            try {
+                YtMusicRepository.accountChannels()
+                    .onSuccess {
+                        if (isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
+                            _channels.value = it
+                            persistDetectedProfiles(it)
+                        }
+                    }
+            } finally {
+                _channelsLoading.value = false
+            }
         }
     }
 
@@ -3737,6 +4158,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun clearListenerState(restoreCached: Boolean = false) {
+        accountLoadJob?.cancel()
+        accountReloadJob?.cancel()
+        libraryLoadJob?.cancel()
+        playlistsLoadJob?.cancel()
+        channelsLoadJob?.cancel()
+        historyLoadJob?.cancel()
+        libraryStateBeforeLoad = null
+        historyStateBeforeLoad = null
         _account.value = null
         likedSyncJob?.cancel()
         LikeState.clear()
@@ -3766,7 +4195,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * itself.
      */
     private fun reloadForAccount() {
-        viewModelScope.launch {
+        accountReloadJob?.cancel()
+        accountReloadJob = viewModelScope.launch {
+            if (!isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
+                loadHome()
+                return@launch
+            }
             Innertube.ensureSessionScope()
             loadHome()
             loadLibrary()

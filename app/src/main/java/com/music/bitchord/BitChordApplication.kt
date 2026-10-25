@@ -39,6 +39,7 @@ import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.SearchHistory
 import com.music.bitchord.data.sources.SourceRegistry
+import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.data.sources.SourceResolver
 import com.music.bitchord.data.sources.StructuredSourceResolutionTraceReporter
 import com.music.bitchord.data.stats.ArtistFacts
@@ -155,7 +156,6 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
                 // first would restore it into the value about to be wiped.
                 restoredSession.profiles.firstOrNull { it.profileId == restoredSession.activeProfileId }
                     ?.let { Innertube.selectChannel(it.pageId, it.dataSyncId, it.authUser) }
-                CoroutineScope(Dispatchers.IO).launch { Innertube.ensureSessionScope() }
             }
         }
         Diagnostics.span(DiagnosticCategory.STARTUP, "app_settings_init") {
@@ -248,6 +248,19 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         }
         Diagnostics.span(DiagnosticCategory.STARTUP, "background_join_wait") {
             backgroundInit.join()
+        }
+        // Warming YouTube's account scope is a discovery request. Wait until
+        // persisted settings and source opt-outs are loaded, and skip it when
+        // the app is configured for independent discovery. Cookie/channel
+        // restoration above still happens so explicit playback keeps its gate.
+        val youtubeDisabled = SourceRegistry.configs.value.any {
+            it.kind == SourceKind.YOUTUBE && !it.enabled
+        }
+        if (restoredSession != null &&
+            !AppSettings.canonicalDiscoveryEnabled.value &&
+            !youtubeDisabled
+        ) {
+            CoroutineScope(Dispatchers.IO).launch { Innertube.ensureSessionScope() }
         }
         Diagnostics.event(
             category = DiagnosticCategory.STARTUP,
