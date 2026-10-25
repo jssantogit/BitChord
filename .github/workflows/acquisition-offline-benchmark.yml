@@ -126,7 +126,7 @@ jobs:
               row("Abstentions","abstentions"),
               row("Recommendations","recommendations"),
           ]
-          summary="\\n".join(lines)+"\\n"
+          summary="\n".join(lines)+"\n"
           print(summary)
           with open(os.environ["GITHUB_STEP_SUMMARY"],"a",encoding="utf-8") as file:
               file.write(summary)
