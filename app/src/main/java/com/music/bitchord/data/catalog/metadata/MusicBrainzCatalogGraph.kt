@@ -28,6 +28,9 @@ internal data class MusicBrainzCatalogTrack(
     val artistDisplay: String? = null,
     /** Shared Recording credit, parsed independently from the edition's Track credit. */
     val recordingArtistDisplay: String? = null,
+    /** Nested Recording metadata is independent from release-specific Track metadata. */
+    val recordingTitle: String? = null,
+    val recordingDurationMs: Long? = null,
 )
 
 internal data class MusicBrainzCatalogReleaseDetail(
@@ -123,6 +126,8 @@ internal class MusicBrainzCatalogGraph(
                         durationMs = (track.long("length") ?: recording.long("length"))?.takeIf { it >= 0 },
                         artistDisplay = track.artistDisplay() ?: recording.artistDisplay(),
                         recordingArtistDisplay = recording.artistDisplay(),
+                        recordingTitle = recording.string("title"),
+                        recordingDurationMs = recording.long("length")?.takeIf { it >= 0 },
                     )
                 }
             }
