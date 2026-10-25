@@ -58,10 +58,15 @@ internal object A0CandidateRank {
         val artistInFilename=artistWords.isNotEmpty() && artistWords.all { it in fileWords }
         // Folder context is supporting evidence only when the *same* folder
         // segment identifies the artist. "New/Jeans" cannot imply "New Jeans".
+        // A title can itself contain the artist's name ("Queen Of Hearts").
+        // That is not independent credit. When names overlap, a supporting
+        // folder must match the actual artist phrase, not the whole song title.
+        val artistTitleOverlap=artistSequence.any { it in titleSequence }
         val artistInSingleFolder=artistWords.isNotEmpty() &&
             parentSegments.any { parent ->
-                val words=tokens(parent).toSet()
-                artistWords.all { it in words }
+                val words=tokens(parent)
+                if(artistTitleOverlap) words==artistSequence
+                else artistWords.all { it in words }
             }
         val titleMatches=titleWords.count { it in fileWords }
         val artistMatches=artistWords.count { it in fileWords || it in folderWords }
@@ -112,6 +117,32 @@ internal object A0CandidateRank {
             if(titleWords.isEmpty() && artistWords.isEmpty()) 0 else qualityScore
         val warnings=mutableListOf<Warning>()
         val nameWords=fileWords
+        // Set inclusion and phrase order alone can silently accept both extra
+        // copies ("ILLIT Magnetic Magnetic") and missing independent credit
+        // ("Queen Of Hearts" for "Queen - Queen Of Hearts"). Compare the
+        // multiplicity of expected artist/title words in the filename only.
+        // A genuine exact artist directory can supply independent credit,
+        // allowing a title-only file even when title and artist share words.
+        if(titleSequence.isNotEmpty() && artistSequence.isNotEmpty()) {
+            val observed=fileTokens.groupingBy { it }.eachCount()
+            val titleOnly=titleSequence.groupingBy { it }.eachCount()
+            val artistAndTitle=(artistSequence+titleSequence)
+                .groupingBy { it }.eachCount()
+            val relevant=(artistSequence+titleSequence).toSet()
+            val actual=relevant.associateWith { observed[it] ?: 0 }
+            val titleCounts=relevant.associateWith { titleOnly[it] ?: 0 }
+            val combinedCounts=relevant.associateWith { artistAndTitle[it] ?: 0 }
+            val complete=when {
+                artistTitleOverlap && artistInSingleFolder ->
+                    actual==titleCounts || actual==combinedCounts
+                artistInFilename -> actual==combinedCounts
+                else -> actual==titleCounts
+            }
+            if(!complete) {
+                score-=9
+                warnings.add(Warning.IDENTITY_AMBIGUOUS)
+            }
+        }
         // Explicit "Other Artist - Magnetic.mp3" contradicts the expected
         // credit even when an ancestor directory is called "ILLIT".
         // Numeric track prefixes ("01 - Magnetic") and title-led suffixes
