@@ -98,7 +98,7 @@ class A0LiveCanonicalOrderingTest {
             requestedAlbum="Blue Sky"
         )
         collector.offerParsed(reply("peer",
-            offer("Music\\\\Mira\\\\Mira - Blue Sky.mp3")),"peer")
+            offer("Music\\Mira\\Mira - Blue Sky.mp3")),"peer")
         val answer=collector.choices().single()
         assertEquals(A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL,
             answer.albumEvidence.status)
@@ -110,7 +110,7 @@ class A0LiveCanonicalOrderingTest {
             requestedAlbum="Blue Sky"
         )
         collector.offerParsed(reply("peer",
-            offer("Music\\\\Greatest Hits\\\\Mira - Blue Sky.mp3")),"peer")
+            offer("Music\\Greatest Hits\\Mira - Blue Sky.mp3")),"peer")
         assertNull(collector.manualSuggestionIndex())
     }
 
