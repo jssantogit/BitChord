@@ -203,4 +203,33 @@ class A0CandidateQualityTest {
                     format="mp3",sizeBytes=6_400_000L).confidence)
         }
     }
+
+    @Test fun visualDirectionOverridesOrInvisibleSeparatorsRequireManualReview() {
+        for(name in listOf(
+            "ILLIT Magnetic\u202E.mp3",
+            "ILLIT\u200B Magnetic.mp3"
+        )) {
+            val rank=A0CandidateRank.rank("ILLIT - Magnetic",name,320,
+                remotePath="Music/ILLIT/"+name,format="mp3",
+                declaredDurationSeconds=161,expectedDurationSeconds=161,
+                sizeBytes=6_400_000L)
+            assertTrue("Invisible filename codepoint",
+                A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in rank.warnings)
+            assertEquals(A0CandidatePreflight.Confidence.REVIEW,
+                A0CandidatePreflight.assess("ILLIT - Magnetic",rank,320,
+                    declaredDurationSeconds=161,expectedDurationSeconds=161,
+                    format="mp3",sizeBytes=6_400_000L).confidence)
+        }
+    }
+
+    @Test fun multipleAmbiguityTriggersProduceOneUserFacingWarning() {
+        val name="ILLIT ILLIT Magnetic Album Version.mp3"
+        val rank=A0CandidateRank.rank("ILLIT - Magnetic",name,320,
+            remotePath="Music/ILLIT/"+name,format="mp3",
+            declaredDurationSeconds=161,expectedDurationSeconds=161,
+            sizeBytes=6_400_000L)
+        assertEquals(1,rank.warnings.count {
+            it==A0CandidateRank.Warning.IDENTITY_AMBIGUOUS
+        })
+    }
 }
