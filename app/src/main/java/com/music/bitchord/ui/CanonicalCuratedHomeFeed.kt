@@ -25,6 +25,7 @@ internal fun canonicalCuratedHomeShelves(
     metadata: List<CanonicalCatalogSearchRow>,
     localPicks: List<Song>,
     trendingRecordingMbids: List<String>,
+    trendingLocalPicks: List<Song> = emptyList(),
     releasesHeading: String,
     picksHeading: String,
     trendingHeading: String,
@@ -79,7 +80,14 @@ internal fun canonicalCuratedHomeShelves(
     val songsByMbid = metadata
         .filter { it.kind == CanonicalSearchKind.RECORDING && it.hasCatalogedAsset }
         .associateBy { it.musicBrainzId }
-    val chart = trendingRecordingMbids.distinct().asSequence()
+    val localTrending = trendingLocalPicks.asSequence()
+        .filter(::isPlayableLocalPick)
+        .distinctBy { it.localUri }
+        .take(16)
+        .map { song ->
+            ShelfItem(song.title, song.artist, song.thumbnailUrl, null, canonicalLocalPickCardId(song))
+        }.toList()
+    val catalogTrending = trendingRecordingMbids.distinct().asSequence()
         .mapNotNull { songsByMbid[it] }
         .take(16)
         .mapNotNull { row ->
@@ -87,5 +95,6 @@ internal fun canonicalCuratedHomeShelves(
                 ShelfItem(row.title, row.subtitle.orEmpty(), row.artworkUri, null, id)
             }
         }.toList()
+    val chart = (localTrending + catalogTrending).distinctBy { it.browseId }.take(16)
     if (chart.isNotEmpty()) add(HomeShelf(trendingHeading, chart))
 }
