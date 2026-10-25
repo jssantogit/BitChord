@@ -91,6 +91,7 @@ internal object A0DownloadQualityPolicy {
             A0CanonicalAcquisitionIntent.Codec.MP3 -> "mp3"
             A0CanonicalAcquisitionIntent.Codec.FLAC -> "flac"
             A0CanonicalAcquisitionIntent.Codec.PCM_WAV -> "wav"
+            A0CanonicalAcquisitionIntent.Codec.AAC_ADTS -> "aac"
         }
         if (ext != expectedExt) return uncertain(Reason.CONTAINER_CODEC_CONFLICT)
         if (codec !in supportedCodecs) {
@@ -111,10 +112,18 @@ internal object A0DownloadQualityPolicy {
                     else mismatch(profile.strict)
             }
             A0CanonicalAcquisitionIntent.QualityPreset.HIGH_QUALITY -> {
-                if (lossless) return match()
+                // A high-quality *lossy output* request is not fulfilled by
+                // returning FLAC instead. AAC-ADTS 256 or MP3 320, and the
+                // exact audio remains unverified until inspected locally.
+                if (lossless) return mismatch(profile.strict)
+                if (codec !in setOf(A0CanonicalAcquisitionIntent.Codec.MP3,
+                        A0CanonicalAcquisitionIntent.Codec.AAC_ADTS))
+                    return mismatch(profile.strict)
                 val rate = offer.bitrateKbps
                     ?: return uncertain(Reason.INSUFFICIENT_TECHNICAL_CLAIMS)
-                return if (rate in 256..320) match() else mismatch(profile.strict)
+                return if((codec==A0CanonicalAcquisitionIntent.Codec.MP3 && rate>=320) ||
+                    (codec==A0CanonicalAcquisitionIntent.Codec.AAC_ADTS && rate>=256))
+                    match() else mismatch(profile.strict)
             }
             A0CanonicalAcquisitionIntent.QualityPreset.CUSTOM -> {
                 if (profile.allowedCodecs.isNotEmpty() &&
