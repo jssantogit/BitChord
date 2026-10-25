@@ -106,6 +106,8 @@ jobs:
       - name: Record APK checksum and exact commit
         run: |
           printf 'commit=%s\n' "$(git rev-parse HEAD)" > catalog-178-build.txt
+          printf 'candidate=178-post-physical-smoke\n' >> catalog-178-build.txt
+          printf 'previous_physical_apk=cffff4e54560f1c15218085c1815b5fd1a3d9b6c\n' >> catalog-178-build.txt
           find app/build/outputs/apk/dev/debug -name '*.apk' -print -exec sha256sum '{}' \; >> catalog-178-build.txt
 
       - name: Upload smoke candidate
