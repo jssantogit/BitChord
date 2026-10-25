@@ -104,6 +104,12 @@ data class CanonicalCatalogSearchRow(
     val fromOfflineCache: Boolean = false,
     /** Edition-specific Track MBID disambiguates repeated recordings in a tracklist. */
     val trackMbid: String? = null,
+    /** First release/edition date from MusicBrainz. Never synthesized from a local import. */
+    val releaseDate: String? = null,
+    /** Album, Single, EP, etc. Only MusicBrainz can supply this classification. */
+    val releaseKind: String? = null,
+    /** Cached authorized cover art; not an implied playable asset. */
+    val artworkUri: String? = null,
 )
 
 /**
