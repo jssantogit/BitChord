@@ -778,6 +778,21 @@ class A0ManualLoginActivity : Activity() {
                                                                     "qualidade não confirmada"
                                                             } }
                                                         }
+                                                        val source=when(candidate.peerAvailability.tier) {
+                                                            A0PeerAvailability.Tier.READY ->
+                                                                "fonte favorável (anunciada)"
+                                                            A0PeerAvailability.Tier.UNKNOWN ->
+                                                                "disponibilidade incerta"
+                                                            A0PeerAvailability.Tier.CONGESTED ->
+                                                                "fonte congestionada/lenta"
+                                                            A0PeerAvailability.Tier.UNAVAILABLE ->
+                                                                "fonte indisponível"
+                                                        }
+                                                        val queue=candidate.peerAvailability.queueLength
+                                                            ?.let { " — fila anunciada " + it }.orEmpty()
+                                                        val speed=candidate.peerAvailability.speedKiBps
+                                                            ?.let { " — upload anunciado " + it + " KiB/s" }
+                                                            .orEmpty()
                                                         val lead=if(i==suggestedIndex)
                                                             "Mais indicado para conferir — " else ""
                                                         lead + candidate.displayName + " — " + format + bitrate +
@@ -785,6 +800,7 @@ class A0ManualLoginActivity : Activity() {
                                                             " — " + quality + " — relevância " +
                                                             candidate.matchScore + " (" + match + ")" +
                                                             " — " + preflight + reasons + flags +
+                                                            " — " + source + queue + speed +
                                                             " — slot livre anunciado — peer: " + peer
                                                     }.toTypedArray()
                                                     AlertDialog.Builder(this@A0ManualLoginActivity)
