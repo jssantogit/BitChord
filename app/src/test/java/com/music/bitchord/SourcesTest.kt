@@ -607,6 +607,25 @@ class SourcesTest {
     }
 
     @Test
+    fun `disabled YouTube stays disabled when source configurations are restored`() {
+        val disabled = SourceConfig(kind = SourceKind.YOUTUBE, enabled = false)
+        val firstBoot = SourceRegistry.sourcesForInit(
+            stored = listOf(disabled),
+            forceJioSaavnOff = true,
+        )
+        assertFalse(firstBoot.single { it.kind == SourceKind.YOUTUBE }.enabled)
+        assertFalse(firstBoot.single { it.kind == SourceKind.JIOSAAVN }.enabled)
+
+        val nextBoot = SourceRegistry.sourcesForInit(
+            stored = firstBoot,
+            forceJioSaavnOff = false,
+        )
+        assertFalse(nextBoot.single { it.kind == SourceKind.YOUTUBE }.enabled)
+        assertTrue(SourceRegistry.sourcesForInit(emptyList(), true)
+            .single { it.kind == SourceKind.YOUTUBE }.enabled)
+    }
+
+    @Test
     fun `the opt-in migration disables JioSaavn once for existing installs`() {
         val previouslyEnabled = SourceConfig(kind = SourceKind.JIOSAAVN, enabled = true)
 
