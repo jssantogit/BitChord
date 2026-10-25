@@ -13,6 +13,7 @@ import com.music.bitchord.auth.sessionId
 import com.music.bitchord.auth.adjacentProfile
 import com.music.bitchord.data.AppUpdateChecker
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.allowedCanonicalLyricsSources
 import com.music.bitchord.data.catalog.metadata.CoverArtArchive
 import com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
@@ -862,11 +863,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         album: String? = null,
         localUri: String? = null,
     ) {
-        val sources = if (AppSettings.syncedLyrics.value) {
-            AppSettings.lyricsSources.value
-        } else {
-            emptySet()
-        }
+        val sources = allowedCanonicalLyricsSources(
+            requested = if (AppSettings.syncedLyrics.value) {
+                AppSettings.lyricsSources.value
+            } else {
+                emptySet()
+            },
+            canonicalDiscovery = isCanonicalDiscoverySelected(),
+            configs = SourceRegistry.configs.value,
+        )
         val key = videoId to sources
         if (lyricsFor == key) return
         // The duration lands a beat after the track, and a database match needs
@@ -890,10 +895,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _lyrics.value = null
         _lyricsSource.value = null
         lyricsJob?.cancel()
-        if (sources.isEmpty()) {
-            // Switched off, or every source unticked. Nothing to look up, and
-            // nothing to say about it — the player drops the lyric strip
-            // rather than reporting a track with no lyrics.
+        if (sources.isEmpty() && localUri == null) {
+            // No network provider remains permitted. Still try embedded
+            // lyrics below when the exact local file is available.
             _lyricsChecked.value = true
             return
         }
@@ -913,13 +917,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     return@launch
                 }
             }
+            if (sources.isEmpty()) {
+                // Embedded lyrics were checked first. Neither the opted-out
+                // YouTube endpoints nor any other provider should be called.
+                _lyricsChecked.value = true
+                return@launch
+            }
             if (durationMs <= 0L) {
                 // Duration arrives a beat after the track does; wait for it.
                 lyricsFor = null
                 return@launch
             }
             val found = LyricsRepository.lyrics(
-                videoId, title, artist, durationMs, album, sources,
+                videoId, title, artist, durationMs, album,
+                allowedCanonicalLyricsSources(
+                    sources, isCanonicalDiscoverySelected(), SourceRegistry.configs.value,
+                ),
                 AppSettings.lyricsSourceOrder.value, AppSettings.prioritizeSyllableSync.value,
                 onSourceStarted = { source -> providerStarted(generation, source) },
                 onSourceResult = { source, result ->
@@ -939,6 +952,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * from memory; misses are inert; only an untouched provider goes online.
      */
     fun selectLyricsProvider(source: LyricsSource) {
+        // The manual picker must not bypass the automatic provider filter.
+        if (source !in allowedCanonicalLyricsSources(
+                setOf(source), isCanonicalDiscoverySelected(), SourceRegistry.configs.value,
+            )
+        ) return
         val request = currentLyricsRequest ?: return
         when (_lyricsProviderStates.value[source]) {
             LyricsProviderState.FOUND -> {
@@ -962,15 +980,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         generation: Long,
         source: LyricsSource,
     ) {
+        if (source !in allowedCanonicalLyricsSources(
+                setOf(source), isCanonicalDiscoverySelected(), SourceRegistry.configs.value,
+            )
+        ) return
         if (manualLyricsJobs[source]?.isActive == true) return
         manualLyricsJobs[source] = viewModelScope.launch {
+            // Recheck inside the launched job in case opt-out raced dispatch.
+            val permitted = allowedCanonicalLyricsSources(
+                setOf(source), isCanonicalDiscoverySelected(), SourceRegistry.configs.value,
+            )
+            if (source !in permitted) return@launch
             LyricsRepository.lyrics(
                 videoId = request.videoId,
                 title = request.title,
                 artist = request.artist,
                 durationMs = request.durationMs,
                 album = request.album,
-                sources = setOf(source),
+                sources = permitted,
                 order = listOf(source),
                 prioritizeSyllableSync = false,
                 onSourceStarted = { provider -> providerStarted(generation, provider) },
