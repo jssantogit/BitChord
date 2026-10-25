@@ -127,4 +127,21 @@ class A0CandidateDiscoveryTest {
         handoff.offerParsed(reply("peer-b",listOf(file("ILLIT Magnetic.mp3"))),"peer-b")
         assertEquals(2,handoff.choices().size)
     }
+
+    @Test fun sanitizedScreeningDistinguishesRelevantAndDubiousCandidates() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",expectedDurationSeconds=161)
+        handoff.offerParsed(reply("peer",listOf(
+            A0SoulseekSearchFile("Music\\ILLIT - Magnetic.mp3",6_400_000,"mp3",
+                mapOf(0 to 320,1 to 161)),
+            A0SoulseekSearchFile("Music\\Something Else.mp3",100_000,"mp3",
+                mapOf(0 to 96,1 to 400))
+        )),"peer")
+        val report=handoff.screening()
+        assertEquals(2,report.accepted)
+        assertEquals(1,report.strongMatches)
+        assertEquals(1,report.weakMatches)
+        assertEquals(1,report.lowQuality)
+        assertFalse(report.toString().contains("ILLIT"))
+    }
 }
