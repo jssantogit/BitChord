@@ -674,6 +674,7 @@ fun NowPlayingScreen(
     accountName: String?,
     likeStatus: LikeStatus,
     onToggleLike: () -> Unit,
+    onEditCanonicalRating: () -> Unit = {},
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -1922,6 +1923,7 @@ fun NowPlayingScreen(
                                     likeStatus = likeStatus,
                                     showRevertCue = showRevertCue,
                                     onToggleLike = onToggleLike,
+                                    onEditCanonicalRating = onEditCanonicalRating,
                                     onOpenMenu = openMenuWithArtwork,
                                     onOpenAlbum = onOpenAlbum,
                                     onOpenArtist = onOpenArtist,
@@ -3302,6 +3304,7 @@ fun NowPlayingScreen(
                                     song = song,
                                     modifier = Modifier.padding(end = 8.dp),
                                     color = Color.White.copy(alpha = 0.84f),
+                                    onClick = onEditCanonicalRating,
                                 )
                             }
                             Spacer(Modifier.width(10.dp))
