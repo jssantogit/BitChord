@@ -44,7 +44,12 @@ internal fun canonicalCuratedHomeShelves(
         }
         .filter { row ->
             val date = row.releaseDate ?: return@filter true
-            date.matches(datePattern) && date.padEnd(10, '0') <= todayIsoDate
+            val normalized = when {
+                date.length == 4 -> "$date-01-01"
+                date.length == 7 -> "$date-01"
+                else -> date
+            }
+            date.matches(datePattern) && normalized <= todayIsoDate
         }
         .sortedWith(
             compareByDescending<CanonicalCatalogSearchRow> { it.releaseDate.orEmpty() }
