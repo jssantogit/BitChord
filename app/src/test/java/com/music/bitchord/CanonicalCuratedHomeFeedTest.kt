@@ -4,8 +4,10 @@ import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
 import com.music.bitchord.ui.canonicalLocalPickCardId
+import com.music.bitchord.ui.canonicalRemotePickCardId
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
+import com.music.bitchord.ui.screens.CanonicalServerSearchRow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -81,6 +83,44 @@ class CanonicalCuratedHomeFeedTest {
         val items = feed(emptyList(), listOf(local, second)).single().items
         assertEquals(2, items.size)
         assertEquals(2, items.map { it.browseId }.distinct().size)
+    }
+
+    @Test fun picksIncludeVerifiedServerAssetsWhenDeviceHasNoLocalFiles() {
+        val remote = CanonicalServerSearchRow(
+            recordingId = "recording-nav-1", mediaAssetId = "asset-nav-1",
+            providerKey = "opensubsonic:test-account", title = "Magnetic", artistDisplay = "ILLIT",
+            artworkUri = "https://example.com/cover.png",
+        )
+        val result = canonicalCuratedHomeShelves(
+            savedReleases = emptyList(), metadata = emptyList(), localPicks = emptyList(),
+            trendingRecordingMbids = emptyList(),
+            releasesHeading = "Lançamentos", picksHeading = "Escolha a dedo",
+            trendingHeading = "Em alta", todayIsoDate = "2026-10-25",
+            remotePicks = listOf(remote),
+        )
+        assertEquals(listOf("Escolha a dedo"), result.map { it.title })
+        val card = result.single().items.single()
+        assertEquals("Magnetic", card.title)
+        assertEquals(remote.artworkUri, card.thumbnailUrl)
+        assertEquals(canonicalRemotePickCardId(remote), card.browseId)
+        assertEquals(null, card.videoId)
+        assertFalse(card.browseId!!.contains(remote.mediaAssetId))
+    }
+
+    @Test fun twoServerAssetsForSameRecordingRetainIndependentNavigationKeys() {
+        val one = CanonicalServerSearchRow(
+            recordingId = "recording-1", mediaAssetId = "asset-1",
+            providerKey = "opensubsonic:account", title = "OMG", artistDisplay = "NewJeans",
+        )
+        val two = one.copy(mediaAssetId = "asset-2")
+        assertFalse(canonicalRemotePickCardId(one) == canonicalRemotePickCardId(two))
+        val cards = canonicalCuratedHomeShelves(
+            savedReleases = emptyList(), metadata = emptyList(), localPicks = emptyList(),
+            trendingRecordingMbids = emptyList(), remotePicks = listOf(one, two),
+            releasesHeading = "Lançamentos", picksHeading = "Escolha a dedo",
+            trendingHeading = "Em alta", todayIsoDate = "2026-10-25",
+        ).single().items
+        assertEquals(2, cards.map { it.browseId }.distinct().size)
     }
 
     @Test fun onlyTrustedLocalUrisCanEnterPickCarousel() {
