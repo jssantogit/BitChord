@@ -55,6 +55,17 @@ jobs:
       - name: Run Android unit tests
         run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
 
+      # This file contains only opaque offer IDs and input fingerprints:
+      # no remote paths, usernames, song names, peer metadata or audio.
+      - name: Upload Soulseek synthetic replay evidence
+        if: github.event_name == 'pull_request' && github.head_ref == 'acquisition/issue-177-soulseek-discovery'
+        uses: actions/upload-artifact@v4
+        with:
+          name: soulseek-offline-v4-${{ github.sha }}
+          path: app/build/benchmark/soulseek/bitchord-preflight-v4.jsonl
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload Android test reports
         if: failure()
         uses: actions/upload-artifact@v4
