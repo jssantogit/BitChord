@@ -3,6 +3,8 @@ package com.music.bitchord.data.catalog.metadata
 import com.music.bitchord.BuildConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.ResponseException
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -27,6 +29,11 @@ internal class KtorMusicBrainzTransport(
     private val baseUrl: String = "https://musicbrainz.org/ws/2",
     private val client: HttpClient = HttpClient(OkHttp) {
         expectSuccess = true
+        install(HttpTimeout) {
+            requestTimeoutMillis = 15_000L
+            connectTimeoutMillis = 10_000L
+            socketTimeoutMillis = 15_000L
+        }
     },
 ) : MusicBrainzTransport {
     override suspend fun get(
@@ -87,12 +94,51 @@ internal class MusicBrainzClient(
     private val transport: MusicBrainzTransport = KtorMusicBrainzTransport(),
     internal val rateLimiter: MusicBrainzRateLimiter = MusicBrainzRequestBudget.limiter,
     val userAgent: String = defaultMusicBrainzUserAgent(),
+    private val retryDelayMillis: suspend (Long) -> Unit = { millis -> delay(millis) },
 ) {
     suspend fun get(
         path: String,
         parameters: Map<String, String> = mapOf("fmt" to "json"),
-    ): String = rateLimiter.runLimited {
-        transport.get(path, parameters, userAgent)
+    ): String {
+        var attempt = 1
+        while (true) {
+            try {
+                // A retry is a new request and must pass through the same shared
+                // budget as the first attempt and every other MusicBrainz endpoint.
+                return rateLimiter.runLimited {
+                    transport.get(path, parameters, userAgent)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (response: ResponseException) {
+                val status = response.response.status.value
+                if (status != HTTP_TOO_MANY_REQUESTS && status != HTTP_SERVICE_UNAVAILABLE ||
+                    attempt >= MAX_ATTEMPTS
+                ) throw response
+
+                val retryAfter = response.response.headers[HttpHeaders.RetryAfter]
+                val delay = when {
+                    retryAfter == null -> BACKOFF_MILLIS[attempt - 1]
+                    else -> retryAfter.retryAfterMillisOrNull() ?: throw response
+                }
+                retryDelayMillis(delay)
+                attempt += 1
+            }
+        }
+    }
+
+    private fun String.retryAfterMillisOrNull(): Long? {
+        val seconds = toLongOrNull()?.takeIf { it in 0L..MAX_RETRY_AFTER_SECONDS } ?: return null
+        return seconds * MILLIS_PER_SECOND
+    }
+
+    private companion object {
+        const val HTTP_TOO_MANY_REQUESTS = 429
+        const val HTTP_SERVICE_UNAVAILABLE = 503
+        const val MAX_ATTEMPTS = 3
+        const val MAX_RETRY_AFTER_SECONDS = 30L
+        const val MILLIS_PER_SECOND = 1_000L
+        val BACKOFF_MILLIS = longArrayOf(1_000L, 2_000L)
     }
 }
 
