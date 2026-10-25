@@ -54,6 +54,7 @@ internal class A0ObservedCandidateHandoff(
         val duplicates:Int=0,
         val capacityDropped:Int=0,
         val perPeerDropped:Int=0,
+        val claimBudgetDropped:Int=0,
         val strongMatches:Int=0,
         val weakMatches:Int=0,
         val lowQuality:Int=0,
@@ -87,6 +88,7 @@ internal class A0ObservedCandidateHandoff(
     private var duplicateCount=0
     private var capDropped=0
     private var perPeerDropped=0
+    private var claimBudgetDropped=0
     private val seen=HashSet<Pair<String,String>>()
     private var replies=0
     private var publicSeen=0
@@ -206,6 +208,21 @@ internal class A0ObservedCandidateHandoff(
                 candidates.removeAt(fromPeer.last().index)
                 perPeerDropped=(perPeerDropped+1).coerceAtMost(100000)
             }
+            // Up to six apparent copies are useful as alternate peers;
+            // allowing 48 identical claims would hide other song versions.
+            // This is strictly claimed metadata equality, never a hash.
+            val sameClaim=candidates.withIndex().filter {
+                A0CandidateClaimClusters.sameClaim(it.value.claim,
+                    A0CandidateClaimClusters.Claim(
+                        filename=basename,format=ext,sizeBytes=file.sizeBytes,
+                        bitrateKbps=bitrateRaw,durationSeconds=duration,
+                        sampleRateHz=sampleRate,bitDepth=bitDepth
+                    ))
+            }
+            if(sameClaim.size>6) {
+                candidates.removeAt(sameClaim.last().index)
+                claimBudgetDropped=(claimBudgetDropped+1).coerceAtMost(100000)
+            }
             if(candidates.size>48) {
                 candidates.removeAt(candidates.lastIndex)
                 capDropped=(capDropped+1).coerceAtMost(100000)
@@ -231,6 +248,7 @@ internal class A0ObservedCandidateHandoff(
         duplicates=duplicateCount,
         capacityDropped=capDropped,
         perPeerDropped=perPeerDropped,
+        claimBudgetDropped=claimBudgetDropped,
         strongMatches=candidates.count {
             it.matchScore>=65 && it.warnings.isEmpty() &&
                 it.quality!=A0CandidateRank.Quality.LOW_ADVERTISED
