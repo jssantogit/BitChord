@@ -113,4 +113,26 @@ class A0DownloadQualityPolicyTest {
                 extension="mp3", bitrateKbps=128),supported)
         assertEquals(A0DownloadQualityPolicy.Status.NOT_CONSTRAINED,r.status)
     }
+
+    @Test fun impossibleAdvertisedMp3BitrateIsNotPromotedEvenByCustomMinimum() {
+        val p=A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
+            preset=A0CanonicalAcquisitionIntent.QualityPreset.CUSTOM,
+            allowedCodecs=setOf(A0CanonicalAcquisitionIntent.Codec.MP3),
+            minBitrateKbps=256, strict=true)
+        val impossible=A0DownloadQualityPolicy.evaluate(p,
+            A0DownloadQualityPolicy.Offer(
+                codecClaim=A0CanonicalAcquisitionIntent.Codec.MP3,
+                extension="mp3", bitrateKbps=512),supported)
+        assertEquals(A0DownloadQualityPolicy.Status.INCONCLUSIVE_MANUAL, impossible.status)
+    }
+
+    @Test fun impossibleAdvertisedLosslessSamplePropertiesNeverProveHiRes() {
+        val p=profile(A0CanonicalAcquisitionIntent.QualityPreset.HI_RES)
+        val impossible=A0DownloadQualityPolicy.evaluate(p,
+            A0DownloadQualityPolicy.Offer(
+                codecClaim=A0CanonicalAcquisitionIntent.Codec.FLAC,
+                extension="flac", sampleRateHz=999_999, bitDepth=80),supported)
+        assertEquals(A0DownloadQualityPolicy.Status.INCONCLUSIVE_MANUAL, impossible.status)
+    }
+
 }
