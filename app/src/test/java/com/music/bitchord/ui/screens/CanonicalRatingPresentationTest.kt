@@ -224,4 +224,23 @@ class CanonicalRatingPresentationTest {
         assertNull(after.byMediaAssetId["navidrome-a"]?.remoteValue)
         assertEquals(3.5, after.byRecordingId["canonical-mb-recording"]?.localValue)
     }
+
+    @Test
+    fun ambiguousCanonicalMediaKeyNeverDisplaysAnotherRecordingScore() {
+        val sharedUri = "content://media/external/audio/shared"
+        val presentation = buildCanonicalRatingPresentation(
+            assets = listOf(
+                asset("canonical-one", "local-one", "local-mediastore", sharedUri),
+                asset("canonical-two", "local-two", "local-mediastore", sharedUri),
+            ),
+            localValues = mapOf("canonical-one" to 5.0),
+            remote = emptyList(),
+            activeProvider = null, activeScope = null,
+        )
+        val song = Song(videoId = sharedUri, title = "Duplicate", artist = "Unknown", thumbnailUrl = null)
+        assertNull(presentation.forSong(song))
+        assertNull(presentation.recordingIdForSong(song))
+        // Rating by exact MediaAssetId remains available in the canonical catalog.
+        assertEquals(5.0, presentation.byMediaAssetId["local-one"]?.localValue)
+    }
 }
