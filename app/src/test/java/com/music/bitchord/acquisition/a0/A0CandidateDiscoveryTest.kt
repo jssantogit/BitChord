@@ -305,4 +305,30 @@ class A0CandidateDiscoveryTest {
         assertEquals(1,collector.screening().simulatedSuggested)
     }
 
+
+    @Test fun peerAvailabilityMustNotChooseBetweenDifferentStrongClaims() {
+        // Both files score identically and have the same declared bitrate.
+        // They are still distinct metadata declarations. Source congestion
+        // must not decide which musical candidate leads the manual list.
+        val collector=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",expectedDurationSeconds=161)
+        val attrs=mapOf(0 to 320,1 to 161)
+        val first=A0SoulseekSearchFile(
+            "Music\\ILLIT - Magnetic.mp3",6_400_000L,"mp3",attrs)
+        val second=A0SoulseekSearchFile(
+            "Music\\ILLIT Magnetic.mp3",6_400_000L,"mp3",attrs)
+        collector.offerParsed(A0SoulseekSearchResponse("slow",177,listOf(first),
+            emptyList(),true,4_096,40),"slow")
+        collector.offerParsed(A0SoulseekSearchResponse("fast",177,listOf(second),
+            emptyList(),true,256_000,0),"fast")
+        val choices=collector.choices()
+        assertEquals(2,choices.size)
+        assertEquals(choices[0].matchScore,choices[1].matchScore)
+        assertEquals(choices[0].preflight,choices[1].preflight)
+        assertEquals(choices[0].declaredBitrateKbps,choices[1].declaredBitrateKbps)
+        assertEquals(2,collector.screening().claimsDistinct)
+        assertEquals(1,collector.screening().simulatedAmbiguous)
+        assertEquals("ILLIT - Magnetic.mp3",choices.first().displayName)
+        assertEquals(A0PeerAvailability.Tier.CONGESTED,choices.first().peerAvailability.tier)
+    }
 }
