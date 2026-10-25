@@ -653,6 +653,15 @@ class A0ManualLoginActivity : Activity() {
                                     if (handoff?.hasCandidates() == true) {
                                         checkNotNull(handoff).markReadersStopped()
                                         val choices=handoff.choices()
+                                        // Observational hint only. Never initiates a transfer;
+                                        // A0 still requires an explicit user-selected index.
+                                        val suggestedIndex=A0CandidatePreflight.suggestIndex(
+                                            choices.map { candidate ->
+                                                A0CandidatePreflight.Weighted(
+                                                    candidate.preflight,candidate.matchScore
+                                                )
+                                            }
+                                        )
                                         val selectableIndices=choices.indices.filter { i ->
                                             !saveToDevice || A5ManualSaveGate.safeDestinationName(
                                                 choices[i].displayName,choices[i].sizeBytes
@@ -685,8 +694,8 @@ class A0ManualLoginActivity : Activity() {
                                                         val formatOk=formatFilter==null ||
                                                             ext.equals(formatFilter,ignoreCase=true)
                                                         val qualityOk=when(qualityFilter) {
-                                                            1 -> file.matchScore>=65 && file.warnings.isEmpty() &&
-                                                                file.quality!=A0CandidateRank.Quality.LOW_ADVERTISED
+                                                            1 -> file.matchScore>=65 &&
+                                                                file.preflight.confidence!=A0CandidatePreflight.Confidence.UNSAFE
                                                             2 -> file.quality==A0CandidateRank.Quality.LOSSLESS_ADVERTISED
                                                             3 -> ext.equals("mp3",ignoreCase=true) &&
                                                                 (file.declaredBitrateKbps ?: 0)>=256
@@ -734,11 +743,43 @@ class A0ManualLoginActivity : Activity() {
                                                             else " — alerta: " + candidate.warnings.joinToString {
                                                                 it.name.lowercase()
                                                             }
-                                                        candidate.displayName + " — " + format + bitrate +
+                                                        val preflight=when(candidate.preflight.confidence) {
+                                                            A0CandidatePreflight.Confidence.STRONG ->
+                                                                "correspondência forte (não verificada)"
+                                                            A0CandidatePreflight.Confidence.REVIEW ->
+                                                                "conferir dados antes de baixar"
+                                                            A0CandidatePreflight.Confidence.UNSAFE ->
+                                                                "divergências nos metadados"
+                                                        }
+                                                        val reasons=when {
+                                                            candidate.preflight.reasons.isEmpty() -> ""
+                                                            else -> " — " + candidate.preflight.reasons.joinToString(
+                                                                separator=", ",limit=3,truncated="..."
+                                                            ) { reason -> when(reason) {
+                                                                A0CandidatePreflight.Reason.TITLE_MISMATCH ->
+                                                                    "título/artista divergentes"
+                                                                A0CandidatePreflight.Reason.ARTIST_UNCONFIRMED ->
+                                                                    "artista sem confirmação"
+                                                                A0CandidatePreflight.Reason.VERSION_CONFLICT ->
+                                                                    "versão alternativa"
+                                                                A0CandidatePreflight.Reason.DURATION_UNCONFIRMED ->
+                                                                    "duração não comparável"
+                                                                A0CandidatePreflight.Reason.DURATION_CONFLICT ->
+                                                                    "duração divergente"
+                                                                A0CandidatePreflight.Reason.SIZE_CONFLICT ->
+                                                                    "tamanho improvável"
+                                                                A0CandidatePreflight.Reason.QUALITY_UNCONFIRMED ->
+                                                                    "qualidade não confirmada"
+                                                            } }
+                                                        }
+                                                        val lead=if(i==suggestedIndex)
+                                                            "Mais indicado para conferir — " else ""
+                                                        lead + candidate.displayName + " — " + format + bitrate +
                                                             duration + " — " + candidate.sizeBytes + " bytes" +
                                                             " — " + quality + " — relevância " +
                                                             candidate.matchScore + " (" + match + ")" +
-                                                            flags + " — slot livre anunciado — peer: " + peer
+                                                            " — " + preflight + reasons + flags +
+                                                            " — slot livre anunciado — peer: " + peer
                                                     }.toTypedArray()
                                                     AlertDialog.Builder(this@A0ManualLoginActivity)
                                                         .setTitle("Candidatos (" + visible.size +
