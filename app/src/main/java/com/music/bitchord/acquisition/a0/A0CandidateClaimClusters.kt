@@ -96,8 +96,9 @@ internal object A0CandidateClaimClusters {
         val representatives=groups.values.map { group ->
             group.sortedWith(compareByDescending<IndexedValue<Entry>> {
                 it.value.score
-            }.thenByDescending {
-                A0PeerAvailability.priority(it.value.availability)
+            }.thenComparator { a,b ->
+                A0PeerAvailability.compareSource(
+                    b.value.availability,a.value.availability)
             }.thenBy { it.index }).first()
         }
         val strong=representatives.filter {
