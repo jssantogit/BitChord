@@ -45,8 +45,11 @@ data class DownloadCustomOptions(
     val isCurrentlySupportedForSoulseek:Boolean get() = format in setOf("mp3","flac","wav","aac")
     val description:String get() = buildString {
         append(format.uppercase())
-        bitrateKbps?.let { append(" · $it kbps") }
-        sampleRateHz?.let { append(" · ${it/1000} kHz") }
-        bitDepth?.let { append(" · $it bits") }
+        if(format in setOf("mp3","aac","m4a"))
+            bitrateKbps?.let { append(" · $it kbps") }
+        else {
+            sampleRateHz?.let { append(" · ${it/1000} kHz") }
+            bitDepth?.let { append(" · $it bits") }
+        }
     }
 }
