@@ -14,6 +14,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.ConscryptMode
 
 /**
  * Local playlists are stored on device, not necessarily playable without
@@ -22,6 +23,7 @@ import org.robolectric.annotation.Config
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [35])
+@ConscryptMode(ConscryptMode.Mode.OFF)
 class LocalPlaylistCanonicalPersistenceTest {
     private val app: Application
         get() = RuntimeEnvironment.getApplication()
