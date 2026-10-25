@@ -15,9 +15,12 @@ internal class A0PeerSearchWorkers(
     private val action:(()->Unit)->Unit = { it() }
 ) {
     private val closed=AtomicBoolean(false)
+    // At most 36 offers are processed per live search. Eight sockets can
+    // drain that burst within the existing short discovery window even when
+    // peers take seconds to time out; the queue is still strictly bounded.
     private val pool=ThreadPoolExecutor(
-        3,3,0L,TimeUnit.MILLISECONDS,
-        ArrayBlockingQueue<Runnable>(6),
+        8,8,0L,TimeUnit.MILLISECONDS,
+        ArrayBlockingQueue<Runnable>(32),
         ThreadPoolExecutor.AbortPolicy()
     )
 
