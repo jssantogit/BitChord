@@ -26,14 +26,13 @@ internal object A0SoulseekQualityProfiles {
                     preset=A0CanonicalAcquisitionIntent.QualityPreset.LOSSLESS,strict=true)
             DownloadQualityProfile.HIGH_QUALITY ->
                 A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
-                    preset=A0CanonicalAcquisitionIntent.QualityPreset.CUSTOM,
-                    allowedCodecs=setOf(A0CanonicalAcquisitionIntent.Codec.MP3),
-                    minBitrateKbps=320,strict=true)
+                    preset=A0CanonicalAcquisitionIntent.QualityPreset.HIGH_QUALITY,strict=true)
             DownloadQualityProfile.CUSTOM -> {
                 val codec=when(custom.format) {
                     "mp3" -> A0CanonicalAcquisitionIntent.Codec.MP3
                     "flac" -> A0CanonicalAcquisitionIntent.Codec.FLAC
                     "wav" -> A0CanonicalAcquisitionIntent.Codec.PCM_WAV
+                    "aac" -> A0CanonicalAcquisitionIntent.Codec.AAC_ADTS
                     else -> null
                 }
                 // A requested unsupported custom codec must not expand into
@@ -46,9 +45,11 @@ internal object A0SoulseekQualityProfiles {
                     preset=A0CanonicalAcquisitionIntent.QualityPreset.CUSTOM,
                     allowedCodecs=setOf(codec),
                     minBitrateKbps=custom.bitrateKbps?.takeIf {
-                        codec==A0CanonicalAcquisitionIntent.Codec.MP3 },
+                        codec in setOf(A0CanonicalAcquisitionIntent.Codec.MP3,
+                            A0CanonicalAcquisitionIntent.Codec.AAC_ADTS) },
                     minSampleRateHz=custom.sampleRateHz?.takeIf {
-                        codec!=A0CanonicalAcquisitionIntent.Codec.MP3 },
+                        codec !in setOf(A0CanonicalAcquisitionIntent.Codec.MP3,
+                            A0CanonicalAcquisitionIntent.Codec.AAC_ADTS) },
                     minBitDepth=custom.bitDepth?.takeIf {
                         codec!=A0CanonicalAcquisitionIntent.Codec.MP3 },
                     strict=true,
