@@ -132,7 +132,7 @@ internal class CoverArtArchive(
         if (cached != null &&
             now >= cached.fetchedAtEpochMs &&
             now - cached.fetchedAtEpochMs < if (cached.artworkUri == null) NEGATIVE_TTL_MS else POSITIVE_TTL_MS
-        ) return cached.artworkUri?.let(CoverLookup::Found) ?: CoverLookup.Missing
+        ) return cached.artworkUri?.let { CoverLookup.Found(it) } ?: CoverLookup.Missing
 
         val answer = try {
             transport.get("$type/$mbid")
@@ -170,7 +170,7 @@ internal class CoverArtArchive(
         } catch (_: Exception) {
             // Cache failure never changes the art already fetched from CAA.
         }
-        return uri?.let(CoverLookup::Found) ?: CoverLookup.Missing
+        return uri?.let { CoverLookup.Found(it) } ?: CoverLookup.Missing
     }
 
     private fun safeImageUrl(raw: String): Boolean {
