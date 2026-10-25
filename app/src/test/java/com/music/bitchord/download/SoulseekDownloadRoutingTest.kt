@@ -84,4 +84,33 @@ class SoulseekDownloadRoutingTest {
         assertNull(SoulseekDownloadRouting.durationSeconds("999:00"))
         assertNull(SoulseekDownloadRouting.durationSeconds("0:03"))
     }
+
+    @Test fun preparedManualSearchKeepsUnverifiedAlbumWithoutInventingMbids() {
+        val prepared = SoulseekDownloadRouting.prepareManual(
+            artist = "Música", title = "Magnetic", count = 1,
+            pilotAvailable = true, creditedArtists = listOf("ILLIT"),
+            requestedAlbum = "Super Real Me", expectedDurationSeconds = 161,
+        )
+        assertNotNull(prepared)
+        assertEquals("ILLIT - Magnetic", prepared!!.query)
+        assertEquals("Super Real Me", prepared.snapshot.requestedAlbum)
+        assertEquals(listOf("ILLIT"), prepared.snapshot.artistCredits)
+        assertNull(prepared.snapshot.ids)
+        assertEquals(161, prepared.snapshot.expectedDurationSeconds)
+        assertEquals(
+            com.music.bitchord.acquisition.a0.A0CanonicalAcquisitionIntent.Origin.MANUAL_QUERY,
+            prepared.snapshot.origin,
+        )
+        assertFalse(prepared.toString().contains("ILLIT"))
+    }
+
+    @Test fun bulkOrUnavailableFlowCannotCreatePreparedManualContext() {
+        assertNull(SoulseekDownloadRouting.prepareManual(
+            artist = "ILLIT", title = "Magnetic", count = 5, pilotAvailable = true,
+        ))
+        assertNull(SoulseekDownloadRouting.prepareManual(
+            artist = "ILLIT", title = "Magnetic", count = 1, pilotAvailable = false,
+        ))
+    }
+
 }
