@@ -232,4 +232,13 @@ class A0CandidateQualityTest {
             it==A0CandidateRank.Warning.IDENTITY_AMBIGUOUS
         })
     }
+
+    @Test fun displayedFilenameMasksUnicodeControlsWithoutLosingAudioExtension() {
+        assertEquals("ILLIT Magnetic_.mp3",
+            A0CandidateRank.safeDisplayName("ILLIT Magnetic\u202E.mp3"))
+        assertEquals("ILLIT_ Magnetic.flac",
+            A0CandidateRank.safeDisplayName("ILLIT\u200B Magnetic.flac"))
+        assertEquals("Björk Jóga.flac",
+            A0CandidateRank.safeDisplayName("Björk Jóga.flac"))
+    }
 }
