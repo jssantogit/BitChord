@@ -208,11 +208,11 @@ internal class MusicBrainzCatalogSearch(
     }
 }
 
-@Serializable
-private open class SearchEnvelope(
-    val count: Int? = null,
-    val offset: Int? = null,
-)
+/** Serializable concrete envelopes own their count/offset properties. */
+private interface SearchEnvelope {
+    val count: Int?
+    val offset: Int?
+}
 
 @Serializable
 private data class SearchArtistReference(
@@ -262,28 +262,28 @@ private data class SearchRecordingEntry(
 
 @Serializable
 private class ArtistSearchEnvelope(
-    count: Int? = null,
-    offset: Int? = null,
+    override val count: Int? = null,
+    override val offset: Int? = null,
     val artists: List<SearchArtistEntry>? = null,
-) : SearchEnvelope(count, offset)
+) : SearchEnvelope
 
 @Serializable
 private class ReleaseGroupSearchEnvelope(
-    count: Int? = null,
-    offset: Int? = null,
+    override val count: Int? = null,
+    override val offset: Int? = null,
     @SerialName("release-groups") val releaseGroups: List<SearchReleaseGroupEntry>? = null,
-) : SearchEnvelope(count, offset)
+) : SearchEnvelope
 
 @Serializable
 private class ReleaseSearchEnvelope(
-    count: Int? = null,
-    offset: Int? = null,
+    override val count: Int? = null,
+    override val offset: Int? = null,
     val releases: List<SearchReleaseEntry>? = null,
-) : SearchEnvelope(count, offset)
+) : SearchEnvelope
 
 @Serializable
 private class RecordingSearchEnvelope(
-    count: Int? = null,
-    offset: Int? = null,
+    override val count: Int? = null,
+    override val offset: Int? = null,
     val recordings: List<SearchRecordingEntry>? = null,
-) : SearchEnvelope(count, offset)
+) : SearchEnvelope
