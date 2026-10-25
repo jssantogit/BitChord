@@ -59,6 +59,9 @@ internal object A0CandidateClaimClusters {
         bitDepth=claim.bitDepth,
     )
 
+    /** For the bounded collector: equality of claims, NOT audio identity. */
+    fun sameClaim(a:Claim,b:Claim):Boolean=key(a)==key(b)
+
     /**
      * Returns a read-only observation, NOT a transfer decision.
      * Availability only chooses among otherwise identical declarations.
