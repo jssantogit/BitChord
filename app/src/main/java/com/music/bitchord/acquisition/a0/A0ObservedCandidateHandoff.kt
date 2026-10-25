@@ -33,6 +33,7 @@ internal class A0ObservedCandidateHandoff(
         val declaredDurationSeconds:Int?,
         val declaredSampleRateHz:Int?,
         val declaredBitDepth:Int?,
+        val preflight:A0CandidatePreflight.Assessment,
     ) {
         override fun toString()="A0 observed candidate (redacted)"
     }
@@ -54,10 +55,19 @@ internal class A0ObservedCandidateHandoff(
         val strongMatches:Int=0,
         val weakMatches:Int=0,
         val lowQuality:Int=0,
+        val preflightStrong:Int=0,
+        val preflightReview:Int=0,
+        val preflightUnsafe:Int=0,
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
     private val candidates=ArrayList<Choice>(48)
-    private val choiceOrder = compareByDescending<Choice> { it.matchScore }
+    private val choiceOrder = compareByDescending<Choice> {
+        when(it.preflight.confidence) {
+            A0CandidatePreflight.Confidence.STRONG -> 2
+            A0CandidatePreflight.Confidence.REVIEW -> 1
+            A0CandidatePreflight.Confidence.UNSAFE -> 0
+        }
+    }.thenByDescending { it.matchScore }
         .thenByDescending { it.declaredBitrateKbps ?: 0 }
         .thenBy { it.displayName.lowercase(java.util.Locale.ROOT) }
         .thenBy { it.peerUsername }
@@ -142,6 +152,11 @@ internal class A0ObservedCandidateHandoff(
                 declaredSampleRateHz=sampleRate,declaredBitDepth=bitDepth,
                 sizeBytes=file.sizeBytes,queueLength=result.queueLength
             )
+            val preflight=A0CandidatePreflight.assess(
+                searchPhrase,ranking,bitrate,
+                declaredDurationSeconds=duration,expectedDurationSeconds=expectedDurationSeconds,
+                format=ext,sizeBytes=file.sizeBytes
+            )
             // A0's original take(82) could cut off ".mp3" and hide an
             // otherwise eligible file from the save selector.
             val suffix=".$ext"
@@ -153,7 +168,8 @@ internal class A0ObservedCandidateHandoff(
                 matchScore=ranking.score, matchSignal=ranking.match,
                 declaredBitrateKbps=bitrate,quality=ranking.quality,
                 warnings=ranking.warnings,declaredDurationSeconds=duration,
-                declaredSampleRateHz=sampleRate,declaredBitDepth=bitDepth
+                declaredSampleRateHz=sampleRate,declaredBitDepth=bitDepth,
+                preflight=preflight
             ))
             candidates.sortWith(choiceOrder)
             // A single enthusiastic peer cannot displace every other source.
@@ -193,6 +209,15 @@ internal class A0ObservedCandidateHandoff(
         },
         lowQuality=candidates.count {
             it.quality==A0CandidateRank.Quality.LOW_ADVERTISED
+        },
+        preflightStrong=candidates.count {
+            it.preflight.confidence==A0CandidatePreflight.Confidence.STRONG
+        },
+        preflightReview=candidates.count {
+            it.preflight.confidence==A0CandidatePreflight.Confidence.REVIEW
+        },
+        preflightUnsafe=candidates.count {
+            it.preflight.confidence==A0CandidatePreflight.Confidence.UNSAFE
         }
     )
 
