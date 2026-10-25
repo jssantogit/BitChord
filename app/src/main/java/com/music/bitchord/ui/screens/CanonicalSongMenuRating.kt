@@ -1,12 +1,9 @@
 package com.music.bitchord.ui.screens
 
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.playback.androidCanonicalQueueResolver
@@ -45,7 +42,8 @@ internal fun CanonicalSongMenuRating(song: Song) {
         }
     }
     resolvedId?.let { canonicalId ->
-        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+        // The shared SongActionsSheet already provides group separators.
+        // An extra divider here created a visibly doubled band above Edit.
         CanonicalRecordingFeedbackEntry(canonicalId)
     }
 }
