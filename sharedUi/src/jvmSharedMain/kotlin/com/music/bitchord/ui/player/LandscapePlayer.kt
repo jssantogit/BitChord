@@ -459,9 +459,13 @@ internal fun LandscapeCredits(
                     startDelayMillis = if (titleOverflowing) MARQUEE_ARTIST_STAGGER_MS else 0L,
                     onOpenArtist = onOpenArtist,
                 )
-                CanonicalSongRatingStars(song, color = Color.White.copy(alpha = 0.84f))
             }
         }
+        CanonicalSongRatingStars(
+            song = song,
+            modifier = Modifier.padding(start = 8.dp),
+            color = Color.White.copy(alpha = 0.84f),
+        )
         Spacer(Modifier.width(10.dp))
         // Same gate as the portrait player's: no account to like against for a
         // guest, and no YouTube identity to rate a local file or a finished
