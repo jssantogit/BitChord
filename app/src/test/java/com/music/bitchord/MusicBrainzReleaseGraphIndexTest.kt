@@ -58,6 +58,11 @@ class MusicBrainzReleaseGraphIndexTest {
             assertEquals("Magnetic", db.catalogDao().catalogMusicBrainzTracks(
                 db.catalogDao().entityIdForExternalIdentity("musicbrainz", "release", release)!!,
             ).single().title)
+            val cachedEdition = index.cachedRelease(release)!!
+            assertEquals("Magnetic", cachedEdition.tracks.single().title)
+            assertEquals(160_000L, cachedEdition.tracks.single().durationMs)
+            assertEquals("Magnetic (sped up)", cachedEdition.tracks.single().recordingTitle)
+            assertEquals(124_000L, cachedEdition.tracks.single().recordingDurationMs)
         } finally { db.close() }
     }
 
