@@ -156,6 +156,7 @@ import com.music.bitchord.R
 import com.music.bitchord.data.sources.DeviceCodecs
 import com.music.bitchord.data.settings.AudioQuality
 import com.music.bitchord.data.settings.DownloadQuality
+import com.music.bitchord.data.settings.SoulseekQualityPreset
 import com.music.bitchord.data.settings.ThemeMode
 import com.music.bitchord.data.stats.Backup
 import com.music.bitchord.playback.AudioCache
@@ -237,6 +238,7 @@ fun SettingsScreen(
     val cacheLimitBytes by AppSettings.audioCacheLimitBytes.collectAsStateWithLifecycle()
     val showCacheFolder by AppSettings.showCacheFolder.collectAsStateWithLifecycle()
     val downloadQuality by AppSettings.downloadQuality.collectAsStateWithLifecycle()
+    val soulseekQuality by AppSettings.soulseekQualityPreset.collectAsStateWithLifecycle()
     val wifiOnlyDownloads by AppSettings.wifiOnlyDownloads.collectAsStateWithLifecycle()
     val exportDownloads by AppSettings.exportDownloads.collectAsStateWithLifecycle()
     val stopOnTaskRemoved by AppSettings.stopOnTaskRemoved.collectAsStateWithLifecycle()
@@ -289,6 +291,7 @@ fun SettingsScreen(
     var searchQuery by remember { mutableStateOf("") }
     var picking by remember { mutableStateOf<QualityTarget?>(null) }
     var pickingDownloadQuality by remember { mutableStateOf(false) }
+    var pickingSoulseekQuality by remember { mutableStateOf(false) }
     var pickingAutomixPerformance by remember { mutableStateOf(false) }
     // What the last export or import did, shown on the row that did it rather
     // than as a toast: a backup is the one action here whose outcome nobody can
@@ -527,6 +530,16 @@ fun SettingsScreen(
                     subtitle = "Conta e downloads manuais (experimental)",
                     trailing = { Chevron() },
                     onClick = onSoulseek,
+                )
+            }
+            row("Qualidade Soulseek", "soulseek", "flac", "mp3", "hi-res", "codec") {
+                SettingsRow(
+                    icon=Icons.Rounded.Download,
+                    title="Qualidade dos candidatos Soulseek",
+                    subtitle="Perfil para ordenar a escolha manual. " +
+                        "Bitrate e resolução são declarados pelo peer; nenhum arquivo é convertido.",
+                    value=soulseekQuality.label,
+                    onClick={ pickingSoulseekQuality=true },
                 )
             }
             val downloadQualityTitle = stringResource(R.string.download_quality)
@@ -1649,6 +1662,33 @@ fun SettingsScreen(
                     picking = null
                 },
             )
+        }
+    }
+
+    if (pickingSoulseekQuality) {
+        ModalBottomSheet(
+            onDismissRequest={ pickingSoulseekQuality=false },
+            containerColor=MaterialTheme.colorScheme.background,
+        ) {
+            Column(modifier=Modifier.fillMaxWidth()) {
+                Text(
+                    "Qualidade dos candidatos Soulseek",
+                    modifier=Modifier.padding(16.dp),
+                    style=MaterialTheme.typography.titleMedium,
+                )
+                SoulseekQualityPreset.entries.forEach { preset ->
+                    SettingsRow(
+                        icon=Icons.Rounded.Download,
+                        title=preset.label,
+                        subtitle=preset.explanation,
+                        value=if(preset==soulseekQuality) "Selecionado" else null,
+                        onClick={
+                            AppSettings.setSoulseekQualityPreset(preset)
+                            pickingSoulseekQuality=false
+                        },
+                    )
+                }
+            }
         }
     }
 
