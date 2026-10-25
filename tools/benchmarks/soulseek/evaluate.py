@@ -286,6 +286,17 @@ def compare(cases: list[dict[str, Any]], left: dict, right: dict,
     kind = next(iter(kinds))
     if kind != "real" and not allow_synthetic:
         raise BenchmarkInputError("synthetic_benchmark_requires_opt_in")
+    if kind == "real":
+        # Declaring dataset_kind=real is NOT independent verification.
+        # Require two external annotations and explicit sealed adjudication;
+        # the code still cannot verify the underlying audio/master itself.
+        for case in cases:
+            audit = case.get("audit")
+            if (not isinstance(audit, dict) or
+                    audit.get("independent_annotators", 0) < 2 or
+                    audit.get("adjudication") != "resolved" or
+                    audit.get("gold_sealed") is not True):
+                raise BenchmarkInputError("real_corpus_requires_independent_gold_audit")
     if any(c["split"] == "holdout" for c in cases):
         raise BenchmarkInputError("sealed_holdout_cannot_be_compared_in_development")
     strata = {
@@ -298,7 +309,9 @@ def compare(cases: list[dict[str, Any]], left: dict, right: dict,
     return {
         "schema_version": 1,
         "dataset_kind": kind,
-        "valid_real_world_claim": kind == "real",
+        # Machine-checkable audit metadata is NOT independent proof of audio.
+        "valid_real_world_claim": False,
+        "audit_metadata_complete": kind == "real",
         "n_cases": len(cases),
         "left_model_version": sorted({p["model_version"] for p in left.values()}),
         "right_model_version": sorted({p["model_version"] for p in right.values()}),
@@ -311,7 +324,7 @@ def compare(cases: list[dict[str, Any]], left: dict, right: dict,
         "paired": _paired(cases, left, right),
         "strata": strata,
         "warning": ("synthetic_truth_not_measured_music_accuracy" if kind == "synthetic" else
-                    "real_ground_truth_requires_independent_audit"),
+                    "real_ground_truth_human_review_still_required"),
     }
 
 
