@@ -22,6 +22,18 @@ class A0SearchQueryTest {
         assertFalse(one.toString(Charsets.UTF_8).contains("naruto"))
     }
 
+    @Test fun boundedFallbackUsesTrackTitleToAvoidOverconstrainedArtistQueries() {
+        assertEquals("Billie Jean", A0SearchQuery.titleOnlyFallback(
+            "Michael Jackson - Billie Jean"))
+        assertEquals("Dynamite", A0SearchQuery.titleOnlyFallback(
+            "BTS (방탄소년단) - Dynamite"))
+        assertEquals("Magnetic", A0SearchQuery.titleOnlyFallback(
+            "ILLIT - Magnetic"))
+        assertNull(A0SearchQuery.titleOnlyFallback("Michael Jackson Billie Jean"))
+        assertNull(A0SearchQuery.titleOnlyFallback("artist - x"))
+        assertNull(A0SearchQuery.titleOnlyFallback("artist - ---"))
+    }
+
     @Test fun emptyPunctuationControlCharactersAndOversizedQueriesFailClosed() {
         for (bad in listOf("", "   ", "---", "***", "../", "x".repeat(121),
             "some\nsearch", "bad\u0000name", "é".repeat(100))) {
