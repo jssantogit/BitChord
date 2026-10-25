@@ -467,6 +467,8 @@ fun SearchScreen(
                 }
             }
             if (!searchingLibrary && query.isNotBlank() &&
+                (filter == SearchFilter.ALL || filter == SearchFilter.SONGS) &&
+                (!searchingCanonical || canonicalDetail == null) &&
                 (searchingCanonical || (!searchingAddons && results != null))
             ) {
                 // General contains both public metadata and authorized server
@@ -477,7 +479,10 @@ fun SearchScreen(
             if (searchingAddons && query.isNotBlank()) {
                 canonicalServerSearchRows(serverResults, onServerPlay)
             }
-            if (searchingCanonical && (addonResults as? UiState.Success)?.data?.isNotEmpty() == true) {
+            if (searchingCanonical && canonicalDetail == null &&
+                (filter == SearchFilter.ALL || filter == SearchFilter.SONGS) &&
+                (addonResults as? UiState.Success)?.data?.isNotEmpty() == true
+            ) {
                 librarySearchResults(
                     query = query.trim(),
                     results = addonResults,
