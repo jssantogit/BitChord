@@ -68,6 +68,21 @@ class CanonicalCuratedHomeFeedTest {
         assertEquals(canonicalLocalPickCardId(local), shelves.last().items.single().browseId)
     }
 
+    @Test fun distinctFilesWithTheSameLegacySongIdKeepDistinctPrivateCardKeys() {
+        val second = local.copy(
+            title = "Magnetic (Live)", localUri = "content://media/audio/456",
+        )
+        val firstCardId = canonicalLocalPickCardId(local)
+        val secondCardId = canonicalLocalPickCardId(second)
+        assertFalse(firstCardId == secondCardId)
+        assertTrue(firstCardId.startsWith("local:pick:"))
+        assertFalse(firstCardId.contains("content://"))
+        assertFalse(firstCardId.contains(local.videoId))
+        val items = feed(emptyList(), listOf(local, second)).single().items
+        assertEquals(2, items.size)
+        assertEquals(2, items.map { it.browseId }.distinct().size)
+    }
+
     @Test fun onlyTrustedLocalUrisCanEnterPickCarousel() {
         val candidates = listOf(
             local,
