@@ -84,9 +84,16 @@ class A0CanonicalBenchmarkReplayTest {
                 expectedDurationSeconds=180,format=format,sizeBytes=size
             )
             val album=if(albumGated) A0CanonicalAlbumPolicy.assess(
-                A0CanonicalAlbumPolicy.Target(request["album"]?.jsonPrimitive?.contentOrNull),
+                A0CanonicalAlbumPolicy.Target(
+                    requestedAlbum=request["album"]?.jsonPrimitive?.contentOrNull,
+                    expectedArtist=artist,
+                ),
                 A0CanonicalAlbumPolicy.Claim(
-                    offer["claimed_album"]?.jsonPrimitive?.contentOrNull)
+                    advertisedAlbum=offer["claimed_album"]?.jsonPrimitive?.contentOrNull,
+                    // The synthetic manifest's album hint was derived from
+                    // the final directory. It is NOT a trusted tag/MBID.
+                    source=A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT,
+                )
             ) else null
             val confidence=when(album?.status) {
                 A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM ->
