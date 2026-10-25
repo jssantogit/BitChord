@@ -62,6 +62,9 @@ internal class A0ObservedCandidateHandoff(
         val peersReady:Int=0,
         val peersUnknown:Int=0,
         val peersCongested:Int=0,
+        val simulatedSuggested:Int=0,
+        val simulatedAmbiguous:Int=0,
+        val simulatedNoStrong:Int=0,
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
     private val candidates=ArrayList<Choice>(48)
@@ -199,7 +202,13 @@ internal class A0ObservedCandidateHandoff(
     }
 
     @Synchronized
-    fun screening():Screening=Screening(
+    fun screening():Screening {
+        // A decision *simulation*, only one sanitized outcome per search.
+        // Never yields transfer authority or stores candidate identities.
+        val preview=A0CandidatePreflight.simulate(candidates.map {
+            A0CandidatePreflight.Weighted(it.preflight,it.matchScore)
+        })
+        return Screening(
         responses=replies,
         publicFiles=publicSeen,
         lockedFiles=lockedSeen,
@@ -239,8 +248,12 @@ internal class A0ObservedCandidateHandoff(
         },
         peersCongested=candidates.count {
             it.peerAvailability.tier==A0PeerAvailability.Tier.CONGESTED
-        }
-    )
+        },
+        simulatedSuggested=if(preview.status==A0CandidatePreflight.SimulationStatus.SUGGESTED) 1 else 0,
+        simulatedAmbiguous=if(preview.status==A0CandidatePreflight.SimulationStatus.AMBIGUOUS) 1 else 0,
+        simulatedNoStrong=if(preview.status==A0CandidatePreflight.SimulationStatus.NO_STRONG) 1 else 0
+        )
+    }
 
     @Synchronized
     fun choices():List<Choice> = if(cancelled||spent)emptyList() else candidates.toList()
