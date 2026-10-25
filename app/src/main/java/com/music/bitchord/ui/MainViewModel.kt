@@ -373,10 +373,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     CanonicalSearchKind.ARTIST -> when (
                         val result = musicBrainzGraph.browseReleaseGroupsForArtist(entry.musicBrainzId, offset = offset)
                     ) {
-                        is MusicBrainzCatalogGraphResult.Success -> result.value.items.map { hit ->
-                            CanonicalCatalogSearchRow(hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP,
-                                hit.title, hit.artistDisplay ?: hit.primaryType)
-                        } to result.value.nextOffset
+                        is MusicBrainzCatalogGraphResult.Success -> {
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
+                                        getApplication<Application>(),
+                                    )).persistArtistGroups(entry.musicBrainzId, result.value.items)
+                                }
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) { /* Live results remain usable. */ }
+                            result.value.items.map { hit ->
+                                CanonicalCatalogSearchRow(hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP,
+                                    hit.title, hit.artistDisplay ?: hit.primaryType)
+                            } to result.value.nextOffset
+                        }
                         is MusicBrainzCatalogGraphResult.Failure -> null
                     }
                     CanonicalSearchKind.RELEASE_GROUP -> when (
@@ -495,7 +506,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             withContext(Dispatchers.IO) {
                                 MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
                                     getApplication<Application>(),
-                                )).persistReleaseGroups(result.value.items)
+                                )).persistArtistGroups(entry.musicBrainzId, result.value.items)
                             }
                         } catch (cancelled: CancellationException) {
                             throw cancelled
@@ -510,7 +521,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             totalCount = result.value.total,
                         ))
                     }
-                    is MusicBrainzCatalogGraphResult.Failure -> UiState.Error("Unable to load artist discography")
+                    is MusicBrainzCatalogGraphResult.Failure -> {
+                        val cached = try {
+                            withContext(Dispatchers.IO) {
+                                MusicBrainzCatalogIndex(
+                                    CanonicalCatalogDatabase.get(getApplication<Application>()),
+                                ).cachedArtistGroups(entry.musicBrainzId)
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { emptyList() }
+                        if (cached.isEmpty()) UiState.Error("Unable to load artist discography")
+                        else UiState.Success(CanonicalCatalogDetailPage(
+                            title = entry.title,
+                            summary = "Saved release groups · offline catalog",
+                            rows = cached.map { hit -> CanonicalCatalogSearchRow(
+                                hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP,
+                                hit.title, hit.artistDisplay ?: hit.primaryType,
+                                fromOfflineCache = true,
+                            ) },
+                        ))
+                    }
                 }
                 CanonicalSearchKind.RELEASE_GROUP -> when (
                     val result = musicBrainzGraph.browseGroupReleases(entry.musicBrainzId)
