@@ -319,6 +319,7 @@ import com.music.bitchord.ui.screens.LibraryGridPage
 import com.music.bitchord.ui.screens.LibraryScreen
 import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingDetailsScreen
 import com.music.bitchord.ui.screens.CanonicalSongMenuRating
+import com.music.bitchord.ui.screens.CanonicalSongRatingDialog
 import com.music.bitchord.ui.screens.rememberCanonicalRatingDisplay
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.screens.CanonicalMyRatingsEntry
@@ -2227,6 +2228,7 @@ private fun BitChordApp(
                         it.memberId == playback.startedBy
                     }?.displayName?.takeIf(String::isNotBlank)
             }
+        var localRatingDialogOpen by remember(displayedSong.videoId) { mutableStateOf(false) }
         Box(Modifier.fillMaxSize()) {
         NowPlayingScreen(
             song = displayedSong,
@@ -2297,6 +2299,7 @@ private fun BitChordApp(
             signedIn = signedIn,
             likeStatus = likeStatuses[song.videoId] ?: LikeStatus.INDIFFERENT,
             onToggleLike = { viewModel.toggleLike(song.videoId) },
+            onEditCanonicalRating = { localRatingDialogOpen = true },
             // The service owns both the queue and the Shuffle state. Keeping
             // the toggle on that side prevents the UI from changing the icon
             // before its asynchronous reorder command has actually landed.
@@ -2479,6 +2482,12 @@ private fun BitChordApp(
                 }
             },
         )
+        if (localRatingDialogOpen) {
+            CanonicalSongRatingDialog(
+                song = displayedSong,
+                onDismiss = { localRatingDialogOpen = false },
+            )
+        }
         recoveryNotice?.let { notice ->
             PlaybackRecoveryBanner(
                 notice = notice,
