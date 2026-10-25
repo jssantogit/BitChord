@@ -96,6 +96,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import com.music.bitchord.data.sources.AddonSource
+import com.music.bitchord.data.sources.SourceConfig
 import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.data.sources.SourceRegistry
 import com.music.bitchord.data.sources.SourceResolver
@@ -114,6 +115,19 @@ import java.util.concurrent.atomic.AtomicLong
 
 /** What the Search tab searches: YouTube Music, or the Local Music folder on this device. */
 enum class SearchSource { YOUTUBE, LIBRARY, ADDONS, CANONICAL }
+
+/**
+ * Playback source opt-out is authoritative for search too. A disabled YT
+ * provider must not be contacted by a legacy search tab selection. Empty
+ * configs (prior to registry init) retain historical behavior.
+ */
+internal fun effectiveSearchSource(
+    requested: SearchSource,
+    configs: List<SourceConfig>,
+): SearchSource = if (
+    requested == SearchSource.YOUTUBE &&
+    configs.any { it.kind == SourceKind.YOUTUBE && !it.enabled }
+) SearchSource.CANONICAL else requested
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -214,7 +228,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val typeaheadResults: StateFlow<List<SearchResult>> = _typeaheadResults.asStateFlow()
 
     /** Where the Search tab looks — see [setSearchSource]. */
-    private val _searchSource = MutableStateFlow(SearchSource.YOUTUBE)
+    private val _searchSource = MutableStateFlow(
+        effectiveSearchSource(SearchSource.YOUTUBE, SourceRegistry.configs.value),
+    )
     val searchSource: StateFlow<SearchSource> = _searchSource.asStateFlow()
 
     /**
@@ -2129,6 +2145,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * a blank placeholder.
      */
     fun searchFor(term: String) {
+        _searchSource.value = effectiveSearchSource(_searchSource.value, SourceRegistry.configs.value)
         _query.value = term
         searchSubmitted = true
         _suggestions.value = emptyList()
@@ -2149,6 +2166,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun clearSearchHistory() = SearchHistory.clear()
 
     fun onQueryChange(newValue: String) {
+        val effective = effectiveSearchSource(_searchSource.value, SourceRegistry.configs.value)
+        if (effective != _searchSource.value) {
+            _searchSource.value = effective
+            _results.value = null
+            _suggestions.value = emptyList()
+            _typeaheadResults.value = emptyList()
+        }
         _query.value = newValue
         if (newValue.isBlank()) {
             searchSubmitted = false
@@ -2188,6 +2212,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * full search, and records the term in history for future recall.
      */
     fun submitSearch() {
+        _searchSource.value = effectiveSearchSource(_searchSource.value, SourceRegistry.configs.value)
         val q = _query.value.trim()
         if (q.isEmpty() || _searchSource.value == SearchSource.LIBRARY) return
         searchSubmitted = true
@@ -2395,8 +2420,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * than a reset.
      */
     fun setSearchSource(source: SearchSource) {
-        if (_searchSource.value == source) return
-        _searchSource.value = source
+        val allowed = effectiveSearchSource(source, SourceRegistry.configs.value)
+        if (_searchSource.value == allowed) return
+        _searchSource.value = allowed
         if (source != SearchSource.CANONICAL) {
             clearCanonicalCatalogNavigation()
             canonicalSearchJob?.cancel()
@@ -2405,7 +2431,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _suggestions.value = emptyList()
         _typeaheadResults.value = emptyList()
         _searchScrollReset.value += 1
-        when (source) {
+        when (allowed) {
             SearchSource.LIBRARY -> loadLibrarySongs()
             SearchSource.YOUTUBE -> submitSearch()
             SearchSource.ADDONS -> if (_query.value.isNotBlank()) submitSearch()
@@ -2475,6 +2501,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun runSearch(anonymous: Boolean = true) {
+        if (_searchSource.value != SearchSource.YOUTUBE ||
+            effectiveSearchSource(SearchSource.YOUTUBE, SourceRegistry.configs.value) != SearchSource.YOUTUBE
+        ) return // No hidden YT search after a provider opt-out.
         val query = _query.value
         if (query.isBlank()) {
             // Nothing in flight can still be waiting to overwrite this: the
