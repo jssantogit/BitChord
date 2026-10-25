@@ -123,6 +123,11 @@ internal fun buildCanonicalRatingPresentation(
             }
         }
     }
+    // Identity ambiguity also invalidates the *visible badge*. A Song.videoId
+    // or content URI shared by two distinct Recordings must not inherit the
+    // last writer's local score merely because its MediaAsset was traversed
+    // second. Exact MediaAssetId displays remain unambiguous.
+    ambiguousKeys.forEach(bySong::remove)
     // Smart playlists and adaptive collections expose a RecordingId rather than
     // a chosen MediaAssetId. Do not guess if two assets disagree.
     val byRecording = assets.groupBy { it.recordingId }.mapNotNull { (id, rows) ->
