@@ -1,7 +1,9 @@
 package com.music.bitchord.ui.screens
 
 import com.music.bitchord.data.catalog.CanonicalRatingAssetRow
+import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.components.RatingDisplayKind
+import com.music.bitchord.ui.components.visibleStarValues
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -141,5 +143,14 @@ class CanonicalRatingPresentationTest {
             activeScope = scope,
         )
         assertTrue(result.byMediaAssetId.isEmpty())
+    }
+
+    @Test
+    fun compactStarStripHasNoDuplicateValueWhenRemoteAndLocalAgree() {
+        assertEquals(listOf(5.0), RatingDisplay(localValue = 5.0, remoteValue = 5).visibleStarValues())
+        assertEquals(listOf(4.5, 3.0), RatingDisplay(localValue = 4.5, remoteValue = 3).visibleStarValues())
+        assertEquals(listOf(3.0), RatingDisplay(remoteValue = 3).visibleStarValues())
+        assertTrue(RatingDisplay().visibleStarValues().isEmpty())
+        assertTrue(RatingDisplay(remoteAvailable = false).visibleStarValues().isEmpty())
     }
 }
