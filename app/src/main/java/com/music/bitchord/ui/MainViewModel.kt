@@ -326,6 +326,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _canonicalResults = MutableStateFlow<UiState<List<CanonicalCatalogSearchRow>>?>(null)
     val canonicalResults: StateFlow<UiState<List<CanonicalCatalogSearchRow>>?> = _canonicalResults.asStateFlow()
     private var canonicalSearchJob: Job? = null
+    private var canonicalTypeaheadJob: Job? = null
     private var canonicalSearchPagingJob: Job? = null
     private var canonicalSearchPageCursors: CanonicalSearchPageCursors? = null
     private val _canonicalSearchHasMore = MutableStateFlow(false)
@@ -462,6 +463,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         suggestRequests.tryEmit("")
         addonSearchJob?.cancel()
         canonicalSearchJob?.cancel()
+        canonicalTypeaheadJob?.cancel()
         resetCanonicalSearchPagination()
         canonicalBrowseJob?.cancel()
         canonicalPagingJob?.cancel()
@@ -2699,6 +2701,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             addonSearchJob?.cancel()
             _addonResults.value = null
             canonicalSearchJob?.cancel()
+            canonicalTypeaheadJob?.cancel()
             resetCanonicalSearchPagination()
             _canonicalResults.value = null
             clearCanonicalCatalogNavigation()
@@ -2714,9 +2717,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_searchSource.value == SearchSource.CANONICAL) {
             // A stale metadata result must not appear under a new query.
             canonicalSearchJob?.cancel()
+            canonicalTypeaheadJob?.cancel()
             resetCanonicalSearchPagination()
             _canonicalResults.value = null
             clearCanonicalCatalogNavigation()
+            showCachedCanonicalTypeahead(newValue.trim())
         }
         // The Library source answers from the device on every keystroke (see
         // [libraryResults]); YouTube's completions have nothing to add to it.
@@ -2750,12 +2755,78 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * Fast typeahead from identities already indexed on this phone. Public
+     * MusicBrainz has a shared 1 req/s budget: never send a request on each
+     * keystroke. Submitting the query performs the explicit live search.
+     */
+    private fun showCachedCanonicalTypeahead(query: String) {
+        canonicalTypeaheadJob?.cancel()
+        if (query.isBlank()) return
+        canonicalTypeaheadJob = viewModelScope.launch {
+            delay(180L)
+            if (_searchSource.value != SearchSource.CANONICAL ||
+                searchSubmitted || _query.value.trim() != query
+            ) return@launch
+
+            val cached = try {
+                withContext(Dispatchers.IO) {
+                    val dao = CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao()
+                    val recordings = dao.searchKnownMusicBrainzRecordings(query, 8)
+                    val available = dao.musicBrainzRecordingMbidsWithAssets(
+                        recordings.map { it.musicBrainzId },
+                    ).toSet()
+                    buildList {
+                        dao.searchKnownMusicBrainzArtists(query, 6).forEach { artist ->
+                            add(CanonicalCatalogSearchRow(
+                                artist.musicBrainzId, CanonicalSearchKind.ARTIST,
+                                artist.name, artist.disambiguation ?: artist.country,
+                                fromOfflineCache = true,
+                            ))
+                        }
+                        dao.searchKnownMusicBrainzGroups(query, 6).forEach { group ->
+                            add(CanonicalCatalogSearchRow(
+                                group.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP,
+                                group.title, group.artistDisplay ?: group.primaryType,
+                                fromOfflineCache = true,
+                            ))
+                        }
+                        dao.searchKnownMusicBrainzReleases(query, 6).forEach { release ->
+                            add(CanonicalCatalogSearchRow(
+                                release.musicBrainzId, CanonicalSearchKind.RELEASE,
+                                release.title,
+                                listOfNotNull(release.artistDisplay, release.country, release.releaseDate)
+                                    .joinToString(" · "),
+                                fromOfflineCache = true,
+                            ))
+                        }
+                        recordings.forEach { recording ->
+                            add(CanonicalCatalogSearchRow(
+                                recording.musicBrainzId, CanonicalSearchKind.RECORDING,
+                                recording.title, recording.artistDisplay,
+                                hasCatalogedAsset = recording.musicBrainzId in available,
+                                fromOfflineCache = true,
+                            ))
+                        }
+                    }.distinctBy { it.kind to it.musicBrainzId }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { emptyList() }
+
+            if (!searchSubmitted && _searchSource.value == SearchSource.CANONICAL &&
+                _query.value.trim() == query && cached.isNotEmpty()
+            ) _canonicalResults.value = UiState.Success(cached)
+        }
+    }
+
+    /**
      * Independent MusicBrainz search. Each page is metadata-only: never map an
      * MBID into Song.videoId (that would route it through YouTube playback).
      * A provider-owned MediaAsset lookup must be wired before enabling play.
      */
     private fun runCanonicalCatalogSearch(query: String) {
         canonicalSearchJob?.cancel()
+        canonicalTypeaheadJob?.cancel()
         resetCanonicalSearchPagination()
         clearCanonicalCatalogNavigation()
         _searchScrollReset.value += 1
