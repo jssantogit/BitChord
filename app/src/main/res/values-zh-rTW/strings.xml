@@ -1352,4 +1352,14 @@
     <string name="canonical_discovery_refresh">重新整理已儲存的目錄</string>
     <string name="legacy_library_youtube_disabled">請在設定中啟用 YouTube Music，以載入此線上音樂庫。本機播放清單與合輯仍可使用。</string>
     <string name="spotify_import_youtube_required">匯入 Spotify 播放清單目前仍需要透過 YouTube Music 比對歌曲。請啟用 YouTube Music 並關閉以目錄為優先的探索模式。</string>
+    <string name="search_origin_general">一般</string>
+    <string name="search_origin_server">伺服器</string>
+    <string name="search_origin_local">本機</string>
+    <string name="artist_signatures">藝人簽名</string>
+    <string name="artist_signatures_subtitle">Apple Music 沒有標題標誌時顯示手寫簽名</string>
+    <string name="artist_signatures_url">簽名 API 網址</string>
+    <string name="artist_signatures_url_hint">https://signatures.example.com</string>
+    <string name="artist_signatures_unconfigured">尚未設定，請點選設定 API 網址</string>
+    <string name="artist_signatures_test_failed">無法透過此網址連線至 API</string>
+    <string name="signed_by">由 %1$s 簽名</string>
 </resources>

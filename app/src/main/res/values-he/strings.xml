@@ -1387,4 +1387,7 @@
     <string name="canonical_discovery_refresh">רענון קטלוג שמור</string>
     <string name="legacy_library_youtube_disabled">הפעילו את YouTube Music בהגדרות כדי לטעון את הספרייה המקוונת. רשימות השמעה ואוספים מקומיים נשארים זמינים.</string>
     <string name="spotify_import_youtube_required">ייבוא רשימות השמעה מ-Spotify עדיין דורש התאמה דרך YouTube Music. יש להפעיל את YouTube Music ולכבות את גילוי הקטלוג.</string>
+    <string name="search_origin_general">כללי</string>
+    <string name="search_origin_server">שרת</string>
+    <string name="search_origin_local">מקומי</string>
 </resources>

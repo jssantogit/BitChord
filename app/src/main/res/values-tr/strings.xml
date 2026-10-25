@@ -1339,4 +1339,7 @@
     <string name="canonical_discovery_refresh">Kayıtlı kataloğu yenile</string>
     <string name="legacy_library_youtube_disabled">Bu çevrimiçi kitaplığı yüklemek için Ayarlar kısmından YouTube Music uygulamasını etkinleştirin. Yerel çalma listeleri ve koleksiyonlar kullanılabilir.</string>
     <string name="spotify_import_youtube_required">Spotify çalma listelerini içe aktarmak hâlâ YouTube Music üzerinden eşleştirme gerektiriyor. YouTube Music uygulamasını etkinleştirin ve katalog odaklı keşfi kapatın.</string>
+    <string name="search_origin_general">Genel</string>
+    <string name="search_origin_server">Sunucu</string>
+    <string name="search_origin_local">Yerel</string>
 </resources>
