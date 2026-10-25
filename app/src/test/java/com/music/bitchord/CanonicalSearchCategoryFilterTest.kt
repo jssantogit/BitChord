@@ -1,9 +1,11 @@
 package com.music.bitchord
 
+import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.SearchFilter
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import com.music.bitchord.ui.screens.canonicalRowsForFilter
+import com.music.bitchord.ui.screens.canonicalRowAsBrowseItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -29,5 +31,14 @@ class CanonicalSearchCategoryFilterTest {
     @Test fun unsupportedVideoAndPlaylistCategoriesNeverPretendMusicBrainzMediaExists() {
         assertTrue(canonicalRowsForFilter(rows, SearchFilter.VIDEOS).isEmpty())
         assertTrue(canonicalRowsForFilter(rows, SearchFilter.PLAYLISTS).isEmpty())
+    }
+    @Test fun metadataRowsReuseNativeBrowseIdentityAndLayoutWithoutVideoIds() {
+        val artist = canonicalRowAsBrowseItem(rows.last())
+        val album = canonicalRowAsBrowseItem(rows[1])
+        assertEquals(BrowseType.ARTIST, artist.type)
+        assertEquals(BrowseType.ALBUM, album.type)
+        assertEquals("catalog:ARTIST:artist", artist.browseId)
+        assertEquals("catalog:RELEASE_GROUP:group", album.browseId)
+        assertEquals("ILLIT", artist.title)
     }
 }
