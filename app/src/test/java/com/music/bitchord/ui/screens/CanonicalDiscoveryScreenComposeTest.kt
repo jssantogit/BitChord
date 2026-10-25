@@ -199,4 +199,35 @@ class CanonicalDiscoveryScreenComposeTest {
             assertEquals(listOf("play:$recordingMbid", "queue:$recordingMbid"), actions)
         }
     }
+
+    @Test
+    @Config(qualifiers = "pt")
+    fun homeLocalPlaylistCountFollowsDeviceLocale() {
+        val playlist = LocalPlaylist("local-list", "Playlist de teste", emptyList())
+        compose.setContent {
+            MaterialTheme {
+                CanonicalDiscoveryScreen(
+                    surface = CanonicalDiscoverySurface.HOME,
+                    catalog = UiState.Success(emptyList()),
+                    downloadedCollections = emptyList(),
+                    localPlaylists = listOf(playlist),
+                    onSearchCatalog = {},
+                    onOpenLibrary = {},
+                    onOpenDownloadedCollection = {},
+                    onOpenLocalPlaylist = {},
+                    onOpenCatalogEntry = {},
+                    onRetryCatalog = {},
+                    onRefresh = {},
+                    refreshing = false,
+                    onPlayRecording = {},
+                    onQueueRecording = {},
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(),
+                )
+            }
+        }
+
+        // The previous implementation hard-coded "0 songs" even with pt resources.
+        // Reuse the existing translated card_songs_format, avoiding new locale keys.
+        compose.onNodeWithText("0 músicas").assertExists()
+    }
 }
