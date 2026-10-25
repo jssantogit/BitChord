@@ -419,6 +419,7 @@ internal fun LandscapeCredits(
     /** The menu glyph is briefly the undo arrow after a quality upgrade. */
     showRevertCue: Boolean,
     onToggleLike: () -> Unit,
+    onEditCanonicalRating: () -> Unit,
     onOpenMenu: () -> Unit,
     onOpenAlbum: (String) -> Unit,
     /** Null browse id for anyone but the lead credit — see [NowPlayingScreen]. */
@@ -465,6 +466,7 @@ internal fun LandscapeCredits(
             song = song,
             modifier = Modifier.padding(start = 8.dp),
             color = Color.White.copy(alpha = 0.84f),
+            onClick = onEditCanonicalRating,
         )
         Spacer(Modifier.width(10.dp))
         // Same gate as the portrait player's: no account to like against for a
