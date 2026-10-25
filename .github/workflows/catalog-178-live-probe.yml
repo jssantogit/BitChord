@@ -1,0 +1,37 @@
+name: Catalog #178 — Live MusicBrainz Evidence
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/catalog_178_musicbrainz_live_probe.py
+      - .github/workflows/catalog-178-live-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-178-live-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live-public-metadata:
+    if: github.event_name != 'pull_request' || github.event.pull_request.number == 183
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Probe public MusicBrainz artist, release and recording identity
+        run: python3 scripts/catalog_178_musicbrainz_live_probe.py --output catalog-178-live.json
+      - name: Save raw measured HTTP evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-178-musicbrainz-api-live
+          path: catalog-178-live.json
+          if-no-files-found: warn
+          retention-days: 14
