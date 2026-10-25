@@ -2,6 +2,7 @@ package com.music.bitchord.data.catalog.metadata
 
 import androidx.room.withTransaction
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.CatalogReleaseGroupEntity
 import com.music.bitchord.data.catalog.CatalogReleaseGroupEditionEntity
 import com.music.bitchord.data.catalog.CatalogMusicBrainzTrackEntity
@@ -68,6 +69,52 @@ internal class MusicBrainzCatalogIndex(
             indexed
         }
 
+
+
+    /** Persist independent Artist identities without merging namesakes. */
+    suspend fun persistArtists(hits: List<MusicBrainzArtistHit>): Map<String, String> =
+        database.withTransaction {
+            val dao = database.catalogDao()
+            val indexed = linkedMapOf<String, String>()
+            hits.forEach { hit ->
+                val mbid = hit.musicBrainzId.trim().lowercase(Locale.ROOT)
+                if (!MBID.matches(mbid) || hit.name.isBlank() || mbid in indexed) return@forEach
+                val existing = dao.entityIdForExternalIdentity("musicbrainz", "artist", mbid)
+                if (existing != null) {
+                    if (dao.artistById(existing) != null) indexed[mbid] = existing
+                } else {
+                    val created = idFactory()
+                    dao.upsertArtist(ArtistEntity(created, hit.name.trim()))
+                    claim(dao, "artist", mbid, created)
+                    indexed[mbid] = created
+                }
+            }
+            indexed
+        }
+
+    /** ReleaseGroup is conceptual; it is not a particular country edition. */
+    suspend fun persistReleaseGroups(hits: List<MusicBrainzReleaseGroupHit>): Map<String, String> =
+        database.withTransaction {
+            val dao = database.catalogDao()
+            val indexed = linkedMapOf<String, String>()
+            hits.forEach { hit ->
+                val mbid = hit.musicBrainzId.trim().lowercase(Locale.ROOT)
+                if (!MBID.matches(mbid) || hit.title.isBlank() || mbid in indexed) return@forEach
+                val existing = dao.entityIdForExternalIdentity("musicbrainz", "release-group", mbid)
+                if (existing != null) {
+                    if (dao.catalogReleaseGroup(existing) != null) indexed[mbid] = existing
+                } else {
+                    val created = idFactory()
+                    dao.upsertCatalogReleaseGroup(CatalogReleaseGroupEntity(
+                        created, hit.title.trim(), hit.artistDisplay,
+                        hit.primaryType, hit.firstReleaseDate,
+                    ))
+                    claim(dao, "release-group", mbid, created)
+                    indexed[mbid] = created
+                }
+            }
+            indexed
+        }
 
     /**
      * Canonical ReleaseGroup/Release/Track graph is independent of audio

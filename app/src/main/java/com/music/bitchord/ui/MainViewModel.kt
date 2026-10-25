@@ -275,15 +275,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 CanonicalSearchKind.ARTIST -> when (
                     val result = musicBrainzGraph.browseReleaseGroupsForArtist(entry.musicBrainzId)
                 ) {
-                    is MusicBrainzCatalogGraphResult.Success -> UiState.Success(
-                        CanonicalCatalogDetailPage(entry.title,
+                    is MusicBrainzCatalogGraphResult.Success -> {
+                        try {
+                            withContext(Dispatchers.IO) {
+                                MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
+                                    getApplication<Application>(),
+                                )).persistReleaseGroups(result.value.items)
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { }
+                        UiState.Success(CanonicalCatalogDetailPage(entry.title,
                             "Release groups · showing ${result.value.items.size} of ${result.value.total}",
                             result.value.items.map { hit -> CanonicalCatalogSearchRow(
                                 hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
                                 hit.artistDisplay ?: hit.primaryType,
                             ) },
-                        ),
-                    )
+                        ))
+                    }
                     is MusicBrainzCatalogGraphResult.Failure -> UiState.Error("Unable to load artist discography")
                 }
                 CanonicalSearchKind.RELEASE_GROUP -> when (
@@ -2147,6 +2156,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (_searchSource.value != SearchSource.CANONICAL || _query.value.trim() != query) {
                 return@launch
             }
+            if (groups is MusicBrainzCatalogSearchResult.Success) {
+                try {
+                    withContext(Dispatchers.IO) {
+                        MusicBrainzCatalogIndex(
+                            CanonicalCatalogDatabase.get(getApplication<Application>()),
+                        ).persistReleaseGroups(groups.page.items)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { /* Offline index is optional, never an audio stream. */ }
+            }
+            if (artists is MusicBrainzCatalogSearchResult.Success) {
+                try {
+                    withContext(Dispatchers.IO) {
+                        MusicBrainzCatalogIndex(
+                            CanonicalCatalogDatabase.get(getApplication<Application>()),
+                        ).persistArtists(artists.page.items)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { /* Network results remain independent. */ }
+            }
             // A public Recording remains known even with zero MediaAssets.
             // Only a trusted MBID claim creates/reuses a canonical identity;
             // never match local tracks by title or artist name.
@@ -2223,14 +2254,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         val available = dao.musicBrainzRecordingMbidsWithAssets(
                             known.map { it.musicBrainzId },
                         ).toSet()
-                        known.map { hit -> CanonicalCatalogSearchRow(
-                            musicBrainzId = hit.musicBrainzId,
-                            kind = CanonicalSearchKind.RECORDING,
-                            title = hit.title,
-                            subtitle = hit.artistDisplay,
-                            hasCatalogedAsset = hit.musicBrainzId in available,
-                            fromOfflineCache = true,
-                        ) }
+                        buildList {
+                            known.forEach { hit -> add(CanonicalCatalogSearchRow(
+                                musicBrainzId = hit.musicBrainzId,
+                                kind = CanonicalSearchKind.RECORDING,
+                                title = hit.title,
+                                subtitle = hit.artistDisplay,
+                                hasCatalogedAsset = hit.musicBrainzId in available,
+                                fromOfflineCache = true,
+                            )) }
+                            dao.searchKnownMusicBrainzGroups(query, 25).forEach { hit ->
+                                add(CanonicalCatalogSearchRow(
+                                    hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
+                                    hit.artistDisplay ?: hit.primaryType, fromOfflineCache = true,
+                                ))
+                            }
+                            dao.searchKnownMusicBrainzArtists(query, 25).forEach { hit ->
+                                add(CanonicalCatalogSearchRow(
+                                    hit.musicBrainzId, CanonicalSearchKind.ARTIST, hit.name,
+                                    hit.disambiguation ?: hit.country, fromOfflineCache = true,
+                                ))
+                            }
+                        }
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled

@@ -456,6 +456,41 @@ internal interface CanonicalCatalogDao {
         localTagsProvider: String,
     )
 
+
+    @Query(
+        """
+        SELECT identity.externalId AS musicBrainzId,
+            artist.name AS name, NULL AS disambiguation, NULL AS country
+        FROM catalog_external_identity identity
+        JOIN catalog_artist artist ON artist.id = identity.entityId
+        WHERE identity.provider = 'musicbrainz' AND identity.entityType = 'artist'
+          AND instr(lower(artist.name), lower(:query)) > 0
+        ORDER BY artist.name COLLATE NOCASE, identity.externalId
+        LIMIT :limit
+        """,
+    )
+    suspend fun searchKnownMusicBrainzArtists(
+        query: String, limit: Int,
+    ): List<com.music.bitchord.data.catalog.metadata.MusicBrainzArtistHit>
+
+    @Query(
+        """
+        SELECT identity.externalId AS musicBrainzId, grp.title AS title,
+               grp.primaryType AS primaryType, grp.firstReleaseDate AS firstReleaseDate,
+               grp.artistDisplay AS artistDisplay
+        FROM catalog_external_identity identity
+        JOIN catalog_release_group grp ON grp.id = identity.entityId
+        WHERE identity.provider = 'musicbrainz' AND identity.entityType = 'release-group'
+          AND (instr(lower(grp.title), lower(:query)) > 0
+            OR instr(lower(grp.artistDisplay), lower(:query)) > 0)
+        ORDER BY grp.title COLLATE NOCASE, identity.externalId
+        LIMIT :limit
+        """,
+    )
+    suspend fun searchKnownMusicBrainzGroups(
+        query: String, limit: Int,
+    ): List<com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit>
+
     /** Persisted MusicBrainz recordings are queryable even without any asset. */
     @Query(
         """
