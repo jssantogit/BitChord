@@ -177,6 +177,9 @@ internal class A0SmokeTrace private constructor(
                 "strongMatches" to n(report.strongMatches),
                 "weakMatches" to n(report.weakMatches),
                 "lowQuality" to n(report.lowQuality),
+                "preflightStrong" to n(report.preflightStrong),
+                "preflightReview" to n(report.preflightReview),
+                "preflightUnsafe" to n(report.preflightUnsafe),
                 "selectable" to n(report.accepted)
             )
         )
