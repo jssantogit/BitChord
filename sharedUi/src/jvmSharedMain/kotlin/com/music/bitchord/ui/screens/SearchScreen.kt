@@ -281,8 +281,20 @@ fun SearchScreen(
             // they stay up for an empty or failed search too, or picking a filter
             // that finds nothing would take away the control needed to leave it.
             // They are YouTube's categories, so the Library source has none.
-            if (results != null && !suggesting && !searchingLibrary && !searchingAddons && !searchingCanonical) {
-                SearchFilterTabs(filter = filter, onFilterChange = onFilterChange)
+            // Catalog searches have artist/album/recording types too. The
+            // underlying source is metadata, not a separate user-facing tab.
+            // YouTube-only video/playlist filters are never offered there.
+            if (!suggesting && !searchingLibrary && !searchingAddons &&
+                (results != null || (searchingCanonical && canonicalResults != null))
+            ) {
+                SearchFilterTabs(
+                    filter = filter,
+                    onFilterChange = onFilterChange,
+                    available = if (searchingCanonical) listOf(
+                        SearchFilter.ALL, SearchFilter.SONGS,
+                        SearchFilter.ALBUMS, SearchFilter.ARTISTS,
+                    ) else SearchFilter.entries,
+                )
             }
         }
 
@@ -293,7 +305,7 @@ fun SearchScreen(
         ) {
             when {
                 searchingCanonical -> canonicalMusicBrainzResults(
-                    canonicalResults, canonicalDetail, onCanonicalOpen, onCanonicalBack,
+                    canonicalResults, canonicalDetail, filter, onCanonicalOpen, onCanonicalBack,
                     onCanonicalLoadMore, canonicalLoadingMore,
                     onCanonicalSearchLoadMore, canonicalSearchHasMore,
                     canonicalSearchLoadingMore,
@@ -447,6 +459,7 @@ fun SearchScreen(
 private fun LazyListScope.canonicalMusicBrainzResults(
     results: UiState<List<CanonicalCatalogSearchRow>>?,
     detail: UiState<CanonicalCatalogDetailPage>?,
+    filter: SearchFilter,
     onOpen: (CanonicalCatalogSearchRow) -> Unit,
     onBack: () -> Unit,
     onLoadMore: () -> Unit,
@@ -477,11 +490,16 @@ private fun LazyListScope.canonicalMusicBrainzResults(
             }
         }
     }
+    // Filters narrow public search results, never an opened release's
+    // tracklist. In an album drill-down the tracklist must stay complete.
     val rows = when (detail) {
         is UiState.Success -> UiState.Success(detail.data.rows)
         is UiState.Error -> UiState.Error(detail.message)
         UiState.Loading -> UiState.Loading
-        null -> results
+        null -> when (results) {
+            is UiState.Success -> UiState.Success(canonicalRowsForFilter(results.data, filter))
+            else -> results
+        }
     }
     when (rows) {
         null -> item(key = "musicbrainz:hint") {
@@ -589,6 +607,21 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                 Text(if (searchLoadingMore) "Loading more…" else "Load more catalog results")
             }
         }
+    }
+}
+
+/** Identity-preserving, client-side category view over four MusicBrainz types. */
+fun canonicalRowsForFilter(
+    rows: List<CanonicalCatalogSearchRow>,
+    filter: SearchFilter,
+): List<CanonicalCatalogSearchRow> = rows.filter { row ->
+    when (filter) {
+        SearchFilter.ALL -> true
+        SearchFilter.SONGS -> row.kind == CanonicalSearchKind.RECORDING
+        SearchFilter.ALBUMS ->
+            row.kind == CanonicalSearchKind.RELEASE || row.kind == CanonicalSearchKind.RELEASE_GROUP
+        SearchFilter.ARTISTS -> row.kind == CanonicalSearchKind.ARTIST
+        SearchFilter.VIDEOS, SearchFilter.PLAYLISTS -> false
     }
 }
 
@@ -1192,7 +1225,11 @@ private fun BrowseRow(item: BrowseItem, onClick: () -> Unit, onLongPress: (() ->
  * text, and the gutter padding sits inside the scroll so it scrolls with them.
  */
 @Composable
-private fun SearchFilterTabs(filter: SearchFilter, onFilterChange: (SearchFilter) -> Unit) {
+private fun SearchFilterTabs(
+    filter: SearchFilter,
+    onFilterChange: (SearchFilter) -> Unit,
+    available: List<SearchFilter> = SearchFilter.entries,
+) {
     val haptics = rememberHaptics()
     Row(
         modifier = Modifier
@@ -1202,7 +1239,7 @@ private fun SearchFilterTabs(filter: SearchFilter, onFilterChange: (SearchFilter
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SearchFilter.entries.forEach { entry ->
+        available.forEach { entry ->
             val selected = entry == filter
             Box(
                 modifier = Modifier
@@ -1221,7 +1258,14 @@ private fun SearchFilterTabs(filter: SearchFilter, onFilterChange: (SearchFilter
                     .padding(horizontal = 12.dp, vertical = 6.dp),
             ) {
                 Text(
-                    text = entry.label,
+                    text = when (entry) {
+                        SearchFilter.ALL -> stringResource(Res.string.canonical_filter_all)
+                        SearchFilter.SONGS -> stringResource(Res.string.canonical_filter_songs)
+                        SearchFilter.ALBUMS -> stringResource(Res.string.albums)
+                        SearchFilter.ARTISTS -> stringResource(Res.string.artists)
+                        SearchFilter.VIDEOS -> stringResource(Res.string.canonical_filter_videos)
+                        SearchFilter.PLAYLISTS -> stringResource(Res.string.playlists)
+                    },
                     style = MaterialTheme.typography.labelLarge,
                     color = if (selected) MaterialTheme.colorScheme.background
                     else MaterialTheme.colorScheme.onBackground,
