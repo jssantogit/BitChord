@@ -34,4 +34,28 @@ class A0CandidateDiagnosticCoverageTest {
         assertEquals("1",values["noSlot"])
         assertFalse(values.toString().contains("ILLIT"))
     }
+    @Test fun canonicalAlbumAndCodecCountsUseSeparateBoundedRedactedEvent() {
+        val points=mutableListOf<StructuredTracePoint>()
+        val tracer=StructuredTracer(
+            sink=StructuredTraceSink { points.add(it) },
+            traceIdFactory={ "issue-177-canonical-counts" }
+        )
+        val trace=A0SmokeTrace.start(tracer,observedTransfer=true)
+        val report=A0ObservedCandidateHandoff.Screening(
+            responses=4,publicFiles=7,lockedFiles=0,tooLarge=0,
+            unsupportedFormat=0,unsafePath=0,noSlot=0,accepted=3,
+            albumMatches=1,albumUnknown=1,albumConflicts=1,
+            qualityMismatches=2,
+        )
+        trace.canonicalCandidateScreening(report,"LOSSLESS")
+        val event=points.single { it.stage=="canonical_candidate_screening" }
+        assertTrue(event.attributes.size<=24)
+        assertEquals("1",event.attributes["albumConflicts"])
+        assertEquals("1",event.attributes["albumMatches"])
+        assertEquals("2",event.attributes["qualityMismatches"])
+        assertEquals("LOSSLESS",event.attributes["qualityPreset"])
+        assertFalse(event.attributes.toString().contains("Greatest Hits"))
+        assertFalse(event.attributes.toString().contains("soulseek_user"))
+    }
+
 }
