@@ -141,4 +141,40 @@ class CanonicalRecordingFeedbackControlsTest {
             edit.getUnclippedBoundsInRoot().left,
         )
     }
+
+    @Test fun lateRoomEmissionMustNotEraseAUserSelectionBeforeSave() {
+        val incoming = androidx.compose.runtime.mutableStateOf<Double?>(null)
+        val values = mutableListOf<Double>()
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecordingFeedbackPanel(
+                    rating = incoming.value,
+                    onSave = { values += it },
+                    onDismiss = {},
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("4 stars").performClick()
+        compose.onNodeWithContentDescription("4.0 stars selected").assertIsDisplayed()
+        compose.runOnIdle { incoming.value = 3.0 }
+        compose.onNodeWithContentDescription("4.0 stars selected").assertIsDisplayed()
+        compose.onNodeWithText("Save rating").performClick()
+        compose.runOnIdle { assertEquals(listOf(4.0), values) }
+    }
+
+    @Test fun latestRoomScoreIsPreselectedWhenTheUserHasNotEditedAnything() {
+        val incoming = androidx.compose.runtime.mutableStateOf<Double?>(null)
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecordingFeedbackPanel(
+                    rating = incoming.value,
+                    onSave = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        compose.runOnIdle { incoming.value = 3.5 }
+        compose.onNodeWithContentDescription("3.5 stars selected").assertIsDisplayed()
+    }
+
 }

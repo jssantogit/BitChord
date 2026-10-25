@@ -243,4 +243,57 @@ class CanonicalRatingPresentationTest {
         // Rating by exact MediaAssetId remains available in the canonical catalog.
         assertEquals(5.0, presentation.byMediaAssetId["local-one"]?.localValue)
     }
+
+    @Test
+    fun unscoredRemoteAssetCannotBorrowOtherRemoteAssetsRatingInRecordingOnlyRows() {
+        val result = buildCanonicalRatingPresentation(
+            assets = listOf(asset("r", "remote-rated"), asset("r", "remote-unrated")),
+            localValues = emptyMap(),
+            remote = listOf(CanonicalRemoteRatingInput("r", "remote-rated", provider, scope, 5, false)),
+            activeProvider = provider,
+            activeScope = scope,
+        )
+        assertEquals(5, result.byMediaAssetId["remote-rated"]?.remoteValue)
+        assertNull(result.byMediaAssetId["remote-unrated"])
+        assertNull("No asset was chosen; the recording must not inherit a partial remote rating",
+            result.byRecordingId["r"])
+    }
+
+    @Test
+    fun conflictingRemoteMediaAssetsMustNotHideIndependentLocalRecordingRating() {
+        val result = buildCanonicalRatingPresentation(
+            assets = listOf(asset("r", "remote-a"), asset("r", "remote-b")),
+            localValues = mapOf("r" to 4.5),
+            remote = listOf(
+                CanonicalRemoteRatingInput("r", "remote-a", provider, scope, 5, false),
+                CanonicalRemoteRatingInput("r", "remote-b", provider, scope, 3, false),
+            ),
+            activeProvider = provider,
+            activeScope = scope,
+        )
+        val recording = result.byRecordingId["r"]
+        assertEquals("The native note is always a RecordingId-owned preference", 4.5,
+            recording?.localValue ?: 0.0, 0.0)
+        assertNull("Conflicting remote assets cannot imply a single remote score", recording?.remoteValue)
+        assertEquals(RatingDisplayKind.RATED, recording?.kind)
+    }
+
+    @Test
+    fun aLocalFileAndOneUnambiguousRemoteAssetRetainBothSourcesAtRecordingLevel() {
+        val result = buildCanonicalRatingPresentation(
+            assets = listOf(
+                asset("r", "local-a", "local-mediastore", "content://music/a"),
+                asset("r", "remote-a"),
+            ),
+            localValues = mapOf("r" to 4.5),
+            remote = listOf(CanonicalRemoteRatingInput("r", "remote-a", provider, scope, 3, false)),
+            activeProvider = provider,
+            activeScope = scope,
+        )
+        val recording = result.byRecordingId.getValue("r")
+        assertEquals(4.5, recording.localValue!!, 0.0)
+        assertEquals(3, recording.remoteValue)
+        assertEquals(RatingDisplayKind.CONFLICT, recording.kind)
+    }
+
 }
