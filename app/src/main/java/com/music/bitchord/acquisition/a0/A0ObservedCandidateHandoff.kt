@@ -51,6 +51,9 @@ internal class A0ObservedCandidateHandoff(
         val duplicates:Int=0,
         val capacityDropped:Int=0,
         val perPeerDropped:Int=0,
+        val strongMatches:Int=0,
+        val weakMatches:Int=0,
+        val lowQuality:Int=0,
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
     private val candidates=ArrayList<Choice>(48)
@@ -180,7 +183,17 @@ internal class A0ObservedCandidateHandoff(
         validBeforeLimit=eligible,
         duplicates=duplicateCount,
         capacityDropped=capDropped,
-        perPeerDropped=perPeerDropped
+        perPeerDropped=perPeerDropped,
+        strongMatches=candidates.count {
+            it.matchScore>=65 && it.warnings.isEmpty() &&
+                it.quality!=A0CandidateRank.Quality.LOW_ADVERTISED
+        },
+        weakMatches=candidates.count {
+            it.matchScore<40 || A0CandidateRank.Warning.DURATION_MISMATCH in it.warnings
+        },
+        lowQuality=candidates.count {
+            it.quality==A0CandidateRank.Quality.LOW_ADVERTISED
+        }
     )
 
     @Synchronized
