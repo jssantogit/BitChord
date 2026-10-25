@@ -109,4 +109,33 @@ class CoverArtArchiveFallbackTest {
         assertEquals(listOf("release/$release", "release/$release"), requests)
     }
 
+
+    @Test fun untrustedCachedCoverNeverBypassesArtworkUrlValidation() = runBlocking {
+        val stored = mutableMapOf(
+            ("release" to release) to MusicBrainzCoverArtCacheEntry(
+                "release", release, "https://untrusted.invalid/cover.jpg", 1000L,
+            ),
+        )
+        var requests = 0
+        val cover = CoverArtArchive(
+            transport = object : CoverArtArchiveTransport {
+                override suspend fun get(path: String): CoverArtArchiveResponse {
+                    requests++
+                    return CoverArtArchiveResponse(
+                        200, """{"images":[{"front":true,"image":"https://archive.org/valid.jpg"}]}""",
+                    )
+                }
+            },
+            store = object : MusicBrainzCoverArtStore {
+                override suspend fun read(type: String, mbid: String) = stored[type to mbid]
+                override suspend fun write(value: MusicBrainzCoverArtCacheEntry) {
+                    stored[value.entityType to value.mbid] = value
+                }
+            },
+            nowEpochMs = { 1001L },
+        )
+        assertEquals("https://archive.org/valid.jpg", cover.findCover(release, group))
+        assertEquals(1, requests)
+    }
+
 }
