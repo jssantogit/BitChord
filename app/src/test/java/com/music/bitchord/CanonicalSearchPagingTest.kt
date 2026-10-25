@@ -44,6 +44,21 @@ class CanonicalSearchPagingTest {
         assertFalse(completed.hasMore)
     }
 
+    @Test fun initialPartialFailureCanRetryMissingEntityTypeFromOffsetZero() {
+        val failed = MusicBrainzCatalogSearchResult.Failure(MusicBrainzCatalogSearchFailure.UNAVAILABLE)
+        val first = CanonicalSearchPageCursors.initial(
+            query = "ILLIT",
+            recordings = page(total = 1, offset = 0, raw = 1),
+            groups = failed,
+            releases = page(total = 0, offset = 0, raw = 0),
+            artists = page(total = 0, offset = 0, raw = 0),
+        )
+        assertEquals(0, first.groups)
+        assertTrue(first.hasMore)
+        val next = first.advance(groups = page(total = 30, offset = 0, raw = 15))
+        assertEquals(15, next.groups)
+    }
+
     @Test fun emptyOrExhaustedResponseStopsPagination() {
         val first = CanonicalSearchPageCursors.initial(
             query = "ILLIT",
