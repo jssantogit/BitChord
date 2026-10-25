@@ -10,7 +10,7 @@ import kotlin.math.abs
  * This policy has no network, filesystem, or playback side effects.
  */
 internal object A0CandidatePreflight {
-    const val POLICY_VERSION="preflight-v3"
+    const val POLICY_VERSION="preflight-v4"
     enum class Confidence { STRONG, REVIEW, UNSAFE }
 
     enum class Reason {
