@@ -567,64 +567,46 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                 items = rows.data,
                 key = { _, row -> "mb:${row.kind}:${row.trackMbid ?: row.musicBrainzId}" },
             ) { index, row ->
-                Column(
-                    modifier = Modifier.fillMaxWidth()
-                        .then(if (row.kind != CanonicalSearchKind.RECORDING) {
-                            Modifier.clickable { onOpen(row) }
-                        } else Modifier)
-                        .padding(
-                            start = PAGE_GUTTER, end = PAGE_GUTTER, top = 12.dp, bottom = 12.dp,
-                        ),
-                ) {
-                    Text(
-                        text = row.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                val kind = when (row.kind) {
+                    CanonicalSearchKind.RECORDING -> stringResource(Res.string.canonical_recording_kind)
+                    CanonicalSearchKind.RELEASE_GROUP -> stringResource(Res.string.canonical_group_kind)
+                    CanonicalSearchKind.RELEASE -> stringResource(Res.string.canonical_release_kind)
+                    CanonicalSearchKind.ARTIST -> stringResource(Res.string.canonical_artist_kind)
+                }
+                val availability = if (row.kind == CanonicalSearchKind.RECORDING) {
+                    stringResource(
+                        if (row.hasCatalogedAsset) Res.string.canonical_known_asset
+                        else Res.string.canonical_metadata_only,
                     )
-                    Text(
-                        text = buildString {
-                            append(when (row.kind) {
-                                CanonicalSearchKind.RECORDING -> stringResource(Res.string.canonical_recording_kind)
-                                CanonicalSearchKind.RELEASE_GROUP -> stringResource(Res.string.canonical_group_kind)
-                                CanonicalSearchKind.RELEASE -> stringResource(Res.string.canonical_release_kind)
-                                CanonicalSearchKind.ARTIST -> stringResource(Res.string.canonical_artist_kind)
-                            })
-                            row.subtitle?.takeIf { it.isNotBlank() }?.let {
-                                append(" · "); append(it)
-                            }
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (row.kind == CanonicalSearchKind.RECORDING) {
-                        Text(
-                            text = when {
-                                row.hasCatalogedAsset ->
-                                    stringResource(Res.string.canonical_known_asset)
-                                row.fromOfflineCache ->
-                                    stringResource(Res.string.canonical_offline_metadata)
-                                else ->
-                                    stringResource(Res.string.canonical_metadata_only)
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        // Never offer actions to metadata-only matches. Existing
-                        // MediaAssets still undergo account/identity checks in
-                        // the canonical planner and again at DataSource.open.
-                        if (row.hasCatalogedAsset) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = { onPlay(row.musicBrainzId) }) {
-                                    Text(stringResource(Res.string.play))
-                                }
-                                OutlinedButton(onClick = { onAddToQueue(row.musicBrainzId) }) {
-                                    Text(stringResource(Res.string.smart_collection_batch_queue))
-                                }
-                            }
+                } else null
+                val nativeItem = canonicalRowAsBrowseItem(row).copy(
+                    subtitle = listOfNotNull(
+                        kind,
+                        row.subtitle?.takeIf(String::isNotBlank),
+                        availability,
+                    ).joinToString(" · "),
+                )
+                // Reuse the same native 52dp artwork, typography and artist/album
+                // rows as the established Search interface. MusicBrainz remains
+                // metadata; a Recording without an owned asset has no click.
+                BrowseRow(
+                    item = nativeItem,
+                    onClick = when {
+                        row.kind != CanonicalSearchKind.RECORDING -> ({ onOpen(row) })
+                        row.hasCatalogedAsset -> ({ onPlay(row.musicBrainzId) })
+                        else -> null
+                    },
+                )
+                if (row.kind == CanonicalSearchKind.RECORDING && row.hasCatalogedAsset) {
+                    Row(
+                        modifier = Modifier.padding(start = PAGE_GUTTER + 66.dp, bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(onClick = { onPlay(row.musicBrainzId) }) {
+                            Text(stringResource(Res.string.play))
+                        }
+                        OutlinedButton(onClick = { onAddToQueue(row.musicBrainzId) }) {
+                            Text(stringResource(Res.string.smart_collection_batch_queue))
                         }
                     }
                 }
@@ -662,6 +644,15 @@ private fun LazyListScope.canonicalMusicBrainzResults(
 }
 
 /** Identity-preserving, client-side category view over four MusicBrainz types. */
+/** A display-only adapter: never turn a public MBID into a videoId or stream URI. */
+fun canonicalRowAsBrowseItem(row: CanonicalCatalogSearchRow): BrowseItem = BrowseItem(
+    browseId = "catalog:${row.kind}:${row.musicBrainzId}",
+    title = row.title,
+    subtitle = row.subtitle.orEmpty(),
+    thumbnailUrl = null,
+    type = if (row.kind == CanonicalSearchKind.ARTIST) BrowseType.ARTIST else BrowseType.ALBUM,
+)
+
 fun canonicalRowsForFilter(
     rows: List<CanonicalCatalogSearchRow>,
     filter: SearchFilter,
@@ -1265,12 +1256,14 @@ private fun RecentSearchEntityRow(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BrowseRow(item: BrowseItem, onClick: () -> Unit, onLongPress: (() -> Unit)? = null) {
+private fun BrowseRow(item: BrowseItem, onClick: (() -> Unit)?, onLongPress: (() -> Unit)? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
-            .contextClick(onLongPress)
+            .then(if (onClick != null) {
+                Modifier.longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
+                    .contextClick(onLongPress)
+            } else Modifier)
             .padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
