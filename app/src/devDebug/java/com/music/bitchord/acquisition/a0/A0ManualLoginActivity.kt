@@ -711,7 +711,7 @@ class A0ManualLoginActivity : Activity() {
                                             if (stopping || isFinishing || isDestroyed ||
                                                 selectableIndices.isEmpty()) {
                                                 if(selectableIndices.isEmpty())status.text=
-                                                    "Nenhum WAV/FLAC/MP3 compatível nesta busca para salvar."
+                                                    "Nenhum candidato de formato suportado nesta busca para salvar."
                                                 choiceQueue.offer(-1)
                                             } else {
                                                 status.text = if(saveToDevice)
@@ -749,10 +749,7 @@ class A0ManualLoginActivity : Activity() {
                                                                     "declarou o perfil ${preset.label}. " +
                                                                     "É possível inspecionar outros formatos, " +
                                                                     "sem alterar a preferência global.")
-                                                            .setPositiveButton("Inspecionar outros") { _, _ ->
-                                                                showChoices(inspectOthers=true)
-                                                            }
-                                                            .setPositiveButton(
+                                                                                                                        .setPositiveButton(
                                                             if(inspectOthers) "Perfil desejado" else "Inspecionar outros"
                                                         ) { _, _ -> showChoices(
                                                             inspectOthers=!inspectOthers) }
@@ -895,25 +892,25 @@ class A0ManualLoginActivity : Activity() {
                                                             val labels=arrayOf(
                                                                 "Todos","Mais relevantes","Lossless declarado",
                                                                 "MP3 ≥256 kbps","Ocultar versões alternativas",
-                                                                "MP3","FLAC","WAV","OGG","M4A","AAC","OPUS"
+                                                                "MP3","FLAC","WAV","AAC"
                                                             )
                                                             val formats=arrayOf<String?>(
                                                                 null,null,null,null,null,
-                                                                "mp3","flac","wav","ogg","m4a","aac","opus"
+                                                                "mp3","flac","wav","aac"
                                                             )
                                                             val qualities=intArrayOf(
-                                                                0,1,2,3,4,0,0,0,0,0,0,0
+                                                                0,1,2,3,4,0,0,0,0
                                                             )
                                                             AlertDialog.Builder(this@A0ManualLoginActivity)
                                                                 .setTitle("Filtrar (reversível)")
                                                                 .setItems(labels) { _, index ->
-                                                                    showChoices(formats[index],qualities[index])
+                                                                    showChoices(formats[index],qualities[index],inspectOthers)
                                                                 }
                                                                 .setNegativeButton("Voltar") { _, _ ->
-                                                                    showChoices(formatFilter,qualityFilter)
+                                                                    showChoices(formatFilter,qualityFilter,inspectOthers)
                                                                 }
                                                                 .setOnCancelListener {
-                                                                    showChoices(formatFilter,qualityFilter)
+                                                                    showChoices(formatFilter,qualityFilter,inspectOthers)
                                                                 }.show()
                                                         }
                                                         .setNegativeButton("Cancelar") { _, _ ->
