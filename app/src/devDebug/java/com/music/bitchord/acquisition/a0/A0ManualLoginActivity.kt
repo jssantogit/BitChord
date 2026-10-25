@@ -690,7 +690,10 @@ class A0ManualLoginActivity : Activity() {
                                         throw IOException("A0 authenticated server frame was interrupted")
                                     }
                                     val report=handoff?.screening()
-                                    if(report!=null) trace.candidateScreening(report)
+                                    if(report!=null) {
+                                        trace.candidateScreening(report)
+                                        trace.canonicalCandidateScreening(report,preset.name)
+                                    }
                                     if (handoff?.hasCandidates() == true) {
                                         checkNotNull(handoff).markReadersStopped()
                                         val choices=handoff.choices()
