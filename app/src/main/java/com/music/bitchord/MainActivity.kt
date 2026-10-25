@@ -256,6 +256,7 @@ import com.music.bitchord.ui.components.isGlassSupported
 import com.music.bitchord.data.sources.SourceConfig
 import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.data.sources.SourceRegistry
+import com.music.bitchord.ui.shouldRunLegacyYoutubeVersionLookup
 import com.music.bitchord.ui.components.ListenBrainzTokenAlert
 import com.music.bitchord.ui.components.MiniPlayer
 import com.music.bitchord.ui.components.QueueActionNotice
@@ -738,6 +739,7 @@ private fun BitChordApp(
 
     val homeState by viewModel.home.collectAsStateWithLifecycle()
     val usesCanonicalDiscovery by viewModel.usesCanonicalDiscovery.collectAsStateWithLifecycle()
+    val discoverySourceConfigs by SourceRegistry.configs.collectAsStateWithLifecycle()
     val canonicalDiscoveryCatalog by viewModel.canonicalDiscoveryCatalog.collectAsStateWithLifecycle()
     val homeLoadingMore by viewModel.homeLoadingMore.collectAsStateWithLifecycle()
     val homeRecentlyPlayedLoading by viewModel.homeRecentlyPlayedLoading.collectAsStateWithLifecycle()
@@ -1452,8 +1454,13 @@ private fun BitChordApp(
     // Start with the video MediaItem so the main player is populated at once,
     // then resolve its catalogue counterpart behind the loading indicators.
     // A failed/identical match simply resumes this untouched video.
-    LaunchedEffect(player.song?.videoId, preferMusicOnly) {
+    LaunchedEffect(player.song?.videoId, preferMusicOnly, usesCanonicalDiscovery, discoverySourceConfigs) {
         val song = player.song ?: return@LaunchedEffect
+        // Canonical metadata/playback must never ask InnerTube to swap versions
+        // just because a local or authorized provider track began playing.
+        if (!shouldRunLegacyYoutubeVersionLookup(usesCanonicalDiscovery, discoverySourceConfigs)) {
+            return@LaunchedEffect
+        }
         if (preferMusicOnly && song.isVideo && song.videoId != keepVideoId) {
             switchToMusicOnly(song, pauseWhileResolving = true)
         }
@@ -1465,9 +1472,14 @@ private fun BitChordApp(
     // each member on their own cut of what is supposed to be one song — see
     // [ListenTogether] and the matching guard server-side in
     // [PlaybackService.smoothSwapCurrentTrackVersion].
-    LaunchedEffect(player.song?.videoId, convertedAudioId, convertedVideoId, partyState.inParty) {
+    LaunchedEffect(
+        player.song?.videoId, convertedAudioId, convertedVideoId,
+        partyState.inParty, usesCanonicalDiscovery, discoverySourceConfigs,
+    ) {
         val song = player.song
-        if (song == null || partyState.inParty) {
+        if (song == null || partyState.inParty ||
+            !shouldRunLegacyYoutubeVersionLookup(usesCanonicalDiscovery, discoverySourceConfigs)
+        ) {
             hasAlternateVersion = false
             return@LaunchedEffect
         }
