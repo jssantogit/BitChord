@@ -4135,9 +4135,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             delay(150)
             var next: String? = token
             while (next != null) {
+                // Capture this page's continuation before passing it to a
+                // suspend lambda; `next` is reassigned after each response.
+                val requestedToken = next ?: break
                 val fetched = runLegacyYoutubeBrowseIfEnabled(
                     enabled = ::canRunLegacyYoutubeCatalogLookup,
-                ) { YtMusicRepository.moreSongs(next).getOrNull() } ?: return@launch
+                ) { YtMusicRepository.moreSongs(requestedToken).getOrNull() } ?: return@launch
                 // Repository calls may finish after cancellation. Do not let
                 // an in-flight UI page append after the playback service has
                 // taken the continuation over.
