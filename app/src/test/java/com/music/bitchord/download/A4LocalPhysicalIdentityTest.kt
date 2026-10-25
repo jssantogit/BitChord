@@ -23,4 +23,12 @@ class A4LocalPhysicalIdentityTest {
         val b="content://com.android.externalstorage.documents/document/primary%3AMusic%2FBitChord%2Ftest.flac"
         assertEquals(A4LocalPhysicalIdentity.key(a),A4LocalPhysicalIdentity.key(b))
     }
+    @Test fun plusSignInRealFilePathMustNotMergeWithSpace() {
+        val plus="content://com.android.externalstorage.documents/document/" +
+            "primary%3AMusic%2FBitChord%2FA+B.flac"
+        val space="content://com.android.externalstorage.documents/document/" +
+            "primary%3AMusic%2FBitChord%2FA%20B.flac"
+        assertNotEquals(A4LocalPhysicalIdentity.key(plus),A4LocalPhysicalIdentity.key(space))
+    }
+
 }
