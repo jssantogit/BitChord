@@ -89,7 +89,7 @@ internal class MusicBrainzCatalogSearch(
     ): MusicBrainzCatalogSearchResult<MusicBrainzArtistHit> =
         search("artist", query, limit, offset) { raw ->
             val result = json.decodeFromString<ArtistSearchEnvelope>(raw)
-            result.pageOrNull(result.artists?.size) {
+            result.pageOrNull(result.artists?.size, MusicBrainzArtistHit::musicBrainzId) {
                 result.artists?.mapNotNull { artist ->
                     val mbid = artist.id.validSearchMbidOrNull() ?: return@mapNotNull null
                     val name = artist.name.nonEmpty() ?: return@mapNotNull null
@@ -105,7 +105,7 @@ internal class MusicBrainzCatalogSearch(
     ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> =
         search("release-group", query, limit, offset) { raw ->
             val result = json.decodeFromString<ReleaseGroupSearchEnvelope>(raw)
-            result.pageOrNull(result.releaseGroups?.size) {
+            result.pageOrNull(result.releaseGroups?.size, MusicBrainzReleaseGroupHit::musicBrainzId) {
                 result.releaseGroups?.mapNotNull { group ->
                     val mbid = group.id.validSearchMbidOrNull() ?: return@mapNotNull null
                     val title = group.title.nonEmpty() ?: return@mapNotNull null
@@ -124,7 +124,7 @@ internal class MusicBrainzCatalogSearch(
     ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseHit> =
         search("release", query, limit, offset) { raw ->
             val result = json.decodeFromString<ReleaseSearchEnvelope>(raw)
-            result.pageOrNull(result.releases?.size) {
+            result.pageOrNull(result.releases?.size, MusicBrainzReleaseHit::musicBrainzId) {
                 result.releases?.mapNotNull { release ->
                     val mbid = release.id.validSearchMbidOrNull() ?: return@mapNotNull null
                     val title = release.title.nonEmpty() ?: return@mapNotNull null
@@ -143,7 +143,7 @@ internal class MusicBrainzCatalogSearch(
     ): MusicBrainzCatalogSearchResult<MusicBrainzRecordingHit> =
         search("recording", query, limit, offset) { raw ->
             val result = json.decodeFromString<RecordingSearchEnvelope>(raw)
-            result.pageOrNull(result.recordings?.size) {
+            result.pageOrNull(result.recordings?.size, MusicBrainzRecordingHit::musicBrainzId) {
                 result.recordings?.mapNotNull { recording ->
                     val mbid = recording.id.validSearchMbidOrNull() ?: return@mapNotNull null
                     val title = recording.title.nonEmpty() ?: return@mapNotNull null
@@ -208,13 +208,14 @@ internal class MusicBrainzCatalogSearch(
 
     private fun <T> SearchEnvelope.pageOrNull(
         rawCount: Int?,
-        items: () -> List<T>?,
+        identity: (T) -> String,
+        items: () -> List<T>?, 
     ): MusicBrainzCatalogPage<T>? {
         val total = count?.takeIf { it >= 0 } ?: return null
         val start = offset?.takeIf { it >= 0 } ?: return null
         val consumed = rawCount?.takeIf { it >= 0 } ?: return null
         val rows = items() ?: return null
-        return MusicBrainzCatalogPage(rows.distinct(), total, start, consumed)
+        return MusicBrainzCatalogPage(rows.distinctBy(identity), total, start, consumed)
     }
 
     private companion object {
