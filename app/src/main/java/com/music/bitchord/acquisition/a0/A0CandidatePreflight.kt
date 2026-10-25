@@ -19,6 +19,7 @@ internal object A0CandidatePreflight {
         DURATION_UNCONFIRMED,
         DURATION_CONFLICT,
         SIZE_CONFLICT,
+        ENCODING_CONFLICT,
         QUALITY_UNCONFIRMED,
     }
 
@@ -36,6 +37,8 @@ internal object A0CandidatePreflight {
         expectedDurationSeconds:Int?,
         format:String,
         sizeBytes:Long,
+        declaredSampleRateHz:Int?=null,
+        declaredBitDepth:Int?=null,
     ):Assessment {
         val reasons=linkedSetOf<Reason>()
         val hard=linkedSetOf<Reason>()
@@ -59,6 +62,10 @@ internal object A0CandidatePreflight {
             reasons.add(Reason.VERSION_CONFLICT)
             hard.add(Reason.VERSION_CONFLICT)
         }
+        if(A0CandidateRank.Warning.ENCODING_CONFLICT in ranking.warnings) {
+            reasons.add(Reason.ENCODING_CONFLICT)
+            hard.add(Reason.ENCODING_CONFLICT)
+        }
         if(A0CandidateRank.Warning.SIZE_SUSPICIOUS in ranking.warnings) {
             reasons.add(Reason.SIZE_CONFLICT)
             hard.add(Reason.SIZE_CONFLICT)
@@ -76,7 +83,9 @@ internal object A0CandidatePreflight {
         // Approximate CBR-size check. A peer's bitrate is unverified and may
         // be an average for VBR. Keep broad tolerance to avoid false precision.
         val ext=format.lowercase(java.util.Locale.ROOT)
-        val goodBitrate=declaredBitrateKbps?.takeIf { it in 32..1536 }
+        val goodBitrate=declaredBitrateKbps?.takeIf {
+            it in 32..(if(ext=="mp3") 320 else 1536)
+        }
         when(ext) {
             "mp3" -> {
                 if(goodBitrate==null || goodBitrate<256) {
@@ -92,7 +101,9 @@ internal object A0CandidatePreflight {
                 }
             }
             "flac", "wav" -> {
-                if(ranking.quality!=A0CandidateRank.Quality.LOSSLESS_ADVERTISED) {
+                if(ranking.quality!=A0CandidateRank.Quality.LOSSLESS_ADVERTISED ||
+                    declaredSampleRateHz==null || declaredSampleRateHz<44_100 ||
+                    declaredBitDepth==null || declaredBitDepth<16) {
                     reasons.add(Reason.QUALITY_UNCONFIRMED)
                 }
                 // Very small files claimed as full-length FLAC/WAV demand
