@@ -88,4 +88,25 @@ class CoverArtArchiveFallbackTest {
         assertNull(cover.findCover("invalid", group))
         assertEquals(2, requests.size)
     }
+
+    @Test fun unsafeEditionArtworkIsTransientFailureAndNeverTriggersGroupFallback() = runBlocking {
+        val requests = mutableListOf<String>()
+        val cover = CoverArtArchive(transport = object : CoverArtArchiveTransport {
+            override suspend fun get(path: String): CoverArtArchiveResponse {
+                requests += path
+                return when {
+                    path.startsWith("release-group/") -> CoverArtArchiveResponse(
+                        200, """{"images":[{"front":true,"image":"https://archive.org/group.jpg"}]}""",
+                    )
+                    else -> CoverArtArchiveResponse(
+                        200, """{"images":[{"front":true,"image":"http://unsafe.invalid/edition.jpg"}]}""",
+                    )
+                }
+            }
+        })
+        assertNull(cover.findCover(release, group))
+        assertNull(cover.findCover(release, group))
+        assertEquals(listOf("release/$release", "release/$release"), requests)
+    }
+
 }
