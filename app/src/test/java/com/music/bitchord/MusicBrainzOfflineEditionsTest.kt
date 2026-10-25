@@ -96,6 +96,22 @@ class MusicBrainzOfflineEditionsTest {
         } finally { db.close() }
     }
 
+    @Test fun paginatedEditionAssociationsAccumulateAndRemainAvailableOffline() = runBlocking {
+        val db = database()
+        try {
+            val index = MusicBrainzCatalogIndex(db)
+            index.persistReleaseGroups(listOf(MusicBrainzReleaseGroupHit(
+                group, "SUPER REAL ME", "EP", "2024-03-25", "ILLIT",
+            )))
+            val pageOne = MusicBrainzReleaseHit(worldwide, "SUPER REAL ME", "XW", "2024-03-25", "ILLIT")
+            val pageTwo = MusicBrainzReleaseHit(japan, "SUPER REAL ME", "JP", "2024-03-25", "ILLIT")
+            index.persistGroupEditions(group, listOf(pageOne))
+            index.persistGroupEditions(group, listOf(pageTwo))
+            index.persistGroupEditions(group, emptyList())
+            assertEquals(setOf(pageOne, pageTwo), index.cachedGroupReleases(group).toSet())
+        } finally { db.close() }
+    }
+
     @Test fun artistDiscographyCacheIsBoundToArtistMbidNotHomonymousArtistName() = runBlocking {
         val db = database()
         try {
