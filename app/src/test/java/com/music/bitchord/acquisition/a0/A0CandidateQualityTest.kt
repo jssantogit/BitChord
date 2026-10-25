@@ -77,4 +77,22 @@ class A0CandidateQualityTest {
         assertNotEquals(A0CandidateRank.Match.ALL_TERMS,candidate.match)
     }
 
+    @Test fun unexplainedExtraArtistWordsWarnEvenWithoutDash() {
+        val ranking=A0CandidateRank.rank(
+            "ILLIT - Magnetic","Other Artist Magnetic.mp3",320,
+            remotePath="Music\\ILLIT\\Other Artist Magnetic.mp3",format="mp3")
+        assertTrue(A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in ranking.warnings)
+    }
+
+    @Test fun ordinaryTrackNumberAndOfficialAudioLabelDoNotCreateIdentityWarning() {
+        val plain=A0CandidateRank.rank("ILLIT - Magnetic","01 - Magnetic.mp3",320,
+            remotePath="Music\\ILLIT\\01 - Magnetic.mp3",format="mp3")
+        val official=A0CandidateRank.rank("ILLIT - Magnetic",
+            "ILLIT - Magnetic (Official Audio).mp3",320,
+            remotePath="Music\\ILLIT\\ILLIT - Magnetic (Official Audio).mp3",
+            format="mp3")
+        assertFalse(A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in plain.warnings)
+        assertFalse(A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in official.warnings)
+    }
+
 }
