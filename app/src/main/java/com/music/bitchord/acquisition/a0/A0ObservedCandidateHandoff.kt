@@ -18,7 +18,10 @@ internal class A0ObservedCandidateHandoff(
     allowLoopbackForLocalTest:Boolean=false,
     private val searchPhrase:String?=null,
     private val saveFormatsOnly:Boolean=false,
-    private val expectedDurationSeconds:Int?=null
+    private val expectedDurationSeconds:Int?=null,
+    private val requestedAlbum:String?=null,
+    private val qualityProfile:A0CanonicalAcquisitionIntent.QualityProfileSnapshot=
+        A0CanonicalAcquisitionIntent.QualityProfileSnapshot(),
 ) {
     class Choice internal constructor(
         val displayName:String,
@@ -35,6 +38,9 @@ internal class A0ObservedCandidateHandoff(
         val declaredBitDepth:Int?,
         val preflight:A0CandidatePreflight.Assessment,
         val peerAvailability:A0PeerAvailability.Assessment,
+        val albumEvidence:A0CanonicalAlbumPolicy.Assessment,
+        val identityEvidence:A0CanonicalIdentityPolicy.Decision,
+        val qualityEvidence:A0DownloadQualityPolicy.Assessment,
         internal val claim:A0CandidateClaimClusters.Claim,
     ) {
         override fun toString()="A0 observed candidate (redacted)"
@@ -72,7 +78,32 @@ internal class A0ObservedCandidateHandoff(
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
     private val candidates=ArrayList<Choice>(48)
-    private val choiceOrder = compareByDescending<Choice> {
+    private val canonicalManualTarget by lazy {
+        // A free-text album is NEVER treated as a confirmed Release MBID.
+        A0CanonicalAcquisitionIntent.manual(
+            title=searchPhrase?.split(Regex("\\s+[-–—]\\s+"),limit=2)
+                ?.lastOrNull()?.takeIf(String::isNotBlank) ?: "Manual search",
+            requestedAlbum=requestedAlbum,
+        )
+    }
+    private val albumOrQualitySelected =
+        !requestedAlbum.isNullOrBlank() ||
+            qualityProfile.preset!=A0CanonicalAcquisitionIntent.QualityPreset.LEGACY_UNSPECIFIED
+
+    private fun claimRisk(choice:Choice):Int = if(!albumOrQualitySelected) 0 else when {
+        choice.preflight.confidence==A0CandidatePreflight.Confidence.UNSAFE -> 4
+        choice.identityEvidence.verdict==A0CanonicalIdentityPolicy.Verdict.INCOMPATIBLE -> 3
+        choice.qualityEvidence.status in setOf(
+            A0DownloadQualityPolicy.Status.INCOMPATIBLE,
+            A0DownloadQualityPolicy.Status.INVALID_PROFILE,
+            A0DownloadQualityPolicy.Status.UNAVAILABLE) -> 2
+        choice.albumEvidence.status==A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL ||
+            choice.qualityEvidence.status==A0DownloadQualityPolicy.Status.INCONCLUSIVE_MANUAL -> 1
+        else -> 0
+    }
+
+    private val choiceOrder = compareBy<Choice> { claimRisk(it) }
+        .thenByDescending {
         when(it.preflight.confidence) {
             A0CandidatePreflight.Confidence.STRONG -> 2
             A0CandidatePreflight.Confidence.REVIEW -> 1
@@ -197,6 +228,39 @@ internal class A0ObservedCandidateHandoff(
             val safeBasename=A0CandidateRank.safeDisplayName(basename)
             val displayName=if(safeBasename.length<=82) safeBasename
                 else safeBasename.take(82-suffix.length)+suffix
+            val immediateFolder=path.replace('\\\\','/').substringBeforeLast('/',"")
+                .substringAfterLast('/',"")
+            val album=A0CanonicalAlbumPolicy.assess(
+                A0CanonicalAlbumPolicy.Target(
+                    requestedAlbum=requestedAlbum,
+                    expectedArtist=canonicalManualTarget.artistCredits.firstOrNull()
+                ),
+                A0CanonicalAlbumPolicy.Claim(immediateFolder,
+                    A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT)
+            )
+            // The live search knows only a user-entered title/album.
+            // Never turn its text into a confirmed canonical relationship.
+            val identityDecision=A0CanonicalIdentityPolicy.assess(
+                canonicalManualTarget,
+                A0CanonicalAcquisitionResolver.Resolution(
+                    A0CanonicalAcquisitionResolver.Status.MISSING),
+                A0CanonicalAlbumPolicy.Claim(immediateFolder,
+                    A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT),
+                preflight,
+            )
+            val codec=when(ext) {
+                "mp3" -> A0CanonicalAcquisitionIntent.Codec.MP3
+                "flac" -> A0CanonicalAcquisitionIntent.Codec.FLAC
+                "wav" -> A0CanonicalAcquisitionIntent.Codec.PCM_WAV
+                else -> null
+            }
+            val qualityAssessment=A0DownloadQualityPolicy.evaluate(
+                qualityProfile,
+                A0DownloadQualityPolicy.Offer(codec,ext,bitrateRaw,sampleRate,bitDepth),
+                setOf(A0CanonicalAcquisitionIntent.Codec.MP3,
+                    A0CanonicalAcquisitionIntent.Codec.FLAC,
+                    A0CanonicalAcquisitionIntent.Codec.PCM_WAV),
+            )
             candidates.add(Choice(
                 displayName=displayName,sizeBytes=file.sizeBytes,
                 peerUsername=result.peerUsername,remotePath=path,
@@ -205,6 +269,8 @@ internal class A0ObservedCandidateHandoff(
                 warnings=ranking.warnings,declaredDurationSeconds=duration,
                 declaredSampleRateHz=sampleRate,declaredBitDepth=bitDepth,
                 preflight=preflight,peerAvailability=peerAvailability,
+                albumEvidence=album,identityEvidence=identityDecision,
+                qualityEvidence=qualityAssessment,
                 claim=A0CandidateClaimClusters.Claim(
                     filename=basename,format=ext,sizeBytes=file.sizeBytes,
                     bitrateKbps=bitrateRaw,durationSeconds=duration,
