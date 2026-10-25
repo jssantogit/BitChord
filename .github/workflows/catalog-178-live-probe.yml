@@ -48,6 +48,8 @@ jobs:
           python-version: '3.12'
       - name: Probe public MusicBrainz artist, release and recording identity
         if: steps.changed.outputs.probe == 'true'
+        env:
+          CATALOG_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: python3 scripts/catalog_178_musicbrainz_live_probe.py --output catalog-178-live.json
       - name: Save raw measured HTTP evidence
         if: steps.changed.outputs.probe == 'true' && always()
