@@ -16,7 +16,9 @@ internal object A0CandidateRank {
         LOSSLESS_ADVERTISED, HIGH_ADVERTISED, MEDIUM_ADVERTISED,
         LOW_ADVERTISED, UNKNOWN_ADVERTISED
     }
-    enum class Warning { VERSION_MISMATCH, DURATION_MISMATCH, SIZE_SUSPICIOUS }
+    enum class Warning {
+        VERSION_MISMATCH, DURATION_MISMATCH, SIZE_SUSPICIOUS, ENCODING_CONFLICT
+    }
 
     data class Ranking(
         val score:Int,
@@ -63,7 +65,11 @@ internal object A0CandidateRank {
             else -> 10*artistMatches/artistWords.size
         }
         val ext=(format ?: name.substringAfterLast('.', "")).lowercase(Locale.ROOT)
-        val validRate=declaredBitrateKbps?.takeIf { it in 32..1536 }
+        val invalidMp3Bitrate=ext=="mp3" && declaredBitrateKbps!=null &&
+            declaredBitrateKbps>320
+        val validRate=declaredBitrateKbps?.takeIf {
+            it in 32..(if(ext=="mp3") 320 else 1536)
+        }
         val lossless=ext in setOf("flac","wav")
         val quality=when {
             lossless && declaredSampleRateHz?.let { it in 8000..384000 } == true &&
@@ -87,10 +93,20 @@ internal object A0CandidateRank {
             if(titleWords.isEmpty() && artistWords.isEmpty()) 0 else qualityScore
         val warnings=mutableListOf<Warning>()
         val nameWords=fileWords
+        val requestedWords=tokens(searchPhrase.orEmpty()).toSet()
+        // A live/remix/acoustic recording is a mismatch only if that version
+        // was NOT explicitly requested. Do not penalize a title called "Live".
         if (setOf("live","remix","karaoke","instrumental","nightcore",
-                "slowed","cover","sped","reverb") .any { it in nameWords }) {
+                "slowed","cover","sped","reverb","acoustic","demo",
+                "extended","bootleg","8d") .any {
+                it in nameWords && it !in requestedWords
+            }) {
             score-=30
             warnings.add(Warning.VERSION_MISMATCH)
+        }
+        if (invalidMp3Bitrate) {
+            score-=40
+            warnings.add(Warning.ENCODING_CONFLICT)
         }
         if (declaredDurationSeconds!=null && expectedDurationSeconds!=null &&
             declaredDurationSeconds>0 && expectedDurationSeconds>0) {
