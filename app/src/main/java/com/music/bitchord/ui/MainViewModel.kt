@@ -166,6 +166,11 @@ internal enum class LegacyDiscoveryRequest {
     MOOD_GENRE_SHELVES,
 }
 
+internal fun shouldRunLegacyYoutubeVersionLookup(
+    canonicalMode: Boolean,
+    configs: List<SourceConfig>,
+): Boolean = !canonicalMode && isYouTubeSourceEnabled(configs)
+
 /** The legacy endpoint closure is never invoked while independent discovery is active. */
 internal class LegacyDiscoveryRequestGate(private val useCanonicalDiscovery: Boolean) {
     suspend fun <T> run(
