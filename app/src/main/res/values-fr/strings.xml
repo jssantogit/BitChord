@@ -1383,4 +1383,7 @@
     <string name="canonical_discovery_refresh">Actualiser le catalogue enregistré</string>
     <string name="legacy_library_youtube_disabled">Activez YouTube Music dans les paramètres pour charger cette bibliothèque en ligne. Les playlists et collections locales restent disponibles.</string>
     <string name="spotify_import_youtube_required">Pour importer une playlist Spotify, la recherche via YouTube Music est encore nécessaire. Activez YouTube Music et désactivez la découverte par catalogue.</string>
+    <string name="search_origin_general">Général</string>
+    <string name="search_origin_server">Serveur</string>
+    <string name="search_origin_local">Local</string>
 </resources>

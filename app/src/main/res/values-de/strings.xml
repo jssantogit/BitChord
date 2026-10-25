@@ -1382,4 +1382,7 @@
     <string name="canonical_discovery_refresh">Gespeicherten Katalog aktualisieren</string>
     <string name="legacy_library_youtube_disabled">Aktiviere YouTube Music in den Einstellungen, um diese Onlinebibliothek zu laden. Lokale Playlists und Sammlungen bleiben verfügbar.</string>
     <string name="spotify_import_youtube_required">Der Import von Spotify-Playlists benötigt derzeit die Suche über YouTube Music. Aktiviere YouTube Music und deaktiviere die katalogbasierte Entdeckung.</string>
+    <string name="search_origin_general">Allgemein</string>
+    <string name="search_origin_server">Server</string>
+    <string name="search_origin_local">Lokal</string>
 </resources>

@@ -1359,4 +1359,7 @@
     <string name="canonical_discovery_refresh">Segarkan katalog tersimpan</string>
     <string name="legacy_library_youtube_disabled">Aktifkan YouTube Music di Pengaturan untuk memuat pustaka online ini. Daftar putar dan koleksi lokal tetap tersedia.</string>
     <string name="spotify_import_youtube_required">Impor playlist Spotify saat ini masih memerlukan pencocokan lewat YouTube Music. Aktifkan YouTube Music dan nonaktifkan penemuan berbasis katalog.</string>
+    <string name="search_origin_general">Umum</string>
+    <string name="search_origin_server">Server</string>
+    <string name="search_origin_local">Lokal</string>
 </resources>

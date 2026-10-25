@@ -1422,4 +1422,7 @@
     <string name="canonical_discovery_refresh">Odśwież zapisany katalog</string>
     <string name="legacy_library_youtube_disabled">Włącz YouTube Music w ustawieniach, aby wczytać bibliotekę online. Lokalne playlisty i kolekcje pozostaną dostępne.</string>
     <string name="spotify_import_youtube_required">Import playlist Spotify nadal wymaga dopasowania w YouTube Music. Włącz YouTube Music i wyłącz odkrywanie oparte na katalogu.</string>
+    <string name="search_origin_general">Ogólne</string>
+    <string name="search_origin_server">Serwer</string>
+    <string name="search_origin_local">Lokalne</string>
 </resources>
