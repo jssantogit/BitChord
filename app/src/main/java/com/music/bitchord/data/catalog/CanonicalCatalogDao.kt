@@ -59,6 +59,22 @@ internal interface CanonicalCatalogDao {
     )
     suspend fun reconciledRemoteRatings(providerKey: String, scopeId: String): List<RemoteRatingEvidenceEntity>
 
+
+    // Canonical MusicBrainz release graph (v5). Provider MBIDs are claimed
+    // through catalog_external_identity, never used as core Recording IDs.
+    @Upsert suspend fun upsertCatalogReleaseGroup(entity: CatalogReleaseGroupEntity)
+    @Upsert suspend fun upsertCatalogReleaseGroupEdition(entity: CatalogReleaseGroupEditionEntity)
+    @Upsert suspend fun upsertCatalogMusicBrainzTrack(entity: CatalogMusicBrainzTrackEntity)
+
+    @Query("SELECT * FROM catalog_release_group WHERE id = :id LIMIT 1")
+    suspend fun catalogReleaseGroup(id: String): CatalogReleaseGroupEntity?
+
+    @Query("SELECT * FROM catalog_release_group_edition WHERE releaseGroupId = :groupId ORDER BY releaseId")
+    suspend fun catalogGroupEditions(groupId: String): List<CatalogReleaseGroupEditionEntity>
+
+    @Query("SELECT * FROM catalog_musicbrainz_track WHERE releaseId = :releaseId ORDER BY mediumNumber, trackNumber, trackMbid")
+    suspend fun catalogMusicBrainzTracks(releaseId: String): List<CatalogMusicBrainzTrackEntity>
+
     @Query("SELECT * FROM catalog_recording WHERE id = :recordingId LIMIT 1")
     suspend fun recordingById(recordingId: String): RecordingEntity?
 

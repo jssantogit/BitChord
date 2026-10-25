@@ -24,8 +24,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MusicBrainzRecordingArtistCreditEntity::class,
         MusicBrainzReleaseEnrichmentEntity::class,
         MusicBrainzReleaseArtistCreditEntity::class,
+        CatalogReleaseGroupEntity::class,
+        CatalogReleaseGroupEditionEntity::class,
+        CatalogMusicBrainzTrackEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
@@ -211,6 +214,64 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
             }
         }
 
+
+        /**
+         * Additive only. Releases/Recordings/MediaAssets and their identity
+         * aliases remain byte-for-byte intact on existing installations.
+         */
+        internal val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `catalog_release_group` (
+                        `id` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `artistDisplay` TEXT,
+                        `primaryType` TEXT,
+                        `firstReleaseDate` TEXT,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `catalog_release_group_edition` (
+                        `releaseGroupId` TEXT NOT NULL,
+                        `releaseId` TEXT NOT NULL,
+                        PRIMARY KEY(`releaseGroupId`, `releaseId`),
+                        FOREIGN KEY(`releaseGroupId`) REFERENCES `catalog_release_group`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`releaseId`) REFERENCES `catalog_release`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_catalog_release_group_edition_releaseId` ON `catalog_release_group_edition` (`releaseId`)",
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `catalog_musicbrainz_track` (
+                        `trackMbid` TEXT NOT NULL,
+                        `releaseId` TEXT NOT NULL,
+                        `recordingId` TEXT NOT NULL,
+                        `mediumNumber` INTEGER NOT NULL,
+                        `trackNumber` INTEGER NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `durationMs` INTEGER,
+                        PRIMARY KEY(`trackMbid`),
+                        FOREIGN KEY(`releaseId`) REFERENCES `catalog_release`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`recordingId`) REFERENCES `catalog_recording`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_catalog_musicbrainz_track_releaseId` ON `catalog_musicbrainz_track` (`releaseId`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_catalog_musicbrainz_track_recordingId` ON `catalog_musicbrainz_track` (`recordingId`)",
+                )
+            }
+        }
+
         @Volatile
         private var instance: CanonicalCatalogDatabase? = null
 
@@ -221,7 +282,7 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
                     CanonicalCatalogDatabase::class.java,
                     "canonical-catalog.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { instance = it }
             }
