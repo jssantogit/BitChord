@@ -79,4 +79,22 @@ class CanonicalRecordingFeedbackControlsTest {
         compose.onNodeWithText("Save rating").performClick()
         compose.runOnIdle { assertEquals(listOf(2.5), values) }
     }
+
+    @Test fun tappingLeftHalfOfThirdStarAndSavingWritesTwoPointFive() {
+        val values = mutableListOf<Double>()
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecordingFeedbackPanel(
+                    rating = null,
+                    onSave = { values += it },
+                    onDismiss = {},
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("2.5 stars").performClick()
+        compose.runOnIdle { assertEquals(emptyList<Double>(), values) }
+        compose.onNodeWithContentDescription("2.5 stars selected").assertIsDisplayed()
+        compose.onNodeWithText("Save rating").performClick()
+        compose.runOnIdle { assertEquals(listOf(2.5), values) }
+    }
 }
