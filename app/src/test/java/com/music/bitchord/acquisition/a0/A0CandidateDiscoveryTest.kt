@@ -144,4 +144,38 @@ class A0CandidateDiscoveryTest {
         assertEquals(1,report.lowQuality)
         assertFalse(report.toString().contains("ILLIT"))
     }
+
+    @Test fun cautiousPreflightPromotesRelevantStudioAndCountsRiskWithoutDiscardingManualChoices() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",expectedDurationSeconds=161)
+        handoff.offerParsed(reply("live-peer",listOf(
+            A0SoulseekSearchFile("Music\\\\ILLIT Magnetic live.mp3",6_400_000,"mp3",
+                mapOf(0 to 320,1 to 161))
+        )),"live-peer")
+        handoff.offerParsed(reply("studio-peer",listOf(
+            A0SoulseekSearchFile("Music\\\\ILLIT Magnetic.mp3",6_400_000,"mp3",
+                mapOf(0 to 320,1 to 161))
+        )),"studio-peer")
+        val sorted=handoff.choices()
+        assertEquals(2,sorted.size)
+        assertEquals("ILLIT Magnetic.mp3",sorted.first().displayName)
+        assertEquals(A0CandidatePreflight.Confidence.STRONG,sorted.first().preflight.confidence)
+        assertEquals(A0CandidatePreflight.Confidence.UNSAFE,sorted.last().preflight.confidence)
+        assertEquals(1,handoff.screening().preflightStrong)
+        assertEquals(1,handoff.screening().preflightUnsafe)
+        assertEquals(0,handoff.screening().preflightReview)
+    }
+
+    @Test fun unknownExpectedDurationDoesNotMakeAnyPeerAutomaticallyReady() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic")
+        handoff.offerParsed(reply("p",listOf(
+            A0SoulseekSearchFile("Music\\\\ILLIT Magnetic.mp3",6_400_000,"mp3",
+                mapOf(0 to 320,1 to 161))
+        )),"p")
+        assertEquals(A0CandidatePreflight.Confidence.REVIEW,
+            handoff.choices().single().preflight.confidence)
+        assertEquals(0,handoff.screening().preflightStrong)
+    }
+
 }
