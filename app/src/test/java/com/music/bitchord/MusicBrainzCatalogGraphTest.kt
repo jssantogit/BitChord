@@ -2,6 +2,10 @@ package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail
 import com.music.bitchord.data.catalog.metadata.MusicBrainzClient
 import com.music.bitchord.data.catalog.metadata.MusicBrainzTransport
 import kotlinx.coroutines.runBlocking
@@ -42,9 +46,9 @@ class MusicBrainzCatalogGraphTest {
         }
         val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport = transport))
         val artistGroups = graph.browseReleaseGroupsForArtist("b51c672b-85e0-48fe-8648-470a2422229f") as
-            MusicBrainzCatalogGraphResult.Success
-        val editions = graph.browseGroupReleases(group) as MusicBrainzCatalogGraphResult.Success
-        val detail = graph.lookupRelease(worldwide) as MusicBrainzCatalogGraphResult.Success
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogPage<MusicBrainzReleaseGroupHit>>
+        val editions = graph.browseGroupReleases(group) as MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogPage<MusicBrainzReleaseHit>>
+        val detail = graph.lookupRelease(worldwide) as MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>
         assertEquals(group, artistGroups.value.items.single().musicBrainzId)
         assertEquals(worldwide, editions.value.items.single().musicBrainzId)
         assertEquals(group, detail.value.groupMbid)
@@ -66,7 +70,7 @@ class MusicBrainzCatalogGraphTest {
         }))
         assertTrue(graph.lookupRelease("not-a-mbid") is MusicBrainzCatalogGraphResult.Failure)
         assertEquals(0, calls)
-        val parsed = graph.lookupRelease(worldwide) as MusicBrainzCatalogGraphResult.Success
+        val parsed = graph.lookupRelease(worldwide) as MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>
         assertEquals(emptyList<String>(), parsed.value.tracks.map { it.recordingMbid })
     }
 }
