@@ -30,7 +30,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MusicBrainzCoverArtCacheEntity::class,
         CatalogReleaseTrackSourceEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
@@ -314,6 +314,18 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
             }
         }
 
+        /** Edition and Recording credits are distinct facts; old rows stay unknown. */
+        internal val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `catalog_musicbrainz_track` ADD COLUMN `artistDisplay` TEXT",
+                )
+                db.execSQL(
+                    "ALTER TABLE `catalog_musicbrainz_track` ADD COLUMN `recordingArtistDisplay` TEXT",
+                )
+            }
+        }
+
         @Volatile
         private var instance: CanonicalCatalogDatabase? = null
 
@@ -324,7 +336,10 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
                     CanonicalCatalogDatabase::class.java,
                     "canonical-catalog.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(
+                        MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
+                        MIGRATION_4_5, MIGRATION_5_6,
+                    )
                     .build()
                     .also { instance = it }
             }

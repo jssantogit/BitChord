@@ -234,7 +234,7 @@ internal class MusicBrainzCatalogIndex(
             MusicBrainzRecordingHit(
                 musicBrainzId = track.recordingMbid,
                 title = track.title,
-                artistDisplay = track.artistDisplay ?: detail.artistDisplay,
+                artistDisplay = track.recordingArtistDisplay ?: detail.artistDisplay,
                 durationMs = track.durationMs,
             )
         })
@@ -296,6 +296,7 @@ internal class MusicBrainzCatalogIndex(
                 dao.upsertCatalogMusicBrainzTrack(CatalogMusicBrainzTrackEntity(
                     trackMbid, releaseId, recordingId, track.mediumNumber,
                     track.trackNumber, track.title, track.durationMs,
+                    track.artistDisplay, track.recordingArtistDisplay,
                 ))
                 // Legacy album browse assumes only one edge per (Release,Recording).
                 // A recording may appear twice on different media; its track

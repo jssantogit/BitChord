@@ -60,7 +60,7 @@ internal interface CanonicalCatalogDao {
     suspend fun reconciledRemoteRatings(providerKey: String, scopeId: String): List<RemoteRatingEvidenceEntity>
 
 
-    // Canonical MusicBrainz release graph (v5). Provider MBIDs are claimed
+    // Canonical MusicBrainz release graph (v6). Provider MBIDs are claimed
     // through catalog_external_identity, never used as core Recording IDs.
     @Upsert suspend fun upsertCatalogReleaseTrackSource(entity: CatalogReleaseTrackSourceEntity)
 
@@ -545,7 +545,8 @@ internal interface CanonicalCatalogDao {
         SELECT track.trackMbid AS trackMbid, identity.externalId AS recordingMbid,
             track.title AS title, track.mediumNumber AS mediumNumber,
             track.trackNumber AS trackNumber, track.durationMs AS durationMs,
-            recording.artistDisplay AS artistDisplay
+            track.artistDisplay AS artistDisplay,
+            track.recordingArtistDisplay AS recordingArtistDisplay
         FROM catalog_musicbrainz_track track
         JOIN catalog_recording recording ON recording.id = track.recordingId
         JOIN catalog_external_identity identity ON identity.entityId = recording.id

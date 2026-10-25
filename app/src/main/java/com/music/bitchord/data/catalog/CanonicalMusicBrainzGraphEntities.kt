@@ -58,6 +58,10 @@ internal data class CatalogMusicBrainzTrackEntity(
     val trackNumber: Int,
     val title: String,
     val durationMs: Long?,
+    /** The credit as listed for this edition-specific Track. */
+    val artistDisplay: String? = null,
+    /** The shared Recording credit; older rows remain unknown after migration. */
+    val recordingArtistDisplay: String? = null,
 )
 
 

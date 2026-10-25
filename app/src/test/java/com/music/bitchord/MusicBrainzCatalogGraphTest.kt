@@ -54,7 +54,8 @@ class MusicBrainzCatalogGraphTest {
                             {"id":"14f273b6-813b-4239-b0f8-c4b839b902c6",
                              "position":2,"title":"Magnetic","length":160000,
                              "artist-credit":[{"name":"ILLIT feat. Guest"}],
-                             "recording":{"id":"$original","title":"Magnetic","length":160000}},
+                             "recording":{"id":"$original","title":"Magnetic","length":160000,
+                             "artist-credit":[{"name":"ILLIT"}]}},
                             {"id":"7d950448-969b-4d73-a00f-fec131238b5d",
                              "position":8,"title":"Magnetic (sped up)","length":124000,
                              "recording":{"id":"$sped","title":"Magnetic (sped up)","length":124000}}
@@ -75,6 +76,7 @@ class MusicBrainzCatalogGraphTest {
         assertEquals(listOf(2, 8), detail.value.tracks.map { it.trackNumber })
         assertEquals(listOf(original, sped), detail.value.tracks.map { it.recordingMbid })
         assertEquals("ILLIT feat. Guest", detail.value.tracks.first().artistDisplay)
+        assertEquals("ILLIT", detail.value.tracks.first().recordingArtistDisplay)
         assertEquals(2, detail.value.tracks.map { it.trackMbid }.distinct().size)
         assertEquals("recordings+artist-credits+release-groups", requests.last().second["inc"])
     }
@@ -114,6 +116,7 @@ class MusicBrainzCatalogGraphTest {
         ).lookupRelease(worldwide) as MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
         assertEquals("ILLIT", detail.artistDisplay)
         assertEquals("ILLIT feat. Guest", detail.tracks.single().artistDisplay)
+        assertEquals("ILLIT feat. Guest", detail.tracks.single().recordingArtistDisplay)
     }
 
 

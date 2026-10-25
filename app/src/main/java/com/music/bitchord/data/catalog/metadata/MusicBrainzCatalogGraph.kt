@@ -26,6 +26,8 @@ internal data class MusicBrainzCatalogTrack(
     val durationMs: Long?,
     /** Specific track credit can differ from the release's credited artist. */
     val artistDisplay: String? = null,
+    /** Shared Recording credit, parsed independently from the edition's Track credit. */
+    val recordingArtistDisplay: String? = null,
 )
 
 internal data class MusicBrainzCatalogReleaseDetail(
@@ -120,6 +122,7 @@ internal class MusicBrainzCatalogGraph(
                         trackNumber = track.integer("position")?.takeIf { it > 0 } ?: index + 1,
                         durationMs = (track.long("length") ?: recording.long("length"))?.takeIf { it >= 0 },
                         artistDisplay = track.artistDisplay() ?: recording.artistDisplay(),
+                        recordingArtistDisplay = recording.artistDisplay(),
                     )
                 }
             }
