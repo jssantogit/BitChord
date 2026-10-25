@@ -17,7 +17,8 @@ internal object A0CandidateRank {
         LOW_ADVERTISED, UNKNOWN_ADVERTISED
     }
     enum class Warning {
-        VERSION_MISMATCH, DURATION_MISMATCH, SIZE_SUSPICIOUS, ENCODING_CONFLICT
+        VERSION_MISMATCH, DURATION_MISMATCH, SIZE_SUSPICIOUS, ENCODING_CONFLICT,
+        ARTIST_CONFLICT
     }
 
     data class Ranking(
@@ -42,13 +43,24 @@ internal object A0CandidateRank {
         val parts=searchPhrase.orEmpty().split(Regex("\\s+[-–—]\\s+"),limit=2)
         val titleWords=tokens(if(parts.size==2)parts[1] else searchPhrase.orEmpty()).distinct()
         val artistWords=if(parts.size==2) tokens(parts[0]).distinct() else emptyList()
-        val fileWords=tokens(name.substringBeforeLast('.',name)).toSet()
-        val pathWords=tokens(remotePath.orEmpty()).toSet()
-        val allWords=fileWords+pathWords
+        val stem=name.substringBeforeLast('.',name)
+        val fileWords=tokens(stem).toSet()
+        val parentSegments=remotePath.orEmpty().replace('\\','/')
+            .split('/').dropLast(1)
+        val folderWords=parentSegments.flatMap(::tokens).toSet()
+        val artistInFilename=artistWords.isNotEmpty() && artistWords.all { it in fileWords }
+        // Folder context is supporting evidence only when the *same* folder
+        // segment identifies the artist. "New/Jeans" cannot imply "New Jeans".
+        val artistInSingleFolder=artistWords.isNotEmpty() &&
+            parentSegments.any { parent ->
+                val words=tokens(parent).toSet()
+                artistWords.all { it in words }
+            }
         val titleMatches=titleWords.count { it in fileWords }
-        val artistMatches=artistWords.count { it in allWords }
+        val artistMatches=artistWords.count { it in fileWords || it in folderWords }
         val titleComplete=titleWords.isNotEmpty() && titleMatches==titleWords.size
-        val artistComplete=artistWords.isEmpty() || artistMatches==artistWords.size
+        val artistComplete=artistWords.isEmpty() ||
+            artistInFilename || artistInSingleFolder
         val match=when {
             titleComplete && artistComplete -> Match.ALL_TERMS
             titleMatches>0 || artistMatches>0 -> Match.SOME_TERMS
@@ -93,6 +105,24 @@ internal object A0CandidateRank {
             if(titleWords.isEmpty() && artistWords.isEmpty()) 0 else qualityScore
         val warnings=mutableListOf<Warning>()
         val nameWords=fileWords
+        // Explicit "Other Artist - Magnetic.mp3" contradicts the expected
+        // credit even when an ancestor directory is called "ILLIT".
+        // Numeric track prefixes ("01 - Magnetic") and title-led suffixes
+        // ("Magnetic - Master") are not treated as artist claims.
+        val stemParts=stem.split(Regex("\\s+[-–—]\\s+"),limit=2)
+        if(artistWords.isNotEmpty() && stemParts.size==2) {
+            val leading=tokens(stemParts[0]).toSet()
+            val isTrackNumber=leading.isNotEmpty() &&
+                leading.all { token -> token.all(Char::isDigit) }
+            val isTitlePrefix=titleWords.isNotEmpty() &&
+                titleWords.all { it in leading }
+            val isExpectedCredit=artistWords.all { it in leading }
+            if(leading.isNotEmpty() && !isTrackNumber &&
+                !isTitlePrefix && !isExpectedCredit) {
+                score-=36
+                warnings.add(Warning.ARTIST_CONFLICT)
+            }
+        }
         val requestedWords=tokens(searchPhrase.orEmpty()).toSet()
         // A live/remix/acoustic recording is a mismatch only if that version
         // was NOT explicitly requested. Do not penalize a title called "Live".
