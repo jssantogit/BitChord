@@ -3292,12 +3292,17 @@ fun NowPlayingScreen(
                                             startDelayMillis = if (titleOverflowing) MARQUEE_ARTIST_STAGGER_MS else 0L,
                                             onOpenArtist = onOpenArtist,
                                         )
-                                        CanonicalSongRatingStars(
-                                            song = song,
-                                            color = Color.White.copy(alpha = 0.84f),
-                                        )
                                     }
                                 }
+                            }
+                            // During Queue the current track is already rated in
+                            // its queue row: do not repeat stars in this header.
+                            if (!queueOpen) {
+                                CanonicalSongRatingStars(
+                                    song = song,
+                                    modifier = Modifier.padding(end = 8.dp),
+                                    color = Color.White.copy(alpha = 0.84f),
+                                )
                             }
                             Spacer(Modifier.width(10.dp))
                             // Beside the credits rather than down in the toggle row:
