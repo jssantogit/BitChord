@@ -1360,4 +1360,25 @@
     <string name="playback_recovery_retry">Erneut versuchen</string>
     <string name="playback_recovery_retrying">Wird erneut versucht…</string>
     <string name="playback_recovery_dismiss">Schließen</string>
+    <string name="canonical_discovery_header">Katalog entdecken</string>
+    <string name="canonical_discovery_setting_title">Startseite und Entdecken mit Katalog</string>
+    <string name="canonical_discovery_setting_subtitle">Gespeicherte Musik und MusicBrainz auf Startseite und Entdecken nutzen. Dieser Modus gilt auch, wenn YouTube Music deaktiviert ist.</string>
+    <string name="canonical_discovery_home_title">Deine Musik</string>
+    <string name="canonical_discovery_explore_title">Katalog entdecken</string>
+    <string name="canonical_discovery_description">Durchsuche gespeicherte Sammlungen auf diesem Gerät oder MusicBrainz. Katalogmetadaten garantieren keine abspielbaren Audiodateien.</string>
+    <string name="canonical_discovery_search">MusicBrainz durchsuchen</string>
+    <string name="canonical_discovery_open_library">Bibliothek öffnen</string>
+    <string name="canonical_discovery_downloaded_collections">Heruntergeladene Sammlungen</string>
+    <string name="canonical_discovery_local_playlists">Auf diesem Gerät gespeicherte Playlists</string>
+    <string name="canonical_discovery_empty_collections">Auf diesem Gerät sind noch keine Sammlungen gespeichert.</string>
+    <string name="canonical_discovery_catalog_cache">Auf diesem Gerät gespeicherter Katalog</string>
+    <string name="canonical_discovery_cache_loading">Gespeicherten Katalog laden…</string>
+    <string name="canonical_discovery_cache_error">Der gespeicherte MusicBrainz-Katalog konnte nicht gelesen werden.</string>
+    <string name="canonical_discovery_cache_empty">Noch keine MusicBrainz-Einträge gespeichert. Durchsuche den Katalog nach öffentlichen Metadaten.</string>
+    <string name="canonical_discovery_metadata_only">Nur Metadaten · keine Audiodatei katalogisiert</string>
+    <string name="canonical_discovery_asset_available">Audio katalogisiert · Zugriff wird bei Wiedergabe geprüft</string>
+    <string name="canonical_discovery_cached_offline">Offline gespeichert</string>
+    <string name="canonical_discovery_retry">Erneut versuchen</string>
+    <string name="canonical_discovery_refresh">Gespeicherten Katalog aktualisieren</string>
+    <string name="legacy_library_youtube_disabled">Aktiviere YouTube Music in den Einstellungen, um diese Onlinebibliothek zu laden. Lokale Playlists und Sammlungen bleiben verfügbar.</string>
 </resources>
