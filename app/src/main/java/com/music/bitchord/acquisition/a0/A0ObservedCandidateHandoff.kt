@@ -79,12 +79,15 @@ internal class A0ObservedCandidateHandoff(
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
     private val candidates=ArrayList<Choice>(48)
     private val canonicalManualTarget by lazy {
-        // A free-text album is NEVER treated as a confirmed Release MBID.
-        A0CanonicalAcquisitionIntent.manual(
-            title=searchPhrase?.split(Regex("\\s+[-–—]\\s+"),limit=2)
-                ?.lastOrNull()?.takeIf(String::isNotBlank) ?: "Manual search",
-            requestedAlbum=requestedAlbum,
-        )
+        // Badly formatted untrusted/search text must not crash the collector.
+        // An invalid album claim loses confidence; it never grants one.
+        runCatching {
+            A0CanonicalAcquisitionIntent.manual(
+                title=searchPhrase?.split(Regex("\\s+[-–—]\\s+"),limit=2)
+                    ?.lastOrNull()?.takeIf(String::isNotBlank) ?: "Manual search",
+                requestedAlbum=requestedAlbum,
+            )
+        }.getOrElse { A0CanonicalAcquisitionIntent.manual(title="Pesquisa manual") }
     }
     private val albumOrQualitySelected =
         !requestedAlbum.isNullOrBlank() ||
@@ -228,7 +231,7 @@ internal class A0ObservedCandidateHandoff(
             val safeBasename=A0CandidateRank.safeDisplayName(basename)
             val displayName=if(safeBasename.length<=82) safeBasename
                 else safeBasename.take(82-suffix.length)+suffix
-            val immediateFolder=path.replace('\\\\','/').substringBeforeLast('/',"")
+            val immediateFolder=path.replace('\\','/').substringBeforeLast('/',"")
                 .substringAfterLast('/',"")
             val album=A0CanonicalAlbumPolicy.assess(
                 A0CanonicalAlbumPolicy.Target(
