@@ -19,6 +19,8 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.Spinner
+import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -128,6 +130,32 @@ class A0ManualLoginActivity : Activity() {
             importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
         }
         page.addView(searchInput)
+        text("Álbum solicitado (opcional)")
+        val albumInput=EditText(this).apply {
+            hint="Álbum da faixa (deixe vazio se desconhecido)"
+            setText(intent.getStringExtra("bitchord.soulseek.manual.album")?.take(120).orEmpty())
+            inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_NORMAL
+            isSingleLine=true
+            filters=arrayOf(InputFilter.LengthFilter(120))
+            isSaveEnabled=false
+            importantForAutofill=View.IMPORTANT_FOR_AUTOFILL_NO
+        }
+        page.addView(albumInput)
+        text("Qualidade desejada: declaração do peer, não áudio verificado")
+        val qualityLabels=listOf(
+            "Sem filtro específico", "Hi-Res (sem perdas, 24-bit >48 kHz)",
+            "Sem perdas: FLAC/WAV", "Alta qualidade: MP3 ≥256 kbps ou sem perdas",
+            "Alta eficiência: não disponível", "Personalizado: MP3 ≥256 kbps",
+            "Personalizado: FLAC ≥24-bit / 96 kHz",
+        )
+        val qualityPicker=Spinner(this).apply {
+            adapter=ArrayAdapter(this@A0ManualLoginActivity,
+                android.R.layout.simple_spinner_item, qualityLabels).also {
+                it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            }
+            isSaveEnabled=false
+        }
+        page.addView(qualityPicker)
         val acknowledge = CheckBox(this).apply {
             text = "Confirmo que é uma senha exclusiva de testes e aceito " +
                 "a transmissão TCP sem TLS exigida pelo protocolo."
@@ -193,6 +221,32 @@ class A0ManualLoginActivity : Activity() {
             // Keep the validated but unnormalized artist/title delimiter for
             // local ranking. Only the normalized term is sent over Soulseek.
             val enteredSearch=if(performSearch) searchInput.text.toString() else null
+            val albumConstraint=albumInput.text.toString().trim().takeIf(String::isNotBlank)
+            val selectedQuality=when(qualityPicker.selectedItemPosition) {
+                1 -> A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
+                    preset=A0CanonicalAcquisitionIntent.QualityPreset.HI_RES,strict=true)
+                2 -> A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
+                    preset=A0CanonicalAcquisitionIntent.QualityPreset.LOSSLESS,strict=true)
+                3 -> A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
+                    preset=A0CanonicalAcquisitionIntent.QualityPreset.HIGH_QUALITY,strict=true)
+                4 -> A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
+                    preset=A0CanonicalAcquisitionIntent.QualityPreset.HIGH_EFFICIENCY,strict=true)
+                5 -> A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
+                    preset=A0CanonicalAcquisitionIntent.QualityPreset.CUSTOM,
+                    allowedCodecs=setOf(A0CanonicalAcquisitionIntent.Codec.MP3),
+                    minBitrateKbps=256,strict=true)
+                6 -> A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
+                    preset=A0CanonicalAcquisitionIntent.QualityPreset.CUSTOM,
+                    allowedCodecs=setOf(A0CanonicalAcquisitionIntent.Codec.FLAC),
+                    minBitDepth=24,minSampleRateHz=96_000,strict=true)
+                else -> A0CanonicalAcquisitionIntent.QualityProfileSnapshot()
+            }
+            if(albumConstraint!=null && runCatching {
+                A0CanonicalAcquisitionIntent.manual("Busca manual",requestedAlbum=albumConstraint)
+            }.isFailure) {
+                status.text="Álbum inválido: remova caracteres de controle."
+                return
+            }
             val requestedSearch = if (performSearch) {
                 try {
                     A0SearchQuery.normalize(checkNotNull(enteredSearch))
@@ -338,7 +392,9 @@ class A0ManualLoginActivity : Activity() {
                                         connection, username, token,
                                         searchPhrase=checkNotNull(enteredSearch),
                                         saveFormatsOnly=saveToDevice,
-                                        expectedDurationSeconds=expectedDuration
+                                        expectedDurationSeconds=expectedDuration,
+                                        requestedAlbum=albumConstraint,
+                                        qualityProfile=selectedQuality,
                                     ).also { transfer ->
                                         if (!SoulseekActiveSession.registerTransfer(
                                                 transfer, accountGeneration
@@ -737,6 +793,27 @@ class A0ManualLoginActivity : Activity() {
                                                             else " — alerta: " + candidate.warnings.joinToString {
                                                                 it.name.lowercase()
                                                             }
+                                                        val albumWarning=when(candidate.albumEvidence.status) {
+                                                            A0CanonicalAlbumPolicy.Status.UNCONSTRAINED -> ""
+                                                            A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED ->
+                                                                " — álbum declarado compatível (não verificado)"
+                                                            A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL ->
+                                                                " — álbum não comprovado; conferir"
+                                                            A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM ->
+                                                                " — ALERTA: pasta anuncia outro álbum"
+                                                        }
+                                                        val qualityWarning=when(candidate.qualityEvidence.status) {
+                                                            A0DownloadQualityPolicy.Status.NOT_CONSTRAINED,
+                                                            A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED -> ""
+                                                            A0DownloadQualityPolicy.Status.INCONCLUSIVE_MANUAL ->
+                                                                " — qualidade desejada inconclusiva"
+                                                            A0DownloadQualityPolicy.Status.INCOMPATIBLE ->
+                                                                " — perfil solicitado não atendido"
+                                                            A0DownloadQualityPolicy.Status.UNAVAILABLE ->
+                                                                " — codec/preset indisponível"
+                                                            A0DownloadQualityPolicy.Status.INVALID_PROFILE ->
+                                                                " — restrição personalizada inválida"
+                                                        }
                                                         val preflight=when(candidate.preflight.confidence) {
                                                             A0CandidatePreflight.Confidence.STRONG ->
                                                                 "correspondência forte (não verificada)"
@@ -794,6 +871,7 @@ class A0ManualLoginActivity : Activity() {
                                                             " — " + quality + " — relevância " +
                                                             candidate.matchScore + " (" + match + ")" +
                                                             " — " + preflight + reasons + flags +
+                                                            albumWarning + qualityWarning +
                                                             " — " + source + queue + speed +
                                                             " — slot livre anunciado — peer: " + peer
                                                     }.toTypedArray()
