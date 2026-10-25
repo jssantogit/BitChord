@@ -1866,4 +1866,22 @@ class SourcesTest {
         assertNull(TrackMatcher.secondsOf("live"))
         assertNull(TrackMatcher.secondsOf("0:00"))
     }
+
+    @Test
+    fun `legacy YouTube stream resolution requires enabled YouTube source`() {
+        val enabled = SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)
+        val disabled = enabled.copy(enabled = false)
+        assertTrue(SourceRegistry.mayResolveLegacyYoutubeStream(emptyList()))
+        assertTrue(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(enabled)))
+        assertFalse(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(disabled)))
+        assertFalse(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(
+            SourceConfig(kind = SourceKind.ADDON, enabled = true),
+            disabled,
+        )))
+        // Disabling an unrelated source does not turn YouTube off.
+        assertTrue(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(
+            enabled,
+            SourceConfig(kind = SourceKind.JIOSAAVN, enabled = false),
+        )))
+    }
 }
