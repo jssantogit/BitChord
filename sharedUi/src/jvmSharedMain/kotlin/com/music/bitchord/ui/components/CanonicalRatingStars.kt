@@ -1,5 +1,6 @@
 package com.music.bitchord.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
@@ -82,6 +83,7 @@ fun CanonicalRatingStars(
     rating: RatingDisplay?,
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
+    onClick: (() -> Unit)? = null,
 ) {
     val values = rating?.visibleStarValues().orEmpty()
     if (values.isEmpty()) return
@@ -93,9 +95,11 @@ fun CanonicalRatingStars(
         rating?.remoteValue?.let { "$it/5 · $remoteName" },
     ).joinToString("; ")
     Column(
-        modifier = modifier.semantics(mergeDescendants = true) {
-            contentDescription = description
-        },
+        modifier = modifier
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .semantics(mergeDescendants = true) {
+                contentDescription = description
+            },
         horizontalAlignment = Alignment.End,
     ) {
         values.forEach { value -> RatingStarsLine(value, color) }
@@ -128,7 +132,8 @@ fun CanonicalSongRatingStars(
     song: Song,
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
+    onClick: (() -> Unit)? = null,
 ) {
     val rating = LocalCanonicalRatingDisplay.current.forSong(song)
-    CanonicalRatingStars(rating, modifier, color)
+    CanonicalRatingStars(rating, modifier, color, onClick = onClick)
 }
