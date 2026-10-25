@@ -122,4 +122,47 @@ class A0CandidateQualityTest {
         }
     }
 
+
+    @Test fun extraOccurrencesOfArtistOrTitleWordsMustBeReviewed() {
+        for(name in listOf(
+            "ILLIT Magnetic Magnetic.mp3",
+            "ILLIT ILLIT Magnetic.mp3",
+            "ILLIT Magnetic ILLIT.mp3"
+        )) {
+            val rank=A0CandidateRank.rank("ILLIT - Magnetic",name,320,
+                remotePath="Music/ILLIT/"+name,format="mp3",
+                declaredDurationSeconds=161,expectedDurationSeconds=161,
+                sizeBytes=6_400_000L)
+            assertTrue("Duplicated identity in "+name,
+                A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in rank.warnings)
+            val result=A0CandidatePreflight.assess("ILLIT - Magnetic",rank,320,
+                declaredDurationSeconds=161,expectedDurationSeconds=161,
+                format="mp3",sizeBytes=6_400_000L)
+            assertEquals(A0CandidatePreflight.Confidence.REVIEW,result.confidence)
+            assertTrue(A0CandidatePreflight.Reason.IDENTITY_AMBIGUOUS in result.reasons)
+        }
+    }
+
+    @Test fun validRepeatedTitleWordsAndArtistFolderRemainStrong() {
+        val cases=listOf(
+            Triple("Artist - Do Do Do","Artist Do Do Do.mp3",
+                "Music/Artist/Artist Do Do Do.mp3"),
+            Triple("ILLIT - Magnetic","Magnetic.mp3",
+                "Music/ILLIT/Magnetic.mp3"),
+            Triple("ILLIT - Magnetic","ILLIT Magnetic (Official Audio).mp3",
+                "Music/ILLIT/ILLIT Magnetic (Official Audio).mp3")
+        )
+        for((query,name,path) in cases) {
+            val rank=A0CandidateRank.rank(query,name,320,
+                remotePath=path,format="mp3",
+                declaredDurationSeconds=161,expectedDurationSeconds=161,
+                sizeBytes=6_400_000L)
+            assertFalse("Valid identity: "+name,
+                A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in rank.warnings)
+            assertEquals(A0CandidatePreflight.Confidence.STRONG,
+                A0CandidatePreflight.assess(query,rank,320,
+                    declaredDurationSeconds=161,expectedDurationSeconds=161,
+                    format="mp3",sizeBytes=6_400_000L).confidence)
+        }
+    }
 }
