@@ -18,10 +18,9 @@ internal object A0SearchQuery {
     private val whitespace = Regex("\\s+")
 
     /**
-     * Suggestions are NEVER dispatched automatically. A user must choose the
-     * next attempt so title-only/diacritic variants cannot fan out silently.
-     * Preserve user spelling for the initial query, then offer at most two
-     * alternatives after validation.
+     * The manual variation button offers up to two alternatives.
+     * A separately bounded, same-session title-only fallback may be sent
+     * after the initial exact query finds no compatible candidates.
      */
     fun variants(userEntered: String): List<String> {
         val first = normalize(userEntered)
@@ -34,6 +33,19 @@ internal object A0SearchQuery {
             variants.add(normalize(parts[1]))
         }
         return variants.take(3)
+    }
+
+    /**
+     * The one safe automatic fallback when a structured artist-title search
+     * yields no quality-compatible candidates. Do not create a broad query
+     * from unstructured or short titles. Identity checks still use the
+     * ORIGINAL artist-title request, never this fallback text.
+     */
+    fun titleOnlyFallback(userEntered: String): String? {
+        val parts = userEntered.split(Regex("\\s+[-–—]\\s+"), limit = 2)
+        if (parts.size != 2 || parts[0].isBlank()) return null
+        return runCatching { normalize(parts[1]) }.getOrNull()
+            ?.takeIf { it.length >= 3 && it != normalize(userEntered) }
     }
 
     fun normalize(userEntered: String): String {
