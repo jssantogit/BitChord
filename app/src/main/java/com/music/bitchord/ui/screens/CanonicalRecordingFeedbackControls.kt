@@ -217,9 +217,9 @@ internal fun CanonicalRecordingFeedbackPanel(
                             Row(Modifier.fillMaxSize()) {
                                 Box(
                                     modifier = Modifier.weight(1f).fillMaxHeight()
-                                        .clickable(enabled = !saving) { selected = index + 0.5 }
+                                        .clickable(enabled = !saving) { selected = (index + 0.5).coerceAtLeast(1.0) }
                                         .semantics {
-                                            contentDescription = "${index + 0.5} stars"
+                                            contentDescription = "${(index + 0.5).coerceAtLeast(1.0)} stars"
                                         },
                                 )
                                 Box(
