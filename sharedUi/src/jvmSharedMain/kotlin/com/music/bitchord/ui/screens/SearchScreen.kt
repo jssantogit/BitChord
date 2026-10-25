@@ -306,6 +306,7 @@ fun SearchScreen(
             // underlying source is metadata, not a separate user-facing tab.
             // YouTube-only video/playlist filters are never offered there.
             if (!suggesting && !searchingLibrary && !searchingAddons &&
+                (!searchingCanonical || canonicalDetail == null) &&
                 (results != null || (searchingCanonical && canonicalResults != null))
             ) {
                 SearchFilterTabs(
