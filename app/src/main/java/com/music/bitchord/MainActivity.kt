@@ -238,6 +238,9 @@ import com.music.bitchord.ui.components.PlaybackRecoveryBanner
 import com.music.bitchord.playback.setQueueDragActive
 import com.music.bitchord.ui.MainViewModel
 import com.music.bitchord.ui.SearchSource
+import com.music.bitchord.ui.SearchOrigin
+import com.music.bitchord.ui.searchOriginOf
+import com.music.bitchord.ui.searchSourceForOrigin
 import com.music.bitchord.ui.components.BottomFadeScrim
 import com.music.bitchord.ui.components.FloatingBarsTapGuard
 import com.music.bitchord.ui.components.BottomTab
@@ -327,6 +330,9 @@ import com.music.bitchord.ui.screens.CanonicalMyRatingsScreen
 import com.music.bitchord.ui.screens.LibraryRediscoveryShelfEntry
 import com.music.bitchord.ui.screens.AdaptiveCollectionsLibraryEntry
 import com.music.bitchord.playback.CanonicalCollectionIntent
+import com.music.bitchord.playback.CanonicalRemotePlaybackRequest
+import com.music.bitchord.playback.CanonicalRemotePlaybackMetadata
+import com.music.bitchord.playback.playCanonicalRemote
 import com.music.bitchord.ui.screens.rememberMusicBrainzCatalogAction
 import com.music.bitchord.ui.screens.rememberSmartCollectionBatchAction
 import com.music.bitchord.ui.screens.SmartCollectionActionSource
@@ -3443,18 +3449,36 @@ private fun BitChordApp(
                             topPadding = topBarContentPadding(),
                             // The field is in the top bar; see the bar's accessory.
                             showField = false,
-                            // The settings page's own two-state selector, so the
-                            // app has one look for "pick one of these".
+                            // Users choose an origin, not a metadata provider.
+                            // General routes to canonical search (or legacy
+                            // YouTube if explicitly in legacy mode) and also
+                            // includes indexed server assets and enabled addons.
                             sourceSwitcher = {
                                 SegmentedControl(
                                     options = listOf(
-                                        stringResource(R.string.search_source_youtube),
-                                        stringResource(R.string.library),
-                                        stringResource(R.string.search_source_addons),
-                                        "MusicBrainz",
+                                        stringResource(R.string.search_origin_general),
+                                        stringResource(R.string.search_origin_server),
+                                        stringResource(R.string.search_origin_local),
                                     ),
-                                    selectedIndex = searchSource.ordinal,
-                                    onSelect = { index -> onSearchSourceChange(SearchSource.entries[index]) },
+                                    selectedIndex = when (searchOriginOf(searchSource)) {
+                                        SearchOrigin.GENERAL -> 0
+                                        SearchOrigin.SERVER -> 1
+                                        SearchOrigin.LOCAL -> 2
+                                    },
+                                    onSelect = { index ->
+                                        val origin = when (index) {
+                                            1 -> SearchOrigin.SERVER
+                                            2 -> SearchOrigin.LOCAL
+                                            else -> SearchOrigin.GENERAL
+                                        }
+                                        onSearchSourceChange(
+                                            searchSourceForOrigin(
+                                                origin,
+                                                canonicalMode = usesCanonicalDiscovery,
+                                                configs = discoverySourceConfigs,
+                                            ),
+                                        )
+                                    },
                                 )
                             },
                             searchingLibrary = searchSource == SearchSource.LIBRARY,
@@ -3476,6 +3500,23 @@ private fun BitChordApp(
                             onCanonicalAddToQueue = { mbid ->
                                 executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.ADD_TO_QUEUE)
                             },
+                            serverResults = viewModel.serverResults.collectAsStateWithLifecycle().value,
+                            onServerPlay = { row ->
+                                // Never invent a videoId for remote audio. The
+                                // backend rechecks this canonical asset/account
+                                // before any network URL is resolved by Media3.
+                                controller?.playCanonicalRemote(
+                                    request = CanonicalRemotePlaybackRequest(
+                                        recordingId = row.recordingId,
+                                        mediaAssetId = row.mediaAssetId,
+                                        providerKey = row.providerKey,
+                                    ),
+                                    metadata = CanonicalRemotePlaybackMetadata(
+                                        title = row.title,
+                                        artistDisplay = row.artistDisplay,
+                                    ),
+                                )
+                            },
                             addonResults = addonResults,
                             addonHistory = viewModel.addonSearchHistory.collectAsStateWithLifecycle().value,
                             onAddonHistoryClick = { term ->
@@ -3488,21 +3529,20 @@ private fun BitChordApp(
                             // tapping the row there would give.
                             onLibrarySongClick = { songs, index ->
                                 playFrom(
-                                    songs,
-                                    index,
-                                    if (searchSource == SearchSource.ADDONS) {
-                                        QueueSource(
-                                            context.getString(R.string.search_source_addons),
-                                            PlaybackSourceType.BROWSE,
-                                            "addons:search",
-                                        )
-                                    } else {
-                                        QueueSource(
-                                            context.getString(R.string.local_music),
-                                            PlaybackSourceType.BROWSE,
-                                            "local:all",
-                                        )
-                                    },
+                                    songs, index,
+                                    QueueSource(
+                                        context.getString(R.string.local_music),
+                                        PlaybackSourceType.BROWSE, "local:all",
+                                    ),
+                                )
+                            },
+                            onAddonSongClick = { songs, index ->
+                                playFrom(
+                                    songs, index,
+                                    QueueSource(
+                                        context.getString(R.string.search_origin_server),
+                                        PlaybackSourceType.SEARCH, "addons:search",
+                                    ),
                                 )
                             },
                         )
