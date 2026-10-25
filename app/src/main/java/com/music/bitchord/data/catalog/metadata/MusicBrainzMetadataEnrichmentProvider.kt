@@ -74,9 +74,18 @@ internal class MusicBrainzRateLimiter(
     }
 }
 
+/**
+ * Enrichment, identity discovery and public catalog search must share one
+ * per-process request budget. Individual MusicBrainzClient instances are not
+ * allowed to independently send one request per second each.
+ */
+internal object MusicBrainzRequestBudget {
+    val limiter = MusicBrainzRateLimiter()
+}
+
 internal class MusicBrainzClient(
     private val transport: MusicBrainzTransport = KtorMusicBrainzTransport(),
-    private val rateLimiter: MusicBrainzRateLimiter = MusicBrainzRateLimiter(),
+    internal val rateLimiter: MusicBrainzRateLimiter = MusicBrainzRequestBudget.limiter,
     val userAgent: String = defaultMusicBrainzUserAgent(),
 ) {
     suspend fun get(
