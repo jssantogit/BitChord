@@ -29,10 +29,10 @@ class CanonicalReleaseTrackProvenanceTest {
                 dao.upsertReleaseTrack(ReleaseTrackEntity(release, "rec", 2))
                 dao.upsertExternalIdentity(ExternalIdentityEntity("local-tags","release","local-$release",release))
             }
-            dao.upsertReleaseTrackSource(CatalogReleaseTrackSourceEntity("local","rec","local-tags"))
-            dao.upsertReleaseTrackSource(CatalogReleaseTrackSourceEntity("remote","rec","opensubsonic:home"))
-            dao.upsertReleaseTrackSource(CatalogReleaseTrackSourceEntity("mixed","rec","local-tags"))
-            dao.upsertReleaseTrackSource(CatalogReleaseTrackSourceEntity("mixed","rec","musicbrainz"))
+            dao.upsertCatalogReleaseTrackSource(CatalogReleaseTrackSourceEntity("local","rec","local-tags"))
+            dao.upsertCatalogReleaseTrackSource(CatalogReleaseTrackSourceEntity("remote","rec","opensubsonic:home"))
+            dao.upsertCatalogReleaseTrackSource(CatalogReleaseTrackSourceEntity("mixed","rec","local-tags"))
+            dao.upsertCatalogReleaseTrackSource(CatalogReleaseTrackSourceEntity("mixed","rec","musicbrainz"))
             dao.deleteReleaseTrackSourcesForRecording("rec", "local-tags")
             dao.deleteLocalOnlyReleaseTracksForRecording("rec", "local-tags")
             assertEquals(
