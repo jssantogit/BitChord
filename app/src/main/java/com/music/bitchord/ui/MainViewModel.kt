@@ -2681,6 +2681,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     throw cancelled
                 } catch (_: Exception) { /* Network results remain independent. */ }
             }
+            if (editions is MusicBrainzCatalogSearchResult.Success) {
+                try {
+                    withContext(Dispatchers.IO) {
+                        MusicBrainzCatalogIndex(
+                            CanonicalCatalogDatabase.get(getApplication<Application>()),
+                        ).persistReleases(editions.page.items)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { /* Never mistake edition metadata for available audio. */ }
+            }
             // A public Recording remains known even with zero MediaAssets.
             // Only a trusted MBID claim creates/reuses a canonical identity;
             // never match local tracks by title or artist name.
@@ -2776,6 +2787,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 add(CanonicalCatalogSearchRow(
                                     hit.musicBrainzId, CanonicalSearchKind.ARTIST, hit.name,
                                     hit.disambiguation ?: hit.country, fromOfflineCache = true,
+                                ))
+                            }
+                            dao.searchKnownMusicBrainzReleases(query, 25).forEach { hit ->
+                                add(CanonicalCatalogSearchRow(
+                                    hit.musicBrainzId, CanonicalSearchKind.RELEASE, hit.title,
+                                    listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
+                                        .joinToString(" · "), fromOfflineCache = true,
                                 ))
                             }
                         }
