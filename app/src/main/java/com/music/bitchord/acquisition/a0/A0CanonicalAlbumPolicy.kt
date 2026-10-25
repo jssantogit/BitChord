@@ -58,7 +58,10 @@ internal object A0CanonicalAlbumPolicy {
             return Assessment(Status.INCONCLUSIVE_MANUAL, Reason.ALBUM_NOT_ADVERTISED)
         }
         if (claim.source == ClaimSource.DIRECTORY_HINT &&
-            (observed == normalize(target.expectedArtist) || observed in genericFolders)
+            (observed == normalize(target.expectedArtist) || observed in genericFolders ||
+                observed.matches(Regex("(?:cd|disc|disk) ?[0-9]{1,2}")) ||
+                observed.matches(Regex("(?:vinyl|side) ?[a-d]")) ||
+                observed.matches(Regex("[0-9]{1,2}")))
         ) {
             // A folder named after the artist, codec or collection is not an
             // affirmative claim that the file belongs to a different album.
