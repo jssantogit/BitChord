@@ -108,12 +108,13 @@ class A0CanonicalBenchmarkReplayTest {
                 assessed.copy(confidence=confidence),album?.status)
         }.sortedWith(
             compareBy<Candidate> {
-                if(!albumGated) 0 else when(it.album) {
-                    A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED,
-                    A0CanonicalAlbumPolicy.Status.UNCONSTRAINED -> 0
-                    A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL -> 1
-                    A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM -> 2
-                    null -> 0
+                if(!albumGated) 0 else when {
+                    // Hard technical/identity conflicts must never rise to
+                    // the top solely because the peer advertised an album.
+                    it.assessment.confidence==A0CandidatePreflight.Confidence.UNSAFE ||
+                        it.album==A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM -> 2
+                    it.album==A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL -> 1
+                    else -> 0
                 }
             }.thenBy { it.assessment.confidence.ordinal }
                 .thenByDescending { it.score }.thenBy { it.id }
