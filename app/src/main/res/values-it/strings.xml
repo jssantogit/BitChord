@@ -1320,4 +1320,5 @@
     <string name="canonical_discovery_retry">Riprova</string>
     <string name="canonical_discovery_refresh">Aggiorna catalogo salvato</string>
     <string name="legacy_library_youtube_disabled">Attiva YouTube Music nelle Impostazioni per caricare la libreria online. Le playlist e le raccolte locali restano disponibili.</string>
+    <string name="spotify_import_youtube_required">Per importare playlist Spotify serve ancora la ricerca su YouTube Music. Attiva YouTube Music e disattiva la scoperta basata sul catalogo.</string>
 </resources>

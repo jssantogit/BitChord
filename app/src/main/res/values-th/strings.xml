@@ -1364,4 +1364,5 @@
     <string name="canonical_discovery_retry">ลองอีกครั้ง</string>
     <string name="canonical_discovery_refresh">รีเฟรชแค็ตตาล็อกที่บันทึกไว้</string>
     <string name="legacy_library_youtube_disabled">เปิด YouTube Music ในการตั้งค่าเพื่อโหลดคลังเพลงออนไลน์นี้ เพลย์ลิสต์และคอลเล็กชันในเครื่องยังใช้งานได้</string>
+    <string name="spotify_import_youtube_required">การนำเข้าเพลย์ลิสต์ Spotify ยังต้องอาศัยการจับคู่ผ่าน YouTube Music เปิดใช้ YouTube Music และปิดการค้นพบจากแค็ตตาล็อกก่อนนำเข้า</string>
 </resources>

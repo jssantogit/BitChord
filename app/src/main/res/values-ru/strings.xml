@@ -1413,4 +1413,5 @@
     <string name="canonical_discovery_retry">Повторить</string>
     <string name="canonical_discovery_refresh">Обновить каталог</string>
     <string name="legacy_library_youtube_disabled">Включите YouTube Music в настройках, чтобы загрузить эту онлайн-медиатеку. Локальные плейлисты и коллекции останутся доступны.</string>
+    <string name="spotify_import_youtube_required">Для импорта плейлистов Spotify пока требуется поиск совпадений в YouTube Music. Включите YouTube Music и отключите поиск на основе каталога.</string>
 </resources>

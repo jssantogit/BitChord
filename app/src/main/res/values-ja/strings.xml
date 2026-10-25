@@ -1359,4 +1359,5 @@
     <string name="canonical_discovery_retry">再試行</string>
     <string name="canonical_discovery_refresh">保存済みカタログを更新</string>
     <string name="legacy_library_youtube_disabled">このオンラインライブラリを読み込むには設定でYouTube Musicを有効にしてください。ローカルのプレイリストとコレクションは引き続き利用できます。</string>
+    <string name="spotify_import_youtube_required">Spotifyのプレイリストのインポートには、現在YouTube Musicでの照合が必要です。YouTube Musicを有効にして、カタログ優先の検索をオフにしてください。</string>
 </resources>
