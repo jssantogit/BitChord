@@ -1418,6 +1418,18 @@ class PlaybackService : MediaLibraryService() {
             }
         }
 
+        // The Media3 loader blocks future legacy YT resolution when disabled.
+        // Read-ahead has a separate scope: cancel *already scheduled* warm-up
+        // requests immediately on opt-out, not only on the next queue change.
+        scope.launch {
+            SourceRegistry.configs
+                .map(SourceRegistry::mayResolveLegacyYoutubeStream)
+                .distinctUntilChanged()
+                .collect { youtubeAllowed ->
+                    if (!youtubeAllowed) AudioCache.cancel()
+                }
+        }
+
         val streamResolver = ResolvingDataSource.Resolver { dataSpec ->
             // Which track everything below is for, said once, because none of
             // it would otherwise know: this runs on ExoPlayer's loader thread
