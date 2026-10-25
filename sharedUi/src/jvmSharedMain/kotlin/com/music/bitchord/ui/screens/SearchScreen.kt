@@ -89,6 +89,19 @@ import com.music.bitchord.ui.haptics.Haptic
 import com.music.bitchord.ui.haptics.rememberHaptics
 import java.util.Locale
 
+/**
+ * Search-only MusicBrainz identity. This model deliberately contains no Song,
+ * videoId or playback URI; tapping a metadata match cannot start a YT stream.
+ */
+enum class CanonicalSearchKind { RECORDING, RELEASE_GROUP, ARTIST }
+
+data class CanonicalCatalogSearchRow(
+    val musicBrainzId: String,
+    val kind: CanonicalSearchKind,
+    val title: String,
+    val subtitle: String?,
+)
+
 @Composable
 fun SearchScreen(
     query: String,
@@ -145,6 +158,9 @@ fun SearchScreen(
     searchingLibrary: Boolean = false,
     /** Whether the page is showing the enabled addons' combined results; see [addonResults]. */
     searchingAddons: Boolean = false,
+    /** Public MusicBrainz discovery shows metadata-only rows with no play actions. */
+    searchingCanonical: Boolean = false,
+    canonicalResults: UiState<List<CanonicalCatalogSearchRow>>? = null,
     /** The Addons source's tracks for the submitted query; null until one is submitted. */
     addonResults: UiState<List<Song>>? = null,
     /** Words searched in the Addons tab before, newest first; shown while the field is empty. */
@@ -185,14 +201,14 @@ fun SearchScreen(
     // MainViewModel.suggestions. Nothing below it is worth showing while it is
     // up: the results are for whatever was searched before this edit began,
     // and so are the filter tabs above them.
-    val suggesting = suggestions.isNotEmpty() && !searchingLibrary && !searchingAddons
+    val suggesting = suggestions.isNotEmpty() && !searchingLibrary && !searchingAddons && !searchingCanonical
     // Live media results arrive from the parallel typeahead pipeline; show
     // them only while the user is still typing (suggestions visible), so they
     // appear as a dropdown beneath the text completions rather than floating
     // after the search has committed.
     val showTypeahead = typeaheadResults.isNotEmpty() && suggesting
-    LaunchedEffect(listState, results, loadingMore, searchingLibrary, searchingAddons) {
-        if (results !is UiState.Success || searchingLibrary || searchingAddons) return@LaunchedEffect
+    LaunchedEffect(listState, results, loadingMore, searchingLibrary, searchingAddons, searchingCanonical) {
+        if (results !is UiState.Success || searchingLibrary || searchingAddons || searchingCanonical) return@LaunchedEffect
         snapshotFlow {
             val layout = listState.layoutInfo
             (layout.visibleItemsInfo.lastOrNull()?.index ?: -1) to layout.totalItemsCount
@@ -239,7 +255,7 @@ fun SearchScreen(
             // they stay up for an empty or failed search too, or picking a filter
             // that finds nothing would take away the control needed to leave it.
             // They are YouTube's categories, so the Library source has none.
-            if (results != null && !suggesting && !searchingLibrary && !searchingAddons) {
+            if (results != null && !suggesting && !searchingLibrary && !searchingAddons && !searchingCanonical) {
                 SearchFilterTabs(filter = filter, onFilterChange = onFilterChange)
             }
         }
@@ -250,6 +266,7 @@ fun SearchScreen(
             contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
         ) {
             when {
+                searchingCanonical -> canonicalMusicBrainzResults(canonicalResults)
                 searchingLibrary || searchingAddons -> librarySearchResults(
                     query = query.trim(),
                     results = if (searchingAddons) addonResults else libraryResults,
@@ -384,6 +401,77 @@ fun SearchScreen(
                             circular = filter == SearchFilter.ARTISTS,
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The MusicBrainz catalog proves that a Recording/ReleaseGroup/Artist exists,
+ * not that the user owns an audio rendition. Keep the UI strictly non-playable
+ * until canonical availability resolution is wired for each Recording MBID.
+ */
+private fun LazyListScope.canonicalMusicBrainzResults(
+    results: UiState<List<CanonicalCatalogSearchRow>>?,
+) {
+    when (results) {
+        null -> item(key = "musicbrainz:hint") {
+            MessageState("Search the MusicBrainz catalog. Results are metadata, not audio.")
+        }
+        UiState.Loading -> songListSkeleton(keyPrefix = "musicbrainz:search")
+        is UiState.Error -> item(key = "musicbrainz:error") {
+            MessageState(results.message)
+        }
+        is UiState.Success -> if (results.data.isEmpty()) {
+            item(key = "musicbrainz:empty") { MessageState("No MusicBrainz entries found.") }
+        } else {
+            itemsIndexed(
+                items = results.data,
+                key = { _, row -> "mb:${row.kind}:${row.musicBrainzId}" },
+            ) { index, row ->
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(
+                        start = PAGE_GUTTER, end = PAGE_GUTTER, top = 12.dp, bottom = 12.dp,
+                    ),
+                ) {
+                    Text(
+                        text = row.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = buildString {
+                            append(when (row.kind) {
+                                CanonicalSearchKind.RECORDING -> "Recording"
+                                CanonicalSearchKind.RELEASE_GROUP -> "Release group"
+                                CanonicalSearchKind.ARTIST -> "Artist"
+                            })
+                            row.subtitle?.takeIf { it.isNotBlank() }?.let {
+                                append(" · "); append(it)
+                            }
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (row.kind == CanonicalSearchKind.RECORDING) {
+                        Text(
+                            text = "Metadata only · Play requires a local or authorized remote file",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                if (index < results.data.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
                 }
             }
         }
