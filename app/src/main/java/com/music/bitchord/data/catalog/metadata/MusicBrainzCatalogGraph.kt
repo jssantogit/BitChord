@@ -199,7 +199,10 @@ internal class MusicBrainzCatalogGraph(
             val credit = item as? JsonObject ?: return@joinToString ""
             (credit.string("name")
                 ?: (credit["artist"] as? JsonObject)?.string("name")).orEmpty() +
-                credit.string("joinphrase").orEmpty()
+                // MusicBrainz joinphrase spaces carry the intended typography
+                // (e.g. " feat. "). Unlike artist names, do not trim them.
+                runCatching { credit["joinphrase"]?.jsonPrimitive?.contentOrNull }
+                    .getOrNull().orEmpty()
         }.trim().takeIf(String::isNotEmpty)
 
     private fun String?.validMbid(): String? =
