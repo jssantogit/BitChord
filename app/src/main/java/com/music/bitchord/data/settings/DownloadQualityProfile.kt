@@ -48,7 +48,11 @@ data class DownloadCustomOptions(
         if(format in setOf("mp3","aac","m4a"))
             bitrateKbps?.let { append(" · $it kbps") }
         else {
-            sampleRateHz?.let { append(" · ${it/1000} kHz") }
+            sampleRateHz?.let { hz ->
+                val whole=hz/1000
+                val fraction=(hz%1000).toString().padStart(3,'0').trimEnd('0')
+                append(" · $whole" + (if(fraction.isNotEmpty()) ",$fraction" else "") + " kHz")
+            }
             bitDepth?.let { append(" · $it bits") }
         }
     }
