@@ -155,7 +155,8 @@ internal class A0ObservedCandidateHandoff(
             val preflight=A0CandidatePreflight.assess(
                 searchPhrase,ranking,bitrate,
                 declaredDurationSeconds=duration,expectedDurationSeconds=expectedDurationSeconds,
-                format=ext,sizeBytes=file.sizeBytes
+                format=ext,sizeBytes=file.sizeBytes,
+                declaredSampleRateHz=sampleRate,declaredBitDepth=bitDepth
             )
             // A0's original take(82) could cut off ".mp3" and hide an
             // otherwise eligible file from the save selector.
