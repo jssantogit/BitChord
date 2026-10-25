@@ -53,6 +53,7 @@ class CanonicalCatalogArtistMigrationTest {
                 CanonicalCatalogDatabase.MIGRATION_3_4,
                 CanonicalCatalogDatabase.MIGRATION_4_5,
                 preserveLegacyTrackCreditColumns,
+                CanonicalCatalogDatabase.MIGRATION_6_7,
             )
             .allowMainThreadQueries()
             .build()
