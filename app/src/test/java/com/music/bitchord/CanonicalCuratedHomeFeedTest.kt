@@ -58,6 +58,22 @@ class CanonicalCuratedHomeFeedTest {
         assertEquals(listOf("SUPER REAL ME", "Older"), items.map { it.title })
     }
 
+    @Test fun existingReleasedEditionIsVisibleWhenEveryCachedGroupIsFuture() {
+        val futureGroup = release.copy(
+            musicBrainzId = "00000000-0000-0000-0000-000000000009",
+            title = "Future release", releaseDate = "2027-01-01",
+        )
+        val releasedEdition = release.copy(
+            musicBrainzId = "00000000-0000-0000-0000-000000000010",
+            kind = CanonicalSearchKind.RELEASE, title = "Existing EP",
+            releaseDate = "2024-03-25",
+        )
+        val shelves = feed(listOf(futureGroup, releasedEdition))
+        assertEquals(listOf("Lançamentos"), shelves.map { it.title })
+        assertEquals("catalog:RELEASE:${releasedEdition.musicBrainzId}",
+            shelves.single().items.single().browseId)
+    }
+
     @Test fun locallyRepeatedSongsCanTrendWithoutAnyMusicBrainzMatch() {
         val shelves = canonicalCuratedHomeShelves(
             savedReleases = emptyList(), metadata = emptyList(),
