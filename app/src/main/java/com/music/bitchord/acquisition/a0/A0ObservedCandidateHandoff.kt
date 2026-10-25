@@ -86,7 +86,9 @@ internal class A0ObservedCandidateHandoff(
             A0CandidateClaimClusters.compareEvidence(
                 a.claim,a.preflight,b.claim,b.preflight)
         }
-        .thenByDescending { A0PeerAvailability.priority(it.peerAvailability) }
+        .thenComparator { a,b ->
+            A0PeerAvailability.compareSource(b.peerAvailability,a.peerAvailability)
+        }
         .thenBy { it.displayName.lowercase(java.util.Locale.ROOT) }
         .thenBy { it.peerUsername }
         .thenBy { it.remotePath }
