@@ -68,7 +68,11 @@ internal object A0CandidateClaimClusters {
      * A distinct strong claim at score distance <12 causes abstention.
      */
     fun preview(entries:List<Entry>):Preview {
-        val groups=entries.withIndex().groupBy { key(it.value.claim) }
+        // Same filename/bytes is not the same *evidence* when folder context
+        // changes identity confidence. Preserve separate risk populations.
+        val groups=entries.withIndex().groupBy {
+            key(it.value.claim) to it.value.assessment
+        }
         val representatives=groups.values.map { group ->
             group.sortedWith(compareByDescending<IndexedValue<Entry>> {
                 it.value.score
