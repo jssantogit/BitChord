@@ -17,7 +17,8 @@ internal class A0ObservedCandidateHandoff(
     private val searchToken:Int,
     allowLoopbackForLocalTest:Boolean=false,
     private val searchPhrase:String?=null,
-    private val saveFormatsOnly:Boolean=false
+    private val saveFormatsOnly:Boolean=false,
+    private val expectedDurationSeconds:Int?=null
 ) {
     class Choice internal constructor(
         val displayName:String,
@@ -27,6 +28,11 @@ internal class A0ObservedCandidateHandoff(
         val matchScore:Int,
         val matchSignal:A0CandidateRank.Match,
         val declaredBitrateKbps:Int?,
+        val quality:A0CandidateRank.Quality,
+        val warnings:List<A0CandidateRank.Warning>,
+        val declaredDurationSeconds:Int?,
+        val declaredSampleRateHz:Int?,
+        val declaredBitDepth:Int?,
     ) {
         override fun toString()="A0 observed candidate (redacted)"
     }
@@ -44,6 +50,7 @@ internal class A0ObservedCandidateHandoff(
         val validBeforeLimit:Int=0,
         val duplicates:Int=0,
         val capacityDropped:Int=0,
+        val perPeerDropped:Int=0,
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
     private val candidates=ArrayList<Choice>(48)
@@ -55,6 +62,8 @@ internal class A0ObservedCandidateHandoff(
     private var eligible=0
     private var duplicateCount=0
     private var capDropped=0
+    private var perPeerDropped=0
+    private val seen=HashSet<Pair<String,String>>()
     private var replies=0
     private var publicSeen=0
     private var lockedSeen=0
@@ -112,15 +121,24 @@ internal class A0ObservedCandidateHandoff(
                 noSlotSeen=(noSlotSeen+1).coerceAtMost(100000)
                 continue
             }
-            if(candidates.any {
-                it.peerUsername==result.peerUsername && it.remotePath==path
-            }) {
+            val identity=result.peerUsername to path
+            if(!seen.add(identity)) {
                 duplicateCount=(duplicateCount+1).coerceAtMost(100000)
                 continue
             }
+            // Cap untrusted identity storage, never persist it or print it.
+            if(seen.size>8192) seen.clear()
             eligible=(eligible+1).coerceAtMost(100000)
-            val bitrate=file.attributes[0]?.takeIf { it in 1..10000 }
-            val ranking=A0CandidateRank.rank(searchPhrase,basename,bitrate)
+            val bitrate=file.attributes[0]?.takeIf { it in 32..1536 }
+            val duration=file.attributes[1]?.takeIf { it in 1..14400 }
+            val sampleRate=file.attributes[4]?.takeIf { it in 8000..384000 }
+            val bitDepth=file.attributes[5]?.takeIf { it in 8..32 }
+            val ranking=A0CandidateRank.rank(
+                searchPhrase,basename,bitrate,remotePath=path,format=ext,
+                declaredDurationSeconds=duration,expectedDurationSeconds=expectedDurationSeconds,
+                declaredSampleRateHz=sampleRate,declaredBitDepth=bitDepth,
+                sizeBytes=file.sizeBytes,queueLength=result.queueLength
+            )
             // A0's original take(82) could cut off ".mp3" and hide an
             // otherwise eligible file from the save selector.
             val suffix=".$ext"
@@ -130,9 +148,18 @@ internal class A0ObservedCandidateHandoff(
                 displayName=displayName,sizeBytes=file.sizeBytes,
                 peerUsername=result.peerUsername,remotePath=path,
                 matchScore=ranking.score, matchSignal=ranking.match,
-                declaredBitrateKbps=bitrate
+                declaredBitrateKbps=bitrate,quality=ranking.quality,
+                warnings=ranking.warnings,declaredDurationSeconds=duration,
+                declaredSampleRateHz=sampleRate,declaredBitDepth=bitDepth
             ))
             candidates.sortWith(choiceOrder)
+            // A single enthusiastic peer cannot displace every other source.
+            val fromPeer=candidates.withIndex()
+                .filter { it.value.peerUsername==result.peerUsername }
+            if(fromPeer.size>10) {
+                candidates.removeAt(fromPeer.last().index)
+                perPeerDropped=(perPeerDropped+1).coerceAtMost(100000)
+            }
             if(candidates.size>48) {
                 candidates.removeAt(candidates.lastIndex)
                 capDropped=(capDropped+1).coerceAtMost(100000)
@@ -152,7 +179,8 @@ internal class A0ObservedCandidateHandoff(
         accepted=candidates.size,
         validBeforeLimit=eligible,
         duplicates=duplicateCount,
-        capacityDropped=capDropped
+        capacityDropped=capDropped,
+        perPeerDropped=perPeerDropped
     )
 
     @Synchronized
