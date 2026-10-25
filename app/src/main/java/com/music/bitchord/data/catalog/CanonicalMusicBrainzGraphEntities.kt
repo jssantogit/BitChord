@@ -18,6 +18,27 @@ internal data class CatalogReleaseGroupEntity(
     val firstReleaseDate: String?,
 )
 
+/**
+ * Positive artist → release-group evidence from a MusicBrainz artist-MBID browse.
+ * Never infer this edge from a display name (homonymous artists are distinct).
+ * An incomplete or failed browse cannot remove previously known associations.
+ */
+@Entity(
+    tableName = "catalog_musicbrainz_artist_group",
+    primaryKeys = ["artistId", "releaseGroupId"],
+    foreignKeys = [
+        ForeignKey(entity = ArtistEntity::class, parentColumns = ["id"],
+            childColumns = ["artistId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = CatalogReleaseGroupEntity::class, parentColumns = ["id"],
+            childColumns = ["releaseGroupId"], onDelete = ForeignKey.CASCADE),
+    ],
+    indices = [Index("releaseGroupId")],
+)
+internal data class CatalogMusicBrainzArtistGroupEntity(
+    val artistId: String,
+    val releaseGroupId: String,
+)
+
 /** Multiple territorial/format releases can belong to one ReleaseGroup. */
 @Entity(
     tableName = "catalog_release_group_edition",
