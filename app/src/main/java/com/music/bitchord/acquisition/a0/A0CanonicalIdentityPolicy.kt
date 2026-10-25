@@ -64,6 +64,10 @@ internal object A0CanonicalIdentityPolicy {
         if (intent.requestedVersion.isNotEmpty() && observedVersionTags.isEmpty()) {
             reasons += Reason.VERSION_UNCONFIRMED
         }
+        // The resolver status has meaning only with an actual canonical
+        // target. A manual-only title and album must NEVER borrow another
+        // request's confirmed relation to become STRONG.
+        if (intent.ids == null) reasons += Reason.CANONICAL_INCOMPLETE
         when (resolution.status) {
             A0CanonicalAcquisitionResolver.Status.CONFIRMED_RELATION -> Unit
             A0CanonicalAcquisitionResolver.Status.UNAVAILABLE ->
