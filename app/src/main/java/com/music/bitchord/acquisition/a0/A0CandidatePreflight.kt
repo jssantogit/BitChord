@@ -133,19 +133,26 @@ internal object A0CandidatePreflight {
     }
 
     data class Weighted(val assessment:Assessment,val score:Int)
+    enum class SimulationStatus { SUGGESTED, NO_STRONG, AMBIGUOUS }
+    data class Simulation(val status:SimulationStatus,val index:Int?=null)
 
     /**
-     * A hint for future opt-in automation, never a transfer instruction.
-     * Abstain unless the best is strong and clearly exceeds any rival strong
-     * candidate; tie/near-tie means retain manual selection.
+     * A pure *counterfactual* preview, NEVER a transfer instruction. Returns
+     * an index only when a strong candidate clearly exceeds other strong
+     * candidates. An ambiguous result must remain manual even if one source
+     * advertises better availability.
      */
-    fun suggestIndex(candidates:List<Weighted>):Int? {
+    fun simulate(candidates:List<Weighted>):Simulation {
         val strong=candidates.withIndex()
             .filter { it.value.assessment.confidence==Confidence.STRONG }
             .sortedWith(compareByDescending<IndexedValue<Weighted>> { it.value.score }
                 .thenBy { it.index })
-        if(strong.isEmpty()) return null
-        if(strong.size>1 && strong[0].value.score-strong[1].value.score<12) return null
-        return strong[0].index
+        if(strong.isEmpty()) return Simulation(SimulationStatus.NO_STRONG)
+        if(strong.size>1 && strong[0].value.score-strong[1].value.score<12)
+            return Simulation(SimulationStatus.AMBIGUOUS)
+        return Simulation(SimulationStatus.SUGGESTED,strong[0].index)
     }
+
+    /** Compatibility entry point for the existing read-only manual UI label. */
+    fun suggestIndex(candidates:List<Weighted>):Int?=simulate(candidates).index
 }
