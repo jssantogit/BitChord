@@ -575,9 +575,43 @@ class A0ManualLoginActivity : Activity() {
                                             failedServerReader.set(true)
                                         }
                                     }
-                                    val peerStatus = inbox.poll(
-                                        if (transferObserved) 18 else 12, TimeUnit.SECONDS
-                                    )
+                                    val peerStatus = if (transferObserved) {
+                                        // One user-initiated search may contain a bounded
+                                        // title-only recovery. Soulseek uses word intersection:
+                                        // artist names can overconstrain results. Reuse the
+                                        // search ticket so the existing P validation remains
+                                        // strict and candidates keep their ORIGINAL identity.
+                                        val early = inbox.poll(6, TimeUnit.SECONDS)
+                                        val fallback = A0SearchQuery.titleOnlyFallback(
+                                            checkNotNull(enteredSearch))
+                                        val compatible = handoff?.choices()?.any {
+                                            it.qualityEvidence.status ==
+                                                A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED
+                                        } == true
+                                        if (early == null && fallback != null && !compatible &&
+                                            !failedServerReader.get() && readerGate.isOpen() &&
+                                            !stopping && !Thread.currentThread().isInterrupted
+                                        ) {
+                                            try {
+                                                connection.getOutputStream().apply {
+                                                    write(A0OneShotPublicSearchWire.fileSearch(token, fallback))
+                                                    flush()
+                                                }
+                                                trace.note(A0SmokeTrace.Stage.SEARCH_VARIANT_SENT)
+                                                runOnUiThread {
+                                                    if (!stopping && readerGate.isOpen()) {
+                                                        status.text = "Buscando também apenas pelo título " +
+                                                            "(qualidade e identidade originais preservadas)."
+                                                    }
+                                                }
+                                            } catch (_: IOException) {
+                                                trace.note(A0SmokeTrace.Stage.SEARCH_VARIANT_FAILED,
+                                                    TraceOutcome.DEGRADED,
+                                                    A0SmokeTrace.Reason.SERVER_IO_FAILURE)
+                                            }
+                                        }
+                                        early ?: inbox.poll(12, TimeUnit.SECONDS)
+                                    } else inbox.poll(12, TimeUnit.SECONDS)
                                     readerGate.stop()
                                     result = peerStatus ?: when {
                                         failedServerReader.get() ->
