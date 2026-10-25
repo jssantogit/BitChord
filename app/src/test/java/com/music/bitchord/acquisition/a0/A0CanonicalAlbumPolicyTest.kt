@@ -125,4 +125,14 @@ class A0CanonicalAlbumPolicyTest {
         }
     }
 
+    @Test fun peerSingleSuffixDoesNotBecomeWrongAlbumOrProofOfEdition() {
+        val target=A0CanonicalAlbumPolicy.Target("Looks Can Kill",expectedArtist="IVE")
+        val answer=A0CanonicalAlbumPolicy.assess(
+            target,
+            A0CanonicalAlbumPolicy.Claim("Looks Can Kill - Single",
+                A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
+        assertEquals(A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED,answer.status)
+        assertFalse(answer.authorizesTransfer)
+    }
+
 }
