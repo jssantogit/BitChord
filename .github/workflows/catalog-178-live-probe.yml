@@ -1,11 +1,8 @@
 name: Catalog #178 — Live MusicBrainz Evidence
 
+# Explicit-only: avoid re-probing a public rate-limited API at every PR push.
+# The first PR execution (#40203783906) archived verified API_LIVE evidence.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - scripts/catalog_178_musicbrainz_live_probe.py
-      - .github/workflows/catalog-178-live-probe.yml
   workflow_dispatch:
 
 permissions:
