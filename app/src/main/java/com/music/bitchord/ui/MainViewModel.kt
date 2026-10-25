@@ -174,6 +174,20 @@ internal class LegacyDiscoveryRequestGate(private val useCanonicalDiscovery: Boo
     ): T? = if (useCanonicalDiscovery) null else legacyRequest()
 }
 
+/**
+ * No hidden YouTube lookup for Spotify metadata while canonical discovery is
+ * active or YouTube is disabled. The second check rejects a legacy result
+ * that completed after a mode/source switch; cancellation is best-effort.
+ */
+internal suspend fun <T> runLegacySpotifyMatchIfAllowed(
+    allowed: () -> Boolean,
+    resolve: suspend () -> T?,
+): T? {
+    if (!allowed()) return null
+    val match = resolve()
+    return match.takeIf { allowed() }
+}
+
 /** A monotonically increasing token makes uncancellable old responses harmless. */
 internal class DiscoveryRequestEpoch {
     private val current = AtomicLong(0L)
@@ -1912,6 +1926,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         explicitlyEnabled = AppSettings.canonicalDiscoveryEnabled.value,
         configs = SourceRegistry.configs.value,
     )
+
+    private fun canResolveLegacySpotifyViaYoutube(): Boolean =
+        !isCanonicalDiscoverySelected() && isYouTubeSourceEnabled(SourceRegistry.configs.value)
 
     private fun legacyDiscoveryGate() = LegacyDiscoveryRequestGate(
         useCanonicalDiscovery = isCanonicalDiscoverySelected(),
@@ -3892,13 +3909,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 setSongs(UiState.Error(text(R.string.spotify_empty_tracks)))
                 return@launch
             }
+            // Spotify track metadata may be shown read-only. Resolving it via
+            // YouTube would violate canonical opt-in / provider opt-out.
+            // Keep every track in original order without inventing local assets
+            // or promoting a text match into a MusicBrainz Recording identity.
+            if (!canResolveLegacySpotifyViaYoutube()) {
+                setSongs(UiState.Success(tracks.map { track ->
+                    track.asPendingSong().copy(videoId = SPOTIFY_MISSING_PREFIX + track.id)
+                }))
+                _detailStack.value = _detailStack.value.map { page ->
+                    if (page.browseId == browseId) page.copy(
+                        subtitle = text(R.string.canonical_discovery_metadata_only),
+                    ) else page
+                }
+                return@launch
+            }
             val gate = Semaphore(SPOTIFY_MATCH_PARALLELISM)
             coroutineScope {
                 tracks.forEachIndexed { index, track ->
                     launch {
                         gate.withPermit {
                             if (!open()) return@withPermit
-                            val match = runCatching { SpotifyImporter.matchTrack(track) }.getOrNull()
+                            val match = runCatching {
+                                runLegacySpotifyMatchIfAllowed(
+                                    allowed = ::canResolveLegacySpotifyViaYoutube,
+                                ) { SpotifyImporter.matchTrack(track) }
+                            }.getOrNull()
                             val found = match?.copy(thumbnailUrl = match.thumbnailUrl ?: track.imageUrl)
                                 ?: track.asPendingSong().let {
                                     it.copy(videoId = SPOTIFY_MISSING_PREFIX + track.id)
