@@ -84,4 +84,39 @@ class MusicBrainzCatalogPlaybackGateTest {
         )
         assertNull(gate.plan(mbid, CanonicalCollectionIntent.PLAY_NOW))
     }
+
+    @Test
+    fun unlinkedMusicBrainzRecordingProducesPrivacySafeDiagnosticReason() = runBlocking {
+        val outcomes = mutableListOf<String>()
+        val gate = MusicBrainzCatalogPlaybackGate(
+            trustedRecordingId = { null },
+            browse = { library("local-1") },
+            planner = CanonicalCollectionIntentPlanner(fakeResolver),
+            traceOutcome = outcomes::add,
+        )
+        assertNull(gate.plan(mbid, CanonicalCollectionIntent.PLAY_NOW))
+        assertEquals(listOf("unlinked_recording"), outcomes)
+        assertTrue(outcomes.none { it.contains(mbid) || it.contains("Magnetic") })
+    }
+
+    @Test
+    fun ambiguousAssetAndUniqueLocalAssetProduceDistinctReasons() = runBlocking {
+        val outcomes = mutableListOf<String>()
+        val gate = MusicBrainzCatalogPlaybackGate(
+            trustedRecordingId = { "recording" },
+            browse = { library("local-1", "local-2") },
+            planner = CanonicalCollectionIntentPlanner(fakeResolver),
+            traceOutcome = outcomes::add,
+        )
+        assertNull(gate.plan(mbid, CanonicalCollectionIntent.PLAY_NOW))
+        assertEquals(listOf("ambiguous_asset"), outcomes)
+        val allowed = MusicBrainzCatalogPlaybackGate(
+            trustedRecordingId = { "recording" },
+            browse = { library("local-1") },
+            planner = CanonicalCollectionIntentPlanner(fakeResolver),
+            traceOutcome = outcomes::add,
+        )
+        assertTrue(allowed.plan(mbid, CanonicalCollectionIntent.PLAY_NOW) != null)
+        assertEquals("ready", outcomes.last())
+    }
 }
