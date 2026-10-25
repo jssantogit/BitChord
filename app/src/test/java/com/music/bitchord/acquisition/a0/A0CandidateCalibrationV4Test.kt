@@ -41,6 +41,10 @@ class A0CandidateCalibrationV4Test {
             file="Artist Do Do Do.mp3",folder="Music/Artist"),
         Case("surplus-repeated-title",R,query="Artist - Do Do Do",
             file="Artist Do Do Do Do.mp3",folder="Music/Artist",
+            reason=A0CandidatePreflight.Reason.IDENTITY_AMBIGUOUS),
+        Case("bidi-filename-override",R,file="ILLIT Magnetic\u202E.mp3",
+            reason=A0CandidatePreflight.Reason.IDENTITY_AMBIGUOUS),
+        Case("invisible-word-separator",R,file="ILLIT\u200B Magnetic.mp3",
             reason=A0CandidatePreflight.Reason.IDENTITY_AMBIGUOUS)
     )
 
@@ -56,10 +60,10 @@ class A0CandidateCalibrationV4Test {
 
     @Test fun policyAndFixturesHaveAnExplicitVersion() {
         assertEquals("preflight-v4",A0CandidatePreflight.POLICY_VERSION)
-        assertEquals(10,pack.size)
-        assertEquals(10,pack.map { it.id }.distinct().size)
+        assertEquals(12,pack.size)
+        assertEquals(12,pack.map { it.id }.distinct().size)
         assertEquals(4,pack.count { it.expected==S })
-        assertEquals(6,pack.count { it.expected==R })
+        assertEquals(8,pack.count { it.expected==R })
     }
 
     @Test fun reviewedLabelsAndReasonsArePreservedWithoutFalseStrong() {
