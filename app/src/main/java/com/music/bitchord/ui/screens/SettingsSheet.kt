@@ -1660,7 +1660,9 @@ fun SettingsScreen(
     if (pickingDownloadQuality) {
         var customFormat by remember { mutableStateOf(downloadCustom.format) }
         var customBitrate by remember { mutableStateOf(downloadCustom.bitrateKbps?.toString().orEmpty()) }
-        var customRate by remember { mutableStateOf(downloadCustom.sampleRateHz?.div(1000)?.toString().orEmpty()) }
+        var customRate by remember { mutableStateOf(downloadCustom.sampleRateHz?.let {
+            if(it%1000==0)(it/1000).toString() else (it/1000.0).toString()
+        }.orEmpty()) }
         var customDepth by remember { mutableStateOf(downloadCustom.bitDepth?.toString().orEmpty()) }
         ModalBottomSheet(
             onDismissRequest = { pickingDownloadQuality = false },
@@ -1730,7 +1732,9 @@ fun SettingsScreen(
                     } else {
                         OutlinedTextField(
                             value=customRate,
-                            onValueChange={customRate=it.filter(Char::isDigit).take(3)},
+                            onValueChange={
+                                customRate=it.filter {c->c.isDigit() || c=='.' || c==','}.take(6)
+                            },
                             label={Text("Frequência mínima (kHz; vazio = automática)")},
                             singleLine=true,
                             modifier=Modifier.fillMaxWidth(),
@@ -1744,7 +1748,8 @@ fun SettingsScreen(
                         )
                     }
                     val bitrate=customBitrate.toIntOrNull()
-                    val rate=customRate.toIntOrNull()?.times(1000)
+                    val rate=customRate.replace(',','.').toDoubleOrNull()
+                        ?.takeIf { it.isFinite() }?.times(1000)?.toInt()
                     val depth=customDepth.toIntOrNull()
                     val valid=(customBitrate.isBlank() || (bitrate!=null && bitrate in 32..1536)) &&
                         (customRate.isBlank() || (rate!=null && rate in 8000..384000)) &&
@@ -1753,7 +1758,8 @@ fun SettingsScreen(
                             (customRate.isBlank() && customDepth.isBlank()))
                     if(!valid) Text(
                         "Parâmetros inválidos: MP3/AAC usam bitrate, não profundidade PCM. " +
-                            "Bitrate 32–1536 kbps, frequência 8–384 kHz e 8–32 bits.",
+                            "Bitrate 32–1536 kbps, frequência 8–384 kHz " +
+                            "(ex.: 44,1 ou 96) e 8–32 bits.",
                         color=MaterialTheme.colorScheme.error,
                         style=MaterialTheme.typography.bodySmall,
                     )
