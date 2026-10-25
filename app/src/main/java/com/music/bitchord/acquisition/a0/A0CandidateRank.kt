@@ -66,8 +66,8 @@ internal object A0CandidateRank {
         val validRate=declaredBitrateKbps?.takeIf { it in 32..1536 }
         val lossless=ext in setOf("flac","wav")
         val quality=when {
-            lossless && declaredSampleRateHz in 8000..384000 &&
-                declaredBitDepth in 8..32 -> Quality.LOSSLESS_ADVERTISED
+            lossless && declaredSampleRateHz?.let { it in 8000..384000 } == true &&
+                declaredBitDepth?.let { it in 8..32 } == true -> Quality.LOSSLESS_ADVERTISED
             lossless -> Quality.UNKNOWN_ADVERTISED
             validRate!=null && validRate>=256 -> Quality.HIGH_ADVERTISED
             validRate!=null && validRate>=160 -> Quality.MEDIUM_ADVERTISED
