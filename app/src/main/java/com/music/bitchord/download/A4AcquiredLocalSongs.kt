@@ -26,7 +26,15 @@ internal object A4AcquiredLocalSongs {
                 A3AndroidAcquisitionLedger.get(context).all()
             }.getOrElse { return@withContext scanned }
             val already=scanned.mapNotNull(Song::localUri).toSet()
-            val uris=A4AvailableLocalUriSelection.choose(entries,already) { raw ->
+            // The same published song can be exposed as a MediaStore row and
+            // a SAF document URI. Keep the scanner's tagged/artwork row; do
+            // not append a second, metadata-poor entry for the same bytes.
+            val alreadyPaths=scanned.mapNotNull(Song::localPath)
+                .map(A4LocalPhysicalIdentity::pathKey).toSet()
+            val uris=A4AvailableLocalUriSelection.choose(
+                entries,alreadyScanned=already,alreadyIdentities=alreadyPaths,
+                identityOf=A4LocalPhysicalIdentity::key
+            ) { raw ->
                 runCatching {
                     resolver.openFileDescriptor(Uri.parse(raw),"r")?.use { descriptor ->
                         descriptor.statSize!=0L
