@@ -68,11 +68,20 @@ data class CanonicalRatingDisplaySnapshot(
     val bySongKey: Map<String, RatingDisplay> = emptyMap(),
     val byMediaAssetId: Map<String, RatingDisplay> = emptyMap(),
     val byRecordingId: Map<String, RatingDisplay> = emptyMap(),
+    // Canonical asset identity remains available even for an un-rated track.
+    // Unlike a remote rating, this is a verified catalog reference, never a
+    // provider ID, an artist/title heuristic or a credential-bearing URL.
+    val recordingIdBySongKey: Map<String, String> = emptyMap(),
 ) {
     fun forSong(song: Song): RatingDisplay? =
         bySongKey[song.videoId]
             ?: song.localUri?.let(bySongKey::get)
             ?: song.localPath?.let(bySongKey::get)
+
+    fun recordingIdForSong(song: Song): String? =
+        recordingIdBySongKey[song.videoId]
+            ?: song.localUri?.let(recordingIdBySongKey::get)
+            ?: song.localPath?.let(recordingIdBySongKey::get)
 }
 
 val LocalCanonicalRatingDisplay = compositionLocalOf { CanonicalRatingDisplaySnapshot() }
