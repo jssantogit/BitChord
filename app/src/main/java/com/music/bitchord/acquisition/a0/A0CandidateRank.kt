@@ -18,7 +18,7 @@ internal object A0CandidateRank {
     }
     enum class Warning {
         VERSION_MISMATCH, DURATION_MISMATCH, SIZE_SUSPICIOUS, ENCODING_CONFLICT,
-        ARTIST_CONFLICT
+        ARTIST_CONFLICT, IDENTITY_AMBIGUOUS
     }
 
     data class Ranking(
@@ -121,6 +121,25 @@ internal object A0CandidateRank {
                 !isTitlePrefix && !isExpectedCredit) {
                 score-=36
                 warnings.add(Warning.ARTIST_CONFLICT)
+            }
+        }
+        // Extra filename words are not proof of a wrong file, but they can
+        // conceal an uncredited performer, mix, reissue, or unrelated media.
+        // Known presentation labels and track numbers are neutral; everything
+        // else must be reviewed before any future unattended decision.
+        if(titleWords.isNotEmpty() && artistWords.isNotEmpty()) {
+            val expectedWords=(artistWords+titleWords).toSet()
+            val neutralLabels=setOf(
+                "official","audio","hq","hd","320","kbps","256",
+                "cbr","vbr","track","stereo"
+            )
+            val unknown=fileWords.filter { token ->
+                token !in expectedWords && token !in neutralLabels &&
+                    !(token.length<=3 && token.all(Char::isDigit))
+            }
+            if(unknown.isNotEmpty()) {
+                score-=7
+                warnings.add(Warning.IDENTITY_AMBIGUOUS)
             }
         }
         val requestedWords=tokens(searchPhrase.orEmpty()).toSet()
