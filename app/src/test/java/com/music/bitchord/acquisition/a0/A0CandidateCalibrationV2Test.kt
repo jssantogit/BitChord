@@ -56,7 +56,18 @@ class A0CandidateCalibrationV2Test {
             file="ILLIT Magnetic.flac",format="flac",bitrate=null,
             sampleRate=8000,depth=8,size=24_000_000L),
         Case("title-only-artist-unconfirmed",R,A0CandidatePreflight.Reason.ARTIST_UNCONFIRMED,
-            query="Magnetic",file="Magnetic.mp3")
+            query="Magnetic",file="Magnetic.mp3"),
+        Case("shuffled-multiword-title",R,A0CandidatePreflight.Reason.IDENTITY_AMBIGUOUS,
+            query="Artist - Save Your Tears",file="Artist Tears Your Save.mp3",
+            path="Music/Artist/Artist Tears Your Save.mp3",
+            duration=215,reference=215,size=8_600_000L),
+        Case("repeated-title-token-missing",R,A0CandidatePreflight.Reason.IDENTITY_AMBIGUOUS,
+            query="Artist - Do Do Do",file="Artist Do.mp3",
+            path="Music/Artist/Artist Do.mp3"),
+        Case("correct-multiword-title",S,query="Artist - Save Your Tears",
+            file="Artist Save Your Tears.mp3",
+            path="Music/Artist/Artist Save Your Tears.mp3",
+            duration=215,reference=215,size=8_600_000L)
     )
     private fun assess(c:Case):A0CandidatePreflight.Assessment {
         val rank=A0CandidateRank.rank(c.query,c.file,c.bitrate,
@@ -71,10 +82,10 @@ class A0CandidateCalibrationV2Test {
 
     @Test fun packAndPolicyAreExplicitlyVersioned() {
         assertEquals("preflight-v2",A0CandidatePreflight.POLICY_VERSION)
-        assertEquals(14,cases.size)
+        assertEquals(17,cases.size)
         assertEquals(cases.size,cases.map { it.id }.distinct().size)
-        assertEquals(3,cases.count { it.expected==S })
-        assertEquals(4,cases.count { it.expected==R })
+        assertEquals(4,cases.count { it.expected==S })
+        assertEquals(6,cases.count { it.expected==R })
         assertEquals(7,cases.count { it.expected==U })
     }
 
