@@ -39,6 +39,42 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" >> local.properties
           chmod +x gradlew
 
+      # A transient/non-ZIP SDK mirror response broke run #40205530200 before
+      # compilation. Install the exact NDK explicitly and check its package
+      # metadata; never let Gradle silently accept an incomplete download.
+      - name: Install verified Android NDK (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ndk_version="27.0.12077973"
+          ndk_path="${ANDROID_HOME}/ndk/${ndk_version}"
+          sdkmanager="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$sdkmanager" ]]; then
+            sdkmanager="$(command -v sdkmanager)"
+          fi
+
+          ndk_ready() {
+            [[ -s "$ndk_path/source.properties" ]] &&
+              grep -Eq "^Pkg.Revision *= *${ndk_version}$" "$ndk_path/source.properties"
+          }
+
+          for attempt in 1 2 3; do
+            if ndk_ready; then
+              echo "Verified NDK ${ndk_version}"
+              exit 0
+            fi
+            # Remove only this candidate SDK component, not other cached SDKs.
+            rm -rf "$ndk_path"
+            echo "NDK install attempt ${attempt}/3"
+            if "$sdkmanager" --install "ndk;${ndk_version}" && ndk_ready; then
+              echo "Verified NDK ${ndk_version}"
+              exit 0
+            fi
+            if (( attempt < 3 )); then sleep $(( 5 * attempt )); fi
+          done
+          echo "::error::Could not install/verify Android NDK ${ndk_version}"
+          exit 1
+
       - name: Build installable dev debug APK
         run: ./gradlew --no-daemon --build-cache -Pbitchord.bundleWear=false :app:assembleDevDebug
 
