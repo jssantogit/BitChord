@@ -2,6 +2,7 @@ package com.music.bitchord
 
 import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
+import androidx.room.migration.Migration
 import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.RecordingArtistCreditEntity
@@ -33,12 +34,25 @@ class CanonicalCatalogArtistMigrationTest {
         file.parentFile?.mkdirs()
         createVersionOneDatabase(file)
 
+        // This stands in for rows already cached by v5, immediately before
+        // the additive v5 -> v6 credit columns are installed.
+        val preserveLegacyTrackCreditColumns = object : Migration(5, 6) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    "INSERT INTO catalog_musicbrainz_track(trackMbid, releaseId, recordingId, mediumNumber, trackNumber, title, durationMs) " +
+                        "VALUES('14f273b6-813b-4239-b0f8-c4b839b902c6', 'release-1', 'recording-1', 1, 1, 'Existing MB Track', 123000)",
+                )
+                CanonicalCatalogDatabase.MIGRATION_5_6.migrate(db)
+            }
+        }
+
         val database = Room.databaseBuilder(context, CanonicalCatalogDatabase::class.java, name)
             .addMigrations(
                 CanonicalCatalogDatabase.MIGRATION_1_2,
                 CanonicalCatalogDatabase.MIGRATION_2_3,
                 CanonicalCatalogDatabase.MIGRATION_3_4,
                 CanonicalCatalogDatabase.MIGRATION_4_5,
+                preserveLegacyTrackCreditColumns,
             )
             .allowMainThreadQueries()
             .build()
@@ -74,6 +88,15 @@ class CanonicalCatalogArtistMigrationTest {
         sql.query("SELECT COUNT(*) FROM catalog_release_artist_credit").use { cursor ->
             assertTrue(cursor.moveToFirst())
             assertEquals(0, cursor.getInt(0))
+        }
+        sql.query(
+            "SELECT title, artistDisplay, recordingArtistDisplay FROM catalog_musicbrainz_track " +
+                "WHERE trackMbid = '14f273b6-813b-4239-b0f8-c4b839b902c6'",
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("Existing MB Track", cursor.getString(0))
+            assertTrue(cursor.isNull(1))
+            assertTrue(cursor.isNull(2))
         }
 
         database.close()
