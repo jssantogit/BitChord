@@ -10,6 +10,7 @@ import com.music.bitchord.ui.defaultDiscoverySearchSource
 import com.music.bitchord.ui.SearchSource
 import com.music.bitchord.ui.shouldPrefetchLegacyYouTubeAccountData
 import com.music.bitchord.ui.isYouTubeSourceEnabled
+import com.music.bitchord.ui.runLegacySpotifyMatchIfAllowed
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -115,5 +116,36 @@ class CanonicalDiscoveryModeTest {
 
         assertFalse(epoch.isCurrent(startedBeforeSwitch))
         assertTrue(epoch.isCurrent(startedAfterSwitch))
+    }
+
+    @Test fun canonicalModeNeverRunsLegacySpotifyYoutubeMatcherEvenWhenYoutubeProviderEnabled() = runBlocking {
+        var calls = 0
+        val result = runLegacySpotifyMatchIfAllowed(
+            allowed = { false },
+        ) {
+            calls++
+            "unexpected YT match"
+        }
+        assertEquals(null, result)
+        assertEquals(0, calls)
+    }
+
+    @Test fun legacyModeWithEnabledYoutubeCanStillMatchSpotifyAndPreservesResult() = runBlocking {
+        var calls = 0
+        val result = runLegacySpotifyMatchIfAllowed(allowed = { true }) {
+            calls++
+            "matched-youtube-id"
+        }
+        assertEquals("matched-youtube-id", result)
+        assertEquals(1, calls)
+    }
+
+    @Test fun changingToCanonicalWhileMatchingDiscardsLegacyResult() = runBlocking {
+        var eligible = true
+        val result = runLegacySpotifyMatchIfAllowed(allowed = { eligible }) {
+            eligible = false
+            "stale-youtube-id"
+        }
+        assertEquals(null, result)
     }
 }
