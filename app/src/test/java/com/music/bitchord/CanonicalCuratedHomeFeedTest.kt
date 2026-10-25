@@ -56,6 +56,18 @@ class CanonicalCuratedHomeFeedTest {
         assertEquals(listOf("SUPER REAL ME", "Older"), items.map { it.title })
     }
 
+    @Test fun locallyRepeatedSongsCanTrendWithoutAnyMusicBrainzMatch() {
+        val shelves = canonicalCuratedHomeShelves(
+            savedReleases = emptyList(), metadata = emptyList(),
+            localPicks = listOf(local), trendingRecordingMbids = emptyList(),
+            trendingLocalPicks = listOf(local),
+            releasesHeading = "Lançamentos", picksHeading = "Escolha a dedo",
+            trendingHeading = "Em alta", todayIsoDate = "2026-10-25",
+        )
+        assertEquals(listOf("Escolha a dedo", "Em alta"), shelves.map { it.title })
+        assertEquals(canonicalLocalPickCardId(local), shelves.last().items.single().browseId)
+    }
+
     @Test fun onlyTrustedLocalUrisCanEnterPickCarousel() {
         val candidates = listOf(
             local,
