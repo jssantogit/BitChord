@@ -132,7 +132,14 @@ internal class CoverArtArchive(
         if (cached != null &&
             now >= cached.fetchedAtEpochMs &&
             now - cached.fetchedAtEpochMs < if (cached.artworkUri == null) NEGATIVE_TTL_MS else POSITIVE_TTL_MS
-        ) return cached.artworkUri?.let { CoverLookup.Found(it) } ?: CoverLookup.Missing
+        ) {
+            // Room cache is a persistence boundary: never trust old or tampered
+            // artwork URLs without the same allowlist used for fresh responses.
+            if (cached.artworkUri == null) return CoverLookup.Missing
+            if (safeImageUrl(cached.artworkUri)) return CoverLookup.Found(cached.artworkUri)
+            // Invalid positive entries must be refreshed, not rendered or
+            // downgraded into cached "missing" evidence.
+        }
 
         val answer = try {
             transport.get("$type/$mbid")
