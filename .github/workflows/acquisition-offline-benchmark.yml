@@ -93,6 +93,44 @@ jobs:
           cp app/build/benchmark/soulseek/bitchord-album-gate-v1.jsonl \
             build/soulseek-benchmark/bitchord-album-gate-ranking.jsonl
           cp /tmp/flux-ranking.jsonl build/soulseek-benchmark/flux-ranking.jsonl
+          python3 tools/benchmarks/soulseek/evaluate.py \
+            --cases app/src/test/resources/soulseek/synthetic-cases.jsonl \
+            --left app/build/benchmark/soulseek/bitchord-preflight-v4.jsonl \
+            --right app/build/benchmark/soulseek/bitchord-album-gate-v1.jsonl \
+            --allow-synthetic \
+            --output build/soulseek-benchmark/synthetic-v4-vs-album-gate.json
+
+      - name: Show synthetic-only ranking trade-offs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path("build/soulseek-benchmark")
+          old=json.loads((root/"synthetic-report.json").read_text())
+          new=json.loads((root/"synthetic-album-gate-report.json").read_text())
+          columns=[old["left"], new["left"], old["right"]]
+          def row(label,field):
+              return "| "+label+" | "+" | ".join(str(col[field]) for col in columns)+" |"
+          lines=[
+              "### Soulseek ranking: SYNTHETIC ONLY (18 invented cases)",
+              "",
+              "These are NOT measured music accuracy, live peers or audio verification.",
+              "",
+              "| Metric | BitChord v4 | BitChord v4 + album claims | Flux default_v1 |",
+              "|---|---:|---:|---:|",
+              row("Exact-labelled top offer","exact_top1"),
+              row("Wrong-edition top offer","wrong_version_top1"),
+              row("Wrong-artist top offer","wrong_artist_top1"),
+              row("Unknown top offer","unknown_recommendations"),
+              row("Abstentions","abstentions"),
+              row("Recommendations","recommendations"),
+          ]
+          summary="\\n".join(lines)+"\\n"
+          print(summary)
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a",encoding="utf-8") as file:
+              file.write(summary)
+          PY
 
       - name: Upload synthetic-only count reports
         uses: actions/upload-artifact@v4
