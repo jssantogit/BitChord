@@ -62,6 +62,20 @@ internal interface CanonicalCatalogDao {
 
     // Canonical MusicBrainz release graph (v5). Provider MBIDs are claimed
     // through catalog_external_identity, never used as core Recording IDs.
+    @Upsert suspend fun upsertCatalogReleaseTrackSource(entity: CatalogReleaseTrackSourceEntity)
+
+    @Query("DELETE FROM catalog_release_track_source WHERE recordingId = :recordingId AND provider = :provider")
+    suspend fun deleteReleaseTrackSourcesForRecording(recordingId: String, provider: String)
+
+    @Query("DELETE FROM catalog_release_track_source WHERE provider = :provider")
+    suspend fun deleteReleaseTrackSourcesForProvider(provider: String)
+
+    @Query("SELECT * FROM catalog_release_track_source WHERE releaseId = :releaseId AND recordingId = :recordingId ORDER BY provider")
+    suspend fun catalogReleaseTrackSources(releaseId: String, recordingId: String): List<CatalogReleaseTrackSourceEntity>
+
+    @Query("SELECT * FROM catalog_release_track WHERE recordingId = :recordingId ORDER BY releaseId")
+    suspend fun catalogReleaseTracksForRecording(recordingId: String): List<ReleaseTrackEntity>
+
     @Upsert suspend fun upsertCatalogReleaseGroup(entity: CatalogReleaseGroupEntity)
     @Upsert suspend fun upsertCatalogReleaseGroupEdition(entity: CatalogReleaseGroupEditionEntity)
     @Upsert suspend fun upsertCatalogMusicBrainzTrack(entity: CatalogMusicBrainzTrackEntity)
@@ -441,6 +455,12 @@ internal interface CanonicalCatalogDao {
             FROM catalog_external_identity AS identity
             WHERE identity.provider = :localTagsProvider
               AND identity.entityType = 'release'
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM catalog_release_track_source AS edgeOwner
+            WHERE edgeOwner.releaseId = catalog_release_track.releaseId
+              AND edgeOwner.recordingId = catalog_release_track.recordingId
+              AND edgeOwner.provider != :localTagsProvider
           )
           AND NOT EXISTS (
             SELECT 1

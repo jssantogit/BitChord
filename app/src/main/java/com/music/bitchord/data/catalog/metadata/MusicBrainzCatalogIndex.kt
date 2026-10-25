@@ -5,6 +5,7 @@ import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.CatalogReleaseGroupEntity
 import com.music.bitchord.data.catalog.CatalogReleaseGroupEditionEntity
+import com.music.bitchord.data.catalog.CatalogReleaseTrackSourceEntity
 import com.music.bitchord.data.catalog.CatalogMusicBrainzTrackEntity
 import com.music.bitchord.data.catalog.CanonicalCatalogDao
 import com.music.bitchord.data.catalog.ExternalIdentityEntity
@@ -200,6 +201,9 @@ internal class MusicBrainzCatalogIndex(
                         releaseId, recordingId, track.trackNumber,
                     ))
                 }
+                dao.upsertCatalogReleaseTrackSource(CatalogReleaseTrackSourceEntity(
+                    releaseId, recordingId, "musicbrainz",
+                ))
             }
             releaseId
         }

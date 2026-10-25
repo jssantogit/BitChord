@@ -28,6 +28,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CatalogReleaseGroupEditionEntity::class,
         CatalogMusicBrainzTrackEntity::class,
         MusicBrainzCoverArtCacheEntity::class,
+        CatalogReleaseTrackSourceEntity::class,
     ],
     version = 5,
     exportSchema = false,
@@ -282,6 +283,34 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
                     )
                     """.trimIndent(),
                 )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `catalog_release_track_source` (
+                        `releaseId` TEXT NOT NULL,
+                        `recordingId` TEXT NOT NULL,
+                        `provider` TEXT NOT NULL,
+                        PRIMARY KEY(`releaseId`, `recordingId`, `provider`),
+                        FOREIGN KEY(`releaseId`, `recordingId`) REFERENCES `catalog_release_track`(`releaseId`, `recordingId`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_catalog_release_track_source_provider` ON `catalog_release_track_source` (`provider`)",
+                )
+                // Existing v4 edges do not record provenance. Conservatively
+                // associate all claimed release providers; never erase an
+                // edge without unambiguous source ownership after upgrade.
+                db.execSQL(
+                    """
+                    INSERT OR IGNORE INTO catalog_release_track_source(releaseId, recordingId, provider)
+                    SELECT rt.releaseId, rt.recordingId, identity.provider
+                    FROM catalog_release_track rt
+                    JOIN catalog_external_identity identity
+                      ON identity.entityId = rt.releaseId AND identity.entityType = 'release'
+                    """.trimIndent(),
+                )
+
             }
         }
 

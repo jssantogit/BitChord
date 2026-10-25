@@ -74,7 +74,9 @@ internal object CanonicalLocalLibrary {
                     ),
                 )
 
-                // Never remove associations backed by MusicBrainz/remote providers.
+                // Clear only this scan's ownership and prune edges exclusively
+                // owned by local tags. MediaAssets/identities from others stay.
+                dao.deleteReleaseTrackSourcesForRecording(recordingId, LOCAL_TAGS_PROVIDER)
                 dao.deleteLocalOnlyReleaseTracksForRecording(recordingId, LOCAL_TAGS_PROVIDER)
                 candidate.albumTitle?.let { albumTitle ->
                     val releaseEvidenceKey = localReleaseEvidenceKey(
@@ -109,6 +111,9 @@ internal object CanonicalLocalLibrary {
                             recordingId = recordingId,
                             trackNumber = candidate.trackNumber,
                         ),
+                    )
+                    dao.upsertCatalogReleaseTrackSource(
+                        CatalogReleaseTrackSourceEntity(releaseId, recordingId, LOCAL_TAGS_PROVIDER),
                     )
                 }
 

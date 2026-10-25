@@ -73,3 +73,25 @@ internal data class MusicBrainzCoverArtCacheEntity(
     val artworkUri: String?,
     val fetchedAtEpochMs: Long,
 )
+    
+
+/**
+ * Provenance belongs to an edge, not just to the Release: two providers may
+ * link different Recordings to the very same canonical Release.
+ */
+@Entity(
+    tableName = "catalog_release_track_source",
+    primaryKeys = ["releaseId", "recordingId", "provider"],
+    foreignKeys = [ForeignKey(
+        entity = ReleaseTrackEntity::class,
+        parentColumns = ["releaseId", "recordingId"],
+        childColumns = ["releaseId", "recordingId"],
+        onDelete = ForeignKey.CASCADE,
+    )],
+    indices = [Index("provider")],
+)
+internal data class CatalogReleaseTrackSourceEntity(
+    val releaseId: String,
+    val recordingId: String,
+    val provider: String,
+)
