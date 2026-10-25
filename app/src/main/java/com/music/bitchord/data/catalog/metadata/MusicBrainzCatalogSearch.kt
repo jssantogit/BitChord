@@ -53,6 +53,7 @@ internal data class MusicBrainzReleaseGroupHit(
     val primaryType: String?,
     val firstReleaseDate: String?,
     val artistDisplay: String?,
+    val artworkUri: String? = null,
 )
 
 internal data class MusicBrainzReleaseHit(
@@ -61,6 +62,7 @@ internal data class MusicBrainzReleaseHit(
     val country: String?,
     val releaseDate: String?,
     val artistDisplay: String?,
+    val artworkUri: String? = null,
 )
 
 internal data class MusicBrainzRecordingHit(

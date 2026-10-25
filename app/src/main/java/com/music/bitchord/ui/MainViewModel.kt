@@ -2054,6 +2054,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
                             hit.artistDisplay ?: hit.primaryType, fromOfflineCache = true,
                             releaseDate = hit.firstReleaseDate, releaseKind = hit.primaryType,
+                            artworkUri = hit.artworkUri,
                         ))
                     }
                     dao.searchKnownMusicBrainzReleases("", limit = 300).forEach { hit ->
@@ -2062,6 +2063,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
                                 .joinToString(" · "),
                             fromOfflineCache = true, releaseDate = hit.releaseDate,
+                            artworkUri = hit.artworkUri,
                         ))
                     }
                     recordings.forEach { hit ->
