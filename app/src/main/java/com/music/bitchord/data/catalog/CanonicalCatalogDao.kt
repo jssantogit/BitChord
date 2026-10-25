@@ -65,6 +65,9 @@ internal interface CanonicalCatalogDao {
     @Upsert suspend fun upsertCatalogReleaseGroup(entity: CatalogReleaseGroupEntity)
     @Upsert suspend fun upsertCatalogReleaseGroupEdition(entity: CatalogReleaseGroupEditionEntity)
     @Upsert suspend fun upsertCatalogMusicBrainzTrack(entity: CatalogMusicBrainzTrackEntity)
+    @Upsert suspend fun upsertMusicBrainzCoverArtCache(entity: MusicBrainzCoverArtCacheEntity)
+    @Query("SELECT * FROM catalog_cover_art_cache WHERE entityType = :entityType AND mbid = :mbid LIMIT 1")
+    suspend fun musicBrainzCoverArtCache(entityType: String, mbid: String): MusicBrainzCoverArtCacheEntity?
 
     @Query("SELECT * FROM catalog_musicbrainz_track WHERE trackMbid = :trackMbid LIMIT 1")
     suspend fun catalogMusicBrainzTrack(trackMbid: String): CatalogMusicBrainzTrackEntity?

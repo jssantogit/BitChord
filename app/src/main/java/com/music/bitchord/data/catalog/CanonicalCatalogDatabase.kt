@@ -27,6 +27,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CatalogReleaseGroupEntity::class,
         CatalogReleaseGroupEditionEntity::class,
         CatalogMusicBrainzTrackEntity::class,
+        MusicBrainzCoverArtCacheEntity::class,
     ],
     version = 5,
     exportSchema = false,
@@ -268,6 +269,18 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
                 )
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_catalog_musicbrainz_track_recordingId` ON `catalog_musicbrainz_track` (`recordingId`)",
+                )
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `catalog_cover_art_cache` (
+                        `entityType` TEXT NOT NULL,
+                        `mbid` TEXT NOT NULL,
+                        `artworkUri` TEXT,
+                        `fetchedAtEpochMs` INTEGER NOT NULL,
+                        PRIMARY KEY(`entityType`, `mbid`)
+                    )
+                    """.trimIndent(),
                 )
             }
         }

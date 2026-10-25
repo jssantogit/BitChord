@@ -59,3 +59,17 @@ internal data class CatalogMusicBrainzTrackEntity(
     val title: String,
     val durationMs: Long?,
 )
+
+
+/**
+ * Bounded TTL cache for positive covers and 404 misses. A null URI is a
+ * confirmed absence, not an excuse to reuse artwork from another release.
+ * This table has no audio or user-private data.
+ */
+@Entity(tableName = "catalog_cover_art_cache", primaryKeys = ["entityType", "mbid"])
+internal data class MusicBrainzCoverArtCacheEntity(
+    val entityType: String,
+    val mbid: String,
+    val artworkUri: String?,
+    val fetchedAtEpochMs: Long,
+)
