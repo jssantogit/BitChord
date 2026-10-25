@@ -75,6 +75,10 @@ internal class A0ObservedCandidateHandoff(
         val simulatedNoStrong:Int=0,
         val claimsDistinct:Int=0,
         val claimsRepeated:Int=0,
+        val albumMatches:Int=0,
+        val albumUnknown:Int=0,
+        val albumConflicts:Int=0,
+        val qualityMismatches:Int=0,
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
     private val candidates=ArrayList<Choice>(48)
@@ -364,7 +368,22 @@ internal class A0ObservedCandidateHandoff(
         simulatedAmbiguous=if(preview.status==A0CandidatePreflight.SimulationStatus.AMBIGUOUS) 1 else 0,
         simulatedNoStrong=if(preview.status==A0CandidatePreflight.SimulationStatus.NO_STRONG) 1 else 0,
         claimsDistinct=preview.distinctClaims,
-        claimsRepeated=preview.repeatedClaims
+        claimsRepeated=preview.repeatedClaims,
+        albumMatches=candidates.count {
+            it.albumEvidence.status==A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED
+        },
+        albumUnknown=candidates.count {
+            it.albumEvidence.status==A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL
+        },
+        albumConflicts=candidates.count {
+            it.albumEvidence.status==A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM
+        },
+        qualityMismatches=candidates.count {
+            it.qualityEvidence.status in setOf(
+                A0DownloadQualityPolicy.Status.INCOMPATIBLE,
+                A0DownloadQualityPolicy.Status.UNAVAILABLE,
+                A0DownloadQualityPolicy.Status.INVALID_PROFILE)
+        }
         )
     }
 
