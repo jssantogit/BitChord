@@ -67,7 +67,7 @@ internal fun buildCanonicalRatingPresentation(
             }
         }
         remoteByAsset.entries.removeAll { (_, evidence) ->
-            evidence.numericValue !in 1..5
+            evidence.numericValue?.let { it in 1..5 } != true
         }
     }
 
