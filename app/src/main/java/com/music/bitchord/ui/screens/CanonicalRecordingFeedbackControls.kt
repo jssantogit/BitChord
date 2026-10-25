@@ -1,24 +1,40 @@
 package com.music.bitchord.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.StarHalf
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReaders
@@ -26,11 +42,13 @@ import com.music.bitchord.data.listening.CanonicalRecordingFeedbackEditor
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.RecordingRatingStore
 import com.music.bitchord.data.listening.RoomRecordingRatingStore
+import com.music.bitchord.data.model.Song
+import com.music.bitchord.playback.androidCanonicalQueueResolver
 import com.music.bitchord.sharedui.resources.Res
-import com.music.bitchord.sharedui.resources.recording_feedback_clear
-import com.music.bitchord.sharedui.resources.recording_feedback_current
+import com.music.bitchord.sharedui.resources.cancel
+import com.music.bitchord.sharedui.resources.recording_feedback_dialog_save
+import com.music.bitchord.sharedui.resources.recording_feedback_dialog_title
 import com.music.bitchord.sharedui.resources.recording_feedback_edit
-import com.music.bitchord.sharedui.resources.recording_feedback_history
 import com.music.bitchord.sharedui.resources.recording_feedback_unavailable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -39,12 +57,60 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * L4: the destination itself remains read-only. Only an explicit tap on one
- * numeric option or Clear invokes a rating command. No MediaController, queue,
- * provider ID, player callback, network, or playback event is involved.
+ * Both song actions and My Ratings use this *same* local rating dialog.
+ * No provider rating is writable; the editor checks canonical availability
+ * against Catalog immediately before changing first-party Listening Room.
  */
 @Composable
 internal fun CanonicalRecordingFeedbackEntry(recordingId: String) {
+    var editing by remember(recordingId) { mutableStateOf(false) }
+    TextButton(onClick = { editing = true }) {
+        Icon(Icons.Rounded.Star, contentDescription = null, modifier = Modifier.size(18.dp))
+        Text(
+            text = stringResource(Res.string.recording_feedback_edit),
+            modifier = Modifier.padding(start = 6.dp),
+        )
+    }
+    if (editing) {
+        CanonicalRecordingRatingDialog(
+            recordingId = recordingId,
+            onDismiss = { editing = false },
+        )
+    }
+}
+
+/** A player Song is NOT a RecordingId: verify the actual rendition before editing. */
+@Composable
+internal fun CanonicalSongRatingDialog(song: Song, onDismiss: () -> Unit) {
+    val context = LocalContext.current.applicationContext
+    val recordingId by produceState<String?>(null, context, song.videoId) {
+        value = try {
+            withContext(Dispatchers.IO) {
+                CanonicalSongFeedbackTarget(androidCanonicalQueueResolver(context)).recordingId(song)
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null // no heuristic matching by provider ID, title or artist
+        }
+    }
+    if (recordingId == null) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(stringResource(Res.string.recording_feedback_dialog_title)) },
+            text = { Text(stringResource(Res.string.recording_feedback_unavailable)) },
+            confirmButton = {
+                TextButton(onClick = onDismiss) { Text(stringResource(Res.string.cancel)) }
+            },
+        )
+    } else {
+        CanonicalRecordingRatingDialog(recordingId = recordingId!!, onDismiss = onDismiss)
+    }
+}
+
+/** The only mutation host for rating edits. A canceled or unconfirmed selection never writes. */
+@Composable
+internal fun CanonicalRecordingRatingDialog(recordingId: String, onDismiss: () -> Unit) {
     val context = LocalContext.current.applicationContext
     val store: RecordingRatingStore = remember(context) {
         RoomRecordingRatingStore(ListeningEventDatabase.get(context).recordingRatingDao())
@@ -52,97 +118,124 @@ internal fun CanonicalRecordingFeedbackEntry(recordingId: String) {
     val editor = remember(context, store) {
         CanonicalRecordingFeedbackEditor(store) { id ->
             val app = context.applicationContext
-            val available = CanonicalLibraryAvailabilityReaders.persistent(app)
-                .availableRecordingIds().contains(id)
-            available && CanonicalCatalogDatabase.get(app).catalogDao().recordingById(id) != null
+            CanonicalLibraryAvailabilityReaders.persistent(app).availableRecordingIds().contains(id) &&
+                CanonicalCatalogDatabase.get(app).catalogDao().recordingById(id) != null
         }
     }
     val observable = remember(store, recordingId) { store.observeRating(recordingId) }
     val current by observable.collectAsState(initial = null)
-    val historyCount by produceState(0, store, recordingId, current) {
-        value = try {
-            withContext(Dispatchers.IO) { store.ratingHistory(recordingId).size }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            0
-        }
-    }
+    var saving by remember(recordingId) { mutableStateOf(false) }
     var denied by remember(recordingId) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     CanonicalRecordingFeedbackPanel(
         rating = current?.value,
-        historyCount = historyCount,
-        onSetRating = { value ->
-            scope.launch {
-                denied = try {
-                    !withContext(Dispatchers.IO) { editor.set(recordingId, value) }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    true
-                }
-            }
-        },
-        onClear = {
-            scope.launch {
-                denied = try {
-                    !withContext(Dispatchers.IO) { editor.clear(recordingId) }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    true
+        saving = saving,
+        denied = denied,
+        onDismiss = { if (!saving) onDismiss() },
+        onSave = { value ->
+            if (!saving) {
+                saving = true
+                denied = false
+                scope.launch {
+                    val succeeded = try {
+                        withContext(Dispatchers.IO) { editor.set(recordingId, value) }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        false
+                    }
+                    saving = false
+                    if (succeeded) onDismiss() else denied = true
                 }
             }
         },
     )
-    if (denied) {
-        Text(
-            text = stringResource(Res.string.recording_feedback_unavailable),
-            modifier = Modifier.padding(horizontal = 20.dp),
-            color = MaterialTheme.colorScheme.error,
-        )
-    }
 }
 
+/**
+ * Icon-based, locally editable 1–5 star modal. Each star has a left (half)
+ * and right (whole) touch target; every increment is explicit and accessible.
+ * Neither opening nor changing selection persists anything until Save.
+ * Deliberately NO clear/reset rating action.
+ */
 @Composable
 internal fun CanonicalRecordingFeedbackPanel(
     rating: Double?,
-    onSetRating: (Double) -> Unit,
-    onClear: () -> Unit,
-    historyCount: Int = 0,
+    onSave: (Double) -> Unit,
+    onDismiss: () -> Unit,
+    saving: Boolean = false,
+    denied: Boolean = false,
 ) {
-    var editing by remember { mutableStateOf(false) }
-    Column(
-        modifier = Modifier.fillMaxWidth().wrapContentHeight()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        Text(
-            text = stringResource(Res.string.recording_feedback_current, rating?.toString() ?: "—"),
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        TextButton(onClick = { editing = !editing }) {
-            Text(stringResource(Res.string.recording_feedback_edit))
-        }
-        if (editing) {
-            Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                listOf(5.0, 4.5, 4.0, 3.0, 2.0).forEach { value ->
-                    TextButton(onClick = {
-                        onSetRating(value)
-                        editing = false
-                    }) { Text(value.toString()) }
+    var selected by remember { mutableDoubleStateOf(rating?.takeIf { it in 1.0..5.0 } ?: 0.0) }
+    AlertDialog(
+        onDismissRequest = { if (!saving) onDismiss() },
+        title = { Text(stringResource(Res.string.recording_feedback_dialog_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    repeat(5) { i ->
+                        val index = i.toDouble()
+                        Box(modifier = Modifier.size(width = 49.dp, height = 56.dp), contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = when {
+                                    selected >= index + 1.0 -> Icons.Rounded.Star
+                                    selected >= index + 0.5 -> Icons.Rounded.StarHalf
+                                    else -> Icons.Rounded.StarBorder
+                                },
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(42.dp),
+                            )
+                            Row(Modifier.fillMaxSize()) {
+                                Box(
+                                    modifier = Modifier.weight(1f).fillMaxHeight()
+                                        .clickable(enabled = !saving) { selected = index + 0.5 }
+                                        .semantics {
+                                            contentDescription = "${index + 0.5} stars"
+                                        },
+                                )
+                                Box(
+                                    modifier = Modifier.weight(1f).fillMaxHeight()
+                                        .clickable(enabled = !saving) { selected = index + 1.0 }
+                                        .semantics {
+                                            contentDescription = "${i + 1} stars"
+                                        },
+                                )
+                            }
+                        }
+                    }
+                }
+                Text(
+                    text = if (selected > 0.0) "${selected} / 5" else "— / 5",
+                    modifier = Modifier.semantics {
+                        contentDescription = "${selected} stars selected"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (denied) {
+                    Text(
+                        stringResource(Res.string.recording_feedback_unavailable),
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
             }
-            if (rating != null) {
-                TextButton(onClick = {
-                    onClear()
-                    editing = false
-                }) { Text(stringResource(Res.string.recording_feedback_clear)) }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(selected) },
+                enabled = selected in 1.0..5.0 && !saving,
+            ) {
+                if (saving) CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                else Text(stringResource(Res.string.recording_feedback_dialog_save))
             }
-            Text(
-                text = stringResource(Res.string.recording_feedback_history, historyCount),
-                style = MaterialTheme.typography.labelSmall,
-            )
-        }
-    }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !saving) {
+                Text(stringResource(Res.string.cancel))
+            }
+        },
+    )
 }
