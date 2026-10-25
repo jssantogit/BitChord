@@ -1,9 +1,17 @@
 name: Acquisition Offline Benchmark
 
-# Deliberately manual: do not add a second Android build to every PR.
+# This workflow is new on #181 and is not registered for manual
+# workflow_dispatch until the file lands on the repository default branch.
+# Bootstrap the one-time pre-merge synthetic run only when THIS YAML changes
+# in its dedicated PR branch. No second build on unrelated PR pushes.
 # No Soulseek/slskd login, peer search, transport or download happens here.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - acquisition/issue-177-soulseek-discovery
+    paths:
+      - .github/workflows/acquisition-offline-benchmark.yml
 
 concurrency:
   group: acquisition-offline-benchmark-${{ github.ref }}
