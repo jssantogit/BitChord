@@ -11,6 +11,7 @@ import com.music.bitchord.ui.SearchSource
 import com.music.bitchord.ui.shouldPrefetchLegacyYouTubeAccountData
 import com.music.bitchord.ui.isYouTubeSourceEnabled
 import com.music.bitchord.ui.runLegacySpotifyMatchIfAllowed
+import com.music.bitchord.ui.shouldRunLegacyYoutubeVersionLookup
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -147,5 +148,16 @@ class CanonicalDiscoveryModeTest {
             "stale-youtube-id"
         }
         assertEquals(null, result)
+    }
+
+    @Test fun canonicalModeAndExplicitOptOutBlockBackgroundYoutubeVersionProbes() {
+        val enabled = listOf(SourceConfig(kind = SourceKind.YOUTUBE, enabled = true))
+        val disabled = listOf(SourceConfig(kind = SourceKind.YOUTUBE, enabled = false))
+        assertFalse(shouldRunLegacyYoutubeVersionLookup(canonicalMode = true, configs = enabled))
+        assertFalse(shouldRunLegacyYoutubeVersionLookup(canonicalMode = true, configs = emptyList()))
+        assertFalse(shouldRunLegacyYoutubeVersionLookup(canonicalMode = false, configs = disabled))
+        assertTrue(shouldRunLegacyYoutubeVersionLookup(canonicalMode = false, configs = enabled))
+        // No setting means existing installation behavior remains unchanged.
+        assertTrue(shouldRunLegacyYoutubeVersionLookup(canonicalMode = false, configs = emptyList()))
     }
 }
