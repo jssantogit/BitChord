@@ -146,10 +146,17 @@ internal object A0CandidateRank {
         val requestedWords=tokens(searchPhrase.orEmpty()).toSet()
         // A live/remix/acoustic recording is a mismatch only if that version
         // was NOT explicitly requested. Do not penalize a title called "Live".
+        val immediateFolderWords=parentSegments.lastOrNull()
+            ?.let { tokens(it).toSet() }.orEmpty()
+        // A title-only filename can live inside an explicitly alternate
+        // version album: "Magnetic (Live)/Magnetic.mp3". Inspect ONLY the
+        // immediate folder to avoid a distant "Live Archive" ancestor
+        // overriding normal album/artist context.
         if (setOf("live","remix","karaoke","instrumental","nightcore",
                 "slowed","cover","sped","reverb","acoustic","demo",
                 "extended","bootleg","8d") .any {
-                it in nameWords && it !in requestedWords
+                (it in nameWords || it in immediateFolderWords) &&
+                    it !in requestedWords
             }) {
             score-=30
             warnings.add(Warning.VERSION_MISMATCH)
