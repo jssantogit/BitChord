@@ -153,4 +153,40 @@ class A0CandidatePreflightTest {
         assertEquals(1,decision.index)
     }
 
+    @Test fun shuffledMultiwordTitleCannotBeStrongMerelyFromMatchingWords() {
+        val rank=A0CandidateRank.rank("Artist - Save Your Tears",
+            "Artist Tears Your Save.mp3",320,
+            remotePath="Music/Artist/Artist Tears Your Save.mp3",
+            format="mp3",declaredDurationSeconds=215,expectedDurationSeconds=215,
+            sizeBytes=8_600_000L)
+        val outcome=A0CandidatePreflight.assess("Artist - Save Your Tears",
+            rank,320,declaredDurationSeconds=215,expectedDurationSeconds=215,
+            format="mp3",sizeBytes=8_600_000L)
+        assertEquals(A0CandidatePreflight.Confidence.REVIEW,outcome.confidence)
+        assertTrue(A0CandidatePreflight.Reason.IDENTITY_AMBIGUOUS in outcome.reasons)
+    }
+
+    @Test fun repeatedTitleWordsCannotBeFakedByOneOccurrence() {
+        val rank=A0CandidateRank.rank("Artist - Do Do Do","Artist Do.mp3",320,
+            remotePath="Music/Artist/Artist Do.mp3",format="mp3",
+            declaredDurationSeconds=161,expectedDurationSeconds=161,
+            sizeBytes=6_400_000L)
+        val outcome=A0CandidatePreflight.assess("Artist - Do Do Do",
+            rank,320,declaredDurationSeconds=161,expectedDurationSeconds=161,
+            format="mp3",sizeBytes=6_400_000L)
+        assertEquals(A0CandidatePreflight.Confidence.REVIEW,outcome.confidence)
+    }
+
+    @Test fun correctlyOrderedMultiwordTitleRemainsStrong() {
+        val rank=A0CandidateRank.rank("Artist - Save Your Tears",
+            "Artist Save Your Tears.mp3",320,
+            remotePath="Music/Artist/Artist Save Your Tears.mp3",
+            format="mp3",declaredDurationSeconds=215,expectedDurationSeconds=215,
+            sizeBytes=8_600_000L)
+        val outcome=A0CandidatePreflight.assess("Artist - Save Your Tears",
+            rank,320,declaredDurationSeconds=215,expectedDurationSeconds=215,
+            format="mp3",sizeBytes=8_600_000L)
+        assertEquals(A0CandidatePreflight.Confidence.STRONG,outcome.confidence)
+    }
+
 }
