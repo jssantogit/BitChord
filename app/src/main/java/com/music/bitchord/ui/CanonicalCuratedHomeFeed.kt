@@ -5,20 +5,34 @@ import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
+import com.music.bitchord.ui.screens.CanonicalServerSearchRow
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+
+/** Opaque navigation-only keys must never contain user files, provider IDs or URLs. */
+private fun opaqueHomeCardId(namespace: String, assetKey: String): String {
+    val bytes = MessageDigest.getInstance("SHA-256")
+        .digest(assetKey.toByteArray(StandardCharsets.UTF_8))
+    return namespace + ":" + bytes.joinToString("") {
+        (it.toInt() and 0xff).toString(16).padStart(2, '0')
+    }
+}
 
 /** A card is keyed by the exact local asset, never by a recycled legacy video handle. */
 internal fun canonicalLocalPickCardId(song: Song): String {
     require(isPlayableLocalPick(song)) { "Home picks require a verified local URI" }
-    // Keep a stable navigation key without exposing a device filename/content URI
-    // to the shared ShelfItem layout or persisting an untrusted videoId.
-    val bytes = MessageDigest.getInstance("SHA-256")
-        .digest(song.localUri!!.toByteArray(StandardCharsets.UTF_8))
-    return "local:pick:" + bytes.joinToString("") {
-        (it.toInt() and 0xff).toString(16).padStart(2, '0')
-    }
+    return opaqueHomeCardId("local:pick", song.localUri!!)
 }
+
+/** A server asset is a verified catalog selection, never a synthetic video or stream URL. */
+internal fun canonicalRemotePickCardId(row: CanonicalServerSearchRow): String {
+    require(isTrustedHomeServerAsset(row)) { "Home Server picks require a trusted MediaAsset" }
+    return opaqueHomeCardId("server:pick", row.providerKey + "|" + row.mediaAssetId)
+}
+
+internal fun isTrustedHomeServerAsset(row: CanonicalServerSearchRow): Boolean =
+    (row.providerKey.startsWith("opensubsonic:") || row.providerKey.startsWith("jellyfin:")) &&
+        row.mediaAssetId.isNotBlank() && row.recordingId.isNotBlank()
 
 internal fun isPlayableLocalPick(song: Song): Boolean =
     song.localUri?.let { it.startsWith("content://") || it.startsWith("file://") } == true
@@ -41,6 +55,7 @@ internal fun canonicalCuratedHomeShelves(
     picksHeading: String,
     trendingHeading: String,
     todayIsoDate: String,
+    remotePicks: List<CanonicalServerSearchRow> = emptyList(),
 ): List<HomeShelf> = buildList {
     val groups = metadata.filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
     val releases = metadata.filter { it.kind == CanonicalSearchKind.RELEASE }
@@ -79,18 +94,26 @@ internal fun canonicalCuratedHomeShelves(
     val releaseItems = if (knownReleases.isNotEmpty()) knownReleases else savedReleases
     if (releaseItems.isNotEmpty()) add(HomeShelf(releasesHeading, releaseItems))
 
-    val picks = localPicks.asSequence()
+    val localCards = localPicks.asSequence()
         .filter(::isPlayableLocalPick)
         .distinctBy { it.localUri }
-        .sortedWith(
-            compareBy<Song> { it.videoId.hashCode() xor todayIsoDate.hashCode() }
-                .thenBy { it.videoId },
-        )
-        .take(16)
         .map { song ->
             ShelfItem(song.title, song.artist, song.thumbnailUrl, null, canonicalLocalPickCardId(song))
-        }
-        .toList()
+        }.toList()
+    val serverCards = remotePicks.asSequence()
+        .filter(::isTrustedHomeServerAsset)
+        .distinctBy { it.providerKey to it.mediaAssetId }
+        .map { row ->
+            ShelfItem(row.title, row.artistDisplay, row.artworkUri, null, canonicalRemotePickCardId(row))
+        }.toList()
+    // Sort both sources together, not local-first. The daily rotation picks
+    // across real MediaStore/Downloads and synchronized, authorized Server assets.
+    val picks = (localCards + serverCards)
+        .distinctBy { it.browseId }
+        .sortedWith(compareBy<ShelfItem> {
+            (it.browseId.orEmpty().hashCode() xor todayIsoDate.hashCode())
+        }.thenBy { it.browseId })
+        .take(16)
     if (picks.isNotEmpty()) add(HomeShelf(picksHeading, picks))
 
     val songsByMbid = metadata
