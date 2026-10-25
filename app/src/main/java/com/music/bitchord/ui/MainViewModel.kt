@@ -241,6 +241,63 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _canonicalDetail = MutableStateFlow<UiState<CanonicalCatalogDetailPage>?>(null)
     val canonicalDetail: StateFlow<UiState<CanonicalCatalogDetailPage>?> = _canonicalDetail.asStateFlow()
     private var canonicalBrowseJob: Job? = null
+    private val _canonicalLoadingMore = MutableStateFlow(false)
+    val canonicalLoadingMore: StateFlow<Boolean> = _canonicalLoadingMore.asStateFlow()
+    private var canonicalPagingJob: Job? = null
+
+    /**
+     * MusicBrainz browse pages can be shorter than the requested limit due to
+     * its 500-track response cap. Never assume offset += 25.
+     */
+    fun loadMoreCanonicalDetail() {
+        val entry = canonicalPath.lastOrNull() ?: return
+        val current = (_canonicalDetail.value as? UiState.Success)?.data ?: return
+        val offset = current.nextOffset ?: return
+        if (_searchSource.value != SearchSource.CANONICAL || _canonicalLoadingMore.value ||
+            (entry.kind != CanonicalSearchKind.ARTIST && entry.kind != CanonicalSearchKind.RELEASE_GROUP)) return
+        _canonicalLoadingMore.value = true
+        canonicalPagingJob?.cancel()
+        canonicalPagingJob = viewModelScope.launch {
+            try {
+                val page = when (entry.kind) {
+                    CanonicalSearchKind.ARTIST -> when (
+                        val result = musicBrainzGraph.browseReleaseGroupsForArtist(entry.musicBrainzId, offset = offset)
+                    ) {
+                        is MusicBrainzCatalogGraphResult.Success -> result.value.items.map { hit ->
+                            CanonicalCatalogSearchRow(hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP,
+                                hit.title, hit.artistDisplay ?: hit.primaryType)
+                        } to result.value.nextOffset
+                        is MusicBrainzCatalogGraphResult.Failure -> null
+                    }
+                    CanonicalSearchKind.RELEASE_GROUP -> when (
+                        val result = musicBrainzGraph.browseGroupReleases(entry.musicBrainzId, offset = offset)
+                    ) {
+                        is MusicBrainzCatalogGraphResult.Success -> result.value.items.map { hit ->
+                            CanonicalCatalogSearchRow(hit.musicBrainzId, CanonicalSearchKind.RELEASE,
+                                hit.title, listOfNotNull(hit.country, hit.releaseDate).joinToString(" · "))
+                        } to result.value.nextOffset
+                        is MusicBrainzCatalogGraphResult.Failure -> null
+                    }
+                    else -> null
+                }
+                val stillCurrent = (_canonicalDetail.value as? UiState.Success)?.data
+                if (page != null && _searchSource.value == SearchSource.CANONICAL &&
+                    canonicalPath.lastOrNull() == entry && stillCurrent != null &&
+                    stillCurrent.nextOffset == offset
+                ) {
+                    val merged = (stillCurrent.rows + page.first)
+                        .distinctBy { it.kind to it.musicBrainzId }
+                    _canonicalDetail.value = UiState.Success(stillCurrent.copy(
+                        rows = merged,
+                        nextOffset = page.second,
+                        summary = "${merged.size} of ${stillCurrent.totalCount ?: merged.size} catalog entries",
+                    ))
+                }
+            } finally {
+                _canonicalLoadingMore.value = false
+            }
+        }
+    }
     private val canonicalPath = mutableListOf<CanonicalCatalogSearchRow>()
 
     fun openCanonicalCatalogEntry(row: CanonicalCatalogSearchRow) {
@@ -262,12 +319,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun clearCanonicalCatalogNavigation() {
         canonicalBrowseJob?.cancel()
+        canonicalPagingJob?.cancel()
+        _canonicalLoadingMore.value = false
         canonicalPath.clear()
         _canonicalDetail.value = null
     }
 
     private fun showCanonicalCatalogEntry(entry: CanonicalCatalogSearchRow) {
         canonicalBrowseJob?.cancel()
+        canonicalPagingJob?.cancel()
+        _canonicalLoadingMore.value = false
         _canonicalDetail.value = UiState.Loading
         _searchScrollReset.value += 1
         canonicalBrowseJob = viewModelScope.launch {
@@ -291,6 +352,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
                                 hit.artistDisplay ?: hit.primaryType,
                             ) },
+                            nextOffset = result.value.nextOffset,
+                            totalCount = result.value.total,
                         ))
                     }
                     is MusicBrainzCatalogGraphResult.Failure -> UiState.Error("Unable to load artist discography")
@@ -309,6 +372,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 listOfNotNull(hit.country, hit.releaseDate).joinToString(" · "),
                             ) },
                             artworkUri = artwork,
+                            nextOffset = result.value.nextOffset,
+                            totalCount = result.value.total,
                         ))
                     }
                     is MusicBrainzCatalogGraphResult.Failure -> UiState.Error("Unable to load release editions")

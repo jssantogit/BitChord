@@ -112,6 +112,9 @@ data class CanonicalCatalogDetailPage(
     val summary: String?,
     val rows: List<CanonicalCatalogSearchRow>,
     val artworkUri: String? = null,
+    /** Next MusicBrainz browse offset, which must use returned row count. */
+    val nextOffset: Int? = null,
+    val totalCount: Int? = null,
 )
 
 @Composable
@@ -176,6 +179,8 @@ fun SearchScreen(
     canonicalDetail: UiState<CanonicalCatalogDetailPage>? = null,
     onCanonicalOpen: (CanonicalCatalogSearchRow) -> Unit = {},
     onCanonicalBack: () -> Unit = {},
+    onCanonicalLoadMore: () -> Unit = {},
+    canonicalLoadingMore: Boolean = false,
     /** Only called for MBIDs that have a cataloged asset; Playback revalidates. */
     onCanonicalPlay: (String) -> Unit = {},
     onCanonicalAddToQueue: (String) -> Unit = {},
@@ -286,6 +291,7 @@ fun SearchScreen(
             when {
                 searchingCanonical -> canonicalMusicBrainzResults(
                     canonicalResults, canonicalDetail, onCanonicalOpen, onCanonicalBack,
+                    onCanonicalLoadMore, canonicalLoadingMore,
                     onCanonicalPlay, onCanonicalAddToQueue,
                 )
                 searchingLibrary || searchingAddons -> librarySearchResults(
@@ -438,6 +444,8 @@ private fun LazyListScope.canonicalMusicBrainzResults(
     detail: UiState<CanonicalCatalogDetailPage>?,
     onOpen: (CanonicalCatalogSearchRow) -> Unit,
     onBack: () -> Unit,
+    onLoadMore: () -> Unit,
+    loadingMore: Boolean,
     onPlay: (String) -> Unit,
     onAddToQueue: (String) -> Unit,
 ) {
@@ -549,6 +557,15 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                         thickness = 0.5.dp,
                         color = MaterialTheme.colorScheme.outline,
                     )
+                }
+            }
+            if (detail is UiState.Success && detail.data.nextOffset != null) {
+                item(key = "musicbrainz:load-more") {
+                    OutlinedButton(
+                        onClick = onLoadMore,
+                        enabled = !loadingMore,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
+                    ) { Text(if (loadingMore) "Loading more…" else "Load more editions") }
                 }
             }
         }

@@ -36,6 +36,7 @@ class MusicBrainzCatalogSearchTest {
         assertEquals(2, page.items.size)
         assertEquals(2, page.total)
         assertEquals(25, page.offset)
+        assertEquals(null, page.nextOffset)
         assertEquals(listOf("Magnetic", "Magnetic (sped up)"), page.items.map { it.title })
         assertEquals(listOf(160000L, 124000L), page.items.map { it.durationMs })
         assertEquals(listOf("ILLIT", "ILLIT"), page.items.map { it.artistDisplay })
@@ -45,6 +46,15 @@ class MusicBrainzCatalogSearchTest {
         assertEquals("25", calls.single().second["limit"])
         assertEquals("25", calls.single().second["offset"])
         assertTrue(calls.single().third.startsWith("Bitchord/"))
+    }
+
+    @Test
+    fun browsePaginationMustAdvanceByActualResponseRowsNotRequestedLimit() {
+        val page = com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage(
+            items = listOf("worldwide", "japan", "international"),
+            total = 100, offset = 25,
+        )
+        assertEquals(28, page.nextOffset)
     }
 
     @Test

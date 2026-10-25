@@ -14,7 +14,14 @@ internal data class MusicBrainzCatalogPage<out T>(
     val items: List<T>,
     val total: Int,
     val offset: Int,
-)
+) {
+    /**
+     * MusicBrainz may return fewer releases than the requested limit when its
+     * 500-track browse cap is reached. Advance by actual rows, not page size.
+     */
+    val nextOffset: Int? get() =
+        if (items.isEmpty() || offset + items.size >= total) null else offset + items.size
+}
 
 internal sealed interface MusicBrainzCatalogSearchResult<out T> {
     data class Success<T>(val page: MusicBrainzCatalogPage<T>) : MusicBrainzCatalogSearchResult<T>
