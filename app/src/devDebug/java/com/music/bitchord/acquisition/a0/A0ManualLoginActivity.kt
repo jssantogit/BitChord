@@ -744,16 +744,20 @@ class A0ManualLoginActivity : Activity() {
                                                         AlertDialog.Builder(this@A0ManualLoginActivity)
                                                             .setTitle("Nenhum candidato atende à qualidade")
                                                             .setMessage(
-                                                                "O Soulseek pesquisa por texto e só anuncia " +
-                                                                    "o formato após a resposta. Nenhum arquivo " +
-                                                                    "declarou o perfil ${preset.label}. " +
-                                                                    "É possível inspecionar outros formatos, " +
-                                                                    "sem alterar a preferência global.")
-                                                                                                                        .setPositiveButton(
-                                                            if(inspectOthers) "Perfil desejado" else "Inspecionar outros"
-                                                        ) { _, _ -> showChoices(
-                                                            inspectOthers=!inspectOthers) }
-                                                        .setNegativeButton("Cancelar") { _, _ ->
+                                                                if(inspectOthers)
+                                                                    "Nenhum arquivo corresponde ao filtro adicional. " +
+                                                                        "Volte ao perfil desejado ou cancele."
+                                                                else
+                                                                    "O Soulseek pesquisa por texto; nenhum arquivo " +
+                                                                        "anunciou o perfil ${preset.label}. " +
+                                                                        "Você pode inspecionar os demais candidatos " +
+                                                                        "sem alterar a qualidade escolhida.")
+                                                            .setPositiveButton(
+                                                                if(inspectOthers) "Perfil desejado" else "Inspecionar outros"
+                                                            ) { _, _ ->
+                                                                showChoices(inspectOthers=!inspectOthers)
+                                                            }
+                                                            .setNegativeButton("Cancelar") { _, _ ->
                                                                 choiceQueue.offer(-1)
                                                             }
                                                             .setOnCancelListener { choiceQueue.offer(-1) }
