@@ -54,9 +54,15 @@ class A0CanonicalBenchmarkReplayTest {
             .joinToString("") { "%02x".format(it.toInt() and 255) }
 
     private data class Candidate(
-        val id:String,val score:Int,val assessment:A0CandidatePreflight.Assessment
+        val id:String,
+        val score:Int,
+        val assessment:A0CandidatePreflight.Assessment,
+        val album:A0CanonicalAlbumPolicy.Status?=null,
     )
-    private fun evaluate(c:JsonObject):JsonObject {
+    private fun evaluateAlbumGated(c:JsonObject)=evaluate(c,albumGated=true)
+
+    /** Compare a pure album-claim prototype, without changing live v4. */
+    private fun evaluate(c:JsonObject,albumGated:Boolean=false):JsonObject {
         val request=c["intent"]!!.jsonObject
         val artist=request.field("artist")
         val title=request.field("title")
@@ -77,9 +83,32 @@ class A0CanonicalBenchmarkReplayTest {
                 phrase,rank,bitrate,declaredDurationSeconds=duration,
                 expectedDurationSeconds=180,format=format,sizeBytes=size
             )
-            Candidate(offer.field("offer_id"),rank.score,assessed)
+            val album=if(albumGated) A0CanonicalAlbumPolicy.assess(
+                A0CanonicalAlbumPolicy.Target(request["album"]?.jsonPrimitive?.contentOrNull),
+                A0CanonicalAlbumPolicy.Claim(
+                    offer["claimed_album"]?.jsonPrimitive?.contentOrNull)
+            ) else null
+            val confidence=when(album?.status) {
+                A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM ->
+                    A0CandidatePreflight.Confidence.UNSAFE
+                A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL ->
+                    if(assessed.confidence==A0CandidatePreflight.Confidence.UNSAFE)
+                        A0CandidatePreflight.Confidence.UNSAFE
+                    else A0CandidatePreflight.Confidence.REVIEW
+                else -> assessed.confidence
+            }
+            Candidate(offer.field("offer_id"),rank.score,
+                assessed.copy(confidence=confidence),album?.status)
         }.sortedWith(
-            compareBy<Candidate> { it.assessment.confidence.ordinal }
+            compareBy<Candidate> {
+                if(!albumGated) 0 else when(it.album) {
+                    A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED,
+                    A0CanonicalAlbumPolicy.Status.UNCONSTRAINED -> 0
+                    A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL -> 1
+                    A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM -> 2
+                    null -> 0
+                }
+            }.thenBy { it.assessment.confidence.ordinal }
                 .thenByDescending { it.score }.thenBy { it.id }
         )
         val decision=A0CandidatePreflight.simulate(
@@ -94,8 +123,9 @@ class A0CanonicalBenchmarkReplayTest {
             }))
             put("ranked_offer_ids",JsonArray(ranked.map { JsonPrimitive(it.id) }))
             put("recommended_offer_id",recommendation?.let { JsonPrimitive(it) } ?: JsonNull)
-            put("model_version","preflight_v4")
-            put("recommendation_policy","strong_only")
+            put("model_version",if(albumGated) "preflight_v4_album_v1" else "preflight_v4")
+            put("recommendation_policy",
+                if(albumGated) "strong_album_gate_only" else "strong_only")
         }
     }
 
@@ -146,5 +176,10 @@ class A0CanonicalBenchmarkReplayTest {
             evaluate(it).toString()
         },Charsets.UTF_8)
         assertEquals(18,file.readLines().size)
+        val albumFile=File(root,"bitchord-album-gate-v1.jsonl")
+        albumFile.writeText(dataset.joinToString(separator="\\n",postfix="\\n") {
+            evaluateAlbumGated(it).toString()
+        },Charsets.UTF_8)
+        assertEquals(18,albumFile.readLines().size)
     }
 }
