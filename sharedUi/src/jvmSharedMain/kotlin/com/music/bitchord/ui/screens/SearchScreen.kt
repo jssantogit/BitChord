@@ -285,14 +285,11 @@ fun SearchScreen(
                 )
             }
             if (sourceSwitcher != null) {
-                AnimatedVisibility(
-                    visible = query.isEmpty(),
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically(),
-                ) {
-                    Box(Modifier.padding(start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 4.dp)) {
-                        sourceSwitcher()
-                    }
+                // Source origins remain selectable while a query is visible,
+                // so changing General ↔ Server ↔ Local does not require the
+                // user to clear and retype the same artist or release.
+                Box(Modifier.padding(start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 4.dp)) {
+                    sourceSwitcher()
                 }
             }
             // The filters only mean something once there is a result set to narrow;
