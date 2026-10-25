@@ -102,6 +102,8 @@ data class CanonicalCatalogSearchRow(
     val subtitle: String?,
     val hasCatalogedAsset: Boolean = false,
     val fromOfflineCache: Boolean = false,
+    /** Edition-specific Track MBID disambiguates repeated recordings in a tracklist. */
+    val trackMbid: String? = null,
 )
 
 /** One navigable step; its rows are metadata identities, not video IDs. */
@@ -471,14 +473,14 @@ private fun LazyListScope.canonicalMusicBrainzResults(
         }
         UiState.Loading -> songListSkeleton(keyPrefix = "musicbrainz:search")
         is UiState.Error -> item(key = "musicbrainz:error") {
-            MessageState(results.message)
+            MessageState(rows.message)
         }
         is UiState.Success -> if (rows.data.isEmpty()) {
             item(key = "musicbrainz:empty") { MessageState("No MusicBrainz entries found.") }
         } else {
             itemsIndexed(
                 items = rows.data,
-                key = { _, row -> "mb:${row.kind}:${row.musicBrainzId}" },
+                key = { _, row -> "mb:${row.kind}:${row.trackMbid ?: row.musicBrainzId}" },
             ) { index, row ->
                 Column(
                     modifier = Modifier.fillMaxWidth()
