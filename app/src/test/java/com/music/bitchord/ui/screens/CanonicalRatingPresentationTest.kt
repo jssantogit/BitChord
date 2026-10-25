@@ -334,4 +334,50 @@ class CanonicalRatingPresentationTest {
         assertEquals(4.5, result.byRecordingId.getValue("recording-3999").localValue!!, 0.0)
     }
 
+
+    @Test
+    fun contradictoryNumericEvidenceForOneMediaAssetIsNeverLastWriterWins() {
+        val five = CanonicalRemoteRatingInput("r", "asset-a", provider, scope, 5, false)
+        val three = five.copy(numericValue = 3)
+        listOf(listOf(five, three), listOf(three, five)).forEach { evidence ->
+            val result = buildCanonicalRatingPresentation(
+                assets = listOf(asset("r", "asset-a")),
+                localValues = emptyMap(),
+                remote = evidence,
+                activeProvider = provider,
+                activeScope = scope,
+            )
+            assertNull("Conflicting evidence for one MediaAsset cannot pick the last row",
+                result.byMediaAssetId["asset-a"])
+            assertNull(result.byRecordingId["r"])
+        }
+    }
+
+    @Test
+    fun validAndClearedEvidenceForSameMediaAssetCannotBecomeFiveStars() {
+        val valid = CanonicalRemoteRatingInput("r", "asset-a", provider, scope, 5, true)
+        val cleared = valid.copy(numericValue = null)
+        val result = buildCanonicalRatingPresentation(
+            assets = listOf(asset("r", "asset-a")),
+            localValues = emptyMap(),
+            remote = listOf(cleared, valid),
+            activeProvider = provider,
+            activeScope = scope,
+        )
+        assertNull(result.byMediaAssetId["asset-a"])
+    }
+
+    @Test
+    fun duplicatedIdenticalScopedRemoteEvidenceIsSafeToDeduplicate() {
+        val five = CanonicalRemoteRatingInput("r", "asset-a", provider, scope, 5, false)
+        val result = buildCanonicalRatingPresentation(
+            assets = listOf(asset("r", "asset-a")),
+            localValues = emptyMap(),
+            remote = listOf(five, five),
+            activeProvider = provider,
+            activeScope = scope,
+        )
+        assertEquals(5, result.byMediaAssetId["asset-a"]?.remoteValue)
+    }
+
 }
