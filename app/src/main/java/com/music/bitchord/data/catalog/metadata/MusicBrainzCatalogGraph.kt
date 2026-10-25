@@ -49,6 +49,7 @@ internal class MusicBrainzCatalogGraph(
     ): MusicBrainzCatalogGraphResult<MusicBrainzCatalogPage<MusicBrainzReleaseGroupHit>> =
         paged("release-group", "artist", artistMbid, limit, offset,
             countKey = "release-group-count", offsetKey = "release-group-offset", arrayKey = "release-groups",
+            identity = MusicBrainzReleaseGroupHit::musicBrainzId,
         ) { row ->
             MusicBrainzReleaseGroupHit(
                 musicBrainzId = row.string("id").validMbid() ?: return@paged null,
@@ -65,6 +66,7 @@ internal class MusicBrainzCatalogGraph(
     ): MusicBrainzCatalogGraphResult<MusicBrainzCatalogPage<MusicBrainzReleaseHit>> =
         paged("release", "release-group", groupMbid, limit, offset,
             countKey = "release-count", offsetKey = "release-offset", arrayKey = "releases",
+            identity = MusicBrainzReleaseHit::musicBrainzId,
         ) { row ->
             MusicBrainzReleaseHit(
                 musicBrainzId = row.string("id").validMbid() ?: return@paged null,
@@ -99,7 +101,7 @@ internal class MusicBrainzCatalogGraph(
             val title = data.string("title")?.takeIf(String::isNotBlank)
                 ?: return MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)
             val media = data.array("media")
-            val tracks = media.flatMapIndexed { mediumIndex, medium ->
+            val parsedTracks = media.flatMapIndexed { mediumIndex, medium ->
                 val mediumObj = medium as? JsonObject ?: return@flatMapIndexed emptyList()
                 val number = mediumObj.integer("position")?.takeIf { it > 0 } ?: (mediumIndex + 1)
                 mediumObj.array("tracks").mapIndexedNotNull { index, entry ->
@@ -120,7 +122,16 @@ internal class MusicBrainzCatalogGraph(
                         artistDisplay = track.artistDisplay() ?: recording.artistDisplay(),
                     )
                 }
-            }.distinctBy(MusicBrainzCatalogTrack::trackMbid)
+            }
+            // An MB Track ID uniquely identifies its edition-specific Recording.
+            // Contradictory rows are not silently collapsed into arbitrary truth.
+            if (parsedTracks.groupBy(MusicBrainzCatalogTrack::trackMbid)
+                    .values.any { rows -> rows.distinct().size > 1 }) {
+                return MusicBrainzCatalogGraphResult.Failure(
+                    MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                )
+            }
+            val tracks = parsedTracks.distinctBy(MusicBrainzCatalogTrack::trackMbid)
             MusicBrainzCatalogGraphResult.Success(MusicBrainzCatalogReleaseDetail(
                 musicBrainzId = normalized,
                 groupMbid = (data["release-group"] as? JsonObject)?.string("id").validMbid(),
@@ -138,6 +149,7 @@ internal class MusicBrainzCatalogGraph(
     private suspend fun <T> paged(
         path: String, relation: String, mbid: String, limit: Int, offset: Int,
         countKey: String, offsetKey: String, arrayKey: String,
+        identity: (T) -> String,
         decode: (JsonObject) -> T?,
     ): MusicBrainzCatalogGraphResult<MusicBrainzCatalogPage<T>> {
         val normalized = mbid.validMbid()
@@ -166,7 +178,7 @@ internal class MusicBrainzCatalogGraph(
             val items = data[arrayKey] as? JsonArray
                 ?: return MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)
             MusicBrainzCatalogGraphResult.Success(
-                MusicBrainzCatalogPage(items.mapNotNull { (it as? JsonObject)?.let(decode) }.distinct(),
+                MusicBrainzCatalogPage(items.mapNotNull { (it as? JsonObject)?.let(decode) }.distinctBy(identity),
                     total, actualOffset, consumedCount = items.size),
             )
         } catch (_: Exception) {
