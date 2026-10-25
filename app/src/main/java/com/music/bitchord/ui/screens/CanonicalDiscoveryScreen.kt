@@ -120,7 +120,7 @@ internal fun CanonicalDiscoveryScreen(
                 items(localPlaylists, key = { "playlist:${it.id}" }) { playlist ->
                     CollectionCard(
                         title = playlist.title,
-                        subtitle = "${playlist.songs.size} songs",
+                        subtitle = stringResource(R.string.card_songs_format, playlist.songs.size),
                         onClick = { onOpenLocalPlaylist(playlist) },
                     )
                 }
