@@ -10,7 +10,7 @@ import kotlin.math.abs
  * This policy has no network, filesystem, or playback side effects.
  */
 internal object A0CandidatePreflight {
-    const val POLICY_VERSION="preflight-v2"
+    const val POLICY_VERSION="preflight-v3"
     enum class Confidence { STRONG, REVIEW, UNSAFE }
 
     enum class Reason {
@@ -121,6 +121,22 @@ internal object A0CandidatePreflight {
                 if(length!=null && sizeBytes<length.toLong()*5_000L) {
                     reasons.add(Reason.SIZE_CONFLICT)
                     hard.add(Reason.SIZE_CONFLICT)
+                }
+                // A WAV label and sample metadata do not prove lossless PCM.
+                // Still, a file far smaller than even MONO uncompressed PCM
+                // cannot support an unattended lossless-quality inference.
+                // Apply a 50% floor only to WAV, not compressible FLAC;
+                // compressed WAVs remain available for manual review.
+                if(ext=="wav" && length!=null) {
+                    val rate=declaredSampleRateHz?.takeIf { it in 44_100..384_000 }
+                    val depth=declaredBitDepth?.takeIf { it in 16..32 }
+                    if(rate!=null && depth!=null) {
+                        val monoBytes=length.toLong()*rate.toLong()*depth.toLong()/8L
+                        if(sizeBytes<monoBytes/2L) {
+                            reasons.add(Reason.SIZE_CONFLICT)
+                            hard.add(Reason.SIZE_CONFLICT)
+                        }
+                    }
                 }
             }
             else -> reasons.add(Reason.QUALITY_UNCONFIRMED)
