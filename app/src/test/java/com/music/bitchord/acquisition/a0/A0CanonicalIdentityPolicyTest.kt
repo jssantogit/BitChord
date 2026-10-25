@@ -14,10 +14,11 @@ class A0CanonicalIdentityPolicyTest {
     private fun request(
         album: String? = "Blue Sky",
         exactEdition: Boolean = false,
-        version: Set<A0CanonicalAcquisitionIntent.VersionTag> = emptySet()
+        version: Set<A0CanonicalAcquisitionIntent.VersionTag> = emptySet(),
+        catalog: Boolean = false,
     ): A0CanonicalAcquisitionIntent =
-        if(exactEdition) A0CanonicalAcquisitionIntent.confirmedCatalog(
-            title="Blue Sky", requestedAlbum=album, strictExactRelease=true,
+        if(exactEdition || catalog) A0CanonicalAcquisitionIntent.confirmedCatalog(
+            title="Blue Sky", requestedAlbum=album, strictExactRelease=exactEdition,
             ids=A0CanonicalAcquisitionIntent.CanonicalIds(
                 recordingMbid="11111111-1111-4111-8111-111111111111",
                 releaseMbid="22222222-2222-4222-8222-222222222222"
@@ -101,11 +102,19 @@ class A0CanonicalIdentityPolicyTest {
 
     @Test fun adequateIndependentEvidenceCanBeStrongButNeverVerifiedAudio() {
         val decision=A0CanonicalIdentityPolicy.assess(
-            request(), exact, A0CanonicalAlbumPolicy.Claim("Blue Sky"), strong
+            request(catalog=true), exact, A0CanonicalAlbumPolicy.Claim("Blue Sky"), strong
         )
         assertEquals(A0CanonicalIdentityPolicy.Verdict.COMPATIBLE_STRONG_UNVERIFIED, decision.verdict)
         assertFalse(decision.provesAudioMaster)
         assertFalse(decision.authorizesTransfer)
+    }
+
+    @Test fun manualSearchCannotBePromotedByAResolutionForAnUnrelatedCatalogTarget() {
+        val decision=A0CanonicalIdentityPolicy.assess(
+            request(), exact, A0CanonicalAlbumPolicy.Claim("Blue Sky"), strong
+        )
+        assertEquals(A0CanonicalIdentityPolicy.Verdict.INCONCLUSIVE_MANUAL, decision.verdict)
+        assertTrue(A0CanonicalIdentityPolicy.Reason.CANONICAL_INCOMPLETE in decision.reasons)
     }
 
     @Test fun preflightReviewNeverBecomesStrongDueToCatalogueEvidence() {
