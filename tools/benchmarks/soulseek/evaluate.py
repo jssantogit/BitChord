@@ -313,7 +313,7 @@ def main(argv: list[str] | None = None) -> int:
             with args.export_blind.open("w", encoding="utf-8") as output_stream:
                 for case in cases:
                     output_stream.write(json.dumps(blind_case(case), ensure_ascii=False,
-                                                   separators=(",", ":")) + "\\n")
+                                                   separators=(",", ":")) + "\n")
             print(json.dumps({"export": "blind_input", "n_cases": len(cases)}))
             return 0
         if args.left is None and args.right is None:
