@@ -558,10 +558,14 @@ internal interface CanonicalCatalogDao {
             track.trackNumber AS trackNumber, track.durationMs AS durationMs,
             track.artistDisplay AS artistDisplay,
             track.recordingArtistDisplay AS recordingArtistDisplay,
-            recording.title AS recordingTitle, recording.durationMs AS recordingDurationMs
+            COALESCE(recordingEvidence.title, recording.title) AS recordingTitle,
+            COALESCE(recordingEvidence.durationMs, recording.durationMs) AS recordingDurationMs
         FROM catalog_musicbrainz_track track
         JOIN catalog_recording recording ON recording.id = track.recordingId
         JOIN catalog_external_identity identity ON identity.entityId = recording.id
+        LEFT JOIN musicbrainz_recording_enrichment recordingEvidence
+          ON recordingEvidence.recordingId = recording.id
+         AND recordingEvidence.mbid = identity.externalId
         WHERE track.releaseId = :releaseId AND identity.provider = 'musicbrainz'
             AND identity.entityType = 'recording'
         ORDER BY track.mediumNumber, track.trackNumber, track.trackMbid
