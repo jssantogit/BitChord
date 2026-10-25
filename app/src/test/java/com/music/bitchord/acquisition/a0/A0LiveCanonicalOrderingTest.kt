@@ -92,4 +92,26 @@ class A0LiveCanonicalOrderingTest {
         collector.cancel()
         assertTrue(collector.choices().isEmpty())
     }
+    @Test fun artistFolderWithoutExplicitAlbumIsInconclusiveNotWrong() {
+        val collector=A0ObservedCandidateHandoff(
+            Socket(),"local",177,true,searchPhrase="Mira - Blue Sky",
+            requestedAlbum="Blue Sky"
+        )
+        collector.offerParsed(reply("peer",
+            offer("Music\\\\Mira\\\\Mira - Blue Sky.mp3")),"peer")
+        val answer=collector.choices().single()
+        assertEquals(A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL,
+            answer.albumEvidence.status)
+    }
+
+    @Test fun legacySuggestionMustNotOverrideExplicitAlbumRisk() {
+        val collector=A0ObservedCandidateHandoff(
+            Socket(),"local",177,true,searchPhrase="Mira - Blue Sky",
+            requestedAlbum="Blue Sky"
+        )
+        collector.offerParsed(reply("peer",
+            offer("Music\\\\Greatest Hits\\\\Mira - Blue Sky.mp3")),"peer")
+        assertNull(collector.manualSuggestionIndex())
+    }
+
 }
