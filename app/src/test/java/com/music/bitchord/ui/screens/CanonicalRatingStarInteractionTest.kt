@@ -3,7 +3,6 @@ package com.music.bitchord.ui.screens
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasClickAction
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.components.CanonicalSongRatingStars
