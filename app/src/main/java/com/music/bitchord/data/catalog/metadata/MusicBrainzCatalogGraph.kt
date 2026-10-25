@@ -24,6 +24,8 @@ internal data class MusicBrainzCatalogTrack(
     val mediumNumber: Int,
     val trackNumber: Int,
     val durationMs: Long?,
+    /** Specific track credit can differ from the release's credited artist. */
+    val artistDisplay: String? = null,
 )
 
 internal data class MusicBrainzCatalogReleaseDetail(
@@ -115,6 +117,7 @@ internal class MusicBrainzCatalogGraph(
                         mediumNumber = number,
                         trackNumber = track.integer("position")?.takeIf { it > 0 } ?: index + 1,
                         durationMs = (track.long("length") ?: recording.long("length"))?.takeIf { it >= 0 },
+                        artistDisplay = track.artistDisplay() ?: recording.artistDisplay(),
                     )
                 }
             }.distinctBy(MusicBrainzCatalogTrack::trackMbid)
@@ -164,7 +167,7 @@ internal class MusicBrainzCatalogGraph(
                 ?: return MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)
             MusicBrainzCatalogGraphResult.Success(
                 MusicBrainzCatalogPage(items.mapNotNull { (it as? JsonObject)?.let(decode) }.distinct(),
-                    total, actualOffset),
+                    total, actualOffset, consumedCount = items.size),
             )
         } catch (_: Exception) {
             MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)

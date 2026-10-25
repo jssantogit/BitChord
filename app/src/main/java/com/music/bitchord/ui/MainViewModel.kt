@@ -408,7 +408,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 musicBrainzId = track.recordingMbid,
                                 kind = CanonicalSearchKind.RECORDING,
                                 title = "${track.mediumNumber}.${track.trackNumber}  ${track.title}",
-                                subtitle = details.artistDisplay,
+                                subtitle = track.artistDisplay ?: details.artistDisplay,
                                 hasCatalogedAsset = track.recordingMbid in available,
                                 trackMbid = track.trackMbid,
                             ) },

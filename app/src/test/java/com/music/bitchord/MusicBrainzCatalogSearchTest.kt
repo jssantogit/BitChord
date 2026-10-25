@@ -12,6 +12,28 @@ import org.junit.Test
 
 class MusicBrainzCatalogSearchTest {
     @Test
+    fun paginationConsumesRawServerRowsEvenWhenSomeMbidsAreRejectedOrDuplicated() = runBlocking {
+        val original = "e614e432-ca77-41c1-82c1-4e3a24ebbb0c"
+        val sped = "3e619ba2-34f0-4649-83d8-05483e2fabe5"
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String =
+                    """{"count":12,"offset":0,"recordings":[
+                        {"id":"not-an-mbid","title":"Bad"},
+                        {"id":"$original","title":"Magnetic"},
+                        {"id":"$original","title":"Magnetic"},
+                        {"id":"$sped","title":"Magnetic (sped up)"}
+                    ]}"""
+            },
+        ))
+        val page = (search.searchRecordings("Magnetic") as
+            MusicBrainzCatalogSearchResult.Success).page
+        assertEquals(listOf(original, sped), page.items.map { it.musicBrainzId })
+        assertEquals(4, page.consumedCount)
+        assertEquals(4, page.nextOffset)
+    }
+
+    @Test
     fun recordingSearchKeepsOriginalAndSpedUpSeparateAndPaginates() = runBlocking {
         val calls = mutableListOf<Triple<String, Map<String, String>, String>>()
         val search = MusicBrainzCatalogSearch(

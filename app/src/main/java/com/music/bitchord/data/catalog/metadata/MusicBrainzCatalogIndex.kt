@@ -132,7 +132,7 @@ internal class MusicBrainzCatalogIndex(
             MusicBrainzRecordingHit(
                 musicBrainzId = track.recordingMbid,
                 title = track.title,
-                artistDisplay = detail.artistDisplay,
+                artistDisplay = track.artistDisplay ?: detail.artistDisplay,
                 durationMs = track.durationMs,
             )
         })

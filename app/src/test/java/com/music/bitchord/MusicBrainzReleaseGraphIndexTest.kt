@@ -31,7 +31,8 @@ class MusicBrainzReleaseGraphIndexTest {
             val japan = "271b31f8-8ab6-483c-97d9-8f0fabb2d4f4"
             val details = listOf(
                 MusicBrainzCatalogReleaseDetail(worldwide, group, "SUPER REAL ME", "ILLIT", "XW", "2024-03-25",
-                    listOf(MusicBrainzCatalogTrack("14f273b6-813b-4239-b0f8-c4b839b902c6",recording,"Magnetic",1,2,160000))),
+                    listOf(MusicBrainzCatalogTrack("14f273b6-813b-4239-b0f8-c4b839b902c6",recording,"Magnetic",1,2,160000,
+                        artistDisplay = "ILLIT feat. Guest"))),
                 MusicBrainzCatalogReleaseDetail(japan, group, "SUPER REAL ME", "ILLIT", "JP", "2024-03-25",
                     listOf(MusicBrainzCatalogTrack("bce9c8f8-b7a6-4427-9f46-97e88f8ae5f7",recording,"Magnetic",1,2,160000))),
             )
@@ -49,6 +50,8 @@ class MusicBrainzReleaseGraphIndexTest {
                 dao.catalogMusicBrainzTracks(r2).single().recordingId)
             assertEquals(4, serial) // 1 Recording + 1 ReleaseGroup + 2 Releases; no reclaims
             assertEquals(r1, index.persistReleaseDetail(details[0]))
+            val canonicalRecordingId = dao.catalogMusicBrainzTracks(r1).single().recordingId
+            assertEquals("ILLIT feat. Guest", dao.recordingById(canonicalRecordingId)?.artistDisplay)
             assertEquals(emptyList<String>(), dao.musicBrainzRecordingMbidsWithAssets(listOf(recording)))
         } finally { db.close() }
     }

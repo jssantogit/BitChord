@@ -14,13 +14,18 @@ internal data class MusicBrainzCatalogPage<out T>(
     val items: List<T>,
     val total: Int,
     val offset: Int,
+    /** How many raw server rows this page consumed, including invalid/duplicate hits. */
+    val consumedCount: Int = items.size,
 ) {
     /**
-     * MusicBrainz may return fewer releases than the requested limit when its
-     * 500-track browse cap is reached. Advance by actual rows, not page size.
+     * Never derive a server cursor from filtered UI results: rejected MBIDs and
+     * duplicate rows have already consumed their upstream offset positions.
+     * Browsing releases can also return fewer rows than the requested limit.
      */
     val nextOffset: Int? get() =
-        if (items.isEmpty() || offset + items.size >= total) null else offset + items.size
+        if (consumedCount <= 0 || offset < 0 || offset >= total ||
+            consumedCount >= total - offset
+        ) null else offset + consumedCount
 }
 
 internal sealed interface MusicBrainzCatalogSearchResult<out T> {
@@ -84,7 +89,7 @@ internal class MusicBrainzCatalogSearch(
     ): MusicBrainzCatalogSearchResult<MusicBrainzArtistHit> =
         search("artist", query, limit, offset) { raw ->
             val result = json.decodeFromString<ArtistSearchEnvelope>(raw)
-            result.pageOrNull {
+            result.pageOrNull(result.artists?.size) {
                 result.artists?.mapNotNull { artist ->
                     val mbid = artist.id.validSearchMbidOrNull() ?: return@mapNotNull null
                     val name = artist.name.nonEmpty() ?: return@mapNotNull null
@@ -100,7 +105,7 @@ internal class MusicBrainzCatalogSearch(
     ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> =
         search("release-group", query, limit, offset) { raw ->
             val result = json.decodeFromString<ReleaseGroupSearchEnvelope>(raw)
-            result.pageOrNull {
+            result.pageOrNull(result.releaseGroups?.size) {
                 result.releaseGroups?.mapNotNull { group ->
                     val mbid = group.id.validSearchMbidOrNull() ?: return@mapNotNull null
                     val title = group.title.nonEmpty() ?: return@mapNotNull null
@@ -119,7 +124,7 @@ internal class MusicBrainzCatalogSearch(
     ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseHit> =
         search("release", query, limit, offset) { raw ->
             val result = json.decodeFromString<ReleaseSearchEnvelope>(raw)
-            result.pageOrNull {
+            result.pageOrNull(result.releases?.size) {
                 result.releases?.mapNotNull { release ->
                     val mbid = release.id.validSearchMbidOrNull() ?: return@mapNotNull null
                     val title = release.title.nonEmpty() ?: return@mapNotNull null
@@ -138,7 +143,7 @@ internal class MusicBrainzCatalogSearch(
     ): MusicBrainzCatalogSearchResult<MusicBrainzRecordingHit> =
         search("recording", query, limit, offset) { raw ->
             val result = json.decodeFromString<RecordingSearchEnvelope>(raw)
-            result.pageOrNull {
+            result.pageOrNull(result.recordings?.size) {
                 result.recordings?.mapNotNull { recording ->
                     val mbid = recording.id.validSearchMbidOrNull() ?: return@mapNotNull null
                     val title = recording.title.nonEmpty() ?: return@mapNotNull null
@@ -201,11 +206,15 @@ internal class MusicBrainzCatalogSearch(
             (credit.name.nonEmpty() ?: credit.artist?.name.nonEmpty().orEmpty()) + credit.joinPhrase.orEmpty()
         }?.trim()?.takeIf(String::isNotEmpty)
 
-    private fun <T> SearchEnvelope.pageOrNull(items: () -> List<T>?): MusicBrainzCatalogPage<T>? {
+    private fun <T> SearchEnvelope.pageOrNull(
+        rawCount: Int?,
+        items: () -> List<T>?,
+    ): MusicBrainzCatalogPage<T>? {
         val total = count?.takeIf { it >= 0 } ?: return null
         val start = offset?.takeIf { it >= 0 } ?: return null
+        val consumed = rawCount?.takeIf { it >= 0 } ?: return null
         val rows = items() ?: return null
-        return MusicBrainzCatalogPage(rows.distinctBy { it }, total, start)
+        return MusicBrainzCatalogPage(rows.distinct(), total, start, consumed)
     }
 
     private companion object {
