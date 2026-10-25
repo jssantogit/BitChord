@@ -2071,6 +2071,10 @@ private fun BitChordApp(
                     context.packageName,
                     "com.music.bitchord.acquisition.a0.A0ManualLoginActivity",
                 ).putExtra("bitchord.soulseek.manual.query", decision.query)
+                    // Album name is an editable target hint, not an authenticated
+                    // MusicBrainz Release ID or proof of the peer's file.
+                    .putExtra("bitchord.soulseek.manual.album",
+                        song?.albumName?.trim()?.take(120))
                     .putExtra("bitchord.soulseek.manual.duration_seconds",
                         SoulseekDownloadRouting.durationSeconds(song?.durationText) ?: 0)
                 runCatching { context.startActivity(intent) }.onFailure {
