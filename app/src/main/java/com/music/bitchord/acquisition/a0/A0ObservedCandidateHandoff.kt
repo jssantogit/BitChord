@@ -192,8 +192,11 @@ internal class A0ObservedCandidateHandoff(
             // A0's original take(82) could cut off ".mp3" and hide an
             // otherwise eligible file from the save selector.
             val suffix=".$ext"
-            val displayName=if(basename.length<=82) basename
-                else basename.take(82-suffix.length)+suffix
+            // The peer's remote path is still passed verbatim to P/F; only
+            // on-screen/saved labels mask bidi and zero-width spoofing controls.
+            val safeBasename=A0CandidateRank.safeDisplayName(basename)
+            val displayName=if(safeBasename.length<=82) safeBasename
+                else safeBasename.take(82-suffix.length)+suffix
             candidates.add(Choice(
                 displayName=displayName,sizeBytes=file.sizeBytes,
                 peerUsername=result.peerUsername,remotePath=path,
