@@ -153,7 +153,13 @@ internal class A0SmokeTrace private constructor(
         )
     }
 
-    /** Redacted filter coverage: never store query, peer or file names. */
+    /**
+     * Redacted filter coverage: 24 attribute keys is a hard StructuredTrace
+     * limit. Keep policyVersion, claim diversity and abstention in the emitted
+     * record rather than silently losing the last five map entries. Legacy
+     * score buckets and derived tiers/outcomes stay in Screening for UI/tests.
+     */
+
     fun candidateScreening(report:A0ObservedCandidateHandoff.Screening) {
         if(complete.get())return
         fun n(value:Int)=value.coerceIn(0,100000).toString()
@@ -175,16 +181,11 @@ internal class A0SmokeTrace private constructor(
                 "capacityDropped" to n(report.capacityDropped),
                 "perPeerDropped" to n(report.perPeerDropped),
                 "claimBudgetDropped" to n(report.claimBudgetDropped),
-                "strongMatches" to n(report.strongMatches),
-                "weakMatches" to n(report.weakMatches),
-                "lowQuality" to n(report.lowQuality),
                 "preflightStrong" to n(report.preflightStrong),
                 "preflightReview" to n(report.preflightReview),
                 "preflightUnsafe" to n(report.preflightUnsafe),
                 "peerReady" to n(report.peersReady),
-                "peerUnknown" to n(report.peersUnknown),
                 "peerCongested" to n(report.peersCongested),
-                "simulationSuggested" to n(report.simulatedSuggested),
                 "simulationAmbiguous" to n(report.simulatedAmbiguous),
                 "simulationNoStrong" to n(report.simulatedNoStrong),
                 "distinctClaims" to n(report.claimsDistinct),
