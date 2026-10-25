@@ -57,13 +57,12 @@ internal fun canonicalCuratedHomeShelves(
     todayIsoDate: String,
     remotePicks: List<CanonicalServerSearchRow> = emptyList(),
 ): List<HomeShelf> = buildList {
-    val groups = metadata.filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
-    val releases = metadata.filter { it.kind == CanonicalSearchKind.RELEASE }
-    // Prefer release groups, which name the musical work. An edition is not a
-    // second musical release, and two different MBIDs must never be merged by title.
-    val candidates = if (groups.isNotEmpty()) groups else releases
     val datePattern = Regex("^\\d{4}(-\\d{2}(-\\d{2})?)?$")
-    val knownReleases = candidates.asSequence()
+    val releasedCandidates = metadata.asSequence()
+        .filter {
+            it.kind == CanonicalSearchKind.RELEASE_GROUP ||
+                it.kind == CanonicalSearchKind.RELEASE
+        }
         .filter { row ->
             val kind = row.releaseKind?.lowercase()
             kind == null || kind == "album" || kind == "single" || kind == "ep"
@@ -77,6 +76,14 @@ internal fun canonicalCuratedHomeShelves(
             }
             date.matches(datePattern) && normalized <= todayIsoDate
         }
+        .toList()
+    // An ineligible/future group must never suppress an already-published
+    // edition. Prefer eligible groups as work identities, then real editions.
+    val groups = releasedCandidates.filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
+    val candidates = groups.ifEmpty {
+        releasedCandidates.filter { it.kind == CanonicalSearchKind.RELEASE }
+    }
+    val knownReleases = candidates.asSequence()
         .sortedWith(
             compareByDescending<CanonicalCatalogSearchRow> { it.releaseDate.orEmpty() }
                 .thenBy { it.musicBrainzId },
