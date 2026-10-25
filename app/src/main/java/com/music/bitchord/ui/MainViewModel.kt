@@ -571,11 +571,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         ))
                     }
                     is MusicBrainzCatalogGraphResult.Failure -> {
-                        val cached = withContext(Dispatchers.IO) {
-                            MusicBrainzCatalogIndex(
-                                CanonicalCatalogDatabase.get(getApplication<Application>()),
-                            ).cachedGroupReleases(entry.musicBrainzId)
-                        }
+                        val cached = try {
+                            withContext(Dispatchers.IO) {
+                                MusicBrainzCatalogIndex(
+                                    CanonicalCatalogDatabase.get(getApplication<Application>()),
+                                ).cachedGroupReleases(entry.musicBrainzId)
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { emptyList() }
                         if (cached.isEmpty()) UiState.Error("Unable to load release editions")
                         else UiState.Success(CanonicalCatalogDetailPage(
                             title = entry.title,
@@ -626,16 +630,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         ))
                     }
                     is MusicBrainzCatalogGraphResult.Failure -> {
-                        val cached = withContext(Dispatchers.IO) {
-                            val db = CanonicalCatalogDatabase.get(getApplication<Application>())
-                            val detail = MusicBrainzCatalogIndex(db).cachedRelease(entry.musicBrainzId)
-                            val available = detail?.let {
-                                db.catalogDao().musicBrainzRecordingMbidsWithAssets(
-                                    it.tracks.map { track -> track.recordingMbid },
-                                ).toSet()
-                            } ?: emptySet()
-                            detail to available
-                        }
+                        val cached = try {
+                            withContext(Dispatchers.IO) {
+                                val db = CanonicalCatalogDatabase.get(getApplication<Application>())
+                                val detail = MusicBrainzCatalogIndex(db).cachedRelease(entry.musicBrainzId)
+                                val available = detail?.let {
+                                    db.catalogDao().musicBrainzRecordingMbidsWithAssets(
+                                        it.tracks.map { track -> track.recordingMbid },
+                                    ).toSet()
+                                } ?: emptySet()
+                                detail to available
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { null to emptySet<String>() }
                         val details = cached.first
                         if (details == null) UiState.Error("Unable to load release tracks")
                         else UiState.Success(CanonicalCatalogDetailPage(
