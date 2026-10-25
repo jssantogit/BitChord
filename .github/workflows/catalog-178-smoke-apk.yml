@@ -1,12 +1,10 @@
 name: Catalog #178 — Android Smoke APK
 
-# One-off APK capture for the Android-only migration. The workflow changes
-# are scoped to PR #183; ordinary code pushes do not produce duplicate APKs.
+# Explicit APK capture for Android-only migration. GitHub pull_request
+# paths match the PR's cumulative diff, not only the new commit, so keeping
+# this path would rebuild a large APK on every later PR push.
+# Dispatch at the candidate HEAD after Android CI passes.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - .github/workflows/catalog-178-smoke-apk.yml
   workflow_dispatch:
 
 permissions:
@@ -14,14 +12,13 @@ permissions:
 
 jobs:
   android-smoke-apk:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.number == 183
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
       - name: Checkout exact candidate SHA
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: JDK 17
         uses: actions/setup-java@v4
