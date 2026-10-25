@@ -146,16 +146,18 @@ internal class CoverArtArchive(
                 val root = json.parseToJsonElement(answer.body.orEmpty()) as? JsonObject
                     ?: return CoverLookup.Unavailable
                 val pictures = root["images"] as? JsonArray ?: return CoverLookup.Unavailable
-                val front = pictures.firstNotNullOfOrNull { candidate ->
-                    val entry = candidate as? JsonObject ?: return@firstNotNullOfOrNull null
-                    if (entry["front"]?.jsonPrimitive?.booleanOrNull != true) {
-                        return@firstNotNullOfOrNull null
-                    }
+                val frontImages = pictures.mapNotNull { it as? JsonObject }
+                    .filter { it["front"]?.jsonPrimitive?.booleanOrNull == true }
+                val front = frontImages.firstNotNullOfOrNull { entry ->
                     val thumbs = entry["thumbnails"] as? JsonObject
                     listOf("250", "500", "1200").firstNotNullOfOrNull { size ->
                         thumbs?.get(size)?.jsonPrimitive?.contentOrNull?.takeIf(::safeImageUrl)
                     } ?: entry["image"]?.jsonPrimitive?.contentOrNull?.takeIf(::safeImageUrl)
                 }
+                // A front cover was advertised but its URL cannot be trusted.
+                // This is NOT proof that an edition has no front cover. Do not
+                // persist a 404-like miss or silently switch to group artwork.
+                if (front == null && frontImages.isNotEmpty()) return CoverLookup.Unavailable
                 front
             } catch (_: Exception) {
                 return CoverLookup.Unavailable
