@@ -188,9 +188,12 @@ class A0ManualLoginActivity : Activity() {
             }
             // Validate on the UI thread BEFORE login or server I/O.
             // Never place search text in traces, diagnostics or exception messages.
+            // Keep the validated but unnormalized artist/title delimiter for
+            // local ranking. Only the normalized term is sent over Soulseek.
+            val enteredSearch=if(performSearch) searchInput.text.toString() else null
             val requestedSearch = if (performSearch) {
                 try {
-                    A0SearchQuery.normalize(searchInput.text.toString())
+                    A0SearchQuery.normalize(checkNotNull(enteredSearch))
                 } catch (_: IllegalArgumentException) {
                     status.text = "Pesquisa inválida: digite termos curtos, sem controles."
                     return
@@ -322,7 +325,7 @@ class A0ManualLoginActivity : Activity() {
                                 val handoff = if (transferObserved) {
                                     A0ObservedCandidateHandoff(
                                         connection, username, token,
-                                        searchPhrase=checkNotNull(requestedSearch),
+                                        searchPhrase=checkNotNull(enteredSearch),
                                         saveFormatsOnly=saveToDevice,
                                         expectedDurationSeconds=expectedDuration
                                     ).also { transfer ->
