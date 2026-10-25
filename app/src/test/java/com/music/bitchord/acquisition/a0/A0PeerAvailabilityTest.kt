@@ -52,4 +52,20 @@ class A0PeerAvailabilityTest {
         assertEquals(A0PeerAvailability.Tier.CONGESTED,bestMusic.tier)
         assertTrue(A0PeerAvailability.priority(fast)>A0PeerAvailability.priority(bestMusic))
     }
+
+    @Test fun withinSameAvailabilityTierPreferShorterKnownQueueBeforeClaimedSpeed() {
+        val short=A0PeerAvailability.assess(true,false,0,80_000)
+        val long=A0PeerAvailability.assess(true,false,2,800_000)
+        assertEquals(A0PeerAvailability.Tier.READY,short.tier)
+        assertEquals(A0PeerAvailability.Tier.READY,long.tier)
+        assertTrue(A0PeerAvailability.compareSource(short,long)>0)
+        assertTrue(A0PeerAvailability.compareSource(long,short)<0)
+    }
+
+    @Test fun withinSameQueuePreferHigherAdvertisedUploadRate() {
+        val faster=A0PeerAvailability.assess(true,false,1,256_000)
+        val slower=A0PeerAvailability.assess(true,false,1,80_000)
+        assertTrue(A0PeerAvailability.compareSource(faster,slower)>0)
+        assertEquals(0,A0PeerAvailability.compareSource(faster,faster))
+    }
 }
