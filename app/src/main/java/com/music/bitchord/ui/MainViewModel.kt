@@ -521,6 +521,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun switchSearchSource(source: SearchSource, rerunCurrentQuery: Boolean = true) {
         if (_searchSource.value == source) return
         _searchSource.value = source
+        if (source == SearchSource.CANONICAL &&
+            _filter.value !in setOf(
+                SearchFilter.ALL, SearchFilter.SONGS,
+                SearchFilter.ALBUMS, SearchFilter.ARTISTS,
+            )
+        ) _filter.value = SearchFilter.ALL
         cancelSearchSourceRequests()
         _results.value = null
         _searchScrollReset.value += 1
@@ -3268,11 +3274,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onFilterChange(value: SearchFilter) {
-        // These filter tabs belong to YouTube only, even if a late UI event
-        // arrives after switching the search namespace.
-        if (_searchSource.value != SearchSource.YOUTUBE) return
+        val source = _searchSource.value
+        if (source != SearchSource.YOUTUBE && source != SearchSource.CANONICAL) return
         if (_filter.value == value) return
         _filter.value = value
+        if (source == SearchSource.CANONICAL) {
+            // All four entity types are already queried with independent MB
+            // cursors. Changing presentation must not spend another public
+            // API request or accidentally reinterpret an MBID as videoId.
+            _searchScrollReset.value += 1
+            return
+        }
         searchSubmitted = true
         runSearch()
     }
