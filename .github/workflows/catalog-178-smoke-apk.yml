@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  detect-candidate:
+  detect_candidate:
     runs-on: ubuntu-latest
     outputs:
       should_build: ${{ steps.delta.outputs.should_build }}
@@ -38,8 +38,8 @@ jobs:
             echo "should_build=false" >> "$GITHUB_OUTPUT"
           fi
   android-smoke-apk:
-    needs: detect-candidate
-    if: needs.detect-candidate.outputs.should_build == 'true'
+    needs: detect_candidate
+    if: needs.detect_candidate.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
