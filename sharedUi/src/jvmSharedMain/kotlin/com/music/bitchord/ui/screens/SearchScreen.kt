@@ -656,7 +656,7 @@ fun canonicalRowAsBrowseItem(row: CanonicalCatalogSearchRow): BrowseItem = Brows
     browseId = "catalog:${row.kind}:${row.musicBrainzId}",
     title = row.title,
     subtitle = row.subtitle.orEmpty(),
-    thumbnailUrl = null,
+    thumbnailUrl = row.artworkUri,
     type = if (row.kind == CanonicalSearchKind.ARTIST) BrowseType.ARTIST else BrowseType.ALBUM,
 )
 
