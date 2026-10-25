@@ -270,4 +270,25 @@ class A0CandidateDiscoveryTest {
         assertEquals(1,collector.screening().simulatedAmbiguous)
     }
 
+    @Test fun apparentCopiesFromManyPeersCannotExhaustCandidateList() {
+        val collector=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",expectedDurationSeconds=161)
+        val same=A0SoulseekSearchFile("Music\\ILLIT Magnetic.mp3",6_400_000L,
+            "mp3",mapOf(0 to 320,1 to 161))
+        repeat(18) { i ->
+            val peer="peer"+i.toString().padStart(2,'0')
+            collector.offerParsed(reply(peer,listOf(same)),peer)
+        }
+        collector.offerParsed(reply("different",listOf(
+            A0SoulseekSearchFile("Music\\ILLIT Magnetic.flac",24_000_000L,
+                "flac",mapOf(1 to 161,4 to 44100,5 to 16))
+        )),"different")
+        assertEquals(7,collector.choices().size)
+        assertEquals(6,collector.choices().count { it.displayName.endsWith(".mp3") })
+        assertEquals(1,collector.choices().count { it.displayName.endsWith(".flac") })
+        assertEquals(12,collector.screening().claimBudgetDropped)
+        assertEquals(2,collector.screening().claimsDistinct)
+        assertEquals(5,collector.screening().claimsRepeated)
+    }
+
 }
