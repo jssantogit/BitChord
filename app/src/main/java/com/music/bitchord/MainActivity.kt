@@ -323,6 +323,9 @@ import com.music.bitchord.ui.screens.LibraryGridPage
 import com.music.bitchord.ui.screens.LibraryScreen
 import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingDetailsScreen
 import com.music.bitchord.ui.canonicalExistingHomeShelves
+import com.music.bitchord.ui.canonicalCuratedHomeShelves
+import com.music.bitchord.ui.canonicalLocalPickCardId
+import com.music.bitchord.ui.isPlayableLocalPick
 import com.music.bitchord.ui.canonicalBrowseCardId
 import com.music.bitchord.ui.screens.CanonicalSongMenuRating
 import com.music.bitchord.ui.screens.CanonicalMyRatingsEntry
@@ -747,6 +750,8 @@ private fun BitChordApp(
     val usesCanonicalDiscovery by viewModel.usesCanonicalDiscovery.collectAsStateWithLifecycle()
     val discoverySourceConfigs by SourceRegistry.configs.collectAsStateWithLifecycle()
     val canonicalDiscoveryCatalog by viewModel.canonicalDiscoveryCatalog.collectAsStateWithLifecycle()
+    val canonicalHomeLocalPicks by viewModel.canonicalHomeLocalPicks.collectAsStateWithLifecycle()
+    val canonicalTrendingMbids by viewModel.canonicalTrendingRecordingMbids.collectAsStateWithLifecycle()
     val homeLoadingMore by viewModel.homeLoadingMore.collectAsStateWithLifecycle()
     val homeRecentlyPlayedLoading by viewModel.homeRecentlyPlayedLoading.collectAsStateWithLifecycle()
 
@@ -936,8 +941,8 @@ private fun BitChordApp(
     // not a second Home/Explore screen; continue using HomeScreen's cards.
     val cachedCanonicalRows =
         (canonicalDiscoveryCatalog as? UiState.Success)?.data.orEmpty()
-    val canonicalHomeShelves = canonicalExistingHomeShelves(
-        downloaded = downloadedReleases.map { collection ->
+    val canonicalHomeShelves = canonicalCuratedHomeShelves(
+        savedReleases = downloadedReleases.filter { !it.playlist }.map { collection ->
             ShelfItem(
                 title = collection.title,
                 subtitle = collection.subtitle,
@@ -946,12 +951,24 @@ private fun BitChordApp(
                 browseId = Downloads.pageIdFor(collection.id),
             )
         },
-        playlists = localPlaylistItems,
         metadata = cachedCanonicalRows,
-        downloadedHeading = stringResource(R.string.canonical_discovery_downloaded_collections),
-        playlistHeading = stringResource(R.string.canonical_discovery_local_playlists),
-        cachedHeading = stringResource(R.string.canonical_discovery_catalog_cache),
+        localPicks = canonicalHomeLocalPicks,
+        trendingRecordingMbids = canonicalTrendingMbids,
+        releasesHeading = stringResource(R.string.shelf_new_releases),
+        picksHeading = stringResource(R.string.shelf_quick_picks),
+        trendingHeading = stringResource(R.string.shelf_trending),
+        todayIsoDate = remember {
+            java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT)
+                .format(java.util.Date())
+        },
     )
+    val canonicalHomeState: UiState<List<HomeShelf>> = when {
+        canonicalHomeShelves.isNotEmpty() -> UiState.Success(canonicalHomeShelves)
+        canonicalDiscoveryCatalog is UiState.Loading -> UiState.Loading
+        canonicalDiscoveryCatalog is UiState.Error ->
+            UiState.Error((canonicalDiscoveryCatalog as UiState.Error).message)
+        else -> UiState.Error(stringResource(R.string.canonical_discovery_cache_empty))
+    }
     // What a browse id is recorded under in Downloads.collections, when it names
     // a release downloaded whole — see BrowseTarget.downloadId. A downloaded
     // playlist's own page and its card both carry the id under the
@@ -2104,11 +2121,23 @@ private fun BitChordApp(
         selectedTab = TAB_SEARCH
         searchFocusRequested = true
     }
-    val onCanonicalShelfClick: (ShelfItem, String) -> Unit = { item, _ ->
+    val onCanonicalShelfClick: (ShelfItem, String) -> Unit = { item, shelfTitle ->
+        val selectedLocal = canonicalHomeLocalPicks.firstOrNull {
+            isPlayableLocalPick(it) && canonicalLocalPickCardId(it) == item.browseId
+        }
         val cached = cachedCanonicalRows.firstOrNull {
             canonicalBrowseCardId(it) == item.browseId
         }
-        if (cached != null) {
+        if (selectedLocal != null) {
+            playFrom(
+                listOf(selectedLocal), 0,
+                QueueSource(shelfTitle, PlaybackSourceType.HOME),
+            )
+        } else if (cached?.kind == CanonicalSearchKind.RECORDING &&
+            cached.hasCatalogedAsset
+        ) {
+            executeMusicBrainzCatalog(cached.musicBrainzId, CanonicalCollectionIntent.PLAY_NOW)
+        } else if (cached != null) {
             viewModel.onQueryChange("")
             viewModel.setSearchSource(SearchSource.CANONICAL)
             selectedTab = TAB_SEARCH
@@ -3211,7 +3240,7 @@ private fun BitChordApp(
                     } else when (key.removePrefix(TAB_KEY).toIntOrNull() ?: selectedTab) {
                         TAB_HOME -> if (usesCanonicalDiscovery) {
                             HomeScreen(
-                                state = UiState.Success(canonicalHomeShelves),
+                                state = canonicalHomeState,
                                 listState = homeListState,
                                 onItemClick = onCanonicalShelfClick,
                                 onRetry = viewModel::loadCanonicalDiscoveryCatalog,
@@ -3264,7 +3293,7 @@ private fun BitChordApp(
                         )
                         TAB_EXPLORE -> if (usesCanonicalDiscovery) {
                             HomeScreen(
-                                state = UiState.Success(canonicalHomeShelves),
+                                state = canonicalHomeState,
                                 listState = exploreListState,
                                 onItemClick = onCanonicalShelfClick,
                                 onRetry = viewModel::loadCanonicalDiscoveryCatalog,
