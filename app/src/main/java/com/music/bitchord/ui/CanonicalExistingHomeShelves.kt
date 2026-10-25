@@ -18,7 +18,11 @@ internal fun canonicalBrowseCardId(row: CanonicalCatalogSearchRow): String? =
     when (row.kind) {
         CanonicalSearchKind.RELEASE, CanonicalSearchKind.RELEASE_GROUP ->
             "catalog:${row.kind}:${row.musicBrainzId}"
-        CanonicalSearchKind.RECORDING, CanonicalSearchKind.ARTIST -> null
+        // The click is gated again by the playback planner; this is a
+        // navigation/action key, NEVER a videoId or a streaming URL.
+        CanonicalSearchKind.RECORDING ->
+            if (row.hasCatalogedAsset) "catalog:RECORDING:${row.musicBrainzId}" else null
+        CanonicalSearchKind.ARTIST -> null
     }
 
 internal fun canonicalExistingHomeShelves(
