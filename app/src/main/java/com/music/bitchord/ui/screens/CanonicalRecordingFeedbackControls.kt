@@ -43,6 +43,7 @@ import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.RecordingRatingStore
 import com.music.bitchord.data.listening.RoomRecordingRatingStore
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.playback.androidCanonicalQueueResolver
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.cancel
@@ -83,7 +84,15 @@ internal fun CanonicalRecordingFeedbackEntry(recordingId: String) {
 @Composable
 internal fun CanonicalSongRatingDialog(song: Song, onDismiss: () -> Unit) {
     val context = LocalContext.current.applicationContext
-    val recordingId by produceState<String?>(null, context, song.videoId) {
+    // The account-scoped Catalog asset snapshot is an offline, verified identity
+    // proof. Unrated local files and cached canonical Navidrome songs can be
+    // edited with no provider lookup. Resolver remains a strict fallback.
+    val cachedId = LocalCanonicalRatingDisplay.current.recordingIdForSong(song)
+    val recordingId by produceState<String?>(cachedId, context, song.videoId, cachedId) {
+        if (cachedId != null) {
+            value = cachedId
+            return@produceState
+        }
         value = try {
             withContext(Dispatchers.IO) {
                 CanonicalSongFeedbackTarget(androidCanonicalQueueResolver(context)).recordingId(song)
