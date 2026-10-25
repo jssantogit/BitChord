@@ -2124,6 +2124,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (canonicalDiscoveryCatalogEpoch.isCurrent(generation) && isCanonicalDiscoverySelected()) {
                 _canonicalTrendingRecordingMbids.value = popularMbids
+                // The alphabetical cached Recording search is only a browse
+                // preview. A well-played Recording can lie outside that page.
+                // Add it from the EXISTING trusted recording/MBID claim only;
+                // never infer identity by matching title or artist.
+                val indexed = (state as? UiState.Success)?.data.orEmpty()
+                val seen = indexed.mapTo(HashSet()) { it.kind to it.musicBrainzId }
+                val trendingRows = try {
+                    val dao = CanonicalCatalogDatabase.get(app).catalogDao()
+                    val available = dao.musicBrainzRecordingMbidsWithAssets(popularMbids).toSet()
+                    popularMbids.asSequence()
+                        .filter { it in available && (CanonicalSearchKind.RECORDING to it) !in seen }
+                        .mapNotNull { mbid ->
+                            val id = dao.entityIdForExternalIdentity("musicbrainz", "recording", mbid)
+                                ?: return@mapNotNull null
+                            val recording = dao.recordingById(id) ?: return@mapNotNull null
+                            CanonicalCatalogSearchRow(
+                                musicBrainzId = mbid, kind = CanonicalSearchKind.RECORDING,
+                                title = recording.title, subtitle = recording.artistDisplay,
+                                hasCatalogedAsset = true, fromOfflineCache = true,
+                            )
+                        }.toList()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                if (canonicalDiscoveryCatalogEpoch.isCurrent(generation) &&
+                    isCanonicalDiscoverySelected() && state is UiState.Success
+                ) {
+                    _canonicalDiscoveryCatalog.value = UiState.Success(
+                        (indexed + trendingRows).distinctBy { it.kind to it.musicBrainzId },
+                    )
+                }
             }
         }
     }
