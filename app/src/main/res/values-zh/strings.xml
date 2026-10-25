@@ -1330,4 +1330,25 @@
     <string name="playback_recovery_retry">重试</string>
     <string name="playback_recovery_retrying">正在重试…</string>
     <string name="playback_recovery_dismiss">关闭</string>
+    <string name="canonical_discovery_header">发现音乐目录</string>
+    <string name="canonical_discovery_setting_title">使用目录的首页与探索</string>
+    <string name="canonical_discovery_setting_subtitle">在首页和探索中使用已保存的音乐及 MusicBrainz。关闭 YouTube Music 时也会使用此模式。</string>
+    <string name="canonical_discovery_home_title">你的音乐</string>
+    <string name="canonical_discovery_explore_title">探索目录</string>
+    <string name="canonical_discovery_description">浏览此设备上的已保存合集，或搜索 MusicBrainz。目录元数据不代表音频一定可播放。</string>
+    <string name="canonical_discovery_search">搜索 MusicBrainz</string>
+    <string name="canonical_discovery_open_library">打开音乐库</string>
+    <string name="canonical_discovery_downloaded_collections">已下载的合集</string>
+    <string name="canonical_discovery_local_playlists">设备上保存的播放列表</string>
+    <string name="canonical_discovery_empty_collections">此设备尚未保存任何合集。</string>
+    <string name="canonical_discovery_catalog_cache">设备上保存的目录</string>
+    <string name="canonical_discovery_cache_loading">正在加载已保存的目录…</string>
+    <string name="canonical_discovery_cache_error">无法读取已保存的 MusicBrainz 目录。</string>
+    <string name="canonical_discovery_cache_empty">尚未保存 MusicBrainz 条目。请搜索目录以浏览公开元数据。</string>
+    <string name="canonical_discovery_metadata_only">仅元数据 · 未收录音频</string>
+    <string name="canonical_discovery_asset_available">已收录音频 · 播放时将验证访问权限</string>
+    <string name="canonical_discovery_cached_offline">已离线保存</string>
+    <string name="canonical_discovery_retry">重试</string>
+    <string name="canonical_discovery_refresh">刷新已保存的目录</string>
+    <string name="legacy_library_youtube_disabled">请在设置中启用 YouTube Music 以加载此在线音乐库。本地播放列表和合集仍可使用。</string>
 </resources>
