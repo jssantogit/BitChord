@@ -215,6 +215,9 @@ class A0CandidateDiscoveryTest {
         assertEquals(A0PeerAvailability.Tier.CONGESTED,choices[1].peerAvailability.tier)
         assertEquals(1,collector.screening().peersReady)
         assertEquals(1,collector.screening().peersCongested)
+        assertEquals(1,collector.screening().simulatedAmbiguous)
+        assertEquals(0,collector.screening().simulatedSuggested)
+        assertFalse(collector.screening().toString().contains("slow"))
     }
 
     @Test fun fasterPeerNeverOutranksARecordingWithStrongerMusicalConfidence() {
@@ -236,6 +239,8 @@ class A0CandidateDiscoveryTest {
             choices[0].peerAvailability.tier)
         assertEquals(A0CandidatePreflight.Confidence.UNSAFE,
             choices[1].preflight.confidence)
+        assertEquals(1,collector.screening().simulatedSuggested)
+        assertEquals(0,collector.screening().simulatedAmbiguous)
     }
 
 }
