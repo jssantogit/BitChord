@@ -185,7 +185,9 @@ internal class MusicBrainzCatalogGraph(
     private fun JsonObject.artistDisplay(): String? =
         array("artist-credit").joinToString("") { item ->
             val credit = item as? JsonObject ?: return@joinToString ""
-            credit.string("name").orEmpty() + credit.string("joinphrase").orEmpty()
+            (credit.string("name")
+                ?: (credit["artist"] as? JsonObject)?.string("name")).orEmpty() +
+                credit.string("joinphrase").orEmpty()
         }.trim().takeIf(String::isNotEmpty)
 
     private fun String?.validMbid(): String? =
