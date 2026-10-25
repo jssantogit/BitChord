@@ -11,6 +11,30 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class CoverArtArchiveFallbackTest {
+    @Test fun release503DoesNotSilentlyReplaceEditionCoverWithGroupArtwork() = runBlocking {
+        val requests = mutableListOf<String>()
+        var releaseRecovered = false
+        val cover = CoverArtArchive(transport = object : CoverArtArchiveTransport {
+            override suspend fun get(path: String): CoverArtArchiveResponse {
+                requests += path
+                return when {
+                    path.startsWith("release-group/") -> CoverArtArchiveResponse(
+                        200, """{"images":[{"front":true,"image":"https://archive.org/group.jpg"}]}""",
+                    )
+                    !releaseRecovered -> CoverArtArchiveResponse(503, null)
+                    else -> CoverArtArchiveResponse(
+                        200, """{"images":[{"front":true,"image":"https://archive.org/edition.jpg"}]}""",
+                    )
+                }
+            }
+        })
+        assertNull(cover.findCover(release, group))
+        assertEquals(listOf("release/$release"), requests)
+        releaseRecovered = true
+        assertEquals("https://archive.org/edition.jpg", cover.findCover(release, group))
+        assertEquals(listOf("release/$release", "release/$release"), requests)
+    }
+
     private val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
     private val group = "529f87a1-1081-48a4-8ee1-3c08de229858"
 

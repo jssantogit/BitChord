@@ -78,6 +78,13 @@ private class MemoryCoverArtStore : MusicBrainzCoverArtStore {
     }
 }
 
+/** Differentiates confirmed absence from temporary failures before fallback. */
+private sealed interface CoverLookup {
+    data class Found(val uri: String) : CoverLookup
+    data object Missing : CoverLookup
+    data object Unavailable : CoverLookup
+}
+
 /**
  * Prefer the actual release's front cover. Fall back exclusively to its known
  * ReleaseGroup; never substitute art based only on same title or artist.
@@ -98,15 +105,22 @@ internal class CoverArtArchive(
         if (releaseMbid == null && groupMbid == null) return null
 
         releaseMbid?.let { mbid ->
-            fetch("release", mbid.lowercase(Locale.ROOT))?.let { return it }
+            when (val primary = fetch("release", mbid.lowercase(Locale.ROOT))) {
+                is CoverLookup.Found -> return primary.uri
+                CoverLookup.Unavailable -> return null // Never replace an unknown edition cover.
+                CoverLookup.Missing -> Unit // Only a confirmed absence permits group fallback.
+            }
         }
         groupMbid?.let { mbid ->
-            fetch("release-group", mbid.lowercase(Locale.ROOT))?.let { return it }
+            return when (val fallback = fetch("release-group", mbid.lowercase(Locale.ROOT))) {
+                is CoverLookup.Found -> fallback.uri
+                CoverLookup.Missing, CoverLookup.Unavailable -> null
+            }
         }
         return null
     }
 
-    private suspend fun fetch(type: String, mbid: String): String? {
+    private suspend fun fetch(type: String, mbid: String): CoverLookup {
         val now = nowEpochMs()
         val cached = try {
             store.read(type, mbid)
@@ -118,20 +132,20 @@ internal class CoverArtArchive(
         if (cached != null &&
             now >= cached.fetchedAtEpochMs &&
             now - cached.fetchedAtEpochMs < if (cached.artworkUri == null) NEGATIVE_TTL_MS else POSITIVE_TTL_MS
-        ) return cached.artworkUri
+        ) return cached.artworkUri?.let(CoverLookup::Found) ?: CoverLookup.Missing
 
         val answer = try {
             transport.get("$type/$mbid")
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            return null
+            return CoverLookup.Unavailable
         }
         val uri = when (answer.status) {
             200 -> try {
                 val root = json.parseToJsonElement(answer.body.orEmpty()) as? JsonObject
-                    ?: return null
-                val pictures = root["images"] as? JsonArray ?: return null
+                    ?: return CoverLookup.Unavailable
+                val pictures = root["images"] as? JsonArray ?: return CoverLookup.Unavailable
                 val front = pictures.firstNotNullOfOrNull { candidate ->
                     val entry = candidate as? JsonObject ?: return@firstNotNullOfOrNull null
                     if (entry["front"]?.jsonPrimitive?.booleanOrNull != true) {
@@ -144,10 +158,10 @@ internal class CoverArtArchive(
                 }
                 front
             } catch (_: Exception) {
-                return null
+                return CoverLookup.Unavailable
             }
             404 -> null
-            else -> return null
+            else -> return CoverLookup.Unavailable
         }
         try {
             store.write(MusicBrainzCoverArtCacheEntry(type, mbid, uri, now))
@@ -156,7 +170,7 @@ internal class CoverArtArchive(
         } catch (_: Exception) {
             // Cache failure never changes the art already fetched from CAA.
         }
-        return uri
+        return uri?.let(CoverLookup::Found) ?: CoverLookup.Missing
     }
 
     private fun safeImageUrl(raw: String): Boolean {
