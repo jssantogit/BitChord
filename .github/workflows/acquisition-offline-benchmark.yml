@@ -80,8 +80,18 @@ jobs:
             --right /tmp/flux-ranking.jsonl \
             --allow-synthetic \
             --output build/soulseek-benchmark/synthetic-report.json
+          # Replay the album-claim prototype on the same frozen inputs.
+          # Its metadata are untrusted, and the result stays synthetic-only.
+          python3 tools/benchmarks/soulseek/evaluate.py \
+            --cases app/src/test/resources/soulseek/synthetic-cases.jsonl \
+            --left app/build/benchmark/soulseek/bitchord-album-gate-v1.jsonl \
+            --right /tmp/flux-ranking.jsonl \
+            --allow-synthetic \
+            --output build/soulseek-benchmark/synthetic-album-gate-report.json
           cp app/build/benchmark/soulseek/bitchord-preflight-v4.jsonl \
             build/soulseek-benchmark/bitchord-ranking.jsonl
+          cp app/build/benchmark/soulseek/bitchord-album-gate-v1.jsonl \
+            build/soulseek-benchmark/bitchord-album-gate-ranking.jsonl
           cp /tmp/flux-ranking.jsonl build/soulseek-benchmark/flux-ranking.jsonl
 
       - name: Upload synthetic-only count reports
