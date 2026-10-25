@@ -110,4 +110,21 @@ class A0CandidateDiscoveryTest {
         assertNotNull(A5ManualSaveGate.safeDestinationName(choice.displayName,choice.sizeBytes))
     }
 
+
+    @Test fun onePeerDoesNotMonopolizeTheSelectionAcrossSearchReplies() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT Magnetic")
+        handoff.offerParsed(reply("peer-a",(1..35).map { file("ILLIT Magnetic v$it.mp3") }),"peer-a")
+        handoff.offerParsed(reply("peer-b",listOf(file("ILLIT Magnetic.mp3"))),"peer-b")
+        assertEquals(11,handoff.choices().size)
+        assertEquals(25,handoff.screening().perPeerDropped)
+        assertTrue(handoff.choices().any { it.displayName=="ILLIT Magnetic.mp3" })
+    }
+
+    @Test fun equalFilenameOfferedByDifferentPeersRemainsSeparateManualChoices() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true)
+        handoff.offerParsed(reply("peer-a",listOf(file("ILLIT Magnetic.mp3"))),"peer-a")
+        handoff.offerParsed(reply("peer-b",listOf(file("ILLIT Magnetic.mp3"))),"peer-b")
+        assertEquals(2,handoff.choices().size)
+    }
 }
