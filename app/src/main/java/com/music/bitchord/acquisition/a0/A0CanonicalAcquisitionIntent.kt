@@ -30,7 +30,7 @@ internal class A0CanonicalAcquisitionIntent private constructor(
         LEGACY_UNSPECIFIED, HI_RES, LOSSLESS, HIGH_QUALITY, HIGH_EFFICIENCY, CUSTOM,
     }
     /** Declared supported-audio families, not proof of actual audio or a transcoder. */
-    enum class Codec { MP3, FLAC, PCM_WAV }
+    enum class Codec { MP3, FLAC, PCM_WAV, AAC_ADTS }
 
     class QualityProfileSnapshot(
         val preset: QualityPreset = QualityPreset.LEGACY_UNSPECIFIED,
