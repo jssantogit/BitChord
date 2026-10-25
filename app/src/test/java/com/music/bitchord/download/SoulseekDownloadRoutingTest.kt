@@ -50,4 +50,30 @@ class SoulseekDownloadRoutingTest {
             SoulseekDownloadRouting.route("Artist\n", "Track", 1, true)
         )
     }
+
+    @Test fun musicPlaceholderIsNeverSentAsAnArtist() {
+        assertEquals(SoulseekDownloadRouting.Decision.ManualSearch("Magnetic"),
+            SoulseekDownloadRouting.route("Música", "Magnetic", 1, true))
+        assertEquals(SoulseekDownloadRouting.Decision.ManualSearch("Magnetic"),
+            SoulseekDownloadRouting.route("Music", "Magnetic", 1, true))
+        assertEquals(SoulseekDownloadRouting.Decision.ManualSearch("Magnetic"),
+            SoulseekDownloadRouting.route("Unknown Artist", "Magnetic", 1, true))
+    }
+
+    @Test fun preferRealCreditedArtistOverGenericDisplayCategory() {
+        assertEquals(SoulseekDownloadRouting.Decision.ManualSearch("ILLIT - Magnetic"),
+            SoulseekDownloadRouting.route(
+                "Música", "Magnetic", 1, true,
+                creditedArtists=listOf("ILLIT")
+            ))
+    }
+
+    @Test fun missingArtistStillAllowsManualTitleOnlySearchWithoutInventingCredit() {
+        assertEquals(SoulseekDownloadRouting.Decision.ManualSearch("Magnetic"),
+            SoulseekDownloadRouting.route("", "Magnetic", 1, true))
+        assertEquals(SoulseekDownloadRouting.Decision.Unavailable,
+            SoulseekDownloadRouting.route("ILLIT", "", 1, true))
+        assertEquals(SoulseekDownloadRouting.Decision.ManualSearch("ILLIT - Magnetic"),
+            SoulseekDownloadRouting.route("ILLIT", "Magnetic", 1, true))
+    }
 }
