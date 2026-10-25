@@ -296,4 +296,6 @@
     <string name="canonical_more_editions">More editions</string>
     <string name="canonical_more_results">More results</string>
     <string name="canonical_loading_more">Loading…</string>
+    <string name="canonical_server_heading">From your servers</string>
+    <string name="canonical_server_track_hint">Available through a configured server · tap to play</string>
 </resources>
