@@ -215,6 +215,14 @@ class A0ManualLoginActivity : Activity() {
             // Clear both controls before any packet creation or network action.
             user.text.clear()
             password.text.clear()
+            // In a legacy manual search, stop exposing editable credentials
+            // before allowing screenshots of results and candidate dialogs.
+            user.isEnabled = false
+            password.isEnabled = false
+            if (performSearch && !A0ScreenCapturePolicy.requiresSecureWindow(
+                    fromSongDownload, credentialsVisible = false)) {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
             acknowledge.isChecked = false
             saveConsent.isChecked = false
             action.isEnabled = false
@@ -1006,6 +1014,13 @@ class A0ManualLoginActivity : Activity() {
                     runOnUiThread {
                         if (!stopping && !isFinishing && !isDestroyed) {
                             status.text = result
+                            // Legacy probe exposes credential fields again:
+                            // restore protection before enabling/editing them.
+                            if (!fromSongDownload) {
+                                window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                            }
+                            user.isEnabled = true
+                            password.isEnabled = true
                             action.isEnabled = true
                             val availableAccount = accountVault.read()
                             if (availableAccount != null) {
