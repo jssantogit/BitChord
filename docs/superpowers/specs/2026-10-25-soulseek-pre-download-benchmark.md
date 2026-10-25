@@ -4,7 +4,7 @@
 **Status:** Protocol approved by autonomous design authority; **NO measured results yet**  
 **Design:** docs/superpowers/specs/2026-10-25-soulseek-pre-download-design.md  
 **Issue:** https://github.com/jssantogit/BitChord/issues/177  
-**Comparator:** https://github.com/jssantogit/noqlen-flux-core
+**Comparator:** https://github.com/jssantogit/noqlen-flux-core — reference main SHA observed 2026-10-25: 3e6fa935fc139ed80e4e75ae3aa7c88ebd36747d. Pin this exact SHA + default_v1 profile for the first frozen comparison (or document a newly agreed SHA **before** evaluation); current results remain **unmeasured**.
 
 ## Why two experiments
 
