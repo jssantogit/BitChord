@@ -133,6 +133,18 @@ class OfflineBenchmarkTest(unittest.TestCase):
         with self.assertRaises(BenchmarkInputError):
             score_model([c], {"c": p})
 
+    def test_checked_in_manifest_is_synthetic_and_stratified(self):
+        cases = load_cases(Path(__file__).parent / "synthetic-cases.jsonl")
+        self.assertEqual(len(cases), 18)
+        self.assertEqual(
+            {name: sum(c["stratum"] == name for c in cases)
+             for name in {"ordinary", "versions", "editions",
+                          "artists", "ambiguous", "quality"}},
+            {name: 3 for name in {"ordinary", "versions", "editions",
+                                  "artists", "ambiguous", "quality"}},
+        )
+        self.assertEqual({c["dataset_kind"] for c in cases}, {"synthetic"})
+
     def test_public_input_fingerprint_excludes_sealed_gold_labels(self):
         original = make_case("blind-01", {"a": "EXACT_EDITION"})
         changed_truth = make_case("blind-01", {"a": "WRONG_EDITION_VERSION"})
