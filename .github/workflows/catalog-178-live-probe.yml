@@ -9,6 +9,11 @@ on:
     branches: [fix/178-musicbrainz-canonical-foundation]
     paths:
       - scripts/catalog_178_musicbrainz_live_probe.py
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/catalog_178_musicbrainz_live_probe.py
+      - .github/workflows/catalog-178-live-probe.yml
 
 permissions:
   contents: read
@@ -24,13 +29,28 @@ jobs:
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+      - name: Limit scheduled API calls to probe commits only
+        id: changed
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] ||
+             git diff --name-only HEAD^ HEAD | grep -Fxq "scripts/catalog_178_musicbrainz_live_probe.py"; then
+            echo "probe=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "probe=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-python@v5
+        if: steps.changed.outputs.probe == 'true'
         with:
           python-version: '3.12'
       - name: Probe public MusicBrainz artist, release and recording identity
+        if: steps.changed.outputs.probe == 'true'
         run: python3 scripts/catalog_178_musicbrainz_live_probe.py --output catalog-178-live.json
       - name: Save raw measured HTTP evidence
-        if: always()
+        if: steps.changed.outputs.probe == 'true' && always()
         uses: actions/upload-artifact@v4
         with:
           name: catalog-178-musicbrainz-api-live
