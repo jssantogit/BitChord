@@ -619,6 +619,7 @@ class A0ManualLoginActivity : Activity() {
                                         }
                                         activePeerWorkers=null
                                         trace.note(A0SmokeTrace.Stage.SEARCH_READERS_JOINED)
+                                        trace.peerSearchBackpressure(peerOfferBackpressure.get())
                                     } else {
                                         listener.close()
                                         activeDirectPeer?.close()
