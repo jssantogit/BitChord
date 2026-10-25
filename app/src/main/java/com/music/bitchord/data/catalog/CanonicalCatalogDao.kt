@@ -546,7 +546,8 @@ internal interface CanonicalCatalogDao {
             track.title AS title, track.mediumNumber AS mediumNumber,
             track.trackNumber AS trackNumber, track.durationMs AS durationMs,
             track.artistDisplay AS artistDisplay,
-            track.recordingArtistDisplay AS recordingArtistDisplay
+            track.recordingArtistDisplay AS recordingArtistDisplay,
+            recording.title AS recordingTitle, recording.durationMs AS recordingDurationMs
         FROM catalog_musicbrainz_track track
         JOIN catalog_recording recording ON recording.id = track.recordingId
         JOIN catalog_external_identity identity ON identity.entityId = recording.id
