@@ -27,7 +27,7 @@ class MusicBrainzCatalogSearchTest {
             },
         ))
         val page = (search.searchRecordings("Magnetic") as
-            MusicBrainzCatalogSearchResult.Success).page
+            MusicBrainzCatalogSearchResult.Success<com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit>).page
         assertEquals(listOf(original, sped), page.items.map { it.musicBrainzId })
         assertEquals(4, page.consumedCount)
         assertEquals(4, page.nextOffset)

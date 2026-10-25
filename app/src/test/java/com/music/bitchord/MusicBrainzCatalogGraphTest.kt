@@ -26,7 +26,7 @@ class MusicBrainzCatalogGraphTest {
                 ]}"""
         }))
         val page = (graph.browseGroupReleases(group) as
-            MusicBrainzCatalogGraphResult.Success).value
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogPage<MusicBrainzReleaseHit>>).value
         assertEquals(2, page.items.size)
         assertEquals(4, page.consumedCount)
         assertEquals(4, page.nextOffset)
