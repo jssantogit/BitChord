@@ -78,4 +78,28 @@ class A4AvailableLocalUriSelectionTest {
         assertTrue(candidates.isEmpty())
         assertEquals(0,probes)
     }
+    @Test fun mediaStoreAndSafAliasShareOnePhysicalEntryWithoutDeletingLedger() {
+        val mediaAlias="content://media/external_primary/audio/media/52"
+        val ledger=row("1",A3AcquisitionLedger.Phase.AVAILABLE,mediaAlias)
+        val result=A4AvailableLocalUriSelection.choose(
+            listOf(ledger),alreadyScanned=setOf(media),
+            identityOf=A4LocalPhysicalIdentity::key
+        ) { true }
+        assertTrue(result.isEmpty())
+        assertEquals(A3AcquisitionLedger.Phase.AVAILABLE,ledger.phase)
+    }
+
+    @Test fun safDocumentOfAlreadyScannedPathIsNotASecondLibraryRow() {
+        val document="content://com.android.externalstorage.documents/document/" +
+            "primary%3AMusic%2FBitChord%2FLooks.flac"
+        val candidates=A4AvailableLocalUriSelection.choose(
+            listOf(row("1",A3AcquisitionLedger.Phase.AVAILABLE,document)),
+            alreadyScanned=emptySet(),
+            alreadyIdentities=setOf(
+                A4LocalPhysicalIdentity.pathKey("/storage/emulated/0/Music/BitChord/Looks.flac")),
+            identityOf=A4LocalPhysicalIdentity::key
+        ) { true }
+        assertTrue(candidates.isEmpty())
+    }
+
 }
