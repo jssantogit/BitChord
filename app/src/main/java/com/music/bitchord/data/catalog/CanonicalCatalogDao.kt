@@ -574,7 +574,11 @@ internal interface CanonicalCatalogDao {
             instr(lower(recording.title), lower(:query)) > 0
             OR instr(lower(recording.artistDisplay), lower(:query)) > 0
           )
-        ORDER BY recording.artistDisplay COLLATE NOCASE,
+        ORDER BY CASE WHEN EXISTS (
+                    SELECT 1 FROM catalog_media_asset playable
+                    WHERE playable.recordingId = recording.id
+                ) THEN 0 ELSE 1 END,
+                 recording.artistDisplay COLLATE NOCASE,
                  recording.title COLLATE NOCASE, identity.externalId
         LIMIT :limit
         """,
