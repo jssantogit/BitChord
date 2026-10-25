@@ -44,10 +44,20 @@ object Diagnostics {
         val remainingMillis: Long,
     )
 
+    /**
+     * Feature-driven capture ownership is separate from the user's manually
+     * started capture. A feature never owns an existing manual capture.
+     */
+    internal data class FeatureCapture(
+        val active: Boolean,
+        internal val lease: ScopedCaptureOwnership.Lease?,
+    )
+
     private val sessionId: String = UUID.randomUUID().toString().substring(0, 8)
     private val traceReferenceSalt: String = UUID.randomUUID().toString()
     private val buffer = DiagnosticBuffer(BUFFER_CAPACITY)
     private val installLock = Any()
+    private val scopedCaptureOwnership = ScopedCaptureOwnership()
     private val writer = DiagnosticWriteQueue(WRITER_QUEUE_CAPACITY)
     private val structuredTracerInstance: StructuredTracer by lazy {
         StructuredTracer(
@@ -229,6 +239,7 @@ object Diagnostics {
         )
     }
 
+    @Synchronized
     fun startCapture(durationMillis: Long = DEFAULT_CAPTURE_MILLIS): CaptureStatus {
         require(durationMillis > 0L) { "durationMillis must be greater than zero" }
         val app = checkNotNull(application) { "Diagnostics.install must be called first" }
@@ -246,6 +257,9 @@ object Diagnostics {
             )
             return CaptureStatus(active = false, expiresAtEpochMillis = null, remainingMillis = 0L)
         }
+        // Explicit Start (or a new successful temporary session) invalidates
+        // any previous feature lease, including one from an earlier search.
+        scopedCaptureOwnership.manualTransition()
         captureWindow = CaptureWindow(expiresAt)
         event(
             category = DiagnosticCategory.APP,
@@ -258,11 +272,13 @@ object Diagnostics {
         return captureStatus()
     }
 
+    @Synchronized
     fun stopCapture(): CaptureStatus {
         val app = checkNotNull(application) { "Diagnostics.install must be called first" }
         if (isCaptureActive()) {
             event(category = DiagnosticCategory.APP, name = "capture_stopped")
         }
+        scopedCaptureOwnership.manualTransition()
         captureWindow = null
         val removed = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
@@ -277,6 +293,28 @@ object Diagnostics {
             )
         }
         return captureStatus()
+    }
+
+    /**
+     * Safe for features such as the one-shot Soulseek picker. If a manual
+     * capture is already active, leave its expiry completely unchanged.
+     * Serializing with explicit Start/Stop also closes the observe-then-write
+     * race and prevents a stale search from stopping a newer capture.
+     */
+    @Synchronized
+    internal fun beginFeatureCapture(durationMillis: Long): FeatureCapture {
+        val existing = captureStatus()
+        if (existing.active) return FeatureCapture(active = true, lease = null)
+        val result = startCapture(durationMillis)
+        val lease = if (result.active) scopedCaptureOwnership.claim() else null
+        return FeatureCapture(active = result.active, lease = lease)
+    }
+
+    @Synchronized
+    internal fun endFeatureCapture(session: FeatureCapture) {
+        if (scopedCaptureOwnership.release(session.lease)) {
+            stopCapture()
+        }
     }
 
     fun captureStatus(nowEpochMillis: Long = System.currentTimeMillis()): CaptureStatus {
