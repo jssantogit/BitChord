@@ -1233,4 +1233,7 @@
     <string name="playback_recovery_retrying">Trying…</string>
     <string name="playback_recovery_dismiss">Dismiss</string>
     <string name="spotify_import_youtube_required">Spotify playlist import currently needs YouTube Music matching. Enable YouTube Music and turn off catalog-first discovery to import.</string>
+    <string name="search_origin_general">General</string>
+    <string name="search_origin_server">Server</string>
+    <string name="search_origin_local">Local</string>
 </resources>
