@@ -137,9 +137,9 @@ object SourceRegistry {
         stored: List<SourceConfig>,
         forceJioSaavnOff: Boolean,
     ): List<SourceConfig> {
-        // Seeded rather than persisted-on-first-write, so a build adding a new
-        // built-in kind picks it up for existing installs too. SourceConfig's
-        // default is the policy: JioSaavn off, YouTube on.
+        // Newly seeded installs keep the existing defaults (JioSaavn off,
+        // YouTube on), but persisted user opt-outs must remain authoritative.
+        // In particular, discovery must never silently re-enable YouTube.
         val seeded = stored + BUILT_IN_KINDS
             .filter { kind -> stored.none { it.kind == kind } }
             .map { SourceConfig(kind = it) }
@@ -150,7 +150,6 @@ object SourceRegistry {
             .filterNot { it.kind == SourceKind.MODULE }
             .map { config ->
                 when {
-                    config.kind == SourceKind.YOUTUBE && !config.enabled -> config.copy(enabled = true)
                     config.kind == SourceKind.JIOSAAVN && forceJioSaavnOff -> config.copy(enabled = false)
                     else -> config
                 }
