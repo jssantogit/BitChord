@@ -39,19 +39,18 @@ internal data class CanonicalSearchPageCursors(
             artists: MusicBrainzCatalogSearchResult<*>,
         ): CanonicalSearchPageCursors = CanonicalSearchPageCursors(
             query = query,
-            recordings = (recordings as? MusicBrainzCatalogSearchResult.Success)?.page?.nextOffset,
-            groups = (groups as? MusicBrainzCatalogSearchResult.Success)?.page?.nextOffset,
-            releases = (releases as? MusicBrainzCatalogSearchResult.Success)?.page?.nextOffset,
-            artists = (artists as? MusicBrainzCatalogSearchResult.Success)?.page?.nextOffset,
+            recordings = (recordings as? MusicBrainzCatalogSearchResult.Success<*>)?.page?.nextOffset,
+            groups = (groups as? MusicBrainzCatalogSearchResult.Success<*>)?.page?.nextOffset,
+            releases = (releases as? MusicBrainzCatalogSearchResult.Success<*>)?.page?.nextOffset,
+            artists = (artists as? MusicBrainzCatalogSearchResult.Success<*>)?.page?.nextOffset,
         )
 
         private fun nextOrRetain(
             previous: Int?,
             page: MusicBrainzCatalogSearchResult<*>?,
-        ): Int? = if (previous == null) null
-            else (page as? MusicBrainzCatalogSearchResult.Success)?.page?.nextOffset ?: when (page) {
-                is MusicBrainzCatalogSearchResult.Success -> null
-                else -> previous
-            }
+        ): Int? = if (previous == null) null else when (page) {
+            is MusicBrainzCatalogSearchResult.Success<*> -> page.page.nextOffset
+            else -> previous
+        }
     }
 }
