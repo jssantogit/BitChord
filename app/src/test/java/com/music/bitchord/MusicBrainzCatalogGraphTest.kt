@@ -116,4 +116,44 @@ class MusicBrainzCatalogGraphTest {
         assertEquals("ILLIT feat. Guest", detail.tracks.single().artistDisplay)
     }
 
+
+    @Test fun browseDeduplicatesByEditionMbidWithoutChangingServerCursor() = runBlocking {
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"release-count":30,"release-offset":0,"releases":[
+                    {"id":"$worldwide","title":"SUPER REAL ME"},
+                    {"id":"$worldwide","title":"SUPER REAL ME (conflicting title)"}
+                ]}"""
+            },
+        ))
+        val page = (graph.browseGroupReleases(group) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogPage<MusicBrainzReleaseHit>>).value
+        assertEquals(listOf(worldwide), page.items.map { it.musicBrainzId })
+        assertEquals(2, page.consumedCount)
+        assertEquals(2, page.nextOffset)
+    }
+
+    @Test fun conflictingTrackMbidInOneReleaseFailsClosedBeforePersistence() = runBlocking {
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"SUPER REAL ME","media":[{"tracks":[
+                    {"id":"14f273b6-813b-4239-b0f8-c4b839b902c6",
+                     "title":"Magnetic","recording":{"id":"$original"}},
+                    {"id":"14f273b6-813b-4239-b0f8-c4b839b902c6",
+                     "title":"Magnetic (sped up)","recording":{"id":"$sped"}}
+                ]}]}"""
+            },
+        ))
+        val result = graph.lookupRelease(worldwide)
+        assertTrue(result is MusicBrainzCatalogGraphResult.Failure)
+        assertEquals(
+            com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+            (result as MusicBrainzCatalogGraphResult.Failure).reason,
+        )
+    }
+
 }
