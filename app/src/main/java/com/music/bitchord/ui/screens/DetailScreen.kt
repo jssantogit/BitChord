@@ -1970,7 +1970,7 @@ private fun CompactSongRow(
         CanonicalSongRatingStars(
             song = song,
             modifier = Modifier.padding(start = 8.dp),
-            color = palette.onBackgroundVariant,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         if (downloadedTint != null) {
             DownloadedBadge(song.videoId, downloadedTint)
@@ -2036,7 +2036,7 @@ private fun SuggestedSongRow(
         CanonicalSongRatingStars(
             song = song,
             modifier = Modifier.padding(start = 8.dp),
-            color = palette.onBackgroundVariant,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         if (downloadedTint != null) {
             DownloadedBadge(song.videoId, downloadedTint)
