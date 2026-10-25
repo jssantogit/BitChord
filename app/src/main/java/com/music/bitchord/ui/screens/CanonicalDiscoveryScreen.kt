@@ -124,7 +124,11 @@ internal fun CanonicalDiscoveryScreen(
                     )
                 }
             }
-        } else {
+        }
+        // The Home screen must not hide the canonical catalog. Saved local
+        // collections and persisted MusicBrainz identities are complementary:
+        // the latter retain offline artist/release navigation without YouTube.
+        run {
             item(key = "canonical-catalog-heading") {
                 SectionHeading(stringResource(R.string.canonical_discovery_catalog_cache))
             }
