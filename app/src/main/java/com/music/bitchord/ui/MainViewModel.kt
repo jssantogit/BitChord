@@ -118,6 +118,26 @@ import java.util.concurrent.atomic.AtomicLong
 /** What the Search tab searches: YouTube Music, or the Local Music folder on this device. */
 enum class SearchSource { YOUTUBE, LIBRARY, ADDONS, CANONICAL }
 
+/** User-facing boundaries. Providers do not own separate search interfaces. */
+internal enum class SearchOrigin { GENERAL, SERVER, LOCAL }
+
+internal fun searchOriginOf(source: SearchSource): SearchOrigin = when (source) {
+    SearchSource.YOUTUBE, SearchSource.CANONICAL -> SearchOrigin.GENERAL
+    SearchSource.ADDONS -> SearchOrigin.SERVER
+    SearchSource.LIBRARY -> SearchOrigin.LOCAL
+}
+
+internal fun searchSourceForOrigin(
+    origin: SearchOrigin,
+    canonicalMode: Boolean,
+    configs: List<SourceConfig>,
+): SearchSource = when (origin) {
+    SearchOrigin.GENERAL ->
+        if (shouldUseCanonicalDiscovery(canonicalMode, configs)) SearchSource.CANONICAL else SearchSource.YOUTUBE
+    SearchOrigin.SERVER -> SearchSource.ADDONS
+    SearchOrigin.LOCAL -> SearchSource.LIBRARY
+}
+
 /**
  * Playback source opt-out is authoritative for search too. A disabled YT
  * provider must not be contacted by a legacy search tab selection. Empty
