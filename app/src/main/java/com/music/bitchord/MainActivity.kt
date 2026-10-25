@@ -2071,6 +2071,8 @@ private fun BitChordApp(
                     context.packageName,
                     "com.music.bitchord.acquisition.a0.A0ManualLoginActivity",
                 ).putExtra("bitchord.soulseek.manual.query", decision.query)
+                    .putExtra("bitchord.soulseek.manual.duration_seconds",
+                        SoulseekDownloadRouting.durationSeconds(song?.durationText) ?: 0)
                 runCatching { context.startActivity(intent) }.onFailure {
                     Toast.makeText(
                         context, "Seletor Soulseek indisponível nesta instalação.",
