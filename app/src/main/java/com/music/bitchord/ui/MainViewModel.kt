@@ -193,6 +193,19 @@ internal suspend fun <T> runLegacySpotifyMatchIfAllowed(
     return match.takeIf { allowed() }
 }
 
+/**
+ * Only explicit, enabled legacy discovery may contact YouTube. A disable that
+ * arrives during a non-cooperative provider call also discards the response.
+ */
+internal suspend fun <T> runLegacyYoutubeBrowseIfEnabled(
+    enabled: () -> Boolean,
+    request: suspend () -> T,
+): T? {
+    if (!enabled()) return null
+    val value = request()
+    return value.takeIf { enabled() }
+}
+
 /** A monotonically increasing token makes uncancellable old responses harmless. */
 internal class DiscoveryRequestEpoch {
     private val current = AtomicLong(0L)
@@ -3782,7 +3795,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val state = when {
                 local != null -> local
                 resolved == BrowseType.ARTIST -> {
-                    YtMusicRepository.artistPage(browseId).fold(
+                    runLegacyYoutubeBrowseIfEnabled(
+                        enabled = { isYouTubeSourceEnabled(SourceRegistry.configs.value) },
+                    ) { YtMusicRepository.artistPage(browseId) }?.fold(
                         onSuccess = { page ->
                             sections = page.sections
                             artwork = page.thumbnailUrl
@@ -3798,10 +3813,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             }
                         },
                         onFailure = { UiState.Error(it.friendly()) },
-                    )
+                    ) ?: UiState.Error(text(R.string.legacy_library_youtube_disabled))
                 }
                 else -> {
-                    YtMusicRepository.browseSongs(browseId).fold(
+                    runLegacyYoutubeBrowseIfEnabled(
+                        enabled = { isYouTubeSourceEnabled(SourceRegistry.configs.value) },
+                    ) { YtMusicRepository.browseSongs(browseId) }?.fold(
                         onSuccess = { page ->
                             // Free here — the page that returned these rows is
                             // the one thing that states who made the playlist,
@@ -3835,19 +3852,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             }
                         },
                         onFailure = { UiState.Error(it.friendly()) },
-                    )
+                    ) ?: UiState.Error(text(R.string.legacy_library_youtube_disabled))
                 }
             }
+            // An opt-out may arrive after the last network await, before the
+            // page is committed. Never publish legacy metadata in that race.
+            // Cached/downloaded tracks already shown above remain visible.
+            val safeState = if (local == null &&
+                !isYouTubeSourceEnabled(SourceRegistry.configs.value)
+            ) UiState.Error(text(R.string.legacy_library_youtube_disabled)) else state
             // Update by id — the user may have pushed another page meanwhile.
             // A page showing its downloaded copy takes only a real listing: a
             // failed or empty fetch leaves the downloaded tracks up.
             _detailStack.value = _detailStack.value.map {
                 if (it.browseId == browseId &&
-                    (it.songs is UiState.Loading || (onDevice.isNotEmpty() && state is UiState.Success))
+                    (it.songs is UiState.Loading || (onDevice.isNotEmpty() && safeState is UiState.Success))
                 ) {
                     it.copy(
-                        songs = state,
-                        sections = sections,
+                        songs = safeState,
+                        sections = if (safeState is UiState.Error) emptyList() else sections,
                         thumbnailUrl = artwork ?: it.thumbnailUrl,
                         title = name ?: it.title,
                         subtitle = credit ?: it.subtitle,
@@ -3865,7 +3888,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             // Only once the first page is on screen: [fillIn] appends to it,
             // and has nothing to append to before this.
-            more?.let { fillIn(browseId, it, thumbnailUrl ?: artwork) }
+            if (isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
+                more?.let { fillIn(browseId, it, thumbnailUrl ?: artwork) }
+            }
         }
     }
 
@@ -4103,7 +4128,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             delay(150)
             var next: String? = token
             while (next != null) {
-                val fetched = YtMusicRepository.moreSongs(next).getOrNull() ?: return@launch
+                val fetched = runLegacyYoutubeBrowseIfEnabled(
+                    enabled = { isYouTubeSourceEnabled(SourceRegistry.configs.value) },
+                ) { YtMusicRepository.moreSongs(next).getOrNull() } ?: return@launch
                 // Repository calls may finish after cancellation. Do not let
                 // an in-flight UI page append after the playback service has
                 // taken the continuation over.
