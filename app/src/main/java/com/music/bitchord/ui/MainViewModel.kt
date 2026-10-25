@@ -2939,41 +2939,41 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
             canonicalSearchPageCursors = pageCursors
             _canonicalSearchHasMore.value = pageCursors.hasMore
-            _canonicalResults.value = if (
-                recordings is MusicBrainzCatalogSearchResult.Failure &&
-                groups is MusicBrainzCatalogSearchResult.Failure &&
-                editions is MusicBrainzCatalogSearchResult.Failure &&
-                artists is MusicBrainzCatalogSearchResult.Failure
-            ) {
-                val cached: List<CanonicalCatalogSearchRow> = try {
-                    withContext(Dispatchers.IO) {
-                        val dao = CanonicalCatalogDatabase
-                            .get(getApplication<Application>()).catalogDao()
-                        val known = dao.searchKnownMusicBrainzRecordings(query, 25)
-                        val available = dao.musicBrainzRecordingMbidsWithAssets(
-                            known.map { it.musicBrainzId },
-                        ).toSet()
-                        buildList<CanonicalCatalogSearchRow> {
+            val failedKinds = buildSet<CanonicalSearchKind> {
+                if (recordings is MusicBrainzCatalogSearchResult.Failure) add(CanonicalSearchKind.RECORDING)
+                if (groups is MusicBrainzCatalogSearchResult.Failure) add(CanonicalSearchKind.RELEASE_GROUP)
+                if (editions is MusicBrainzCatalogSearchResult.Failure) add(CanonicalSearchKind.RELEASE)
+                if (artists is MusicBrainzCatalogSearchResult.Failure) add(CanonicalSearchKind.ARTIST)
+            }
+            // Recover each failed type independently. Successful MusicBrainz
+            // responses take precedence and must not be replaced by stale cache.
+            val cached: List<CanonicalCatalogSearchRow> = if (failedKinds.isEmpty()) {
+                emptyList()
+            } else try {
+                withContext(Dispatchers.IO) {
+                    val dao = CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao()
+                    buildList {
+                        if (CanonicalSearchKind.RECORDING in failedKinds) {
+                            val known = dao.searchKnownMusicBrainzRecordings(query, 25)
+                            val available = dao.musicBrainzRecordingMbidsWithAssets(
+                                known.map { it.musicBrainzId },
+                            ).toSet()
                             known.forEach { hit -> add(CanonicalCatalogSearchRow(
-                                musicBrainzId = hit.musicBrainzId,
-                                kind = CanonicalSearchKind.RECORDING,
-                                title = hit.title,
-                                subtitle = hit.artistDisplay,
+                                hit.musicBrainzId, CanonicalSearchKind.RECORDING,
+                                hit.title, hit.artistDisplay,
                                 hasCatalogedAsset = hit.musicBrainzId in available,
                                 fromOfflineCache = true,
                             )) }
+                        }
+                        if (CanonicalSearchKind.RELEASE_GROUP in failedKinds) {
                             dao.searchKnownMusicBrainzGroups(query, 25).forEach { hit ->
                                 add(CanonicalCatalogSearchRow(
                                     hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
                                     hit.artistDisplay ?: hit.primaryType, fromOfflineCache = true,
                                 ))
                             }
-                            dao.searchKnownMusicBrainzArtists(query, 25).forEach { hit ->
-                                add(CanonicalCatalogSearchRow(
-                                    hit.musicBrainzId, CanonicalSearchKind.ARTIST, hit.name,
-                                    hit.disambiguation ?: hit.country, fromOfflineCache = true,
-                                ))
-                            }
+                        }
+                        if (CanonicalSearchKind.RELEASE in failedKinds) {
                             dao.searchKnownMusicBrainzReleases(query, 25).forEach { hit ->
                                 add(CanonicalCatalogSearchRow(
                                     hit.musicBrainzId, CanonicalSearchKind.RELEASE, hit.title,
@@ -2982,15 +2982,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 ))
                             }
                         }
+                        if (CanonicalSearchKind.ARTIST in failedKinds) {
+                            dao.searchKnownMusicBrainzArtists(query, 25).forEach { hit ->
+                                add(CanonicalCatalogSearchRow(
+                                    hit.musicBrainzId, CanonicalSearchKind.ARTIST, hit.name,
+                                    hit.disambiguation ?: hit.country, fromOfflineCache = true,
+                                ))
+                            }
+                        }
                     }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    emptyList()
                 }
-                if (cached.isEmpty()) UiState.Error("MusicBrainz unavailable and no local matches")
-                else UiState.Success(cached)
-            } else UiState.Success(rows)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
+            }
+            if (_searchSource.value != SearchSource.CANONICAL || _query.value.trim() != query) {
+                return@launch
+            }
+            val combined = mergeCanonicalSearchRows(rows, cached, failedKinds)
+            _canonicalResults.value =
+                if (failedKinds.size == CanonicalSearchKind.entries.size && combined.isEmpty()) {
+                    UiState.Error("MusicBrainz unavailable and no local matches")
+                } else UiState.Success(combined)
         }
     }
 
