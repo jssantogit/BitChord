@@ -8,6 +8,8 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import com.music.bitchord.diagnostics.Diagnostics
+import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.data.settings.SoulseekQualityPreset
 import com.music.bitchord.diagnostics.DiagnosticsShare
 import com.music.bitchord.observability.TraceOutcome
 import com.music.bitchord.download.A3AcquisitionLedger
@@ -142,18 +144,14 @@ class A0ManualLoginActivity : Activity() {
         }
         page.addView(albumInput)
         text("Qualidade desejada: declaração do peer, não áudio verificado")
-        val qualityLabels=listOf(
-            "Sem filtro específico", "Hi-Res (sem perdas, 24-bit >48 kHz)",
-            "Sem perdas: FLAC/WAV", "Alta qualidade: MP3 ≥256 kbps ou sem perdas",
-            "Alta eficiência: não disponível", "Personalizado: MP3 ≥256 kbps",
-            "Personalizado: FLAC ≥24-bit / 96 kHz",
-        )
+        val qualityLabels=SoulseekQualityPreset.entries.map { it.label }
         val qualityPicker=Spinner(this).apply {
             adapter=ArrayAdapter(this@A0ManualLoginActivity,
                 android.R.layout.simple_spinner_item, qualityLabels).also {
                 it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
             }
             isSaveEnabled=false
+            setSelection(AppSettings.soulseekQualityPreset.value.ordinal)
         }
         page.addView(qualityPicker)
         val acknowledge = CheckBox(this).apply {
@@ -222,25 +220,12 @@ class A0ManualLoginActivity : Activity() {
             // local ranking. Only the normalized term is sent over Soulseek.
             val enteredSearch=if(performSearch) searchInput.text.toString() else null
             val albumConstraint=albumInput.text.toString().trim().takeIf(String::isNotBlank)
-            val selectedQuality=when(qualityPicker.selectedItemPosition) {
-                1 -> A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
-                    preset=A0CanonicalAcquisitionIntent.QualityPreset.HI_RES,strict=true)
-                2 -> A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
-                    preset=A0CanonicalAcquisitionIntent.QualityPreset.LOSSLESS,strict=true)
-                3 -> A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
-                    preset=A0CanonicalAcquisitionIntent.QualityPreset.HIGH_QUALITY,strict=true)
-                4 -> A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
-                    preset=A0CanonicalAcquisitionIntent.QualityPreset.HIGH_EFFICIENCY,strict=true)
-                5 -> A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
-                    preset=A0CanonicalAcquisitionIntent.QualityPreset.CUSTOM,
-                    allowedCodecs=setOf(A0CanonicalAcquisitionIntent.Codec.MP3),
-                    minBitrateKbps=256,strict=true)
-                6 -> A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
-                    preset=A0CanonicalAcquisitionIntent.QualityPreset.CUSTOM,
-                    allowedCodecs=setOf(A0CanonicalAcquisitionIntent.Codec.FLAC),
-                    minBitDepth=24,minSampleRateHz=96_000,strict=true)
-                else -> A0CanonicalAcquisitionIntent.QualityProfileSnapshot()
-            }
+            val preset=SoulseekQualityPreset.entries.getOrElse(
+                qualityPicker.selectedItemPosition) { SoulseekQualityPreset.ANY }
+            // Changing Soulseek quality never mutates legacy DownloadQuality
+            // or initiates an automatic transfer.
+            AppSettings.setSoulseekQualityPreset(preset)
+            val selectedQuality=A0SoulseekQualityProfiles.snapshot(preset)
             if(albumConstraint!=null && runCatching {
                 A0CanonicalAcquisitionIntent.manual("Busca manual",requestedAlbum=albumConstraint)
             }.isFailure) {
