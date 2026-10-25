@@ -36,6 +36,16 @@ internal object A0CandidateRank {
     private fun containsPhrase(haystack:List<String>,phrase:List<String>):Boolean=
         phrase.isNotEmpty() && haystack.windowed(phrase.size).any { it==phrase }
 
+    /** Never allow peer-supplied bidi/zero-width formatting to spoof the UI. */
+    private fun isUnsafeDisplayFormatChar(ch:Char)=
+        ch in '\u202A'..'\u202E' || ch in '\u2066'..'\u2069' ||
+            ch in '\u200B'..'\u200F' || ch=='\u2060' || ch=='\uFEFF'
+
+    /** Display/safe local filename only; NEVER change remote P/F identity. */
+    fun safeDisplayName(name:String):String=buildString(name.length) {
+        name.forEach { append(if(isUnsafeDisplayFormatChar(it)) '_' else it) }
+    }
+
     @Suppress("UNUSED_PARAMETER")
     fun rank(
         searchPhrase:String?, name:String, declaredBitrateKbps:Int?,
@@ -123,10 +133,7 @@ internal object A0CandidateRank {
         // filename look like a different title/extension to the reader while
         // normal token matching still reports ALL_TERMS. Never classify that
         // display as STRONG on untrusted peer metadata.
-        if(stem.any { ch ->
-                ch in '\u202A'..'\u202E' || ch in '\u2066'..'\u2069' ||
-                    ch in '\u200B'..'\u200F' || ch=='\u2060' || ch=='\uFEFF'
-            }) {
+        if(stem.any(::isUnsafeDisplayFormatChar)) {
             score-=9
             warnings.add(Warning.IDENTITY_AMBIGUOUS)
         }
