@@ -662,12 +662,23 @@ class A0ManualLoginActivity : Activity() {
                                                 else "Selecione UM arquivo autorizado. Nenhum download automático."
                                                 // Filters affect only presentation; the full
                                                 // bounded ranked set stays in memory for retry.
-                                                fun showChoices(formatFilter:String?=null) {
+                                                fun showChoices(formatFilter:String?=null,
+                                                    qualityFilter:Int=0) {
                                                     val visible=selectableIndices.filter { i ->
-                                                        formatFilter == null ||
-                                                            choices[i].displayName
-                                                                .substringAfterLast('.',"")
-                                                                .equals(formatFilter,ignoreCase=true)
+                                                        val file=choices[i]
+                                                        val ext=file.displayName.substringAfterLast('.', "")
+                                                        val formatOk=formatFilter==null ||
+                                                            ext.equals(formatFilter,ignoreCase=true)
+                                                        val qualityOk=when(qualityFilter) {
+                                                            1 -> file.matchScore>=65 && file.warnings.isEmpty() &&
+                                                                file.quality!=A0CandidateRank.Quality.LOW_ADVERTISED
+                                                            2 -> file.quality==A0CandidateRank.Quality.LOSSLESS_ADVERTISED
+                                                            3 -> ext.equals("mp3",ignoreCase=true) &&
+                                                                (file.declaredBitrateKbps ?: 0)>=256
+                                                            4 -> A0CandidateRank.Warning.VERSION_MISMATCH !in file.warnings
+                                                            else -> true
+                                                        }
+                                                        formatOk && qualityOk
                                                     }
                                                     val titles=visible.map { i ->
                                                         val candidate=choices[i]
@@ -688,11 +699,31 @@ class A0ManualLoginActivity : Activity() {
                                                         val bitrate=candidate.declaredBitrateKbps?.let {
                                                             " — " + it + " kbps declarados"
                                                         }.orEmpty()
+                                                        val quality=when(candidate.quality) {
+                                                            A0CandidateRank.Quality.LOSSLESS_ADVERTISED ->
+                                                                "lossless declarado"
+                                                            A0CandidateRank.Quality.HIGH_ADVERTISED ->
+                                                                "alta qualidade declarada"
+                                                            A0CandidateRank.Quality.MEDIUM_ADVERTISED ->
+                                                                "qualidade média declarada"
+                                                            A0CandidateRank.Quality.LOW_ADVERTISED ->
+                                                                "qualidade baixa declarada"
+                                                            A0CandidateRank.Quality.UNKNOWN_ADVERTISED ->
+                                                                "qualidade não confirmada"
+                                                        }
+                                                        val duration=candidate.declaredDurationSeconds?.let {
+                                                            " — " + (it/60) + ":" +
+                                                                (it%60).toString().padStart(2,'0')
+                                                        }.orEmpty()
+                                                        val flags=if(candidate.warnings.isEmpty()) ""
+                                                            else " — alerta: " + candidate.warnings.joinToString {
+                                                                it.name.lowercase()
+                                                            }
                                                         candidate.displayName + " — " + format + bitrate +
-                                                            " — " + candidate.sizeBytes + " bytes" +
-                                                            " — score " + candidate.matchScore +
-                                                            " (" + match + ")" +
-                                                            " — slot livre anunciado — peer: " + peer
+                                                            duration + " — " + candidate.sizeBytes + " bytes" +
+                                                            " — " + quality + " — relevância " +
+                                                            candidate.matchScore + " (" + match + ")" +
+                                                            flags + " — slot livre anunciado — peer: " + peer
                                                     }.toTypedArray()
                                                     AlertDialog.Builder(this@A0ManualLoginActivity)
                                                         .setTitle("Candidatos (" + visible.size +
@@ -702,23 +733,27 @@ class A0ManualLoginActivity : Activity() {
                                                         }
                                                         .setNeutralButton("Filtrar formato") { _, _ ->
                                                             val labels=arrayOf(
-                                                                "Todos","MP3","FLAC","WAV",
-                                                                "OGG","M4A","AAC","OPUS"
+                                                                "Todos","Mais relevantes","Lossless declarado",
+                                                                "MP3 ≥256 kbps","Ocultar versões alternativas",
+                                                                "MP3","FLAC","WAV","OGG","M4A","AAC","OPUS"
                                                             )
-                                                            val filters=arrayOf<String?>(
-                                                                null,"mp3","flac","wav",
-                                                                "ogg","m4a","aac","opus"
+                                                            val formats=arrayOf<String?>(
+                                                                null,null,null,null,null,
+                                                                "mp3","flac","wav","ogg","m4a","aac","opus"
+                                                            )
+                                                            val qualities=intArrayOf(
+                                                                0,1,2,3,4,0,0,0,0,0,0,0
                                                             )
                                                             AlertDialog.Builder(this@A0ManualLoginActivity)
                                                                 .setTitle("Filtrar (reversível)")
                                                                 .setItems(labels) { _, index ->
-                                                                    showChoices(filters[index])
+                                                                    showChoices(formats[index],qualities[index])
                                                                 }
                                                                 .setNegativeButton("Voltar") { _, _ ->
-                                                                    showChoices(formatFilter)
+                                                                    showChoices(formatFilter,qualityFilter)
                                                                 }
                                                                 .setOnCancelListener {
-                                                                    showChoices(formatFilter)
+                                                                    showChoices(formatFilter,qualityFilter)
                                                                 }.show()
                                                         }
                                                         .setNegativeButton("Cancelar") { _, _ ->
