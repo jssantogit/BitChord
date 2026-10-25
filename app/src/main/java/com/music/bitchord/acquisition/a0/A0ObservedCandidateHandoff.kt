@@ -34,6 +34,7 @@ internal class A0ObservedCandidateHandoff(
         val declaredSampleRateHz:Int?,
         val declaredBitDepth:Int?,
         val preflight:A0CandidatePreflight.Assessment,
+        val peerAvailability:A0PeerAvailability.Assessment,
     ) {
         override fun toString()="A0 observed candidate (redacted)"
     }
@@ -58,6 +59,9 @@ internal class A0ObservedCandidateHandoff(
         val preflightStrong:Int=0,
         val preflightReview:Int=0,
         val preflightUnsafe:Int=0,
+        val peersReady:Int=0,
+        val peersUnknown:Int=0,
+        val peersCongested:Int=0,
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
     private val candidates=ArrayList<Choice>(48)
@@ -69,6 +73,7 @@ internal class A0ObservedCandidateHandoff(
         }
     }.thenByDescending { it.matchScore }
         .thenByDescending { it.declaredBitrateKbps ?: 0 }
+        .thenByDescending { A0PeerAvailability.priority(it.peerAvailability) }
         .thenBy { it.displayName.lowercase(java.util.Locale.ROOT) }
         .thenBy { it.peerUsername }
         .thenBy { it.remotePath }
@@ -158,6 +163,12 @@ internal class A0ObservedCandidateHandoff(
                 format=ext,sizeBytes=file.sizeBytes,
                 declaredSampleRateHz=sampleRate,declaredBitDepth=bitDepth
             )
+            // Only these (already admitted) peer claims affect a source
+            // tie-breaker. They do not contribute to preflight confidence.
+            val peerAvailability=A0PeerAvailability.assess(
+                hasFreeUploadSlot=result.hasFreeUploadSlot,locked=path in locked,
+                queueLength=result.queueLength,uploadSpeedBytesPerSecond=result.uploadSpeed
+            )
             // A0's original take(82) could cut off ".mp3" and hide an
             // otherwise eligible file from the save selector.
             val suffix=".$ext"
@@ -170,7 +181,7 @@ internal class A0ObservedCandidateHandoff(
                 declaredBitrateKbps=bitrate,quality=ranking.quality,
                 warnings=ranking.warnings,declaredDurationSeconds=duration,
                 declaredSampleRateHz=sampleRate,declaredBitDepth=bitDepth,
-                preflight=preflight
+                preflight=preflight,peerAvailability=peerAvailability
             ))
             candidates.sortWith(choiceOrder)
             // A single enthusiastic peer cannot displace every other source.
@@ -219,6 +230,15 @@ internal class A0ObservedCandidateHandoff(
         },
         preflightUnsafe=candidates.count {
             it.preflight.confidence==A0CandidatePreflight.Confidence.UNSAFE
+        },
+        peersReady=candidates.count {
+            it.peerAvailability.tier==A0PeerAvailability.Tier.READY
+        },
+        peersUnknown=candidates.count {
+            it.peerAvailability.tier==A0PeerAvailability.Tier.UNKNOWN
+        },
+        peersCongested=candidates.count {
+            it.peerAvailability.tier==A0PeerAvailability.Tier.CONGESTED
         }
     )
 
