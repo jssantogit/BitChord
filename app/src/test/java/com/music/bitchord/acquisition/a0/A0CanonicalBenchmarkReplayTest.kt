@@ -175,6 +175,21 @@ class A0CanonicalBenchmarkReplayTest {
         assertTrue(after["recommended_offer_id"] is JsonNull)
     }
 
+    @Test fun implausibleEncodingCannotLeadListSolelyFromAnAlbumMatch() {
+        val source=dataset.single { it.field("case_id")=="synthetic_17" }
+        val alteredOffers=source["observations"]!!.jsonArray.mapIndexed { index,item ->
+            val original=item.jsonObject
+            if(index!=1) original else JsonObject(
+                original + ("claimed_album" to JsonPrimitive("General"))
+            )
+        }
+        val trial=JsonObject(source + ("observations" to JsonArray(alteredOffers)))
+        val decision=evaluateAlbumGated(trial)
+        assertEquals("synthetic_17_o2",
+            decision["ranked_offer_ids"]!!.jsonArray.first().jsonPrimitive.content)
+        assertTrue(decision["recommended_offer_id"] is JsonNull)
+    }
+
     @Test fun fixtureReplayEmitsDeveloperOnlyPredictions() {
         val root=File(System.getProperty("user.dir"),"build/benchmark/soulseek")
         assertTrue(root.exists() || root.mkdirs())
