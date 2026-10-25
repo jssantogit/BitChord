@@ -79,7 +79,7 @@ internal object A0CandidateRank {
         }
         val ext=(format ?: name.substringAfterLast('.', "")).lowercase(Locale.ROOT)
         val invalidMp3Bitrate=ext=="mp3" && declaredBitrateKbps!=null &&
-            declaredBitrateKbps>320
+            declaredBitrateKbps !in 32..320
         val validRate=declaredBitrateKbps?.takeIf {
             it in 32..(if(ext=="mp3") 320 else 1536)
         }
