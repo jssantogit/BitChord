@@ -1,6 +1,8 @@
 package com.music.bitchord.ui
 
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
+import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
+import com.music.bitchord.ui.screens.CanonicalSearchKind
 
 /**
  * Cursor ownership is per upstream entity type, never based on the number of
@@ -54,3 +56,13 @@ internal data class CanonicalSearchPageCursors(
         }
     }
 }
+
+/** Live facts win over cache. Only failed entity kinds may use stale evidence. */
+internal fun mergeCanonicalSearchRows(
+    live: List<CanonicalCatalogSearchRow>,
+    cached: List<CanonicalCatalogSearchRow>,
+    failedKinds: Set<CanonicalSearchKind>,
+): List<CanonicalCatalogSearchRow> =
+    (live + cached.filter { it.kind in failedKinds })
+        .distinctBy { it.kind to it.musicBrainzId }
+
