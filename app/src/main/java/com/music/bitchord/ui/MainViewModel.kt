@@ -394,10 +394,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     CanonicalSearchKind.RELEASE_GROUP -> when (
                         val result = musicBrainzGraph.browseGroupReleases(entry.musicBrainzId, offset = offset)
                     ) {
-                        is MusicBrainzCatalogGraphResult.Success -> result.value.items.map { hit ->
-                            CanonicalCatalogSearchRow(hit.musicBrainzId, CanonicalSearchKind.RELEASE,
-                                hit.title, listOfNotNull(hit.country, hit.releaseDate).joinToString(" · "))
-                        } to result.value.nextOffset
+                        is MusicBrainzCatalogGraphResult.Success -> {
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
+                                        getApplication<Application>(),
+                                    )).persistGroupEditions(entry.musicBrainzId, result.value.items)
+                                }
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) { /* No false offline claim; live list still usable. */ }
+                            result.value.items.map { hit ->
+                                CanonicalCatalogSearchRow(hit.musicBrainzId, CanonicalSearchKind.RELEASE,
+                                    hit.title, listOfNotNull(hit.country, hit.releaseDate).joinToString(" · "))
+                            } to result.value.nextOffset
+                        }
                         is MusicBrainzCatalogGraphResult.Failure -> null
                     }
                     else -> null
