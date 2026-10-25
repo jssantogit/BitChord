@@ -401,8 +401,35 @@ internal interface CanonicalCatalogDao {
         if (!credits.isNullOrEmpty()) upsertMusicBrainzReleaseArtistCredits(credits)
     }
 
-    @Query("DELETE FROM catalog_release_track WHERE recordingId = :recordingId")
-    suspend fun deleteReleaseTracksForRecording(recordingId: String)
+    /**
+     * A MediaStore rescan owns local-tag associations only. An existing release
+     * used by MusicBrainz or a remote provider must not lose its Recording
+     * links when local album tags change. Without a per-edge ownership table,
+     * favor retaining a possibly stale shared edge over deleting remote data.
+     */
+    @Query(
+        """
+        DELETE FROM catalog_release_track
+        WHERE recordingId = :recordingId
+          AND releaseId IN (
+            SELECT identity.entityId
+            FROM catalog_external_identity AS identity
+            WHERE identity.provider = :localTagsProvider
+              AND identity.entityType = 'release'
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM catalog_external_identity AS other
+            WHERE other.entityId = catalog_release_track.releaseId
+              AND other.entityType = 'release'
+              AND other.provider != :localTagsProvider
+          )
+        """,
+    )
+    suspend fun deleteLocalOnlyReleaseTracksForRecording(
+        recordingId: String,
+        localTagsProvider: String,
+    )
 
     @Query("DELETE FROM catalog_media_asset WHERE provider = :provider")
     suspend fun deleteAllMediaAssets(provider: String)
