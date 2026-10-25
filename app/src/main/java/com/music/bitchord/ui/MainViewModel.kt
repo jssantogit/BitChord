@@ -1937,11 +1937,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         searchSubmitted = true
         _suggestions.value = emptyList()
         _typeaheadResults.value = emptyList()
-        // Picking a suggestion or history item is deliberate, but it must NOT
-        // pollute the user's YTMusic server-side search history — only an
-        // explicit keyboard submission should do that.  Use the anonymous
-        // endpoint so YouTube does not log this query against the account.
-        runSearch(anonymous = true)
+        // A saved search/suggestion must stay in its selected namespace.
+        // Never send a MusicBrainz query to YouTube or interpret an MBID as a
+        // bare videoId. Only actual YouTube searches use anonymous history.
+        when (_searchSource.value) {
+            SearchSource.YOUTUBE -> runSearch(anonymous = true)
+            SearchSource.CANONICAL -> runCanonicalCatalogSearch(term.trim())
+            SearchSource.ADDONS -> runAddonSearch(term.trim())
+            SearchSource.LIBRARY -> loadLibrarySongs()
+        }
     }
 
     fun removeSearch(id: String) = SearchHistory.remove(id)
@@ -2183,6 +2187,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onFilterChange(value: SearchFilter) {
+        // These filter tabs belong to YouTube only, even if a late UI event
+        // arrives after switching the search namespace.
+        if (_searchSource.value != SearchSource.YOUTUBE) return
         if (_filter.value == value) return
         _filter.value = value
         searchSubmitted = true
@@ -2299,6 +2306,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * continuation was the reason a search sat on a spinner for seconds.
      */
     fun loadMoreSearchResults() {
+        if (_searchSource.value != SearchSource.YOUTUBE) return
         val session = searchSession ?: return
         val token = session.continuation ?: return
         if (_searchLoadingMore.value) return
