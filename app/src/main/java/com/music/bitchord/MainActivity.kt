@@ -946,29 +946,44 @@ private fun BitChordApp(
     // not a second Home/Explore screen; continue using HomeScreen's cards.
     val cachedCanonicalRows =
         (canonicalDiscoveryCatalog as? UiState.Success)?.data.orEmpty()
-    val canonicalHomeShelves = canonicalCuratedHomeShelves(
-        savedReleases = downloadedReleases.filter { !it.playlist }.map { collection ->
-            ShelfItem(
-                title = collection.title,
-                subtitle = collection.subtitle,
-                thumbnailUrl = collection.thumbnailUrl,
-                videoId = null,
-                browseId = Downloads.pageIdFor(collection.id),
-            )
-        },
-        metadata = cachedCanonicalRows,
-        localPicks = canonicalHomeLocalPicks,
-        remotePicks = canonicalHomeRemotePicks,
-        trendingRecordingMbids = canonicalTrendingMbids,
-        trendingLocalPicks = canonicalTrendingLocalSongs,
-        releasesHeading = stringResource(R.string.shelf_new_releases),
-        picksHeading = stringResource(R.string.shelf_quick_picks),
-        trendingHeading = stringResource(R.string.shelf_trending),
-        todayIsoDate = remember {
-            java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT)
-                .format(java.util.Date())
-        },
-    )
+    val canonicalReleasesHeading = stringResource(R.string.shelf_new_releases)
+    val canonicalPicksHeading = stringResource(R.string.shelf_quick_picks)
+    val canonicalTrendingHeading = stringResource(R.string.shelf_trending)
+    val canonicalFeedDate = remember {
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT)
+            .format(java.util.Date())
+    }
+    // Rendering Now Playing and the mini-player must not rehash and sort hundreds
+    // of media URIs. Recompute the native Home shelves only when their input
+    // snapshot, date, or the user's locale actually changes.
+    val canonicalHomeShelves = remember(
+        downloadedReleases, cachedCanonicalRows,
+        canonicalHomeLocalPicks, canonicalHomeRemotePicks,
+        canonicalTrendingMbids, canonicalTrendingLocalSongs,
+        canonicalReleasesHeading, canonicalPicksHeading, canonicalTrendingHeading,
+        canonicalFeedDate,
+    ) {
+        canonicalCuratedHomeShelves(
+            savedReleases = downloadedReleases.filter { !it.playlist }.map { collection ->
+                ShelfItem(
+                    title = collection.title,
+                    subtitle = collection.subtitle,
+                    thumbnailUrl = collection.thumbnailUrl,
+                    videoId = null,
+                    browseId = Downloads.pageIdFor(collection.id),
+                )
+            },
+            metadata = cachedCanonicalRows,
+            localPicks = canonicalHomeLocalPicks,
+            remotePicks = canonicalHomeRemotePicks,
+            trendingRecordingMbids = canonicalTrendingMbids,
+            trendingLocalPicks = canonicalTrendingLocalSongs,
+            releasesHeading = canonicalReleasesHeading,
+            picksHeading = canonicalPicksHeading,
+            trendingHeading = canonicalTrendingHeading,
+            todayIsoDate = canonicalFeedDate,
+        )
+    }
     val canonicalHomeState: UiState<List<HomeShelf>> = when {
         canonicalHomeShelves.isNotEmpty() -> UiState.Success(canonicalHomeShelves)
         canonicalDiscoveryCatalog is UiState.Loading -> UiState.Loading
