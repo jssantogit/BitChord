@@ -109,6 +109,7 @@ data class CanonicalCatalogDetailPage(
     val title: String,
     val summary: String?,
     val rows: List<CanonicalCatalogSearchRow>,
+    val artworkUri: String? = null,
 )
 
 @Composable
@@ -443,6 +444,13 @@ private fun LazyListScope.canonicalMusicBrainzResults(
             Column(Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 12.dp)) {
                 OutlinedButton(onClick = onBack) { Text("Back") }
                 if (detail is UiState.Success) {
+                    detail.data.artworkUri?.let { art ->
+                        AsyncImage(
+                            model = art,
+                            contentDescription = "Album cover",
+                            modifier = Modifier.size(112.dp).clip(RoundedCornerShape(10.dp)),
+                        )
+                    }
                     Text(detail.data.title, style = MaterialTheme.typography.titleLarge)
                     detail.data.summary?.let {
                         Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)

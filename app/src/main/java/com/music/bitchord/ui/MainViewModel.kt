@@ -13,6 +13,8 @@ import com.music.bitchord.auth.sessionId
 import com.music.bitchord.auth.adjacentProfile
 import com.music.bitchord.data.AppUpdateChecker
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.metadata.CoverArtArchive
+import com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
@@ -231,6 +233,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var canonicalSearchJob: Job? = null
     private val musicBrainzSearch by lazy { MusicBrainzCatalogSearch() }
     private val musicBrainzGraph by lazy { MusicBrainzCatalogGraph() }
+    private val coverArtArchive by lazy {
+        CoverArtArchive(store = RoomMusicBrainzCoverArtStore(
+            CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao(),
+        ))
+    }
     private val _canonicalDetail = MutableStateFlow<UiState<CanonicalCatalogDetailPage>?>(null)
     val canonicalDetail: StateFlow<UiState<CanonicalCatalogDetailPage>?> = _canonicalDetail.asStateFlow()
     private var canonicalBrowseJob: Job? = null
@@ -282,15 +289,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 CanonicalSearchKind.RELEASE_GROUP -> when (
                     val result = musicBrainzGraph.browseGroupReleases(entry.musicBrainzId)
                 ) {
-                    is MusicBrainzCatalogGraphResult.Success -> UiState.Success(
-                        CanonicalCatalogDetailPage(entry.title,
+                    is MusicBrainzCatalogGraphResult.Success -> {
+                        val artwork = withContext(Dispatchers.IO) {
+                            coverArtArchive.findCover(null, entry.musicBrainzId)
+                        }
+                        UiState.Success(CanonicalCatalogDetailPage(entry.title,
                             "Releases/editions · showing ${result.value.items.size} of ${result.value.total}",
                             result.value.items.map { hit -> CanonicalCatalogSearchRow(
                                 hit.musicBrainzId, CanonicalSearchKind.RELEASE, hit.title,
                                 listOfNotNull(hit.country, hit.releaseDate).joinToString(" · "),
                             ) },
-                        ),
-                    )
+                            artworkUri = artwork,
+                        ))
+                    }
                     is MusicBrainzCatalogGraphResult.Failure -> UiState.Error("Unable to load release editions")
                 }
                 CanonicalSearchKind.RELEASE -> when (
@@ -311,8 +322,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         } catch (_: Exception) {
                             emptySet()
                         }
+                        val artwork = withContext(Dispatchers.IO) {
+                            coverArtArchive.findCover(details.musicBrainzId, details.groupMbid)
+                        }
                         UiState.Success(CanonicalCatalogDetailPage(
                             title = details.title,
+                            artworkUri = artwork,
                             summary = listOfNotNull(details.country, details.releaseDate)
                                 .joinToString(" · "),
                             rows = details.tracks.map { track -> CanonicalCatalogSearchRow(
