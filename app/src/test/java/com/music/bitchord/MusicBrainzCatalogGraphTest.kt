@@ -93,4 +93,27 @@ class MusicBrainzCatalogGraphTest {
         val parsed = graph.lookupRelease(worldwide) as MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>
         assertEquals(emptyList<String>(), parsed.value.tracks.map { it.recordingMbid })
     }
+
+    @Test fun graphPreservesNestedArtistCreditsWhenCreditDisplayNamesAreMissing() = runBlocking {
+        val transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String = """{"id":"$worldwide","title":"SUPER REAL ME",
+                "artist-credit":[{"artist":{"name":"ILLIT"}}],
+                "media":[{"position":1,"tracks":[
+                    {"id":"14f273b6-813b-4239-b0f8-c4b839b902c6","title":"Magnetic",
+                    "recording":{"id":"$original","title":"Magnetic",
+                    "artist-credit":[
+                        {"artist":{"name":"ILLIT"},"joinphrase":" feat. "},
+                        {"artist":{"name":"Guest"}}
+                    ]}}
+                ]}]}"""
+        }
+        val detail = (MusicBrainzCatalogGraph(
+            MusicBrainzClient(transport = transport),
+        ).lookupRelease(worldwide) as MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals("ILLIT", detail.artistDisplay)
+        assertEquals("ILLIT feat. Guest", detail.tracks.single().artistDisplay)
+    }
+
 }
