@@ -12,6 +12,8 @@ import com.music.bitchord.auth.profileId
 import com.music.bitchord.auth.sessionId
 import com.music.bitchord.auth.adjacentProfile
 import com.music.bitchord.data.AppUpdateChecker
+import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
@@ -60,6 +62,7 @@ import com.music.bitchord.data.model.EntityType
 import com.music.bitchord.data.settings.SearchHistory
 import com.music.bitchord.download.Downloads
 import android.util.LruCache
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -70,6 +73,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -2013,6 +2017,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val artists = musicBrainzSearch.searchArtists(query, limit = 15)
             if (_searchSource.value != SearchSource.CANONICAL || _query.value.trim() != query) {
                 return@launch
+            }
+            // A public Recording remains known even with zero MediaAssets.
+            // Only a trusted MBID claim creates/reuses a canonical identity;
+            // never match local tracks by title or artist name.
+            if (recordings is MusicBrainzCatalogSearchResult.Success) {
+                try {
+                    withContext(Dispatchers.IO) {
+                        MusicBrainzCatalogIndex(
+                            CanonicalCatalogDatabase.get(getApplication<Application>()),
+                        ).persistRecordings(recordings.page.items)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    // Search remains read-only/usable when the local index is
+                    // unavailable; a failed persistence cannot fake assets.
+                }
             }
             val rows = buildList {
                 if (recordings is MusicBrainzCatalogSearchResult.Success) {
