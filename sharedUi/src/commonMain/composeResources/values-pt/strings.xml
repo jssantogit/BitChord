@@ -209,6 +209,7 @@
     <string name="rediscovery_unavailable">Gravação indisponível</string>
     <string name="recording_feedback_dialog_title">Avaliação do usuário</string>
     <string name="recording_feedback_dialog_save">Salvar avaliação</string>
+    <string name="canonical_rating_song_options">Opções da música</string>
     <string name="recording_feedback_edit">Editar avaliação</string>
     <string name="recording_feedback_clear">Limpar avaliação</string>
     <string name="recording_feedback_current">Avaliação: %1$s</string>
