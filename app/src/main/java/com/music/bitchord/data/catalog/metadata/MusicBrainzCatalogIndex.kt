@@ -233,9 +233,9 @@ internal class MusicBrainzCatalogIndex(
         val recordingIds = persistRecordings(detail.tracks.map { track ->
             MusicBrainzRecordingHit(
                 musicBrainzId = track.recordingMbid,
-                title = track.title,
+                title = track.recordingTitle?.takeIf(String::isNotBlank) ?: track.title,
                 artistDisplay = track.recordingArtistDisplay ?: detail.artistDisplay,
-                durationMs = track.durationMs,
+                durationMs = track.recordingDurationMs ?: track.durationMs,
             )
         })
         return database.withTransaction {
