@@ -303,6 +303,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Only verified local file URIs; never any legacy YouTube video handles. */
     private val _canonicalHomeLocalPicks = MutableStateFlow<List<Song>>(emptyList())
     val canonicalHomeLocalPicks: StateFlow<List<Song>> = _canonicalHomeLocalPicks.asStateFlow()
+    /** Read-only, synced OpenSubsonic/Jellyfin media assets for the native Home shelf. */
+    private val _canonicalHomeRemotePicks =
+        MutableStateFlow<List<CanonicalServerSearchRow>>(emptyList())
+    val canonicalHomeRemotePicks: StateFlow<List<CanonicalServerSearchRow>> =
+        _canonicalHomeRemotePicks.asStateFlow()
 
     /** Ranked by actual recent local listening starts, not public MusicBrainz popularity. */
     private val _canonicalTrendingRecordingMbids = MutableStateFlow<List<String>>(emptyList())
@@ -2113,6 +2118,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _canonicalHomeLocalPicks.value = picks
             }
 
+            // A valid Server MediaAsset can populate "Escolha a dedo" even when
+            // MediaStore is empty and MusicBrainz has not been searched yet.
+            // This DAO projection omits stream URLs and provider-native IDs.
+            val remotePicks = try {
+                CanonicalCatalogDatabase.get(app).catalogDao()
+                    .searchCanonicalRemoteServerAssets("", limit = 400)
+                    .distinctBy { it.providerKey to it.mediaAssetId }
+                    .map { row ->
+                        CanonicalServerSearchRow(
+                            recordingId = row.recordingId,
+                            mediaAssetId = row.mediaAssetId,
+                            providerKey = row.providerKey,
+                            title = row.title,
+                            artistDisplay = row.artistDisplay,
+                            artworkUri = row.artworkUri,
+                        )
+                    }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
+            }
+            if (canonicalDiscoveryCatalogEpoch.isCurrent(generation) &&
+                isCanonicalDiscoverySelected()
+            ) {
+                _canonicalHomeRemotePicks.value = remotePicks
+            }
+
             val popularMbids = try {
                 val listening = ListeningEventDatabase.get(app).listeningEventDao()
                 val dao = CanonicalCatalogDatabase.get(app).catalogDao()
@@ -3411,6 +3444,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         providerKey = row.providerKey,
                         title = row.title,
                         artistDisplay = row.artistDisplay,
+                        artworkUri = row.artworkUri,
                     )
                 })
             } catch (cancelled: CancellationException) {
