@@ -115,6 +115,29 @@ class A0CanonicalBenchmarkReplayTest {
         }
     }
 
+    @Test fun stricterAlbumPolicyDoesNotPromoteGreatestHitsForRequestedAlbum() {
+        val fixture=dataset.single { it.field("case_id")=="synthetic_08" }
+        val legacy=evaluate(fixture)
+        assertEquals("synthetic_08_o1",
+            legacy["recommended_offer_id"]?.jsonPrimitive?.content)
+        val enhanced=evaluateAlbumGated(fixture)
+        assertNull("Wrong Greatest Hits edition cannot be promoted",
+            enhanced["recommended_offer_id"]?.jsonPrimitive?.contentOrNull)
+        assertEquals("synthetic_08_o2",
+            enhanced["ranked_offer_ids"]!!.jsonArray.first().jsonPrimitive.content)
+        assertEquals(2,enhanced["ranked_offer_ids"]!!.jsonArray.size)
+        assertEquals(digest(fixture),enhanced.field("input_sha256"))
+    }
+
+    @Test fun albumGateDoesNotConcealManualInconclusiveCandidates() {
+        val fixture=dataset.single { it.field("case_id")=="synthetic_14" }
+        val after=evaluateAlbumGated(fixture)
+        assertEquals(1,after["ranked_offer_ids"]!!.jsonArray.size)
+        assertEquals("synthetic_14_o1",
+            after["ranked_offer_ids"]!!.jsonArray[0].jsonPrimitive.content)
+        assertTrue(after["recommended_offer_id"] is JsonNull)
+    }
+
     @Test fun fixtureReplayEmitsDeveloperOnlyPredictions() {
         val root=File(System.getProperty("user.dir"),"build/benchmark/soulseek")
         assertTrue(root.exists() || root.mkdirs())
