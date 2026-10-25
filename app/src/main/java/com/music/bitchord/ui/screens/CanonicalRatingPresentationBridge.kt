@@ -43,6 +43,7 @@ internal fun buildCanonicalRatingPresentation(
     remote: List<CanonicalRemoteRatingInput>,
     activeProvider: String?,
     activeScope: String?,
+    remoteCacheAvailable: Boolean = true,
 ): CanonicalRatingDisplaySnapshot {
     val remoteByAsset = if (activeProvider != null && !activeScope.isNullOrBlank()) {
         remote.asSequence().filter {
@@ -64,9 +65,16 @@ internal fun buildCanonicalRatingPresentation(
                 it.recordingId == asset.recordingId &&
                     it.providerKey == asset.providerKey
             }?.numericValue
-        if (local == null && remoteNumeric == null) return@forEach
+        // An offline/failed account cache is UNKNOWN, not proof that this
+        // remote MediaAsset has never been rated. Keep the distinction typed.
+        if (local == null && remoteNumeric == null &&
+            (remoteCacheAvailable || asset.providerKey != activeProvider)
+        ) return@forEach
 
-        val display = RatingDisplay(localValue = local, remoteValue = remoteNumeric)
+        val display = RatingDisplay(
+            localValue = local, remoteValue = remoteNumeric,
+            remoteAvailable = remoteCacheAvailable,
+        )
         byAsset[asset.mediaAssetId] = display
 
         val key = when {
@@ -128,12 +136,28 @@ internal fun buildCanonicalRatingPresentation(
     // last writer's local score merely because its MediaAsset was traversed
     // second. Exact MediaAssetId displays remain unambiguous.
     ambiguousKeys.forEach(bySong::remove)
-    // Smart playlists and adaptive collections expose a RecordingId rather than
-    // a chosen MediaAssetId. Do not guess if two assets disagree.
-    val byRecording = assets.groupBy { it.recordingId }.mapNotNull { (id, rows) ->
-        val distinct = rows.mapNotNull { byAsset[it.mediaAssetId] }.distinct()
-        if (distinct.size == 1) id to distinct.single() else null
-    }.toMap()
+    // Recording-only rows have no selected rendition. Local notes belong to
+    // the RecordingId even if the remote renditions disagree. A remote score
+    // is safe to promote to this view ONLY when every active-account remote
+    // MediaAsset for the recording has the same numeric evidence. Ignoring
+    // unrated assets would silently attribute a sibling asset's score.
+    val byRecording = LinkedHashMap<String, RatingDisplay>()
+    assets.groupBy { it.recordingId }.forEach { (id, rows) ->
+        val local = localValues[id]?.takeIf { it.isFinite() && it in 1.0..5.0 }
+        val remoteRows = rows.filter {
+            it.providerKey == activeProvider && !activeScope.isNullOrBlank()
+        }
+        val remoteValues = remoteRows.map { byAsset[it.mediaAssetId]?.remoteValue }.distinct()
+        val remoteValue = remoteValues.singleOrNull()
+        if (local != null || remoteValue != null ||
+            (!remoteCacheAvailable && remoteRows.isNotEmpty())
+        ) {
+            byRecording[id] = RatingDisplay(
+                localValue = local, remoteValue = remoteValue,
+                remoteAvailable = remoteCacheAvailable,
+            )
+        }
+    }
     return CanonicalRatingDisplaySnapshot(
         bySongKey = bySong,
         byMediaAssetId = byAsset,
@@ -223,12 +247,20 @@ internal fun rememberCanonicalRatingDisplay(): CanonicalRatingDisplaySnapshot {
                             )
                         }
                     } else emptyList()
+                    val cacheIsComplete = account == null || (
+                        snapshot?.availability == RemoteRatingAvailability.CACHED_COMPLETE &&
+                            !activeScope.isNullOrBlank() &&
+                            snapshot.items.all {
+                                it.providerKey == activeProvider && it.scopeId == activeScope
+                            }
+                        )
                     val assembled = buildCanonicalRatingPresentation(
                         assets = assets,
                         localValues = localRows.associate { it.recordingId to it.ratingValue },
                         remote = remote,
                         activeProvider = activeProvider,
                         activeScope = activeScope,
+                        remoteCacheAvailable = cacheIsComplete,
                     )
                     // A logout/switch mid-query cannot paint the previous user's stars.
                     if (persistence.read() != account) {

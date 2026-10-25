@@ -216,6 +216,8 @@
     <string name="rediscovery_unavailable">Recording unavailable</string>
     <string name="recording_feedback_dialog_title">User rating</string>
     <string name="recording_feedback_dialog_save">Save rating</string>
+    <string name="recording_feedback_stars_selected">%1$s stars selected</string>
+    <string name="recording_feedback_stars_value">%1$s stars</string>
     <string name="canonical_rating_song_options">Song options</string>
     <string name="recording_feedback_edit">Edit rating</string>
     <string name="recording_feedback_clear">Clear rating</string>

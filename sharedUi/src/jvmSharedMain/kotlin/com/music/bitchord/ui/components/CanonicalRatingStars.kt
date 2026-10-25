@@ -23,6 +23,7 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.my_ratings_local_source
 import com.music.bitchord.sharedui.resources.my_ratings_remote_source
+import com.music.bitchord.sharedui.resources.my_ratings_remote_unavailable
 import org.jetbrains.compose.resources.stringResource
 
 /** Provenance is *not* merged into a single number. In particular, starred != 5. */
@@ -99,9 +100,11 @@ fun CanonicalRatingStars(
 
     val localName = stringResource(Res.string.my_ratings_local_source)
     val remoteName = stringResource(Res.string.my_ratings_remote_source)
+    val remoteUnavailable = stringResource(Res.string.my_ratings_remote_unavailable)
     val description = listOfNotNull(
         rating?.localValue?.let { "$it/5 · $localName" },
         rating?.remoteValue?.let { "$it/5 · $remoteName" },
+        rating?.takeIf { !it.remoteAvailable }?.let { remoteUnavailable },
     ).joinToString("; ")
     Column(
         modifier = modifier

@@ -296,4 +296,42 @@ class CanonicalRatingPresentationTest {
         assertEquals(RatingDisplayKind.CONFLICT, recording.kind)
     }
 
+
+    @Test
+    fun unavailableRemoteCoveragePreservesLocalScoreAndMarksRemoteAsUnknown() {
+        val result = buildCanonicalRatingPresentation(
+            assets = listOf(asset("r", "remote-a"), asset("unrated", "remote-b")),
+            localValues = mapOf("r" to 4.5),
+            remote = emptyList(),
+            activeProvider = provider,
+            activeScope = scope,
+            remoteCacheAvailable = false,
+        )
+        assertEquals(4.5, result.byMediaAssetId["remote-a"]?.localValue ?: 0.0, 0.0)
+        assertFalse(result.byMediaAssetId.getValue("remote-a").remoteAvailable)
+        assertEquals(RatingDisplayKind.UNAVAILABLE, result.byMediaAssetId["remote-b"]?.kind)
+        assertNull(result.byMediaAssetId["remote-b"]?.remoteValue)
+        assertFalse("The original local score must remain visible in the generic list",
+            result.byRecordingId.getValue("r").remoteAvailable)
+    }
+
+    @Test
+    fun largeRatingProjectionRemainsDeterministicAcrossThousandsOfAssets() {
+        val assets = (1..4000).map { n ->
+            asset("recording-$n", "asset-$n", "local-mediastore", "content://music/$n")
+        }
+        val locals = (1..4000 step 2).associate { n -> "recording-$n" to 4.5 }
+        val result = buildCanonicalRatingPresentation(
+            assets = assets,
+            localValues = locals,
+            remote = emptyList(),
+            activeProvider = null,
+            activeScope = null,
+        )
+        assertEquals(2000, result.byRecordingId.size)
+        assertEquals(2000, result.byMediaAssetId.size)
+        assertEquals(4000, result.recordingIdBySongKey.size)
+        assertEquals(4.5, result.byRecordingId.getValue("recording-3999").localValue!!, 0.0)
+    }
+
 }

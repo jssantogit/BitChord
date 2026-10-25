@@ -22,6 +22,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
@@ -52,6 +54,8 @@ import com.music.bitchord.sharedui.resources.recording_feedback_dialog_save
 import com.music.bitchord.sharedui.resources.recording_feedback_dialog_title
 import com.music.bitchord.sharedui.resources.recording_feedback_edit
 import com.music.bitchord.sharedui.resources.recording_feedback_unavailable
+import com.music.bitchord.sharedui.resources.recording_feedback_stars_selected
+import com.music.bitchord.sharedui.resources.recording_feedback_stars_value
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -161,7 +165,7 @@ internal fun CanonicalRecordingRatingDialog(recordingId: String, onDismiss: () -
     var saving by remember(recordingId) { mutableStateOf(false) }
     var denied by remember(recordingId) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    CanonicalRecordingFeedbackPanel(
+    key(recordingId) { CanonicalRecordingFeedbackPanel(
         rating = current?.value,
         saving = saving,
         denied = denied,
@@ -183,7 +187,7 @@ internal fun CanonicalRecordingRatingDialog(recordingId: String, onDismiss: () -
                 }
             }
         },
-    )
+    ) }
 }
 
 /**
@@ -200,7 +204,14 @@ internal fun CanonicalRecordingFeedbackPanel(
     saving: Boolean = false,
     denied: Boolean = false,
 ) {
-    var selected by remember(rating) { mutableDoubleStateOf(rating?.takeIf { it in 1.0..5.0 } ?: 0.0) }
+    var selected by remember { mutableDoubleStateOf(rating?.takeIf { it in 1.0..5.0 } ?: 0.0) }
+    var touched by remember { mutableStateOf(false) }
+    // Room may deliver the persisted rating after the dialog opens. Hydrate
+    // untouched selections, but never erase the user's pending choice.
+    LaunchedEffect(rating) {
+        if (!touched) selected = rating?.takeIf { it.isFinite() && it in 1.0..5.0 } ?: 0.0
+    }
+    val selectedDescription = stringResource(Res.string.recording_feedback_stars_selected, selected.toString())
     AlertDialog(
         onDismissRequest = { if (!saving) onDismiss() },
         title = { Text(stringResource(Res.string.recording_feedback_dialog_title)) },
@@ -215,12 +226,15 @@ internal fun CanonicalRecordingFeedbackPanel(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .semantics { contentDescription = "${selected} stars selected" },
+                        .semantics { contentDescription = selectedDescription },
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     repeat(5) { i ->
                         val index = i.toDouble()
+                        val half = (index + 0.5).coerceAtLeast(1.0)
+                        val halfDescription = stringResource(Res.string.recording_feedback_stars_value, half.toString())
+                        val wholeDescription = stringResource(Res.string.recording_feedback_stars_value, (index + 1.0).toString().removeSuffix(".0"))
                         Box(
                             modifier = Modifier.size(width = 42.dp, height = 48.dp),
                             contentAlignment = Alignment.Center,
@@ -242,10 +256,10 @@ internal fun CanonicalRecordingFeedbackPanel(
                                             interactionSource = remember { MutableInteractionSource() },
                                             indication = null,
                                             enabled = !saving,
-                                            onClick = { selected = (index + 0.5).coerceAtLeast(1.0) },
+                                            onClick = { touched = true; selected = half },
                                         )
                                         .semantics {
-                                            contentDescription = "${(index + 0.5).coerceAtLeast(1.0)} stars"
+                                            contentDescription = halfDescription
                                         },
                                 )
                                 Box(
@@ -254,10 +268,10 @@ internal fun CanonicalRecordingFeedbackPanel(
                                             interactionSource = remember { MutableInteractionSource() },
                                             indication = null,
                                             enabled = !saving,
-                                            onClick = { selected = index + 1.0 },
+                                            onClick = { touched = true; selected = index + 1.0 },
                                         )
                                         .semantics {
-                                            contentDescription = "${i + 1} stars"
+                                            contentDescription = wholeDescription
                                         },
                                 )
                             }
