@@ -13,6 +13,7 @@ import com.music.bitchord.auth.sessionId
 import com.music.bitchord.auth.adjacentProfile
 import com.music.bitchord.data.AppUpdateChecker
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.catalog.allowedCanonicalLyricsSources
 import com.music.bitchord.data.catalog.metadata.CoverArtArchive
 import com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore
@@ -299,6 +300,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     )
     val canonicalDiscoveryCatalog: StateFlow<UiState<List<CanonicalCatalogSearchRow>>> =
         _canonicalDiscoveryCatalog.asStateFlow()
+    /** Only verified local file URIs; never any legacy YouTube video handles. */
+    private val _canonicalHomeLocalPicks = MutableStateFlow<List<Song>>(emptyList())
+    val canonicalHomeLocalPicks: StateFlow<List<Song>> = _canonicalHomeLocalPicks.asStateFlow()
+
+    /** Ranked by actual recent local listening starts, not public MusicBrainz popularity. */
+    private val _canonicalTrendingRecordingMbids = MutableStateFlow<List<String>>(emptyList())
+    val canonicalTrendingRecordingMbids: StateFlow<List<String>> =
+        _canonicalTrendingRecordingMbids.asStateFlow()
     private val canonicalDiscoveryCatalogEpoch = DiscoveryRequestEpoch()
     private var canonicalDiscoveryCatalogJob: Job? = null
 
@@ -2029,7 +2038,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         canonicalDiscoveryCatalogJob = viewModelScope.launch(Dispatchers.IO) {
             val state = try {
                 val dao = CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao()
-                val recordings = dao.searchKnownMusicBrainzRecordings("", limit = 20)
+                val recordings = dao.searchKnownMusicBrainzRecordings("", limit = 100)
                 val available = dao.musicBrainzRecordingMbidsWithAssets(
                     recordings.map { it.musicBrainzId },
                 ).toSet()
@@ -2040,18 +2049,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             hit.disambiguation ?: hit.country, fromOfflineCache = true,
                         ))
                     }
-                    dao.searchKnownMusicBrainzGroups("", limit = 12).forEach { hit ->
+                    dao.searchKnownMusicBrainzGroups("", limit = 300).forEach { hit ->
                         add(CanonicalCatalogSearchRow(
                             hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
                             hit.artistDisplay ?: hit.primaryType, fromOfflineCache = true,
+                            releaseDate = hit.firstReleaseDate, releaseKind = hit.primaryType,
                         ))
                     }
-                    dao.searchKnownMusicBrainzReleases("", limit = 12).forEach { hit ->
+                    dao.searchKnownMusicBrainzReleases("", limit = 300).forEach { hit ->
                         add(CanonicalCatalogSearchRow(
                             hit.musicBrainzId, CanonicalSearchKind.RELEASE, hit.title,
                             listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
                                 .joinToString(" · "),
-                            fromOfflineCache = true,
+                            fromOfflineCache = true, releaseDate = hit.releaseDate,
                         ))
                     }
                     recordings.forEach { hit ->
@@ -2073,6 +2083,47 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 isCanonicalDiscoverySelected()
             ) {
                 _canonicalDiscoveryCatalog.value = state
+            }
+            // MediaStore is scanned off-main and independent of the MusicBrainz
+            // cache: a fresh YT-off installation must not render a blank Home
+            // just because no public MBID has been looked up yet.
+            val app = getApplication<Application>()
+            val picks = try {
+                val local = if (LocalMediaRepository.hasStoragePermission(app)) {
+                    LocalMediaRepository.getLocalMusic(app)
+                } else emptyList()
+                val downloaded = Downloads.getDownloadedSongs(app)
+                (local + downloaded)
+                    .filter { com.music.bitchord.ui.isPlayableLocalPick(it) }
+                    .distinctBy { it.localUri }
+                    .take(500)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
+            }
+            if (canonicalDiscoveryCatalogEpoch.isCurrent(generation) && isCanonicalDiscoverySelected()) {
+                _canonicalHomeLocalPicks.value = picks
+            }
+
+            val popularMbids = try {
+                val listening = ListeningEventDatabase.get(app).listeningEventDao()
+                val dao = CanonicalCatalogDatabase.get(app).catalogDao()
+                val since = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+                listening.recentPopularRecordings(sinceEpochMs = since, limit = 40)
+                    .mapNotNull { entry ->
+                        dao.externalIdentitiesForEntity(
+                            provider = "musicbrainz", entityType = "recording",
+                            entityId = entry.recordingId,
+                        ).firstOrNull()?.externalId
+                    }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
+            }
+            if (canonicalDiscoveryCatalogEpoch.isCurrent(generation) && isCanonicalDiscoverySelected()) {
+                _canonicalTrendingRecordingMbids.value = popularMbids
             }
         }
     }
