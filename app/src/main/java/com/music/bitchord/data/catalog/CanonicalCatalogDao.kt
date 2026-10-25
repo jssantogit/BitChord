@@ -66,6 +66,12 @@ internal interface CanonicalCatalogDao {
     @Upsert suspend fun upsertCatalogReleaseGroupEdition(entity: CatalogReleaseGroupEditionEntity)
     @Upsert suspend fun upsertCatalogMusicBrainzTrack(entity: CatalogMusicBrainzTrackEntity)
 
+    @Query("SELECT * FROM catalog_musicbrainz_track WHERE trackMbid = :trackMbid LIMIT 1")
+    suspend fun catalogMusicBrainzTrack(trackMbid: String): CatalogMusicBrainzTrackEntity?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertReleaseTrackIfAbsent(entity: ReleaseTrackEntity): Long
+
     @Query("SELECT * FROM catalog_release_group WHERE id = :id LIMIT 1")
     suspend fun catalogReleaseGroup(id: String): CatalogReleaseGroupEntity?
 

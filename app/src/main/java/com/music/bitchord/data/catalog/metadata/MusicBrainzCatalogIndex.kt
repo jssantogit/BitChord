@@ -2,8 +2,14 @@ package com.music.bitchord.data.catalog.metadata
 
 import androidx.room.withTransaction
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.CatalogReleaseGroupEntity
+import com.music.bitchord.data.catalog.CatalogReleaseGroupEditionEntity
+import com.music.bitchord.data.catalog.CatalogMusicBrainzTrackEntity
+import com.music.bitchord.data.catalog.CanonicalCatalogDao
 import com.music.bitchord.data.catalog.ExternalIdentityEntity
 import com.music.bitchord.data.catalog.RecordingEntity
+import com.music.bitchord.data.catalog.ReleaseEntity
+import com.music.bitchord.data.catalog.ReleaseTrackEntity
 import java.util.Locale
 import java.util.UUID
 
@@ -61,6 +67,107 @@ internal class MusicBrainzCatalogIndex(
             }
             indexed
         }
+
+
+    /**
+     * Canonical ReleaseGroup/Release/Track graph is independent of audio
+     * availability and YouTube. MBIDs must never become provider sourceKeys.
+     * Edition-specific track MBIDs are not recording MBIDs.
+     */
+    suspend fun persistReleaseDetail(detail: MusicBrainzCatalogReleaseDetail): String? {
+        val releaseMbid = detail.musicBrainzId.trim().lowercase(Locale.ROOT)
+        if (!MBID.matches(releaseMbid) || detail.title.isBlank()) return null
+        val groupMbid = detail.groupMbid?.trim()?.lowercase(Locale.ROOT)?.takeIf(MBID::matches)
+        // Recording identity claims are independently valid if the later release
+        // fails; they never attach artificial MediaAssets to the library.
+        val recordingIds = persistRecordings(detail.tracks.map { track ->
+            MusicBrainzRecordingHit(
+                musicBrainzId = track.recordingMbid,
+                title = track.title,
+                artistDisplay = detail.artistDisplay,
+                durationMs = track.durationMs,
+            )
+        })
+        return database.withTransaction {
+            val dao = database.catalogDao()
+            val groupId = groupMbid?.let { mbid ->
+                val existing = dao.entityIdForExternalIdentity("musicbrainz", "release-group", mbid)
+                if (existing != null) {
+                    check(dao.catalogReleaseGroup(existing) != null) { "Orphaned release-group claim" }
+                    existing
+                } else {
+                    val created = idFactory()
+                    dao.upsertCatalogReleaseGroup(CatalogReleaseGroupEntity(
+                        id = created,
+                        title = detail.title,
+                        artistDisplay = detail.artistDisplay,
+                        primaryType = null,
+                        firstReleaseDate = detail.releaseDate,
+                    ))
+                    claim(dao, "release-group", mbid, created)
+                    created
+                }
+            }
+            val existingRelease = dao.entityIdForExternalIdentity(
+                "musicbrainz", "release", releaseMbid,
+            )
+            val releaseId = if (existingRelease != null) {
+                check(dao.releaseById(existingRelease) != null) { "Orphaned release claim" }
+                existingRelease
+            } else {
+                val created = idFactory()
+                dao.upsertRelease(ReleaseEntity(
+                    id = created,
+                    title = detail.title,
+                    artistDisplay = detail.artistDisplay,
+                    artworkUri = null,
+                ))
+                claim(dao, "release", releaseMbid, created)
+                created
+            }
+            if (groupId != null) {
+                dao.upsertCatalogReleaseGroupEdition(CatalogReleaseGroupEditionEntity(
+                    releaseGroupId = groupId, releaseId = releaseId,
+                ))
+            }
+            val uniqueRecordings = mutableSetOf<String>()
+            detail.tracks.forEach { track ->
+                val trackMbid = track.trackMbid.trim().lowercase(Locale.ROOT)
+                val recordingId = recordingIds[track.recordingMbid.lowercase(Locale.ROOT)]
+                if (!MBID.matches(trackMbid) || recordingId == null ||
+                    track.mediumNumber <= 0 || track.trackNumber <= 0) return@forEach
+                val existingTrack = dao.catalogMusicBrainzTrack(trackMbid)
+                check(existingTrack == null ||
+                    (existingTrack.releaseId == releaseId && existingTrack.recordingId == recordingId)) {
+                    "MusicBrainz Track MBID conflicts with a different recording or edition"
+                }
+                dao.upsertCatalogMusicBrainzTrack(CatalogMusicBrainzTrackEntity(
+                    trackMbid, releaseId, recordingId, track.mediumNumber,
+                    track.trackNumber, track.title, track.durationMs,
+                ))
+                // Legacy album browse assumes only one edge per (Release,Recording).
+                // A recording may appear twice on different media; its track
+                // positions remain intact in the distinct MB Track sidecar.
+                if (uniqueRecordings.add(recordingId)) {
+                    dao.insertReleaseTrackIfAbsent(ReleaseTrackEntity(
+                        releaseId, recordingId, track.trackNumber,
+                    ))
+                }
+            }
+            releaseId
+        }
+    }
+
+    private suspend fun claim(
+        dao: CanonicalCatalogDao, type: String, mbid: String, localId: String,
+    ) {
+        val result = dao.claimExternalIdentityExclusivelyForEntity(
+            ExternalIdentityEntity("musicbrainz", type, mbid, localId),
+        )
+        check(result.inserted && result.candidateOwnerEntityId == localId) {
+            "MusicBrainz $type claim conflict"
+        }
+    }
 
     private companion object {
         val MBID = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
