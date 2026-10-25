@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import com.music.bitchord.data.catalog.CanonicalRatingAssetRow
+import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.components.RatingDisplayKind
 import com.music.bitchord.ui.components.visibleStarValues
@@ -152,5 +153,50 @@ class CanonicalRatingPresentationTest {
         assertEquals(listOf(3.0), RatingDisplay(remoteValue = 3).visibleStarValues())
         assertTrue(RatingDisplay().visibleStarValues().isEmpty())
         assertTrue(RatingDisplay(remoteAvailable = false).visibleStarValues().isEmpty())
+    }
+
+    @Test
+    fun unratedLocalRecordingCanOpenEditorByVerifiedUriWithoutNetwork() {
+        val result = buildCanonicalRatingPresentation(
+            assets = listOf(asset(
+                recording = "recording-local",
+                id = "asset-local",
+                source = "local-mediastore",
+                uri = "content://media/external/audio/123",
+            )),
+            localValues = emptyMap(),
+            remote = emptyList(),
+            activeProvider = null,
+            activeScope = null,
+        )
+        val song = Song(videoId = "content://media/external/audio/123", title = "Ignored",
+            artist = "Ignored", thumbnailUrl = null)
+        assertTrue(result.bySongKey.isEmpty())
+        assertEquals("recording-local", result.recordingIdForSong(song))
+    }
+
+    @Test
+    fun unavailableProviderNeverExposesForeignOfflineRatingTarget() {
+        val result = buildCanonicalRatingPresentation(
+            assets = listOf(asset(source = otherProvider, uri = "content://foreign")),
+            localValues = emptyMap(), remote = emptyList(),
+            activeProvider = provider, activeScope = scope,
+        )
+        val song = Song(videoId = "content://foreign", title = "A", artist = "B", thumbnailUrl = null)
+        assertNull(result.recordingIdForSong(song))
+    }
+
+    @Test
+    fun conflictingLocalUrisFailClosedInsteadOfChoosingArbitraryRecording() {
+        val result = buildCanonicalRatingPresentation(
+            assets = listOf(
+                asset("one", "asset-one", "local-mediastore", "content://media/shared"),
+                asset("two", "asset-two", "local-mediastore", "content://media/shared"),
+            ),
+            localValues = emptyMap(), remote = emptyList(),
+            activeProvider = null, activeScope = null,
+        )
+        val song = Song(videoId = "content://media/shared", title = "A", artist = "B", thumbnailUrl = null)
+        assertNull(result.recordingIdForSong(song))
     }
 }
