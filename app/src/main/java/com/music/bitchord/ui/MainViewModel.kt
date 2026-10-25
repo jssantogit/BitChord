@@ -23,6 +23,7 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.ui.screens.CanonicalCatalogDetailPage
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
+import com.music.bitchord.ui.screens.CanonicalServerSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import com.music.bitchord.data.LocalMediaRepository
 import com.music.bitchord.data.LikeState
@@ -375,6 +376,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val addonResults: StateFlow<UiState<List<Song>>?> = _addonResults.asStateFlow()
     private var addonSearchJob: Job? = null
 
+    /** Search of synced remote-provider assets, keyed by canonical RecordingId. */
+    private val _serverResults = MutableStateFlow<UiState<List<CanonicalServerSearchRow>>?>(null)
+    val serverResults: StateFlow<UiState<List<CanonicalServerSearchRow>>?> = _serverResults.asStateFlow()
+    private var serverSearchJob: Job? = null
+
     /** Public MusicBrainz identities are not Song/videoId and cannot be queued. */
     private val _canonicalResults = MutableStateFlow<UiState<List<CanonicalCatalogSearchRow>>?>(null)
     val canonicalResults: StateFlow<UiState<List<CanonicalCatalogSearchRow>>?> = _canonicalResults.asStateFlow()
@@ -526,6 +532,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         searchRequests.tryEmit(SearchRequest("", _filter.value, newestRequestId.get()))
         suggestRequests.tryEmit("")
         addonSearchJob?.cancel()
+        serverSearchJob?.cancel()
+        _serverResults.value = null
         canonicalSearchJob?.cancel()
         canonicalTypeaheadJob?.cancel()
         resetCanonicalSearchPagination()
@@ -2782,8 +2790,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Never send a MusicBrainz query to YouTube or interpret an MBID as a
         // bare videoId. Only actual YouTube searches use anonymous history.
         when (_searchSource.value) {
-            SearchSource.YOUTUBE -> runSearch(anonymous = true)
-            SearchSource.CANONICAL -> runCanonicalCatalogSearch(term.trim())
+            SearchSource.YOUTUBE -> {
+                runSearch(anonymous = true)
+                runAddonSearch(term.trim(), recordHistory = false)
+            }
+            SearchSource.CANONICAL -> {
+                runCanonicalCatalogSearch(term.trim())
+                runAddonSearch(term.trim(), recordHistory = false)
+            }
             SearchSource.ADDONS -> runAddonSearch(term.trim())
             SearchSource.LIBRARY -> loadLibrarySongs()
         }
@@ -2806,6 +2820,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _results.value = null
             addonSearchJob?.cancel()
             _addonResults.value = null
+            serverSearchJob?.cancel()
+            _serverResults.value = null
             canonicalSearchJob?.cancel()
             canonicalTypeaheadJob?.cancel()
             resetCanonicalSearchPagination()
@@ -2819,6 +2835,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         // Reset the submission gate so typeahead pipelines fire again.
+        serverSearchJob?.cancel()
+        _serverResults.value = null
+        addonSearchJob?.cancel()
+        _addonResults.value = null
         searchSubmitted = false
         if (_searchSource.value == SearchSource.CANONICAL) {
             // A stale metadata result must not appear under a new query.
@@ -2855,9 +2875,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (_searchSource.value == SearchSource.CANONICAL) {
             runCanonicalCatalogSearch(q)
+            runAddonSearch(q, recordHistory = false)
             return
         }
         runSearch(anonymous = false)
+        runAddonSearch(q, recordHistory = false)
     }
 
     /**
@@ -3230,13 +3252,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * only costs its own rows; the list is the rest of them, round-robin so
      * no single catalogue buries the others.
      */
-    private fun runAddonSearch(q: String) {
-        SearchHistory.recordAddonQuery(q)
+    private fun runAddonSearch(q: String, recordHistory: Boolean = true) {
+        if (recordHistory) SearchHistory.recordAddonQuery(q)
+        runServerAssetSearch(q)
         addonSearchJob?.cancel()
-        _searchScrollReset.value += 1
+        if (recordHistory) _searchScrollReset.value += 1
         val addons = SourceRegistry.active().filterIsInstance<AddonSource>()
         if (addons.isEmpty()) {
-            _addonResults.value = UiState.Error(text(R.string.search_addons_none))
+            _addonResults.value = UiState.Success(emptyList())
             return
         }
         _addonResults.value = UiState.Loading
@@ -3255,6 +3278,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 for (i in 0 until longest) perAddon.forEach { rows -> rows.getOrNull(i)?.let(::add) }
             }
             _addonResults.value = UiState.Success(merged)
+        }
+    }
+
+    /** Read-only persisted remote search. Playback revalidates account access. */
+    private fun runServerAssetSearch(query: String) {
+        serverSearchJob?.cancel()
+        _serverResults.value = UiState.Loading
+        serverSearchJob = viewModelScope.launch {
+            val result: UiState<List<CanonicalServerSearchRow>> = try {
+                val rows = withContext(Dispatchers.IO) {
+                    CanonicalCatalogDatabase.get(getApplication<Application>())
+                        .catalogDao().searchCanonicalRemoteServerAssets(query, limit = 250)
+                }
+                UiState.Success(rows.distinctBy { it.recordingId to it.providerKey }.map { row ->
+                    CanonicalServerSearchRow(
+                        recordingId = row.recordingId,
+                        mediaAssetId = row.mediaAssetId,
+                        providerKey = row.providerKey,
+                        title = row.title,
+                        artistDisplay = row.artistDisplay,
+                    )
+                })
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                UiState.Error(text(R.string.canonical_discovery_cache_error))
+            }
+            if (_query.value.trim() == query &&
+                _searchSource.value in setOf(
+                    SearchSource.CANONICAL, SearchSource.YOUTUBE, SearchSource.ADDONS,
+                )
+            ) _serverResults.value = result
         }
     }
 
