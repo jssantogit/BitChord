@@ -95,4 +95,31 @@ class A0CandidateQualityTest {
         assertFalse(A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in official.warnings)
     }
 
+    @Test fun versionHintsInImmediateAlbumFolderAreNotTrustedAsStudio() {
+        val rank=A0CandidateRank.rank("ILLIT - Magnetic","Magnetic.mp3",320,
+            remotePath="Music\\ILLIT\\Magnetic (Live)\\Magnetic.mp3",
+            format="mp3",declaredDurationSeconds=161,expectedDurationSeconds=161,
+            sizeBytes=6_400_000)
+        assertEquals(A0CandidateRank.Match.ALL_TERMS,rank.match)
+        assertTrue(A0CandidateRank.Warning.VERSION_MISMATCH in rank.warnings)
+    }
+
+    @Test fun karaokeAlbumFolderIsVersionConflictButUnrelatedAncestorDoesNotForceIt() {
+        val karaoke=A0CandidateRank.rank("ILLIT - Magnetic","Magnetic.mp3",320,
+            remotePath="Music\\ILLIT\\Karaoke\\Magnetic.mp3",format="mp3")
+        assertTrue(A0CandidateRank.Warning.VERSION_MISMATCH in karaoke.warnings)
+        val upstream=A0CandidateRank.rank("ILLIT - Magnetic","ILLIT Magnetic.mp3",320,
+            remotePath="Music\\Live Archive\\ILLIT\\ILLIT Magnetic.mp3",format="mp3")
+        assertFalse(A0CandidateRank.Warning.VERSION_MISMATCH in upstream.warnings)
+    }
+
+    @Test fun impossiblyLowOrNegativeMp3ClaimsAreEncodingConflicts() {
+        for(rate in listOf(-1,0,16,2_000_000)) {
+            val candidate=A0CandidateRank.rank("ILLIT - Magnetic","ILLIT Magnetic.mp3",rate,
+                format="mp3")
+            assertTrue("Claim "+rate+" was silently ignored",
+                A0CandidateRank.Warning.ENCODING_CONFLICT in candidate.warnings)
+        }
+    }
+
 }
