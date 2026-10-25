@@ -380,4 +380,24 @@ class CanonicalRatingPresentationTest {
         assertEquals(5, result.byMediaAssetId["asset-a"]?.remoteValue)
     }
 
+
+    @Test
+    fun remoteCacheOutageNeverLabelsLocalOnlyFilesAsRemoteUnavailable() {
+        val result = buildCanonicalRatingPresentation(
+            assets = listOf(
+                asset("local-r", "local-a", "local-mediastore", "content://music/local"),
+                asset("remote-r", "remote-b"),
+            ),
+            localValues = mapOf("local-r" to 4.5),
+            remote = emptyList(),
+            activeProvider = provider,
+            activeScope = scope,
+            remoteCacheAvailable = false,
+        )
+        assertTrue(result.byMediaAssetId.getValue("local-a").remoteAvailable)
+        assertTrue(result.byRecordingId.getValue("local-r").remoteAvailable)
+        assertEquals(RatingDisplayKind.UNAVAILABLE, result.byMediaAssetId["remote-b"]?.kind)
+        assertFalse(result.byMediaAssetId.getValue("remote-b").remoteAvailable)
+    }
+
 }

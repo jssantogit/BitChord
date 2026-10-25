@@ -45,13 +45,31 @@ internal fun buildCanonicalRatingPresentation(
     activeScope: String?,
     remoteCacheAvailable: Boolean = true,
 ): CanonicalRatingDisplaySnapshot {
-    val remoteByAsset = if (activeProvider != null && !activeScope.isNullOrBlank()) {
-        remote.asSequence().filter {
-            it.providerKey == activeProvider &&
-                it.scopeId == activeScope &&
-                it.numericValue != null && it.numericValue in 1..5
-        }.associateBy { it.mediaAssetId }
-    } else emptyMap()
+    // A malformed/stale remote snapshot can contain duplicate evidence for
+    // the same MediaAsset. Never let input order decide its rating. Even a
+    // numeric score conflicting with a cleared/invalid observation is unsafe.
+    val remoteByAsset = LinkedHashMap<String, CanonicalRemoteRatingInput>()
+    if (activeProvider != null && !activeScope.isNullOrBlank()) {
+        val ambiguousAssets = HashSet<String>()
+        remote.forEach { claim ->
+            if (claim.providerKey != activeProvider || claim.scopeId != activeScope ||
+                claim.mediaAssetId.isBlank() || claim.mediaAssetId in ambiguousAssets
+            ) return@forEach
+            val previous = remoteByAsset[claim.mediaAssetId]
+            if (previous != null &&
+                (previous.recordingId != claim.recordingId ||
+                    previous.numericValue != claim.numericValue)
+            ) {
+                remoteByAsset.remove(claim.mediaAssetId)
+                ambiguousAssets.add(claim.mediaAssetId)
+            } else if (previous == null) {
+                remoteByAsset[claim.mediaAssetId] = claim
+            }
+        }
+        remoteByAsset.entries.removeAll { (_, evidence) ->
+            evidence.numericValue !in 1..5
+        }
+    }
 
     val byAsset = LinkedHashMap<String, RatingDisplay>()
     val bySong = LinkedHashMap<String, RatingDisplay>()
@@ -73,7 +91,8 @@ internal fun buildCanonicalRatingPresentation(
 
         val display = RatingDisplay(
             localValue = local, remoteValue = remoteNumeric,
-            remoteAvailable = remoteCacheAvailable,
+            // A local-only file is not an account-scoped remote cache entry.
+            remoteAvailable = remoteCacheAvailable || asset.providerKey != activeProvider,
         )
         byAsset[asset.mediaAssetId] = display
 
@@ -154,7 +173,7 @@ internal fun buildCanonicalRatingPresentation(
         ) {
             byRecording[id] = RatingDisplay(
                 localValue = local, remoteValue = remoteValue,
-                remoteAvailable = remoteCacheAvailable,
+                remoteAvailable = remoteCacheAvailable || remoteRows.isEmpty(),
             )
         }
     }
