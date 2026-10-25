@@ -473,12 +473,12 @@ private fun LazyListScope.canonicalMusicBrainzResults(
     if (detail != null) {
         item(key = "musicbrainz:navigation") {
             Column(Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 12.dp)) {
-                OutlinedButton(onClick = onBack) { Text("Back") }
+                OutlinedButton(onClick = onBack) { Text(stringResource(Res.string.canonical_back)) }
                 if (detail is UiState.Success) {
                     detail.data.artworkUri?.let { art ->
                         AsyncImage(
                             model = art,
-                            contentDescription = "Album cover",
+                            contentDescription = stringResource(Res.string.canonical_cover_art),
                             modifier = Modifier.size(112.dp).clip(RoundedCornerShape(10.dp)),
                         )
                     }
@@ -503,14 +503,14 @@ private fun LazyListScope.canonicalMusicBrainzResults(
     }
     when (rows) {
         null -> item(key = "musicbrainz:hint") {
-            MessageState("Search the MusicBrainz catalog. Results are metadata, not audio.")
+            MessageState(stringResource(Res.string.canonical_search_hint))
         }
         UiState.Loading -> songListSkeleton(keyPrefix = "musicbrainz:search")
         is UiState.Error -> item(key = "musicbrainz:error") {
             MessageState(rows.message)
         }
         is UiState.Success -> if (rows.data.isEmpty()) {
-            item(key = "musicbrainz:empty") { MessageState("No MusicBrainz entries found.") }
+            item(key = "musicbrainz:empty") { MessageState(stringResource(Res.string.canonical_empty_search)) }
         } else {
             itemsIndexed(
                 items = rows.data,
@@ -535,10 +535,10 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                     Text(
                         text = buildString {
                             append(when (row.kind) {
-                                CanonicalSearchKind.RECORDING -> "Recording"
-                                CanonicalSearchKind.RELEASE_GROUP -> "Release group"
-                                CanonicalSearchKind.RELEASE -> "Release edition · view tracks"
-                                CanonicalSearchKind.ARTIST -> "Artist · view discography"
+                                CanonicalSearchKind.RECORDING -> stringResource(Res.string.canonical_recording_kind)
+                                CanonicalSearchKind.RELEASE_GROUP -> stringResource(Res.string.canonical_group_kind)
+                                CanonicalSearchKind.RELEASE -> stringResource(Res.string.canonical_release_kind)
+                                CanonicalSearchKind.ARTIST -> stringResource(Res.string.canonical_artist_kind)
                             })
                             row.subtitle?.takeIf { it.isNotBlank() }?.let {
                                 append(" · "); append(it)
@@ -553,11 +553,11 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                         Text(
                             text = when {
                                 row.hasCatalogedAsset ->
-                                    "Media file cataloged · verify availability in Library"
+                                    stringResource(Res.string.canonical_known_asset)
                                 row.fromOfflineCache ->
-                                    "Offline metadata · no known playable file"
+                                    stringResource(Res.string.canonical_offline_metadata)
                                 else ->
-                                    "Metadata only · Play requires a local or authorized remote file"
+                                    stringResource(Res.string.canonical_metadata_only)
                             },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -568,10 +568,10 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                         if (row.hasCatalogedAsset) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 OutlinedButton(onClick = { onPlay(row.musicBrainzId) }) {
-                                    Text("Play")
+                                    Text(stringResource(Res.string.play))
                                 }
                                 OutlinedButton(onClick = { onAddToQueue(row.musicBrainzId) }) {
-                                    Text("Add to queue")
+                                    Text(stringResource(Res.string.add_to_queue))
                                 }
                             }
                         }
@@ -591,7 +591,7 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                         onClick = onLoadMore,
                         enabled = !loadingMore,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
-                    ) { Text(if (loadingMore) "Loading more…" else "Load more editions") }
+                    ) { Text(if (loadingMore) stringResource(Res.string.canonical_loading_more) else stringResource(Res.string.canonical_more_editions)) }
                 }
             }
         }
@@ -604,7 +604,7 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                 modifier = Modifier.fillMaxWidth()
                     .padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
             ) {
-                Text(if (searchLoadingMore) "Loading more…" else "Load more catalog results")
+                Text(if (searchLoadingMore) stringResource(Res.string.canonical_loading_more) else stringResource(Res.string.canonical_more_results))
             }
         }
     }
