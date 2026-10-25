@@ -47,9 +47,26 @@ internal class A0CanonicalAcquisitionResolver(
         UNAVAILABLE,
     }
 
-    class Resolution(val status: Status) {
+    class Resolution(
+        val status: Status,
+        private val resolvedFor: A0CanonicalAcquisitionIntent.CanonicalIds? = null,
+    ) {
         val provesAudioMaster: Boolean get() = false
         val authorizesTransfer: Boolean get() = false
+        /**
+         * A result for a different Recording/Release/Group cannot grant
+         * confidence to this intent, even if both have the same display name.
+         */
+        fun isFor(intent: A0CanonicalAcquisitionIntent): Boolean {
+            val requested = intent.ids ?: return false
+            val source = resolvedFor ?: return false
+            fun same(a: String?, b: String?): Boolean =
+                if (a == null || b == null) a == null && b == null
+                else a.equals(b, ignoreCase = true)
+            return same(requested.recordingMbid, source.recordingMbid) &&
+                same(requested.releaseMbid, source.releaseMbid) &&
+                same(requested.releaseGroupMbid, source.releaseGroupMbid)
+        }
         override fun toString(): String = "CanonicalResolution(status=$status)"
     }
 
@@ -92,7 +109,8 @@ internal class A0CanonicalAcquisitionResolver(
                     )
                 return Resolution(
                     if (sameRelease && recordingLinked && sameGroup)
-                        Status.CONFIRMED_RELATION else Status.PARTIAL
+                        Status.CONFIRMED_RELATION else Status.PARTIAL,
+                    ids
                 )
             }
         }
