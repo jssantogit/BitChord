@@ -135,7 +135,7 @@ def collect_checks(client: PublicMusicBrainz) -> list[dict]:
             "primary_type": data.get("primary-type"),
         }
 
-    check("15", "ReleaseGroup immutable identity", group_case)
+    check("21", "ReleaseGroup immutable identity", group_case)
 
     def release_case(mbid, label):
         data = client.get("release", mbid, inc="recordings+artist-credits+release-groups")
@@ -149,9 +149,9 @@ def collect_checks(client: PublicMusicBrainz) -> list[dict]:
             "sample_recording_mbid": (tracks[0].get("recording") or {}).get("id") if tracks else None,
         }
 
-    check("16", "Worldwide edition Track versus Recording identity",
+    check("26", "Worldwide edition Track versus Recording identity",
           lambda: release_case(WORLD, "worldwide"))
-    check("17", "Japanese edition independent release identity",
+    check("27", "Japanese edition independent release identity",
           lambda: release_case(JAPAN, "japan"))
 
     def artist_search():
@@ -161,7 +161,34 @@ def collect_checks(client: PublicMusicBrainz) -> list[dict]:
         return ILLIT in ids, {"returned": len(rows), "found_illit_mbid": ILLIT in ids}
 
     # Search endpoints have no entity ID path: call /artist?query=...
-    check("01-search", "Public artist search resolves ILLIT by MBID", artist_search)
+    check("03", "Public artist search resolves ILLIT by MBID", artist_search)
+
+    def aespa_search():
+        data = client.get("artist", "", query="aespa", limit="25", dismax="true")
+        ids = {row.get("id") for row in data.get("artists", [])}
+        return AESPA in ids, {"returned": len(ids), "found_aespa_mbid": AESPA in ids}
+
+    check("04", "Public artist search resolves aespa by MBID", aespa_search)
+
+    def no_match_search():
+        # A known-absent exact token should be an empty result, not HTTP failure
+        # or an invented catalog hit.
+        data = client.get("artist", "", query="zzzbitchordissue1782026unlikelymatchzzzz",
+                          limit="25", dismax="true")
+        rows = data.get("artists")
+        return isinstance(rows, list) and len(rows) == 0, {
+            "count": data.get("count"), "returned": len(rows) if isinstance(rows, list) else None,
+        }
+
+    check("05", "Public artist search with no matches", no_match_search)
+
+    def artist_group_browse():
+        data = client.get("release-group", "", artist=ILLIT, limit="100")
+        groups = data.get("release-groups", [])
+        found = GROUP in {group.get("id") for group in groups}
+        return found, {"returned": len(groups), "found_expected_release_group": found}
+
+    check("22", "Artist-to-ReleaseGroup browse uses stable identity", artist_group_browse)
 
     def group_browse():
         data = client.get("release", "", **{"release-group": GROUP, "limit": "100"})
@@ -172,7 +199,7 @@ def collect_checks(client: PublicMusicBrainz) -> list[dict]:
             "japan_found": JAPAN in mbids,
         }
 
-    check("15-17-browse", "ReleaseGroup lists worldwide and Japan editions", group_browse)
+    check("26-27-browse", "ReleaseGroup lists worldwide and Japan editions", group_browse)
     return checks
 
 
@@ -188,6 +215,14 @@ def main() -> int:
         "scope": "PUBLIC_MUSICBRAINZ_API_ONLY",
         "not_executed": "Room/Media3/Android UI/Navidrome/physical device and remaining issue #178 matrix cases",
         "checks": checks,
+        # This is subset *public API evidence*, not an Android acceptance PASS.
+        # Auxiliary checks retain descriptive IDs and are not counted as
+        # standalone matrix cases.
+        "matrix_case_ids_with_api_evidence": sorted({
+            check["case"] for check in checks
+            if len(check["case"]) == 2 and check["case"].isdigit()
+            and check["status"] == "PASS"
+        }),
         "http_requests": client.requests,
         "http_request_count": len(client.requests),
         "latency_p50_ms": percentile(client.latencies_ms, 50),
