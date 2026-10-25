@@ -18,7 +18,9 @@ class A0CandidatePreflightTest {
             sizeBytes=size)
         return A0CandidatePreflight.assess(query, ranked, bitrate,
             declaredDurationSeconds=duration, expectedDurationSeconds=expected,
-            format=ext,sizeBytes=size)
+            format=ext,sizeBytes=size,
+            declaredSampleRateHz=if(ext=="flac") 44100 else null,
+            declaredBitDepth=if(ext=="flac") 16 else null)
     }
 
     @Test fun completeHighQualityClaimAndDurationIsStrongButNeverVerifiedAudio() {
