@@ -115,8 +115,21 @@ internal object A0CandidateRank {
         // No user intent means no evidence to prefer a peer by advertised codec.
         var score=titleScore+artistScore+
             if(titleWords.isEmpty() && artistWords.isEmpty()) 0 else qualityScore
-        val warnings=mutableListOf<Warning>()
+        // Different ambiguity signals can overlap; show one warning code
+        // per cause in the manual selector and preflight diagnostics.
+        val warnings=linkedSetOf<Warning>()
         val nameWords=fileWords
+        // Unicode direction overrides and zero-width separators can make a
+        // filename look like a different title/extension to the reader while
+        // normal token matching still reports ALL_TERMS. Never classify that
+        // display as STRONG on untrusted peer metadata.
+        if(stem.any { ch ->
+                ch in '\u202A'..'\u202E' || ch in '\u2066'..'\u2069' ||
+                    ch in '\u200B'..'\u200F' || ch=='\u2060' || ch=='\uFEFF'
+            }) {
+            score-=9
+            warnings.add(Warning.IDENTITY_AMBIGUOUS)
+        }
         // Set inclusion and phrase order alone can silently accept both extra
         // copies ("ILLIT Magnetic Magnetic") and missing independent credit
         // ("Queen Of Hearts" for "Queen - Queen Of Hearts"). Compare the
@@ -237,6 +250,6 @@ internal object A0CandidateRank {
         // The queue belongs to the source, not the recording. It must never
         // change the musical score. Keep queueLength in the signature for
         // compatibility with existing rank callers and baseline fixtures.
-        return Ranking(score.coerceIn(0,100),match,quality,warnings)
+        return Ranking(score.coerceIn(0,100),match,quality,warnings.toList())
     }
 }
