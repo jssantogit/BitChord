@@ -2021,20 +2021,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // A public Recording remains known even with zero MediaAssets.
             // Only a trusted MBID claim creates/reuses a canonical identity;
             // never match local tracks by title or artist name.
-            if (recordings is MusicBrainzCatalogSearchResult.Success) {
+            val catalogedAssetMbids = if (recordings is MusicBrainzCatalogSearchResult.Success) {
                 try {
                     withContext(Dispatchers.IO) {
-                        MusicBrainzCatalogIndex(
-                            CanonicalCatalogDatabase.get(getApplication<Application>()),
-                        ).persistRecordings(recordings.page.items)
+                        val db = CanonicalCatalogDatabase.get(getApplication<Application>())
+                        MusicBrainzCatalogIndex(db).persistRecordings(recordings.page.items)
+                        db.catalogDao().musicBrainzRecordingMbidsWithAssets(
+                            recordings.page.items.map { it.musicBrainzId },
+                        ).toSet()
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
-                    // Search remains read-only/usable when the local index is
-                    // unavailable; a failed persistence cannot fake assets.
+                    emptySet()
                 }
-            }
+            } else emptySet()
             val rows = buildList {
                 if (recordings is MusicBrainzCatalogSearchResult.Success) {
                     recordings.page.items.forEach { hit ->
@@ -2043,6 +2044,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             kind = CanonicalSearchKind.RECORDING,
                             title = hit.title,
                             subtitle = hit.artistDisplay,
+                            hasCatalogedAsset = hit.musicBrainzId in catalogedAssetMbids,
                         ))
                     }
                 }
@@ -2071,8 +2073,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 recordings is MusicBrainzCatalogSearchResult.Failure &&
                 groups is MusicBrainzCatalogSearchResult.Failure &&
                 artists is MusicBrainzCatalogSearchResult.Failure
-            ) UiState.Error("MusicBrainz catalog is unavailable")
-            else UiState.Success(rows)
+            ) {
+                val cached = try {
+                    withContext(Dispatchers.IO) {
+                        val dao = CanonicalCatalogDatabase
+                            .get(getApplication<Application>()).catalogDao()
+                        val known = dao.searchKnownMusicBrainzRecordings(query, 25)
+                        val available = dao.musicBrainzRecordingMbidsWithAssets(
+                            known.map { it.musicBrainzId },
+                        ).toSet()
+                        known.map { hit -> CanonicalCatalogSearchRow(
+                            musicBrainzId = hit.musicBrainzId,
+                            kind = CanonicalSearchKind.RECORDING,
+                            title = hit.title,
+                            subtitle = hit.artistDisplay,
+                            hasCatalogedAsset = hit.musicBrainzId in available,
+                            fromOfflineCache = true,
+                        ) }
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                if (cached.isEmpty()) UiState.Error("MusicBrainz unavailable and no local matches")
+                else UiState.Success(cached)
+            } else UiState.Success(rows)
         }
     }
 

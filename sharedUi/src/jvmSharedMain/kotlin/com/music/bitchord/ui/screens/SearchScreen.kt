@@ -100,6 +100,8 @@ data class CanonicalCatalogSearchRow(
     val kind: CanonicalSearchKind,
     val title: String,
     val subtitle: String?,
+    val hasCatalogedAsset: Boolean = false,
+    val fromOfflineCache: Boolean = false,
 )
 
 @Composable
@@ -460,7 +462,14 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                     )
                     if (row.kind == CanonicalSearchKind.RECORDING) {
                         Text(
-                            text = "Metadata only · Play requires a local or authorized remote file",
+                            text = when {
+                                row.hasCatalogedAsset ->
+                                    "Media file cataloged · verify availability in Library"
+                                row.fromOfflineCache ->
+                                    "Offline metadata · no known playable file"
+                                else ->
+                                    "Metadata only · Play requires a local or authorized remote file"
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

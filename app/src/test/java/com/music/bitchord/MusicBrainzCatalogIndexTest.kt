@@ -48,6 +48,16 @@ class MusicBrainzCatalogIndexTest {
             assertEquals(recordingId, index.persistRecordings(listOf(repeated))[original.musicBrainzId])
             assertEquals("Magnetic", db.catalogDao().recordingById(recordingId)?.title)
             assertEquals(1, counter)
+            assertEquals(
+                listOf(original.musicBrainzId),
+                db.catalogDao().searchKnownMusicBrainzRecordings("magnetic", 25)
+                    .map { it.musicBrainzId },
+            )
+            assertEquals(
+                emptyList<String>(),
+                db.catalogDao().searchKnownMusicBrainzRecordings("Mag%", 25)
+                    .map { it.musicBrainzId },
+            )
 
             db.catalogDao().upsertMediaAsset(MediaAssetEntity(
                 "asset-home", recordingId, "opensubsonic:home", "native-888",
@@ -56,6 +66,10 @@ class MusicBrainzCatalogIndexTest {
             val available = browse.observe(setOf("opensubsonic:home")).first().tracks
             assertEquals(listOf(recordingId), available.map { it.recordingId })
             assertEquals(listOf("asset-home"), available.single().availableAssets.map { it.mediaAssetId })
+            assertEquals(
+                listOf(original.musicBrainzId),
+                db.catalogDao().musicBrainzRecordingMbidsWithAssets(listOf(original.musicBrainzId)),
+            )
         } finally {
             db.close()
         }

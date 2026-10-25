@@ -431,6 +431,43 @@ internal interface CanonicalCatalogDao {
         localTagsProvider: String,
     )
 
+    /** Persisted MusicBrainz recordings are queryable even without any asset. */
+    @Query(
+        """
+        SELECT identity.externalId AS musicBrainzId,
+               recording.title AS title,
+               recording.artistDisplay AS artistDisplay,
+               recording.durationMs AS durationMs
+        FROM catalog_external_identity AS identity
+        INNER JOIN catalog_recording AS recording ON recording.id = identity.entityId
+        WHERE identity.provider = 'musicbrainz'
+          AND identity.entityType = 'recording'
+          AND (
+            instr(lower(recording.title), lower(:query)) > 0
+            OR instr(lower(recording.artistDisplay), lower(:query)) > 0
+          )
+        ORDER BY recording.artistDisplay COLLATE NOCASE,
+                 recording.title COLLATE NOCASE, identity.externalId
+        LIMIT :limit
+        """,
+    )
+    suspend fun searchKnownMusicBrainzRecordings(
+        query: String, limit: Int,
+    ): List<com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit>
+
+    /** Catalogued renditions are evidence, not a guarantee of account access. */
+    @Query(
+        """
+        SELECT DISTINCT identity.externalId
+        FROM catalog_external_identity AS identity
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = identity.entityId
+        WHERE identity.provider = 'musicbrainz'
+          AND identity.entityType = 'recording'
+          AND identity.externalId IN (:mbids)
+        """,
+    )
+    suspend fun musicBrainzRecordingMbidsWithAssets(mbids: List<String>): List<String>
+
     @Query("DELETE FROM catalog_media_asset WHERE provider = :provider")
     suspend fun deleteAllMediaAssets(provider: String)
 
