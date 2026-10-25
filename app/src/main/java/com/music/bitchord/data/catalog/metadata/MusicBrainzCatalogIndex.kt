@@ -7,6 +7,7 @@ import com.music.bitchord.data.catalog.MusicBrainzArtistEnrichmentEntity
 import com.music.bitchord.data.catalog.MusicBrainzReleaseEnrichmentEntity
 import com.music.bitchord.data.catalog.CatalogReleaseGroupEntity
 import com.music.bitchord.data.catalog.CatalogReleaseGroupEditionEntity
+import com.music.bitchord.data.catalog.CatalogMusicBrainzArtistGroupEntity
 import com.music.bitchord.data.catalog.CatalogReleaseTrackSourceEntity
 import com.music.bitchord.data.catalog.CatalogMusicBrainzTrackEntity
 import com.music.bitchord.data.catalog.CanonicalCatalogDao
@@ -135,6 +136,40 @@ internal class MusicBrainzCatalogIndex(
                 }
             }
             indexed
+        }
+
+    /**
+     * Associate groups with one verified artist MBID. This stores positive
+     * evidence only: a partial browse, timeout or empty response never prunes.
+     */
+    suspend fun persistArtistGroups(artistMbid: String, hits: List<MusicBrainzReleaseGroupHit>) {
+        val normalized = artistMbid.trim().lowercase(Locale.ROOT)
+        if (!MBID.matches(normalized)) return
+        database.withTransaction {
+            val dao = database.catalogDao()
+            val artistId = dao.entityIdForExternalIdentity("musicbrainz", "artist", normalized)
+                ?: return@withTransaction
+            check(dao.artistById(artistId) != null) { "Orphaned MusicBrainz artist claim" }
+            persistReleaseGroups(hits).values.forEach { groupId ->
+                dao.upsertMusicBrainzArtistGroup(CatalogMusicBrainzArtistGroupEntity(artistId, groupId))
+            }
+        }
+    }
+
+    suspend fun cachedArtistGroups(artistMbid: String): List<MusicBrainzReleaseGroupHit> =
+        database.withTransaction {
+            val normalized = artistMbid.trim().lowercase(Locale.ROOT).takeIf(MBID::matches)
+                ?: return@withTransaction emptyList()
+            val dao = database.catalogDao()
+            val artistId = dao.entityIdForExternalIdentity("musicbrainz", "artist", normalized)
+                ?: return@withTransaction emptyList()
+            dao.musicBrainzGroupsForArtist(artistId).mapNotNull { group ->
+                val mbid = dao.externalIdentitiesForEntity(
+                    "musicbrainz", "release-group", group.id,
+                ).singleOrNull()?.externalId ?: return@mapNotNull null
+                MusicBrainzReleaseGroupHit(mbid, group.title, group.primaryType,
+                    group.firstReleaseDate, group.artistDisplay)
+            }
         }
 
     /** Edition search evidence uses the existing source-specific v3 cache. */
