@@ -19,12 +19,12 @@ class A0ProgressiveServerFrameReaderTest {
         var timeouts = 0
         // The only result is a P offer. Interrupted frames are retried
         // instead of losing subsequent valid peer connections.
-        repeat(30) {
+        for (attempt in 0 until 30) {
+            if (event != null) break
             try {
                 val next = reader.readEvent(ignored::add)
                 if (next != null) event = next
             } catch (_: SocketTimeoutException) { timeouts++ }
-            if (event != null) return@repeat
         }
         assertEquals(3, timeouts)
         assertEquals(listOf(64), ignored)
