@@ -81,6 +81,17 @@ class CanonicalSearchCategoryFilterTest {
         assertEquals(listOf("artist-1", "artist-2"), displayed.map { it.musicBrainzId })
     }
 
+    @Test fun artistMbidScopedWorksSurviveUnusualCreditText() {
+        val artist = CanonicalCatalogSearchRow("artist-illit", CanonicalSearchKind.ARTIST,
+            "ILLIT", null)
+        val canonical = CanonicalCatalogSearchRow("recording-m", CanonicalSearchKind.RECORDING,
+            "Magnetic", "Unusual credited name", artistScopeMbid = "artist-illit")
+        val other = CanonicalCatalogSearchRow("other-m", CanonicalSearchKind.RECORDING,
+            "Illit", "Another unrelated group")
+        val displayed = canonicalRowsForQuery(listOf(other, canonical, artist), "illit", SearchFilter.ALL)
+        assertEquals(listOf("artist-illit", "recording-m"), displayed.map { it.musicBrainzId })
+    }
+
     @Test fun generalSearchUsesNativeArtistSongsAlbumsSectionOrder() {
         val artist = CanonicalCatalogSearchRow("artist-k", CanonicalSearchKind.ARTIST, "ILLIT", null)
         val song = CanonicalCatalogSearchRow("recording-k", CanonicalSearchKind.RECORDING, "Magnetic", "ILLIT")
