@@ -10,6 +10,19 @@ import org.junit.Test
 class A0IndirectFileOfferWireTest {
     private val local = InetAddress.getByAddress(byteArrayOf(127,0,0,1))
 
+    @Test fun unrelatedLegacySearchOfferDoesNotBreakSelectedFileChannel() {
+        // Search P offers may still arrive while waiting for the selected
+        // upload's F. Their unsupported tails are not F authorization.
+        val full=frame("search_peer","P",byteArrayOf(1,0,0,127),38891,84)
+        val frameWithUnexpectedTail=full.copyOf(full.size-4).also { bytes ->
+            val newLength=bytes.size-4
+            for(i in 0..3)bytes[i]=(newLength ushr (8*i)).toByte()
+        }
+        assertEquals(A0IndirectFileOfferWire.Event.Unrelated,
+            A0IndirectFileOfferWire.readServerEvent(
+                ByteArrayInputStream(frameWithUnexpectedTail),"owned_peer",local))
+    }
+
     @Test fun acceptsOnlyFileOfferFromExpectedPeerAndSameAddress() {
         val event=A0IndirectFileOfferWire.readServerEvent(
             ByteArrayInputStream(frame("owned_peer","F",byteArrayOf(1,0,0,127),38891,84)),
