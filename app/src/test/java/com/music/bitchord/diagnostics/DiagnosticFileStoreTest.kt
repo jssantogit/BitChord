@@ -72,6 +72,31 @@ class DiagnosticFileStoreTest {
         assertTrue(text.contains("crash snapshot"))
     }
 
+
+    @Test
+    fun `existing TXT export adds bounded anonymous CAA statistics without identity`() {
+        val store = DiagnosticFileStore(
+            rootDir = temporaryFolder.newFolder("cover-art-export"),
+            maxCaptureBytes = 512L,
+        )
+        val report = store.createExport(
+            metadataLines = emptyList(),
+            recentEventLines = emptyList(),
+            fileName = "catalog.txt",
+            catalogCoverReport = listOf(
+                "scope=caa_metadata_http_only",
+                "network_requests=3 success=2 not_found=1 transient_failures=0",
+                "p50_network_ms=120 p95_network_ms=260 samples=3",
+            ),
+        ).readText()
+        assertTrue(report.contains("[catalog-cover-art-v1]"))
+        assertTrue(report.contains("scope=caa_metadata_http_only"))
+        assertTrue(report.contains("p50_network_ms=120 p95_network_ms=260 samples=3"))
+        assertFalse(report.contains("https://"))
+        assertFalse(report.contains("musicBrainzId"))
+    }
+
+
     @Test
     fun `exports keep only the three newest reports`() {
         val root = temporaryFolder.newFolder("diagnostics")
