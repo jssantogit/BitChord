@@ -65,11 +65,11 @@ internal interface MusicBrainzCoverArtStore {
  */
 internal fun verifiedFrontCacheType(type: String): String =
     when (type) {
-        "release" -> "release:front-v2"
+        "release" -> "release:front-v3"
         // A generic group fallback has no Official-edition provenance and
         // must NEVER poison the verified artist shelf's v4 namespace.
         "release-group" -> "release-group:front-v2"
-        // Only the MainViewModel path proving an exact-title Official Release
+        // Only the MainViewModel path proving an MBID-linked Official Release
         // inside this group's MBID can write this positive v4 evidence.
         "verified-artist-group" -> "release-group:front-v4"
         else -> error("Unsupported cover cache entity type")
