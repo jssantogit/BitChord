@@ -42,9 +42,13 @@ internal object A0IndirectFileOfferWire {
         val ip=exact(body,4).reversedArray()
         val port=le32(body)
         val token=le32(body)
-        val privileged=body.read()
-        val obfuscated=le32(body)
-        val obfuscatedPort=le32(body)
+        // Legacy clients omit the optional modern nine-byte tail.
+        // Both complete shapes are valid, but partial tails are never safe.
+        val tailBytes=body.available()
+        if(tailBytes != 0 && tailBytes != 9)malformed()
+        val privileged=if(tailBytes == 9)body.read() else 0
+        val obfuscated=if(tailBytes == 9)le32(body) else 0
+        val obfuscatedPort=if(tailBytes == 9)le32(body) else 0
         if(body.available()!=0 || privileged !in 0..1 ||
             port !in 1..65535 || token<=0 ||
             obfuscated!=0 || obfuscatedPort!=0
