@@ -3273,7 +3273,10 @@ private fun BitChordApp(
                             },
                             songSort = songSort,
                             folder = folder,
-                            canonicalTracks = if (page.browseId.startsWith("catalog:RELEASE:")) {
+                            canonicalTracks = if (
+                                page.browseId.startsWith("catalog:RELEASE:") ||
+                                page.browseId.startsWith("catalog:RELEASE_GROUP:")
+                            ) {
                                 (viewModel.canonicalDetail.collectAsStateWithLifecycle().value
                                     as? UiState.Success)?.data?.rows.orEmpty()
                             } else emptyList(),
