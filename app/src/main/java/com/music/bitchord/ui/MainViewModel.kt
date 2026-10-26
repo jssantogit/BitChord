@@ -426,6 +426,72 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao(),
         ))
     }
+    private var canonicalSearchCoverJob: Job? = null
+    private var canonicalHomeCoverJob: Job? = null
+
+    /**
+     * Fill only genuine CAA artwork on an IO worker. A 404 or temporary error
+     * remains an empty cover; it must not borrow a similarly named album.
+     */
+    private fun enrichCanonicalSearchCovers(query: String) {
+        canonicalSearchCoverJob?.cancel()
+        val visible = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
+        val prioritized = visible.sortedByDescending { row ->
+            row.subtitle?.contains(query, ignoreCase = true) == true
+        }
+        val candidates = canonicalCoverLookupCandidates(prioritized, limit = 12)
+        if (candidates.isEmpty()) return
+        canonicalSearchCoverJob = viewModelScope.launch(Dispatchers.IO) {
+            for (row in candidates) {
+                if (_searchSource.value != SearchSource.CANONICAL ||
+                    _query.value.trim() != query) return@launch
+                val target = canonicalCoverLookupTarget(row) ?: continue
+                val artwork = try {
+                    coverArtArchive.findCover(target.first, target.second)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { null } ?: continue
+                if (_searchSource.value != SearchSource.CANONICAL ||
+                    _query.value.trim() != query) return@launch
+                val current = (_canonicalResults.value as? UiState.Success)?.data ?: continue
+                _canonicalResults.value = UiState.Success(current.map {
+                    if (it.kind == row.kind && it.musicBrainzId == row.musicBrainzId &&
+                        it.artworkUri.isNullOrBlank()) it.copy(artworkUri = artwork) else it
+                })
+            }
+        }
+    }
+
+    private fun enrichCanonicalHomeCovers(generation: Long) {
+        canonicalHomeCoverJob?.cancel()
+        val current = (_canonicalDiscoveryCatalog.value as? UiState.Success)?.data.orEmpty()
+        val prioritized = current.sortedWith(
+            compareByDescending<CanonicalCatalogSearchRow> { it.releaseDate.orEmpty() }
+                .thenBy { it.musicBrainzId },
+        )
+        val candidates = canonicalCoverLookupCandidates(prioritized, limit = 16)
+        if (candidates.isEmpty()) return
+        canonicalHomeCoverJob = viewModelScope.launch(Dispatchers.IO) {
+            for (row in candidates) {
+                if (!canonicalDiscoveryCatalogEpoch.isCurrent(generation) ||
+                    !isCanonicalDiscoverySelected()) return@launch
+                val target = canonicalCoverLookupTarget(row) ?: continue
+                val artwork = try {
+                    coverArtArchive.findCover(target.first, target.second)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { null } ?: continue
+                if (!canonicalDiscoveryCatalogEpoch.isCurrent(generation) ||
+                    !isCanonicalDiscoverySelected()) return@launch
+                val latest = (_canonicalDiscoveryCatalog.value as? UiState.Success)?.data ?: continue
+                _canonicalDiscoveryCatalog.value = UiState.Success(latest.map {
+                    if (it.kind == row.kind && it.musicBrainzId == row.musicBrainzId &&
+                        it.artworkUri.isNullOrBlank()) it.copy(artworkUri = artwork) else it
+                })
+            }
+        }
+    }
+
     private val _canonicalDetail = MutableStateFlow<UiState<CanonicalCatalogDetailPage>?>(null)
     val canonicalDetail: StateFlow<UiState<CanonicalCatalogDetailPage>?> = _canonicalDetail.asStateFlow()
     private var canonicalBrowseJob: Job? = null
@@ -554,6 +620,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         serverSearchJob?.cancel()
         _serverResults.value = null
         canonicalSearchJob?.cancel()
+        canonicalSearchCoverJob?.cancel()
         canonicalTypeaheadJob?.cancel()
         resetCanonicalSearchPagination()
         canonicalBrowseJob?.cancel()
@@ -2044,6 +2111,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (canonicalDiscoveryCatalogJob?.isActive == true) return
         val generation = canonicalDiscoveryCatalogEpoch.next()
         canonicalDiscoveryCatalogJob?.cancel()
+        canonicalHomeCoverJob?.cancel()
         _canonicalDiscoveryCatalog.value = UiState.Loading
         canonicalDiscoveryCatalogJob = viewModelScope.launch(Dispatchers.IO) {
             val state = try {
@@ -2220,6 +2288,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             }
+            if (canonicalDiscoveryCatalogEpoch.isCurrent(generation) &&
+                isCanonicalDiscoverySelected()
+            ) enrichCanonicalHomeCovers(generation)
         }
     }
 
@@ -3183,6 +3254,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             kind = CanonicalSearchKind.RELEASE_GROUP,
                             title = hit.title,
                             subtitle = hit.artistDisplay ?: hit.primaryType,
+                            releaseDate = hit.firstReleaseDate,
+                            releaseKind = hit.primaryType,
                         ))
                     }
                 }
@@ -3194,6 +3267,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             title = hit.title,
                             subtitle = listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
                                 .joinToString(" · "),
+                            releaseDate = hit.releaseDate,
                         ))
                     }
                 }
@@ -3279,6 +3353,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (failedKinds.size == CanonicalSearchKind.entries.size && combined.isEmpty()) {
                     UiState.Error("MusicBrainz unavailable and no local matches")
                 } else UiState.Success(combined)
+            if (_canonicalResults.value is UiState.Success) enrichCanonicalSearchCovers(query)
         }
     }
 
@@ -3382,6 +3457,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _canonicalResults.value = UiState.Success(
                     (existing + additional).distinctBy { it.kind to it.musicBrainzId },
                 )
+                enrichCanonicalSearchCovers(cursor.query)
                 val advanced = cursor.advance(recordings, groups, editions, artists)
                 canonicalSearchPageCursors = advanced
                 _canonicalSearchHasMore.value = advanced.hasMore
