@@ -12,15 +12,17 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Slow peers are independent, unlike A0's previous blocking offer loop.
  */
 internal class A0PeerSearchWorkers(
-    private val action:(()->Unit)->Unit = { it() }
+    private val action:(()->Unit)->Unit = { it() },
+    queueCapacity:Int = 32,
 ) {
+    init { require(queueCapacity in 8..128) }
     private val closed=AtomicBoolean(false)
     // At most 36 offers are processed per live search. Eight sockets can
     // drain that burst within the existing short discovery window even when
     // peers take seconds to time out; the queue is still strictly bounded.
     private val pool=ThreadPoolExecutor(
         8,8,0L,TimeUnit.MILLISECONDS,
-        ArrayBlockingQueue<Runnable>(32),
+        ArrayBlockingQueue<Runnable>(queueCapacity),
         ThreadPoolExecutor.AbortPolicy()
     )
 
