@@ -46,6 +46,24 @@ class CanonicalCuratedHomeFeedTest {
         assertEquals("catalog:RECORDING:${playable.musicBrainzId}", shelves[2].items.single().browseId)
     }
 
+    @Test fun unclassifiedReleaseGroupsAndUntypedEditionsCannotPretendToBeNewAlbums() {
+        val unknownGroup = release.copy(
+            musicBrainzId = "right-now-other",
+            title = "Right Now", releaseKind = "Other",
+        )
+        val unknownEdition = release.copy(
+            musicBrainzId = "right-now-edition",
+            kind = CanonicalSearchKind.RELEASE, releaseKind = null,
+        )
+        val recording = playable.copy(title = "Hype Boy")
+        val knownSingle = release.copy(
+            musicBrainzId = "certified-single", title = "Super Shy", releaseKind = "Single",
+        )
+        val shelves = feed(listOf(unknownGroup, unknownEdition, recording, release, knownSingle))
+        assertEquals(listOf("Super Shy", "SUPER REAL ME"), shelves.single().items.map { it.title })
+        assertTrue(shelves.single().items.all { it.browseId!!.contains("RELEASE_GROUP") })
+    }
+
     @Test fun cannotClaimChartsWithoutListeningEvidenceOrAudioAsset() {
         val shelves = feed(listOf(release, playable.copy(hasCatalogedAsset = false)),
             listOf(local.copy(localUri = null)), listOf(playable.musicBrainzId))
