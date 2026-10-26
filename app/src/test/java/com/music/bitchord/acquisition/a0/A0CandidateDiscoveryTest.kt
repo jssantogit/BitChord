@@ -12,6 +12,26 @@ class A0CandidateDiscoveryTest {
     private fun reply(peer: String, files: List<A0SoulseekSearchFile>) =
         A0SoulseekSearchResponse(peer, 177, files, emptyList(), true, 1000, 0)
 
+
+    @Test(timeout=10000)
+    fun diverseSearchBeyondPrevious256ChoicesKeepsSourcesWithoutUnboundedMemory() {
+        val handoff=A0ObservedCandidateHandoff(
+            java.net.Socket(),"local",81,true,searchPhrase="Artist - Song")
+        repeat(270) { i ->
+            val peer="peer" + i.toString().padStart(3,'0')
+            handoff.offerParsed(
+                A0SoulseekSearchResponse(
+                    peer,81,listOf(A0SoulseekSearchFile(
+                        "Music\\\\Artist\\\\Song ${i}.mp3",
+                        5_000_000L+i,"mp3",mapOf(0 to 320)
+                    )),emptyList(),true,3000,0
+                ),peer
+            )
+        }
+        assertEquals(270,handoff.choices().size)
+        assertEquals(0,handoff.screening().capacityDropped)
+    }
+
     @Test fun laterRelevantPeerOutranksEarlierUnrelatedPeer() {
         val handoff = A0ObservedCandidateHandoff(
             Socket(), "local", 177, true, searchPhrase = "ILLIT - Magnetic"
