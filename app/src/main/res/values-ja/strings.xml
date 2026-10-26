@@ -58,6 +58,7 @@
     </plurals>
     <string name="songs">曲</string>
     <string name="artists">アーティスト</string>
+    <string name="canonical_singles_eps">シングルとEP</string>
     <string name="albums">アルバム</string>
     <string name="no_album_metadata">これらの曲はどのアルバムに属するか示されていません。</string>
     <string name="search_empty">YouTube Musicで何百万もの曲を検索できます。</string>
