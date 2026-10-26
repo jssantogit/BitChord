@@ -101,7 +101,8 @@ internal data class MusicBrainzRecordingHit(
  */
 /** Explicit edition status is required for public streaming-style Release tiles. */
 internal fun isCuratedMusicBrainzRelease(hit: MusicBrainzReleaseHit): Boolean =
-    hit.status.equals("Official", ignoreCase = true)
+    hit.status.equals("Official", ignoreCase = true) &&
+        canonicalStreamingTitleIsSafe(hit.title)
 
 internal fun isCuratedMusicBrainzRecording(hit: MusicBrainzRecordingHit): Boolean =
     hit.hasOfficialAudioRelease == true && hit.isVideo != true &&
