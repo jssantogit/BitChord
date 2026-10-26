@@ -81,6 +81,18 @@ class CanonicalNativeNavigationTest {
         assertTrue(com.music.bitchord.ui.canonicalMayUseAlbumFallbackLabel("local:album:1"))
     }
 
+    @Test fun unknownMusicBrainzTypesMustNotEnterArtistAlbumsAndSinglesShelf() {
+        val unclassified = group.copy(
+            musicBrainzId = "unknown", title = "Right Now", releaseKind = "Other",
+        )
+        val known = group.copy(musicBrainzId = "known", title = "OMG", releaseKind = "Single")
+        val sections = canonicalNativeSections(
+            parentKind = CanonicalSearchKind.ARTIST,
+            rows = listOf(unclassified, known), heading = "Lançamentos",
+        )
+        assertEquals(listOf("OMG"), sections.single().items.map { it.title })
+    }
+
     @Test fun canonicalGroupTracklistDoesNotInsertEditionShelf() {
         val track = CanonicalCatalogSearchRow(
             musicBrainzId = "recording-1",
