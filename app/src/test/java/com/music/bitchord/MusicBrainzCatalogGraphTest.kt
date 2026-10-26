@@ -20,14 +20,18 @@ class MusicBrainzCatalogGraphTest {
             override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String =
                 """{"release-count":20,"release-offset":0,"releases":[
                     {"id":"bad","title":"Invalid"},
+                    {"id":"$worldwide","title":"SUPER REAL ME",
+                     "cover-art-archive":{"front":false}},
                     {"id":"$worldwide","title":"SUPER REAL ME"},
-                    {"id":"$worldwide","title":"SUPER REAL ME"},
-                    {"id":"271b31f8-8ab6-483c-97d9-8f0fabb2d4f4","title":"SUPER REAL ME"}
+                    {"id":"271b31f8-8ab6-483c-97d9-8f0fabb2d4f4","title":"SUPER REAL ME",
+                     "cover-art-archive":{"front":true}}
                 ]}"""
         }))
         val page = (graph.browseGroupReleases(group) as
             MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogPage<MusicBrainzReleaseHit>>).value
         assertEquals(2, page.items.size)
+        assertEquals(false, page.items.first().hasFrontCover)
+        assertEquals(true, page.items.last().hasFrontCover)
         assertEquals(4, page.consumedCount)
         assertEquals(4, page.nextOffset)
     }
