@@ -70,6 +70,8 @@ internal data class MusicBrainzRecordingHit(
     val title: String,
     val artistDisplay: String?,
     val durationMs: Long?,
+    /** Art comes from an actual linked MusicBrainz Release, never title matching. */
+    val coverReleaseMbid: String? = null,
 )
 
 /**
@@ -194,9 +196,17 @@ internal class MusicBrainzCatalogSearch(
                 result.recordings?.mapNotNull { recording ->
                     val mbid = recording.id.validSearchMbidOrNull() ?: return@mapNotNull null
                     val title = recording.title.nonEmpty() ?: return@mapNotNull null
+                    val releaseForArt = recording.releases.orEmpty().mapNotNull { release ->
+                        release.id.validSearchMbidOrNull()?.let { id -> release.copy(id = id) }
+                    }.sortedWith(
+                        compareBy<SearchRecordingRelease> {
+                            !it.status.equals("Official", ignoreCase = true)
+                        }.thenBy { it.date.orEmpty().ifBlank { "9999-12-31" } },
+                    ).firstOrNull()?.id
                     MusicBrainzRecordingHit(
                         mbid, title, recording.artistCredit.displayArtistCredit(),
                         recording.length?.takeIf { it >= 0 },
+                        coverReleaseMbid = releaseForArt,
                     )
                 }
             }
@@ -320,11 +330,19 @@ private data class SearchReleaseEntry(
 )
 
 @Serializable
+private data class SearchRecordingRelease(
+    val id: String? = null,
+    val date: String? = null,
+    val status: String? = null,
+)
+
+@Serializable
 private data class SearchRecordingEntry(
     val id: String? = null,
     val title: String? = null,
     val length: Long? = null,
     @SerialName("artist-credit") val artistCredit: List<SearchArtistCredit>? = null,
+    val releases: List<SearchRecordingRelease>? = null,
 )
 
 @Serializable
