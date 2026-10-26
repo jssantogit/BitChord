@@ -182,6 +182,12 @@ class CanonicalCuratedHomeFeedTest {
         assertEquals(edition.musicBrainzId to null, canonicalCoverLookupTarget(edition))
         assertEquals(null, canonicalCoverLookupTarget(artist))
         assertEquals(null, canonicalCoverLookupTarget(recording))
+        // A recording is permitted a cover only from a MusicBrainz Release
+        // explicitly associated with it, never a title-only assumption.
+        val linkedRelease = "22222222-2222-4222-8222-222222222222"
+        assertEquals(linkedRelease to null, canonicalCoverLookupTarget(
+            recording.copy(coverReleaseMbid = linkedRelease),
+        ))
         val candidates = canonicalCoverLookupCandidates(
             listOf(artist, release, release, recording, edition),
             limit = 2,
