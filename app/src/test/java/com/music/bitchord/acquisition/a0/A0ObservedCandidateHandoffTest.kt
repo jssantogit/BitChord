@@ -109,4 +109,34 @@ class A0ObservedCandidateHandoffTest {
         assertEquals(0,handoff.screening().tooLarge)
     }
 
+
+    @Test(timeout=12000)
+    fun boundedReleaseShadowRetainsLateNewPeerAfterEarlierPeersFill512Slots() {
+        val handoff=A0ObservedCandidateHandoff(java.net.Socket(),"local",81,true,
+            searchPhrase="Artist - Song",collectReleaseShadow=true)
+        repeat(8) { group ->
+            val peer="group-$group"
+            val files=(1..64).map { n ->
+                A0SoulseekSearchFile(
+                    "Music\\Artist\\Album\\Artist - Noise ${group*64+n}.mp3",
+                    6_400_000L,"mp3",mapOf(0 to 320,1 to 161))
+            }
+            handoff.offerParsed(A0SoulseekSearchResponse(
+                peer,81,files,emptyList(),true,128_000,0),peer)
+        }
+        val before=handoff.releaseShadowChoices()
+        assertEquals(512,before.size)
+        assertFalse(before.any { it.peerUsername=="late" })
+        handoff.offerParsed(A0SoulseekSearchResponse("late",81,listOf(
+            A0SoulseekSearchFile("Music\\Artist\\Album\\Artist - Song.mp3",
+                6_400_000L,"mp3",mapOf(0 to 320,1 to 161))),
+            emptyList(),true,128_000,0),"late")
+        val after=handoff.releaseShadowChoices()
+        assertEquals(512,after.size)
+        assertTrue(after.any { it.peerUsername=="late" })
+        assertTrue(after.groupBy { it.peerUsername }.values.all { it.size<=64 })
+        assertEquals(1,after.count { it.peerUsername=="late" })
+        handoff.cancel()
+        assertTrue(handoff.releaseShadowChoices().isEmpty())
+    }
 }
