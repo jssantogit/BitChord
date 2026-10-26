@@ -75,4 +75,20 @@ class CanonicalNativeNavigationTest {
         assertEquals(setOf("first", "second"), canonicalPreferredEditions(releases, "Original").map { it.musicBrainzId }.toSet())
     }
 
+    @Test fun canonicalGroupTracklistDoesNotInsertEditionShelf() {
+        val track = CanonicalCatalogSearchRow(
+            musicBrainzId = "recording-1",
+            kind = CanonicalSearchKind.RECORDING,
+            title = "Magnetic",
+            subtitle = "ILLIT",
+            durationMs = 160_000L,
+        )
+        assertTrue(canonicalNativeSections(
+            parentKind = CanonicalSearchKind.RELEASE_GROUP,
+            rows = listOf(track),
+            heading = "Edições",
+        ).isEmpty())
+        assertEquals(160_000L, track.durationMs)
+    }
+
 }
