@@ -630,6 +630,9 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                     },
                     localDownloaded = row.kind == CanonicalSearchKind.RECORDING &&
                         row.hasVerifiedLocalAsset,
+                    durationLabel = if (row.kind == CanonicalSearchKind.RECORDING) {
+                        canonicalDurationLabel(row.durationMs)
+                    } else null,
                 )
                 if (index < section.second.lastIndex) {
                     HorizontalDivider(
@@ -1382,6 +1385,7 @@ private fun BrowseRow(
     onClick: (() -> Unit)?,
     onLongPress: (() -> Unit)? = null,
     localDownloaded: Boolean = false,
+    durationLabel: String? = null,
 ) {
     Row(
         modifier = Modifier
@@ -1444,6 +1448,28 @@ private fun BrowseRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        durationLabel?.let { duration ->
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = duration,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Display-only duration from actual MusicBrainz recording evidence. */
+fun canonicalDurationLabel(durationMs: Long?): String? {
+    if (durationMs == null || durationMs < 1000L) return null
+    val totalSeconds = durationMs / 1000L
+    val hours = totalSeconds / 3600L
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return if (hours > 0L) {
+        String.format(Locale.ROOT, "%d:%02d:%02d", hours, minutes % 60L, seconds)
+    } else {
+        String.format(Locale.ROOT, "%d:%02d", minutes, seconds)
     }
 }
 
