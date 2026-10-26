@@ -75,6 +75,12 @@ class CanonicalNativeNavigationTest {
         assertEquals(setOf("first", "second"), canonicalPreferredEditions(releases, "Original").map { it.musicBrainzId }.toSet())
     }
 
+    @Test fun unknownMusicBrainzGroupCannotDefaultToAnAlbumLabel() {
+        assertTrue(!com.music.bitchord.ui.canonicalMayUseAlbumFallbackLabel("catalog:RELEASE_GROUP:unknown"))
+        assertTrue(!com.music.bitchord.ui.canonicalMayUseAlbumFallbackLabel("catalog:RELEASE:edition"))
+        assertTrue(com.music.bitchord.ui.canonicalMayUseAlbumFallbackLabel("local:album:1"))
+    }
+
     @Test fun canonicalGroupTracklistDoesNotInsertEditionShelf() {
         val track = CanonicalCatalogSearchRow(
             musicBrainzId = "recording-1",
