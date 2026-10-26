@@ -101,7 +101,7 @@ internal fun canonicalCoverLookupTarget(
     row: CanonicalCatalogSearchRow,
 ): Pair<String?, String?>? = when (row.kind) {
     CanonicalSearchKind.RELEASE_GROUP -> null to row.musicBrainzId
-    CanonicalSearchKind.RELEASE -> row.musicBrainzId to null
+    CanonicalSearchKind.RELEASE -> row.musicBrainzId to row.coverGroupMbid
     CanonicalSearchKind.RECORDING -> row.coverReleaseMbid?.let { it to null }
     CanonicalSearchKind.ARTIST -> null
 }
