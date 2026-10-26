@@ -23,8 +23,15 @@ internal fun canonicalArtworkEditionsForGroup(
     canonicalPreferredEditions(editions, groupTitle)
         .filter { edition ->
             isCuratedMusicBrainzRelease(edition) &&
-                edition.title.trim().equals(groupTitle.trim(), ignoreCase = true)
-        }.take(2)
+                edition.title.trim().equals(groupTitle.trim(), ignoreCase = true) &&
+                // MusicBrainz can tell us that an edition has no CAA Front.
+                // Don't spend another archive round-trip to confirm a 404.
+                edition.hasFrontCover != false
+        }
+        // Artwork choice is separate from tracklist edition preference:
+        // positively known covers avoid slow dead-end CAA requests.
+        .sortedByDescending { it.hasFrontCover == true }
+        .take(2)
 
 internal fun canonicalPreferredEditions(
     editions: List<MusicBrainzReleaseHit>,
