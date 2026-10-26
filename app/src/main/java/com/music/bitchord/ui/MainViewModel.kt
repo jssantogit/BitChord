@@ -3254,9 +3254,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // artist must browse that artist's MBID, not return unrelated
             // recordings with the same word in their title.
             val artists = musicBrainzSearch.searchArtists(query, limit = 15)
-            val artistScopeMbid = (artists as? MusicBrainzCatalogSearchResult.Success)
-                ?.page?.items?.firstOrNull { it.name.equals(query.trim(), ignoreCase = true) }
-                ?.musicBrainzId
+            val artistScopeMbid = if (artists is MusicBrainzCatalogSearchResult.Success) {
+                artists.page.items.firstOrNull {
+                    it.name.equals(query.trim(), ignoreCase = true)
+                }?.musicBrainzId
+            } else null
             val recordings = if (artistScopeMbid != null) {
                 musicBrainzSearch.searchRecordingsForArtistMbid(artistScopeMbid, limit = 25)
             } else musicBrainzSearch.searchRecordings(query, limit = 25)
