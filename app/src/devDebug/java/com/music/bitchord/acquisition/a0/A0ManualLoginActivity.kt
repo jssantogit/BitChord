@@ -403,9 +403,10 @@ class A0ManualLoginActivity : Activity() {
                                 trace.note(A0SmokeTrace.Stage.SEARCH_LISTENER_OPEN)
                                 listener.soTimeout = 18_000
                                 val token = SecureRandom().nextInt(Int.MAX_VALUE - 1) + 1
-                                val expectedDuration=intent.getIntExtra(
-                                    "bitchord.soulseek.manual.duration_seconds",0
-                                ).takeIf { it in 15..7200 }
+                                val expectedDuration=SoulseekBatchPlan.expectedDuration(
+                                    batch?.current,
+                                    intent.getIntExtra("bitchord.soulseek.manual.duration_seconds",0)
+                                )
                                 val peerReliability=A0PeerReliabilityEvidence()
                                 val handoff = if (transferObserved) {
                                     A0ObservedCandidateHandoff(
