@@ -32,4 +32,18 @@ class A0PeerOfferGateTest {
         assertFalse(gate.releaseUnsubmitted("unknown",999))
         assertEquals(8,gate.acceptedCount)
     }
+
+    @Test fun singlePeerCannotConsumeTheWholeIndirectSearchBudget() {
+        val gate=A0PeerOfferGate(160)
+        repeat(8) { assertTrue(gate.accept("noisy",it+1)) }
+        assertFalse(gate.accept("noisy",9))
+        assertEquals(1,gate.perPeerDropped)
+        assertEquals(8,gate.acceptedCount)
+        repeat(80) { assertTrue(gate.accept("other-$it",it+20)) }
+        assertEquals(88,gate.acceptedCount)
+        assertTrue(gate.releaseUnsubmitted("noisy",8))
+        assertTrue(gate.accept("noisy",9))
+        assertEquals(89,gate.acceptedCount)
+        assertEquals(1,gate.perPeerDropped)
+    }
 }
