@@ -32,6 +32,23 @@ internal object SoulseekDownloadRouting {
         return cleaned.takeIf { it.isNotBlank() && key !in unknownArtistLabels }
     }
 
+    /** Resolve only an album hint backed by the same track or album page.
+     * Never turn a playlist/radio title into an album assertion.
+     */
+    fun albumHint(
+        songAlbum:String?,
+        playingAlbum:String?,
+        targetAlbum:String?,
+        samePlayingTrack:Boolean,
+        fromAlbum:Boolean,
+    ):String? =
+        sequenceOf(songAlbum,
+            playingAlbum.takeIf { samePlayingTrack },
+            targetAlbum.takeIf { fromAlbum })
+            .mapNotNull { it?.let(::text)?.takeIf(String::isNotBlank) }
+            .firstOrNull()
+            ?.take(120)
+
     /** A weak optional duration hint; never sent in a Soulseek query. */
     fun durationSeconds(display:String?):Int? {
         val components=display?.trim()?.split(':') ?: return null
