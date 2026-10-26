@@ -88,4 +88,20 @@ class A0CandidateClaimClustersTest {
         assertEquals(A0CandidatePreflight.SimulationStatus.SUGGESTED,result.status)
     }
 
+
+    @Test fun shadowReadinessOnlyConsidersEligibleClaimsButKeepsFullDiscoveryCounts() {
+        val entries=listOf(
+            entry(filename="ILLIT Magnetic.flac",score=99),
+            entry(filename="ILLIT Magnetic.mp3",score=90),
+        )
+        val compatible=A0CandidateClaimClusters.preview(entries,eligibleIndices=setOf(1))
+        assertEquals(A0CandidatePreflight.SimulationStatus.SUGGESTED,compatible.status)
+        assertEquals(1,compatible.preferredIndex)
+        assertEquals(2,compatible.totalCandidates)
+        assertEquals(2,compatible.distinctClaims)
+        val abstain=A0CandidateClaimClusters.preview(entries,eligibleIndices=emptySet())
+        assertEquals(A0CandidatePreflight.SimulationStatus.NO_STRONG,abstain.status)
+        assertNull(abstain.preferredIndex)
+        assertEquals(2,abstain.distinctClaims)
+    }
 }
