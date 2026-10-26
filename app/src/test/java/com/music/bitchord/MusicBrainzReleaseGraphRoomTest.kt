@@ -7,6 +7,9 @@ import com.music.bitchord.data.catalog.CatalogReleaseGroupEditionEntity
 import com.music.bitchord.data.catalog.CatalogReleaseGroupEntity
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.ReleaseEntity
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -61,4 +64,27 @@ class MusicBrainzReleaseGraphRoomTest {
             db.close()
         }
     }
+    @Test fun cachedEditionPreservesExplicitOfficialStatusAndSparseSearchCannotEraseIt() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            var next = 0
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "edition-test-${++next}" })
+            val groupMbid = "11111111-1111-4111-8111-111111111111"
+            val editionMbid = "22222222-2222-4222-8222-222222222222"
+            index.persistReleaseGroups(listOf(MusicBrainzReleaseGroupHit(
+                groupMbid, "Get Up", "EP", "2023-07-21", "NewJeans",
+            )))
+            val official = MusicBrainzReleaseHit(
+                editionMbid, "Get Up", "XW", "2023-07-21", "NewJeans", status = "Official",
+            )
+            index.persistGroupEditions(groupMbid, listOf(official))
+            assertEquals("Official", index.cachedGroupReleases(groupMbid).single().status)
+            // Later sparse search results omit status; retain positive evidence.
+            index.persistReleases(listOf(official.copy(status = null)))
+            assertEquals("Official", index.cachedGroupReleases(groupMbid).single().status)
+        } finally { db.close() }
+    }
+
 }
