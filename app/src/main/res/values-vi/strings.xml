@@ -64,6 +64,7 @@
     </plurals>
     <string name="songs">Bài hát</string>
     <string name="artists">Nghệ sĩ</string>
+    <string name="canonical_singles_eps">Đĩa đơn và EP</string>
     <string name="albums">Album</string>
     <string name="no_album_metadata">Không có thông tin album cho các bản nhạc này.</string>
     <string name="search_empty">Tìm kiếm hàng triệu bài hát trên YouTube Music.</string>
