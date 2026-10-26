@@ -156,7 +156,10 @@ class MusicBrainzCatalogSearchTest {
         assertEquals("SUPER REAL ME", groups.page.items.single().title)
         assertEquals("SUPER REAL ME", editions.page.items.single().title)
         assertEquals(listOf("recording", "release-group", "release"), requested.map { it.first })
-        assertTrue(requested.all { it.second == "arid:$artistMbid" && it.third == "false" })
+        assertTrue(requested.all { (path, query, dismax) ->
+            query == (if (path == "recording") "arid:$artistMbid AND status:official"
+                else "arid:$artistMbid") && dismax == "false"
+        })
     }
 
     @Test
