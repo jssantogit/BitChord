@@ -79,6 +79,8 @@ internal class A0ObservedCandidateHandoff(
         val albumUnknown:Int=0,
         val albumConflicts:Int=0,
         val qualityMismatches:Int=0,
+        val manualPrimary:Int=0,
+        val shadowStrong:Int=0,
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
     private val candidates=ArrayList<Choice>(384)
@@ -333,6 +335,9 @@ internal class A0ObservedCandidateHandoff(
         unsafePath=unsafe,
         noSlot=noSlotSeen,
         accepted=candidates.size,
+        manualPrimary=A0ManualCandidatePolicy.primaryIndices(
+            candidates,candidates.indices.toList()).size,
+        shadowStrong=shadowEligibleIndices().size,
         validBeforeLimit=eligible,
         duplicates=duplicateCount,
         capacityDropped=capDropped,
@@ -389,15 +394,10 @@ internal class A0ObservedCandidateHandoff(
         )
     }
 
-    // Pure shadow suggestion. Never called from transferChoice() or any
-    // side-effectful operation. Candidate data remains in-memory only.
-    @Synchronized
-    fun claimPreview():A0CandidateClaimClusters.Preview {
-        // The old preflight-v4 cannot see the selected album or quality
-        // preset. A strong match to the title is not automatically a usable
-        // offer: this shadow-only gate keeps incompatible and unconfirmed
-        // album evidence out of any future unattended-choice simulation.
-        val eligible=A0ManualCandidatePolicy.primaryIndices(
+    // This stricter counterfactual is NEVER transfer authorization.
+    // Unknown album evidence is review-only, even if a filename scores well.
+    private fun shadowEligibleIndices():Set<Int> =
+        A0ManualCandidatePolicy.primaryIndices(
             candidates,candidates.indices.toList()
         ).filter { index ->
             val choice=candidates[index]
@@ -407,11 +407,16 @@ internal class A0ObservedCandidateHandoff(
                     A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED
                 )
         }.toSet()
+
+    // Pure shadow suggestion. Never called from transferChoice() or any
+    // side-effectful operation. Candidate data remains in-memory only.
+    @Synchronized
+    fun claimPreview():A0CandidateClaimClusters.Preview {
         return A0CandidateClaimClusters.preview(candidates.map {
             A0CandidateClaimClusters.Entry(
                 it.claim,it.preflight,it.matchScore,it.peerAvailability
             )
-        },eligibleIndices=eligible)
+        },eligibleIndices=shadowEligibleIndices())
     }
 
     /**
