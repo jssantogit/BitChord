@@ -272,12 +272,15 @@ internal class A0SmokeTrace private constructor(
     }
 
     /** No peer/path/query data. Measures offers dropped by the bounded P pool. */
-    fun peerSearchBackpressure(dropped:Int) {
+    fun peerSearchBackpressure(dropped:Int,perPeerDropped:Int=0) {
         if(complete.get())return
         continuationTrace().event(
             stage="peer_search_backpressure",
             outcome=if(dropped>0)TraceOutcome.DEGRADED else TraceOutcome.SUCCEEDED,
-            attributes=mapOf("droppedOffers" to dropped.coerceIn(0,100000).toString())
+            attributes=mapOf(
+                "droppedOffers" to dropped.coerceIn(0,100000).toString(),
+                "perPeerDropped" to perPeerDropped.coerceIn(0,100000).toString(),
+            )
         )
     }
 
