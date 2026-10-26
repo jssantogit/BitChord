@@ -858,37 +858,37 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         if (_searchSource.value != SearchSource.CANONICAL ||
                             canonicalPath.lastOrNull() != artist) return@paint
                         val results = ready.values.toMap()
-                _canonicalDetail.update { old ->
-                    if (old !is UiState.Success) old else UiState.Success(
-                        old.data.copy(rows = old.data.rows.map {
-                            val cover = results[it.musicBrainzId]
-                            if (it.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                                it.artworkUri.isNullOrBlank() && cover != null
-                            ) it.copy(artworkUri = cover) else it
-                        }),
-                    )
-                }
-                val artistId = canonicalNativeBrowseId(artist)
-                _detailStack.update { pages ->
-                    if (_searchSource.value != SearchSource.CANONICAL ||
-                        canonicalPath.lastOrNull() != artist) pages else {
-                        val rows = (_canonicalDetail.value as? UiState.Success)
-                            ?.data?.rows.orEmpty()
-                        pages.map { page ->
-                            if (page.browseId != artistId) page else page.copy(
-                                sections = canonicalNativeSections(
-                                    parentKind = CanonicalSearchKind.ARTIST,
-                                    rows = rows,
-                                    heading = getApplication<Application>().getString(
-                                        R.string.shelf_new_albums_singles,
-                                    ),
-                                    albumsHeading = getApplication<Application>().getString(R.string.albums),
-                                    singlesHeading = getApplication<Application>().getString(R.string.canonical_singles_eps),
-                                ),
+                        _canonicalDetail.update { old ->
+                            if (old !is UiState.Success) old else UiState.Success(
+                                old.data.copy(rows = old.data.rows.map {
+                                    val cover = results[it.musicBrainzId]
+                                    if (it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                                        it.artworkUri.isNullOrBlank() && cover != null
+                                    ) it.copy(artworkUri = cover) else it
+                                }),
                             )
                         }
-                    }
-                }
+                        val artistId = canonicalNativeBrowseId(artist)
+                        _detailStack.update { pages ->
+                            if (_searchSource.value != SearchSource.CANONICAL ||
+                                canonicalPath.lastOrNull() != artist) pages else {
+                                val rows = (_canonicalDetail.value as? UiState.Success)
+                                    ?.data?.rows.orEmpty()
+                                pages.map { page ->
+                                    if (page.browseId != artistId) page else page.copy(
+                                        sections = canonicalNativeSections(
+                                            parentKind = CanonicalSearchKind.ARTIST,
+                                            rows = rows,
+                                            heading = getApplication<Application>().getString(
+                                                R.string.shelf_new_albums_singles,
+                                            ),
+                                            albumsHeading = getApplication<Application>().getString(R.string.albums),
+                                            singlesHeading = getApplication<Application>().getString(R.string.canonical_singles_eps),
+                                        ),
+                                    )
+                                }
+                            }
+                        }
                     },
                 )
                 if (_searchSource.value != SearchSource.CANONICAL ||
