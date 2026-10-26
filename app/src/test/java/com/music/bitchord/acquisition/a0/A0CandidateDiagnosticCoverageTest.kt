@@ -58,4 +58,27 @@ class A0CandidateDiagnosticCoverageTest {
         assertFalse(event.attributes.toString().contains("soulseek_user"))
     }
 
+    @Test fun rejectedPeerOffersAreAggregatedWithoutExhaustingTraceEvents() {
+        val points=mutableListOf<StructuredTracePoint>()
+        val tracer=StructuredTracer(
+            sink=StructuredTraceSink { points.add(it) },
+            traceIdFactory={ "issue-177-peer-burst" }
+        )
+        val trace=A0SmokeTrace.start(tracer,observedTransfer=true)
+        repeat(180) { trace.serverOfferRejected() }
+        repeat(45) { trace.serverOfferReceived() }
+        trace.finish(com.music.bitchord.observability.TraceOutcome.SUCCEEDED)
+        val rejected=points.count { it.stage=="server_offer_rejected" }
+        val received=points.count { it.stage=="server_offer_received" }
+        assertTrue(rejected<=2)
+        assertTrue(received<=2)
+        val complete=points.single {
+            it.kind==com.music.bitchord.observability.TracePointKind.TRACE_END &&
+                it.operation=="a0_soulseek_one_shot"
+        }
+        assertEquals("180",complete.attributes["rejectedServerOffers"])
+        assertEquals("45",complete.attributes["receivedServerOffers"])
+        assertFalse(complete.attributes.toString().contains("peerUsername"))
+    }
+
 }
