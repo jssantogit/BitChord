@@ -158,7 +158,17 @@ internal class CoverArtArchive(
                     ?: return CoverLookup.Unavailable
                 val pictures = root["images"] as? JsonArray ?: return CoverLookup.Unavailable
                 val frontImages = pictures.mapNotNull { it as? JsonObject }
-                    .filter { it["front"]?.jsonPrimitive?.booleanOrNull == true }
+                    .filter { entry ->
+                        if (entry["front"]?.jsonPrimitive?.booleanOrNull != true ||
+                            entry["approved"]?.jsonPrimitive?.booleanOrNull == false
+                        ) return@filter false
+                        // MusicBrainz CAA has separate Track, Poster and Front types.
+                        // A poster marked front is not evidence of an audio sleeve.
+                        val types = entry["types"] as? JsonArray
+                        types == null || types.isEmpty() || types.any {
+                            it.jsonPrimitive.contentOrNull.equals("Front", ignoreCase = true)
+                        }
+                    }
                 val front = frontImages.firstNotNullOfOrNull { entry ->
                     val thumbs = entry["thumbnails"] as? JsonObject
                     // Hero art should never pick 250 when a larger source is
