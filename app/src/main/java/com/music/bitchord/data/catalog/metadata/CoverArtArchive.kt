@@ -138,7 +138,13 @@ internal class CoverArtArchive(
             // Room cache is a persistence boundary: never trust old or tampered
             // artwork URLs without the same allowlist used for fresh responses.
             if (cached.artworkUri == null) return CoverLookup.Missing
-            if (safeImageUrl(cached.artworkUri) && !cached.artworkUri.endsWith("-250.jpg")) {
+            if (safeImageUrl(cached.artworkUri) && !cached.artworkUri.endsWith("-250.jpg") &&
+                // Positive entries created before the approved-Front policy
+                // may point at video posters despite being 1200px. Revalidate
+                // them once; fresh values still use the normal 30-day TTL.
+                (now < VERIFIED_FRONT_POLICY_EPOCH_MS ||
+                    cached.fetchedAtEpochMs >= VERIFIED_FRONT_POLICY_EPOCH_MS)
+            ) {
                 return CoverLookup.Found(cached.artworkUri)
             }
             // 250px legacy entries were correct at the time but blur in the
@@ -234,6 +240,10 @@ internal class CoverArtArchive(
     private fun validMbid(value: String): Boolean = MBID.matches(value.lowercase(Locale.ROOT))
 
     private companion object {
+        // 2026-10-26 UTC: migration boundary for previously unvalidated front art.
+        // No Room schema change; tests with synthetic clocks before this date
+        // preserve ordinary cache TTL semantics.
+        const val VERIFIED_FRONT_POLICY_EPOCH_MS = 1_792_972_800_000L
         const val POSITIVE_TTL_MS = 30L * 24 * 60 * 60 * 1_000
         const val NEGATIVE_TTL_MS = 24L * 60 * 60 * 1_000
         val MBID = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
