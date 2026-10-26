@@ -72,32 +72,21 @@ class MusicBrainzCatalogGraphTest {
         assertEquals(2, output.value.items.size)
         assertEquals(group, output.value.items.first().releaseGroupMbid)
         assertEquals(true, output.value.items.first().hasFrontCover)
-        assertEquals("https://coverartarchive.org/release/$worldwide/front-500",
-            com.music.bitchord.data.catalog.metadata.verifiedCaaFront500Url(
-                output.value.items.first()))
         assertEquals(listOf(worldwide), output.value.items
             .filter { it.status.equals("Official", ignoreCase = true) }
             .map { it.musicBrainzId })
     }
 
-    @Test fun directCaaThumbnailRequiresPositiveFrontAndOfficialRelease() {
+    @Test fun frontPresenceFlagAloneDoesNotClaimThatImageTypesAreApproved() {
+        // Positive metadata only allows the archive JSON to be checked.
+        // It is not enough to construct a URL or classify a Poster as a sleeve.
         val release = MusicBrainzReleaseHit(worldwide, "SUPER REAL ME", "XW",
             "2024-03-25", "ILLIT", status = "Official", hasFrontCover = true)
-        val expected = "https://coverartarchive.org/release/$worldwide/front-500"
-        assertEquals(expected,
-            com.music.bitchord.data.catalog.metadata.verifiedCaaFront500Url(release))
-        for (flag in listOf(null, false)) {
-            assertEquals(null,
-                com.music.bitchord.data.catalog.metadata.verifiedCaaFront500Url(
-                    release.copy(hasFrontCover = flag)))
-        }
-        assertEquals(null,
-            com.music.bitchord.data.catalog.metadata.verifiedCaaFront500Url(
-                release.copy(status = "Bootleg")))
-        assertEquals(null,
-            com.music.bitchord.data.catalog.metadata.verifiedCaaFront500Url(
-                release.copy(musicBrainzId = "invalid")))
+        assertEquals(true, release.hasFrontCover)
+        assertEquals(false, release.copy(hasFrontCover = false).hasFrontCover)
+        assertEquals(null, release.copy(hasFrontCover = null).hasFrontCover)
     }
+
 
     @Test fun artistToGroupToReleaseToMediumTrackGraphKeepsIdentityBoundaries() = runBlocking {
         val requests = mutableListOf<Pair<String, Map<String, String>>>()
