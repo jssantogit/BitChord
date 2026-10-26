@@ -64,6 +64,7 @@
     </plurals>
     <string name="songs">שירים</string>
     <string name="artists">אמנים</string>
+    <string name="canonical_singles_eps">סינגלים ומיני-אלבומים</string>
     <string name="albums">אלבומים</string>
     <string name="no_album_metadata">אף אחת מהרצועות האלה לא מציינת מאיזה אלבום היא.</string>
     <string name="search_empty">חפשו מיליוני שירים ב-YouTube Music.</string>
