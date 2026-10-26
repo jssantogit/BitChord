@@ -70,6 +70,7 @@
     </plurals>
     <string name="songs">Песни</string>
     <string name="artists">Исполнители</string>
+    <string name="canonical_singles_eps">Синглы и EP</string>
     <string name="albums">Альбомы</string>
     <string name="no_album_metadata">Ни один из этих треков не указывает свой альбом.</string>
     <string name="search_empty">Ищите миллионы песен на YouTube Music.</string>
