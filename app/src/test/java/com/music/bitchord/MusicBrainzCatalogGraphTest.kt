@@ -159,4 +159,36 @@ class MusicBrainzCatalogGraphTest {
         )
     }
 
+    @Test fun recordingCoverRequiresExplicitReleaseRelation() = runBlocking {
+        val requests = mutableListOf<String>()
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    requests += path + ":" + parameters["inc"]
+                    return """{"id":"$original","releases":[
+                        {"id":"$sped","status":"Bootleg","date":"2024-03-01"},
+                        {"id":"$worldwide","status":"Official","date":"2024-03-25"}
+                    ]}"""
+                }
+            },
+        ))
+        assertEquals(listOf(worldwide, sped), graph.lookupRecordingCoverReleases(original))
+        assertEquals(listOf("recording/$original:releases"), requests)
+        assertEquals(emptyList<String>(), graph.lookupRecordingCoverReleases("invalid"))
+        assertEquals(1, requests.size)
+    }
+
+    @Test fun unrelatedRecordingCannotBorrowAnotherRecordingsCover() = runBlocking {
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$sped","releases":[{"id":"$worldwide","status":"Official"}]}"""
+            },
+        ))
+        assertEquals(emptyList<String>(), graph.lookupRecordingCoverReleases(original))
+    }
+
 }
