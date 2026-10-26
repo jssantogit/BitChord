@@ -23,6 +23,7 @@ internal class A0ObservedCandidateHandoff(
     private val qualityProfile:A0CanonicalAcquisitionIntent.QualityProfileSnapshot=
         A0CanonicalAcquisitionIntent.QualityProfileSnapshot(),
     private val peerReliability:A0PeerReliabilityEvidence=A0PeerReliabilityEvidence(),
+    private val collectReleaseShadow:Boolean=false,
 ) {
     class Choice internal constructor(
         val displayName:String,
@@ -85,6 +86,10 @@ internal class A0ObservedCandidateHandoff(
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
     private val candidates=ArrayList<Choice>(384)
+    // Separate bounded observation cache: long releases need up to 64 tracks
+    // from the same peer, but the actual manual selector retains max 10/peer.
+    private val releaseShadow=ArrayList<Choice>(512)
+    private val releaseShadowPerPeer=HashMap<String,Int>()
     private val canonicalManualTarget by lazy {
         // Badly formatted untrusted/search text must not crash the collector.
         // An invalid album claim loses confidence; it never grants one.
@@ -275,7 +280,7 @@ internal class A0ObservedCandidateHandoff(
                     A0CanonicalAcquisitionIntent.Codec.PCM_WAV,
                     A0CanonicalAcquisitionIntent.Codec.AAC_ADTS),
             )
-            candidates.add(Choice(
+            val observedChoice=Choice(
                 displayName=displayName,sizeBytes=file.sizeBytes,
                 peerUsername=result.peerUsername,remotePath=path,
                 matchScore=ranking.score, matchSignal=ranking.match,
@@ -290,7 +295,15 @@ internal class A0ObservedCandidateHandoff(
                     bitrateKbps=bitrateRaw,durationSeconds=duration,
                     sampleRateHz=sampleRate,bitDepth=bitDepth
                 )
-            ))
+            )
+            candidates.add(observedChoice)
+            if(collectReleaseShadow && releaseShadow.size<512) {
+                val count=releaseShadowPerPeer[result.peerUsername] ?: 0
+                if(count<64) {
+                    releaseShadow.add(observedChoice)
+                    releaseShadowPerPeer[result.peerUsername]=count+1
+                }
+            }
             candidates.sortWith(choiceOrder)
             // A single enthusiastic peer cannot displace every other source.
             val fromPeer=candidates.withIndex()
@@ -452,6 +465,11 @@ internal class A0ObservedCandidateHandoff(
     fun choices():List<Choice> = if(cancelled||spent)emptyList() else candidates.toList()
 
     @Synchronized
+    fun releaseShadowChoices():List<Choice> =
+        if(!collectReleaseShadow || cancelled || spent)emptyList()
+        else releaseShadow.toList()
+
+    @Synchronized
     fun hasCandidates()=candidates.isNotEmpty()&&!cancelled&&!spent
 
     @Synchronized
@@ -474,6 +492,8 @@ internal class A0ObservedCandidateHandoff(
             selected=candidates[index]
             spent=true
             candidates.clear()
+            releaseShadow.clear()
+            releaseShadowPerPeer.clear()
         }
         return transport.runObservedOnce(
             authenticatedServer,localUsername,selected.peerUsername,
@@ -487,6 +507,8 @@ internal class A0ObservedCandidateHandoff(
     fun cancel(){
         cancelled=true
         candidates.clear()
+        releaseShadow.clear()
+        releaseShadowPerPeer.clear()
         transport.cancel()
     }
 
