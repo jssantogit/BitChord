@@ -2372,7 +2372,9 @@ private fun DetailPage.headerLines(trackCount: Int, playtime: String? = null): P
     // artist page, but it is still billed as the artist it is.
     val localKind = if (LocalGroups.isArtist(browseId)) stringResource(R.string.artist) else null
     val meta = listOfNotNull(
-        (kind ?: type.localizedLabel() ?: localKind)?.capitalizeWords(),
+        (kind ?: type.localizedLabel()?.takeIf {
+            com.music.bitchord.ui.canonicalMayUseAlbumFallbackLabel(browseId)
+        } ?: localKind)?.capitalizeWords(),
         year,
         trackCount.takeIf { it > 0 }?.let {
             pluralStringResource(R.plurals.track_count_plural, it, it).capitalizeWords()
