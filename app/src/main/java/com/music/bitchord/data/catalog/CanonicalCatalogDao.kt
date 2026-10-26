@@ -101,6 +101,10 @@ internal interface CanonicalCatalogDao {
     @Query("SELECT * FROM catalog_cover_art_cache WHERE entityType = :entityType AND mbid = :mbid LIMIT 1")
     suspend fun musicBrainzCoverArtCache(entityType: String, mbid: String): MusicBrainzCoverArtCacheEntity?
 
+    /** Batch lookup prevents one Room round trip per artist shelf card. */
+    @Query("SELECT * FROM catalog_cover_art_cache WHERE entityType = 'release-group:front-v2' AND mbid IN (:mbids)")
+    suspend fun verifiedGroupFronts(mbids: List<String>): List<MusicBrainzCoverArtCacheEntity>
+
     @Query("SELECT * FROM catalog_musicbrainz_track WHERE trackMbid = :trackMbid LIMIT 1")
     suspend fun catalogMusicBrainzTrack(trackMbid: String): CatalogMusicBrainzTrackEntity?
 
