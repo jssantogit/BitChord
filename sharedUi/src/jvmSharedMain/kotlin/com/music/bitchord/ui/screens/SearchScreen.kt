@@ -674,9 +674,15 @@ fun canonicalRowAsBrowseItem(row: CanonicalCatalogSearchRow): BrowseItem = Brows
     browseId = "catalog:${row.kind}:${row.musicBrainzId}",
     title = row.title,
     subtitle = row.subtitle.orEmpty(),
-    thumbnailUrl = row.artworkUri,
+    thumbnailUrl = row.artworkUri.takeUnless {
+        row.kind == CanonicalSearchKind.RELEASE_GROUP && !canonicalVerifiedGroupType(row)
+    },
     type = if (row.kind == CanonicalSearchKind.ARTIST) BrowseType.ARTIST else BrowseType.ALBUM,
 )
+
+/** Only positive, independently supplied release classification may create an album tile. */
+private fun canonicalVerifiedGroupType(row: CanonicalCatalogSearchRow): Boolean =
+    row.releaseKind?.trim()?.lowercase(Locale.ROOT) in setOf("album", "ep", "single")
 
 /** Presentation-only grouping; never changes the underlying indexed identities. */
 fun canonicalSearchDisplaySections(
@@ -687,23 +693,28 @@ fun canonicalSearchDisplaySections(
     return listOf(
         SearchFilter.ARTISTS to rows.filter { it.kind == CanonicalSearchKind.ARTIST },
         SearchFilter.SONGS to rows.filter { it.kind == CanonicalSearchKind.RECORDING },
-        SearchFilter.ALBUMS to rows.filter {
-            it.kind == CanonicalSearchKind.RELEASE_GROUP || it.kind == CanonicalSearchKind.RELEASE
-        },
+        SearchFilter.ALBUMS to canonicalRowsForFilter(rows, SearchFilter.ALBUMS),
     ).filter { it.second.isNotEmpty() }
 }
 
 fun canonicalRowsForFilter(
     rows: List<CanonicalCatalogSearchRow>,
     filter: SearchFilter,
-): List<CanonicalCatalogSearchRow> = rows.filter { row ->
+): List<CanonicalCatalogSearchRow> {
+    val knownGroupIds = rows.filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
+        .mapTo(HashSet()) { it.musicBrainzId }
+    return rows.filter { row ->
     when (filter) {
         SearchFilter.ALL -> true
         SearchFilter.SONGS -> row.kind == CanonicalSearchKind.RECORDING
-        SearchFilter.ALBUMS ->
-            row.kind == CanonicalSearchKind.RELEASE || row.kind == CanonicalSearchKind.RELEASE_GROUP
+        SearchFilter.ALBUMS -> canonicalVerifiedGroupType(row) && when (row.kind) {
+            CanonicalSearchKind.RELEASE_GROUP -> true
+            CanonicalSearchKind.RELEASE -> row.coverGroupMbid !in knownGroupIds
+            else -> false
+        }
         SearchFilter.ARTISTS -> row.kind == CanonicalSearchKind.ARTIST
         SearchFilter.VIDEOS, SearchFilter.PLAYLISTS -> false
+    }
     }
 }
 
