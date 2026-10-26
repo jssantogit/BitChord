@@ -522,7 +522,8 @@ internal interface CanonicalCatalogDao {
         """
         SELECT identity.externalId AS musicBrainzId, grp.title AS title,
                grp.primaryType AS primaryType, grp.firstReleaseDate AS firstReleaseDate,
-               grp.artistDisplay AS artistDisplay, art.artworkUri AS artworkUri
+               grp.artistDisplay AS artistDisplay, grp.secondaryTypes AS secondaryTypes,
+               art.artworkUri AS artworkUri
         FROM catalog_external_identity identity
         JOIN catalog_release_group grp ON grp.id = identity.entityId
         LEFT JOIN catalog_cover_art_cache art
