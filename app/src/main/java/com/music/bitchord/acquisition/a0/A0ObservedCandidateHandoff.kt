@@ -159,17 +159,21 @@ internal class A0ObservedCandidateHandoff(
 
     init {require(searchToken>0)}
 
-    fun offerSearchResult(frame:ByteArray,claimedPeerUsername:String) {
+    /** A wire frame is credited as a valid peer reply only after the
+     * authenticated search token and claimed peer identity pass every gate.
+     * Invalid peer bytes must never inflate availability/reliability metrics.
+     */
+    fun offerSearchResult(frame:ByteArray,claimedPeerUsername:String):Boolean {
         val result=try {
             A0SoulseekSearchResponseParser.parse(frame,searchToken)
-        } catch (_:IOException) {return} catch (_:IllegalArgumentException) {return}
-        offerParsed(result,claimedPeerUsername)
+        } catch (_:IOException) {return false} catch (_:IllegalArgumentException) {return false}
+        return offerParsed(result,claimedPeerUsername)
     }
 
     @Synchronized
-    fun offerParsed(result:A0SoulseekSearchResponse,claimedPeerUsername:String) {
+    fun offerParsed(result:A0SoulseekSearchResponse,claimedPeerUsername:String):Boolean {
         if(cancelled||spent||readersStopped||result.token!=searchToken ||
-            result.peerUsername!=claimedPeerUsername) return
+            result.peerUsername!=claimedPeerUsername) return false
         try { A0PeerRendezvousWire.getPeerAddress(result.peerUsername) }
         catch (_:IllegalArgumentException) { return }
         replies=(replies+1).coerceAtMost(100000)
@@ -356,6 +360,7 @@ internal class A0ObservedCandidateHandoff(
                 capDropped=(capDropped+1).coerceAtMost(100000)
             }
         }
+        return true
     }
 
     @Synchronized
