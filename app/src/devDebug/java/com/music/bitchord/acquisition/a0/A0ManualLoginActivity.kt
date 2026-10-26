@@ -557,9 +557,10 @@ class A0ManualLoginActivity : Activity() {
                                                     peerOfferBackpressure.incrementAndGet()
                                                 }
                                             }
-                                            if (!framedServer.atFrameBoundary) {
-                                                // An incomplete frame at shutdown cannot be
-                                                // handed to the P/F transport as aligned.
+                                            if (!framedServer.finishPendingFrame()) {
+                                                // Finish only the already-started TCP frame.
+                                                // We can hand the socket to P/F only at an
+                                                // aligned boundary; never erase partial bytes.
                                                 failedServerReader.set(true)
                                                 trace.note(
                                                     A0SmokeTrace.Stage.SERVER_READ_FAILURE,
