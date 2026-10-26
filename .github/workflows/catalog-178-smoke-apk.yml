@@ -3,7 +3,7 @@ name: Catalog #178 — Android Smoke APK
 # APK candidate from the exact #178 PR HEAD. Pull-request path filters
 # use the cumulative PR diff, so a cheap commit-delta gate prevents repeated
 # 300+ MB builds on unrelated later code pushes.
-# Candidate: post-A54 fixes; group Front-v4, release Front-v3, official edition names, Room cached-first.
+# Candidate: final post-A54 fixes; edition group MBIDs, editorial names, Front-v3/v4, cached-first UI.
 # The APK job runs JVM regressions on the exact checked-out HEAD before packaging.
 on:
   workflow_dispatch:
