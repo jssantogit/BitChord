@@ -577,6 +577,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
     private val canonicalPath = mutableListOf<CanonicalCatalogSearchRow>()
 
+    /**
+     * Canonical identity uses the same native DetailScreen as the rest of
+     * BitChord. A public MBID remains a browse key, NEVER a Song.videoId.
+     */
+    fun openCanonicalNativeDetail(row: CanonicalCatalogSearchRow) {
+        val nativeType = canonicalNativePageType(row.kind) ?: return
+        val browseId = canonicalNativeBrowseId(row)
+        if (_detailStack.value.lastOrNull()?.browseId == browseId) return
+        if (_searchSource.value != SearchSource.CANONICAL) {
+            switchSearchSource(SearchSource.CANONICAL, rerunCurrentQuery = false)
+        }
+        _detailStack.value += DetailPage(
+            browseId = browseId,
+            title = row.title,
+            subtitle = if (row.kind == CanonicalSearchKind.ARTIST) "" else row.subtitle.orEmpty(),
+            thumbnailUrl = row.artworkUri,
+            songs = UiState.Loading,
+            type = nativeType,
+        )
+        openCanonicalCatalogEntry(row)
+    }
+
+    fun openCanonicalNativeShelfItem(browseId: String): Boolean {
+        if (!browseId.startsWith("catalog:")) return false
+        val currentRows = (_canonicalDetail.value as? UiState.Success)?.data?.rows.orEmpty()
+        val fromCatalog = (_canonicalDiscoveryCatalog.value as? UiState.Success)?.data.orEmpty()
+        val row = (currentRows + fromCatalog).firstOrNull {
+            canonicalNativeBrowseId(it) == browseId
+        } ?: return false
+        openCanonicalNativeDetail(row)
+        return true
+    }
+
     fun openCanonicalCatalogEntry(row: CanonicalCatalogSearchRow) {
         if (_searchSource.value != SearchSource.CANONICAL ||
             row.kind == CanonicalSearchKind.RECORDING) return
@@ -831,6 +864,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (_searchSource.value == SearchSource.CANONICAL && canonicalPath.lastOrNull() == entry) {
                 _canonicalDetail.value = output
+                val nativeId = canonicalNativeBrowseId(entry)
+                _detailStack.value = _detailStack.value.map { page ->
+                    if (page.browseId != nativeId) page else when (output) {
+                        is UiState.Success -> page.copy(
+                            songs = UiState.Success(emptyList()),
+                            sections = canonicalNativeSections(
+                                parentKind = entry.kind,
+                                rows = output.data.rows,
+                                heading = getApplication<Application>().getString(
+                                    if (entry.kind == CanonicalSearchKind.ARTIST) R.string.shelf_new_albums_singles
+                                    else R.string.albums,
+                                ),
+                            ),
+                            thumbnailUrl = output.data.artworkUri ?: page.thumbnailUrl,
+                        )
+                        is UiState.Error -> page.copy(songs = UiState.Error(output.message))
+                        UiState.Loading -> page
+                    }
+                }
             }
         }
     }
@@ -4643,7 +4695,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun closeDetail(): Boolean {
         val stack = _detailStack.value
         if (stack.isEmpty()) return false
+        val wasCanonical = stack.last().browseId.startsWith("catalog:")
         _detailStack.value = stack.dropLast(1)
+        if (wasCanonical) backCanonicalCatalogEntry()
         return true
     }
 
