@@ -196,6 +196,13 @@ class CoverArtArchiveFallbackTest {
             cover.findCover(release, null))
     }
 
+    @Test fun strictFrontPolicyUsesSeparatePersistentKeysFromLegacyCoverCache() {
+        assertEquals("release:front-v2",
+            com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType("release"))
+        assertEquals("release-group:front-v2",
+            com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType("release-group"))
+    }
+
     @Test fun coversCachedBeforeStricterFrontPolicyAreRecheckedOnce() = runBlocking {
         val oldTime = 1_792_886_400_000L
         val now = 1_793_000_000_000L
