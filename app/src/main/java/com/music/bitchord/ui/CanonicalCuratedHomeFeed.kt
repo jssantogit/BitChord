@@ -140,7 +140,9 @@ internal fun canonicalCoverLookupTarget(
     row: CanonicalCatalogSearchRow,
 ): Pair<String?, String?>? = when (row.kind) {
     CanonicalSearchKind.RELEASE_GROUP -> null to row.musicBrainzId
-    CanonicalSearchKind.RELEASE -> row.musicBrainzId to row.coverGroupMbid
+    // A Group Front can be a different edition's video/poster artwork.
+    // A specific Release only displays its own typed and approved Front.
+    CanonicalSearchKind.RELEASE -> row.musicBrainzId to null
     CanonicalSearchKind.RECORDING -> row.coverReleaseMbid?.let { it to null }
     CanonicalSearchKind.ARTIST -> null
 }
