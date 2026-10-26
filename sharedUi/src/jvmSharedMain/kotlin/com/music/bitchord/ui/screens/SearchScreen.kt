@@ -121,6 +121,8 @@ data class CanonicalCatalogSearchRow(
     val coverGroupMbid: String? = null,
     /** Recording/release Track duration from MusicBrainz; never inferred from UI title. */
     val durationMs: Long? = null,
+    /** Secondary MusicBrainz ReleaseGroup type evidence, never inferred from a title. */
+    val secondaryTypes: String? = null,
 )
 
 /**
