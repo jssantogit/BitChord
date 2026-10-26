@@ -14,14 +14,17 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal class A0PeerSearchWorkers(
     private val action:(()->Unit)->Unit = { it() },
     queueCapacity:Int = 32,
+    parallelism:Int = 8,
 ) {
-    init { require(queueCapacity in 8..128) }
+    init {
+        require(queueCapacity in 8..128)
+        require(parallelism in 4..12)
+    }
     private val closed=AtomicBoolean(false)
-    // At most 36 offers are processed per live search. Eight sockets can
-    // drain that burst within the existing short discovery window even when
-    // peers take seconds to time out; the queue is still strictly bounded.
+    // Parallel reads remain bounded, with a short queue and deterministic
+    // shutdown. Configurable only for the guided A0 discovery session.
     private val pool=ThreadPoolExecutor(
-        8,8,0L,TimeUnit.MILLISECONDS,
+        parallelism,parallelism,0L,TimeUnit.MILLISECONDS,
         ArrayBlockingQueue<Runnable>(queueCapacity),
         ThreadPoolExecutor.AbortPolicy()
     )
