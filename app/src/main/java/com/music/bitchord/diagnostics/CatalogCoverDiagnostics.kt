@@ -14,6 +14,7 @@ internal object CatalogCoverDiagnostics {
         add("not_measured=bitmap_render_duration_wrong_cover_rate")
         add("cache_hits=${s.positiveCacheHits} negative_cache_hits=${s.negativeCacheHits}" +
             " coalesced_requests=${s.coalescedRequests}")
+        add("direct_front_candidates=${s.directFrontCandidates} source=musicbrainz_verified_release_front")
         add("network_requests=${s.networkRequests} success=${s.successfulNetworkRequests}" +
             " not_found=${s.networkNotFound} transient_failures=${s.transientFailures}")
         if (s.latencySampleCount > 0 && s.p50NetworkMs != null && s.p95NetworkMs != null) {
