@@ -203,11 +203,13 @@ class CoverArtArchiveFallbackTest {
             com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType("release-group"))
     }
 
-    @Test fun coversCachedBeforeStricterFrontPolicyAreRecheckedOnce() = runBlocking {
+    @Test fun oldFrontCacheCannotBlockNewPolicyAndNewCacheIsReusable() = runBlocking {
         val oldTime = 1_792_886_400_000L
         val now = 1_793_000_000_000L
+        val oldKey = "release" to release
+        val freshKey = com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType("release") to release
         val storeRows = mutableMapOf(
-            ("release" to release) to MusicBrainzCoverArtCacheEntry(
+            oldKey to MusicBrainzCoverArtCacheEntry(
                 "release", release, "https://archive.org/old-video-still.jpg", oldTime,
             ),
         )
@@ -225,9 +227,10 @@ class CoverArtArchiveFallbackTest {
                 }
             },
             store = object : MusicBrainzCoverArtStore {
-                override suspend fun read(type: String, mbid: String) = storeRows[type to mbid]
+                override suspend fun read(type: String, mbid: String) =
+                    storeRows[com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType(type) to mbid]
                 override suspend fun write(value: MusicBrainzCoverArtCacheEntry) {
-                    storeRows[value.entityType to value.mbid] = value
+                    storeRows[com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType(value.entityType) to value.mbid] = value
                 }
             },
             nowEpochMs = { now },
@@ -235,6 +238,8 @@ class CoverArtArchiveFallbackTest {
         assertEquals("https://archive.org/official-sleeve.jpg", cover.findCover(release, null))
         assertEquals("https://archive.org/official-sleeve.jpg", cover.findCover(release, null))
         assertEquals(1, calls)
+        assertEquals("https://archive.org/old-video-still.jpg", storeRows[oldKey]?.artworkUri)
+        assertEquals("https://archive.org/official-sleeve.jpg", storeRows[freshKey]?.artworkUri)
     }
 
     @Test fun old250pxRoomCacheCanBeUpgradedWithoutTrustingTextMatches() = runBlocking {
