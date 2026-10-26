@@ -25,7 +25,7 @@ class A0CandidateDiagnosticCoverageTest {
         val event=points.single { it.stage=="candidate_screening" }
         val values=event.attributes
         assertTrue(values.size<=24)
-        assertEquals("preflight-v4",values["policyVersion"])
+        assertEquals("preflight-v5",values["policyVersion"])
         assertEquals("2",values["selectable"])
         assertEquals("2",values["distinctClaims"])
         assertEquals("0",values["repeatedClaims"])
