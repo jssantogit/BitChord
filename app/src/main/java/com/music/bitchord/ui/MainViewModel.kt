@@ -544,7 +544,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         RoomMusicBrainzCoverArtStore(
                             CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao(),
                         ).write(MusicBrainzCoverArtCacheEntry(
-                            "release-group", row.musicBrainzId, null,
+                            "verified-artist-group", row.musicBrainzId, null,
                             System.currentTimeMillis(), quick,
                         ))
                     } catch (cancelled: CancellationException) { throw cancelled }
@@ -563,7 +563,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     RoomMusicBrainzCoverArtStore(
                         CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao(),
                     ).write(MusicBrainzCoverArtCacheEntry(
-                        "release-group", row.musicBrainzId, hero,
+                        "verified-artist-group", row.musicBrainzId, hero,
                         System.currentTimeMillis(), thumb,
                     ))
                 } catch (cancelled: CancellationException) { throw cancelled }
