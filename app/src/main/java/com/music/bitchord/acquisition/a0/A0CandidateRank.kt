@@ -224,7 +224,8 @@ internal object A0CandidateRank {
         // overriding normal album/artist context.
         if (setOf("live","remix","karaoke","instrumental","nightcore",
                 "slowed","cover","sped","reverb","acoustic","demo",
-                "extended","bootleg","8d") .any {
+                "extended","bootleg","8d","remaster","remastered",
+                "radio","edit","rerecorded","re-recorded") .any {
                 (it in nameWords || it in immediateFolderWords) &&
                     it !in requestedWords
             }) {
