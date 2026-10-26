@@ -15,8 +15,10 @@ internal object A0ManualCandidatePolicy {
         selectableIndices: List<Int>,
     ): List<Int> = selectableIndices.filter { index ->
         val claim = choices.getOrNull(index) ?: return@filter false
-        claim.qualityEvidence.status ==
-            A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED &&
+        claim.qualityEvidence.status in setOf(
+            A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED,
+            A0DownloadQualityPolicy.Status.NOT_CONSTRAINED
+        ) &&
             claim.preflight.confidence != A0CandidatePreflight.Confidence.UNSAFE &&
             claim.identityEvidence.verdict != A0CanonicalIdentityPolicy.Verdict.INCOMPATIBLE &&
             claim.albumEvidence.status != A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM
