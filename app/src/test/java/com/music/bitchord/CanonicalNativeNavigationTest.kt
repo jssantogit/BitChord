@@ -168,6 +168,11 @@ class CanonicalNativeNavigationTest {
         assertEquals(listOf("official"), canonicalPreferredEditions(
             listOf(bootleg, promo, verified), "Get Up").map { it.musicBrainzId })
         assertTrue(canonicalPreferredEditions(listOf(bootleg, promo), "Get Up").isEmpty())
+        // A missing MusicBrainz status cannot prove official availability,
+        // including old offline Release metadata saved before status tracking.
+        assertTrue(canonicalPreferredEditions(listOf(
+            verified.copy(musicBrainzId = "unknown", status = null)
+        ), "Get Up").isEmpty())
     }
 
 }
