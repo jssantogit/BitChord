@@ -15,7 +15,7 @@ class A0ObservedCandidateHandoffTest {
                 A0SoulseekSearchFile("Songs\\newjeans - omg.mp3",40000,"mp3",emptyMap()),
                 A0SoulseekSearchFile("Songs\\other track.flac",110000,"flac",emptyMap()),
                 A0SoulseekSearchFile("../invalid.mp3",80000,"mp3",emptyMap()),
-                A0SoulseekSearchFile("Songs\\oversize.mp3",65L*1024*1024,"mp3",emptyMap())
+                A0SoulseekSearchFile("Songs\\oversize.mp3",257L*1024*1024,"mp3",emptyMap())
             ),
             lockedFiles=emptyList(),hasFreeUploadSlot=true,uploadSpeed=1000,queueLength=0
         )
