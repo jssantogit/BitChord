@@ -49,7 +49,7 @@ class A0ManualLoginActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     @Volatile private var activeSocket: Socket? = null
     @Volatile private var activeListener: ServerSocket? = null
-    @Volatile private var activeDirectPeer: Socket? = null
+    @Volatile private var activeDirectCollector:A0DirectPeerSearchCollector?=null
     private val activeIndirectPeers=java.util.concurrent.ConcurrentHashMap.newKeySet<Socket>()
     @Volatile private var activePeerWorkers:A0PeerSearchWorkers?=null
     @Volatile private var stopping = false
@@ -352,7 +352,7 @@ class A0ManualLoginActivity : Activity() {
                             result = "LOGIN CONFIRMADO. Sessão encerrada, sem buscas ou downloads."
                             finalOutcome = TraceOutcome.SUCCEEDED
                         } else {
-                            ServerSocket(0, 32).use { listener ->
+                            ServerSocket(0, 128).use { listener ->
                                 activeListener = listener
                                 trace.note(A0SmokeTrace.Stage.SEARCH_LISTENER_OPEN)
                                 listener.soTimeout = 18_000
@@ -413,58 +413,63 @@ class A0ManualLoginActivity : Activity() {
                                 val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(18)
                                 // The server reader only parses frames; indirect peer
                                 // handshakes run concurrently on peer-only sockets.
-                                val peerWorkers=A0PeerSearchWorkers()
+                                val peerWorkers=A0PeerSearchWorkers(queueCapacity=96)
                                 activePeerWorkers=peerWorkers
                                 val peerOfferBackpressure=java.util.concurrent.atomic.AtomicInteger(0)
+                                val directOfferBackpressure=java.util.concurrent.atomic.AtomicInteger(0)
+                                val directWaits=java.util.concurrent.atomic.AtomicInteger(0)
+                                val directCollector=A0DirectPeerSearchCollector { peer ->
+                                    if(readerGate.isOpen() && !stopping) {
+                                        try {
+                                            peer.soTimeout = 3500
+                                            val observation=A0OneShotPublicSearchWire.readOneDirectPeerReply(
+                                                peer.getInputStream(),token
+                                            ) { verifiedFrame, claimedPeer ->
+                                                receivedValidP2pReply.set(true)
+                                                handoff?.offerSearchResult(verifiedFrame,claimedPeer)
+                                                discoveryProgress()
+                                            }
+                                            trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_ACCEPTED)
+                                            if (!transferObserved) {
+                                                readerGate.publish(inbox,
+                                                    "RESPOSTA P2P DIRETA: " +
+                                                    "${observation.untrustedResultCount} entradas declaradas.")
+                                            }
+                                        } catch (_: SocketTimeoutException) {
+                                            if(directWaits.incrementAndGet()<=2)
+                                                trace.note(A0SmokeTrace.Stage.DIRECT_READ_TIMEOUT,
+                                                    TraceOutcome.SKIPPED,A0SmokeTrace.Reason.READ_TIMEOUT)
+                                        } catch (_: IOException) {
+                                            if(readerGate.isOpen())
+                                                trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_REJECTED,
+                                                    TraceOutcome.DEGRADED,A0SmokeTrace.Reason.PEER_IO_FAILURE)
+                                        }
+                                    }
+                                }
+                                activeDirectCollector=directCollector
                                 val readers = Executors.newFixedThreadPool(2)
                                 try {
                                     readers.execute {
-                                        listener.soTimeout = 1000
-                                        var directWaits = 0
+                                        // Accept continuously; each P read runs on a bounded
+                                        // independent worker instead of blocking the listener
+                                        // for up to four seconds per slow/unreachable peer.
+                                        listener.soTimeout=750
                                         while (!Thread.currentThread().isInterrupted &&
                                             !listener.isClosed && System.nanoTime() < deadline &&
                                             readerGate.isOpen()
                                         ) {
                                             try {
-                                                listener.accept().use { peer ->
-                                                    if (!readerGate.isOpen()) return@use
-                                                    trace.note(A0SmokeTrace.Stage.DIRECT_ACCEPTED)
-                                                    activeDirectPeer = peer
-                                                    peer.soTimeout = 4000
-                                                    val observation =
-                                                        A0OneShotPublicSearchWire.readOneDirectPeerReply(
-                                                            peer.getInputStream(), token
-                                                        ) { verifiedFrame, claimedPeer ->
-                                                            receivedValidP2pReply.set(true)
-                                                            handoff?.offerSearchResult(
-                                                                verifiedFrame, claimedPeer
-                                                            )
-                                                            discoveryProgress()
-                                                        }
-                                                    trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_ACCEPTED)
-                                                    if (!transferObserved) {
-                                                        readerGate.publish(
-                                                            inbox, "RESPOSTA P2P DIRETA: " +
-                                                                "${observation.untrustedResultCount} entradas " +
-                                                                "declaradas, não verificadas."
-                                                        )
-                                                    }
-                                                }
+                                                val peer=listener.accept()
+                                                trace.note(A0SmokeTrace.Stage.DIRECT_ACCEPTED)
+                                                if(!directCollector.offer(peer))
+                                                    directOfferBackpressure.incrementAndGet()
                                             } catch (_: SocketTimeoutException) {
-                                                if (++directWaits <= 2) trace.note(
-                                                    A0SmokeTrace.Stage.DIRECT_READ_TIMEOUT,
-                                                    TraceOutcome.SKIPPED,
-                                                    A0SmokeTrace.Reason.READ_TIMEOUT
-                                                )
+                                                // No inbound peers yet; keep listening.
                                             } catch (_: IOException) {
-                                                if (listener.isClosed) break
-                                                trace.note(
-                                                    A0SmokeTrace.Stage.DIRECT_REPLY_REJECTED,
+                                                if (listener.isClosed || !readerGate.isOpen()) break
+                                                trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_REJECTED,
                                                     TraceOutcome.DEGRADED,
-                                                    A0SmokeTrace.Reason.PEER_IO_FAILURE
-                                                )
-                                            } finally {
-                                                activeDirectPeer = null
+                                                    A0SmokeTrace.Reason.PEER_IO_FAILURE)
                                             }
                                         }
                                     }
@@ -479,7 +484,7 @@ class A0ManualLoginActivity : Activity() {
                                         try {
                                             while (!Thread.currentThread().isInterrupted &&
                                                 System.nanoTime() < deadline &&
-                                                readerGate.isOpen() && attempts < 36
+                                                readerGate.isOpen() && attempts < 96
                                             ) {
                                                 framedServer.nextFrame()
                                                 val offer = try {
@@ -684,22 +689,28 @@ class A0ManualLoginActivity : Activity() {
                                             readers,
                                             closeSearchSockets={
                                                 listener.close()
-                                                activeDirectPeer?.close()
+                                                directCollector.closeSockets()
                                             },
                                             timeoutMillis=5000
                                         )
                                         // The only remaining work owns separate P sockets.
                                         // Close them before P/F takes the server connection.
                                         activeIndirectPeers.toList().forEach { runCatching { it.close() } }
+                                        if (!directCollector.stop(4500)) {
+                                            throw IOException("A0 direct peer tasks still active")
+                                        }
+                                        activeDirectCollector=null
                                         if (!peerWorkers.stop(4500)) {
                                             throw IOException("A0 indirect peer tasks still active")
                                         }
                                         activePeerWorkers=null
                                         trace.note(A0SmokeTrace.Stage.SEARCH_READERS_JOINED)
-                                        trace.peerSearchBackpressure(peerOfferBackpressure.get())
+                                        trace.peerSearchBackpressure(
+                                            peerOfferBackpressure.get()+directOfferBackpressure.get())
                                     } else {
                                         listener.close()
-                                        activeDirectPeer?.close()
+                                        directCollector.cancel()
+                                        activeDirectCollector=null
                                         activeIndirectPeers.toList().forEach { runCatching { it.close() } }
                                         peerWorkers.cancel()
                                         activePeerWorkers=null
@@ -1320,7 +1331,7 @@ class A0ManualLoginActivity : Activity() {
             A0SmokeTrace.Reason.CANCELLED
         )
         activeListener?.close() // Interrupt any pending direct peer result.
-        activeDirectPeer?.close()
+        activeDirectCollector?.cancel()
         activePeerWorkers?.cancel()
         activeIndirectPeers.toList().forEach { runCatching { it.close() } }
         activeSocket?.close() // Interrupt unfinished server response.
@@ -1336,7 +1347,7 @@ class A0ManualLoginActivity : Activity() {
         activeSelectionQueue?.offer(-1)
         activeTransfer?.cancel()
         activeListener?.close()
-        activeDirectPeer?.close()
+        activeDirectCollector?.cancel()
         activePeerWorkers?.cancel()
         activeIndirectPeers.toList().forEach { runCatching { it.close() } }
         activeSocket?.close()
