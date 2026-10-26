@@ -127,7 +127,7 @@ class MusicBrainzPublicMetadataIndexTest {
             val index = MusicBrainzCatalogIndex(db, idFactory = { "artist-card-${++number}" })
             val artistMbid = "b51c672b-85e0-48fe-8648-470a2422229f"
             val groupMbid = "529f87a1-1081-48a4-8ee1-3c08de229858"
-            index.persistArtists(listOf(MusicBrainzArtistHit(
+            val artistIds = index.persistArtists(listOf(MusicBrainzArtistHit(
                 artistMbid, "aespa", "South Korean group", "KR")))
             index.persistArtistGroups(artistMbid, listOf(MusicBrainzReleaseGroupHit(
                 groupMbid, "SUPER REAL ME", "EP", "2024-03-25", "aespa",
@@ -138,6 +138,11 @@ class MusicBrainzPublicMetadataIndexTest {
                 "https://archive.org/verified-album-1200.jpg", 20_000L,
                 thumbnailUri = "https://archive.org/verified-album-500.jpg",
             ))
+            val joined = db.catalogDao().verifiedArtistDiscographyRows(
+                requireNotNull(artistIds[artistMbid])).single()
+            assertEquals(groupMbid, joined.musicBrainzId)
+            assertEquals("https://archive.org/verified-album-500.jpg", joined.artworkUri)
+            assertEquals("Remix", joined.secondaryTypes)
             val cached = index.cachedArtistGroups(artistMbid).single()
             assertEquals(groupMbid, cached.musicBrainzId)
             assertEquals("Remix", cached.secondaryTypes)
