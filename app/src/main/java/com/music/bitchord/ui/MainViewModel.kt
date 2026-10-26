@@ -555,7 +555,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val portrait = canonicalArtistArtworkCandidate(visible, query)
         if (candidates.isEmpty() && portrait == null) return
         canonicalSearchCoverJob = viewModelScope.launch(Dispatchers.IO) {
-            if (portrait != null) {
+            // Artist portrait is independent decoration: don't block the
+            // entire album/recording cover queue on the Apple art endpoint.
+            if (portrait != null) launch {
                 val art = try {
                     AppleArtistArtRepository.artFor(portrait.title)?.heroUrl
                 } catch (cancelled: CancellationException) {
@@ -563,9 +565,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (_: Exception) { null }
                 if (art != null && _searchSource.value == SearchSource.CANONICAL &&
                     _query.value.trim() == query
-                ) {
-                    val current = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
-                    _canonicalResults.value = UiState.Success(current.map {
+                ) _canonicalResults.update { old ->
+                    if (old !is UiState.Success) old else UiState.Success(old.data.map {
                         if (it.kind == CanonicalSearchKind.ARTIST &&
                             it.musicBrainzId == portrait.musicBrainzId &&
                             it.artworkUri.isNullOrBlank()) it.copy(artworkUri = art) else it
