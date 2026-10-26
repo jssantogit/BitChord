@@ -35,7 +35,15 @@ internal fun canonicalPreferredEditions(
         }.thenBy {
             if (it.releaseDate?.matches(Regex("""\d{4}(-\d{2}){0,2}""")) == true) 0 else 1
         }.thenBy {
-            it.releaseDate?.padEnd(10, '0') ?: "9999-12-31"
+            // A precise date is better evidence than a year-only placeholder.
+            when (it.releaseDate?.length) {
+                10 -> 0
+                7 -> 1
+                4 -> 2
+                else -> 3
+            }
+        }.thenBy {
+            it.releaseDate ?: "9999-12-31"
         }.thenBy {
             when (it.country) {
                 "XW" -> 0 // International release, if all stronger evidence ties.
