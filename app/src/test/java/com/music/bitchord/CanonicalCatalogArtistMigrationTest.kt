@@ -57,6 +57,7 @@ class CanonicalCatalogArtistMigrationTest {
                 CanonicalCatalogDatabase.MIGRATION_7_8,
                 CanonicalCatalogDatabase.MIGRATION_8_9,
                 CanonicalCatalogDatabase.MIGRATION_9_10,
+                CanonicalCatalogDatabase.MIGRATION_10_11,
             )
             .allowMainThreadQueries()
             .build()
