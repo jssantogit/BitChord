@@ -498,7 +498,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (target == null) return null
         val direct = coverArtArchive.findCover(target.first, target.second)
-        if (direct != null || row.kind != CanonicalSearchKind.RELEASE_GROUP) return direct
+        if (direct != null) return direct
+        if (row.kind == CanonicalSearchKind.RECORDING) {
+            // Search's shortened list may nominate an edition with no front.
+            // Try only other verified Release links for this same Recording.
+            for (release in musicBrainzGraph.lookupRecordingCoverReleases(row.musicBrainzId)) {
+                if (release == row.coverReleaseMbid) continue
+                val cover = coverArtArchive.findCover(release, null)
+                if (cover != null) return cover
+            }
+            return null
+        }
+        if (row.kind != CanonicalSearchKind.RELEASE_GROUP) return null
         val related = musicBrainzGraph.browseGroupReleases(row.musicBrainzId, limit = 20)
         val versions = if (related is MusicBrainzCatalogGraphResult.Success) {
             canonicalPreferredEditions(related.value.items, row.title).take(3)
