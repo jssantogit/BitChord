@@ -2,6 +2,8 @@ package com.music.bitchord.data.catalog.metadata
 
 import java.util.Locale
 
+private val EXTERNAL_CANONICAL_MBID = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
 /**
  * Read-only observations from future provider adapters.
  * These are *not* canonical IDs, playable MediaAssets, or assertions that the
@@ -36,13 +38,13 @@ internal data class ExternalEditorialEvidence(
     private fun normalizedId(): String? {
         val id = externalId.trim()
         if (id.isEmpty() || id.length > 180 || id.contains('/') ||
-            id.contains('\\') || id.any { it.isISOControl() }
+            id.contains('\\') || id.any { Character.isISOControl(it) }
         ) return null
         return id
     }
 
     fun assess(): CatalogEvidenceDecision {
-        if (!MBID.matches(canonicalMbid.lowercase(Locale.ROOT)) ||
+        if (!EXTERNAL_CANONICAL_MBID.matches(canonicalMbid.lowercase(Locale.ROOT)) ||
             normalizedId() == null
         ) return CatalogEvidenceDecision.REJECTED
         if (provider == CatalogExternalProvider.APPLE_MUSIC &&
