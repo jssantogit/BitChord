@@ -232,11 +232,12 @@ class MusicBrainzCatalogSearchTest {
         val flip = "33333333-3333-4333-8333-333333333333"
         val performance = "44444444-4444-4444-8444-444444444444"
         val officialRemix = "55555555-5555-4555-8555-555555555555"
+        val officialVideoRelease = "77777777-7777-4777-8777-777777777777"
         val release = "66666666-6666-4666-8666-666666666666"
         val search = MusicBrainzCatalogSearch(MusicBrainzClient(
             transport = object : MusicBrainzTransport {
                 override suspend fun get(path: String, parameters: Map<String,String>, userAgent: String) =
-                    """{"count":5,"offset":0,"recordings":[
+                    """{"count":6,"offset":0,"recordings":[
                       {"id":"$original","title":"Hurt","artist-credit":[{"name":"$artist"}],
                        "releases":[{"id":"$release","status":"Official","release-group":{"primary-type":"EP"}}]},
                       {"id":"$video","title":"Hurt","video":true,
@@ -246,7 +247,9 @@ class MusicBrainzCatalogSearchTest {
                       {"id":"$performance","title":"Cool With You (performance ver.)",
                        "releases":[{"id":"$release","status":"Official","release-group":{"primary-type":"Single"}}]},
                       {"id":"$officialRemix","title":"Hurt (250 Remix)",
-                       "releases":[{"id":"$release","status":"Official","release-group":{"primary-type":"Album"}}]}
+                       "releases":[{"id":"$release","status":"Official","release-group":{"primary-type":"Album"}}]},
+                      {"id":"$officialVideoRelease","title":"Hurt",
+                       "releases":[{"id":"$release","status":"Official","release-group":{"primary-type":"Other"}}]}
                     ]}"""
             }
         ))
@@ -257,6 +260,10 @@ class MusicBrainzCatalogSearchTest {
         assertEquals(release, rows.first().coverReleaseMbid)
         assertEquals(null, rows[1].coverReleaseMbid)
         assertEquals(null, rows[2].coverReleaseMbid)
+        // A clean title and an Official release are insufficient: the
+        // only known edition may be a film/video classified as Other.
+        assertEquals(null, rows.last().coverReleaseMbid)
+        assertTrue(!com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRecording(rows.last()))
     }
 
     @Test fun musicVideoPracticeAndUnverifiedRecordingAreNotPromotedToOfficialAudio() {
