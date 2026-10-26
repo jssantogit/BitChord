@@ -1221,6 +1221,16 @@ class PlaybackService : MediaLibraryService() {
             // so it names the track this format arrived for even if the
             // queue has moved on again since. See [audioFormatFor].
             audioFormatFor = eventTime.mediaId()
+            // Media3 reports decoder INPUT here. No selected stream attempt is
+            // inferred from the renderer callback, and this is not decoded
+            // output, effective bitrate or proof that the listener heard audio.
+            if (player?.currentMediaItem?.isCanonicalRemotePlayback() == true &&
+                audioFormatFor != null && player?.currentMediaItem?.mediaId == audioFormatFor) {
+                CanonicalRemoteQualityDiagnostics.record(CanonicalRemoteQualityEvidence(
+                    stage = CanonicalRemoteQualityEvidenceStage.DECODER_INPUT_REPORTED,
+                    decoderInput = CanonicalRemoteDecoderInputEvidence.fromMime(format.sampleMimeType),
+                ))
+            }
             // Ground truth for a real-device listening test: this is the
             // renderer's own Format, straight off the decoder with none of
             // the app's caching/upgrade logic in between, so it's the one
@@ -1291,6 +1301,16 @@ class PlaybackService : MediaLibraryService() {
             initializedTimestampMs: Long,
             initializationDurationMs: Long,
         ) {
+            if (player?.currentMediaItem?.isCanonicalRemotePlayback() == true &&
+                eventTime.mediaId() != null &&
+                player?.currentMediaItem?.mediaId == eventTime.mediaId()) {
+                // Initialized is stronger than MIME header, but weaker than
+                // decoded output or externally heard audio. Deliberately unlinked
+                // to any DataSource attempt without proven causal identity.
+                CanonicalRemoteQualityDiagnostics.record(CanonicalRemoteQualityEvidence(
+                    stage = CanonicalRemoteQualityEvidenceStage.DECODER_INITIALIZED,
+                ))
+            }
             AudioOutputStatus.publishDecoder(decoderName)
             TrackLog.i(
                 "AUDIO_OUT",
@@ -1736,6 +1756,7 @@ class PlaybackService : MediaLibraryService() {
                     runtime = canonicalQualityRuntime,
                     preferences = CanonicalRemoteQualityPreferences::current,
                     network = { CanonicalRemotePhysicalNetwork.snapshot(applicationContext) },
+                    evidence = CanonicalRemoteQualityDiagnostics::record,
                 )
             },
         )
