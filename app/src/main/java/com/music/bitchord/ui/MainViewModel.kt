@@ -485,6 +485,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * An actual edition must always retain its own artwork authority.
      */
     private suspend fun canonicalArtworkForRow(row: CanonicalCatalogSearchRow): String? {
+        // MusicBrainz "Other" is not positive evidence for a release sleeve.
+        // An unrelated release edition might be a video whose art is a still.
+        if (row.kind == CanonicalSearchKind.RELEASE_GROUP &&
+            canonicalEditorialReleaseType(row) == null
+        ) return null
         val target = canonicalCoverLookupTarget(row)
         if (target == null && row.kind == CanonicalSearchKind.RECORDING) {
             // MusicBrainz search does not always send the release relation.
@@ -509,13 +514,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             return null
         }
-        if (row.kind != CanonicalSearchKind.RELEASE_GROUP) return null
-        val related = musicBrainzGraph.browseGroupReleases(row.musicBrainzId, limit = 20)
+        if (row.kind != CanonicalSearchKind.RELEASE_GROUP ||
+            canonicalEditorialReleaseType(row) == null
+        ) return null
+        // Album/EP/Single Group art has priority. Never use unrelated video,
+        // remix or release variants merely because they share an RG MBID.
+        val related = musicBrainzGraph.browseGroupReleases(row.musicBrainzId, limit = 16)
         val versions = if (related is MusicBrainzCatalogGraphResult.Success) {
-            canonicalPreferredEditions(related.value.items, row.title).take(3)
+            canonicalPreferredEditions(related.value.items, row.title)
+                .filter { it.status.equals("Official", ignoreCase = true) &&
+                    it.title.trim().equals(row.title.trim(), ignoreCase = true) }
+                .take(2)
         } else emptyList()
         for (release in versions) {
-            val image = coverArtArchive.findCover(release.musicBrainzId, row.musicBrainzId)
+            val image = coverArtArchive.findCover(release.musicBrainzId, null)
             if (image != null) return image
         }
         return null
@@ -703,7 +715,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         canonicalDetailCoverJob?.cancel()
         val initial = (_canonicalDetail.value as? UiState.Success)?.data?.rows
             .orEmpty().filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
-            .filter { it.artworkUri.isNullOrBlank() }.take(12)
+            .filter { canonicalEditorialReleaseType(it) != null &&
+                it.artworkUri.isNullOrBlank() }.take(12)
         if (initial.isEmpty()) return
         canonicalDetailCoverJob = viewModelScope.launch(Dispatchers.IO) {
             for (group in initial) {
@@ -718,7 +731,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             group.musicBrainzId, limit = 16,
                         )
                         val first = if (related is MusicBrainzCatalogGraphResult.Success) {
-                            canonicalPreferredEditions(related.value.items, group.title).take(3)
+                            canonicalPreferredEditions(related.value.items, group.title)
+                                .filter { it.status.equals("Official", ignoreCase = true) &&
+                                    it.title.trim().equals(group.title.trim(), ignoreCase = true) }
+                                .take(2)
                         } else emptyList()
                         var found: String? = null
                         for (release in first) {
@@ -780,7 +796,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }).filter { it.isNotBlank() }.joinToString(" · ")
                 else -> row.subtitle.orEmpty()
             },
-            thumbnailUrl = row.artworkUri,
+            thumbnailUrl = row.artworkUri.takeUnless {
+                row.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                    canonicalEditorialReleaseType(row) == null
+            },
             songs = UiState.Loading,
             type = nativeType,
         )
@@ -822,6 +841,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _canonicalLoadingMore.value = false
         canonicalPath.clear()
         _canonicalDetail.value = null
+    }
+
+    /**
+     * Native release tracks must never be delayed by CAA/Archive redirects.
+     * Artwork updates only the still-open canonical page, never an old browse.
+     */
+    private fun enrichCanonicalNativeReleaseCover(entry: CanonicalCatalogSearchRow) {
+        canonicalDetailCoverJob?.cancel()
+        if (entry.kind == CanonicalSearchKind.RELEASE_GROUP &&
+            canonicalEditorialReleaseType(entry) == null
+        ) return
+        canonicalDetailCoverJob = viewModelScope.launch(Dispatchers.IO) {
+            val artwork = try {
+                canonicalArtworkForRow(entry)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { null } ?: return@launch
+            if (_searchSource.value != SearchSource.CANONICAL ||
+                canonicalPath.lastOrNull() != entry) return@launch
+            val current = (_canonicalDetail.value as? UiState.Success)?.data
+                ?: return@launch
+            _canonicalDetail.value = UiState.Success(current.copy(artworkUri = artwork))
+            val id = canonicalNativeBrowseId(entry)
+            _detailStack.value = _detailStack.value.map {
+                if (it.browseId == id) it.copy(thumbnailUrl = artwork) else it
+            }
+        }
     }
 
     /** Cancel the old namespace before the new source starts answering the same query. */
@@ -1011,30 +1057,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Exception) { emptySet() }
-                        val cover = withContext(Dispatchers.IO) {
-                            // A Release Group page represents the release as a
-                            // whole. Prefer the selected edition's front; only
-                            // if neither it nor the group has one, try a small
-                            // number of *other editions from this exact group*.
-                            var art = coverArtArchive.findCover(
-                                detail.musicBrainzId, entry.musicBrainzId,
-                            )
-                            if (art == null) {
-                                for (edition in ranked.filterNot {
-                                    it.musicBrainzId == detail.musicBrainzId
-                                }.take(3)) {
-                                    art = coverArtArchive.findCover(
-                                        edition.musicBrainzId, entry.musicBrainzId,
-                                    )
-                                    if (art != null) break
-                                }
-                            }
-                            art
-                        }
+                        // Publish tracks immediately; remote cover is a separate,
+                        // cancellable decoration, never a tracklist prerequisite.
                         UiState.Success(CanonicalCatalogDetailPage(
                             title = entry.title,
                             summary = null,
-                            artworkUri = cover,
+                            artworkUri = entry.artworkUri.takeIf {
+                                canonicalEditorialReleaseType(entry) != null
+                            },
                             rows = detail.tracks.map { track ->
                                 CanonicalCatalogSearchRow(
                                     musicBrainzId = track.recordingMbid,
@@ -1067,12 +1097,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         } catch (_: Exception) {
                             emptySet()
                         }
-                        val artwork = withContext(Dispatchers.IO) {
-                            coverArtArchive.findCover(details.musicBrainzId, details.groupMbid)
-                        }
                         UiState.Success(CanonicalCatalogDetailPage(
                             title = details.title,
-                            artworkUri = artwork,
+                            artworkUri = entry.artworkUri,
                             summary = listOfNotNull(details.country, details.releaseDate)
                                 .joinToString(" · "),
                             rows = details.tracks.map { track -> CanonicalCatalogSearchRow(
@@ -1123,8 +1150,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (_searchSource.value == SearchSource.CANONICAL && canonicalPath.lastOrNull() == entry) {
                 _canonicalDetail.value = output
-                if (entry.kind == CanonicalSearchKind.ARTIST && output is UiState.Success) {
-                    enrichCanonicalNativeDetailCovers(entry)
+                if (output is UiState.Success) {
+                    if (entry.kind == CanonicalSearchKind.ARTIST) {
+                        enrichCanonicalNativeDetailCovers(entry)
+                    } else if (entry.kind == CanonicalSearchKind.RELEASE ||
+                        entry.kind == CanonicalSearchKind.RELEASE_GROUP
+                    ) {
+                        enrichCanonicalNativeReleaseCover(entry)
+                    }
                 }
                 val nativeId = canonicalNativeBrowseId(entry)
                 _detailStack.value = _detailStack.value.map { page ->
