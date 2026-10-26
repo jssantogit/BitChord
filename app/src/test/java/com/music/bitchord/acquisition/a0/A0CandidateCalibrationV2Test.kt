@@ -82,7 +82,7 @@ class A0CandidateCalibrationV2Test {
 
     @Test fun packAndPolicyAreExplicitlyVersioned() {
         // Frozen calibration-v2 data is also run against the current v4 policy.
-        assertEquals("preflight-v4",A0CandidatePreflight.POLICY_VERSION)
+        assertEquals("preflight-v5",A0CandidatePreflight.POLICY_VERSION)
         assertEquals(17,cases.size)
         assertEquals(cases.size,cases.map { it.id }.distinct().size)
         assertEquals(4,cases.count { it.expected==S })
