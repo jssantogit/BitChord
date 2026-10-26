@@ -30,10 +30,8 @@ class A0SearchComparisonTest {
             history.observe("artist - title",null,"HIGH_QUALITY",16,3).kind)
         assertEquals(A0SearchComparison.Kind.REPEAT_STABLE,
             history.observe("artist - title",null,"HIGH_QUALITY",4,2).kind)
-        assertEquals(A0SearchComparison.Kind.CHANGED,
-            A0SearchComparison().observe("artist - title",null,"HIGH_QUALITY",1,1)
-                .kind.let { if(it==A0SearchComparison.Kind.FIRST)
-                    A0SearchComparison.Kind.CHANGED else it })
+        assertEquals(A0SearchComparison.Kind.FIRST,
+            A0SearchComparison().observe("artist - title",null,"HIGH_QUALITY",1,1).kind)
         assertFalse(history.toString().contains("Title"))
     }
 }
