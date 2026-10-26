@@ -99,6 +99,10 @@ internal data class MusicBrainzRecordingHit(
  * release. Avoid blocking legitimate label-issued remixes/instrumentals.
  * Reject video-only and user-edited titles even if mislabeled "Official".
  */
+/** Explicit edition status is required for public streaming-style Release tiles. */
+internal fun isCuratedMusicBrainzRelease(hit: MusicBrainzReleaseHit): Boolean =
+    hit.status.equals("Official", ignoreCase = true)
+
 internal fun isCuratedMusicBrainzRecording(hit: MusicBrainzRecordingHit): Boolean =
     hit.hasOfficialAudioRelease == true && hit.isVideo != true &&
         canonicalStreamingTitleIsSafe(hit.title)
