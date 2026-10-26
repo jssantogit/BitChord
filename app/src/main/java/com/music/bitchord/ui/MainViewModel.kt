@@ -485,7 +485,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * An actual edition must always retain its own artwork authority.
      */
     private suspend fun canonicalArtworkForRow(row: CanonicalCatalogSearchRow): String? {
-        val target = canonicalCoverLookupTarget(row) ?: return null
+        val target = canonicalCoverLookupTarget(row)
+        if (target == null && row.kind == CanonicalSearchKind.RECORDING) {
+            // MusicBrainz search does not always send the release relation.
+            // Obtain it with a Recording MBID lookup before requesting any art.
+            val releases = musicBrainzGraph.lookupRecordingCoverReleases(row.musicBrainzId)
+            for (release in releases) {
+                val cover = coverArtArchive.findCover(release, null)
+                if (cover != null) return cover
+            }
+            return null
+        }
+        if (target == null) return null
         val direct = coverArtArchive.findCover(target.first, target.second)
         if (direct != null || row.kind != CanonicalSearchKind.RELEASE_GROUP) return direct
         val related = musicBrainzGraph.browseGroupReleases(row.musicBrainzId, limit = 20)
