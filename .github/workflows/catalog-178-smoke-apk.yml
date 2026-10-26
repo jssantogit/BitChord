@@ -3,6 +3,7 @@ name: Catalog #178 — Android Smoke APK
 # APK candidate from the exact #178 PR HEAD. Pull-request path filters
 # use the cumulative PR diff, so a cheap commit-delta gate prevents repeated
 # 300+ MB builds on unrelated later code pushes.
+# Intentional candidate: canonical native detail, MBID-scoped search and local badge.
 on:
   workflow_dispatch:
   pull_request:
@@ -106,9 +107,9 @@ jobs:
       - name: Record APK checksum and exact commit
         run: |
           printf 'commit=%s\n' "$(git rev-parse HEAD)" > catalog-178-build.txt
-          printf 'candidate=178-native-editorial-home-and-unified-search\n' >> catalog-178-build.txt
-          printf 'previous_physical_apk=db753b34f5ce41cb42044fcbdbf0dcfa10d1ff39\n' >> catalog-178-build.txt
-          printf 'validation_focus=launches-local-and-server-picks-personal-trending-search-rows\n' >> catalog-178-build.txt
+          printf 'candidate=178-native-detail-artwork-artist-scoped-search-local-badge\n' >> catalog-178-build.txt
+          printf 'previous_physical_apk=b663df12953dee9c12b2b0880be44b841a3061d2\n' >> catalog-178-build.txt
+          printf 'validation_focus=native-artist-album-detail-cover-art-illit-search-rank-local-download-badge\n' >> catalog-178-build.txt
           find app/build/outputs/apk/dev/debug -name '*.apk' -print -exec sha256sum '{}' \; >> catalog-178-build.txt
 
       - name: Upload smoke candidate
