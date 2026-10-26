@@ -113,6 +113,22 @@ class MusicBrainzCatalogSearchTest {
     }
 
 
+    @Test fun recordingSearchKeepsVerifiedReleaseCoverAssociationWithoutGuessingTitle() = runBlocking {
+        val recordingId = "e614e432-ca77-41c1-82c1-4e3a24ebbb0c"
+        val release1 = "11111111-1111-4111-8111-111111111111"
+        val release2 = "22222222-2222-4222-8222-222222222222"
+        val transport = object : MusicBrainzTransport {
+            override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String =
+                """{"count":1,"offset":0,"recordings":[{"id":"$recordingId","title":"Magnetic",
+                "releases":[{"id":"$release2","status":"Official","date":"2025-01-01"},
+                            {"id":"$release1","status":"Official","date":"2024-03-25"},
+                            {"id":"untrusted","date":"2023-01-01"}]}]}"""
+        }
+        val result = MusicBrainzCatalogSearch(MusicBrainzClient(transport = transport))
+            .searchRecordings("Magnetic") as MusicBrainzCatalogSearchResult.Success<com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit>
+        assertEquals(release1, result.page.items.single().coverReleaseMbid)
+    }
+
     @Test
     fun artistScopedDiscoveryUsesValidatedMbidInsteadOfAmbiguousName() = runBlocking {
         val artistMbid = "6b128dd7-e998-4edb-a4f5-400fef190445"
