@@ -25,8 +25,11 @@ internal class A0ProgressiveServerFrameReader(
 
     fun readEvent(onIgnoredCode:(Int)->Unit = {}):A0IndirectSearchWire.Offer? {
         if(body==null) {
-            lengthReceived+=readInto(lengthField,lengthReceived,4-lengthReceived)
-            if(lengthReceived<4) throw IOException("Partial server frame length")
+            while(lengthReceived<4) {
+                val n=input.read(lengthField,lengthReceived,4-lengthReceived)
+                if(n<=0)throw IOException("Incomplete authenticated server frame length")
+                lengthReceived+=n
+            }
             val size=(lengthField[0].toInt() and 255) or
                 ((lengthField[1].toInt() and 255) shl 8) or
                 ((lengthField[2].toInt() and 255) shl 16) or
@@ -37,8 +40,11 @@ internal class A0ProgressiveServerFrameReader(
             body=ByteArray(size)
         }
         val target=checkNotNull(body)
-        bodyReceived+=readInto(target,bodyReceived,target.size-bodyReceived)
-        if(bodyReceived!=target.size)throw IOException("Partial server frame")
+        while(bodyReceived<target.size) {
+            val n=input.read(target,bodyReceived,target.size-bodyReceived)
+            if(n<=0)throw IOException("Incomplete authenticated server frame body")
+            bodyReceived+=n
+        }
         val complete=lengthField+target
         // A complete but malformed offer can be rejected without poisoning the
         // following frame. The socket stays aligned after the parser throws.
@@ -48,15 +54,4 @@ internal class A0ProgressiveServerFrameReader(
         return A0IndirectSearchWire.readServerEvent(ByteArrayInputStream(complete),onIgnoredCode)
     }
 
-    private fun readInto(destination:ByteArray,offset:Int,length:Int):Int {
-        var received=0
-        while(received<length) {
-            // SocketTimeoutException propagates; all previously read bytes are
-            // kept in the fields above, with their exact byte offsets.
-            val count=input.read(destination,offset+received,length-received)
-            if(count<=0)throw IOException("Incomplete authenticated server frame")
-            received+=count
-        }
-        return received
-    }
 }
