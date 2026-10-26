@@ -20,6 +20,8 @@ import com.music.bitchord.data.catalog.metadata.CoverArtArchive
 import com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
@@ -788,7 +790,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             "Release groups · showing ${result.value.items.size} of ${result.value.total}",
                             result.value.items.map { hit -> CanonicalCatalogSearchRow(
                                 hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
-                                hit.artistDisplay ?: hit.primaryType,
+                                hit.artistDisplay?.takeUnless { it.equals("Other", true) },
+                                releaseDate = hit.firstReleaseDate,
+                                releaseKind = hit.primaryType?.takeUnless { it.equals("Other", true) },
                             ) },
                             nextOffset = result.value.nextOffset,
                             totalCount = result.value.total,
@@ -810,59 +814,104 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             summary = "Saved release groups · offline catalog",
                             rows = cached.map { hit -> CanonicalCatalogSearchRow(
                                 hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP,
-                                hit.title, hit.artistDisplay ?: hit.primaryType,
+                                hit.title, hit.artistDisplay?.takeUnless { it.equals("Other", true) },
+                                releaseDate = hit.firstReleaseDate,
+                                releaseKind = hit.primaryType?.takeUnless { it.equals("Other", true) },
                                 fromOfflineCache = true,
                             ) },
                         ))
                     }
                 }
-                CanonicalSearchKind.RELEASE_GROUP -> when (
-                    val result = musicBrainzGraph.browseGroupReleases(entry.musicBrainzId)
-                ) {
-                    is MusicBrainzCatalogGraphResult.Success -> {
+                CanonicalSearchKind.RELEASE_GROUP -> {
+                    // Album / Single / EP tiles are *works*, not a demand that
+                    // the listener choose among every national/digital edition.
+                    // Resolve the best documented Release to its native tracklist
+                    // without synthesizing a Song or discarding edition MBIDs.
+                    val live = musicBrainzGraph.browseGroupReleases(
+                        entry.musicBrainzId, limit = 75,
+                    )
+                    val versions = if (live is MusicBrainzCatalogGraphResult.Success) {
                         try {
                             withContext(Dispatchers.IO) {
-                                MusicBrainzCatalogIndex(
-                                    CanonicalCatalogDatabase.get(getApplication<Application>()),
-                                ).persistGroupEditions(entry.musicBrainzId, result.value.items)
+                                MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
+                                    getApplication<Application>(),
+                                )).persistGroupEditions(entry.musicBrainzId, live.value.items)
                             }
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (_: Exception) { /* A network page remains usable if its offline index fails. */ }
-                        val artwork = withContext(Dispatchers.IO) {
-                            coverArtArchive.findCover(null, entry.musicBrainzId)
+                        } catch (_: Exception) { }
+                        live.value.items
+                    } else try {
+                        withContext(Dispatchers.IO) {
+                            MusicBrainzCatalogIndex(
+                                CanonicalCatalogDatabase.get(getApplication<Application>()),
+                            ).cachedGroupReleases(entry.musicBrainzId)
                         }
-                        UiState.Success(CanonicalCatalogDetailPage(entry.title,
-                            "Releases/editions · showing ${result.value.items.size} of ${result.value.total}",
-                            result.value.items.map { hit -> CanonicalCatalogSearchRow(
-                                hit.musicBrainzId, CanonicalSearchKind.RELEASE, hit.title,
-                                listOfNotNull(hit.country, hit.releaseDate).joinToString(" · "),
-                            ) },
-                            artworkUri = artwork,
-                            nextOffset = result.value.nextOffset,
-                            totalCount = result.value.total,
-                        ))
-                    }
-                    is MusicBrainzCatalogGraphResult.Failure -> {
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) { emptyList() }
+
+                    val ranked = canonicalPreferredEditions(versions, entry.title)
+                    var chosen: MusicBrainzCatalogReleaseDetail? = null
+                    // Bounded retry: an MB edition can have no usable tracks,
+                    // even when its Release Group is perfectly valid.
+                    for (candidate in ranked.take(4)) {
+                        val detail = musicBrainzGraph.lookupRelease(candidate.musicBrainzId)
+                        if (detail is MusicBrainzCatalogGraphResult.Success &&
+                            detail.value.tracks.isNotEmpty()
+                        ) {
+                            chosen = detail.value
+                            break
+                        }
                         val cached = try {
                             withContext(Dispatchers.IO) {
                                 MusicBrainzCatalogIndex(
                                     CanonicalCatalogDatabase.get(getApplication<Application>()),
-                                ).cachedGroupReleases(entry.musicBrainzId)
+                                ).cachedRelease(candidate.musicBrainzId)
                             }
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (_: Exception) { emptyList() }
-                        if (cached.isEmpty()) UiState.Error("Unable to load release editions")
-                        else UiState.Success(CanonicalCatalogDetailPage(
+                        } catch (_: Exception) { null }
+                        if (cached?.tracks?.isNotEmpty() == true) {
+                            chosen = cached
+                            break
+                        }
+                    }
+                    if (chosen == null) {
+                        UiState.Error(getApplication<Application>().getString(
+                            R.string.canonical_discovery_cache_empty,
+                        ))
+                    } else {
+                        val detail = chosen
+                        val available = try {
+                            withContext(Dispatchers.IO) {
+                                val db = CanonicalCatalogDatabase.get(getApplication<Application>())
+                                MusicBrainzCatalogIndex(db).persistReleaseDetail(detail)
+                                db.catalogDao().musicBrainzRecordingMbidsWithAssets(
+                                    detail.tracks.map { it.recordingMbid },
+                                ).toSet()
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { emptySet() }
+                        val cover = withContext(Dispatchers.IO) {
+                            coverArtArchive.findCover(detail.musicBrainzId, entry.musicBrainzId)
+                        }
+                        UiState.Success(CanonicalCatalogDetailPage(
                             title = entry.title,
-                            summary = "Saved editions · offline catalog",
-                            rows = cached.map { hit -> CanonicalCatalogSearchRow(
-                                hit.musicBrainzId, CanonicalSearchKind.RELEASE, hit.title,
-                                listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
-                                    .joinToString(" · "),
-                                fromOfflineCache = true,
-                            ) },
+                            summary = null,
+                            artworkUri = cover,
+                            rows = detail.tracks.map { track ->
+                                CanonicalCatalogSearchRow(
+                                    musicBrainzId = track.recordingMbid,
+                                    kind = CanonicalSearchKind.RECORDING,
+                                    title = track.title,
+                                    subtitle = track.artistDisplay ?: detail.artistDisplay,
+                                    hasCatalogedAsset = track.recordingMbid in available,
+                                    trackMbid = track.trackMbid,
+                                    durationMs = track.durationMs,
+                                )
+                            },
                         ))
                     }
                 }
@@ -899,6 +948,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 subtitle = track.artistDisplay ?: details.artistDisplay,
                                 hasCatalogedAsset = track.recordingMbid in available,
                                 trackMbid = track.trackMbid,
+                                durationMs = track.durationMs,
                             ) },
                         ))
                     }
@@ -930,6 +980,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 hasCatalogedAsset = track.recordingMbid in cached.second,
                                 fromOfflineCache = true,
                                 trackMbid = track.trackMbid,
+                                durationMs = track.durationMs,
                             ) },
                         ))
                     }
