@@ -1071,6 +1071,60 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _canonicalDetail.value = UiState.Loading
         _searchScrollReset.value += 1
         canonicalBrowseJob = viewModelScope.launch {
+            // Reopening an already browsed artist should paint persisted
+            // metadata and verified Front-v4 artwork immediately. A slow
+            // MusicBrainz browse refreshes this page later; it must not hold
+            // the old, valid Room catalog behind a network loading spinner.
+            if (entry.kind == CanonicalSearchKind.ARTIST) {
+                val saved = try {
+                    withContext(Dispatchers.IO) {
+                        MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
+                            getApplication<Application>(),
+                        )).cachedArtistGroups(entry.musicBrainzId)
+                    }
+                } catch (cancelled: CancellationException) { throw cancelled }
+                  catch (_: Exception) { emptyList() }
+                if (saved.isNotEmpty() &&
+                    _searchSource.value == SearchSource.CANONICAL &&
+                    canonicalPath.lastOrNull() == entry
+                ) {
+                    val cachedRows = saved.map { hit -> CanonicalCatalogSearchRow(
+                        hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
+                        hit.artistDisplay?.takeUnless { it.equals("Other", true) },
+                        releaseDate = hit.firstReleaseDate,
+                        releaseKind = hit.primaryType?.takeUnless { it.equals("Other", true) },
+                        secondaryTypes = hit.secondaryTypes,
+                        artworkUri = hit.artworkUri,
+                        fromOfflineCache = true,
+                    ) }
+                    val preview = CanonicalCatalogDetailPage(
+                        entry.title, "Saved release groups · refreshing",
+                        cachedRows,
+                    )
+                    _canonicalDetail.value = UiState.Success(preview)
+                    val nativeId = canonicalNativeBrowseId(entry)
+                    _detailStack.update { stack ->
+                        stack.map { page ->
+                            if (page.browseId != nativeId) page else page.copy(
+                                songs = UiState.Success(emptyList()),
+                                sections = canonicalNativeSections(
+                                    parentKind = CanonicalSearchKind.ARTIST,
+                                    rows = cachedRows,
+                                    heading = getApplication<Application>().getString(
+                                        R.string.shelf_new_albums_singles,
+                                    ),
+                                    albumsHeading = getApplication<Application>().getString(
+                                        R.string.albums,
+                                    ),
+                                    singlesHeading = getApplication<Application>().getString(
+                                        R.string.canonical_singles_eps,
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
             var artistFirstPage: MusicBrainzCatalogPage<MusicBrainzReleaseGroupHit>? = null
             val output: UiState<CanonicalCatalogDetailPage> = when (entry.kind) {
                 CanonicalSearchKind.ARTIST -> when (
