@@ -226,9 +226,13 @@ class CanonicalCuratedHomeFeedTest {
             listOf(artist, release, release, recording, edition),
             limit = 2,
         )
-        // A Recording is now eligible for a separate explicit MBID graph lookup,
-        // not for any name-derived fallback cover.
-        assertEquals(listOf(release, recording), candidates)
+        // Never fan out to MB for unverified recording editions: this could
+        // fetch performance-video stills and stall every thumbnail.
+        assertEquals(listOf(release, edition), candidates)
+        assertEquals(listOf(recording.copy(coverReleaseMbid = linkedRelease)),
+            canonicalCoverLookupCandidates(
+                listOf(recording.copy(coverReleaseMbid = linkedRelease)), limit = 2))
+
     }
     @Test fun legacyCaaFront250WithoutJpgIsStillRecognizedAsSmallArtwork() {
         assertTrue(com.music.bitchord.ui.canonicalNeedsCoverRefresh(
