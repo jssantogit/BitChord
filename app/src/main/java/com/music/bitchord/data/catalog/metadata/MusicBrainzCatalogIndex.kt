@@ -178,20 +178,10 @@ internal class MusicBrainzCatalogIndex(
             val dao = database.catalogDao()
             val artistId = dao.entityIdForExternalIdentity("musicbrainz", "artist", normalized)
                 ?: return@withTransaction emptyList()
-            val groups = dao.musicBrainzGroupsForArtist(artistId).mapNotNull { group ->
-                val mbid = dao.externalIdentitiesForEntity(
-                    "musicbrainz", "release-group", group.id,
-                ).singleOrNull()?.externalId ?: return@mapNotNull null
-                MusicBrainzReleaseGroupHit(mbid, group.title, group.primaryType,
-                    group.firstReleaseDate, group.artistDisplay,
-                    secondaryTypes = group.secondaryTypes)
-            }
-            val fronts = groups.map { it.musicBrainzId }.chunked(200)
-                .flatMap { dao.verifiedGroupFronts(it) }.associateBy { it.mbid }
-            groups.map { hit ->
-                val cached = fronts[hit.musicBrainzId]
-                hit.copy(artworkUri = cached?.thumbnailUri ?: cached?.artworkUri)
-            }
+            // Single snapshot query replaces 1 + N identity lookups plus
+            // cache batching, preventing a cold 300-group artist browse from
+            // spending hundreds of Room round trips before showing any art.
+            dao.verifiedArtistDiscographyRows(artistId)
         }
 
     /** Edition search evidence uses the existing source-specific v3 cache. */
