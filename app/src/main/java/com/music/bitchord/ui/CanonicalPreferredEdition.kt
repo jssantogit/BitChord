@@ -28,7 +28,11 @@ internal fun canonicalArtworkEditionsForGroup(
             // is the provenance boundary. Curated title rejects video variants.
             isCuratedMusicBrainzRelease(edition) &&
                 // MusicBrainz can tell us that an edition has no CAA Front.
-                edition.hasFrontCover != false
+                edition.hasFrontCover != false &&
+                // Packaging/territorial “ver.” covers are edition-specific
+                // collectibles, not the unqualified sleeve of the work.
+                !Regex("""(?i)\\([^)]*\\b(?:ver\\.?|version|mix|edition|reissue|remaster)\\b[^)]*\\)""")
+                    .containsMatchIn(edition.title)
         }
         // Artwork choice is separate from tracklist edition preference:
         // positively known covers avoid slow dead-end CAA requests.
