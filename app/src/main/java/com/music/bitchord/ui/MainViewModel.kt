@@ -479,6 +479,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * Fill only genuine CAA artwork on an IO worker. A 404 or temporary error
      * remains an empty cover; it must not borrow a similarly named album.
      */
+    /**
+     * A Group can have no CAA group front while a release explicitly linked
+     * to it has the cover. No fuzzy title/artist search, even as fallback.
+     * An actual edition must always retain its own artwork authority.
+     */
+    private suspend fun canonicalArtworkForRow(row: CanonicalCatalogSearchRow): String? {
+        val target = canonicalCoverLookupTarget(row) ?: return null
+        val direct = coverArtArchive.findCover(target.first, target.second)
+        if (direct != null || row.kind != CanonicalSearchKind.RELEASE_GROUP) return direct
+        val related = musicBrainzGraph.browseGroupReleases(row.musicBrainzId, limit = 20)
+        val versions = (related as? MusicBrainzCatalogGraphResult.Success)
+            ?.value?.items?.let { canonicalPreferredEditions(it, row.title).take(3) }
+            .orEmpty()
+        for (release in versions) {
+            val image = coverArtArchive.findCover(release.musicBrainzId, row.musicBrainzId)
+            if (image != null) return image
+        }
+        return null
+    }
+
     private fun enrichCanonicalSearchCovers(query: String) {
         canonicalSearchCoverJob?.cancel()
         val visible = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
@@ -491,10 +511,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             canonicalCoverLookupCandidates(prioritized.filter {
                 it.kind == CanonicalSearchKind.RELEASE ||
                     it.kind == CanonicalSearchKind.RELEASE_GROUP
-            }, limit = 6) +
+            }, limit = 12) +
             canonicalCoverLookupCandidates(prioritized.filter {
                 it.kind == CanonicalSearchKind.RECORDING
-            }, limit = 6)
+            }, limit = 12)
         ).distinctBy { it.kind to it.musicBrainzId }
         // Independent Apple artwork is a visual fallback for the best exact
         // artist-name hit, not an identity link between Apple and MusicBrainz.
@@ -521,9 +541,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             for (row in candidates) {
                 if (_searchSource.value != SearchSource.CANONICAL ||
                     _query.value.trim() != query) return@launch
-                val target = canonicalCoverLookupTarget(row) ?: continue
                 val artwork = try {
-                    coverArtArchive.findCover(target.first, target.second)
+                    canonicalArtworkForRow(row)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) { null } ?: continue
@@ -532,7 +551,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val current = (_canonicalResults.value as? UiState.Success)?.data ?: continue
                 _canonicalResults.value = UiState.Success(current.map {
                     if (it.kind == row.kind && it.musicBrainzId == row.musicBrainzId &&
-                        it.artworkUri.isNullOrBlank()) it.copy(artworkUri = artwork) else it
+                        canonicalNeedsCoverRefresh(it.artworkUri)) it.copy(artworkUri = artwork) else it
                 })
             }
         }
@@ -545,15 +564,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             compareByDescending<CanonicalCatalogSearchRow> { it.releaseDate.orEmpty() }
                 .thenBy { it.musicBrainzId },
         )
-        val candidates = canonicalCoverLookupCandidates(prioritized, limit = 16)
+        val candidates = canonicalCoverLookupCandidates(prioritized, limit = 24)
         if (candidates.isEmpty()) return
         canonicalHomeCoverJob = viewModelScope.launch(Dispatchers.IO) {
             for (row in candidates) {
                 if (!canonicalDiscoveryCatalogEpoch.isCurrent(generation) ||
                     !isCanonicalDiscoverySelected()) return@launch
-                val target = canonicalCoverLookupTarget(row) ?: continue
                 val artwork = try {
-                    coverArtArchive.findCover(target.first, target.second)
+                    canonicalArtworkForRow(row)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) { null } ?: continue
@@ -562,7 +580,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val latest = (_canonicalDiscoveryCatalog.value as? UiState.Success)?.data ?: continue
                 _canonicalDiscoveryCatalog.value = UiState.Success(latest.map {
                     if (it.kind == row.kind && it.musicBrainzId == row.musicBrainzId &&
-                        it.artworkUri.isNullOrBlank()) it.copy(artworkUri = artwork) else it
+                        canonicalNeedsCoverRefresh(it.artworkUri)) it.copy(artworkUri = artwork) else it
                 })
             }
         }
