@@ -215,4 +215,47 @@ class CanonicalNativeNavigationTest {
             ).map { it.musicBrainzId })
     }
 
+
+    @Test fun catalogCoverUsesLinkedOfficialEditionWhenGroupAndReleaseTitlesDiffer() {
+        val howSweet = MusicBrainzReleaseHit(
+            "how-sweet-xw", "How Sweet", "XW", "2024-05-24", "NewJeans",
+            status = "Official", hasFrontCover = true,
+        )
+        val video = howSweet.copy(musicBrainzId = "video",
+            title = "How Sweet (music video)")
+        val promo = howSweet.copy(musicBrainzId = "promo", status = "Promotion")
+        assertEquals(listOf("how-sweet-xw"),
+            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
+                listOf(video, promo, howSweet), "How Sweet & Bubble Gum",
+            ).map { it.musicBrainzId })
+    }
+
+    @Test fun officialEditionPresentationCanCorrectCompositeGroupTitleWithoutChangingIdentity() {
+        val worldwide = MusicBrainzReleaseHit(
+            "xw", "How Sweet", "XW", "2024-05-24", "NewJeans", status = "Official",
+        )
+        val bootleg = worldwide.copy(musicBrainzId = "bootleg",
+            title = "Unrelated", status = "Bootleg")
+        assertEquals("How Sweet", com.music.bitchord.ui.canonicalOfficialGroupDisplayTitle(
+            "How Sweet & Bubble Gum", listOf(bootleg, worldwide)))
+        assertEquals("Get Up", com.music.bitchord.ui.canonicalOfficialGroupDisplayTitle(
+            "Get Up", listOf(worldwide)))
+        assertEquals("How Sweet & Bubble Gum",
+            com.music.bitchord.ui.canonicalOfficialGroupDisplayTitle(
+                "How Sweet & Bubble Gum", listOf(bootleg)))
+    }
+
+    @Test fun candidateRankingSkipsConfirmedNoFrontWithoutStarvingOtherOfficialTitles() {
+        val noCover = MusicBrainzReleaseHit(
+            "plain", "Get Up", "XW", "2023-07-21", "NewJeans",
+            status = "Official", hasFrontCover = false,
+        )
+        val official = noCover.copy(musicBrainzId = "other-official",
+            title = "Get Up (Bluebook ver.)", hasFrontCover = true)
+        assertEquals(listOf("other-official"),
+            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
+                listOf(noCover, official), "Get Up",
+            ).map { it.musicBrainzId })
+    }
+
 }
