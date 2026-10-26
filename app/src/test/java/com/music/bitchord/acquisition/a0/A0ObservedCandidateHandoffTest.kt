@@ -81,7 +81,7 @@ class A0ObservedCandidateHandoffTest {
         val audio=A0SoulseekSearchFile("Album\\sample.mp3",5L*1024*1024,"mp3",emptyMap())
         handoff.offerParsed(response(listOf(audio),free=false),"somepeer")
         handoff.offerParsed(response(listOf(
-            A0SoulseekSearchFile("Album\\huge.flac",65L*1024*1024,"flac",emptyMap()),
+            A0SoulseekSearchFile("Album\\huge.flac",257L*1024*1024,"flac",emptyMap()),
             A0SoulseekSearchFile("Album\\cover.jpg",20000,"jpg",emptyMap()),
             A0SoulseekSearchFile("../escape.mp3",20000,"mp3",emptyMap())
         ),locked=listOf(audio)),"somepeer")
