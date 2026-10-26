@@ -19,7 +19,6 @@ import com.music.bitchord.data.catalog.allowedCanonicalLyricsSources
 import com.music.bitchord.data.catalog.metadata.CoverArtArchive
 import com.music.bitchord.data.catalog.metadata.CoverArtSize
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCoverArtCacheEntry
-import com.music.bitchord.data.catalog.metadata.verifiedCaaFront500Url
 import com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage
@@ -529,28 +528,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             for (edition in vetted) {
-                // MusicBrainz explicitly confirms that this exact Official
-                // edition has a CAA Front: render a 500px thumbnail directly
-                // through Coil. This avoids waiting ~2.6s p50 for CAA JSON
-                // metadata before *starting* the actual image load.
-                // A Hero still resolves verified full-size metadata separately.
-                val quick = if (size == CoverArtSize.THUMBNAIL) {
-                    verifiedCaaFront500Url(edition)
-                } else null
-                if (quick != null) {
-                    com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry.process
-                        .recordDirectFrontCandidate()
-                    try {
-                        RoomMusicBrainzCoverArtStore(
-                            CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao(),
-                        ).write(MusicBrainzCoverArtCacheEntry(
-                            "verified-artist-group", row.musicBrainzId, null,
-                            System.currentTimeMillis(), quick,
-                        ))
-                    } catch (cancelled: CancellationException) { throw cancelled }
-                    catch (_: Exception) { /* Still show trusted exact edition URL. */ }
-                    return quick
-                }
+                // MusicBrainz's front=true is only a presence hint. It does
+                // NOT prove CAA's image isn't tagged Poster/Track, and the
+                // direct /front-500 URL bypasses strict JSON validation.
+                // Resolve the typed Front once, then reuse the Room cache.
                 // No group-front API shortcut: it may point to a video or an
                 // alternate artwork edition even under the correct group MBID.
                 val hero = coverArtArchive.findCover(
