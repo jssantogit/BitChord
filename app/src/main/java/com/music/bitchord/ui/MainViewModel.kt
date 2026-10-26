@@ -953,15 +953,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     musicBrainzGraph.browseReleaseGroupsForArtist(entry.musicBrainzId, limit = 75)
                 ) {
                     is MusicBrainzCatalogGraphResult.Success -> {
-                        try {
+                        val verifiedCovers = try {
                             withContext(Dispatchers.IO) {
-                                MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
+                                val index = MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
                                     getApplication<Application>(),
-                                )).persistArtistGroups(entry.musicBrainzId, result.value.items)
+                                ))
+                                index.persistArtistGroups(entry.musicBrainzId, result.value.items)
+                                index.cachedArtistGroups(entry.musicBrainzId)
+                                    .associate { it.musicBrainzId to it.artworkUri }
                             }
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (_: Exception) { }
+                        } catch (_: Exception) { emptyMap() }
                         UiState.Success(CanonicalCatalogDetailPage(entry.title,
                             "Release groups · showing ${result.value.items.size} of ${result.value.total}",
                             result.value.items.map { hit -> CanonicalCatalogSearchRow(
@@ -970,6 +973,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 releaseDate = hit.firstReleaseDate,
                                 releaseKind = hit.primaryType?.takeUnless { it.equals("Other", true) },
                                 secondaryTypes = hit.secondaryTypes,
+                                artworkUri = verifiedCovers[hit.musicBrainzId],
                             ) },
                             nextOffset = result.value.nextOffset,
                             totalCount = result.value.total,
@@ -995,6 +999,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 releaseDate = hit.firstReleaseDate,
                                 releaseKind = hit.primaryType?.takeUnless { it.equals("Other", true) },
                                 secondaryTypes = hit.secondaryTypes,
+                                artworkUri = hit.artworkUri,
                                 fromOfflineCache = true,
                             ) },
                         ))
