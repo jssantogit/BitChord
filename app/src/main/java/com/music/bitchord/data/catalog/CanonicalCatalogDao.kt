@@ -615,7 +615,7 @@ internal interface CanonicalCatalogDao {
         LEFT JOIN musicbrainz_release_enrichment info
             ON info.releaseId = edition.id AND info.mbid = identity.externalId
         LEFT JOIN catalog_cover_art_cache art
-            ON art.entityType = 'release:front-v2' AND art.mbid = identity.externalId
+            ON art.entityType = 'release:front-v3' AND art.mbid = identity.externalId
         WHERE identity.provider = 'musicbrainz' AND identity.entityType = 'release'
             AND (instr(lower(edition.title), lower(:query)) > 0
                 OR instr(lower(edition.artistDisplay), lower(:query)) > 0)
