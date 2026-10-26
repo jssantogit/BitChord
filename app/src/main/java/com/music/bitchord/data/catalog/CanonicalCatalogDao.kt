@@ -20,6 +20,13 @@ internal data class ExclusiveExternalIdentityClaimResult(
     val inserted: Boolean,
 )
 
+/** Only strong MusicBrainz Recording links qualify; names never qualify. */
+internal data class CanonicalMusicBrainzLocalAssetClaim(
+    val musicBrainzId: String,
+    val uri: String,
+    val provider: String,
+)
+
 @Dao
 internal interface CanonicalCatalogDao {
 
@@ -622,6 +629,28 @@ internal interface CanonicalCatalogDao {
         """,
     )
     suspend fun musicBrainzRecordingMbidsWithAssets(mbids: List<String>): List<String>
+
+    /**
+     * Read-only evidence for a downloaded icon. Identity must be the *same*
+     * canonical Recording; MediaStore ownership is not inferred by title.
+     * Consumers must additionally verify that the URI is still readable.
+     */
+    @Query("""
+        SELECT DISTINCT identity.externalId AS musicBrainzId,
+               asset.uri AS uri,
+               asset.provider AS provider
+        FROM catalog_external_identity AS identity
+        INNER JOIN catalog_media_asset AS asset
+            ON asset.recordingId = identity.entityId
+        WHERE identity.provider = 'musicbrainz'
+          AND identity.entityType = 'recording'
+          AND identity.externalId IN (:mbids)
+          AND asset.provider = 'local-mediastore'
+          AND asset.uri LIKE 'content://%'
+    """)
+    suspend fun musicBrainzRecordingLocalAssetClaims(
+        mbids: List<String>,
+    ): List<CanonicalMusicBrainzLocalAssetClaim>
 
     @Query("DELETE FROM catalog_media_asset WHERE provider = :provider")
     suspend fun deleteAllMediaAssets(provider: String)
