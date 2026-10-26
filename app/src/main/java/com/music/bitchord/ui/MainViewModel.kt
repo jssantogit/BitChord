@@ -1172,15 +1172,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (_searchSource.value == SearchSource.CANONICAL && canonicalPath.lastOrNull() == entry) {
                 _canonicalDetail.value = output
-                if (output is UiState.Success) {
-                    if (entry.kind == CanonicalSearchKind.ARTIST) {
-                        enrichCanonicalNativeDetailCovers(entry)
-                    } else if (entry.kind == CanonicalSearchKind.RELEASE ||
-                        entry.kind == CanonicalSearchKind.RELEASE_GROUP
-                    ) {
-                        enrichCanonicalNativeReleaseCover(entry)
-                    }
-                }
                 val nativeId = canonicalNativeBrowseId(entry)
                 _detailStack.value = _detailStack.value.map { page ->
                     if (page.browseId != nativeId) page else when (output) {
@@ -1198,6 +1189,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         )
                         is UiState.Error -> page.copy(songs = UiState.Error(output.message))
                         UiState.Loading -> page
+                    }
+                }
+                // Publish the complete page before starting any competing
+                // asynchronous image update, including an immediate cache hit.
+                if (output is UiState.Success) {
+                    if (entry.kind == CanonicalSearchKind.ARTIST) {
+                        enrichCanonicalNativeDetailCovers(entry)
+                    } else if (entry.kind == CanonicalSearchKind.RELEASE ||
+                        entry.kind == CanonicalSearchKind.RELEASE_GROUP
+                    ) {
+                        enrichCanonicalNativeReleaseCover(entry)
                     }
                 }
             }
