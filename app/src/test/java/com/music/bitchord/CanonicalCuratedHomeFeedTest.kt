@@ -57,7 +57,7 @@ class CanonicalCuratedHomeFeedTest {
         )
         val recording = playable.copy(title = "Hype Boy")
         val knownSingle = release.copy(
-            musicBrainzId = "certified-single", title = "Super Shy", releaseKind = "Single",
+            musicBrainzId = "certified-single", title = "Super Shy", releaseKind = "Single", releaseDate = "2025-01-01",
         )
         val shelves = feed(listOf(unknownGroup, unknownEdition, recording, release, knownSingle))
         assertEquals(listOf("Super Shy", "SUPER REAL ME"), shelves.single().items.map { it.title })
