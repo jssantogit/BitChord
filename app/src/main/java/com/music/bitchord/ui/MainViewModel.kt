@@ -3605,6 +3605,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 .joinToString(" · "),
                             releaseDate = hit.releaseDate,
                             artistScopeMbid = artistScopeMbid,
+                            coverGroupMbid = hit.releaseGroupMbid,
                         ))
                     }
                 }
@@ -3794,6 +3795,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
                                     .joinToString(" · "),
                                 artistScopeMbid = cursor.artistScopeMbid,
+                                coverGroupMbid = hit.releaseGroupMbid,
                             ))
                         }
                     }
