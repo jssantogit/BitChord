@@ -59,6 +59,22 @@ class CanonicalSearchPagingTest {
         assertEquals(15, next.groups)
     }
 
+    @Test fun artistMbidScopePersistsAcrossContinuationsAndRetainsRawOffsets() {
+        val first = CanonicalSearchPageCursors.initial(
+            query = "ILLIT",
+            recordings = page(50, 0, 25),
+            groups = page(20, 0, 15),
+            releases = page(10, 0, 10),
+            artists = page(2, 0, 2),
+            artistScopeMbid = "6b128dd7-e998-4edb-a4f5-400fef190445",
+        )
+        assertEquals("6b128dd7-e998-4edb-a4f5-400fef190445", first.artistScopeMbid)
+        val next = first.advance(recordings = page(50, 25, 25), groups = page(20, 15, 5))
+        assertEquals(first.artistScopeMbid, next.artistScopeMbid)
+        assertEquals(null, next.recordings)
+        assertEquals(null, next.groups)
+    }
+
     @Test fun emptyOrExhaustedResponseStopsPagination() {
         val first = CanonicalSearchPageCursors.initial(
             query = "ILLIT",
