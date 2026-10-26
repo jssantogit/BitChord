@@ -551,9 +551,7 @@ class A0ManualLoginActivity : Activity() {
                                                 if (!readerGate.isOpen()) break
                                                 trace.serverOfferReceived()
                                                 if(!offerGate.accept(offer.username,offer.token))continue
-                                                attemptedIndirect.set(true)
-                                                attempts++
-                                                if (!peerWorkers.submit {
+                                                if (peerWorkers.submit {
                                                     try {
                                                         trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECT_STARTED)
                                                         Socket().use { peer ->
@@ -598,6 +596,13 @@ class A0ManualLoginActivity : Activity() {
                                                             TraceOutcome.DEGRADED,A0SmokeTrace.Reason.PEER_IO_FAILURE)
                                                     }
                                                 }) {
+                                                    attemptedIndirect.set(true)
+                                                    attempts++
+                                                } else {
+                                                    // Rejected before execution: do not burn a
+                                                    // unique P ticket or our admitted-offer budget.
+                                                    offerGate.releaseUnsubmitted(
+                                                        offer.username,offer.token)
                                                     peerOfferBackpressure.incrementAndGet()
                                                 }
                                             }
