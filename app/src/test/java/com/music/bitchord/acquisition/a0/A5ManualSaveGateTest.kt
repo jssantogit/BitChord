@@ -24,9 +24,11 @@ class A5ManualSaveGateTest {
     @Test fun enforceObservedPilotSizeAndRequireUserSaveConsent() {
         assertNull(A5ManualSaveGate.safeDestinationName("sample.wav",0))
         assertNull(A5ManualSaveGate.safeDestinationName("sample.wav",43))
-        assertNull(A5ManualSaveGate.safeDestinationName("sample.wav",64L*1024*1024+1))
+        assertNull(A5ManualSaveGate.safeDestinationName("sample.wav",256L*1024*1024+1))
         assertEquals("sample.wav",
-            A5ManualSaveGate.safeDestinationName("sample.wav",64L*1024*1024))
+            A5ManualSaveGate.safeDestinationName("sample.wav",256L*1024*1024))
+        assertEquals("hires.flac",
+            A5ManualSaveGate.safeDestinationName("hires.flac",96L*1024*1024))
         assertFalse(A5ManualSaveGate.canSave(true,false))
         assertFalse(A5ManualSaveGate.canSave(false,true))
         assertTrue(A5ManualSaveGate.canSave(true,true))
