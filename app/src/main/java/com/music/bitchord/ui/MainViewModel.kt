@@ -489,9 +489,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val direct = coverArtArchive.findCover(target.first, target.second)
         if (direct != null || row.kind != CanonicalSearchKind.RELEASE_GROUP) return direct
         val related = musicBrainzGraph.browseGroupReleases(row.musicBrainzId, limit = 20)
-        val versions = (related as? MusicBrainzCatalogGraphResult.Success)
-            ?.value?.items?.let { canonicalPreferredEditions(it, row.title).take(3) }
-            .orEmpty()
+        val versions = if (related is MusicBrainzCatalogGraphResult.Success) {
+            canonicalPreferredEditions(related.value.items, row.title).take(3)
+        } else emptyList()
         for (release in versions) {
             val image = coverArtArchive.findCover(release.musicBrainzId, row.musicBrainzId)
             if (image != null) return image
@@ -695,10 +695,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         val related = musicBrainzGraph.browseGroupReleases(
                             group.musicBrainzId, limit = 16,
                         )
-                        val first = (related as? MusicBrainzCatalogGraphResult.Success)
-                            ?.value?.items?.let {
-                                canonicalPreferredEditions(it, group.title).take(3)
-                            }.orEmpty()
+                        val first = if (related is MusicBrainzCatalogGraphResult.Success) {
+                            canonicalPreferredEditions(related.value.items, group.title).take(3)
+                        } else emptyList()
                         var found: String? = null
                         for (release in first) {
                             found = coverArtArchive.findCover(
