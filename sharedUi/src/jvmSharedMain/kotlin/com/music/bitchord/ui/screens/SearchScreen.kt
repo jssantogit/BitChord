@@ -112,6 +112,8 @@ data class CanonicalCatalogSearchRow(
     val artworkUri: String? = null,
     /** Verifiable scoped search relation returned by MusicBrainz arid, not a text match. */
     val artistScopeMbid: String? = null,
+    /** Exact Release MBID explicitly listed by MusicBrainz for this recording. */
+    val coverReleaseMbid: String? = null,
 )
 
 /**
