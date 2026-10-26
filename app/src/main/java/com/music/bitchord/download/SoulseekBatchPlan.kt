@@ -70,6 +70,7 @@ internal class SoulseekBatchSession(val entries: List<SoulseekBatchPlan.Entry>) 
     val current:SoulseekBatchPlan.Entry?
         get()=entries.getOrNull(index)
     val isComplete:Boolean get()=index>=entries.size
+    val currentSaved:Boolean get()=savedCurrent
 
     fun markSaved():Boolean {
         if(isComplete || savedCurrent)return false
