@@ -2189,6 +2189,7 @@ private fun TopReleaseCard(
     val shape = RoundedCornerShape(28.dp)
     val coverShape = RoundedCornerShape(12.dp)
     val haptics = rememberHaptics()
+    val observeCaaCover = rememberCaaCoverLoadObserver(item.thumbnailUrl)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2207,6 +2208,7 @@ private fun TopReleaseCard(
         AsyncImage(
             model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
             contentDescription = null,
+            onState = observeCaaCover,
             modifier = Modifier
                 .size(88.dp)
                 .clip(coverShape)
@@ -2272,6 +2274,36 @@ private const val DISABLED_ACTION_ALPHA = 0.38f
 private const val TOP_RELEASE_EDGE_ALPHA = 0.10f
 private const val TOP_RELEASE_COVER_EDGE_ALPHA = 0.215f
 
+/**
+ * Anonymous timing of the actual Coil CAA image consumer. Duration begins at
+ * first composition of that URL and ends once Coil signals Success or Error.
+ * Distinct URLs record once each per composed card; never store their URL,
+ * album name, MBID or user/device identity in the diagnostics report.
+ */
+@Composable
+private fun rememberCaaCoverLoadObserver(
+    url: String?,
+): (AsyncImagePainter.State) -> Unit {
+    val beganAt = remember(url) { android.os.SystemClock.elapsedRealtime() }
+    val seen = remember(url) { java.util.concurrent.atomic.AtomicBoolean(false) }
+    val isCaa = url?.startsWith("https://coverartarchive.org/") == true ||
+        url?.startsWith("https://archive.org/") == true ||
+        url?.startsWith("https://s3.us.archive.org/") == true
+    return remember(url, beganAt) {
+        { state: AsyncImagePainter.State ->
+            val done = state is AsyncImagePainter.State.Success ||
+                state is AsyncImagePainter.State.Error
+            if (isCaa && done && seen.compareAndSet(false, true)) {
+                com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry.process
+                    .recordImageResult(
+                        state is AsyncImagePainter.State.Success,
+                        android.os.SystemClock.elapsedRealtime() - beganAt,
+                    )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SectionCard(
@@ -2281,6 +2313,7 @@ private fun SectionCard(
     modifier: Modifier = Modifier.width(SHELF_CARD_WIDTH),
     onLongPress: (() -> Unit)? = null,
 ) {
+    val observeCaaCover = rememberCaaCoverLoadObserver(item.thumbnailUrl)
     Column(
         modifier = modifier
             .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress),
@@ -2288,6 +2321,7 @@ private fun SectionCard(
         AsyncImage(
             model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
             contentDescription = null,
+            onState = observeCaaCover,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
