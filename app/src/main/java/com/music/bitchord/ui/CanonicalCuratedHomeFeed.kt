@@ -46,12 +46,9 @@ internal fun canonicalEditorialReleaseType(row: CanonicalCatalogSearchRow): Stri
     if (row.kind != CanonicalSearchKind.RELEASE_GROUP && row.kind != CanonicalSearchKind.RELEASE) {
         return null
     }
-    return when (row.releaseKind?.trim()?.lowercase(java.util.Locale.ROOT)) {
-        "album" -> "Album"
-        "ep" -> "EP"
-        "single" -> "Single"
-        else -> null
-    }
+    return CanonicalEditorialDiscography.classify(
+        row.releaseKind, row.secondaryTypes,
+    ).format
 }
 
 /** Native DetailScreen accepts real browse shelves without synthetic Song.videoId. */
@@ -80,7 +77,13 @@ internal fun canonicalNativeSections(
     fun cards(items: List<CanonicalCatalogSearchRow>): List<ShelfItem> = items.map { row ->
         ShelfItem(
             title = row.title,
-            subtitle = row.releaseKind ?: row.subtitle.orEmpty(),
+            subtitle = CanonicalEditorialDiscography.classify(
+                row.releaseKind, row.secondaryTypes,
+            ).let { decision ->
+                if (decision.isPublishable) {
+                    (listOfNotNull(decision.format) + decision.secondaryTypes).joinToString(" · ")
+                } else row.subtitle.orEmpty()
+            },
             thumbnailUrl = row.artworkUri,
             videoId = null,
             browseId = canonicalNativeBrowseId(row),
