@@ -8,6 +8,25 @@ package com.music.bitchord.download
 internal object SoulseekBatchPlan {
     const val MAX_TRACKS = 64
 
+    /**
+     * Pure, read-only join between canonical release slots and peer-offer
+     * observations. A peer's folder is not proof of a release or an album
+     * download. This never starts a transfer or changes the manual batch.
+     */
+    fun previewDiscovery(
+        entries:List<Entry>,
+        offers:List<com.music.bitchord.acquisition.a0.A0ReleaseDiscoveryPlanner.Offer>,
+        evidence:com.music.bitchord.acquisition.a0.A0PeerReliabilityEvidence=
+            com.music.bitchord.acquisition.a0.A0PeerReliabilityEvidence(),
+    ):com.music.bitchord.acquisition.a0.A0ReleaseDiscoveryPlanner.Preview {
+        require(entries.size in 1..MAX_TRACKS)
+        return com.music.bitchord.acquisition.a0.A0ReleaseDiscoveryPlanner.preview(
+            entries.map { entry ->
+                com.music.bitchord.acquisition.a0.A0ReleaseDiscoveryPlanner.Target(
+                    id=entry.trackId,expectedDurationSeconds=entry.durationSeconds)
+            },offers,evidence)
+    }
+
     /** A user may vary the network search, but never the release slot's
      * original artist/title identity or its album/version preflight.
      */
