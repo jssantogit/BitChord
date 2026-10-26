@@ -104,13 +104,16 @@ class MusicBrainzPublicMetadataIndexTest {
             assertEquals(null, dao.searchKnownMusicBrainzGroups("New Jeans", 10).single().artworkUri)
             assertEquals(null, dao.searchKnownMusicBrainzReleases("New Jeans", 10).single().artworkUri)
             dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
-                "release-group:front-v2", groupId, "https://archive.org/verified-group-front.jpg", 2000L,
+                "release-group:front-v2", groupId, "https://archive.org/verified-group-front.jpg",
+                2000L, thumbnailUri = "https://archive.org/verified-group-thumb-500.jpg",
             ))
             dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
                 "release:front-v2", editionId, "https://archive.org/verified-release-front.jpg", 2000L,
             ))
-            assertEquals("https://archive.org/verified-group-front.jpg",
+            assertEquals("https://archive.org/verified-group-thumb-500.jpg",
                 dao.searchKnownMusicBrainzGroups("New Jeans", 10).single().artworkUri)
+            assertEquals("https://archive.org/verified-group-front.jpg",
+                dao.musicBrainzCoverArtCache("release-group:front-v2", groupId)?.artworkUri)
             assertEquals("https://archive.org/verified-release-front.jpg",
                 dao.searchKnownMusicBrainzReleases("New Jeans", 10).single().artworkUri)
         } finally { db.close() }
