@@ -198,7 +198,9 @@ internal class MusicBrainzCatalogIndex(
                     artistDisplay = hit.artistDisplay?.takeIf(String::isNotBlank) ?: previous?.artistDisplay,
                     releaseDate = hit.releaseDate?.takeIf(String::isNotBlank) ?: previous?.releaseDate,
                     country = hit.country?.takeIf(String::isNotBlank) ?: previous?.country,
-                    status = previous?.status, fetchedAtEpochMs = System.currentTimeMillis(),
+                    status = hit.status?.trim()?.takeIf(String::isNotEmpty)
+                        ?: previous?.status,
+                    fetchedAtEpochMs = System.currentTimeMillis(),
                 ))
                 indexed[mbid] = releaseId
             }
@@ -233,7 +235,7 @@ internal class MusicBrainzCatalogIndex(
                 val release = dao.releaseById(edition.releaseId) ?: return@mapNotNull null
                 val info = dao.musicBrainzReleaseEnrichment(edition.releaseId)
                 MusicBrainzReleaseHit(mbid, release.title, info?.country, info?.releaseDate,
-                    info?.artistDisplay ?: release.artistDisplay)
+                    info?.artistDisplay ?: release.artistDisplay, status = info?.status)
             }
         }
 
