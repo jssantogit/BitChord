@@ -155,6 +155,22 @@ class CanonicalCuratedHomeFeedTest {
         assertTrue(shelf.items.all { it.videoId == null && it.browseId!!.startsWith("local:pick:") })
     }
 
+    @Test fun knownEditionUsesOnlyVerifiedGroupMbidForCoverFallback() {
+        val edition = release.copy(
+            kind = CanonicalSearchKind.RELEASE,
+            musicBrainzId = "33333333-3333-4333-8333-333333333333",
+            coverGroupMbid = "44444444-4444-4444-8444-444444444444",
+        )
+        assertEquals(
+            edition.musicBrainzId to edition.coverGroupMbid,
+            canonicalCoverLookupTarget(edition),
+        )
+        assertEquals(
+            edition.musicBrainzId to null,
+            canonicalCoverLookupTarget(edition.copy(coverGroupMbid = null)),
+        )
+    }
+
     @Test fun onlyOneExactArtistGetsDecorativeSearchPortrait() {
         val first = release.copy(kind = CanonicalSearchKind.ARTIST,
             musicBrainzId = "artist-main", title = "ILLIT", artworkUri = null)
