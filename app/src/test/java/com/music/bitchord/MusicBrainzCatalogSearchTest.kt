@@ -100,7 +100,7 @@ class MusicBrainzCatalogSearchTest {
             override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String =
                 when (path) {
                     "artist" -> """{"count":1,"offset":0,"artists":[{"id":"b51c672b-85e0-48fe-8648-470a2422229f","name":"aespa","disambiguation":"South Korean girl group"}]}"""
-                    "release-group" -> """{"count":1,"offset":0,"release-groups":[{"id":"529f87a1-1081-48a4-8ee1-3c08de229858","title":"SUPER REAL ME","primary-type":"EP"}]}"""
+                    "release-group" -> """{"count":1,"offset":0,"release-groups":[{"id":"529f87a1-1081-48a4-8ee1-3c08de229858","title":"SUPER REAL ME","primary-type":"EP","secondary-types":["Live","Remix"]}]}"""
                     else -> error("Unexpected MusicBrainz endpoint $path")
                 }
         }
@@ -110,6 +110,7 @@ class MusicBrainzCatalogSearchTest {
         assertEquals("b51c672b-85e0-48fe-8648-470a2422229f", artists.page.items.single().musicBrainzId)
         assertEquals("529f87a1-1081-48a4-8ee1-3c08de229858", groups.page.items.single().musicBrainzId)
         assertEquals("EP", groups.page.items.single().primaryType)
+        assertEquals("Live|Remix", groups.page.items.single().secondaryTypes)
     }
 
 
