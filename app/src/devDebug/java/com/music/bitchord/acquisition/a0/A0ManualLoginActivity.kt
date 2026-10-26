@@ -443,7 +443,8 @@ class A0ManualLoginActivity : Activity() {
                                 val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(18)
                                 // The server reader only parses frames; indirect peer
                                 // handshakes run concurrently on peer-only sockets.
-                                val peerWorkers=A0PeerSearchWorkers(queueCapacity=96)
+                                val peerWorkers=A0PeerSearchWorkers(queueCapacity=128)
+                                val offerGate=A0PeerOfferGate(160)
                                 activePeerWorkers=peerWorkers
                                 val peerOfferBackpressure=java.util.concurrent.atomic.AtomicInteger(0)
                                 val directOfferBackpressure=java.util.concurrent.atomic.AtomicInteger(0)
@@ -514,7 +515,7 @@ class A0ManualLoginActivity : Activity() {
                                         try {
                                             while (!Thread.currentThread().isInterrupted &&
                                                 System.nanoTime() < deadline &&
-                                                readerGate.isOpen() && attempts < 96
+                                                readerGate.isOpen() && attempts < 160
                                             ) {
                                                 val offer = try {
                                                     framedServer.readEvent { code ->
@@ -533,6 +534,7 @@ class A0ManualLoginActivity : Activity() {
                                                 if (offer == null) continue
                                                 if (!readerGate.isOpen()) break
                                                 trace.serverOfferReceived()
+                                                if(!offerGate.accept(offer.username,offer.token))continue
                                                 attemptedIndirect.set(true)
                                                 attempts++
                                                 if (!peerWorkers.submit {
@@ -735,7 +737,8 @@ class A0ManualLoginActivity : Activity() {
                                         activePeerWorkers=null
                                         trace.note(A0SmokeTrace.Stage.SEARCH_READERS_JOINED)
                                         trace.peerSearchBackpressure(
-                                            peerOfferBackpressure.get()+directOfferBackpressure.get())
+                                            peerOfferBackpressure.get()+directOfferBackpressure.get()+
+                                                offerGate.capacityDropped)
                                     } else {
                                         listener.close()
                                         directCollector.cancel()
