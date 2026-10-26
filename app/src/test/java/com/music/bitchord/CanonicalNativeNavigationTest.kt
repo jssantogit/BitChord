@@ -4,6 +4,8 @@ import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.ui.canonicalNativeBrowseId
 import com.music.bitchord.ui.canonicalNativePageType
 import com.music.bitchord.ui.canonicalNativeSections
+import com.music.bitchord.ui.canonicalPreferredEditions
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import org.junit.Assert.assertEquals
@@ -50,4 +52,27 @@ class CanonicalNativeNavigationTest {
         assertEquals(2, sections.single().items.map { it.browseId }.distinct().size)
         assertTrue(sections.single().items.all { it.videoId == null })
     }
+    @Test fun preferredEditionAvoidsBootlegsAndRemixes() {
+        val versions = listOf(
+            MusicBrainzReleaseHit("remix", "SUPER REAL ME (sped up)", "JP",
+                "2024-04-02", "ILLIT", status = "Official"),
+            MusicBrainzReleaseHit("bootleg", "SUPER REAL ME", "XW",
+                "2024-03-23", "ILLIT", status = "Bootleg"),
+            MusicBrainzReleaseHit("main", "SUPER REAL ME", "KR",
+                "2024-03-25", "ILLIT", status = "Official"),
+            MusicBrainzReleaseHit("deluxe", "SUPER REAL ME (Deluxe)", "XW",
+                "2024-04-01", "ILLIT", status = "Official"),
+        )
+        assertEquals("main", canonicalPreferredEditions(versions, "SUPER REAL ME").first().musicBrainzId)
+    }
+
+    @Test fun preferredEditionDoesNotInventIdentityOrMergeRealReleases() {
+        val releases = listOf(
+            MusicBrainzReleaseHit("first", "Original", null, null, "Artist", status = "Official"),
+            MusicBrainzReleaseHit("second", "Original", null, null, "Artist", status = "Official"),
+        )
+        assertEquals(2, canonicalPreferredEditions(releases, "Original").size)
+        assertEquals(setOf("first", "second"), canonicalPreferredEditions(releases, "Original").map { it.musicBrainzId }.toSet())
+    }
+
 }
