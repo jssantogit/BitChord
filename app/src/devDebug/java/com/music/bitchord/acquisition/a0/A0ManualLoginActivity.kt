@@ -477,7 +477,7 @@ class A0ManualLoginActivity : Activity() {
                                         // A bounded socket timeout lets this reader
                                         // relinquish server ownership before P/F routing.
                                         connection.soTimeout = 750
-                                        val framedServer = A0FrameReadProgress(
+                                        val framedServer = A0ProgressiveServerFrameReader(
                                             connection.getInputStream()
                                         )
                                         var attempts = 0
@@ -486,23 +486,15 @@ class A0ManualLoginActivity : Activity() {
                                                 System.nanoTime() < deadline &&
                                                 readerGate.isOpen() && attempts < 96
                                             ) {
-                                                framedServer.nextFrame()
                                                 val offer = try {
-                                                    A0IndirectSearchWire.readServerEvent(
-                                                        framedServer
-                                                    ) { code -> trace.ignoredServerFrame(code) }
-                                                } catch (_: SocketTimeoutException) {
-                                                    if (!framedServer.atFrameBoundary) {
-                                                        // A frame was only partially consumed.
-                                                        // Never hand its corrupted stream to P/F.
-                                                        failedServerReader.set(true)
-                                                        trace.note(
-                                                            A0SmokeTrace.Stage.SERVER_READ_FAILURE,
-                                                            TraceOutcome.DEGRADED,
-                                                            A0SmokeTrace.Reason.SERVER_IO_FAILURE
-                                                        )
-                                                        break
+                                                    framedServer.readEvent { code ->
+                                                        trace.ignoredServerFrame(code)
                                                     }
+                                                } catch (_: SocketTimeoutException) {
+                                                    // Preserve bytes already read: TCP may split
+                                                    // legitimate server frames across timeouts.
+                                                    // The progressive reader will finish the
+                                                    // same frame on the next iteration.
                                                     continue
                                                 } catch (_: A0IndirectSearchWire.RejectedPeerOffer) {
                                                     trace.note(
@@ -564,6 +556,16 @@ class A0ManualLoginActivity : Activity() {
                                                 }) {
                                                     peerOfferBackpressure.incrementAndGet()
                                                 }
+                                            }
+                                            if (!framedServer.atFrameBoundary) {
+                                                // An incomplete frame at shutdown cannot be
+                                                // handed to the P/F transport as aligned.
+                                                failedServerReader.set(true)
+                                                trace.note(
+                                                    A0SmokeTrace.Stage.SERVER_READ_FAILURE,
+                                                    TraceOutcome.DEGRADED,
+                                                    A0SmokeTrace.Reason.SERVER_IO_FAILURE
+                                                )
                                             }
                                         } catch (_: SocketTimeoutException) {
                                             trace.note(
