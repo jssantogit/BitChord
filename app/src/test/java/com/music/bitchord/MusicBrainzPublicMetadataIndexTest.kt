@@ -83,7 +83,7 @@ class MusicBrainzPublicMetadataIndexTest {
                 .map { it.musicBrainzId })
         } finally { db.close() }
     }
-    @Test fun offlineReleaseCoversUseValidatedFrontV2AndNeverSurfaceLegacyPoster() = runBlocking {
+    @Test fun offlineReleaseCoversUseStrictFrontV3AndNeverSurfaceLegacyPoster() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
         try {
@@ -118,7 +118,12 @@ class MusicBrainzPublicMetadataIndexTest {
                 2000L, thumbnailUri = "https://archive.org/verified-group-thumb-500.jpg",
             ))
             dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
-                "release:front-v2", editionId, "https://archive.org/verified-release-front.jpg", 2000L,
+                "release:front-v2", editionId, "https://archive.org/previous-front-video.jpg", 1000L,
+            ))
+            assertEquals(null, dao.searchKnownMusicBrainzReleases("New Jeans", 10)
+                .single().artworkUri)
+            dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
+                "release:front-v3", editionId, "https://archive.org/verified-release-front.jpg", 2000L,
             ))
             assertEquals("https://archive.org/verified-group-thumb-500.jpg",
                 dao.searchKnownMusicBrainzGroups("New Jeans", 10).single().artworkUri)
