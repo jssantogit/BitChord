@@ -780,8 +780,10 @@ fun canonicalDisplaySubtitle(row: CanonicalCatalogSearchRow, kindLabel: String):
         // suffix rather than introducing a second, untranslated label.
         CanonicalSearchKind.ARTIST -> kindLabel.substringBefore('·').trim()
         CanonicalSearchKind.RELEASE_GROUP, CanonicalSearchKind.RELEASE ->
-            row.releaseKind?.takeIf { it.isNotBlank() }
-                ?: row.subtitle?.substringBefore('·')?.trim().orEmpty()
+            row.releaseKind?.takeIf {
+                it.isNotBlank() && !it.equals("Other", ignoreCase = true)
+            } ?: row.subtitle?.substringBefore('·')?.trim()
+                ?.takeUnless { it.equals("Other", ignoreCase = true) }.orEmpty()
     }
 
 /** A Server asset uses the same native search row as other browseable content. */
