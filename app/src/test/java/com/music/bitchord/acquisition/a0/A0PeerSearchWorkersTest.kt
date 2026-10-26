@@ -53,4 +53,35 @@ class A0PeerSearchWorkersTest {
             assertTrue(workers.stop(2000))
         }
         assertFalse(workers.submit {})
-    }}
+    }
+
+    @Test(timeout=6000)
+    fun widerPeerDiscoveryStillHasStrictParallelAndQueueLimits() {
+        val release=CountDownLatch(1)
+        val started=CountDownLatch(12)
+        val concurrent=AtomicInteger()
+        val peak=AtomicInteger()
+        val workers=A0PeerSearchWorkers(
+            action={ task ->
+                val active=concurrent.incrementAndGet()
+                peak.updateAndGet { maxOf(it,active) }
+                started.countDown()
+                release.await(2,TimeUnit.SECONDS)
+                concurrent.decrementAndGet()
+                task()
+            },
+            queueCapacity=128,parallelism=12,
+        )
+        try {
+            repeat(12){assertTrue(workers.submit{})}
+            assertTrue(started.await(2,TimeUnit.SECONDS))
+            repeat(128){assertTrue(workers.submit{})}
+            assertFalse(workers.submit{})
+            assertEquals(12,peak.get())
+        } finally {
+            release.countDown()
+            assertTrue(workers.stop(3000))
+        }
+    }
+
+}
