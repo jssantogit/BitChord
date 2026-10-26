@@ -2175,10 +2175,7 @@ private fun BitChordApp(
         ) {
             executeMusicBrainzCatalog(cached.musicBrainzId, CanonicalCollectionIntent.PLAY_NOW)
         } else if (cached != null) {
-            viewModel.onQueryChange("")
-            viewModel.setSearchSource(SearchSource.CANONICAL)
-            selectedTab = TAB_SEARCH
-            viewModel.openCanonicalCatalogEntry(cached)
+            viewModel.openCanonicalNativeDetail(cached)
         } else {
             item.browseId?.let { id ->
                 val collection = downloadedReleases.firstOrNull {
@@ -3229,13 +3226,17 @@ private fun BitChordApp(
                             },
                             onSectionItemClick = { item ->
                                 item.browseId?.let { id ->
-                                    viewModel.openDetail(
-                                        browseId = id,
-                                        title = item.title,
-                                        subtitle = item.subtitle,
-                                        thumbnailUrl = item.thumbnailUrl,
-                                        type = BrowseType.ALBUM,
-                                    )
+                                    if (id.startsWith("catalog:")) {
+                                        viewModel.openCanonicalNativeShelfItem(id)
+                                    } else {
+                                        viewModel.openDetail(
+                                            browseId = id,
+                                            title = item.title,
+                                            subtitle = item.subtitle,
+                                            thumbnailUrl = item.thumbnailUrl,
+                                            type = BrowseType.ALBUM,
+                                        )
+                                    }
                                 }
                             },
                             onSectionItemLongPress = onBrowseLongPress,
@@ -3553,7 +3554,7 @@ private fun BitChordApp(
                             searchingCanonical = searchSource == SearchSource.CANONICAL,
                             canonicalResults = viewModel.canonicalResults.collectAsStateWithLifecycle().value,
                             canonicalDetail = viewModel.canonicalDetail.collectAsStateWithLifecycle().value,
-                            onCanonicalOpen = viewModel::openCanonicalCatalogEntry,
+                            onCanonicalOpen = viewModel::openCanonicalNativeDetail,
                             onCanonicalBack = viewModel::backCanonicalCatalogEntry,
                             onCanonicalLoadMore = viewModel::loadMoreCanonicalDetail,
                             canonicalLoadingMore = viewModel.canonicalLoadingMore.collectAsStateWithLifecycle().value,
