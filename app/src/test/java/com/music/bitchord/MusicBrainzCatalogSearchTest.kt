@@ -271,7 +271,9 @@ class MusicBrainzCatalogSearchTest {
             "11111111-1111-4111-8111-111111111111", "Get Up", "XW",
             "2023-07-21", "NewJeans", status = "Official",
         )
-        val curated = ::com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease
+        val curated: (com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit) -> Boolean = {
+            com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease(it)
+        }
         assertTrue(curated(official))
         for (status in listOf(null, "Bootleg", "Promotion", "Pseudo-Release", "Withdrawn")) {
             assertTrue(!curated(official.copy(status = status)))
