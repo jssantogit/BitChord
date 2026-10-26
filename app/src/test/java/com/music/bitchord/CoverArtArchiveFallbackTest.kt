@@ -428,6 +428,33 @@ class CoverArtArchiveFallbackTest {
         assertEquals(0, network)
     }
 
+    @Test fun genericGroupFallbackCannotPoisonOfficialArtistFrontCache() = runBlocking {
+        val now = 1_793_034_000_000L
+        val rows = mutableMapOf<String, MusicBrainzCoverArtCacheEntry>()
+        val cover = CoverArtArchive(
+            transport = object : CoverArtArchiveTransport {
+                override suspend fun get(path: String) = CoverArtArchiveResponse(200,
+                    """{"images":[{"front":true,"types":["Front"],"approved":true,
+                        "image":"https://archive.org/video-misclassified-front.jpg"}]}""")
+            },
+            store = object : MusicBrainzCoverArtStore {
+                override suspend fun read(type: String, mbid: String) =
+                    rows[com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType(type)]
+                override suspend fun write(value: MusicBrainzCoverArtCacheEntry) {
+                    rows[com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType(value.entityType)] =
+                        value
+                }
+            },
+            nowEpochMs = { now },
+        )
+        assertEquals("https://archive.org/video-misclassified-front.jpg",
+            cover.findCover(null, group))
+        assertEquals("https://archive.org/video-misclassified-front.jpg",
+            rows["release-group:front-v2"]?.artworkUri)
+        assertNull(rows["release-group:front-v3"])
+        assertNull(cover.cachedVerifiedGroupCover(group))
+    }
+
     @Test fun staleOrUntrustedGroupV3ArtworkCannotBeRenderedAsVerified() = runBlocking {
         val now = 1_793_034_000_000L
         var entry = MusicBrainzCoverArtCacheEntry(
