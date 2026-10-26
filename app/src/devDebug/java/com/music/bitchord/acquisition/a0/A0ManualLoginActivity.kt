@@ -497,16 +497,12 @@ class A0ManualLoginActivity : Activity() {
                                                     // same frame on the next iteration.
                                                     continue
                                                 } catch (_: A0IndirectSearchWire.RejectedPeerOffer) {
-                                                    trace.note(
-                                                        A0SmokeTrace.Stage.SERVER_OFFER_REJECTED,
-                                                        TraceOutcome.DEGRADED,
-                                                        A0SmokeTrace.Reason.WIRE_REJECTED
-                                                    )
+                                                    trace.serverOfferRejected()
                                                     continue
                                                 }
                                                 if (offer == null) continue
                                                 if (!readerGate.isOpen()) break
-                                                trace.note(A0SmokeTrace.Stage.SERVER_OFFER_RECEIVED)
+                                                trace.serverOfferReceived()
                                                 attemptedIndirect.set(true)
                                                 attempts++
                                                 if (!peerWorkers.submit {
