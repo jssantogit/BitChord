@@ -741,56 +741,52 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 it.artworkUri.isNullOrBlank() }.take(12)
         if (initial.isEmpty()) return
         canonicalDetailCoverJob = viewModelScope.launch(Dispatchers.IO) {
-            for (group in initial) {
-                if (_searchSource.value != SearchSource.CANONICAL ||
-                    canonicalPath.lastOrNull() != artist
-                ) return@launch
-                val artwork = try {
-                    coverArtArchive.findCover(null, group.musicBrainzId) ?: run {
-                        // A group can have no group-level image even though
-                        // one of its explicitly related editions has one.
-                        val related = musicBrainzGraph.browseGroupReleases(
-                            group.musicBrainzId, limit = 16,
-                        )
-                        val first = if (related is MusicBrainzCatalogGraphResult.Success) {
-                            canonicalPreferredEditions(related.value.items, group.title)
-                                .filter { it.status.equals("Official", ignoreCase = true) &&
-                                    it.title.trim().equals(group.title.trim(), ignoreCase = true) }
-                                .take(2)
-                        } else emptyList()
-                        var found: String? = null
-                        for (release in first) {
-                            found = coverArtArchive.findCover(
-                                release.musicBrainzId, group.musicBrainzId,
+            // A slow artwork response must not block unrelated rows. Bounded
+            // CAA work; Graph lookup honors the central MusicBrainz limiter.
+            val permits = Semaphore(3)
+            initial.forEach { group ->
+                launch {
+                    permits.withPermit {
+                        if (_searchSource.value != SearchSource.CANONICAL ||
+                            canonicalPath.lastOrNull() != artist) return@withPermit
+                        val artwork = try {
+                            canonicalArtworkForRow(group)
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { null } ?: return@withPermit
+                        if (_searchSource.value != SearchSource.CANONICAL ||
+                            canonicalPath.lastOrNull() != artist) return@withPermit
+                        _canonicalDetail.update { old ->
+                            if (old !is UiState.Success) old else UiState.Success(
+                                old.data.copy(rows = old.data.rows.map {
+                                    if (it.kind == group.kind &&
+                                        it.musicBrainzId == group.musicBrainzId &&
+                                        it.artworkUri.isNullOrBlank()
+                                    ) it.copy(artworkUri = artwork) else it
+                                }),
                             )
-                            if (found != null) break
                         }
-                        found
+                        val artistId = canonicalNativeBrowseId(artist)
+                        _detailStack.update { pages ->
+                            if (_searchSource.value != SearchSource.CANONICAL ||
+                                canonicalPath.lastOrNull() != artist) pages
+                            else {
+                                val rows = (_canonicalDetail.value as? UiState.Success)
+                                    ?.data?.rows.orEmpty()
+                                pages.map { page ->
+                                    if (page.browseId != artistId) page else page.copy(
+                                        sections = canonicalNativeSections(
+                                            parentKind = CanonicalSearchKind.ARTIST,
+                                            rows = rows,
+                                            heading = getApplication<Application>().getString(
+                                                R.string.shelf_new_albums_singles,
+                                            ),
+                                        ),
+                                    )
+                                }
+                            }
+                        }
                     }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) { null } ?: continue
-                if (_searchSource.value != SearchSource.CANONICAL ||
-                    canonicalPath.lastOrNull() != artist
-                ) return@launch
-                val current = (_canonicalDetail.value as? UiState.Success)?.data ?: continue
-                val updated = current.copy(rows = current.rows.map {
-                    if (it.kind == group.kind && it.musicBrainzId == group.musicBrainzId &&
-                        it.artworkUri.isNullOrBlank()
-                    ) it.copy(artworkUri = artwork) else it
-                })
-                _canonicalDetail.value = UiState.Success(updated)
-                val artistId = canonicalNativeBrowseId(artist)
-                _detailStack.value = _detailStack.value.map { page ->
-                    if (page.browseId != artistId) page else page.copy(
-                        sections = canonicalNativeSections(
-                            parentKind = CanonicalSearchKind.ARTIST,
-                            rows = updated.rows,
-                            heading = getApplication<Application>().getString(
-                                R.string.shelf_new_albums_singles,
-                            ),
-                        ),
-                    )
                 }
             }
         }
