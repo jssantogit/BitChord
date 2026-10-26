@@ -15,7 +15,7 @@ import java.net.URI
  * with expectedSha256 and fail closed on any mismatch.
  */
 internal object A0OpenAudioCandidateGate {
-    private const val MAX_PROBE_BYTES = 64L * 1024L * 1024L
+    private const val MAX_PROBE_BYTES = A0ObservedTransferLimits.MAX_AUDIO_BYTES
     private const val MAX_REMOTE_PATH_UTF8_BYTES = 2048
     private val SHA256_HEX = Regex("[0-9a-fA-F]{64}")
     private val ALLOWED_LICENSES = setOf(
