@@ -337,6 +337,9 @@ fun DetailScreen(
      * [LocalFolder].
      */
     folder: LocalFolder? = null,
+    /** Public tracklist metadata; never manufactured as a playable Song. */
+    canonicalTracks: List<CanonicalCatalogSearchRow> = emptyList(),
+    onCanonicalTrackPlay: ((String) -> Unit)? = null,
 ) {
     val rawSongs = (page.songs as? UiState.Success)?.data.orEmpty()
     // A folder keeps its own sort — the one its top bar menu sets — rather
@@ -680,7 +683,57 @@ fun DetailScreen(
                         onSongLongPress = onSongLongPress,
                         onSongSwipe = onSongSwipe,
                     )
-                } else if (isArtist) {
+                } else if (canonicalTracks.isNotEmpty()) {
+                    // Keep the original release-page typography and numbered
+                    // tracklist. A metadata-only row is simply non-playable;
+                    // no synthetic video IDs or technical warning labels.
+                    itemsIndexed(
+                        items = canonicalTracks,
+                        key = { _, row -> "canonical:track:${row.trackMbid ?: row.musicBrainzId}" },
+                    ) { index, row ->
+                        val canPlay = row.hasCatalogedAsset && onCanonicalTrackPlay != null
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .then(if (canPlay) Modifier.clickable {
+                                    onCanonicalTrackPlay?.invoke(row.musicBrainzId)
+                                } else Modifier)
+                                .padding(start = PAGE_GUTTER, end = PAGE_GUTTER, top = 12.dp, bottom = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = (index + 1).toString(),
+                                modifier = Modifier.width(34.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = palette.onBackgroundVariant,
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = row.title.replace(Regex("^\\d+\\.\\d+\\s+"), ""),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = palette.onBackground,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                row.subtitle?.takeIf { it.isNotBlank() }?.let { artist ->
+                                    Text(
+                                        text = artist,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = palette.onBackgroundVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                        if (index < canonicalTracks.lastIndex) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = NUMBERED_ROW_DIVIDER_INSET),
+                                thickness = 0.5.dp,
+                                color = palette.divider,
+                            )
+                        }
+                    }
+                } else if (isArtist && state.data.isNotEmpty()) {
                     // An artist's full song list would bury the album shelves, so
                     // it pages sideways four at a time and stops at twenty.
                     item {
