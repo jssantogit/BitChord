@@ -3,6 +3,8 @@ package com.music.bitchord
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
+import com.music.bitchord.ui.canonicalCoverLookupTarget
+import com.music.bitchord.ui.canonicalCoverLookupCandidates
 import com.music.bitchord.ui.canonicalLocalPickCardId
 import com.music.bitchord.ui.canonicalRemotePickCardId
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
@@ -150,5 +152,23 @@ class CanonicalCuratedHomeFeedTest {
         assertEquals("Escolha a dedo", shelf.title)
         assertEquals(2, shelf.items.size)
         assertTrue(shelf.items.all { it.videoId == null && it.browseId!!.startsWith("local:pick:") })
+    }
+
+    @Test fun artworkEnrichmentOnlyRequestsIdentitySafeReleaseOrGroupCovers() {
+        val edition = release.copy(kind = CanonicalSearchKind.RELEASE,
+            musicBrainzId = "00000000-0000-0000-0000-000000000003")
+        val artist = release.copy(kind = CanonicalSearchKind.ARTIST,
+            musicBrainzId = "00000000-0000-0000-0000-000000000004")
+        val recording = release.copy(kind = CanonicalSearchKind.RECORDING,
+            musicBrainzId = "00000000-0000-0000-0000-000000000005")
+        assertEquals(null to release.musicBrainzId, canonicalCoverLookupTarget(release))
+        assertEquals(edition.musicBrainzId to null, canonicalCoverLookupTarget(edition))
+        assertEquals(null, canonicalCoverLookupTarget(artist))
+        assertEquals(null, canonicalCoverLookupTarget(recording))
+        val candidates = canonicalCoverLookupCandidates(
+            listOf(artist, release, release, recording, edition),
+            limit = 2,
+        )
+        assertEquals(listOf(release, edition), candidates)
     }
 }
