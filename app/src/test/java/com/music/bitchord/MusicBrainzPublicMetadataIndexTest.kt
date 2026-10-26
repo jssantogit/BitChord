@@ -56,7 +56,8 @@ class MusicBrainzPublicMetadataIndexTest {
             val artistMbid = "b51c672b-85e0-48fe-8648-470a2422229f"
             val groupMbid = "529f87a1-1081-48a4-8ee1-3c08de229858"
             val artist = MusicBrainzArtistHit(artistMbid, "aespa", "South Korean girl group", "KR")
-            val group = MusicBrainzReleaseGroupHit(groupMbid, "SUPER REAL ME", "EP", "2024-03-25", "ILLIT")
+            val group = MusicBrainzReleaseGroupHit(groupMbid, "SUPER REAL ME", "EP", "2024-03-25", "ILLIT",
+                secondaryTypes = "Remix|Compilation")
             val artists = index.persistArtists(listOf(artist))
             val groups = index.persistReleaseGroups(listOf(group))
             assertNotEquals(artists[artistMbid], groups[groupMbid])
@@ -66,6 +67,13 @@ class MusicBrainzPublicMetadataIndexTest {
             assertEquals(groupMbid, db.catalogDao().searchKnownMusicBrainzGroups("real", 20)
                 .single().musicBrainzId)
             assertEquals("EP", db.catalogDao().catalogReleaseGroup(groups[groupMbid]!!)?.primaryType)
+            assertEquals("Remix|Compilation",
+                db.catalogDao().catalogReleaseGroup(groups[groupMbid]!!)?.secondaryTypes)
+            assertEquals("Remix|Compilation",
+                db.catalogDao().searchKnownMusicBrainzGroups("real", 20).single().secondaryTypes)
+            index.persistReleaseGroups(listOf(group.copy(primaryType = null, secondaryTypes = null)))
+            assertEquals("Remix|Compilation",
+                db.catalogDao().catalogReleaseGroup(groups[groupMbid]!!)?.secondaryTypes)
             assertEquals(groups, index.persistReleaseGroups(listOf(group.copy(title = "Untrusted synonym"))))
             assertEquals(2, id)
             assertEquals(emptyList<String>(), db.catalogDao().searchKnownMusicBrainzGroups("REAL%", 20)
