@@ -12,11 +12,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.ConscryptMode
 
-/** A real old SQLite file must survive two new additive catalog migrations. */
+/** A real old SQLite file must survive three additive catalog migrations. */
 @ConscryptMode(ConscryptMode.Mode.OFF)
 @RunWith(RobolectricTestRunner::class)
 class CanonicalCatalogIncrementalMigrationTest {
-    @Test fun migrationsFromSevenPreserveMusicBrainzGroupsAndCoverCache() {
+    @Test fun migrationsFromSevenPreserveGroupsCoverCacheAndLegacyPublicationEvidence() {
         val context = RuntimeEnvironment.getApplication()
         val name = "catalog-incremental-v7-to-v9.db"
         context.deleteDatabase(name)
@@ -47,6 +47,11 @@ class CanonicalCatalogIncrementalMigrationTest {
                 fetchedAtEpochMs INTEGER NOT NULL,
                 PRIMARY KEY(entityType, mbid)
             )""")
+            raw.execSQL("""CREATE TABLE catalog_musicbrainz_artist_group(
+                artistId TEXT NOT NULL, releaseGroupId TEXT NOT NULL,
+                PRIMARY KEY(artistId, releaseGroupId)
+            )""")
+            raw.execSQL("INSERT INTO catalog_musicbrainz_artist_group VALUES('artist-local','old-group')")
             raw.execSQL("""INSERT INTO catalog_release_group
                 (id, title, artistDisplay, primaryType, firstReleaseDate)
                 VALUES ('old-group','NJWMX','NewJeans','Album','2023-12-19')""")
@@ -55,6 +60,14 @@ class CanonicalCatalogIncrementalMigrationTest {
                 VALUES ('release-group:front-v2','verified','https://archive.org/old.jpg',1000)""")
             CanonicalCatalogDatabase.MIGRATION_7_8.migrate(migrationDb)
             CanonicalCatalogDatabase.MIGRATION_8_9.migrate(migrationDb)
+            CanonicalCatalogDatabase.MIGRATION_9_10.migrate(migrationDb)
+            raw.rawQuery(
+                "SELECT publicationEvidence FROM catalog_musicbrainz_artist_group WHERE artistId='artist-local'",
+                null,
+            ).use {
+                org.junit.Assert.assertTrue(it.moveToFirst())
+                assertNull("v9 links cannot be silently marked Official", it.getString(0))
+            }
             raw.rawQuery("SELECT title,primaryType,secondaryTypes FROM catalog_release_group WHERE id = 'old-group'", null).use {
                 org.junit.Assert.assertTrue(it.moveToFirst())
                 assertEquals("NJWMX", it.getString(0))
