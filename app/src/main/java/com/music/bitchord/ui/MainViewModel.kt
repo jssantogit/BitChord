@@ -538,6 +538,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     verifiedCaaFront500Url(edition)
                 } else null
                 if (quick != null) {
+                    com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry.process
+                        .recordDirectFrontCandidate()
                     try {
                         RoomMusicBrainzCoverArtStore(
                             CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao(),
