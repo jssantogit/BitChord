@@ -94,6 +94,29 @@ internal interface CanonicalCatalogDao {
     """)
     suspend fun musicBrainzGroupsForArtist(artistId: String): List<CatalogReleaseGroupEntity>
 
+    /**
+     * One indexed Room query per artist page, independent of discography size.
+     * Both group MBID and artist-group association must be positive evidence;
+     * legacy/non-front cache namespaces cannot bleed into these cards.
+     */
+    @Query("""
+        SELECT ident.externalId AS musicBrainzId, grp.title AS title,
+               grp.primaryType AS primaryType, grp.firstReleaseDate AS firstReleaseDate,
+               grp.artistDisplay AS artistDisplay, grp.secondaryTypes AS secondaryTypes,
+               COALESCE(art.thumbnailUri, art.artworkUri) AS artworkUri
+        FROM catalog_musicbrainz_artist_group AS membership
+        JOIN catalog_release_group AS grp ON grp.id = membership.releaseGroupId
+        JOIN catalog_external_identity AS ident ON ident.entityId = grp.id
+            AND ident.provider = 'musicbrainz' AND ident.entityType = 'release-group'
+        LEFT JOIN catalog_cover_art_cache AS art
+            ON art.entityType = 'release-group:front-v2' AND art.mbid = ident.externalId
+        WHERE membership.artistId = :artistId
+        ORDER BY grp.firstReleaseDate DESC, grp.title COLLATE NOCASE, ident.externalId
+    """)
+    suspend fun verifiedArtistDiscographyRows(
+        artistId: String,
+    ): List<com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit>
+
     @Upsert suspend fun upsertCatalogReleaseGroup(entity: CatalogReleaseGroupEntity)
     @Upsert suspend fun upsertCatalogReleaseGroupEdition(entity: CatalogReleaseGroupEditionEntity)
     @Upsert suspend fun upsertCatalogMusicBrainzTrack(entity: CatalogMusicBrainzTrackEntity)
