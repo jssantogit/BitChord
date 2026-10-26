@@ -3,7 +3,7 @@ name: Catalog #178 — Android Smoke APK
 # APK candidate from the exact #178 PR HEAD. Pull-request path filters
 # use the cumulative PR diff, so a cheap commit-delta gate prevents repeated
 # 300+ MB builds on unrelated later code pushes.
-# Candidate: strict Front-v4 provenance, progressive covers, diagnostics and Room v11.
+# Candidate: post-A54 fixes; group Front-v4, release Front-v3, official edition names, Room cached-first.
 # The APK job runs JVM regressions on the exact checked-out HEAD before packaging.
 on:
   workflow_dispatch:
@@ -113,8 +113,8 @@ jobs:
       - name: Record APK checksum and exact commit
         run: |
           printf 'commit=%s\n' "$(git rev-parse HEAD)" > catalog-178-build.txt
-          printf 'candidate=178-front-v4-progressive-art-and-coil-metrics\n' >> catalog-178-build.txt
-          printf 'validation_focus=newjeans-hurt-get-up-omg-njwmx-right-now-supernatural-cold-warm-art-coil-offline-yt-off\n' >> catalog-178-build.txt
+          printf 'candidate=178-post-a54-official-edition-titles-front-v3-restart-cache\n' >> catalog-178-build.txt
+          printf 'validation_focus=newjeans-how-sweet-title-and-front-get-up-super-shy-illit-cover-reopen-cold-warm-coil-yt-off\n' >> catalog-178-build.txt
           find app/build/outputs/apk/dev/debug -name '*.apk' -print -exec sha256sum '{}' \; >> catalog-178-build.txt
 
       - name: Upload smoke candidate
