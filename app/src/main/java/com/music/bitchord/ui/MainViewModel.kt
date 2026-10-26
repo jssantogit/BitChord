@@ -3637,7 +3637,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 fromOfflineCache = true,
                             ))
                         }
-                        recordings.filter { canonicalStreamingTitleIsSafe(it.title) }.forEach { recording ->
+                        recordings.filter(::isCuratedMusicBrainzRecording).forEach { recording ->
                             add(CanonicalCatalogSearchRow(
                                 recording.musicBrainzId, CanonicalSearchKind.RECORDING,
                                 recording.title, recording.artistDisplay,
@@ -3827,7 +3827,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             val available = dao.musicBrainzRecordingMbidsWithAssets(
                                 known.map { it.musicBrainzId },
                             ).toSet()
-                            known.filter { canonicalStreamingTitleIsSafe(it.title) }.forEach { hit -> add(CanonicalCatalogSearchRow(
+                            known.filter(::isCuratedMusicBrainzRecording).forEach { hit -> add(CanonicalCatalogSearchRow(
                                 hit.musicBrainzId, CanonicalSearchKind.RECORDING,
                                 hit.title, hit.artistDisplay,
                                 hasCatalogedAsset = hit.musicBrainzId in available,
