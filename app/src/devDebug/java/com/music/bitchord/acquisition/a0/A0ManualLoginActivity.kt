@@ -66,6 +66,17 @@ class A0ManualLoginActivity : Activity() {
         // Launched by the in-app song Download action, not the old A0 tool entry.
         val fromSongDownload = intent.hasExtra("bitchord.soulseek.manual.query")
         val hasBatch=intent.hasExtra("bitchord.soulseek.batch.queries")
+        // Process death cannot be assumed to preserve the completion of a
+        // MediaStore commit. Fail closed instead of silently restarting at
+        // track one and risking a duplicate physical download.
+        if(hasBatch && savedInstanceState!=null) {
+            Toast.makeText(this,
+                "Lote interrompido. Faixas já salvas permanecem na biblioteca; " +
+                    "abra o lançamento novamente para continuar manualmente.",
+                Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
         val batchEntries=if(hasBatch)SoulseekBatchPayload.decode(
             intent.getStringArrayListExtra("bitchord.soulseek.batch.queries"),
             intent.getStringArrayListExtra("bitchord.soulseek.batch.albums"),
@@ -191,7 +202,9 @@ class A0ManualLoginActivity : Activity() {
             "Não envie credenciais, capturas de rede ou logcat bruto.")
         val status = text("Nenhuma conexão iniciada.")
         val batchStatus=if(batch!=null)text(
-            "Lote: faixa 1 de ${batch.entries.size} · 0 salvas · 0 puladas."
+            "Lote guiado: faixa 1 de ${batch.entries.size} · 0 salvas · 0 puladas. " +
+                "Cada faixa exige escolha manual. Sair interrompe o lote, " +
+                "sem excluir downloads já concluídos."
         )else null
         val nextTrack=if(batch!=null)Button(this).also {
             it.text="Próxima faixa / Pular atual"
