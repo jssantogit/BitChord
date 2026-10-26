@@ -200,7 +200,7 @@ class CoverArtArchiveFallbackTest {
     }
 
     @Test fun strictFrontPolicyUsesSeparatePersistentKeysFromLegacyCoverCache() {
-        assertEquals("release:front-v2",
+        assertEquals("release:front-v3",
             com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType("release"))
         assertEquals("release-group:front-v2",
             com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType("release-group"))
