@@ -375,4 +375,60 @@ class CoverArtArchiveFallbackTest {
             cached["release" to releaseId]?.thumbnailUri)
     }
 
+
+    @Test fun verifiedGroupCacheNeverReadsLegacyAlternateEditionArtworkOrCallsCAA() = runBlocking {
+        val now = 1_793_034_000_000L
+        val records = mutableMapOf(
+            "release-group:front-v2" to MusicBrainzCoverArtCacheEntry(
+                "release-group", group, "https://archive.org/old-video.jpg", now,
+            ),
+        )
+        var network = 0
+        val store = object : MusicBrainzCoverArtStore {
+            override suspend fun read(type: String, mbid: String): MusicBrainzCoverArtCacheEntry? =
+                records[com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType(type)]
+            override suspend fun write(value: MusicBrainzCoverArtCacheEntry) {
+                records[com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType(value.entityType)] = value
+            }
+        }
+        val cover = CoverArtArchive(
+            transport = object : CoverArtArchiveTransport {
+                override suspend fun get(path: String): CoverArtArchiveResponse {
+                    network++
+                    error("V3 cache probe must not make a request")
+                }
+            },
+            store = store, nowEpochMs = { now + 1000L },
+        )
+        assertNull(cover.cachedVerifiedGroupCover(group))
+        records["release-group:front-v3"] = MusicBrainzCoverArtCacheEntry(
+            "release-group", group,
+            "https://archive.org/official-1200.jpg", now,
+            "https://archive.org/official-500.jpg",
+        )
+        assertEquals("https://archive.org/official-500.jpg",
+            cover.cachedVerifiedGroupCover(group, CoverArtSize.THUMBNAIL))
+        assertEquals("https://archive.org/official-1200.jpg",
+            cover.cachedVerifiedGroupCover(group, CoverArtSize.HERO))
+        assertEquals(0, network)
+    }
+
+    @Test fun staleOrUntrustedGroupV3ArtworkCannotBeRenderedAsVerified() = runBlocking {
+        val now = 1_793_034_000_000L
+        var entry = MusicBrainzCoverArtCacheEntry(
+            "release-group", group, "https://evil.invalid/wrong.jpg", now,
+        )
+        val cover = CoverArtArchive(
+            store = object : MusicBrainzCoverArtStore {
+                override suspend fun read(type: String, mbid: String) = entry
+                override suspend fun write(value: MusicBrainzCoverArtCacheEntry) { entry = value }
+            },
+            nowEpochMs = { now },
+        )
+        assertNull(cover.cachedVerifiedGroupCover(group))
+        entry = entry.copy(artworkUri = "https://archive.org/correct.jpg",
+            fetchedAtEpochMs = now - 32L * 24 * 60 * 60 * 1000)
+        assertNull(cover.cachedVerifiedGroupCover(group))
+    }
+
 }
