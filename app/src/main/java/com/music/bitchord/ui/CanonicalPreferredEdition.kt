@@ -1,6 +1,7 @@
 package com.music.bitchord.ui
 
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
+import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease
 import java.util.Locale
 
 /**
@@ -11,6 +12,20 @@ import java.util.Locale
  * MusicBrainz status and an actual group-title match outrank geography/date.
  * This is selection of a display *edition*, NOT deduplication of audio identities.
  */
+/**
+ * Album cards only borrow covers from real editions in their exact MusicBrainz
+ * ReleaseGroup, with a verified Official status and matching edition title.
+ * The group's own CAA Front can originate from a video/alternate edition.
+ */
+internal fun canonicalArtworkEditionsForGroup(
+    editions: List<MusicBrainzReleaseHit>, groupTitle: String,
+): List<MusicBrainzReleaseHit> =
+    canonicalPreferredEditions(editions, groupTitle)
+        .filter { edition ->
+            isCuratedMusicBrainzRelease(edition) &&
+                edition.title.trim().equals(groupTitle.trim(), ignoreCase = true)
+        }.take(2)
+
 internal fun canonicalPreferredEditions(
     editions: List<MusicBrainzReleaseHit>,
     groupTitle: String,
