@@ -104,7 +104,24 @@ internal interface CanonicalCatalogDao {
      * legacy/non-front cache namespaces cannot bleed into these cards.
      */
     @Query("""
-        SELECT ident.externalId AS musicBrainzId, grp.title AS title,
+        SELECT ident.externalId AS musicBrainzId, COALESCE((
+                SELECT edition.title
+                FROM catalog_release_group_edition AS groupEdition
+                JOIN catalog_release AS edition ON edition.id = groupEdition.releaseId
+                JOIN musicbrainz_release_enrichment AS evidence
+                    ON evidence.releaseId = edition.id
+                WHERE groupEdition.releaseGroupId = grp.id
+                  AND lower(evidence.status) = 'official'
+                  -- A composite ReleaseGroup label is not necessarily the
+                  -- commercially released album title. “How Sweet & Bubble
+                  -- Gum” has verified Official editions titled “How Sweet”.
+                  -- The title remains source-owned; group ID never changes.
+                  AND instr(lower(grp.title), lower(trim(edition.title) || ' & ')) = 1
+                ORDER BY CASE WHEN evidence.country = 'XW' THEN 0
+                              WHEN evidence.country = 'KR' THEN 1 ELSE 2 END,
+                         evidence.releaseDate, edition.id
+                LIMIT 1
+            ), grp.title) AS title,
                grp.primaryType AS primaryType, grp.firstReleaseDate AS firstReleaseDate,
                grp.artistDisplay AS artistDisplay, grp.secondaryTypes AS secondaryTypes,
                COALESCE(art.thumbnailUri, art.artworkUri) AS artworkUri
@@ -552,7 +569,24 @@ internal interface CanonicalCatalogDao {
 
     @Query(
         """
-        SELECT identity.externalId AS musicBrainzId, grp.title AS title,
+        SELECT identity.externalId AS musicBrainzId, COALESCE((
+                SELECT edition.title
+                FROM catalog_release_group_edition AS groupEdition
+                JOIN catalog_release AS edition ON edition.id = groupEdition.releaseId
+                JOIN musicbrainz_release_enrichment AS evidence
+                    ON evidence.releaseId = edition.id
+                WHERE groupEdition.releaseGroupId = grp.id
+                  AND lower(evidence.status) = 'official'
+                  -- A composite ReleaseGroup label is not necessarily the
+                  -- commercially released album title. “How Sweet & Bubble
+                  -- Gum” has verified Official editions titled “How Sweet”.
+                  -- The title remains source-owned; group ID never changes.
+                  AND instr(lower(grp.title), lower(trim(edition.title) || ' & ')) = 1
+                ORDER BY CASE WHEN evidence.country = 'XW' THEN 0
+                              WHEN evidence.country = 'KR' THEN 1 ELSE 2 END,
+                         evidence.releaseDate, edition.id
+                LIMIT 1
+            ), grp.title) AS title,
                grp.primaryType AS primaryType, grp.firstReleaseDate AS firstReleaseDate,
                grp.artistDisplay AS artistDisplay, grp.secondaryTypes AS secondaryTypes,
                COALESCE(art.thumbnailUri, art.artworkUri) AS artworkUri
