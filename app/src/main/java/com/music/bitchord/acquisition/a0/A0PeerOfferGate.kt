@@ -8,9 +8,12 @@ package com.music.bitchord.acquisition.a0
 internal class A0PeerOfferGate(private val capacity:Int=160) {
     init { require(capacity in 8..256) }
     private val seen=HashSet<Pair<String,Int>>()
+    private val maxTicketsPerPeer=8
     var duplicateCount:Int=0
         private set
     var capacityDropped:Int=0
+        private set
+    var perPeerDropped:Int=0
         private set
     val acceptedCount:Int get()=seen.size
 
@@ -31,6 +34,13 @@ internal class A0PeerOfferGate(private val capacity:Int=160) {
         }
         if(seen.size>=capacity) {
             capacityDropped++
+            return false
+        }
+        // Server-side floods of distinct tokens from one untrusted peer
+        // must not starve other peers within our bounded search window.
+        // Different tickets remain valid up to this conservative per-peer cap.
+        if(seen.count { it.first==username }>=maxTicketsPerPeer) {
+            perPeerDropped++
             return false
         }
         seen.add(key)
