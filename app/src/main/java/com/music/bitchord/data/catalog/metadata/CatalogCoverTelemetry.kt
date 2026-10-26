@@ -30,6 +30,18 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
     private var transient = 0
     private val durations = ArrayDeque<Long>()
 
+    /** Start a clean anonymous metric window for each explicit capture. */
+    @Synchronized fun reset() {
+        cached = 0
+        negative = 0
+        coalesced = 0
+        network = 0
+        successful = 0
+        missing = 0
+        transient = 0
+        durations.clear()
+    }
+
     @Synchronized fun recordCacheHit() { cached++ }
     @Synchronized fun recordNegativeCacheHit() { negative++ }
     @Synchronized fun recordJoinedRequest() { coalesced++ }
