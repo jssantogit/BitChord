@@ -477,9 +477,9 @@ class A0ManualLoginActivity : Activity() {
                                                 peer.getInputStream(),token
                                             ) { verifiedFrame, claimedPeer ->
                                                 receivedValidP2pReply.set(true)
+                                                handoff?.offerSearchResult(verifiedFrame,claimedPeer)
                                                 peerReliability.observe(claimedPeer,
                                                     A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
-                                                handoff?.offerSearchResult(verifiedFrame,claimedPeer)
                                                 discoveryProgress()
                                             }
                                             trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_ACCEPTED)
@@ -578,9 +578,9 @@ class A0ManualLoginActivity : Activity() {
                                                                     peer.getInputStream(),token,offer.username
                                                                 ) { frame, claimedPeer ->
                                                                     receivedValidP2pReply.set(true)
+                                                                    handoff?.offerSearchResult(frame,claimedPeer)
                                                                     peerReliability.observe(claimedPeer,
                                                                         A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
-                                                                    handoff?.offerSearchResult(frame,claimedPeer)
                                                                     discoveryProgress()
                                                                 }
                                                                 trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_ACCEPTED)
