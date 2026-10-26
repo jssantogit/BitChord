@@ -570,6 +570,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return coverArtArchive.findCover(target.first, target.second, size)
     }
 
+    /** Read only linked, Official edition titles; never match by artist/title. */
+    private suspend fun canonicalSavedGroupDisplayTitle(row: CanonicalCatalogSearchRow): String {
+        if (row.kind != CanonicalSearchKind.RELEASE_GROUP) return row.title
+        val editions = try {
+            MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
+                getApplication<Application>(),
+            )).cachedGroupReleases(row.musicBrainzId)
+        } catch (cancelled: CancellationException) { throw cancelled }
+          catch (_: Exception) { emptyList() }
+        return canonicalOfficialGroupDisplayTitle(row.title, editions)
+    }
+
     private fun enrichCanonicalSearchCovers(query: String) {
         canonicalSearchCoverJob?.cancel()
         val visible = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
@@ -623,15 +635,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             canonicalArtworkForRow(row)
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (_: Exception) { null } ?: return@withPermit
+                        } catch (_: Exception) { null }
+                        val officialTitle = canonicalSavedGroupDisplayTitle(row)
+                        if (artwork == null && officialTitle == row.title) return@withPermit
                         if (_searchSource.value != SearchSource.CANONICAL ||
                             _query.value.trim() != query) return@withPermit
                         _canonicalResults.update { old ->
                             if (old !is UiState.Success) old else UiState.Success(
                                 old.data.map {
-                                    if (it.kind == row.kind && it.musicBrainzId == row.musicBrainzId &&
-                                        canonicalNeedsCoverRefresh(it.artworkUri)
-                                    ) it.copy(artworkUri = artwork) else it
+                                    if (it.kind != row.kind || it.musicBrainzId != row.musicBrainzId) it
+                                    else it.copy(
+                                        title = officialTitle,
+                                        artworkUri = if (artwork != null &&
+                                            canonicalNeedsCoverRefresh(it.artworkUri))
+                                            artwork else it.artworkUri,
+                                    )
                                 },
                             )
                         }
@@ -661,15 +679,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             canonicalArtworkForRow(row)
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (_: Exception) { null } ?: return@withPermit
+                        } catch (_: Exception) { null }
+                        val officialTitle = canonicalSavedGroupDisplayTitle(row)
+                        if (artwork == null && officialTitle == row.title) return@withPermit
                         if (!canonicalDiscoveryCatalogEpoch.isCurrent(generation) ||
                             !isCanonicalDiscoverySelected()) return@withPermit
                         _canonicalDiscoveryCatalog.update { old ->
                             if (old !is UiState.Success) old else UiState.Success(
                                 old.data.map {
-                                    if (it.kind == row.kind && it.musicBrainzId == row.musicBrainzId &&
-                                        canonicalNeedsCoverRefresh(it.artworkUri)
-                                    ) it.copy(artworkUri = artwork) else it
+                                    if (it.kind != row.kind || it.musicBrainzId != row.musicBrainzId) it
+                                    else it.copy(
+                                        title = officialTitle,
+                                        artworkUri = if (artwork != null &&
+                                            canonicalNeedsCoverRefresh(it.artworkUri))
+                                            artwork else it.artworkUri,
+                                    )
                                 },
                             )
                         }
@@ -1270,6 +1294,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     } catch (_: Exception) { emptyList() }
 
                     val ranked = canonicalPreferredEditions(versions, entry.title)
+                    val editorialTitle = canonicalOfficialGroupDisplayTitle(entry.title, versions)
                     var chosen: MusicBrainzCatalogReleaseDetail? = null
                     // Bounded retry: an MB edition can have no usable tracks,
                     // even when its Release Group is perfectly valid.
@@ -1318,7 +1343,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         // Publish tracks immediately; remote cover is a separate,
                         // cancellable decoration, never a tracklist prerequisite.
                         UiState.Success(CanonicalCatalogDetailPage(
-                            title = entry.title,
+                            title = editorialTitle,
                             summary = null,
                             artworkUri = entry.artworkUri.takeIf {
                                 canonicalEditorialReleaseType(entry) != null
@@ -1412,6 +1437,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _detailStack.value = _detailStack.value.map { page ->
                     if (page.browseId != nativeId) page else when (output) {
                         is UiState.Success -> page.copy(
+                            title = output.data.title,
                             songs = UiState.Success(emptyList()),
                             sections = canonicalNativeSections(
                                 parentKind = entry.kind,
