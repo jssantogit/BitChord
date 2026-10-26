@@ -93,11 +93,19 @@ internal object A0CandidatePreflight {
         // Approximate CBR-size check. A peer's bitrate is unverified and may
         // be an average for VBR. Keep broad tolerance to avoid false precision.
         val ext=format.lowercase(java.util.Locale.ROOT)
+        val maxClaimedBitrate=when(ext) {
+            "mp3" -> 320
+            // AAC ADTS beyond 512 kbps is unusual for the supported
+            // high-quality music preset. Keep it manually inspectable,
+            // not strong evidence for future unattended selection.
+            "aac" -> 512
+            else -> 1536
+        }
         val goodBitrate=declaredBitrateKbps?.takeIf {
-            it in 32..(if(ext=="mp3") 320 else 1536)
+            it in 32..maxClaimedBitrate
         }
         when(ext) {
-            "mp3" -> {
+            "mp3", "aac" -> {
                 if(goodBitrate==null || goodBitrate<256) {
                     reasons.add(Reason.QUALITY_UNCONFIRMED)
                 }
