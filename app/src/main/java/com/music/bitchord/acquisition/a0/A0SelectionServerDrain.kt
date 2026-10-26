@@ -34,13 +34,14 @@ internal object A0SelectionServerDrain {
         val progress=A0ProgressiveServerFrameReader(server.getInputStream())
         var frames=0
         var bytes=0L
+        var pendingChoice:Int?=null
         try {
             while(!isCancelled()) {
-                val choice=choices.poll()
+                if(pendingChoice==null) pendingChoice=choices.poll()
                 // Selection may arrive while we are partway through a TCP
-                // frame. Never transfer the socket to P/F until alignment.
-                if(choice!=null && progress.atFrameBoundary)
-                    return Selection(choice,frames)
+                // frame. Preserve the choice and finish framing first.
+                if(pendingChoice!=null && progress.atFrameBoundary)
+                    return Selection(pendingChoice,frames)
                 val timeLeft=deadline-System.nanoTime()
                 if(timeLeft<=0L) {
                     if(!progress.atFrameBoundary)
