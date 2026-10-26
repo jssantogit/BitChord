@@ -97,6 +97,32 @@ internal class MusicBrainzCatalogGraph(
             )
         }
 
+    /**
+     * Batch up to 100 official artist editions in one MusicBrainz request,
+     * including their actual ReleaseGroup MBIDs. This avoids one separate
+     * rate-limited browse per album just to identify its artwork candidate.
+     * The caller still checks exact titles and statuses before displaying art.
+     */
+    suspend fun browseOfficialReleasesForArtist(
+        artistMbid: String, limit: Int = 100, offset: Int = 0,
+    ): MusicBrainzCatalogGraphResult<MusicBrainzCatalogPage<MusicBrainzReleaseHit>> =
+        paged("release", "artist", artistMbid, limit, offset,
+            extraParameters = mapOf("status" to "official", "inc" to "release-groups"),
+            countKey = "release-count", offsetKey = "release-offset", arrayKey = "releases",
+            identity = MusicBrainzReleaseHit::musicBrainzId,
+        ) { row ->
+            MusicBrainzReleaseHit(
+                musicBrainzId = row.string("id").validMbid() ?: return@paged null,
+                title = row.string("title") ?: return@paged null,
+                country = row.string("country"),
+                releaseDate = row.string("date"),
+                artistDisplay = row.artistDisplay(),
+                status = row.string("status"),
+                releaseGroupMbid = (row["release-group"] as? JsonObject)
+                    ?.string("id").validMbid(),
+            )
+        }
+
     /** Every edition is a separate Release; multiple releases share one group. */
     suspend fun browseGroupReleases(
         groupMbid: String, limit: Int = 25, offset: Int = 0,
