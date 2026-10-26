@@ -6,6 +6,12 @@ name: Catalog #178 — Android Smoke APK
 # Intentional candidate: CI-green d90b88d, Room v11 official audio/edition evidence, canonical covers, diagnostics and artist paging.
 on:
   workflow_dispatch:
+  # The smoke workflow is intentionally isolated to PR #183 and does not
+  # exist on main yet; push-to-self is the reliable explicit APK trigger.
+  push:
+    branches: [fix/178-musicbrainz-canonical-foundation]
+    paths:
+      - .github/workflows/catalog-178-smoke-apk.yml
   pull_request:
     branches: [main]
     paths:
