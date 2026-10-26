@@ -21,4 +21,15 @@ class A0PeerOfferGateTest {
         assertTrue(gate.accept("peer",2))
         assertEquals(2,gate.acceptedCount)
     }
+    @Test fun unsubmittedOfferDoesNotConsumeThePeerBudgetOrSuppressRetry() {
+        val gate=A0PeerOfferGate(8)
+        repeat(8) { index -> assertTrue(gate.accept("peer-$index",index+1)) }
+        assertFalse(gate.accept("new-peer",99))
+        assertTrue(gate.releaseUnsubmitted("peer-3",4))
+        assertEquals(7,gate.acceptedCount)
+        assertTrue(gate.accept("peer-3",4))
+        assertEquals(8,gate.acceptedCount)
+        assertFalse(gate.releaseUnsubmitted("unknown",999))
+        assertEquals(8,gate.acceptedCount)
+    }
 }
