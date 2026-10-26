@@ -48,7 +48,10 @@ internal data class MusicBrainzCoverArtCacheEntry(
     val mbid: String,
     val artworkUri: String?,
     val fetchedAtEpochMs: Long,
+    val thumbnailUri: String? = null,
 )
+
+internal enum class CoverArtSize { THUMBNAIL, HERO }
 
 internal interface MusicBrainzCoverArtStore {
     suspend fun read(type: String, mbid: String): MusicBrainzCoverArtCacheEntry?
@@ -71,13 +74,15 @@ internal class RoomMusicBrainzCoverArtStore(
 ) : MusicBrainzCoverArtStore {
     override suspend fun read(type: String, mbid: String): MusicBrainzCoverArtCacheEntry? =
         dao.musicBrainzCoverArtCache(verifiedFrontCacheType(type), mbid)?.let {
-            MusicBrainzCoverArtCacheEntry(type, it.mbid, it.artworkUri, it.fetchedAtEpochMs)
+            MusicBrainzCoverArtCacheEntry(
+                type, it.mbid, it.artworkUri, it.fetchedAtEpochMs, it.thumbnailUri,
+            )
         }
 
     override suspend fun write(value: MusicBrainzCoverArtCacheEntry) {
         dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
             verifiedFrontCacheType(value.entityType), value.mbid,
-            value.artworkUri, value.fetchedAtEpochMs,
+            value.artworkUri, value.fetchedAtEpochMs, value.thumbnailUri,
         ))
     }
 }
@@ -95,7 +100,7 @@ private class MemoryCoverArtStore : MusicBrainzCoverArtStore {
 
 /** Differentiates confirmed absence from temporary failures before fallback. */
 private sealed interface CoverLookup {
-    data class Found(val uri: String) : CoverLookup
+    data class Found(val uri: String, val thumbnailUri: String? = null) : CoverLookup
     data object Missing : CoverLookup
     data object Unavailable : CoverLookup
 }
@@ -119,7 +124,10 @@ internal class CoverArtArchive(
     // a long-lived negative cache. Other MBIDs proceed independently.
     private val inFlight = ConcurrentHashMap<Pair<String, String>, CompletableDeferred<CoverLookup>>()
 
-    suspend fun findCover(releaseMbid: String?, groupMbid: String?): String? {
+    suspend fun findCover(
+        releaseMbid: String?, groupMbid: String?,
+        size: CoverArtSize = CoverArtSize.HERO,
+    ): String? {
         // Invalid supplied IDs fail closed, including before attempting group art.
         if (releaseMbid != null && !validMbid(releaseMbid)) return null
         if (groupMbid != null && !validMbid(groupMbid)) return null
@@ -127,19 +135,22 @@ internal class CoverArtArchive(
 
         releaseMbid?.let { mbid ->
             when (val primary = fetch("release", mbid.lowercase(Locale.ROOT))) {
-                is CoverLookup.Found -> return primary.uri
+                is CoverLookup.Found -> return primary.urlFor(size)
                 CoverLookup.Unavailable -> return null // Never replace an unknown edition cover.
                 CoverLookup.Missing -> Unit // Only a confirmed absence permits group fallback.
             }
         }
         groupMbid?.let { mbid ->
             return when (val fallback = fetch("release-group", mbid.lowercase(Locale.ROOT))) {
-                is CoverLookup.Found -> fallback.uri
+                is CoverLookup.Found -> fallback.urlFor(size)
                 CoverLookup.Missing, CoverLookup.Unavailable -> null
             }
         }
         return null
     }
+
+    private fun CoverLookup.Found.urlFor(size: CoverArtSize): String =
+        if (size == CoverArtSize.THUMBNAIL) thumbnailUri ?: uri else uri
 
     private suspend fun fetch(type: String, mbid: String): CoverLookup {
         val key = type to mbid
@@ -185,7 +196,9 @@ internal class CoverArtArchive(
             if (safeImageUrl(cached.artworkUri) &&
                 (!smallArtwork || now - cached.fetchedAtEpochMs < SMALL_ART_RECHECK_MS)
             ) {
-                return CoverLookup.Found(cached.artworkUri)
+                return CoverLookup.Found(
+                    cached.artworkUri, cached.thumbnailUri?.takeIf(::safeImageUrl),
+                )
             }
             // Old small covers get a chance to upgrade; a suspicious cached URL
             // must be revalidated rather than rendered or treated as a 404.
@@ -202,7 +215,7 @@ internal class CoverArtArchive(
         } catch (_: Exception) {
             return CoverLookup.Unavailable
         }
-        val uri = when (answer.status) {
+        val art: CoverLookup.Found? = when (answer.status) {
             200 -> try {
                 val root = json.parseToJsonElement(answer.body.orEmpty()) as? JsonObject
                     ?: return CoverLookup.Unavailable
@@ -224,17 +237,19 @@ internal class CoverArtArchive(
                     }
                 val front = frontImages.firstNotNullOfOrNull { entry ->
                     val thumbs = entry["thumbnails"] as? JsonObject
-                    // Hero art should never pick 250 when a larger source is
-                    // published. Reuse exactly the same authoritative CAA image
-                    // entry; transform only the scheme of allowlisted CAA hosts.
-                    listOf("1200", "500").firstNotNullOfOrNull { size ->
-                        thumbs?.get(size)?.jsonPrimitive?.contentOrNull?.let(::trustedImageUrl)
-                    } ?: entry["image"]?.jsonPrimitive?.contentOrNull?.let(::trustedImageUrl)
-                        ?: thumbs?.get("250")?.jsonPrimitive?.contentOrNull?.let(::trustedImageUrl)
+                    fun thumb(key: String): String? =
+                        thumbs?.get(key)?.jsonPrimitive?.contentOrNull?.let(::trustedImageUrl)
+                    // Both URLs are retrieved from the SAME verified CAA
+                    // Front entry. Never synthesize a thumbnail by changing an
+                    // unrelated image URL, especially for video-poster releases.
+                    val hero = thumb("1200") ?: thumb("500") ?:
+                        entry["image"]?.jsonPrimitive?.contentOrNull?.let(::trustedImageUrl) ?:
+                        thumb("250")
+                    hero?.let { verified ->
+                        CoverLookup.Found(verified,
+                            thumb("500") ?: thumb("250") ?: verified)
+                    }
                 }
-                // A front cover was advertised but its URL cannot be trusted.
-                // This is NOT proof that an edition has no front cover. Do not
-                // persist a 404-like miss or silently switch to group artwork.
                 if (front == null && frontImages.isNotEmpty()) return CoverLookup.Unavailable
                 front
             } catch (_: Exception) {
@@ -244,13 +259,15 @@ internal class CoverArtArchive(
             else -> return CoverLookup.Unavailable
         }
         try {
-            store.write(MusicBrainzCoverArtCacheEntry(type, mbid, uri, now))
+            store.write(MusicBrainzCoverArtCacheEntry(
+                type, mbid, art?.uri, now, art?.thumbnailUri,
+            ))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
             // Cache failure never changes the art already fetched from CAA.
         }
-        return uri?.let { CoverLookup.Found(it) } ?: CoverLookup.Missing
+        return art ?: CoverLookup.Missing
     }
 
     /**
