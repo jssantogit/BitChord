@@ -496,6 +496,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun canonicalArtworkForRow(
         row: CanonicalCatalogSearchRow,
         size: CoverArtSize = CoverArtSize.THUMBNAIL,
+        prefetchedOfficialEditions: List<MusicBrainzReleaseHit>? = null,
     ): String? {
         // MusicBrainz "Other" is not positive evidence for a release sleeve.
         // An unrelated release edition might be a video whose art is a still.
@@ -514,7 +515,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val saved = try { index.cachedGroupReleases(row.musicBrainzId) }
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { emptyList() }
-            var vetted = canonicalArtworkEditionsForGroup(saved, row.title)
+            var vetted = canonicalArtworkEditionsForGroup(
+                prefetchedOfficialEditions.orEmpty(), row.title,
+            ).ifEmpty { canonicalArtworkEditionsForGroup(saved, row.title) }
             if (vetted.isEmpty()) {
                 val fetched = musicBrainzGraph.browseGroupReleases(row.musicBrainzId, limit = 40)
                 if (fetched is MusicBrainzCatalogGraphResult.Success) {
@@ -797,6 +800,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         canonicalDetailCoverJob?.cancel()
         activeDetailCoverArtistMbid = artist.musicBrainzId
         canonicalDetailCoverJob = viewModelScope.launch(Dispatchers.IO) {
+            // One artist-level API page supplies official ReleaseGroup edges
+            // for most small/medium discographies. Falls back per-group only
+            // when no matching verified edition was included in that page.
+            val offlineOnly = (_canonicalDetail.value as? UiState.Success)
+                ?.data?.rows?.firstOrNull()?.fromOfflineCache == true
+            val artistEditions = if (offlineOnly) emptyMap() else try {
+                when (val batch = musicBrainzGraph.browseOfficialReleasesForArtist(
+                    artist.musicBrainzId, limit = 100,
+                )) {
+                    is MusicBrainzCatalogGraphResult.Success ->
+                        batch.value.items.filter { isCuratedMusicBrainzRelease(it) &&
+                            it.releaseGroupMbid != null
+                        }.groupBy { requireNotNull(it.releaseGroupMbid) }
+                    is MusicBrainzCatalogGraphResult.Failure -> emptyMap()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { emptyMap() }
             val attempted = mutableSetOf<String>()
             val permits = Semaphore(3)
             while (true) {
@@ -819,7 +840,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     batch.map { group ->
                         async {
                             permits.withPermit {
-                                val cover = try { canonicalArtworkForRow(group) }
+                                val cover = try {
+                                    canonicalArtworkForRow(
+                                        group, prefetchedOfficialEditions =
+                                            artistEditions[group.musicBrainzId],
+                                    )
+                                }
                                     catch (cancelled: CancellationException) { throw cancelled }
                                     catch (_: Exception) { null }
                                 group.musicBrainzId to cover
