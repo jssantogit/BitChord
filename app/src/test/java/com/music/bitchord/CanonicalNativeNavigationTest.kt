@@ -81,6 +81,20 @@ class CanonicalNativeNavigationTest {
         assertTrue(com.music.bitchord.ui.canonicalMayUseAlbumFallbackLabel("local:album:1"))
     }
 
+    @Test fun nativeArtistShelfPublishesArtworkForItsExactVerifiedGroup() {
+        val verified = group.copy(
+            musicBrainzId = "verified-group", releaseKind = "EP",
+            artworkUri = "https://archive.org/verified-sleeve.jpg",
+        )
+        val result = canonicalNativeSections(
+            parentKind = CanonicalSearchKind.ARTIST,
+            rows = listOf(verified), heading = "Lançamentos",
+        )
+        assertEquals("https://archive.org/verified-sleeve.jpg",
+            result.single().items.single().thumbnailUrl)
+        assertNull(result.single().items.single().videoId)
+    }
+
     @Test fun unknownMusicBrainzTypesMustNotEnterArtistAlbumsAndSinglesShelf() {
         val unclassified = group.copy(
             musicBrainzId = "unknown", title = "Right Now", releaseKind = "Other",
