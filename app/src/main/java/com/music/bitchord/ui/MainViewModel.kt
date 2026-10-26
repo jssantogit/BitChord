@@ -3464,6 +3464,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 recording.title, recording.artistDisplay,
                                 hasCatalogedAsset = recording.musicBrainzId in available,
                                 fromOfflineCache = true,
+                                durationMs = recording.durationMs,
                             ))
                         }
                     }.distinctBy { it.kind to it.musicBrainzId }
@@ -3579,6 +3580,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             hasCatalogedAsset = hit.musicBrainzId in catalogedAssetMbids,
                             artistScopeMbid = artistScopeMbid,
                             coverReleaseMbid = hit.coverReleaseMbid,
+                            durationMs = hit.durationMs,
                         ))
                     }
                 }
@@ -3776,6 +3778,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 hit.artistDisplay, hasCatalogedAsset = hit.musicBrainzId in assetMbids,
                                 artistScopeMbid = cursor.artistScopeMbid,
                                 coverReleaseMbid = hit.coverReleaseMbid,
+                                durationMs = hit.durationMs,
                             ))
                         }
                     }
