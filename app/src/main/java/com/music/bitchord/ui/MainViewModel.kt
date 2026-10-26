@@ -3652,6 +3652,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 hit.title, hit.artistDisplay,
                                 hasCatalogedAsset = hit.musicBrainzId in available,
                                 fromOfflineCache = true,
+                                durationMs = hit.durationMs,
                             )) }
                         }
                         if (CanonicalSearchKind.RELEASE_GROUP in failedKinds) {
