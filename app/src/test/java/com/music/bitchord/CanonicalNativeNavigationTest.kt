@@ -20,6 +20,30 @@ class CanonicalNativeNavigationTest {
     private val edition = CanonicalCatalogSearchRow("release-id", CanonicalSearchKind.RELEASE,
         "SUPER REAL ME", "ILLIT")
 
+    @Test fun artistDiscographySeparatesAlbumsFromSinglesAndEpsWithoutDuplicatingTracks() {
+        val album = group.copy(musicBrainzId = "album-group", title = "NJWMX",
+            releaseKind = "Album", releaseDate = "2023-12-19")
+        val ep = group.copy(musicBrainzId = "ep-group", title = "Get Up",
+            releaseKind = "EP", releaseDate = "2023-07-21")
+        val single = group.copy(musicBrainzId = "single-group", title = "Supernatural",
+            releaseKind = "Single", releaseDate = "2024-06-21")
+        val unknown = group.copy(musicBrainzId = "unknown-group", title = "Right Now",
+            releaseKind = "Other")
+        val recording = group.copy(musicBrainzId = "recording", title = "Hype Boy",
+            kind = CanonicalSearchKind.RECORDING)
+        val sections = canonicalNativeSections(
+            parentKind = CanonicalSearchKind.ARTIST,
+            rows = listOf(ep, recording, unknown, single, album),
+            heading = "Novos álbuns e singles",
+            albumsHeading = "Álbuns",
+            singlesHeading = "Singles e EPs",
+        )
+        assertEquals(listOf("Álbuns", "Singles e EPs"), sections.map { it.title })
+        assertEquals(listOf("NJWMX"), sections[0].items.map { it.title })
+        assertEquals(listOf("Supernatural", "Get Up"), sections[1].items.map { it.title })
+        assertTrue(sections.flatMap { it.items }.all { it.videoId == null })
+    }
+
     @Test fun artistAndAlbumKeepNativeDetailTypesWithoutLegacyVideoIds() {
         assertEquals(BrowseType.ARTIST, canonicalNativePageType(artist.kind))
         assertEquals(BrowseType.ALBUM, canonicalNativePageType(group.kind))
