@@ -105,7 +105,22 @@ internal class MusicBrainzCatalogSearch(
         limit: Int = 25,
         offset: Int = 0,
     ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> =
-        search("release-group", query, limit, offset) { raw ->
+        searchReleaseGroupsInternal(query, limit, offset)
+
+    suspend fun searchReleaseGroupsForArtistMbid(
+        artistMbid: String,
+        limit: Int = 25,
+        offset: Int = 0,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> {
+        val id = artistMbid.validSearchMbidOrNull()
+            ?: return MusicBrainzCatalogSearchResult.Failure(MusicBrainzCatalogSearchFailure.INVALID_QUERY)
+        return searchReleaseGroupsInternal("arid:$id", limit, offset, fieldedQuery = true)
+    }
+
+    private suspend fun searchReleaseGroupsInternal(
+        query: String, limit: Int, offset: Int, fieldedQuery: Boolean = false,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> =
+        search("release-group", query, limit, offset, fieldedQuery) { raw ->
             val result = json.decodeFromString<ReleaseGroupSearchEnvelope>(raw)
             result.pageOrNull(result.releaseGroups?.size, MusicBrainzReleaseGroupHit::musicBrainzId) {
                 result.releaseGroups?.mapNotNull { group ->
@@ -124,7 +139,22 @@ internal class MusicBrainzCatalogSearch(
         limit: Int = 25,
         offset: Int = 0,
     ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseHit> =
-        search("release", query, limit, offset) { raw ->
+        searchReleasesInternal(query, limit, offset)
+
+    suspend fun searchReleasesForArtistMbid(
+        artistMbid: String,
+        limit: Int = 25,
+        offset: Int = 0,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseHit> {
+        val id = artistMbid.validSearchMbidOrNull()
+            ?: return MusicBrainzCatalogSearchResult.Failure(MusicBrainzCatalogSearchFailure.INVALID_QUERY)
+        return searchReleasesInternal("arid:$id", limit, offset, fieldedQuery = true)
+    }
+
+    private suspend fun searchReleasesInternal(
+        query: String, limit: Int, offset: Int, fieldedQuery: Boolean = false,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseHit> =
+        search("release", query, limit, offset, fieldedQuery) { raw ->
             val result = json.decodeFromString<ReleaseSearchEnvelope>(raw)
             result.pageOrNull(result.releases?.size, MusicBrainzReleaseHit::musicBrainzId) {
                 result.releases?.mapNotNull { release ->
@@ -143,7 +173,22 @@ internal class MusicBrainzCatalogSearch(
         limit: Int = 25,
         offset: Int = 0,
     ): MusicBrainzCatalogSearchResult<MusicBrainzRecordingHit> =
-        search("recording", query, limit, offset) { raw ->
+        searchRecordingsInternal(query, limit, offset)
+
+    suspend fun searchRecordingsForArtistMbid(
+        artistMbid: String,
+        limit: Int = 25,
+        offset: Int = 0,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzRecordingHit> {
+        val id = artistMbid.validSearchMbidOrNull()
+            ?: return MusicBrainzCatalogSearchResult.Failure(MusicBrainzCatalogSearchFailure.INVALID_QUERY)
+        return searchRecordingsInternal("arid:$id", limit, offset, fieldedQuery = true)
+    }
+
+    private suspend fun searchRecordingsInternal(
+        query: String, limit: Int, offset: Int, fieldedQuery: Boolean = false,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzRecordingHit> =
+        search("recording", query, limit, offset, fieldedQuery) { raw ->
             val result = json.decodeFromString<RecordingSearchEnvelope>(raw)
             result.pageOrNull(result.recordings?.size, MusicBrainzRecordingHit::musicBrainzId) {
                 result.recordings?.mapNotNull { recording ->
@@ -162,6 +207,7 @@ internal class MusicBrainzCatalogSearch(
         rawQuery: String,
         limit: Int,
         offset: Int,
+        fieldedQuery: Boolean = false,
         decode: (String) -> MusicBrainzCatalogPage<T>?,
     ): MusicBrainzCatalogSearchResult<T> {
         val query = rawQuery.trim().replace(Regex("\\s+"), " ")
@@ -177,7 +223,7 @@ internal class MusicBrainzCatalogSearch(
                 "fmt" to "json",
                 "query" to query,
                 // User input is ordinary text, never unescaped Lucene syntax.
-                "dismax" to "true",
+                "dismax" to if (fieldedQuery) "false" else "true",
                 "limit" to limit.toString(),
                 "offset" to offset.toString(),
             ))
