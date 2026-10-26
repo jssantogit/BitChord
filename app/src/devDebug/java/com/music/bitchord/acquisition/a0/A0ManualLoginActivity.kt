@@ -350,6 +350,9 @@ class A0ManualLoginActivity : Activity() {
                 var finalOutcome = TraceOutcome.FAILED
                 var finalReason: A0SmokeTrace.Reason? = null
                 var transferAttempted=false
+                // A completed P/F receipt can still fail the independent A2/A3
+                // local publication. Never mislabel that as a peer failure.
+                var bytesStagedForCurrent=false
                 var publishedForCurrent=false
                 var lastTransferPhase:A0ServerAssociatedTransfer.Phase?=null
                 var packet: ByteArray? = null
@@ -1100,6 +1103,7 @@ class A0ManualLoginActivity : Activity() {
                                                 lastTransferPhase=phase
                                                 trace.transferPhase(phase)
                                             }
+                                            bytesStagedForCurrent=true
                                             try {
                                                 trace.note(A0SmokeTrace.Stage.P_F_TRANSFER_COMPLETED)
                                                 if(saveToDevice) {
@@ -1183,19 +1187,26 @@ class A0ManualLoginActivity : Activity() {
                     trace.note(A0SmokeTrace.Stage.LOGIN_DENIED, TraceOutcome.FAILED, finalReason)
                     result = "LOGIN RECUSADO. Confira a conta e desconecte o Seeker."
                 } catch (error: SocketTimeoutException) {
-                    if(transferAttempted) {
+                    if(bytesStagedForCurrent) {
+                        trace.localSaveFailure(A0LocalSaveFailure.classify(error))
+                    } else if(transferAttempted) {
                         trace.transferFailure(lastTransferPhase,error)
                     }
                     finalOutcome = if(transferAttempted) TraceOutcome.FAILED
                         else TraceOutcome.DEGRADED
-                    finalReason = A0SmokeTrace.Reason.READ_TIMEOUT
+                    finalReason = if(bytesStagedForCurrent)
+                        A0SmokeTrace.Reason.LOCAL_SAVE_FAILURE
+                    else A0SmokeTrace.Reason.READ_TIMEOUT
                     val readProgress = loginReplyProgress
                     if (!searchSubmitted && readProgress != null) {
                         trace.loginResponseProblem(readProgress.phase, timedOut = true)
                     } else {
                         trace.note(A0SmokeTrace.Stage.SERVER_READ_TIMEOUT, TraceOutcome.DEGRADED, finalReason)
                     }
-                    result = if(transferAttempted) {
+                    result = if(bytesStagedForCurrent) {
+                        "Áudio recebido, mas a publicação local não terminou. " +
+                            "Confira destino/permissões sem iniciar downloads repetidos."
+                    } else if(transferAttempted) {
                         "TIMEOUT NA NEGOCIAÇÃO P/F. Nenhum arquivo concluído."
                     } else if (searchSubmitted) {
                         "BUSCA ENVIADA; NENHUMA RESPOSTA P2P RECEBIDA. " +
@@ -1204,19 +1215,27 @@ class A0ManualLoginActivity : Activity() {
                         "TIMEOUT. A conexão ou resposta do servidor não chegou."
                     }
                 } catch (error: IllegalArgumentException) {
-                    if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
+                    if(bytesStagedForCurrent)
+                        trace.localSaveFailure(A0LocalSaveFailure.classify(error))
+                    else if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
                     finalOutcome=TraceOutcome.FAILED
-                    finalReason = A0SmokeTrace.Reason.INVALID_INPUT
+                    finalReason = if(bytesStagedForCurrent)
+                        A0SmokeTrace.Reason.LOCAL_SAVE_FAILURE
+                    else A0SmokeTrace.Reason.INVALID_INPUT
                     trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE, TraceOutcome.FAILED, finalReason)
                     result = "ENTRADA INVÁLIDA. Confira usuário e senha de teste."
                 } catch (error: IOException) {
-                    if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
+                    if(bytesStagedForCurrent)
+                        trace.localSaveFailure(A0LocalSaveFailure.classify(error))
+                    else if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
                     finalOutcome=TraceOutcome.FAILED
                     val readProgress = loginReplyProgress
                     if (!searchSubmitted && readProgress != null) {
                         trace.loginResponseProblem(readProgress.phase, timedOut = false)
                     }
-                    finalReason = when (error) {
+                    finalReason = if(bytesStagedForCurrent)
+                        A0SmokeTrace.Reason.LOCAL_SAVE_FAILURE
+                    else when (error) {
                         is UnknownHostException -> A0SmokeTrace.Reason.DNS_FAILURE
                         is ConnectException -> A0SmokeTrace.Reason.CONNECT_FAILED
                         is SocketException -> A0SmokeTrace.Reason.SOCKET_CLOSED
@@ -1224,6 +1243,19 @@ class A0ManualLoginActivity : Activity() {
                     }
                     trace.note(A0SmokeTrace.Stage.IO_FAILURE, TraceOutcome.FAILED, finalReason)
                     result = when {
+                        bytesStagedForCurrent -> when(A0LocalSaveFailure.classify(error)) {
+                            A0LocalSaveFailure.Kind.DESTINATION_COLLISION ->
+                                "Áudio recebido, mas já existe um arquivo com esse nome na pasta. " +
+                                    "Nenhum arquivo existente foi substituído."
+                            A0LocalSaveFailure.Kind.UNSUPPORTED_AUDIO ->
+                                "Áudio recebido, mas a assinatura do arquivo não combina " +
+                                    "com um formato de áudio suportado. Nenhum arquivo publicado."
+                            A0LocalSaveFailure.Kind.DESTINATION_UNAVAILABLE ->
+                                "Áudio recebido, mas o destino local está indisponível. " +
+                                    "Confira pasta/permissões em Configurações → Downloads."
+                            else -> "Áudio recebido, mas a publicação local falhou. " +
+                                "Nenhum novo arquivo foi confirmado na biblioteca."
+                        }
                         transferAttempted && error is A0IndirectFileOfferWire.MalformedFileOffer ->
                             "A oferta do canal F não corresponde ao protocolo esperado. " +
                                 "O peer foi recusado por segurança; tente outro candidato."
@@ -1243,9 +1275,13 @@ class A0ManualLoginActivity : Activity() {
                         else -> "ERRO DE REDE OU PROTOCOLO. Nenhum arquivo foi baixado."
                     }
                 } catch (error: RuntimeException) {
-                    if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
+                    if(bytesStagedForCurrent)
+                        trace.localSaveFailure(A0LocalSaveFailure.classify(error))
+                    else if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
                     finalOutcome=TraceOutcome.FAILED
-                    finalReason = A0SmokeTrace.Reason.UNKNOWN_FAILURE
+                    finalReason = if(bytesStagedForCurrent)
+                        A0SmokeTrace.Reason.LOCAL_SAVE_FAILURE
+                    else A0SmokeTrace.Reason.UNKNOWN_FAILURE
                     trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE, TraceOutcome.FAILED, finalReason)
                     result = "ERRO NO TESTE. Nenhuma credencial foi armazenada."
                 } finally {
