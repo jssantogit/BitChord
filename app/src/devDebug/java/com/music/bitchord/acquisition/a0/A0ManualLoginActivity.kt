@@ -802,6 +802,17 @@ class A0ManualLoginActivity : Activity() {
                                         trace.searchComparison(searchComparison.observe(
                                             checkNotNull(requestedSearch),albumConstraint,
                                             preset.name,report.manualPrimary,report.responses))
+                                        if(batch!=null) {
+                                            // Shadow-only: re-screen at most 8192
+                                            // offer/slot pairs without initiating P/F.
+                                            // Any observation failure must not break
+                                            // an otherwise usable manual download.
+                                            runCatching {
+                                                A0ReleaseDiscoveryShadowAdapter.preview(
+                                                    batch.entries,checkNotNull(handoff).choices(),
+                                                    selectedQuality,peerReliability)
+                                            }.onSuccess { trace.releaseDiscoveryCoverage(it) }
+                                        }
                                     }
                                     if (handoff?.hasCandidates() == true) {
                                         checkNotNull(handoff).markReadersStopped()
