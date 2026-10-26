@@ -87,19 +87,23 @@ internal object A0CandidateClaimClusters {
      * Availability only chooses among otherwise identical declarations.
      * A distinct strong claim at score distance <12 causes abstention.
      */
-    fun preview(entries:List<Entry>):Preview {
+    fun preview(entries:List<Entry>,eligibleIndices:Set<Int>?=null):Preview {
         // Same filename/bytes is not the same *evidence* when folder context
         // changes identity confidence. Preserve separate risk populations.
         val groups=entries.withIndex().groupBy {
             key(it.value.claim) to it.value.assessment
         }
-        val representatives=groups.values.map { group ->
-            group.sortedWith(compareByDescending<IndexedValue<Entry>> {
-                it.value.score
-            }.thenComparator { a,b ->
-                A0PeerAvailability.compareSource(
-                    b.value.availability,a.value.availability)
-            }.thenBy { it.index }).first()
+        // Keep totals for ALL announced claims, but a constrained readiness
+        // preview must never prefer an incompatible quality/album/identity
+        // offer just because it has a better legacy rank or faster peer.
+        val representatives=groups.values.mapNotNull { group ->
+            group.filter { eligibleIndices==null || it.index in eligibleIndices }
+                .sortedWith(compareByDescending<IndexedValue<Entry>> {
+                    it.value.score
+                }.thenComparator { a,b ->
+                    A0PeerAvailability.compareSource(
+                        b.value.availability,a.value.availability)
+                }.thenBy { it.index }).firstOrNull()
         }
         val strong=representatives.filter {
             it.value.assessment.confidence==A0CandidatePreflight.Confidence.STRONG
