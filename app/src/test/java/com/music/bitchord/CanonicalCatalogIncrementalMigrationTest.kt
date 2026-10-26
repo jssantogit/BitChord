@@ -1,8 +1,7 @@
 package com.music.bitchord
 
-import androidx.sqlite.db.SupportSQLiteDatabase
-import androidx.sqlite.db.SupportSQLiteOpenHelper
-import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
+import android.database.sqlite.SQLiteDatabase
+import androidx.sqlite.db.framework.FrameworkSQLiteDatabase
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -10,34 +9,32 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.ConscryptMode
 
 /** A real old SQLite file must survive two new additive catalog migrations. */
+@ConscryptMode(ConscryptMode.Mode.OFF)
 @RunWith(RobolectricTestRunner::class)
 class CanonicalCatalogIncrementalMigrationTest {
     @Test fun migrationsFromSevenPreserveMusicBrainzGroupsAndCoverCache() {
         val context = RuntimeEnvironment.getApplication()
         val name = "catalog-incremental-v7-to-v9.db"
         context.deleteDatabase(name)
-        val helper = FrameworkSQLiteOpenHelperFactory().create(
-            SupportSQLiteOpenHelper.Configuration.builder(context)
-                .name(name)
-                .callback(object : SupportSQLiteOpenHelper.Callback(7) {
-                    override fun onCreate(db: SupportSQLiteDatabase) {
-                        db.execSQL("""CREATE TABLE catalog_release_group(
-                            id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL,
-                            artistDisplay TEXT, primaryType TEXT, firstReleaseDate TEXT
-                        )""")
-                        db.execSQL("""CREATE TABLE catalog_cover_art_cache(
-                            entityType TEXT NOT NULL, mbid TEXT NOT NULL, artworkUri TEXT,
-                            fetchedAtEpochMs INTEGER NOT NULL,
-                            PRIMARY KEY(entityType, mbid)
-                        )""")
-                    }
-                    override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {}
-                }).build(),
-        )
+        val file = context.getDatabasePath(name)
+        file.parentFile?.mkdirs()
+        // Use the same SQLiteDatabase-backed migration fixture as the other
+        // Robolectric migration tests, not a second open-helper/native loader.
+        val raw = SQLiteDatabase.openOrCreateDatabase(file, null)
+        val db = FrameworkSQLiteDatabase(raw)
         try {
-            val db = helper.writableDatabase
+            db.execSQL("""CREATE TABLE catalog_release_group(
+                id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL,
+                artistDisplay TEXT, primaryType TEXT, firstReleaseDate TEXT
+            )""")
+            db.execSQL("""CREATE TABLE catalog_cover_art_cache(
+                entityType TEXT NOT NULL, mbid TEXT NOT NULL, artworkUri TEXT,
+                fetchedAtEpochMs INTEGER NOT NULL,
+                PRIMARY KEY(entityType, mbid)
+            )""")
             db.execSQL("""INSERT INTO catalog_release_group
                 (id, title, artistDisplay, primaryType, firstReleaseDate)
                 VALUES ('old-group','NJWMX','NewJeans','Album','2023-12-19')""")
@@ -64,7 +61,7 @@ class CanonicalCatalogIncrementalMigrationTest {
                 assertEquals("Remix", it.getString(0))
             }
         } finally {
-            helper.close()
+            raw.close()
             context.deleteDatabase(name)
         }
     }
