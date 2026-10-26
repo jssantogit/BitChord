@@ -392,12 +392,27 @@ internal class A0ObservedCandidateHandoff(
     // Pure shadow suggestion. Never called from transferChoice() or any
     // side-effectful operation. Candidate data remains in-memory only.
     @Synchronized
-    fun claimPreview():A0CandidateClaimClusters.Preview=
-        A0CandidateClaimClusters.preview(candidates.map {
+    fun claimPreview():A0CandidateClaimClusters.Preview {
+        // The old preflight-v4 cannot see the selected album or quality
+        // preset. A strong match to the title is not automatically a usable
+        // offer: this shadow-only gate keeps incompatible and unconfirmed
+        // album evidence out of any future unattended-choice simulation.
+        val eligible=A0ManualCandidatePolicy.primaryIndices(
+            candidates,candidates.indices.toList()
+        ).filter { index ->
+            val choice=candidates[index]
+            choice.preflight.confidence==A0CandidatePreflight.Confidence.STRONG &&
+                choice.albumEvidence.status in setOf(
+                    A0CanonicalAlbumPolicy.Status.UNCONSTRAINED,
+                    A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED
+                )
+        }.toSet()
+        return A0CandidateClaimClusters.preview(candidates.map {
             A0CandidateClaimClusters.Entry(
                 it.claim,it.preflight,it.matchScore,it.peerAvailability
             )
-        })
+        },eligibleIndices=eligible)
+    }
 
     /**
      * Never display a legacy v4 "most suggested" label when the caller added
