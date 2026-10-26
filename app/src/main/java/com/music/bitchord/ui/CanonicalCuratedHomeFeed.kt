@@ -1,6 +1,7 @@
 package com.music.bitchord.ui
 
 import com.music.bitchord.data.model.HomeShelf
+import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
@@ -22,6 +23,42 @@ private fun opaqueHomeCardId(namespace: String, assetKey: String): String {
 internal fun canonicalLocalPickCardId(song: Song): String {
     require(isPlayableLocalPick(song)) { "Home picks require a verified local URI" }
     return opaqueHomeCardId("local:pick", song.localUri!!)
+}
+
+
+/** Canonical navigation targets the EXISTING native artist/release DetailScreen. */
+internal fun canonicalNativePageType(kind: CanonicalSearchKind): BrowseType? = when (kind) {
+    CanonicalSearchKind.ARTIST -> BrowseType.ARTIST
+    CanonicalSearchKind.RELEASE_GROUP, CanonicalSearchKind.RELEASE -> BrowseType.ALBUM
+    CanonicalSearchKind.RECORDING -> null
+}
+
+internal fun canonicalNativeBrowseId(row: CanonicalCatalogSearchRow): String =
+    "catalog:${row.kind}:${row.musicBrainzId}"
+
+/** Native DetailScreen accepts real browse shelves without synthetic Song.videoId. */
+internal fun canonicalNativeSections(
+    parentKind: CanonicalSearchKind,
+    rows: List<CanonicalCatalogSearchRow>,
+    heading: String,
+): List<HomeShelf> {
+    val kind = when (parentKind) {
+        CanonicalSearchKind.ARTIST -> CanonicalSearchKind.RELEASE_GROUP
+        CanonicalSearchKind.RELEASE_GROUP -> CanonicalSearchKind.RELEASE
+        else -> return emptyList()
+    }
+    val cards = rows.asSequence().filter { it.kind == kind }
+        .distinctBy { it.kind to it.musicBrainzId }
+        .map { row ->
+            ShelfItem(
+                title = row.title,
+                subtitle = row.releaseKind ?: row.subtitle.orEmpty(),
+                thumbnailUrl = row.artworkUri,
+                videoId = null,
+                browseId = canonicalNativeBrowseId(row),
+            )
+        }.toList()
+    return if (cards.isNotEmpty()) listOf(HomeShelf(heading, cards)) else emptyList()
 }
 
 /** A server asset is a verified catalog selection, never a synthetic video or stream URL. */
