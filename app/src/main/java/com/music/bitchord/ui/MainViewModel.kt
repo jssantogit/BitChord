@@ -826,6 +826,59 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) { emptyMap() }
+            // Editorial labels come from Official edition evidence, not CAA
+            // availability: a correct name must survive even with no artwork.
+            // Persist only the groups with a provable composite -> edition
+            // correction, keeping Room's raw ReleaseGroup title unchanged.
+            val titleCorrections = (_canonicalDetail.value as? UiState.Success)
+                ?.data?.rows.orEmpty().mapNotNull { row ->
+                    if (row.kind != CanonicalSearchKind.RELEASE_GROUP) return@mapNotNull null
+                    val editions = artistEditions[row.musicBrainzId].orEmpty()
+                    val label = canonicalOfficialGroupDisplayTitle(row.title, editions)
+                    if (label == row.title) null else Triple(row.musicBrainzId, label, editions)
+                }
+            if (titleCorrections.isNotEmpty() &&
+                _searchSource.value == SearchSource.CANONICAL &&
+                canonicalPath.lastOrNull() == artist
+            ) {
+                try {
+                    val index = MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
+                        getApplication<Application>(),
+                    ))
+                    titleCorrections.forEach { (mbid, _, editions) ->
+                        index.persistGroupEditions(mbid, editions)
+                    }
+                } catch (cancelled: CancellationException) { throw cancelled }
+                  catch (_: Exception) { /* On-screen evidence still applies. */ }
+                val corrections = titleCorrections.associate { it.first to it.second }
+                _canonicalDetail.update { old ->
+                    if (old !is UiState.Success) old else UiState.Success(old.data.copy(
+                        rows = old.data.rows.map { row ->
+                            corrections[row.musicBrainzId]?.let { row.copy(title = it) } ?: row
+                        },
+                    ))
+                }
+                val nativeId = canonicalNativeBrowseId(artist)
+                _detailStack.update { stack ->
+                    val rows = (_canonicalDetail.value as? UiState.Success)?.data?.rows.orEmpty()
+                    stack.map { page ->
+                        if (page.browseId != nativeId) page else page.copy(
+                            sections = canonicalNativeSections(
+                                parentKind = CanonicalSearchKind.ARTIST, rows = rows,
+                                heading = getApplication<Application>().getString(
+                                    R.string.shelf_new_albums_singles,
+                                ),
+                                albumsHeading = getApplication<Application>().getString(
+                                    R.string.albums,
+                                ),
+                                singlesHeading = getApplication<Application>().getString(
+                                    R.string.canonical_singles_eps,
+                                ),
+                            ),
+                        )
+                    }
+                }
+            }
             val attempted = mutableSetOf<String>()
             while (true) {
                 currentCoroutineContext().ensureActive()
