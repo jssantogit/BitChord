@@ -141,6 +141,8 @@ internal class MusicBrainzCatalogGraph(
                 releaseDate = row.string("date"),
                 artistDisplay = row.artistDisplay(),
                 status = row.string("status"),
+                hasFrontCover = (row["cover-art-archive"] as? JsonObject)
+                    ?.get("front")?.jsonPrimitive?.booleanOrNull,
             )
         }
 
