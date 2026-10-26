@@ -271,6 +271,25 @@ internal class A0SmokeTrace private constructor(
         )
     }
 
+    /**
+     * Compares identical user requests only inside a running Activity.
+     * Never emits a query, canonical title, hash, account or path.
+     */
+    fun searchComparison(observation:A0SearchComparison.Observation) {
+        if(complete.get()) return
+        fun n(value:Int)=value.coerceIn(0,100000).toString()
+        continuationTrace().event(
+            stage="search_comparison",outcome=TraceOutcome.SUCCEEDED,
+            attributes=mapOf(
+                "kind" to observation.kind.name.lowercase(Locale.ROOT),
+                "previousCandidates" to n(observation.previousCandidates),
+                "currentCandidates" to n(observation.currentCandidates),
+                "previousPeerReplies" to n(observation.previousPeerReplies),
+                "currentPeerReplies" to n(observation.currentPeerReplies),
+            )
+        )
+    }
+
     /** No peer/path/query data. Measures offers dropped by the bounded P pool. */
     fun peerSearchBackpressure(dropped:Int,perPeerDropped:Int=0) {
         if(complete.get())return
