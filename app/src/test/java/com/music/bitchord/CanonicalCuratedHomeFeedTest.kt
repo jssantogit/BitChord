@@ -173,14 +173,16 @@ class CanonicalCuratedHomeFeedTest {
         assertTrue(shelf.items.all { it.videoId == null && it.browseId!!.startsWith("local:pick:") })
     }
 
-    @Test fun knownEditionUsesOnlyVerifiedGroupMbidForCoverFallback() {
+    @Test fun editionCannotBorrowPotentiallyWrongGroupArtworkWhenItsOwnFrontIsMissing() {
         val edition = release.copy(
             kind = CanonicalSearchKind.RELEASE,
             musicBrainzId = "33333333-3333-4333-8333-333333333333",
             coverGroupMbid = "44444444-4444-4444-8444-444444444444",
         )
+        // The group's CAA Front may be a video poster from a different
+        // edition; a specific Release must show its own sleeve or none.
         assertEquals(
-            edition.musicBrainzId to edition.coverGroupMbid,
+            edition.musicBrainzId to null,
             canonicalCoverLookupTarget(edition),
         )
         assertEquals(
