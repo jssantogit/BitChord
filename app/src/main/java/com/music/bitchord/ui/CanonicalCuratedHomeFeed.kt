@@ -37,6 +37,29 @@ internal fun isTrustedHomeServerAsset(row: CanonicalServerSearchRow): Boolean =
 internal fun isPlayableLocalPick(song: Song): Boolean =
     song.localUri?.let { it.startsWith("content://") || it.startsWith("file://") } == true
 
+
+/**
+ * CoverArtArchive has art for releases and release-groups, NOT artists or
+ * recordings. Never guess an edition/group by title to fill a thumbnail.
+ */
+internal fun canonicalCoverLookupTarget(
+    row: CanonicalCatalogSearchRow,
+): Pair<String?, String?>? = when (row.kind) {
+    CanonicalSearchKind.RELEASE_GROUP -> null to row.musicBrainzId
+    CanonicalSearchKind.RELEASE -> row.musicBrainzId to null
+    CanonicalSearchKind.ARTIST, CanonicalSearchKind.RECORDING -> null
+}
+
+/** Bound network enrichment to a small visible subset, with stable identities. */
+internal fun canonicalCoverLookupCandidates(
+    rows: List<CanonicalCatalogSearchRow>,
+    limit: Int,
+): List<CanonicalCatalogSearchRow> = rows.asSequence()
+    .filter { it.artworkUri.isNullOrBlank() && canonicalCoverLookupTarget(it) != null }
+    .distinctBy { it.kind to it.musicBrainzId }
+    .take(limit.coerceAtLeast(0))
+    .toList()
+
 /**
  * Producer-neutral Home content for the existing Android HomeScreen, not a parallel screen.
  *
