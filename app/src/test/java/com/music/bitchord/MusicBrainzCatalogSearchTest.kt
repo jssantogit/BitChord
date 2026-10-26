@@ -160,6 +160,27 @@ class MusicBrainzCatalogSearchTest {
     }
 
     @Test
+    fun releaseSearchCarriesOnlyValidatedReleaseGroupIdentityForArtFallback() = runBlocking {
+        val release = "11111111-1111-4111-8111-111111111111"
+        val group = "22222222-2222-4222-8222-222222222222"
+        val invalid = "33333333-3333-4333-8333-333333333333"
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String) =
+                    """{"count":2,"offset":0,"releases":[
+                        {"id":"$release","title":"SUPER REAL ME","release-group":{"id":"$group"}},
+                        {"id":"$invalid","title":"Unverified","release-group":{"id":"not-an-mbid"}}
+                    ]}"""
+            },
+        ))
+        val rows = (search.searchReleases("SUPER REAL ME") as
+            MusicBrainzCatalogSearchResult.Success<com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit>)
+            .page.items
+        assertEquals(group, rows.first().releaseGroupMbid)
+        assertEquals(null, rows.last().releaseGroupMbid)
+    }
+
+    @Test
     fun invalidArtistMbidCannotBecomeLuceneSyntaxOrSendNetwork() = runBlocking {
         var calls = 0
         val search = MusicBrainzCatalogSearch(MusicBrainzClient(transport = object : MusicBrainzTransport {
