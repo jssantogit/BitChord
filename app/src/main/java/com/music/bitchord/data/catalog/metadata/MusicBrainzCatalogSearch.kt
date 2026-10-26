@@ -77,8 +77,10 @@ internal data class MusicBrainzRecordingHit(
     /** Art comes from an actual linked MusicBrainz Release, never title matching. */
     val coverReleaseMbid: String? = null,
     /** A matching published release is evidence, unlike an arbitrary Recording MBID. */
-    val hasOfficialAudioRelease: Boolean = false,
-    val isVideo: Boolean = false,
+    // Nullable because Room's offline search projection does not select these
+    // live-only evidence fields. Missing != positively verified Official.
+    val hasOfficialAudioRelease: Boolean? = null,
+    val isVideo: Boolean? = null,
 )
 
 /**
@@ -95,7 +97,8 @@ internal data class MusicBrainzRecordingHit(
  * Reject video-only and user-edited titles even if mislabeled "Official".
  */
 internal fun isCuratedMusicBrainzRecording(hit: MusicBrainzRecordingHit): Boolean =
-    hit.hasOfficialAudioRelease && !hit.isVideo && canonicalStreamingTitleIsSafe(hit.title)
+    hit.hasOfficialAudioRelease == true && hit.isVideo != true &&
+        canonicalStreamingTitleIsSafe(hit.title)
 
 internal fun canonicalStreamingTitleIsSafe(title: String): Boolean {
     if (title.isBlank()) return false
