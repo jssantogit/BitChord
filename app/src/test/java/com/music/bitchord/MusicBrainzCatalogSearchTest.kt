@@ -275,6 +275,9 @@ class MusicBrainzCatalogSearchTest {
             com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease(it)
         }
         assertTrue(curated(official))
+        assertTrue(curated(official.copy(title = "NJWMX (Official Remix)")))
+        assertTrue(!curated(official.copy(title = "OMG (Jersey flip)")))
+        assertTrue(!curated(official.copy(title = "Hurt (performance ver.)")))
         for (status in listOf(null, "Bootleg", "Promotion", "Pseudo-Release", "Withdrawn")) {
             assertTrue(!curated(official.copy(status = status)))
         }
