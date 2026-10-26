@@ -196,6 +196,40 @@ class CoverArtArchiveFallbackTest {
             cover.findCover(release, null))
     }
 
+    @Test fun coversCachedBeforeStricterFrontPolicyAreRecheckedOnce() = runBlocking {
+        val oldTime = 1_792_886_400_000L
+        val now = 1_793_000_000_000L
+        val storeRows = mutableMapOf(
+            ("release" to release) to MusicBrainzCoverArtCacheEntry(
+                "release", release, "https://archive.org/old-video-still.jpg", oldTime,
+            ),
+        )
+        var calls = 0
+        val cover = CoverArtArchive(
+            transport = object : CoverArtArchiveTransport {
+                override suspend fun get(path: String): CoverArtArchiveResponse {
+                    calls++
+                    return CoverArtArchiveResponse(200,
+                        """{"images":[
+                            {"front":true,"types":["Poster"],"image":"https://archive.org/still.jpg"},
+                            {"front":true,"types":["Front"],"approved":true,
+                             "image":"https://archive.org/official-sleeve.jpg"}
+                        ]}""")
+                }
+            },
+            store = object : MusicBrainzCoverArtStore {
+                override suspend fun read(type: String, mbid: String) = storeRows[type to mbid]
+                override suspend fun write(value: MusicBrainzCoverArtCacheEntry) {
+                    storeRows[value.entityType to value.mbid] = value
+                }
+            },
+            nowEpochMs = { now },
+        )
+        assertEquals("https://archive.org/official-sleeve.jpg", cover.findCover(release, null))
+        assertEquals("https://archive.org/official-sleeve.jpg", cover.findCover(release, null))
+        assertEquals(1, calls)
+    }
+
     @Test fun old250pxRoomCacheCanBeUpgradedWithoutTrustingTextMatches() = runBlocking {
         val entries = mutableMapOf(
             ("release" to release) to MusicBrainzCoverArtCacheEntry(
