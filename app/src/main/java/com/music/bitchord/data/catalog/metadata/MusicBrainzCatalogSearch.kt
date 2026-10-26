@@ -70,7 +70,21 @@ internal data class MusicBrainzReleaseHit(
     val status: String? = null,
     /** Search response's exact Release -> ReleaseGroup association, not a title match. */
     val releaseGroupMbid: String? = null,
+    /** Positive CAA Front availability flag attached to this *specific* Release. */
+    val hasFrontCover: Boolean? = null,
 )
+
+/**
+ * Public CAA direct thumbnail URL. Requires MusicBrainz to have positively
+ * asserted a Front exists for this exact Official Release; null/false cannot
+ * skip verification, and raw search titles alone are never used to build URLs.
+ */
+internal fun verifiedCaaFront500Url(hit: MusicBrainzReleaseHit): String? =
+    if (hit.hasFrontCover == true && isCuratedMusicBrainzRelease(hit) &&
+        Regex("^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
+            .matches(hit.musicBrainzId)
+    ) "https://coverartarchive.org/release/${hit.musicBrainzId.lowercase(Locale.ROOT)}/front-500"
+    else null
 
 internal data class MusicBrainzRecordingHit(
     val musicBrainzId: String,
