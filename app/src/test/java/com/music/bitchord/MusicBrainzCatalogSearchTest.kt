@@ -266,6 +266,18 @@ class MusicBrainzCatalogSearchTest {
         assertTrue(!com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRecording(rows.last()))
     }
 
+    @Test fun releasePresentationAllowsOnlyExplicitOfficialEdtionsAndKeepsRawMbids() {
+        val official = com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit(
+            "11111111-1111-4111-8111-111111111111", "Get Up", "XW",
+            "2023-07-21", "NewJeans", status = "Official",
+        )
+        val curated = ::com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease
+        assertTrue(curated(official))
+        for (status in listOf(null, "Bootleg", "Promotion", "Pseudo-Release", "Withdrawn")) {
+            assertTrue(!curated(official.copy(status = status)))
+        }
+    }
+
     @Test fun musicVideoPracticeAndUnverifiedRecordingAreNotPromotedToOfficialAudio() {
         val good = com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit(
             "11111111-1111-4111-8111-111111111111", "Super Shy", "NewJeans", 180000,
