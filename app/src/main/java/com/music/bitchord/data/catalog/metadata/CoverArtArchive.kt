@@ -136,7 +136,11 @@ internal class CoverArtArchive(
             // Room cache is a persistence boundary: never trust old or tampered
             // artwork URLs without the same allowlist used for fresh responses.
             if (cached.artworkUri == null) return CoverLookup.Missing
-            if (safeImageUrl(cached.artworkUri)) return CoverLookup.Found(cached.artworkUri)
+            if (safeImageUrl(cached.artworkUri) && !cached.artworkUri.endsWith("-250.jpg")) {
+                return CoverLookup.Found(cached.artworkUri)
+            }
+            // 250px legacy entries were correct at the time but blur in the
+            // native album hero; ask CAA for a larger canonical image on demand.
             // Invalid positive entries must be refreshed, not rendered or
             // downgraded into cached "missing" evidence.
         }
@@ -157,9 +161,13 @@ internal class CoverArtArchive(
                     .filter { it["front"]?.jsonPrimitive?.booleanOrNull == true }
                 val front = frontImages.firstNotNullOfOrNull { entry ->
                     val thumbs = entry["thumbnails"] as? JsonObject
-                    listOf("250", "500", "1200").firstNotNullOfOrNull { size ->
-                        thumbs?.get(size)?.jsonPrimitive?.contentOrNull?.takeIf(::safeImageUrl)
-                    } ?: entry["image"]?.jsonPrimitive?.contentOrNull?.takeIf(::safeImageUrl)
+                    // Hero art should never pick 250 when a larger source is
+                    // published. Reuse exactly the same authoritative CAA image
+                    // entry; transform only the scheme of allowlisted CAA hosts.
+                    listOf("1200", "500").firstNotNullOfOrNull { size ->
+                        thumbs?.get(size)?.jsonPrimitive?.contentOrNull?.let(::trustedImageUrl)
+                    } ?: entry["image"]?.jsonPrimitive?.contentOrNull?.let(::trustedImageUrl)
+                        ?: thumbs?.get("250")?.jsonPrimitive?.contentOrNull?.let(::trustedImageUrl)
                 }
                 // A front cover was advertised but its URL cannot be trusted.
                 // This is NOT proof that an edition has no front cover. Do not
@@ -180,6 +188,18 @@ internal class CoverArtArchive(
             // Cache failure never changes the art already fetched from CAA.
         }
         return uri?.let { CoverLookup.Found(it) } ?: CoverLookup.Missing
+    }
+
+    /**
+     * CAA metadata sometimes advertises http:// links to its own archive
+     * even though the API is fetched over HTTPS. HTTPS-upgrade only a strict
+     * allowlist of CAA/archive domains. Never rewrite or admit third-party URLs.
+     */
+    private fun trustedImageUrl(raw: String): String? {
+        val secure = if (raw.startsWith("http://", ignoreCase = true)) {
+            "https://" + raw.substring(7)
+        } else raw
+        return secure.takeIf(::safeImageUrl)
     }
 
     private fun safeImageUrl(raw: String): Boolean {
