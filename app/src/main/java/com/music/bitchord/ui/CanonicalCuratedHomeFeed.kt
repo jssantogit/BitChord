@@ -59,28 +59,42 @@ internal fun canonicalNativeSections(
     parentKind: CanonicalSearchKind,
     rows: List<CanonicalCatalogSearchRow>,
     heading: String,
+    albumsHeading: String = heading,
+    singlesHeading: String = heading,
 ): List<HomeShelf> {
     val kind = when (parentKind) {
         CanonicalSearchKind.ARTIST -> CanonicalSearchKind.RELEASE_GROUP
         CanonicalSearchKind.RELEASE_GROUP -> CanonicalSearchKind.RELEASE
         else -> return emptyList()
     }
-    val cards = rows.asSequence().filter { it.kind == kind }
+    val eligible = rows.asSequence().filter { it.kind == kind }
         .filter {
             parentKind != CanonicalSearchKind.ARTIST ||
                 canonicalEditorialReleaseType(it) != null
         }
         .distinctBy { it.kind to it.musicBrainzId }
-        .map { row ->
-            ShelfItem(
-                title = row.title,
-                subtitle = row.releaseKind ?: row.subtitle.orEmpty(),
-                thumbnailUrl = row.artworkUri,
-                videoId = null,
-                browseId = canonicalNativeBrowseId(row),
-            )
-        }.toList()
-    return if (cards.isNotEmpty()) listOf(HomeShelf(heading, cards)) else emptyList()
+        .sortedWith(compareByDescending<CanonicalCatalogSearchRow> {
+            it.releaseDate.orEmpty()
+        }.thenBy { it.musicBrainzId })
+        .toList()
+    fun cards(items: List<CanonicalCatalogSearchRow>): List<ShelfItem> = items.map { row ->
+        ShelfItem(
+            title = row.title,
+            subtitle = row.releaseKind ?: row.subtitle.orEmpty(),
+            thumbnailUrl = row.artworkUri,
+            videoId = null,
+            browseId = canonicalNativeBrowseId(row),
+        )
+    }
+    if (parentKind == CanonicalSearchKind.ARTIST) {
+        return buildList {
+            val albums = eligible.filter { canonicalEditorialReleaseType(it) == "Album" }
+            val singlesAndEps = eligible.filter { canonicalEditorialReleaseType(it) in setOf("Single", "EP") }
+            if (albums.isNotEmpty()) add(HomeShelf(albumsHeading, cards(albums)))
+            if (singlesAndEps.isNotEmpty()) add(HomeShelf(singlesHeading, cards(singlesAndEps)))
+        }
+    }
+    return if (eligible.isNotEmpty()) listOf(HomeShelf(heading, cards(eligible))) else emptyList()
 }
 
 /** A server asset is a verified catalog selection, never a synthetic video or stream URL. */
