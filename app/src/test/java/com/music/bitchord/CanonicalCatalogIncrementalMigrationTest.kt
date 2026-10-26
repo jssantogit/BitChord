@@ -12,7 +12,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.ConscryptMode
 
-/** A real old SQLite file must survive three additive catalog migrations. */
+/** A real old SQLite file must survive four additive catalog migrations. */
 @ConscryptMode(ConscryptMode.Mode.OFF)
 @RunWith(RobolectricTestRunner::class)
 class CanonicalCatalogIncrementalMigrationTest {
@@ -51,6 +51,15 @@ class CanonicalCatalogIncrementalMigrationTest {
                 artistId TEXT NOT NULL, releaseGroupId TEXT NOT NULL,
                 PRIMARY KEY(artistId, releaseGroupId)
             )""")
+            raw.execSQL("""CREATE TABLE musicbrainz_recording_enrichment(
+                recordingId TEXT NOT NULL PRIMARY KEY,
+                mbid TEXT NOT NULL, title TEXT, durationMs INTEGER,
+                artistDisplay TEXT, fetchedAtEpochMs INTEGER NOT NULL
+            )""")
+            raw.execSQL("""INSERT INTO musicbrainz_recording_enrichment
+                (recordingId,mbid,title,durationMs,artistDisplay,fetchedAtEpochMs)
+                VALUES ('old-recording','11111111-1111-4111-8111-111111111111',
+                    'Hurt',200000,'NewJeans',1000)""")
             raw.execSQL("INSERT INTO catalog_musicbrainz_artist_group VALUES('artist-local','old-group')")
             raw.execSQL("""INSERT INTO catalog_release_group
                 (id, title, artistDisplay, primaryType, firstReleaseDate)
@@ -61,6 +70,16 @@ class CanonicalCatalogIncrementalMigrationTest {
             CanonicalCatalogDatabase.MIGRATION_7_8.migrate(migrationDb)
             CanonicalCatalogDatabase.MIGRATION_8_9.migrate(migrationDb)
             CanonicalCatalogDatabase.MIGRATION_9_10.migrate(migrationDb)
+            CanonicalCatalogDatabase.MIGRATION_10_11.migrate(migrationDb)
+            raw.rawQuery(
+                "SELECT title,hasOfficialAudioRelease,isVideo FROM musicbrainz_recording_enrichment WHERE recordingId='old-recording'",
+                null,
+            ).use {
+                org.junit.Assert.assertTrue(it.moveToFirst())
+                assertEquals("Hurt", it.getString(0))
+                assertNull("legacy audio approval must remain unknown", it.getString(1))
+                assertNull("legacy video flag must remain unknown", it.getString(2))
+            }
             raw.rawQuery(
                 "SELECT publicationEvidence FROM catalog_musicbrainz_artist_group WHERE artistId='artist-local'",
                 null,
