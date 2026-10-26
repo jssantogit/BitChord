@@ -3,6 +3,7 @@ package com.music.bitchord
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.MusicBrainzCoverArtCacheEntity
+import com.music.bitchord.data.catalog.CatalogMusicBrainzArtistGroupEntity
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
 import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistHit
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
@@ -116,6 +117,42 @@ class MusicBrainzPublicMetadataIndexTest {
                 dao.musicBrainzCoverArtCache("release-group:front-v2", groupId)?.artworkUri)
             assertEquals("https://archive.org/verified-release-front.jpg",
                 dao.searchKnownMusicBrainzReleases("New Jeans", 10).single().artworkUri)
+        } finally { db.close() }
+    }
+
+
+    @Test fun legacyArtistMembershipCannotClaimOfficialDiscographyUntilWebsiteDefaultBrowse() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            var seq = 0
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "legacy-${++seq}" })
+            val artistMbid = "b51c672b-85e0-48fe-8648-470a2422229f"
+            val oldGroup = MusicBrainzReleaseGroupHit(
+                "22222222-2222-4222-8222-222222222222",
+                "Unverified old bootleg", "Album", "2020", "NewJeans")
+            val newGroup = MusicBrainzReleaseGroupHit(
+                "33333333-3333-4333-8333-333333333333",
+                "Get Up", "EP", "2023-07-21", "NewJeans")
+            val artistLocal = requireNotNull(index.persistArtists(listOf(
+                MusicBrainzArtistHit(artistMbid, "NewJeans", null, "KR")
+            ))[artistMbid])
+            val groupLocal = requireNotNull(index.persistReleaseGroups(listOf(oldGroup))[
+                oldGroup.musicBrainzId])
+            db.catalogDao().upsertMusicBrainzArtistGroup(
+                CatalogMusicBrainzArtistGroupEntity(artistLocal, groupLocal))
+            assertEquals(emptyList<MusicBrainzReleaseGroupHit>(),
+                index.cachedArtistGroups(artistMbid))
+            assertEquals(1, db.catalogDao().musicBrainzArtistGroupMembershipCount(artistLocal))
+
+            // Only a browse through artist MBID with the website-default
+            // status filter may promote groups into official discography.
+            index.persistArtistGroups(artistMbid, listOf(newGroup))
+            assertEquals(listOf("Get Up"), index.cachedArtistGroups(artistMbid).map { it.title })
+            assertEquals(2, db.catalogDao().musicBrainzArtistGroupMembershipCount(artistLocal))
+            index.persistArtistGroups(artistMbid, listOf(oldGroup))
+            assertEquals(setOf("Get Up", "Unverified old bootleg"),
+                index.cachedArtistGroups(artistMbid).map { it.title }.toSet())
         } finally { db.close() }
     }
 
