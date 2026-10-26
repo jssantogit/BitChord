@@ -102,7 +102,8 @@ internal fun canonicalCoverLookupTarget(
 ): Pair<String?, String?>? = when (row.kind) {
     CanonicalSearchKind.RELEASE_GROUP -> null to row.musicBrainzId
     CanonicalSearchKind.RELEASE -> row.musicBrainzId to null
-    CanonicalSearchKind.ARTIST, CanonicalSearchKind.RECORDING -> null
+    CanonicalSearchKind.RECORDING -> row.coverReleaseMbid?.let { it to null }
+    CanonicalSearchKind.ARTIST -> null
 }
 
 /** Bound network enrichment to a small visible subset, with stable identities. */
