@@ -823,7 +823,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 throw cancelled
             } catch (_: Exception) { emptyMap() }
             val attempted = mutableSetOf<String>()
-            val permits = Semaphore(3)
             while (true) {
                 currentCoroutineContext().ensureActive()
                 if (_searchSource.value != SearchSource.CANONICAL ||
@@ -837,29 +836,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }.take(6)
                 if (batch.isEmpty()) break
                 attempted.addAll(batch.map { it.musicBrainzId })
-                // Six independent covers per wave, only three simultaneous
-                // network calls. One native shelf update per wave instead of
-                // reparsing/recomposing an entire discography for each image.
-                val results = coroutineScope {
-                    batch.map { group ->
-                        async {
-                            permits.withPermit {
-                                val cover = try {
-                                    canonicalArtworkForRow(
-                                        group, prefetchedOfficialEditions =
-                                            artistEditions[group.musicBrainzId],
-                                    )
-                                }
-                                    catch (cancelled: CancellationException) { throw cancelled }
-                                    catch (_: Exception) { null }
-                                group.musicBrainzId to cover
-                            }
-                        }
-                    }.awaitAll()
-                }.filter { it.second != null }.associate { it.first to requireNotNull(it.second) }
-                if (_searchSource.value != SearchSource.CANONICAL ||
-                    canonicalPath.lastOrNull() != artist) break
-                if (results.isEmpty()) continue
+                // Stream finished covers immediately instead of withholding an
+                // entire six-row wave behind the slowest CAA network lookup.
+                // At most three calls are active; bursts coalesce before state
+                // updates, and navigation checks prevent stale artwork.
+                loadCanonicalCoversProgressively(
+                    keys = batch,
+                    maxConcurrent = 3,
+                    fetch = { group ->
+                        val cover = try {
+                            canonicalArtworkForRow(
+                                group, prefetchedOfficialEditions =
+                                    artistEditions[group.musicBrainzId],
+                            )
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { null }
+                        cover?.let { group.musicBrainzId to it }
+                    },
+                    publish = paint@{ ready ->
+                        if (_searchSource.value != SearchSource.CANONICAL ||
+                            canonicalPath.lastOrNull() != artist) return@paint
+                        val results = ready.values.toMap()
                 _canonicalDetail.update { old ->
                     if (old !is UiState.Success) old else UiState.Success(
                         old.data.copy(rows = old.data.rows.map {
@@ -891,6 +889,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                     }
                 }
+                    },
+                )
+                if (_searchSource.value != SearchSource.CANONICAL ||
+                    canonicalPath.lastOrNull() != artist) break
             }
         }
     }
