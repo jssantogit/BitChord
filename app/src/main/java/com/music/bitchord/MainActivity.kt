@@ -3273,6 +3273,13 @@ private fun BitChordApp(
                             },
                             songSort = songSort,
                             folder = folder,
+                            canonicalTracks = if (page.browseId.startsWith("catalog:RELEASE:")) {
+                                (viewModel.canonicalDetail.collectAsStateWithLifecycle().value
+                                    as? UiState.Success)?.data?.rows.orEmpty()
+                            } else emptyList(),
+                            onCanonicalTrackPlay = { mbid ->
+                                executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.PLAY_NOW)
+                            },
                             contentPadding = listPadding,
                         )
                     } else when (key.removePrefix(TAB_KEY).toIntOrNull() ?: selectedTab) {
