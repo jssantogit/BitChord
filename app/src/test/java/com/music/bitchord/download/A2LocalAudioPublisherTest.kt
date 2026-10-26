@@ -178,4 +178,18 @@ class A2LocalAudioPublisherTest {
         assertEquals(0,otherFactory.opened)
     }
 
+    @Test fun largeStagedFilePassesSizeGateButCancellationPreventsPublication() {
+        val large=temp.newFile("large-hires-stage.flac")
+        java.io.RandomAccessFile(large,"rw").use { it.setLength(96L*1024L*1024L) }
+        val factory=RecordingFactory()
+        try {
+            A2LocalAudioPublisher.publish(large,"large-hires.flac",large.length(),
+                "0".repeat(64),factory,isCancelled={true})
+            fail("Cancelled publication must not reserve MediaStore")
+        } catch (e:IOException) {
+            assertTrue(e.message.orEmpty().contains("cancelled"))
+        }
+        assertEquals(0,factory.opened)
+    }
+
 }
