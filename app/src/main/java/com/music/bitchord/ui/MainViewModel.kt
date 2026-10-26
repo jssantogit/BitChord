@@ -20,6 +20,9 @@ import com.music.bitchord.data.catalog.metadata.CoverArtArchive
 import com.music.bitchord.data.catalog.metadata.CoverArtSize
 import com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
+import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistDiscographyPager
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
@@ -946,6 +949,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _canonicalDetail.value = UiState.Loading
         _searchScrollReset.value += 1
         canonicalBrowseJob = viewModelScope.launch {
+            var artistFirstPage: MusicBrainzCatalogPage<MusicBrainzReleaseGroupHit>? = null
             val output: UiState<CanonicalCatalogDetailPage> = when (entry.kind) {
                 CanonicalSearchKind.ARTIST -> when (
                     val result = // Group-first discovery needs enough range for albums AND singles/EPs;
@@ -953,6 +957,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     musicBrainzGraph.browseReleaseGroupsForArtist(entry.musicBrainzId, limit = 75)
                 ) {
                     is MusicBrainzCatalogGraphResult.Success -> {
+                        artistFirstPage = result.value
                         val verifiedCovers = try {
                             withContext(Dispatchers.IO) {
                                 val index = MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
@@ -1205,6 +1210,83 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         enrichCanonicalNativeReleaseCover(entry)
                     }
                 }
+            }
+            // Publish the first artist page immediately. Complete the next
+            // four pages progressively, still respecting MusicBrainz's global
+            // rate limiter and the same cancellation/navigation boundary.
+            // The remaining real cursor stays available to the existing
+            // "more" action for unusually large discographies.
+            val first = artistFirstPage
+            if (entry.kind == CanonicalSearchKind.ARTIST && first?.nextOffset != null &&
+                _searchSource.value == SearchSource.CANONICAL &&
+                canonicalPath.lastOrNull() == entry
+            ) {
+                MusicBrainzArtistDiscographyPager.collect(
+                    first, maxAdditionalPages = 4,
+                    fetch = { offset ->
+                        musicBrainzGraph.browseReleaseGroupsForArtist(
+                            entry.musicBrainzId, limit = 75, offset = offset)
+                    },
+                    onPage = { hits, next ->
+                        val artworkById = try {
+                            withContext(Dispatchers.IO) {
+                                val idx = MusicBrainzCatalogIndex(
+                                    CanonicalCatalogDatabase.get(getApplication<Application>()))
+                                idx.persistArtistGroups(entry.musicBrainzId, hits)
+                                idx.cachedArtistGroups(entry.musicBrainzId)
+                                    .associate { it.musicBrainzId to it.artworkUri }
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { emptyMap() }
+                        if (_searchSource.value == SearchSource.CANONICAL &&
+                            canonicalPath.lastOrNull() == entry
+                        ) {
+                            val current = (_canonicalDetail.value as? UiState.Success)?.data
+                            if (current != null) {
+                                val known = current.rows.associateBy { it.musicBrainzId }
+                                val rows = hits.map { hit ->
+                                    val previous = known[hit.musicBrainzId]
+                                    CanonicalCatalogSearchRow(
+                                        hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP,
+                                        hit.title,
+                                        hit.artistDisplay?.takeUnless { it.equals("Other", true) },
+                                        releaseDate = hit.firstReleaseDate,
+                                        releaseKind = hit.primaryType?.takeUnless {
+                                            it.equals("Other", true)
+                                        },
+                                        secondaryTypes = hit.secondaryTypes,
+                                        artworkUri = previous?.artworkUri ?:
+                                            artworkById[hit.musicBrainzId],
+                                    )
+                                }
+                                _canonicalDetail.value = UiState.Success(current.copy(
+                                    rows = rows,
+                                    nextOffset = next,
+                                    summary = "Release groups · showing ${rows.size} of ${current.totalCount ?: rows.size}",
+                                ))
+                                val nativeId = canonicalNativeBrowseId(entry)
+                                _detailStack.value = _detailStack.value.map { page ->
+                                    if (page.browseId != nativeId) page else page.copy(
+                                        sections = canonicalNativeSections(
+                                            parentKind = CanonicalSearchKind.ARTIST,
+                                            rows = rows,
+                                            heading = getApplication<Application>().getString(
+                                                R.string.shelf_new_albums_singles),
+                                            albumsHeading = getApplication<Application>().getString(
+                                                R.string.albums),
+                                            singlesHeading = getApplication<Application>().getString(
+                                                R.string.canonical_singles_eps),
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                    },
+                )
+                if (_searchSource.value == SearchSource.CANONICAL &&
+                    canonicalPath.lastOrNull() == entry
+                ) enrichCanonicalNativeDetailCovers(entry)
             }
         }
     }
