@@ -138,4 +138,49 @@ class CoverArtArchiveFallbackTest {
         assertEquals(1, requests)
     }
 
+    @Test fun chooses1200Over250AndNormalizesTrustedCaaHttpToHttps() = runBlocking {
+        val cover = CoverArtArchive(transport = object : CoverArtArchiveTransport {
+            override suspend fun get(path: String) = CoverArtArchiveResponse(
+                200, """{"images":[{"front":true,"thumbnails":{
+                    "250":"http://coverartarchive.org/release/$release/art-250.jpg",
+                    "500":"http://coverartarchive.org/release/$release/art-500.jpg",
+                    "1200":"http://coverartarchive.org/release/$release/art-1200.jpg"
+                }}]}""",
+            )
+        })
+        assertEquals("https://coverartarchive.org/release/$release/art-1200.jpg",
+            cover.findCover(release, null))
+    }
+
+    @Test fun old250pxRoomCacheCanBeUpgradedWithoutTrustingTextMatches() = runBlocking {
+        val entries = mutableMapOf(
+            ("release" to release) to MusicBrainzCoverArtCacheEntry(
+                "release", release,
+                "https://coverartarchive.org/release/$release/art-250.jpg", 1000L,
+            )
+        )
+        var calls = 0
+        val cover = CoverArtArchive(
+            transport = object : CoverArtArchiveTransport {
+                override suspend fun get(path: String): CoverArtArchiveResponse {
+                    calls++
+                    return CoverArtArchiveResponse(200, """{"images":[{"front":true,
+                        "thumbnails":{"1200":"https://coverartarchive.org/release/$release/art-1200.jpg"}
+                    }]}""")
+                }
+            },
+            store = object : MusicBrainzCoverArtStore {
+                override suspend fun read(type: String, mbid: String) = entries[type to mbid]
+                override suspend fun write(value: MusicBrainzCoverArtCacheEntry) {
+                    entries[value.entityType to value.mbid] = value
+                }
+            },
+            nowEpochMs = { 1100L },
+        )
+        assertEquals("https://coverartarchive.org/release/$release/art-1200.jpg",
+            cover.findCover(release, null))
+        assertEquals(1, calls)
+    }
+
+
 }
