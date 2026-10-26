@@ -18,6 +18,7 @@ import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.catalog.allowedCanonicalLyricsSources
 import com.music.bitchord.data.catalog.metadata.CoverArtArchive
 import com.music.bitchord.data.catalog.metadata.CoverArtSize
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCoverArtCacheEntry
 import com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage
@@ -500,6 +501,50 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (row.kind == CanonicalSearchKind.RELEASE_GROUP &&
             canonicalEditorialReleaseType(row) == null
         ) return null
+        if (row.kind == CanonicalSearchKind.RELEASE_GROUP) {
+            // Fast path on revisit: only art copied from a verified Official
+            // exact-title Release is stored under group front-v3.
+            coverArtArchive.cachedVerifiedGroupCover(row.musicBrainzId, size)?.let {
+                return it
+            }
+            val index = MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
+                getApplication<Application>(),
+            ))
+            val saved = try { index.cachedGroupReleases(row.musicBrainzId) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { emptyList() }
+            var vetted = canonicalArtworkEditionsForGroup(saved, row.title)
+            if (vetted.isEmpty()) {
+                val fetched = musicBrainzGraph.browseGroupReleases(row.musicBrainzId, limit = 40)
+                if (fetched is MusicBrainzCatalogGraphResult.Success) {
+                    try { index.persistGroupEditions(row.musicBrainzId, fetched.value.items) }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { /* Fresh response remains usable. */ }
+                    vetted = canonicalArtworkEditionsForGroup(fetched.value.items, row.title)
+                }
+            }
+            for (edition in vetted) {
+                // No group-front API shortcut: it may point to a video or an
+                // alternate artwork edition even under the correct group MBID.
+                val hero = coverArtArchive.findCover(
+                    edition.musicBrainzId, null, CoverArtSize.HERO,
+                ) ?: continue
+                val thumb = coverArtArchive.findCover(
+                    edition.musicBrainzId, null, CoverArtSize.THUMBNAIL,
+                ) ?: hero
+                try {
+                    RoomMusicBrainzCoverArtStore(
+                        CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao(),
+                    ).write(MusicBrainzCoverArtCacheEntry(
+                        "release-group", row.musicBrainzId, hero,
+                        System.currentTimeMillis(), thumb,
+                    ))
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { /* Valid art still renders if cache is unavailable. */ }
+                return if (size == CoverArtSize.THUMBNAIL) thumb else hero
+            }
+            return null
+        }
         val target = canonicalCoverLookupTarget(row)
         if (row.kind == CanonicalSearchKind.RECORDING) {
             // Search can only nominate a release with Official status and
@@ -510,25 +555,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return coverArtArchive.findCover(verifiedEdition, null, size)
         }
         if (target == null) return null
-        val direct = coverArtArchive.findCover(target.first, target.second, size)
-        if (direct != null) return direct
-        if (row.kind != CanonicalSearchKind.RELEASE_GROUP ||
-            canonicalEditorialReleaseType(row) == null
-        ) return null
-        // Album/EP/Single Group art has priority. Never use unrelated video,
-        // remix or release variants merely because they share an RG MBID.
-        val related = musicBrainzGraph.browseGroupReleases(row.musicBrainzId, limit = 16)
-        val versions = if (related is MusicBrainzCatalogGraphResult.Success) {
-            canonicalPreferredEditions(related.value.items, row.title)
-                .filter { it.status.equals("Official", ignoreCase = true) &&
-                    it.title.trim().equals(row.title.trim(), ignoreCase = true) }
-                .take(2)
-        } else emptyList()
-        for (release in versions) {
-            val image = coverArtArchive.findCover(release.musicBrainzId, null, size)
-            if (image != null) return image
-        }
-        return null
+        return coverArtArchive.findCover(target.first, target.second, size)
     }
 
     private fun enrichCanonicalSearchCovers(query: String) {
