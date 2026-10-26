@@ -443,7 +443,7 @@ class A0ManualLoginActivity : Activity() {
                                 val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(18)
                                 // The server reader only parses frames; indirect peer
                                 // handshakes run concurrently on peer-only sockets.
-                                val peerWorkers=A0PeerSearchWorkers(queueCapacity=128)
+                                val peerWorkers=A0PeerSearchWorkers(queueCapacity=128,parallelism=12)
                                 val offerGate=A0PeerOfferGate(160)
                                 activePeerWorkers=peerWorkers
                                 val peerOfferBackpressure=java.util.concurrent.atomic.AtomicInteger(0)
