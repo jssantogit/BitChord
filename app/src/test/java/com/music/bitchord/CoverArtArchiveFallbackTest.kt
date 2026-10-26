@@ -138,6 +138,30 @@ class CoverArtArchiveFallbackTest {
         assertEquals(1, requests)
     }
 
+    @Test fun posterOrTrackImageMarkedAsFrontIsNotAnAlbumSleeve() = runBlocking {
+        val cover = CoverArtArchive(transport = object : CoverArtArchiveTransport {
+            override suspend fun get(path: String) = CoverArtArchiveResponse(
+                200, """{"images":[
+                    {"front":true,"types":["Poster"],"approved":true,
+                     "image":"https://archive.org/promotional-video-poster.jpg"},
+                    {"front":true,"types":["Front"],"approved":true,
+                     "image":"https://archive.org/official-audio-cover.jpg"}
+                ]}""",
+            )
+        })
+        assertEquals("https://archive.org/official-audio-cover.jpg", cover.findCover(release, null))
+    }
+
+    @Test fun explicitlyUnapprovedFrontIsNotPromotedAsCover() = runBlocking {
+        val cover = CoverArtArchive(transport = object : CoverArtArchiveTransport {
+            override suspend fun get(path: String) = CoverArtArchiveResponse(
+                200, """{"images":[{"front":true,"types":["Front"],"approved":false,
+                    "image":"https://archive.org/unapproved-art.jpg"}]}""",
+            )
+        })
+        assertNull(cover.findCover(release, null))
+    }
+
     @Test fun chooses1200Over250AndNormalizesTrustedCaaHttpToHttps() = runBlocking {
         val cover = CoverArtArchive(transport = object : CoverArtArchiveTransport {
             override suspend fun get(path: String) = CoverArtArchiveResponse(
