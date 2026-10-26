@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -120,6 +121,8 @@ internal class MusicBrainzCatalogGraph(
                 status = row.string("status"),
                 releaseGroupMbid = (row["release-group"] as? JsonObject)
                     ?.string("id").validMbid(),
+                hasFrontCover = (row["cover-art-archive"] as? JsonObject)
+                    ?.get("front")?.jsonPrimitive?.booleanOrNull,
             )
         }
 
