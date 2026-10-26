@@ -133,9 +133,9 @@ class MusicBrainzCatalogSearchTest {
             }
         }
         val search = MusicBrainzCatalogSearch(MusicBrainzClient(transport = transport))
-        val songs = search.searchRecordingsForArtistMbid(artistMbid) as MusicBrainzCatalogSearchResult.Success
-        val groups = search.searchReleaseGroupsForArtistMbid(artistMbid) as MusicBrainzCatalogSearchResult.Success
-        val editions = search.searchReleasesForArtistMbid(artistMbid) as MusicBrainzCatalogSearchResult.Success
+        val songs = search.searchRecordingsForArtistMbid(artistMbid) as MusicBrainzCatalogSearchResult.Success<com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit>
+        val groups = search.searchReleaseGroupsForArtistMbid(artistMbid) as MusicBrainzCatalogSearchResult.Success<com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit>
+        val editions = search.searchReleasesForArtistMbid(artistMbid) as MusicBrainzCatalogSearchResult.Success<com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit>
         assertEquals("Magnetic", songs.page.items.single().title)
         assertEquals("SUPER REAL ME", groups.page.items.single().title)
         assertEquals("SUPER REAL ME", editions.page.items.single().title)
