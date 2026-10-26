@@ -49,7 +49,8 @@ internal object A0ReleaseDiscoveryShadowAdapter {
                 val immediate=path.replace('\\','/')
                     .substringBeforeLast('/',"").substringAfterLast('/',"")
                 val album=A0CanonicalAlbumPolicy.assess(
-                    A0CanonicalAlbumPolicy.Target(entry.album,expectedArtist),
+                    A0CanonicalAlbumPolicy.Target(
+                        requestedAlbum=entry.album,expectedArtist=expectedArtist),
                     A0CanonicalAlbumPolicy.Claim(
                         immediate,A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
                 val codec=when(ext) {
