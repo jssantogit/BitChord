@@ -59,4 +59,15 @@ class A0ManualCandidatePolicyTest {
         assertTrue(A0ManualCandidatePolicy.primaryIndices(all,listOf(0)).isEmpty())
         assertEquals(1,all.size)
     }
+    @Test fun unconstrainedLegacyProfilePreservesOrdinaryManualCandidates() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",expectedDurationSeconds=161)
+        handoff.offerParsed(result("source",
+            offer("Music\\ILLIT\\ILLIT Magnetic.mp3")), "source")
+        val all=handoff.choices()
+        assertEquals(A0DownloadQualityPolicy.Status.NOT_CONSTRAINED,
+            all.single().qualityEvidence.status)
+        assertEquals(listOf(0),A0ManualCandidatePolicy.primaryIndices(all,listOf(0)))
+    }
+
 }
