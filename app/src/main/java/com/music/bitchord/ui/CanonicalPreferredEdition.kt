@@ -19,7 +19,18 @@ internal fun canonicalPreferredEditions(
     val modifier = Regex(
         """(?i)(?:\b(?:sped\s*up|slowed|nightcore|remix|bootleg|instrumental|deluxe|special\s+edition|repackage|karaoke|live)\b)"""
     )
-    return editions.distinctBy { it.musicBrainzId }.sortedWith(
+    val unique = editions.distinctBy { it.musicBrainzId }
+    // "Official" is positive release evidence. A Bootleg, Promotion, withdrawn
+    // or pseudo-release must not become the user's default tracklist merely
+    // because it is the earliest/only edition with a playable-looking title.
+    // Unknown statuses may be retained only when no verified official edition
+    // has been discovered, without calling them official.
+    val official = unique.filter { it.status.equals("Official", ignoreCase = true) }
+    val eligible = when {
+        official.isNotEmpty() -> official
+        else -> unique.filter { it.status.isNullOrBlank() }
+    }
+    return eligible.sortedWith(
         compareBy<MusicBrainzReleaseHit> {
             when (it.status?.lowercase(Locale.ROOT)) {
                 "official" -> 0
