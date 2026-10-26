@@ -70,6 +70,9 @@ class MusicBrainzCatalogGraphTest {
         val editions = graph.browseGroupReleases(group) as MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogPage<MusicBrainzReleaseHit>>
         val detail = graph.lookupRelease(worldwide) as MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>
         assertEquals(group, artistGroups.value.items.single().musicBrainzId)
+        // Mirror MusicBrainz's official website artist release-group policy
+        // instead of fetching promotional/bootleg-only discography groups.
+        assertEquals("website-default", requests.first().second["release-group-status"])
         assertEquals(worldwide, editions.value.items.single().musicBrainzId)
         assertEquals(group, detail.value.groupMbid)
         assertEquals(2, detail.value.tracks.size)
