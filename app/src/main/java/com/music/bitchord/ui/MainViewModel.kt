@@ -954,7 +954,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         canonicalBrowseJob = viewModelScope.launch {
             val output: UiState<CanonicalCatalogDetailPage> = when (entry.kind) {
                 CanonicalSearchKind.ARTIST -> when (
-                    val result = musicBrainzGraph.browseReleaseGroupsForArtist(entry.musicBrainzId)
+                    val result = // Group-first discovery needs enough range for albums AND singles/EPs;
+                    // 25 arbitrary upstream groups often omitted actual releases.
+                    musicBrainzGraph.browseReleaseGroupsForArtist(entry.musicBrainzId, limit = 75)
                 ) {
                     is MusicBrainzCatalogGraphResult.Success -> {
                         try {
