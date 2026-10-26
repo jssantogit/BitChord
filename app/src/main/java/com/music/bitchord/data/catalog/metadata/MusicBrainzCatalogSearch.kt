@@ -74,17 +74,10 @@ internal data class MusicBrainzReleaseHit(
     val hasFrontCover: Boolean? = null,
 )
 
-/**
- * Public CAA direct thumbnail URL. Requires MusicBrainz to have positively
- * asserted a Front exists for this exact Official Release; null/false cannot
- * skip verification, and raw search titles alone are never used to build URLs.
- */
-internal fun verifiedCaaFront500Url(hit: MusicBrainzReleaseHit): String? =
-    if (hit.hasFrontCover == true && isCuratedMusicBrainzRelease(hit) &&
-        Regex("^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
-            .matches(hit.musicBrainzId)
-    ) "https://coverartarchive.org/release/${hit.musicBrainzId.lowercase(Locale.ROOT)}/front-500"
-    else null
+// A MusicBrainz cover-art-archive.front flag is a presence hint only.
+// Never synthesize direct /front-500 URLs from it: CAA may label the
+// underlying image Poster/Track or leave its approval unverified.
+// CoverArtArchive must validate typed image metadata before presentation.
 
 internal data class MusicBrainzRecordingHit(
     val musicBrainzId: String,
