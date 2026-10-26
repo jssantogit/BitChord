@@ -47,7 +47,7 @@ internal class A0SmokeTrace private constructor(
         LOGIN_DENIED, DNS_FAILURE,
         CONNECT_FAILED, CONNECT_TIMEOUT, READ_TIMEOUT, SOCKET_CLOSED,
         SERVER_IO_FAILURE, PEER_IO_FAILURE, CANCELLED, INVALID_INPUT,
-        UNKNOWN_FAILURE
+        LOCAL_SAVE_FAILURE, UNKNOWN_FAILURE
     }
 
     enum class Transport { WIFI, CELLULAR, VPN, ETHERNET, OTHER, DISCONNECTED, UNKNOWN }
@@ -161,6 +161,16 @@ internal class A0SmokeTrace private constructor(
                 "elapsedMs" to elapsedMillis().toString(),
                 "discardedFrames" to discardedFrames.coerceIn(0,65_536).toString()
             )
+        )
+    }
+
+    /** Receipt already staged; never blame P/F for a later publication fault. */
+    fun localSaveFailure(kind:A0LocalSaveFailure.Kind) {
+        if(complete.get())return
+        continuationTrace().event(
+            stage="local_save_failure_diagnostic",
+            outcome=TraceOutcome.FAILED,
+            attributes=mapOf("kind" to kind.name.lowercase(Locale.ROOT))
         )
     }
 
