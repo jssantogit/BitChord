@@ -15,7 +15,7 @@ internal object CatalogCoverDiagnostics {
         add("image_scope=coil_load_caa_urls_only")
         add("cache_hits=${s.positiveCacheHits} negative_cache_hits=${s.negativeCacheHits}" +
             " coalesced_requests=${s.coalescedRequests}")
-        add("direct_front_candidates=${s.directFrontCandidates} source=musicbrainz_verified_release_front")
+        add("direct_front_candidates=${s.directFrontCandidates} source=legacy_front_presence_counter")
         add("network_requests=${s.networkRequests} success=${s.successfulNetworkRequests}" +
             " not_found=${s.networkNotFound} transient_failures=${s.transientFailures}")
         add("coil_load_success=${s.imageRenderSuccesses} coil_load_errors=${s.imageRenderFailures}")
