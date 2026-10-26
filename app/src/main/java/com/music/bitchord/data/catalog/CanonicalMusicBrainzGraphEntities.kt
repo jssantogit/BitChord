@@ -39,6 +39,8 @@ internal data class CatalogReleaseGroupEntity(
 internal data class CatalogMusicBrainzArtistGroupEntity(
     val artistId: String,
     val releaseGroupId: String,
+    /** Legacy null means no proof of the new official-browse policy. */
+    val publicationEvidence: String? = null,
 )
 
 /** Multiple territorial/format releases can belong to one ReleaseGroup. */
