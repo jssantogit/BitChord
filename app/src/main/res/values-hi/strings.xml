@@ -62,6 +62,7 @@
     </plurals>
     <string name="songs">गाने</string>
     <string name="artists">कलाकार</string>
+    <string name="canonical_singles_eps">सिंगल और ईपी</string>
     <string name="albums">एल्बम</string>
     <string name="no_album_metadata">इनमें से कोई भी ट्रैक यह नहीं बताता कि वह किस एल्बम का है।</string>
     <string name="search_empty">YouTube Music पर लाखों गाने खोजें।</string>
