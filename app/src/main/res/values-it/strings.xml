@@ -84,6 +84,7 @@
     </plurals>
     <string name="songs">Brani</string>
     <string name="artists">Artisti</string>
+    <string name="canonical_singles_eps">Singoli ed EP</string>
     <string name="albums">Album</string>
     <string name="no_album_metadata">Nessuno di questi brani indica da quale album proviene.</string>
     <string name="search_empty">Cerca milioni di brani su YouTube Music.</string>
