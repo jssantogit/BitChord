@@ -65,7 +65,11 @@ internal interface MusicBrainzCoverArtStore {
  */
 internal fun verifiedFrontCacheType(type: String): String =
     when (type) {
-        "release", "release-group" -> "$type:front-v2"
+        "release" -> "release:front-v2"
+        // v2 could contain a group Front chosen from a video/alternate
+        // edition. Only v3 carries evidence from an explicitly Official,
+        // exact-title Release belonging to the group.
+        "release-group" -> "release-group:front-v3"
         else -> error("Unsupported cover cache entity type")
     }
 
@@ -148,6 +152,25 @@ internal class CoverArtArchive(
             }
         }
         return null
+    }
+
+    /**
+     * Cached v3 group artwork has already been sourced from an Official
+     * exact-title edition. Never make an unverified group CAA request here.
+     */
+    suspend fun cachedVerifiedGroupCover(
+        groupMbid: String, size: CoverArtSize = CoverArtSize.THUMBNAIL,
+    ): String? {
+        if (!validMbid(groupMbid)) return null
+        val cached = try { store.read("release-group", groupMbid.lowercase(Locale.ROOT)) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { null } ?: return null
+        val url = if (size == CoverArtSize.THUMBNAIL) {
+            cached.thumbnailUri ?: cached.artworkUri
+        } else cached.artworkUri
+        if (url == null || !safeImageUrl(url)) return null
+        telemetry.recordCacheHit()
+        return url
     }
 
     private fun CoverLookup.Found.urlFor(size: CoverArtSize): String =
