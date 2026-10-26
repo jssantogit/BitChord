@@ -36,6 +36,24 @@ internal fun canonicalNativePageType(kind: CanonicalSearchKind): BrowseType? = w
 internal fun canonicalNativeBrowseId(row: CanonicalCatalogSearchRow): String =
     "catalog:${row.kind}:${row.musicBrainzId}"
 
+/** A MusicBrainz Release Group with Other/unspecified type is NOT an album by default. */
+internal fun canonicalMayUseAlbumFallbackLabel(browseId: String): Boolean =
+    !browseId.startsWith("catalog:RELEASE_GROUP:") &&
+        !browseId.startsWith("catalog:RELEASE:")
+
+/** The editorial album/EP/single shelf must not promote untyped editions or recordings. */
+internal fun canonicalEditorialReleaseType(row: CanonicalCatalogSearchRow): String? {
+    if (row.kind != CanonicalSearchKind.RELEASE_GROUP && row.kind != CanonicalSearchKind.RELEASE) {
+        return null
+    }
+    return when (row.releaseKind?.trim()?.lowercase(java.util.Locale.ROOT)) {
+        "album" -> "Album"
+        "ep" -> "EP"
+        "single" -> "Single"
+        else -> null
+    }
+}
+
 /** Native DetailScreen accepts real browse shelves without synthetic Song.videoId. */
 internal fun canonicalNativeSections(
     parentKind: CanonicalSearchKind,
