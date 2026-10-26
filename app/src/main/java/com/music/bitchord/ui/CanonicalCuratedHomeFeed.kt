@@ -76,6 +76,24 @@ internal fun isPlayableLocalPick(song: Song): Boolean =
 
 
 /**
+ * A decorative artist thumbnail can be requested only for the first exact
+ * artist-name match. Any alternative MBIDs remain distinct and get no
+ * inferred image. Apple portrait is NOT canonical identity evidence.
+ */
+internal fun canonicalArtistArtworkCandidate(
+    rows: List<CanonicalCatalogSearchRow>,
+    query: String,
+): CanonicalCatalogSearchRow? {
+    val text = query.trim()
+    if (text.isBlank()) return null
+    return rows.firstOrNull {
+        it.kind == CanonicalSearchKind.ARTIST &&
+            it.title.equals(text, ignoreCase = true) &&
+            it.artworkUri.isNullOrBlank()
+    }
+}
+
+/**
  * CoverArtArchive has art for releases and release-groups, NOT artists or
  * recordings. Never guess an edition/group by title to fill a thumbnail.
  */
