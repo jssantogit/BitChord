@@ -135,4 +135,21 @@ class A0CandidateDiagnosticCoverageTest {
         assertEquals("31",event.attributes["droppedOffers"])
         assertEquals("7",event.attributes["perPeerDropped"])
     }
+
+    @Test fun comparisonOfSameQueryLogsOnlyOutcomeAndCounts() {
+        val points=mutableListOf<StructuredTracePoint>()
+        val tracer=StructuredTracer(sink=StructuredTraceSink { points.add(it) },
+            traceIdFactory={ "repeat-search-privacy" })
+        val trace=A0SmokeTrace.start(tracer,observedTransfer=true)
+        val comparison=A0SearchComparison()
+        comparison.observe("ILLIT - Magnetic","SUPER REAL ME","HIGH_QUALITY",203,5)
+        trace.searchComparison(comparison.observe(
+            "ILLIT - Magnetic","SUPER REAL ME","HIGH_QUALITY",0,0))
+        val event=points.single { it.stage=="search_comparison" }
+        assertEquals("repeat_lost",event.attributes["kind"])
+        assertEquals("203",event.attributes["previousCandidates"])
+        assertEquals("0",event.attributes["currentPeerReplies"])
+        assertFalse(event.attributes.toString().contains("ILLIT"))
+        assertFalse(event.attributes.toString().contains("SUPER REAL ME"))
+    }
 }
