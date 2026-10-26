@@ -216,6 +216,7 @@ import com.music.bitchord.download.MediaTagger
 import com.music.bitchord.download.DownloadTarget
 import com.music.bitchord.download.Downloads
 import com.music.bitchord.download.SoulseekDownloadRouting
+import com.music.bitchord.download.SoulseekBatchPlan
 import com.music.bitchord.ui.screens.SoulseekAccountSettingsScreen
 import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
@@ -2057,6 +2058,52 @@ private fun BitChordApp(
     // Each supported request opens a manual Soulseek search; the picker alone
     // can authorize a specific file, and only in devDebug.
     val startDownload: (List<Song>, DownloadTarget?) -> Unit = { requested, from ->
+        if (requested.size > 1) {
+            // One release tap, a bounded sequential MANUAL selection per track.
+            // Playlists, artist pages and loose multi-selection do not become
+            // unconsented bulk transfers. The devDebug pilot is explicit.
+            val plan=SoulseekBatchPlan.prepare(
+                requested.map { track ->
+                    SoulseekBatchPlan.SourceTrack(
+                        trackId=track.videoId,
+                        artist=track.artist,
+                        title=track.title,
+                        creditedArtists=track.artists.map { it.name },
+                        album=track.albumName,
+                        durationSeconds=SoulseekDownloadRouting.durationSeconds(
+                            track.durationText),
+                    )
+                },
+                releaseTitle=from?.title,
+                isRelease=from!=null && !from.playlist,
+                pilotAvailable=BuildConfig.FLAVOR=="dev" && BuildConfig.DEBUG,
+            )
+            if (plan==null) {
+                Toast.makeText(context,
+                    "Lote Soulseek indisponível: abra um álbum/EP/single com 2 a 64 faixas válidas.",
+                    Toast.LENGTH_LONG).show()
+            } else {
+                val first=plan.first()
+                val batchIntent=Intent().setClassName(
+                    context.packageName,
+                    "com.music.bitchord.acquisition.a0.A0ManualLoginActivity",
+                ).putExtra("bitchord.soulseek.manual.query",first.query)
+                    .putExtra("bitchord.soulseek.manual.album",first.album)
+                    .putExtra("bitchord.soulseek.manual.duration_seconds",
+                        first.durationSeconds ?: 0)
+                    .putStringArrayListExtra("bitchord.soulseek.batch.queries",
+                        ArrayList(plan.map { it.query }))
+                    .putStringArrayListExtra("bitchord.soulseek.batch.albums",
+                        ArrayList(plan.map { it.album.orEmpty() }))
+                    .putExtra("bitchord.soulseek.batch.durations",
+                        plan.map { it.durationSeconds ?: 0 }.toIntArray())
+                runCatching { context.startActivity(batchIntent) }.onFailure {
+                    Toast.makeText(context,
+                        "Seletor Soulseek em lote indisponível nesta instalação.",
+                        Toast.LENGTH_LONG).show()
+                }
+            }
+        } else {
         val song = requested.singleOrNull()
         val playingSameTrack=player.song?.videoId==song?.videoId && song!=null
         val albumHint=SoulseekDownloadRouting.albumHint(
@@ -2103,6 +2150,7 @@ private fun BitChordApp(
                     "Download Soulseek indisponível nesta variante ou música sem artista/título.",
                     Toast.LENGTH_LONG,
                 ).show()
+        }
         }
     }
     /**
