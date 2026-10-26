@@ -98,6 +98,37 @@ class A0SelectionServerDrainTest {
         }
     }
 
+    @Test(timeout=6500)
+    fun choiceArrivingDuringPartialControlFrameIsNotLost() {
+        val choices=LinkedBlockingQueue<Int>(1)
+        ServerSocket(0,1,loopback).use { listener ->
+            val workers=Executors.newSingleThreadExecutor()
+            try {
+                val sender=workers.submit {
+                    listener.accept().use { peer ->
+                        val packet=frame(18,byteArrayOf(1,2,3,4))
+                        peer.getOutputStream().apply {write(packet,0,5);flush()}
+                        Thread.sleep(180)
+                        choices.offer(7)
+                        Thread.sleep(850)
+                        peer.getOutputStream().apply {
+                            write(packet,5,packet.size-5)
+                            flush()
+                        }
+                        Thread.sleep(250)
+                    }
+                }
+                Socket(loopback,listener.localPort).use { peer ->
+                    val result=A0SelectionServerDrain.awaitChoice(
+                        peer,choices,3000,{false})
+                    assertEquals(7,result.index)
+                    assertEquals(1,result.discardedFrames)
+                }
+                sender.get(3,TimeUnit.SECONDS)
+            }finally {workers.shutdownNow()}
+        }
+    }
+
     @Test(timeout=4000)
     fun partialServerFrameTimeoutFailsClosedInsteadOfDesynchronizingStream() {
         ServerSocket(0,1,loopback).use { listener ->
