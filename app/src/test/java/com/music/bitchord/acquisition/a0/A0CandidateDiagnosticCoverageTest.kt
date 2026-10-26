@@ -168,4 +168,17 @@ class A0CandidateDiagnosticCoverageTest {
         assertEquals("0",event.attributes["bestFolderCoverage"])
         assertFalse(event.attributes.toString().contains("song"))
     }
+
+    @Test fun postBytePublicationFailureIsTypedAndNeverMisreportedAsPeerProtocol() {
+        val points=mutableListOf<StructuredTracePoint>()
+        val tracer=StructuredTracer(sink=StructuredTraceSink { points.add(it) },
+            traceIdFactory={ "safe-post-byte-failure" })
+        val trace=A0SmokeTrace.start(tracer,observedTransfer=true)
+        trace.localSaveFailure(A0LocalSaveFailure.Kind.UNSUPPORTED_AUDIO)
+        assertEquals(0,points.count { it.stage=="pf_transfer_failure" })
+        val event=points.single { it.stage=="local_save_failure_diagnostic" }
+        assertEquals("unsupported_audio",event.attributes["kind"])
+        assertTrue(event.attributes.size<=24)
+        assertFalse(event.attributes.toString().contains("remotePath"))
+    }
 }
