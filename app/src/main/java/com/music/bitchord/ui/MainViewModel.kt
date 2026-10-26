@@ -3250,10 +3250,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _searchScrollReset.value += 1
         _canonicalResults.value = UiState.Loading
         canonicalSearchJob = viewModelScope.launch {
-            val recordings = musicBrainzSearch.searchRecordings(query, limit = 25)
-            val groups = musicBrainzSearch.searchReleaseGroups(query, limit = 15)
-            val editions = musicBrainzSearch.searchReleases(query, limit = 15)
+            // Resolve the artist identity FIRST. A query exactly naming an
+            // artist must browse that artist's MBID, not return unrelated
+            // recordings with the same word in their title.
             val artists = musicBrainzSearch.searchArtists(query, limit = 15)
+            val artistScopeMbid = (artists as? MusicBrainzCatalogSearchResult.Success)
+                ?.page?.items?.firstOrNull { it.name.equals(query.trim(), ignoreCase = true) }
+                ?.musicBrainzId
+            val recordings = if (artistScopeMbid != null) {
+                musicBrainzSearch.searchRecordingsForArtistMbid(artistScopeMbid, limit = 25)
+            } else musicBrainzSearch.searchRecordings(query, limit = 25)
+            val groups = if (artistScopeMbid != null) {
+                musicBrainzSearch.searchReleaseGroupsForArtistMbid(artistScopeMbid, limit = 15)
+            } else musicBrainzSearch.searchReleaseGroups(query, limit = 15)
+            val editions = if (artistScopeMbid != null) {
+                musicBrainzSearch.searchReleasesForArtistMbid(artistScopeMbid, limit = 15)
+            } else musicBrainzSearch.searchReleases(query, limit = 15)
             if (_searchSource.value != SearchSource.CANONICAL || _query.value.trim() != query) {
                 return@launch
             }
@@ -3357,6 +3369,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }.distinctBy { it.kind to it.musicBrainzId }
             val pageCursors = CanonicalSearchPageCursors.initial(
                 query, recordings, groups, editions, artists,
+                artistScopeMbid = artistScopeMbid,
             )
             canonicalSearchPageCursors = pageCursors
             _canonicalSearchHasMore.value = pageCursors.hasMore
@@ -3445,14 +3458,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         canonicalSearchPagingJob?.cancel()
         canonicalSearchPagingJob = viewModelScope.launch {
             try {
-                val recordings = cursor.recordings?.let {
-                    musicBrainzSearch.searchRecordings(cursor.query, limit = 25, offset = it)
+                val recordings = cursor.recordings?.let { offset ->
+                    cursor.artistScopeMbid?.let {
+                        musicBrainzSearch.searchRecordingsForArtistMbid(it, limit = 25, offset = offset)
+                    } ?: musicBrainzSearch.searchRecordings(cursor.query, limit = 25, offset = offset)
                 }
-                val groups = cursor.groups?.let {
-                    musicBrainzSearch.searchReleaseGroups(cursor.query, limit = 15, offset = it)
+                val groups = cursor.groups?.let { offset ->
+                    cursor.artistScopeMbid?.let {
+                        musicBrainzSearch.searchReleaseGroupsForArtistMbid(it, limit = 15, offset = offset)
+                    } ?: musicBrainzSearch.searchReleaseGroups(cursor.query, limit = 15, offset = offset)
                 }
-                val editions = cursor.releases?.let {
-                    musicBrainzSearch.searchReleases(cursor.query, limit = 15, offset = it)
+                val editions = cursor.releases?.let { offset ->
+                    cursor.artistScopeMbid?.let {
+                        musicBrainzSearch.searchReleasesForArtistMbid(it, limit = 15, offset = offset)
+                    } ?: musicBrainzSearch.searchReleases(cursor.query, limit = 15, offset = offset)
                 }
                 val artists = cursor.artists?.let {
                     musicBrainzSearch.searchArtists(cursor.query, limit = 15, offset = it)
