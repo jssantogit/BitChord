@@ -667,7 +667,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _detailStack.value += DetailPage(
             browseId = browseId,
             title = row.title,
-            subtitle = if (row.kind == CanonicalSearchKind.ARTIST) "" else row.subtitle.orEmpty(),
+            subtitle = when (row.kind) {
+                CanonicalSearchKind.ARTIST -> ""
+                CanonicalSearchKind.RELEASE_GROUP ->
+                    listOfNotNull(row.subtitle, row.releaseKind?.takeUnless {
+                        it.equals("Other", ignoreCase = true)
+                    }).filter { it.isNotBlank() }.joinToString(" · ")
+                else -> row.subtitle.orEmpty()
+            },
             thumbnailUrl = row.artworkUri,
             songs = UiState.Loading,
             type = nativeType,
