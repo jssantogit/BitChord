@@ -14,7 +14,9 @@ internal class A0DirectPeerSearchCollector(
 ) {
     private val closed = AtomicBoolean(false)
     private val sockets = ConcurrentHashMap.newKeySet<Socket>()
-    private val workers = A0PeerSearchWorkers(queueCapacity = 96)
+    // Match the indirect P channel's bounded 12 workers + 128 queued offers.
+    // Inbound direct peers must not be starved by the former 8 + 96 budget.
+    private val workers = A0PeerSearchWorkers(queueCapacity = 128, parallelism = 12)
 
     /** Owns the socket even when the queue is full or the search is closing. */
     fun offer(socket: Socket): Boolean {
