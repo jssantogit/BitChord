@@ -327,7 +327,6 @@ private data class SearchReleaseGroupEntry(
 )
 
 @Serializable
-@Serializable
 private data class SearchReleaseGroupReference(val id: String? = null)
 
 @Serializable
