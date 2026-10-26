@@ -178,4 +178,14 @@ class CanonicalSearchCategoryFilterTest {
         assertTrue(canonicalVerifiedLocalBadgeMbids(emptyList()) { true }.isEmpty())
     }
 
+    @Test fun otherTypeMustNotLeakAsMusicGenre() {
+        val unknown = CanonicalCatalogSearchRow(
+            "group-other", CanonicalSearchKind.RELEASE_GROUP,
+            "Right Now", "NewJeans", releaseKind = "Other",
+        )
+        val ep = unknown.copy(musicBrainzId = "group-ep", releaseKind = "EP")
+        assertEquals("NewJeans", canonicalDisplaySubtitle(unknown, "Álbum"))
+        assertEquals("EP", canonicalDisplaySubtitle(ep, "Álbum"))
+    }
+
 }
