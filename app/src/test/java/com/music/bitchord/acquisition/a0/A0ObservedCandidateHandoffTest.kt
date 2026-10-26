@@ -139,4 +139,20 @@ class A0ObservedCandidateHandoffTest {
         handoff.cancel()
         assertTrue(handoff.releaseShadowChoices().isEmpty())
     }
+
+    @Test fun onlyValidatedParsedPeerRepliesMayBeCreditedAsSuccessful() {
+        val handoff=A0ObservedCandidateHandoff(java.net.Socket(),"local",81,true)
+        assertFalse(handoff.offerSearchResult(byteArrayOf(1,2,3),"claimed"))
+        assertEquals(0,handoff.screening().responses)
+        val valid=A0SoulseekSearchResponse("claimed",81,
+            listOf(A0SoulseekSearchFile("Music\\Artist - Song.mp3",
+                6_400_000L,"mp3",mapOf(0 to 320,1 to 161))),
+            emptyList(),true,128_000,0)
+        assertFalse(handoff.offerParsed(valid,"other-peer"))
+        assertEquals(0,handoff.screening().responses)
+        assertTrue(handoff.offerParsed(valid,"claimed"))
+        assertEquals(1,handoff.screening().responses)
+        handoff.cancel()
+        assertFalse(handoff.offerParsed(valid,"claimed"))
+    }
 }
