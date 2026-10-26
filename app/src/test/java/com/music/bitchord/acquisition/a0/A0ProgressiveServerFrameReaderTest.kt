@@ -34,6 +34,21 @@ class A0ProgressiveServerFrameReaderTest {
         assertTrue(reader.atFrameBoundary)
     }
 
+    @Test fun unfinishedSearchFrameCanDrainSafelyBeforeTransferHandoff() {
+        val bytes=frame(64,byteArrayOf(1,2,3)) + offer("peer",4820,1234)
+        val reader=A0ProgressiveServerFrameReader(
+            InterruptedReads(bytes,timeoutAfter=setOf(2)))
+        try {
+            reader.readEvent()
+            fail("Injected timeout must interrupt first frame")
+        }catch(_:SocketTimeoutException){}
+        assertFalse(reader.atFrameBoundary)
+        assertTrue(reader.finishPendingFrame(maxReadTimeouts=3))
+        assertTrue(reader.atFrameBoundary)
+        val offer=reader.readEvent()
+        assertEquals("peer",offer?.username)
+    }
+
     @Test fun incompleteFrameCanNeverBeMistakenForSafePfhandoff() {
         val raw=offer("peer",4820,1234).copyOf(9)
         val reader=A0ProgressiveServerFrameReader(ByteArrayInputStream(raw))
