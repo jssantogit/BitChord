@@ -1,5 +1,6 @@
 package com.music.bitchord
 
+import com.music.bitchord.data.catalog.metadata.CoverArtSize
 import com.music.bitchord.data.catalog.metadata.CoverArtArchive
 import com.music.bitchord.data.catalog.metadata.CoverArtArchiveResponse
 import com.music.bitchord.data.catalog.metadata.CoverArtArchiveTransport
@@ -341,6 +342,37 @@ class CoverArtArchiveFallbackTest {
             )
         })
         assertEquals("https://archive.org/actual-release-cover.jpg", cover.findCover(release, null))
+    }
+
+    @Test fun thumbnailAndHeroReuseSameApprovedImageEvidenceWithoutExtraNetwork() = runBlocking {
+        val releaseId = release
+        var calls = 0
+        val cached = mutableMapOf<Pair<String,String>, MusicBrainzCoverArtCacheEntry>()
+        val store = object : MusicBrainzCoverArtStore {
+            override suspend fun read(type: String, mbid: String) = cached[type to mbid]
+            override suspend fun write(value: MusicBrainzCoverArtCacheEntry) {
+                cached[value.entityType to value.mbid] = value
+            }
+        }
+        val cover = CoverArtArchive(
+            transport = object : CoverArtArchiveTransport {
+                override suspend fun get(path: String): CoverArtArchiveResponse {
+                    calls++
+                    return CoverArtArchiveResponse(200, """{"images":[
+                        {"front":true,"types":["Front"],"approved":true,
+                         "thumbnails":{"500":"https://coverartarchive.org/release/$releaseId/front-500",
+                                       "1200":"https://coverartarchive.org/release/$releaseId/front-1200"}}
+                    ]}""")
+                }
+            }, store = store,
+        )
+        assertEquals("https://coverartarchive.org/release/$releaseId/front-500",
+            cover.findCover(releaseId, null, CoverArtSize.THUMBNAIL))
+        assertEquals("https://coverartarchive.org/release/$releaseId/front-1200",
+            cover.findCover(releaseId, null, CoverArtSize.HERO))
+        assertEquals(1, calls)
+        assertEquals("https://coverartarchive.org/release/$releaseId/front-500",
+            cached["release" to releaseId]?.thumbnailUri)
     }
 
 }
