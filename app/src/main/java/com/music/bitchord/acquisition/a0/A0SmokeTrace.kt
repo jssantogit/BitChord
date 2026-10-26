@@ -290,6 +290,24 @@ internal class A0SmokeTrace private constructor(
         )
     }
 
+    /** Album discovery shadow: aggregate-only counters, never file/peer identity. */
+    fun releaseDiscoveryCoverage(report:A0ReleaseDiscoveryPlanner.Preview) {
+        if(complete.get())return
+        fun n(v:Int)=v.coerceIn(0,100000).toString()
+        continuationTrace().event(
+            stage="release_discovery_shadow",
+            outcome=TraceOutcome.SUCCEEDED,
+            attributes=mapOf(
+                "autoReadyTracks" to n(report.autoReadyTracks),
+                "manualReviewTracks" to n(report.manualReviewTracks),
+                "ambiguousTracks" to n(report.ambiguousTracks),
+                "bestFolderCoverage" to n(report.bestFolderCoverage),
+                "foldersConsidered" to n(report.foldersConsidered),
+                "examinedOffers" to n(report.examinedOffers)
+            )
+        )
+    }
+
     /** No peer/path/query data. Measures offers dropped by the bounded P pool. */
     fun peerSearchBackpressure(dropped:Int,perPeerDropped:Int=0) {
         if(complete.get())return
