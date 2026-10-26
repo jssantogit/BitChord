@@ -406,6 +406,7 @@ class A0ManualLoginActivity : Activity() {
                                 val expectedDuration=intent.getIntExtra(
                                     "bitchord.soulseek.manual.duration_seconds",0
                                 ).takeIf { it in 15..7200 }
+                                val peerReliability=A0PeerReliabilityEvidence()
                                 val handoff = if (transferObserved) {
                                     A0ObservedCandidateHandoff(
                                         connection, username, token,
@@ -416,6 +417,7 @@ class A0ManualLoginActivity : Activity() {
                                         expectedDurationSeconds=expectedDuration,
                                         requestedAlbum=albumConstraint,
                                         qualityProfile=selectedQuality,
+                                        peerReliability=peerReliability,
                                     ).also { transfer ->
                                         if (!SoulseekActiveSession.registerTransfer(
                                                 transfer, accountGeneration
@@ -475,6 +477,8 @@ class A0ManualLoginActivity : Activity() {
                                                 peer.getInputStream(),token
                                             ) { verifiedFrame, claimedPeer ->
                                                 receivedValidP2pReply.set(true)
+                                                peerReliability.observe(claimedPeer,
+                                                    A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
                                                 handoff?.offerSearchResult(verifiedFrame,claimedPeer)
                                                 discoveryProgress()
                                             }
@@ -574,6 +578,8 @@ class A0ManualLoginActivity : Activity() {
                                                                     peer.getInputStream(),token,offer.username
                                                                 ) { frame, claimedPeer ->
                                                                     receivedValidP2pReply.set(true)
+                                                                    peerReliability.observe(claimedPeer,
+                                                                        A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
                                                                     handoff?.offerSearchResult(frame,claimedPeer)
                                                                     discoveryProgress()
                                                                 }
@@ -588,12 +594,21 @@ class A0ManualLoginActivity : Activity() {
                                                             }
                                                         }
                                                     } catch (_: SocketTimeoutException) {
+                                                        if(!stopping && readerGate.isOpen())
+                                                            peerReliability.observe(offer.username,
+                                                                A0PeerReliabilityEvidence.Outcome.READ_TIMEOUT)
                                                         trace.note(A0SmokeTrace.Stage.INDIRECT_READ_TIMEOUT,
                                                             TraceOutcome.DEGRADED,A0SmokeTrace.Reason.READ_TIMEOUT)
                                                     } catch (_: ConnectException) {
+                                                        if(!stopping && readerGate.isOpen())
+                                                            peerReliability.observe(offer.username,
+                                                                A0PeerReliabilityEvidence.Outcome.CONNECT_FAILED)
                                                         trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECT_FAILED,
                                                             TraceOutcome.DEGRADED,A0SmokeTrace.Reason.CONNECT_FAILED)
                                                     } catch (_: IOException) {
+                                                        if(!stopping && readerGate.isOpen())
+                                                            peerReliability.observe(offer.username,
+                                                                A0PeerReliabilityEvidence.Outcome.INVALID_REPLY)
                                                         trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_REJECTED,
                                                             TraceOutcome.DEGRADED,A0SmokeTrace.Reason.PEER_IO_FAILURE)
                                                     }
