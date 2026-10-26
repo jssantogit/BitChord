@@ -86,6 +86,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -785,60 +786,78 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * identity boundary; fallback artwork may be from a Release known to
      * belong to that exact group, never from fuzzy name matching.
      */
+    private var activeDetailCoverArtistMbid: String? = null
+
     private fun enrichCanonicalNativeDetailCovers(artist: CanonicalCatalogSearchRow) {
+        // A new page of 75 groups must not cancel an ongoing cover request
+        // queue; older code restarted the first 12 on each pagination.
+        if (activeDetailCoverArtistMbid == artist.musicBrainzId &&
+            canonicalDetailCoverJob?.isActive == true
+        ) return
         canonicalDetailCoverJob?.cancel()
-        val initial = (_canonicalDetail.value as? UiState.Success)?.data?.rows
-            .orEmpty().filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
-            .filter { canonicalEditorialReleaseType(it) != null &&
-                it.artworkUri.isNullOrBlank() }.take(12)
-        if (initial.isEmpty()) return
+        activeDetailCoverArtistMbid = artist.musicBrainzId
         canonicalDetailCoverJob = viewModelScope.launch(Dispatchers.IO) {
-            // A slow artwork response must not block unrelated rows. Bounded
-            // CAA work; Graph lookup honors the central MusicBrainz limiter.
+            val attempted = mutableSetOf<String>()
             val permits = Semaphore(3)
-            initial.forEach { group ->
-                launch {
-                    permits.withPermit {
-                        if (_searchSource.value != SearchSource.CANONICAL ||
-                            canonicalPath.lastOrNull() != artist) return@withPermit
-                        val artwork = try {
-                            canonicalArtworkForRow(group)
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (_: Exception) { null } ?: return@withPermit
-                        if (_searchSource.value != SearchSource.CANONICAL ||
-                            canonicalPath.lastOrNull() != artist) return@withPermit
-                        _canonicalDetail.update { old ->
-                            if (old !is UiState.Success) old else UiState.Success(
-                                old.data.copy(rows = old.data.rows.map {
-                                    if (it.kind == group.kind &&
-                                        it.musicBrainzId == group.musicBrainzId &&
-                                        it.artworkUri.isNullOrBlank()
-                                    ) it.copy(artworkUri = artwork) else it
-                                }),
-                            )
-                        }
-                        val artistId = canonicalNativeBrowseId(artist)
-                        _detailStack.update { pages ->
-                            if (_searchSource.value != SearchSource.CANONICAL ||
-                                canonicalPath.lastOrNull() != artist) pages
-                            else {
-                                val rows = (_canonicalDetail.value as? UiState.Success)
-                                    ?.data?.rows.orEmpty()
-                                pages.map { page ->
-                                    if (page.browseId != artistId) page else page.copy(
-                                        sections = canonicalNativeSections(
-                                            parentKind = CanonicalSearchKind.ARTIST,
-                                            rows = rows,
-                                            heading = getApplication<Application>().getString(
-                                                R.string.shelf_new_albums_singles,
-                                            ),
-                                            albumsHeading = getApplication<Application>().getString(R.string.albums),
-                                            singlesHeading = getApplication<Application>().getString(R.string.canonical_singles_eps),
-                                        ),
-                                    )
-                                }
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                if (_searchSource.value != SearchSource.CANONICAL ||
+                    canonicalPath.lastOrNull() != artist) break
+                val batch = (_canonicalDetail.value as? UiState.Success)?.data?.rows
+                    .orEmpty().filter {
+                        it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                            canonicalEditorialReleaseType(it) != null &&
+                            it.artworkUri.isNullOrBlank() &&
+                            it.musicBrainzId !in attempted
+                    }.take(6)
+                if (batch.isEmpty()) break
+                attempted.addAll(batch.map { it.musicBrainzId })
+                // Six independent covers per wave, only three simultaneous
+                // network calls. One native shelf update per wave instead of
+                // reparsing/recomposing an entire discography for each image.
+                val results = coroutineScope {
+                    batch.map { group ->
+                        async {
+                            permits.withPermit {
+                                val cover = try { canonicalArtworkForRow(group) }
+                                    catch (cancelled: CancellationException) { throw cancelled }
+                                    catch (_: Exception) { null }
+                                group.musicBrainzId to cover
                             }
+                        }
+                    }.awaitAll()
+                }.filter { it.second != null }.associate { it.first to requireNotNull(it.second) }
+                if (_searchSource.value != SearchSource.CANONICAL ||
+                    canonicalPath.lastOrNull() != artist) break
+                if (results.isEmpty()) continue
+                _canonicalDetail.update { old ->
+                    if (old !is UiState.Success) old else UiState.Success(
+                        old.data.copy(rows = old.data.rows.map {
+                            val cover = results[it.musicBrainzId]
+                            if (it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                                it.artworkUri.isNullOrBlank() && cover != null
+                            ) it.copy(artworkUri = cover) else it
+                        }),
+                    )
+                }
+                val artistId = canonicalNativeBrowseId(artist)
+                _detailStack.update { pages ->
+                    if (_searchSource.value != SearchSource.CANONICAL ||
+                        canonicalPath.lastOrNull() != artist) pages else {
+                        val rows = (_canonicalDetail.value as? UiState.Success)
+                            ?.data?.rows.orEmpty()
+                        pages.map { page ->
+                            if (page.browseId != artistId) page else page.copy(
+                                sections = canonicalNativeSections(
+                                    parentKind = CanonicalSearchKind.ARTIST,
+                                    rows = rows,
+                                    heading = getApplication<Application>().getString(
+                                        R.string.shelf_new_albums_singles,
+                                    ),
+                                    albumsHeading = getApplication<Application>().getString(R.string.albums),
+                                    singlesHeading = getApplication<Application>().getString(R.string.canonical_singles_eps),
+                                ),
+                            )
                         }
                     }
                 }
