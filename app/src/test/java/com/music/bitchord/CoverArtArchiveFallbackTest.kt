@@ -6,6 +6,8 @@ import com.music.bitchord.data.catalog.metadata.CoverArtArchiveTransport
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCoverArtCacheEntry
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCoverArtStore
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
+import kotlinx.coroutines.CoroutineStart
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -313,11 +315,11 @@ class CoverArtArchiveFallbackTest {
                         "image":"https://archive.org/shared-front.jpg"}]}""")
             }
         })
-        val first = kotlinx.coroutines.async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+        val first = async(start = CoroutineStart.UNDISPATCHED) {
             cover.findCover(release, null)
         }
         releaseStarted.await()
-        val second = kotlinx.coroutines.async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+        val second = async(start = CoroutineStart.UNDISPATCHED) {
             cover.findCover(release, null)
         }
         assertEquals(1, calls)
