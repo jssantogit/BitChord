@@ -628,9 +628,13 @@ internal interface CanonicalCatalogDao {
         SELECT identity.externalId AS musicBrainzId,
                recording.title AS title,
                recording.artistDisplay AS artistDisplay,
-               recording.durationMs AS durationMs
+               recording.durationMs AS durationMs,
+               info.hasOfficialAudioRelease AS hasOfficialAudioRelease,
+               info.isVideo AS isVideo
         FROM catalog_external_identity AS identity
         INNER JOIN catalog_recording AS recording ON recording.id = identity.entityId
+        LEFT JOIN musicbrainz_recording_enrichment info
+            ON info.recordingId = recording.id AND info.mbid = identity.externalId
         WHERE identity.provider = 'musicbrainz'
           AND identity.entityType = 'recording'
           AND (
