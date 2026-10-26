@@ -66,10 +66,12 @@ internal interface MusicBrainzCoverArtStore {
 internal fun verifiedFrontCacheType(type: String): String =
     when (type) {
         "release" -> "release:front-v2"
-        // v2 could contain a group Front chosen from a video/alternate
-        // edition. Only v3 carries evidence from an explicitly Official,
-        // exact-title Release belonging to the group.
-        "release-group" -> "release-group:front-v3"
+        // A generic group fallback has no Official-edition provenance and
+        // must NEVER poison the verified artist shelf's v3 namespace.
+        "release-group" -> "release-group:front-v2"
+        // Only the MainViewModel path proving an exact-title Official Release
+        // inside this group's MBID can write this positive v3 evidence.
+        "verified-artist-group" -> "release-group:front-v3"
         else -> error("Unsupported cover cache entity type")
     }
 
@@ -162,7 +164,7 @@ internal class CoverArtArchive(
         groupMbid: String, size: CoverArtSize = CoverArtSize.THUMBNAIL,
     ): String? {
         if (!validMbid(groupMbid)) return null
-        val cached = try { store.read("release-group", groupMbid.lowercase(Locale.ROOT)) }
+        val cached = try { store.read("verified-artist-group", groupMbid.lowercase(Locale.ROOT)) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { null } ?: return null
         val age = nowEpochMs() - cached.fetchedAtEpochMs
