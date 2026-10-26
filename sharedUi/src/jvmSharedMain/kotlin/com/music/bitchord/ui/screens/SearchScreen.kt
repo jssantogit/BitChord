@@ -675,9 +675,15 @@ fun canonicalRowsForQuery(
             it.title.equals(normalized, ignoreCase = true)
     }
     val identityScoped = if (filter == SearchFilter.ALL && exactArtists.isNotEmpty()) {
+        // The General view highlights the best-ranked exact artist from the
+        // MusicBrainz response. Namesakes remain independently accessible in
+        // the Artists filter; never merge their distinct MBIDs in Room.
+        val primaryArtist = exactArtists.first()
         candidates.filter { row ->
-            row.kind == CanonicalSearchKind.ARTIST ||
-                canonicalCreditsMentionArtist(row.subtitle, normalized)
+            (row.kind == CanonicalSearchKind.ARTIST &&
+                row.musicBrainzId == primaryArtist.musicBrainzId) ||
+                (row.kind != CanonicalSearchKind.ARTIST &&
+                    canonicalCreditsMentionArtist(row.subtitle, normalized))
         }
     } else candidates
     return identityScoped.sortedWith(
