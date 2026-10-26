@@ -48,6 +48,34 @@ internal class MusicBrainzCatalogGraph(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
+    /**
+     * Resolve genuine Recording -> Release relations when a search response
+     * omitted its abbreviated release list. Never guess album art by title.
+     * Results are bounded before any downstream Cover Art Archive lookups.
+     */
+    suspend fun lookupRecordingCoverReleases(mbid: String): List<String> {
+        val normalized = mbid.validMbid() ?: return emptyList()
+        val raw = try {
+            client.get("recording/$normalized", mapOf("fmt" to "json", "inc" to "releases"))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) { return emptyList() }
+        return try {
+            val data = json.parseToJsonElement(raw).jsonObject
+            if (data.string("id").validMbid() != normalized) return emptyList()
+            data.array("releases").mapNotNull { item ->
+                val release = item as? JsonObject ?: return@mapNotNull null
+                val id = release.string("id").validMbid() ?: return@mapNotNull null
+                Triple(id, release.string("status"), release.string("date"))
+            }.distinctBy { it.first }.sortedWith(
+                compareBy<Triple<String, String?, String?>> {
+                    if (it.second.equals("Official", ignoreCase = true)) 0 else 1
+                }.thenBy { it.third.orEmpty().ifBlank { "9999-12-31" } }
+                    .thenBy { it.first },
+            ).take(3).map { it.first }
+        } catch (_: Exception) { emptyList() }
+    }
+
     /** Browse, not fuzzy-name search: identity stays bound to an artist MBID. */
     suspend fun browseReleaseGroupsForArtist(
         artistMbid: String, limit: Int = 25, offset: Int = 0,
