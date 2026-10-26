@@ -764,10 +764,15 @@ private fun canonicalCreditsMentionArtist(credit: String?, query: String): Boole
 /** User-facing text only; never advertise DB availability or metadata plumbing. */
 fun canonicalDisplaySubtitle(row: CanonicalCatalogSearchRow, kindLabel: String): String =
     when (row.kind) {
-        CanonicalSearchKind.RECORDING -> row.subtitle?.takeIf { it.isNotBlank() } ?: kindLabel
-        CanonicalSearchKind.ARTIST -> kindLabel
+        // Never expose "Recording", "metadata-only" or an internal fallback
+        // when the artist credit is missing.
+        CanonicalSearchKind.RECORDING -> row.subtitle.orEmpty()
+        // Native label already exists in every locale; trim its explanatory
+        // suffix rather than introducing a second, untranslated label.
+        CanonicalSearchKind.ARTIST -> kindLabel.substringBefore('·').trim()
         CanonicalSearchKind.RELEASE_GROUP, CanonicalSearchKind.RELEASE ->
-            row.releaseKind?.takeIf { it.isNotBlank() } ?: kindLabel
+            row.releaseKind?.takeIf { it.isNotBlank() }
+                ?: row.subtitle?.substringBefore('·')?.trim().orEmpty()
     }
 
 /** A Server asset uses the same native search row as other browseable content. */
