@@ -105,4 +105,29 @@ class A0ReleaseDiscoveryShadowAdapterTest {
             preview.trackDecisions[63].status)
         assertFalse(preview.canTransfer)
     }
+
+    @Test fun titleGateOnlyRejectsCandidatesRankerCanNeverAccept() {
+        val inputs=listOf(
+            Triple("ILLIT - More","ILLIT - More.mp3","Music/ILLIT/BREAK EVEN/ILLIT - More.mp3"),
+            Triple("ILLIT - More","More.mp3","Music/ILLIT/BREAK EVEN/More.mp3"),
+            Triple("ILLIT - Lucky Girl Syndrome","02 Lucky Girl Syndrome.flac","Music/ILLIT/Lucky Girl Syndrome.flac"),
+            Triple("NewJeans - Hype Boy","NewJeans - Hype Boy.mp3","Music/NewJeans/NewJeans - Hype Boy.mp3"),
+            Triple("ILLIT - Café","ILLIT - Cafe.mp3","Music/ILLIT/ILLIT - Cafe.mp3"),
+            Triple("ILLIT - More","ILLIT - Something Else.mp3","Music/ILLIT/BREAK EVEN/ILLIT - Something Else.mp3"),
+            Triple("ILLIT - More","ILLIT - More More.mp3","Music/ILLIT/BREAK EVEN/ILLIT - More More.mp3")
+        )
+        for((query,name,path) in inputs) {
+            val ranked=A0CandidateRank.rank(query,name,320,
+                remotePath=path,format=name.substringAfterLast('.'),
+                declaredDurationSeconds=160,expectedDurationSeconds=160,
+                sizeBytes=6_400_000L)
+            val tokens=A0ReleaseDiscoveryShadowAdapter.titleTokens(query)
+            val fileTokens=A0ReleaseDiscoveryShadowAdapter.fileTokens(name)
+            if(ranked.match==A0CandidateRank.Match.ALL_TERMS) {
+                assertTrue("Never drop fully matching $query",fileTokens.containsAll(tokens))
+            }
+        }
+        assertFalse(A0ReleaseDiscoveryShadowAdapter.fileTokens("ILLIT - Noise.mp3")
+            .containsAll(A0ReleaseDiscoveryShadowAdapter.titleTokens("ILLIT - More")))
+    }
 }
