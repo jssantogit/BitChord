@@ -951,7 +951,12 @@ private fun ReleaseHeader(
     onArtistClick: ((String, String) -> Unit)?,
     onToggleLibrary: (() -> Unit)?,
 ) {
-    val canonicalMinutes = canonicalTracks.sumOf { (it.durationMs ?: 0L).coerceAtLeast(0L) } / 60_000
+    // Do not display a partial sum as if the album's total were complete.
+    val allCanonicalDurationsKnown = canonicalTracks.isNotEmpty() &&
+        canonicalTracks.all { (it.durationMs ?: 0L) > 0L }
+    val canonicalMinutes = if (allCanonicalDurationsKnown) {
+        canonicalTracks.sumOf { it.durationMs ?: 0L } / 60_000
+    } else 0L
     val canonicalTime = when {
         canonicalMinutes <= 0L -> null
         canonicalMinutes < 60L -> stringResource(R.string.minutes_short, canonicalMinutes.toInt())
