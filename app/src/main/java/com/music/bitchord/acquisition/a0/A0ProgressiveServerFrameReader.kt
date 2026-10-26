@@ -3,6 +3,7 @@ package com.music.bitchord.acquisition.a0
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.InputStream
+import java.net.SocketTimeoutException
 
 /**
  * Resumable, bounded reader for the authenticated Soulseek server.
@@ -26,6 +27,34 @@ internal class A0ProgressiveServerFrameReader(
     fun readEvent(onIgnoredCode:(Int)->Unit = {}):A0IndirectSearchWire.Offer? =
         A0IndirectSearchWire.readServerEvent(
             ByteArrayInputStream(readRawFrame()),onIgnoredCode)
+
+    /**
+     * At shutdown, complete only an already-started frame. Bounded by the
+     * socket's own SO_TIMEOUT and a small retry count. A partial stream never
+     * crosses into P/F; no new frame is consumed at a clean boundary.
+     */
+    fun finishPendingFrame(maxReadTimeouts:Int=3):Boolean {
+        require(maxReadTimeouts in 1..4)
+        if(atFrameBoundary)return true
+        var timeouts=0
+        while(timeouts<maxReadTimeouts) {
+            try {
+                val completed=readRawFrame()
+                // A session-replacement frame cannot be ignored just because
+                // it arrived while finishing search.
+                val code=(completed[4].toInt() and 255) or
+                    ((completed[5].toInt() and 255) shl 8) or
+                    ((completed[6].toInt() and 255) shl 16) or
+                    (completed[7].toInt() shl 24)
+                return code!=41 && atFrameBoundary
+            }catch(_:SocketTimeoutException) {
+                timeouts++
+            }catch(_:IOException) {
+                return false
+            }
+        }
+        return false
+    }
 
     /** Complete server message, including its 4-byte length. */
     fun readRawFrame():ByteArray {
