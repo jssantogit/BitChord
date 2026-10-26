@@ -1,5 +1,7 @@
 package com.music.bitchord
 
+import com.music.bitchord.data.catalog.CanonicalMusicBrainzLocalAssetClaim
+import com.music.bitchord.ui.canonicalVerifiedLocalBadgeMbids
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.SearchFilter
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
@@ -142,4 +144,38 @@ class CanonicalSearchCategoryFilterTest {
             releaseKind = null, subtitle = "ILLIT · Japão · 2024")
         assertEquals("ILLIT", canonicalDisplaySubtitle(edition, "Edição · faixas"))
     }
+    @Test fun localBadgeNeedsStrongMbidAndReadableMedia() {
+        val claims = listOf(
+            CanonicalMusicBrainzLocalAssetClaim(
+                "mbid-local", "content://media/external/audio/media/12", "local-mediastore",
+            ),
+            CanonicalMusicBrainzLocalAssetClaim(
+                "mbid-remote", "content://media/external/audio/media/12", "opensubsonic:account",
+            ),
+            CanonicalMusicBrainzLocalAssetClaim(
+                "mbid-stale", "content://media/external/audio/media/13", "local-mediastore",
+            ),
+            CanonicalMusicBrainzLocalAssetClaim(
+                "mbid-no-uri", "", "local-mediastore",
+            ),
+        )
+        val actual = canonicalVerifiedLocalBadgeMbids(claims) { uri ->
+            uri == "content://media/external/audio/media/12"
+        }
+        assertEquals(setOf("mbid-local"), actual)
+    }
+
+    @Test fun localBadgeCannotBeInferredFromCatalogPlayableOrTitleOnly() {
+        val remoteOnly = CanonicalCatalogSearchRow(
+            "recording-remote", CanonicalSearchKind.RECORDING,
+            "Magnetic", "ILLIT", hasCatalogedAsset = true,
+        )
+        val metadataOnly = remoteOnly.copy(
+            musicBrainzId = "recording-unlinked", hasCatalogedAsset = false,
+        )
+        assertTrue(!remoteOnly.hasVerifiedLocalAsset)
+        assertTrue(!metadataOnly.hasVerifiedLocalAsset)
+        assertTrue(canonicalVerifiedLocalBadgeMbids(emptyList()) { true }.isEmpty())
+    }
+
 }
