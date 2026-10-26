@@ -9,6 +9,7 @@ import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -95,6 +96,7 @@ internal class CoverArtArchive(
     private val transport: CoverArtArchiveTransport = KtorCoverArtArchiveTransport(),
     private val store: MusicBrainzCoverArtStore = MemoryCoverArtStore(),
     private val nowEpochMs: () -> Long = System::currentTimeMillis,
+    private val requestTimeoutMs: Long = 6_000L,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -146,7 +148,11 @@ internal class CoverArtArchive(
         }
 
         val answer = try {
-            transport.get("$type/$mbid")
+            // A stalled archive endpoint must not hold a screen's artwork
+            // pipeline indefinitely. Timeout is transient, never a cached 404.
+            withTimeoutOrNull(requestTimeoutMs) {
+                transport.get("$type/$mbid")
+            } ?: return CoverLookup.Unavailable
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
