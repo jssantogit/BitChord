@@ -21,6 +21,11 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         val latencySampleCount: Int,
         val p50NetworkMs: Long?,
         val p95NetworkMs: Long?,
+        val imageRenderSuccesses: Int,
+        val imageRenderFailures: Int,
+        val imageLoadSampleCount: Int,
+        val p50ImageLoadMs: Long?,
+        val p95ImageLoadMs: Long?,
     )
 
     private var cached = 0
@@ -32,6 +37,9 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
     private var missing = 0
     private var transient = 0
     private val durations = ArrayDeque<Long>()
+    private var loadedImages = 0
+    private var failedImages = 0
+    private val imageDurations = ArrayDeque<Long>()
 
     /** Start a clean anonymous metric window for each explicit capture. */
     @Synchronized fun reset() {
@@ -44,6 +52,9 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         missing = 0
         transient = 0
         durations.clear()
+        loadedImages = 0
+        failedImages = 0
+        imageDurations.clear()
     }
 
     @Synchronized fun recordCacheHit() { cached++ }
@@ -61,15 +72,30 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         durations.addLast(durationMs.coerceAtLeast(0))
     }
 
+    /**
+     * Coil finished loading a CAA bitmap (or reported an error). This is
+     * measured at the actual Android image consumer, not inferred from the
+     * much faster MB flag/direct URL nomination.
+     */
+    @Synchronized fun recordImageResult(success: Boolean, durationMs: Long) {
+        if (success) loadedImages++ else failedImages++
+        if (imageDurations.size == maxSamples) imageDurations.removeFirst()
+        imageDurations.addLast(durationMs.coerceAtLeast(0))
+    }
+
     @Synchronized fun snapshot(): Snapshot {
-        val sorted = durations.sorted()
-        fun quantile(percent: Int): Long? {
+        val networkSorted = durations.sorted()
+        val imagesSorted = imageDurations.sorted()
+        fun quantile(sorted: List<Long>, percent: Int): Long? {
             if (sorted.isEmpty()) return null
             val rank = ((percent * sorted.size + 99) / 100).coerceIn(1, sorted.size)
             return sorted[rank - 1]
         }
         return Snapshot(cached, negative, coalesced, direct, network, successful,
-            missing, transient, sorted.size, quantile(50), quantile(95))
+            missing, transient, networkSorted.size,
+            quantile(networkSorted, 50), quantile(networkSorted, 95),
+            loadedImages, failedImages, imagesSorted.size,
+            quantile(imagesSorted, 50), quantile(imagesSorted, 95))
     }
 
     companion object {
