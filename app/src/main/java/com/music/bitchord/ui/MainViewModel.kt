@@ -1012,7 +1012,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             throw cancelled
                         } catch (_: Exception) { emptySet() }
                         val cover = withContext(Dispatchers.IO) {
-                            coverArtArchive.findCover(detail.musicBrainzId, entry.musicBrainzId)
+                            // A Release Group page represents the release as a
+                            // whole. Prefer the selected edition's front; only
+                            // if neither it nor the group has one, try a small
+                            // number of *other editions from this exact group*.
+                            var art = coverArtArchive.findCover(
+                                detail.musicBrainzId, entry.musicBrainzId,
+                            )
+                            if (art == null) {
+                                for (edition in ranked.filterNot {
+                                    it.musicBrainzId == detail.musicBrainzId
+                                }.take(3)) {
+                                    art = coverArtArchive.findCover(
+                                        edition.musicBrainzId, entry.musicBrainzId,
+                                    )
+                                    if (art != null) break
+                                }
+                            }
+                            art
                         }
                         UiState.Success(CanonicalCatalogDetailPage(
                             title = entry.title,
