@@ -178,6 +178,13 @@ class CanonicalSearchCategoryFilterTest {
         assertTrue(canonicalVerifiedLocalBadgeMbids(emptyList()) { true }.isEmpty())
     }
 
+    @Test fun canonicalTrackTimeUsesMusicBrainzEvidenceNotFakeZero() {
+        assertEquals(null, com.music.bitchord.ui.screens.canonicalDurationLabel(null))
+        assertEquals(null, com.music.bitchord.ui.screens.canonicalDurationLabel(0L))
+        assertEquals("2:49", com.music.bitchord.ui.screens.canonicalDurationLabel(169_000L))
+        assertEquals("1:02:03", com.music.bitchord.ui.screens.canonicalDurationLabel(3_723_000L))
+    }
+
     @Test fun otherTypeMustNotLeakAsMusicGenre() {
         val unknown = CanonicalCatalogSearchRow(
             "group-other", CanonicalSearchKind.RELEASE_GROUP,
