@@ -79,6 +79,7 @@ internal class MusicBrainzCatalogGraph(
                 country = row.string("country"),
                 releaseDate = row.string("date"),
                 artistDisplay = row.artistDisplay(),
+                status = row.string("status"),
             )
         }
 
