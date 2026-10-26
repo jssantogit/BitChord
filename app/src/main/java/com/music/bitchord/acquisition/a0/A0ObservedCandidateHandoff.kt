@@ -297,11 +297,34 @@ internal class A0ObservedCandidateHandoff(
                 )
             )
             candidates.add(observedChoice)
-            if(collectReleaseShadow && releaseShadow.size<512) {
-                val count=releaseShadowPerPeer[result.peerUsername] ?: 0
-                if(count<64) {
-                    releaseShadow.add(observedChoice)
-                    releaseShadowPerPeer[result.peerUsername]=count+1
+            if(collectReleaseShadow) {
+                val peer=result.peerUsername
+                val peerCount=releaseShadowPerPeer[peer] ?: 0
+                if(peerCount<64) {
+                    if(releaseShadow.size==512) {
+                        // One early burst cannot monopolize all 512 shadow
+                        // observations and hide later release-wide sources.
+                        // Evict only from a strictly better-represented peer
+                        // (or the oldest one when every peer has one slot).
+                        // This cache does NOT change the manual choices or P/F.
+                        val maxCount=releaseShadowPerPeer.values.maxOrNull() ?: 0
+                        if(maxCount>peerCount) {
+                            val victim=releaseShadow.firstOrNull {
+                                releaseShadowPerPeer[it.peerUsername]==maxCount
+                            }
+                            if(victim!=null) {
+                                releaseShadow.remove(victim)
+                                val remainder=checkNotNull(
+                                    releaseShadowPerPeer[victim.peerUsername])-1
+                                if(remainder==0)releaseShadowPerPeer.remove(victim.peerUsername)
+                                else releaseShadowPerPeer[victim.peerUsername]=remainder
+                            }
+                        }
+                    }
+                    if(releaseShadow.size<512) {
+                        releaseShadow.add(observedChoice)
+                        releaseShadowPerPeer[peer]=peerCount+1
+                    }
                 }
             }
             candidates.sortWith(choiceOrder)
