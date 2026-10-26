@@ -249,4 +249,39 @@ class MusicBrainzPublicMetadataIndexTest {
         } finally { db.close() }
     }
 
+
+    @Test fun offlineDiscographyUsesDocumentedOfficialEditionDisplayLabelNotCompositeGroupTitle() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            var id = 0
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "offline-title-" + (++id) })
+            val artist = "49204a7a-ed85-407a-828f-6fd46f1d8126"
+            val group = "9750354e-78df-4058-8758-b5a7a2eccf66"
+            index.persistArtists(listOf(MusicBrainzArtistHit(artist, "NewJeans", null, "KR")))
+            index.persistArtistGroups(artist, listOf(
+                MusicBrainzReleaseGroupHit(group, "How Sweet & Bubble Gum",
+                    "Single", "2024-05-24", "NewJeans"),
+            ))
+            assertEquals("How Sweet & Bubble Gum", index.cachedArtistGroups(artist).single().title)
+            index.persistGroupEditions(group, listOf(
+                MusicBrainzReleaseHit("11111111-1111-4111-8111-111111111111",
+                    "How Sweet", "XW", "2024-05-24", "NewJeans", status = "Official"),
+                MusicBrainzReleaseHit("22222222-2222-4222-8222-222222222222",
+                    "How Sweet (music video)", "KR", "2024-05-24", "NewJeans",
+                    status = "Official"),
+            ))
+            assertEquals("How Sweet", index.cachedArtistGroups(artist).single().title)
+            assertEquals("How Sweet", db.catalogDao().searchKnownMusicBrainzGroups(
+                "How Sweet", 30,
+            ).single { it.musicBrainzId == group }.title)
+            // A later raw MB browse must not undo the edition-backed display label.
+            index.persistArtistGroups(artist, listOf(
+                MusicBrainzReleaseGroupHit(group, "How Sweet & Bubble Gum",
+                    "Single", "2024-05-24", "NewJeans"),
+            ))
+            assertEquals("How Sweet", index.cachedArtistGroups(artist).single().title)
+        } finally { db.close() }
+    }
+
 }
