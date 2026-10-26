@@ -81,7 +81,7 @@ internal class A0ObservedCandidateHandoff(
         val qualityMismatches:Int=0,
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
-    private val candidates=ArrayList<Choice>(48)
+    private val candidates=ArrayList<Choice>(256)
     private val canonicalManualTarget by lazy {
         // Badly formatted untrusted/search text must not crash the collector.
         // An invalid album claim loses confidence; it never grants one.
@@ -297,7 +297,7 @@ internal class A0ObservedCandidateHandoff(
                 perPeerDropped=(perPeerDropped+1).coerceAtMost(100000)
             }
             // Up to six apparent copies are useful as alternate peers;
-            // allowing 48 identical claims would hide other song versions.
+            // allowing dozens of identical claims would hide other song versions.
             // This is strictly claimed metadata equality, never a hash.
             val sameClaim=candidates.withIndex().filter {
                 it.value.preflight==preflight &&
@@ -312,7 +312,7 @@ internal class A0ObservedCandidateHandoff(
                 candidates.removeAt(sameClaim.last().index)
                 claimBudgetDropped=(claimBudgetDropped+1).coerceAtMost(100000)
             }
-            if(candidates.size>48) {
+            if(candidates.size>256) {
                 candidates.removeAt(candidates.lastIndex)
                 capDropped=(capDropped+1).coerceAtMost(100000)
             }
