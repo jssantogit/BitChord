@@ -440,7 +440,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val prioritized = visible.sortedByDescending { row ->
             row.subtitle?.contains(query, ignoreCase = true) == true
         }
-        val candidates = canonicalCoverLookupCandidates(prioritized, limit = 12)
+        // Balance visible release sleeves and song covers instead of allowing
+        // twenty matching recordings to starve all release/group artwork.
+        val candidates = (
+            canonicalCoverLookupCandidates(prioritized.filter {
+                it.kind == CanonicalSearchKind.RELEASE ||
+                    it.kind == CanonicalSearchKind.RELEASE_GROUP
+            }, limit = 6) +
+            canonicalCoverLookupCandidates(prioritized.filter {
+                it.kind == CanonicalSearchKind.RECORDING
+            }, limit = 6)
+        ).distinctBy { it.kind to it.musicBrainzId }
         // Independent Apple artwork is a visual fallback for the best exact
         // artist-name hit, not an identity link between Apple and MusicBrainz.
         val portrait = canonicalArtistArtworkCandidate(visible, query)
@@ -3332,6 +3342,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             subtitle = hit.artistDisplay,
                             hasCatalogedAsset = hit.musicBrainzId in catalogedAssetMbids,
                             artistScopeMbid = artistScopeMbid,
+                            coverReleaseMbid = hit.coverReleaseMbid,
                         ))
                     }
                 }
@@ -3522,6 +3533,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 hit.musicBrainzId, CanonicalSearchKind.RECORDING, hit.title,
                                 hit.artistDisplay, hasCatalogedAsset = hit.musicBrainzId in assetMbids,
                                 artistScopeMbid = cursor.artistScopeMbid,
+                                coverReleaseMbid = hit.coverReleaseMbid,
                             ))
                         }
                     }
