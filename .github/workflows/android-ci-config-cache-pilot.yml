@@ -1,0 +1,82 @@
+name: Android Configuration Cache Compatibility Pilot
+
+# Optional PR-only experiment. Does not replace protected Android checks,
+# persist configuration-cache state, write Gradle caches or upload artifacts.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/android-ci-config-cache-pilot.yml'
+      - 'tests/test_ci_configuration_cache_pilot.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-configcache-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'infra/android-ci-configcache-compat-v0'
+    name: Android CI pilot · configuration cache (non-required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle without writable shared cache
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      # Use non-secret placeholders: task configuration is serialized by Gradle.
+      # No CC files, logs, build scans or workspace are uploaded or cached.
+      - name: Write non-secret local.properties
+        run: |
+          printf '%s\n' 'LASTFM_API_KEY=ci-placeholder' 'LASTFM_SECRET=ci-placeholder' > local.properties
+
+      - name: Grant Gradle wrapper execute permission
+        run: chmod +x gradlew
+
+      - name: Verify strict pilot isolation contract
+        run: python3 -m unittest discover -s tests -p test_ci_configuration_cache_pilot.py -v
+
+      # The first Android build can create SDK/NDK directories after Gradle
+      # snapshots them. Settle the SDK/NDK with the *same full test suite*
+      # before taking the first configuration-cache snapshot.
+      - name: Prepare SDK/NDK and task outputs without configuration cache
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+
+      - name: Check strict configuration-cache storage and reuse on same runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Android SDK may create this directory after Gradle snapshots its absence.
+          # Prepare it before the first configuration-cache capture.
+          mkdir -p "$HOME/.config/.android/cache"
+          cold_start=$SECONDS
+          ./gradlew --build-cache --configuration-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest 2>&1 | tee "$RUNNER_TEMP/config-cache-cold.log"
+          cold_seconds=$((SECONDS - cold_start))
+          warm_start=$SECONDS
+          ./gradlew --build-cache --configuration-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest 2>&1 | tee "$RUNNER_TEMP/config-cache-warm.log"
+          warm_seconds=$((SECONDS - warm_start))
+          if ! grep -Fq 'Reusing configuration cache.' "$RUNNER_TEMP/config-cache-warm.log"; then
+            echo 'CONFIGURATION CACHE PILOT HALTED: warm invocation did not confirm reuse'
+            exit 1
+          fi
+          {
+            echo '### Gradle configuration-cache compatibility pilot (optional)'
+            echo "Cold invocation: ${cold_seconds}s"
+            echo "Same-runner warm invocation: ${warm_seconds}s"
+            echo 'Configuration cache: strict store and reuse succeeded.'
+            echo 'Both invocations used the full Android unit test target.'
+            echo 'These two runs are not a controlled cross-job speedup benchmark.'
+            echo 'Configuration cache was not uploaded, written to shared cache or persisted between jobs.'
+          } >> "$GITHUB_STEP_SUMMARY"
