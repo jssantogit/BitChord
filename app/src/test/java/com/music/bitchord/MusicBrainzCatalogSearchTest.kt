@@ -112,6 +112,50 @@ class MusicBrainzCatalogSearchTest {
         assertEquals("EP", groups.page.items.single().primaryType)
     }
 
+
+    @Test
+    fun artistScopedDiscoveryUsesValidatedMbidInsteadOfAmbiguousName() = runBlocking {
+        val artistMbid = "6b128dd7-e998-4edb-a4f5-400fef190445"
+        val requested = mutableListOf<Triple<String, String?, String?>>()
+        val transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String,
+                parameters: Map<String, String>,
+                userAgent: String,
+            ): String {
+                requested.add(Triple(path, parameters["query"], parameters["dismax"]))
+                return when (path) {
+                    "recording" -> """{"count":1,"offset":0,"recordings":[{"id":"e614e432-ca77-41c1-82c1-4e3a24ebbb0c","title":"Magnetic","artist-credit":[{"name":"ILLIT"}]}]}"""
+                    "release-group" -> """{"count":1,"offset":0,"release-groups":[{"id":"529f87a1-1081-48a4-8ee1-3c08de229858","title":"SUPER REAL ME","artist-credit":[{"name":"ILLIT"}]}]}"""
+                    "release" -> """{"count":1,"offset":0,"releases":[{"id":"11d18da1-1081-48a4-8ee1-3c08de229858","title":"SUPER REAL ME","artist-credit":[{"name":"ILLIT"}]}]}"""
+                    else -> error("Unexpected MusicBrainz endpoint")
+                }
+            }
+        }
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(transport = transport))
+        val songs = search.searchRecordingsForArtistMbid(artistMbid) as MusicBrainzCatalogSearchResult.Success
+        val groups = search.searchReleaseGroupsForArtistMbid(artistMbid) as MusicBrainzCatalogSearchResult.Success
+        val editions = search.searchReleasesForArtistMbid(artistMbid) as MusicBrainzCatalogSearchResult.Success
+        assertEquals("Magnetic", songs.page.items.single().title)
+        assertEquals("SUPER REAL ME", groups.page.items.single().title)
+        assertEquals("SUPER REAL ME", editions.page.items.single().title)
+        assertEquals(listOf("recording", "release-group", "release"), requested.map { it.first })
+        assertTrue(requested.all { it.second == "arid:$artistMbid" && it.third == "false" })
+    }
+
+    @Test
+    fun invalidArtistMbidCannotBecomeLuceneSyntaxOrSendNetwork() = runBlocking {
+        var calls = 0
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String {
+                calls++
+                return "{}"
+            }
+        }))
+        assertTrue(search.searchRecordingsForArtistMbid("a OR artist:*") is MusicBrainzCatalogSearchResult.Failure)
+        assertEquals(0, calls)
+    }
+
     @Test
     fun allDefaultMusicBrainzClientsUseOneProcessWideRateLimiter() {
         val first = MusicBrainzClient()
