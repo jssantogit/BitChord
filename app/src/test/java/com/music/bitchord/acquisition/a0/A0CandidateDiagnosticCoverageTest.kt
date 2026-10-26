@@ -91,6 +91,10 @@ class A0CandidateDiagnosticCoverageTest {
             traceIdFactory={ "issue-177-peer-timeout-storm" }
         )
         val trace=A0SmokeTrace.start(tracer,observedTransfer=true)
+        repeat(200) { trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECT_STARTED) }
+        repeat(140) { trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECTED) }
+        repeat(100) { trace.note(A0SmokeTrace.Stage.PIERCE_SENT) }
+        repeat(25) { trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_ACCEPTED) }
         repeat(300) { trace.note(A0SmokeTrace.Stage.INDIRECT_READ_TIMEOUT,
             com.music.bitchord.observability.TraceOutcome.DEGRADED,
             A0SmokeTrace.Reason.READ_TIMEOUT) }
@@ -103,7 +107,8 @@ class A0CandidateDiagnosticCoverageTest {
         trace.finish(com.music.bitchord.observability.TraceOutcome.DEGRADED)
         for(stage in listOf(
             "indirect_read_timeout", "indirect_connect_failed",
-            "indirect_reply_rejected")) {
+            "indirect_reply_rejected", "indirect_connect_started",
+            "indirect_connected", "pierce_sent", "indirect_reply_accepted")) {
             assertTrue(stage,points.count { it.stage==stage }<=2)
         }
         val end=points.single {
@@ -113,6 +118,10 @@ class A0CandidateDiagnosticCoverageTest {
         assertEquals("300",end.attributes["indirectReadTimeouts"])
         assertEquals("80",end.attributes["indirectConnectFailures"])
         assertEquals("40",end.attributes["indirectReplyFailures"])
+        assertEquals("200",end.attributes["indirectAttempts"])
+        assertEquals("140",end.attributes["indirectConnected"])
+        assertEquals("100",end.attributes["indirectPierceSent"])
+        assertEquals("25",end.attributes["indirectRepliesAccepted"])
         assertFalse(end.attributes.toString().contains("peerUsername"))
     }
 }
