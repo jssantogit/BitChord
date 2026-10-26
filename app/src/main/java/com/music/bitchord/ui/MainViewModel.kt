@@ -676,8 +676,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 throw cancelled
                             } catch (_: Exception) { /* Live results remain usable. */ }
                             result.value.items.map { hit ->
-                                CanonicalCatalogSearchRow(hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP,
-                                    hit.title, hit.artistDisplay ?: hit.primaryType)
+                                CanonicalCatalogSearchRow(
+                                    hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP,
+                                    hit.title, hit.artistDisplay ?: hit.primaryType,
+                                    releaseDate = hit.firstReleaseDate,
+                                    releaseKind = hit.primaryType,
+                                    secondaryTypes = hit.secondaryTypes,
+                                )
                             } to result.value.nextOffset
                         }
                         is MusicBrainzCatalogGraphResult.Failure -> null
@@ -697,7 +702,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             } catch (_: Exception) { /* No false offline claim; live list still usable. */ }
                             result.value.items.map { hit ->
                                 CanonicalCatalogSearchRow(hit.musicBrainzId, CanonicalSearchKind.RELEASE,
-                                    hit.title, listOfNotNull(hit.country, hit.releaseDate).joinToString(" · "))
+                                    hit.title, listOfNotNull(hit.country, hit.releaseDate).joinToString(" · "),
+                                    releaseDate = hit.releaseDate,
+                                    coverGroupMbid = hit.releaseGroupMbid,
+                                )
                             } to result.value.nextOffset
                         }
                         is MusicBrainzCatalogGraphResult.Failure -> null
@@ -716,6 +724,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         nextOffset = page.second,
                         summary = "${merged.size} of ${stillCurrent.totalCount ?: merged.size} catalog entries",
                     ))
+                    // Manual next-page clicks must refresh the same native
+                    // shelves as auto-pagination. Search-only rows aren't
+                    // enough for the Android artist DetailScreen.
+                    val nativeId = canonicalNativeBrowseId(entry)
+                    _detailStack.value = _detailStack.value.map { detail ->
+                        if (detail.browseId != nativeId) detail else detail.copy(
+                            sections = canonicalNativeSections(
+                                parentKind = entry.kind, rows = merged,
+                                heading = getApplication<Application>().getString(
+                                    if (entry.kind == CanonicalSearchKind.ARTIST)
+                                        R.string.shelf_new_albums_singles else R.string.albums),
+                                albumsHeading = getApplication<Application>().getString(R.string.albums),
+                                singlesHeading = getApplication<Application>().getString(
+                                    R.string.canonical_singles_eps),
+                            ),
+                        )
+                    }
+                    if (entry.kind == CanonicalSearchKind.ARTIST)
+                        enrichCanonicalNativeDetailCovers(entry)
                 }
             } finally {
                 _canonicalLoadingMore.value = false
@@ -1221,6 +1248,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _searchSource.value == SearchSource.CANONICAL &&
                 canonicalPath.lastOrNull() == entry
             ) {
+                _canonicalLoadingMore.value = true
+                try {
                 MusicBrainzArtistDiscographyPager.collect(
                     first, maxAdditionalPages = 4,
                     fetch = { offset ->
@@ -1287,6 +1316,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (_searchSource.value == SearchSource.CANONICAL &&
                     canonicalPath.lastOrNull() == entry
                 ) enrichCanonicalNativeDetailCovers(entry)
+                } finally {
+                    _canonicalLoadingMore.value = false
+                }
             }
         }
     }
