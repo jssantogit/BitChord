@@ -477,8 +477,13 @@ class A0ManualLoginActivity : Activity() {
                                             val observation=A0OneShotPublicSearchWire.readOneDirectPeerReply(
                                                 peer.getInputStream(),token
                                             ) { verifiedFrame, claimedPeer ->
+                                                // The outer wire reader checks protocol framing;
+                                                // the handoff also verifies token, identity and
+                                                // full search-response decoding. Only after both
+                                                // may this source receive a reliability credit.
+                                                if(handoff?.offerSearchResult(verifiedFrame,claimedPeer)==false)
+                                                    throw IOException("Invalid peer search response")
                                                 receivedValidP2pReply.set(true)
-                                                handoff?.offerSearchResult(verifiedFrame,claimedPeer)
                                                 peerReliability.observe(claimedPeer,
                                                     A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
                                                 discoveryProgress()
@@ -578,8 +583,9 @@ class A0ManualLoginActivity : Activity() {
                                                                 val observation=A0IndirectSearchWire.readIndirectReply(
                                                                     peer.getInputStream(),token,offer.username
                                                                 ) { frame, claimedPeer ->
+                                                                    if(handoff?.offerSearchResult(frame,claimedPeer)==false)
+                                                                        throw IOException("Invalid peer search response")
                                                                     receivedValidP2pReply.set(true)
-                                                                    handoff?.offerSearchResult(frame,claimedPeer)
                                                                     peerReliability.observe(claimedPeer,
                                                                         A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
                                                                     discoveryProgress()
