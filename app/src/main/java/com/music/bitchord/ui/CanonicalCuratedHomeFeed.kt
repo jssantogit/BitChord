@@ -66,6 +66,10 @@ internal fun canonicalNativeSections(
         else -> return emptyList()
     }
     val cards = rows.asSequence().filter { it.kind == kind }
+        .filter {
+            parentKind != CanonicalSearchKind.ARTIST ||
+                canonicalEditorialReleaseType(it) != null
+        }
         .distinctBy { it.kind to it.musicBrainzId }
         .map { row ->
             ShelfItem(
