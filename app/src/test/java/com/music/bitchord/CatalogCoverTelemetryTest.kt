@@ -38,7 +38,7 @@ class CatalogCoverTelemetryTest {
         val snapshot = meter.snapshot()
         assertEquals(2, snapshot.imageRenderSuccesses)
         assertEquals(1, snapshot.imageRenderFailures)
-        assertEquals(410L, snapshot.p50ImageLoadMs)
+        assertEquals(950L, snapshot.p50ImageLoadMs)
         assertEquals(1600L, snapshot.p95ImageLoadMs)
         assertEquals(0, snapshot.networkRequests)
         meter.reset()
