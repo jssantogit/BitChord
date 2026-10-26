@@ -99,4 +99,14 @@ class A0ObservedCandidateHandoffTest {
         assertFalse(report.toString().contains("somepeer"))
     }
 
+    @Test fun boundedLargeHiResFileRemainsAvailableForManualReview() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"ouruser",81,true)
+        val large=A0SoulseekSearchFile("Albums\\\\long-hires.flac",
+            96L*1024L*1024L,"flac",emptyMap())
+        handoff.offerParsed(A0SoulseekSearchResponse("somepeer",81,
+            listOf(large),emptyList(),true,1000,0),"somepeer")
+        assertEquals(1,handoff.choices().size)
+        assertEquals(0,handoff.screening().tooLarge)
+    }
+
 }
