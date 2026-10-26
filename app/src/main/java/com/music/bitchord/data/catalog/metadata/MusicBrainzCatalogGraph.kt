@@ -91,6 +91,9 @@ internal class MusicBrainzCatalogGraph(
                 primaryType = row.string("primary-type"),
                 firstReleaseDate = row.string("first-release-date"),
                 artistDisplay = row.artistDisplay(),
+                secondaryTypes = (row["secondary-types"] as? JsonArray)
+                    ?.mapNotNull { runCatching { it.jsonPrimitive.contentOrNull }.getOrNull() }
+                    ?.filter(String::isNotBlank)?.joinToString("|")?.ifBlank { null },
             )
         }
 
