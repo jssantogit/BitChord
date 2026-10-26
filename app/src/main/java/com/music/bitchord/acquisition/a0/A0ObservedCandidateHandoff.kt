@@ -428,6 +428,24 @@ internal class A0ObservedCandidateHandoff(
     fun manualSuggestionIndex():Int? =
         if(albumOrQualitySelected) null else claimPreview().preferredIndex
 
+    /**
+     * A good codec claim alone must not suppress the one bounded title-only
+     * recovery query. Only primary-list offers that actually match the
+     * requested artist/title count as usable search coverage. This is still
+     * manual discovery, not a transfer/auto-selection decision.
+     */
+    @Synchronized
+    fun hasRelevantCandidateForSearchRecovery():Boolean {
+        if(cancelled||spent) return false
+        return A0ManualCandidatePolicy.primaryIndices(
+            candidates,candidates.indices.toList()
+        ).any { index ->
+            val choice=candidates[index]
+            choice.matchScore>=65 &&
+                choice.matchSignal==A0CandidateRank.Match.ALL_TERMS
+        }
+    }
+
     @Synchronized
     fun choices():List<Choice> = if(cancelled||spent)emptyList() else candidates.toList()
 
