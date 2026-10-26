@@ -175,7 +175,7 @@ internal class A0ObservedCandidateHandoff(
         if(cancelled||spent||readersStopped||result.token!=searchToken ||
             result.peerUsername!=claimedPeerUsername) return false
         try { A0PeerRendezvousWire.getPeerAddress(result.peerUsername) }
-        catch (_:IllegalArgumentException) { return }
+        catch (_:IllegalArgumentException) { return false }
         replies=(replies+1).coerceAtMost(100000)
         publicSeen=(publicSeen+result.files.size).coerceAtMost(100000)
         lockedSeen=(lockedSeen+result.lockedFiles.size).coerceAtMost(100000)
