@@ -67,11 +67,11 @@ internal fun verifiedFrontCacheType(type: String): String =
     when (type) {
         "release" -> "release:front-v2"
         // A generic group fallback has no Official-edition provenance and
-        // must NEVER poison the verified artist shelf's v3 namespace.
+        // must NEVER poison the verified artist shelf's v4 namespace.
         "release-group" -> "release-group:front-v2"
         // Only the MainViewModel path proving an exact-title Official Release
-        // inside this group's MBID can write this positive v3 evidence.
-        "verified-artist-group" -> "release-group:front-v3"
+        // inside this group's MBID can write this positive v4 evidence.
+        "verified-artist-group" -> "release-group:front-v4"
         else -> error("Unsupported cover cache entity type")
     }
 
@@ -157,7 +157,7 @@ internal class CoverArtArchive(
     }
 
     /**
-     * Cached v3 group artwork has already been sourced from an Official
+     * Cached v4 group artwork has already been sourced from an Official
      * exact-title edition. Never make an unverified group CAA request here.
      */
     suspend fun cachedVerifiedGroupCover(
@@ -278,7 +278,21 @@ internal class CoverArtArchive(
                         (labels.isEmpty() || "front" in labels) &&
                             "poster" !in labels && "track" !in labels
                     }
-                val front = frontImages.firstNotNullOfOrNull { entry ->
+                // On ambiguous archives the first `front=true` entry may
+                // be an unreviewed video still. Prefer explicitly approved
+                // Front-labelled art before falling back to untyped entries.
+                val rankedFrontImages = frontImages.sortedWith(
+                    compareByDescending<JsonObject> {
+                        it["approved"]?.jsonPrimitive?.booleanOrNull == true
+                    }.thenByDescending { candidate ->
+                        (candidate["types"] as? JsonArray)?.any { type ->
+                            runCatching {
+                                type.jsonPrimitive.contentOrNull.equals("Front", ignoreCase = true)
+                            }.getOrDefault(false)
+                        } == true
+                    },
+                )
+                val front = rankedFrontImages.firstNotNullOfOrNull { entry ->
                     val thumbs = entry["thumbnails"] as? JsonObject
                     fun thumb(key: String): String? =
                         thumbs?.get(key)?.jsonPrimitive?.contentOrNull?.let(::trustedImageUrl)
