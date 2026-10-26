@@ -165,6 +165,8 @@ internal class CoverArtArchive(
         val cached = try { store.read("release-group", groupMbid.lowercase(Locale.ROOT)) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { null } ?: return null
+        val age = nowEpochMs() - cached.fetchedAtEpochMs
+        if (age < 0 || age >= POSITIVE_TTL_MS) return null
         val url = if (size == CoverArtSize.THUMBNAIL) {
             cached.thumbnailUri ?: cached.artworkUri
         } else cached.artworkUri
