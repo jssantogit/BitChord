@@ -251,7 +251,7 @@ class CanonicalNativeNavigationTest {
             status = "Official", hasFrontCover = false,
         )
         val official = noCover.copy(musicBrainzId = "other-official",
-            title = "Get Up (Bluebook ver.)", hasFrontCover = true)
+            title = "NewJeans 2nd EP Get Up", hasFrontCover = true)
         assertEquals(listOf("other-official"),
             com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
                 listOf(noCover, official), "Get Up",
