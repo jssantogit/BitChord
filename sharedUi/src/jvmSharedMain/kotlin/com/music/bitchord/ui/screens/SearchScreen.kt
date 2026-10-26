@@ -329,7 +329,7 @@ fun SearchScreen(
         ) {
             when {
                 searchingCanonical -> canonicalMusicBrainzResults(
-                    canonicalResults, canonicalDetail, filter, onCanonicalOpen, onCanonicalBack,
+                    query, canonicalResults, canonicalDetail, filter, onCanonicalOpen, onCanonicalBack,
                     onCanonicalLoadMore, canonicalLoadingMore,
                     onCanonicalSearchLoadMore, canonicalSearchHasMore,
                     canonicalSearchLoadingMore,
@@ -517,6 +517,7 @@ fun SearchScreen(
  * until canonical availability resolution is wired for each Recording MBID.
  */
 private fun LazyListScope.canonicalMusicBrainzResults(
+    query: String,
     results: UiState<List<CanonicalCatalogSearchRow>>?,
     detail: UiState<CanonicalCatalogDetailPage>?,
     filter: SearchFilter,
@@ -557,7 +558,7 @@ private fun LazyListScope.canonicalMusicBrainzResults(
         is UiState.Error -> UiState.Error(detail.message)
         UiState.Loading -> UiState.Loading
         null -> when (results) {
-            is UiState.Success -> UiState.Success(canonicalRowsForFilter(results.data, filter))
+            is UiState.Success -> UiState.Success(canonicalRowsForQuery(results.data, query, filter))
             else -> results
         }
     }
@@ -582,18 +583,8 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                     CanonicalSearchKind.RELEASE -> stringResource(Res.string.canonical_release_kind)
                     CanonicalSearchKind.ARTIST -> stringResource(Res.string.canonical_artist_kind)
                 }
-                val availability = if (row.kind == CanonicalSearchKind.RECORDING) {
-                    stringResource(
-                        if (row.hasCatalogedAsset) Res.string.canonical_known_asset
-                        else Res.string.canonical_metadata_only,
-                    )
-                } else null
                 val nativeItem = canonicalRowAsBrowseItem(row).copy(
-                    subtitle = listOfNotNull(
-                        kind,
-                        row.subtitle?.takeIf(String::isNotBlank),
-                        availability,
-                    ).joinToString(" · "),
+                    subtitle = canonicalDisplaySubtitle(row, kind),
                 )
                 // Reuse the same native 52dp artwork, typography and artist/album
                 // rows as the established Search interface. MusicBrainz remains
@@ -606,19 +597,6 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                         else -> null
                     },
                 )
-                if (row.kind == CanonicalSearchKind.RECORDING && row.hasCatalogedAsset) {
-                    Row(
-                        modifier = Modifier.padding(start = PAGE_GUTTER + 66.dp, bottom = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        OutlinedButton(onClick = { onPlay(row.musicBrainzId) }) {
-                            Text(stringResource(Res.string.play))
-                        }
-                        OutlinedButton(onClick = { onAddToQueue(row.musicBrainzId) }) {
-                            Text(stringResource(Res.string.smart_collection_batch_queue))
-                        }
-                    }
-                }
                 if (index < rows.data.lastIndex) {
                     HorizontalDivider(
                         modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
@@ -675,6 +653,76 @@ fun canonicalRowsForFilter(
         SearchFilter.VIDEOS, SearchFilter.PLAYLISTS -> false
     }
 }
+
+/**
+ * Search relevance is a presentation policy, not an identity migration.
+ * When an exact artist match exists, the General page leads with that artist
+ * and with works actually credited to that artist, rather than unrelated
+ * recordings containing the same word in their titles. Other MBIDs remain
+ * distinct; no artist is merged or rewritten by name.
+ */
+fun canonicalRowsForQuery(
+    rows: List<CanonicalCatalogSearchRow>,
+    query: String,
+    filter: SearchFilter,
+): List<CanonicalCatalogSearchRow> {
+    val normalized = query.trim().replace(Regex("\\s+"), " ")
+    val candidates = canonicalRowsForFilter(rows, filter)
+        .distinctBy { it.kind to it.musicBrainzId }
+    if (normalized.isBlank()) return candidates
+    val exactArtists = candidates.filter {
+        it.kind == CanonicalSearchKind.ARTIST &&
+            it.title.equals(normalized, ignoreCase = true)
+    }
+    val identityScoped = if (filter == SearchFilter.ALL && exactArtists.isNotEmpty()) {
+        candidates.filter { row ->
+            row.kind == CanonicalSearchKind.ARTIST ||
+                canonicalCreditsMentionArtist(row.subtitle, normalized)
+        }
+    } else candidates
+    return identityScoped.sortedWith(
+        compareBy<CanonicalCatalogSearchRow> { row ->
+            when {
+                row.kind == CanonicalSearchKind.ARTIST &&
+                    row.title.equals(normalized, ignoreCase = true) -> 0
+                row.title.equals(normalized, ignoreCase = true) -> 1
+                row.kind == CanonicalSearchKind.ARTIST -> 2
+                row.title.startsWith(normalized, ignoreCase = true) -> 3
+                canonicalCreditsMentionArtist(row.subtitle, normalized) -> 4
+                else -> 5
+            }
+        }.thenBy { row ->
+            when (row.kind) {
+                CanonicalSearchKind.ARTIST -> 0
+                CanonicalSearchKind.RELEASE_GROUP -> 1
+                CanonicalSearchKind.RELEASE -> 2
+                CanonicalSearchKind.RECORDING -> 3
+            }
+        },
+    )
+}
+
+/** Credited-name boundary check; a text match is never an MBID equivalence. */
+private fun canonicalCreditsMentionArtist(credit: String?, query: String): Boolean {
+    if (credit.isNullOrBlank()) return false
+    return credit.equals(query, ignoreCase = true) ||
+        credit.startsWith("$query ·", ignoreCase = true) ||
+        credit.startsWith("$query,", ignoreCase = true) ||
+        credit.startsWith("$query &", ignoreCase = true) ||
+        credit.startsWith("$query feat.", ignoreCase = true) ||
+        credit.contains(" · $query", ignoreCase = true) ||
+        credit.contains(", $query", ignoreCase = true) ||
+        credit.contains(" & $query", ignoreCase = true)
+}
+
+/** User-facing text only; never advertise DB availability or metadata plumbing. */
+fun canonicalDisplaySubtitle(row: CanonicalCatalogSearchRow, kindLabel: String): String =
+    when (row.kind) {
+        CanonicalSearchKind.RECORDING -> row.subtitle?.takeIf { it.isNotBlank() } ?: kindLabel
+        CanonicalSearchKind.ARTIST -> kindLabel
+        CanonicalSearchKind.RELEASE_GROUP, CanonicalSearchKind.RELEASE ->
+            row.releaseKind?.takeIf { it.isNotBlank() } ?: kindLabel
+    }
 
 /** A Server asset uses the same native search row as other browseable content. */
 fun canonicalServerRowAsBrowseItem(row: CanonicalServerSearchRow): BrowseItem = BrowseItem(
