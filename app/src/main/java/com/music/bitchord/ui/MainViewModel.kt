@@ -19,6 +19,7 @@ import com.music.bitchord.data.catalog.allowedCanonicalLyricsSources
 import com.music.bitchord.data.catalog.metadata.CoverArtArchive
 import com.music.bitchord.data.catalog.metadata.CoverArtSize
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCoverArtCacheEntry
+import com.music.bitchord.data.catalog.metadata.verifiedCaaFront500Url
 import com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage
@@ -528,6 +529,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             for (edition in vetted) {
+                // MusicBrainz explicitly confirms that this exact Official
+                // edition has a CAA Front: render a 500px thumbnail directly
+                // through Coil. This avoids waiting ~2.6s p50 for CAA JSON
+                // metadata before *starting* the actual image load.
+                // A Hero still resolves verified full-size metadata separately.
+                val quick = if (size == CoverArtSize.THUMBNAIL) {
+                    verifiedCaaFront500Url(edition)
+                } else null
+                if (quick != null) {
+                    try {
+                        RoomMusicBrainzCoverArtStore(
+                            CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao(),
+                        ).write(MusicBrainzCoverArtCacheEntry(
+                            "release-group", row.musicBrainzId, null,
+                            System.currentTimeMillis(), quick,
+                        ))
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { /* Still show trusted exact edition URL. */ }
+                    return quick
+                }
                 // No group-front API shortcut: it may point to a video or an
                 // alternate artwork edition even under the correct group MBID.
                 val hero = coverArtArchive.findCover(
