@@ -147,4 +147,27 @@ class CanonicalNativeNavigationTest {
         assertEquals(160_000L, track.durationMs)
     }
 
+    @Test fun officialSecondaryTypesKeepTheirFormatAndDescribeRemixAlbumWithoutInventingSingles() {
+        val remix = group.copy(musicBrainzId = "njwmx", title = "NJWMX",
+            releaseKind = "Album", secondaryTypes = "Remix|Compilation")
+        val unknown = group.copy(musicBrainzId = "ambiguous", title = "Right Now",
+            releaseKind = "Other", secondaryTypes = "Soundtrack")
+        val sections = canonicalNativeSections(
+            CanonicalSearchKind.ARTIST, listOf(remix, unknown), "Lançamentos",
+            albumsHeading = "Álbuns", singlesHeading = "Singles e EPs",
+        )
+        assertEquals(listOf("Álbuns"), sections.map { it.title })
+        assertEquals("Album · Remix · Compilation", sections.single().items.single().subtitle)
+    }
+
+    @Test fun unverifiedEditionsCannotReplaceAnOfficialEditionOrSupplyAnOfficialTracklist() {
+        val verified = MusicBrainzReleaseHit("official", "Get Up", "XW",
+            "2023-07-21", "NewJeans", status = "Official")
+        val bootleg = verified.copy(musicBrainzId = "bootleg", status = "Bootleg")
+        val promo = verified.copy(musicBrainzId = "promo", status = "Promotion")
+        assertEquals(listOf("official"), canonicalPreferredEditions(
+            listOf(bootleg, promo, verified), "Get Up").map { it.musicBrainzId })
+        assertTrue(canonicalPreferredEditions(listOf(bootleg, promo), "Get Up").isEmpty())
+    }
+
 }
