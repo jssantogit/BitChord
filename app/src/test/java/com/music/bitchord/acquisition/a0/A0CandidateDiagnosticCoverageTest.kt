@@ -83,4 +83,36 @@ class A0CandidateDiagnosticCoverageTest {
         assertFalse(complete.attributes.toString().contains("peerUsername"))
     }
 
+
+    @Test fun hundredsOfPeerFailuresKeepSummaryWithoutFloodingTraces() {
+        val points=mutableListOf<StructuredTracePoint>()
+        val tracer=StructuredTracer(
+            sink=StructuredTraceSink { points.add(it) },
+            traceIdFactory={ "issue-177-peer-timeout-storm" }
+        )
+        val trace=A0SmokeTrace.start(tracer,observedTransfer=true)
+        repeat(300) { trace.note(A0SmokeTrace.Stage.INDIRECT_READ_TIMEOUT,
+            com.music.bitchord.observability.TraceOutcome.DEGRADED,
+            A0SmokeTrace.Reason.READ_TIMEOUT) }
+        repeat(80) { trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECT_FAILED,
+            com.music.bitchord.observability.TraceOutcome.DEGRADED,
+            A0SmokeTrace.Reason.CONNECT_FAILED) }
+        repeat(40) { trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_REJECTED,
+            com.music.bitchord.observability.TraceOutcome.DEGRADED,
+            A0SmokeTrace.Reason.PEER_IO_FAILURE) }
+        trace.finish(com.music.bitchord.observability.TraceOutcome.DEGRADED)
+        for(stage in listOf(
+            "indirect_read_timeout", "indirect_connect_failed",
+            "indirect_reply_rejected")) {
+            assertTrue(stage,points.count { it.stage==stage }<=2)
+        }
+        val end=points.single {
+            it.kind==com.music.bitchord.observability.TracePointKind.TRACE_END &&
+                it.operation=="a0_soulseek_one_shot"
+        }
+        assertEquals("300",end.attributes["indirectReadTimeouts"])
+        assertEquals("80",end.attributes["indirectConnectFailures"])
+        assertEquals("40",end.attributes["indirectReplyFailures"])
+        assertFalse(end.attributes.toString().contains("peerUsername"))
+    }
 }
