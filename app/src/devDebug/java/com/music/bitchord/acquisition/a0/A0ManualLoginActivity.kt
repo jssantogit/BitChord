@@ -91,7 +91,7 @@ class A0ManualLoginActivity : Activity() {
                 "O protocolo Soulseek envia a senha por TCP SEM TLS. " +
                 "Não reutilize senhas de outros serviços.")
         if (!fromSongDownload) text("A pesquisa digitável não baixa arquivos. No teste separado de transporte, " +
-             "você escolhe manualmente um arquivo público anunciado (até 64 MiB) " +
+             "você escolhe manualmente um arquivo público anunciado (até 256 MiB) " +
              "para o qual tenha autorização. Os bytes ficam só temporariamente: " +
              "tamanho e SHA-256 observado são medidos, depois apagados. " +
              "O hash NÃO comprova autenticidade da fonte. Soulseek usa TCP sem TLS. " +
@@ -155,7 +155,7 @@ class A0ManualLoginActivity : Activity() {
         }
         page.addView(searchAction)
         val transferAction = Button(this).apply {
-            text = "Teste de transporte: escolher 1 arquivo (até 64 MiB)"
+            text = "Teste de transporte: escolher 1 arquivo (até 256 MiB)"
         }
         page.addView(transferAction)
         val saveConsent=CheckBox(this).apply {
@@ -934,7 +934,7 @@ class A0ManualLoginActivity : Activity() {
                                                     }.toTypedArray()
                                                     AlertDialog.Builder(this@A0ManualLoginActivity)
                                                         .setTitle("Candidatos (" + visible.size +
-                                                            "/" + selectableIndices.size + ", até 64 MiB)" +
+                                                            "/" + selectableIndices.size + ", até 256 MiB)" +
                                                             (if(inspectOthers) " · fora do perfil" else " · ${preset.label}"))
                                                         .setItems(titles) { _, index ->
                                                             choiceQueue.offer(visible[index])
