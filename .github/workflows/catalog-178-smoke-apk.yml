@@ -107,9 +107,9 @@ jobs:
       - name: Record APK checksum and exact commit
         run: |
           printf 'commit=%s\n' "$(git rev-parse HEAD)" > catalog-178-build.txt
-          printf 'candidate=178-artist-albums-singles-ep-shelves-and-front-cover-cache-refresh\n' >> catalog-178-build.txt
+          printf 'candidate=178-fuller-artist-discography-shelves-and-safe-artwork-cache\n' >> catalog-178-build.txt
           printf 'previous_physical_apk=4a54e503b0b2df3f7d3619c6223aef83ba5a89fb\n' >> catalog-178-build.txt
-          printf 'validation_focus=newjeans-albums-vs-singles-ep-order-cache-invalidation-right-now-apple-comparison\n' >> catalog-178-build.txt
+          printf 'validation_focus=newjeans-75-groups-split-artist-shelves-stale-artwork-cache-illit-mamihlapinatapai\n' >> catalog-178-build.txt
           find app/build/outputs/apk/dev/debug -name '*.apk' -print -exec sha256sum '{}' \; >> catalog-178-build.txt
 
       - name: Upload smoke candidate
