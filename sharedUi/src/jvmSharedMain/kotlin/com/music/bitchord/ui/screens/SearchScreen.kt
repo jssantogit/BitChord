@@ -117,6 +117,8 @@ data class CanonicalCatalogSearchRow(
     val coverReleaseMbid: String? = null,
     /** UI decoration only: strong canonical MBID -> readable local MediaAsset. */
     val hasVerifiedLocalAsset: Boolean = false,
+    /** Release -> ReleaseGroup MBID advertised by MusicBrainz; cover fallback only. */
+    val coverGroupMbid: String? = null,
     /** Recording/release Track duration from MusicBrainz; never inferred from UI title. */
     val durationMs: Long? = null,
 )
