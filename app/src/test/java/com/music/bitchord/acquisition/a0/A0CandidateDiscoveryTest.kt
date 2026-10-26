@@ -428,4 +428,42 @@ class A0CandidateDiscoveryTest {
         assertEquals(A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED,
             selected.qualityEvidence.status)
     }
+
+    @Test fun searchRecoveryIgnoresGoodBitrateWhenAlbumOrFormatIsIncompatible() {
+        val handoff=A0ObservedCandidateHandoff(
+            Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",saveFormatsOnly=true,
+            requestedAlbum="SUPER REAL ME",expectedDurationSeconds=161,
+            qualityProfile=A0SoulseekQualityProfiles.snapshot(
+                com.music.bitchord.data.settings.DownloadQualityProfile.HIGH_QUALITY)
+        )
+        fun file(folder:String,ext:String,bitrate:Int?):A0SoulseekSearchFile =
+            A0SoulseekSearchFile("Music\\$folder\\ILLIT - Magnetic.$ext",
+                if(ext=="flac") 25_000_000 else 6_400_000,ext,
+                if(ext=="flac")mapOf(1 to 161,4 to 44_100,5 to 16)
+                    else mapOf(0 to checkNotNull(bitrate),1 to 161))
+        handoff.offerParsed(reply("wrong-album",listOf(
+            file("Unrelated Edition","mp3",320))),"wrong-album")
+        handoff.offerParsed(reply("wrong-quality",listOf(
+            file("SUPER REAL ME","flac",null))),"wrong-quality")
+        assertFalse(handoff.hasRelevantCandidateForSearchRecovery())
+        handoff.offerParsed(reply("correct",listOf(
+            file("SUPER REAL ME","mp3",320))),"correct")
+        assertTrue(handoff.hasRelevantCandidateForSearchRecovery())
+        assertEquals(3,handoff.choices().size)
+    }
+
+    @Test fun searchRecoveryDoesNotTreatUnrelatedFilenameAsUsefulCoverage() {
+        val handoff=A0ObservedCandidateHandoff(
+            Socket(),"local",177,true,searchPhrase="ILLIT - Magnetic",
+            expectedDurationSeconds=161,
+            qualityProfile=A0SoulseekQualityProfiles.snapshot(
+                com.music.bitchord.data.settings.DownloadQualityProfile.HIGH_QUALITY)
+        )
+        handoff.offerParsed(reply("p",listOf(
+            A0SoulseekSearchFile("Music\\ILLIT - Another Track.mp3",
+                6_400_000L,"mp3",mapOf(0 to 320,1 to 161))
+        )),"p")
+        assertFalse(handoff.hasRelevantCandidateForSearchRecovery())
+    }
 }
