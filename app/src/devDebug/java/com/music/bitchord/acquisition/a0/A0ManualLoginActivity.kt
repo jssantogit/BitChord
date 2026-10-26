@@ -13,6 +13,9 @@ import com.music.bitchord.diagnostics.DiagnosticsShare
 import com.music.bitchord.observability.TraceOutcome
 import com.music.bitchord.download.A3AcquisitionLedger
 import com.music.bitchord.download.A3AndroidAcquisitionLedger
+import com.music.bitchord.download.SoulseekBatchPayload
+import com.music.bitchord.download.SoulseekBatchSession
+import android.widget.Toast
 import android.text.InputType
 import android.text.InputFilter
 import android.view.View
@@ -61,6 +64,19 @@ class A0ManualLoginActivity : Activity() {
         super.onCreate(savedInstanceState)
         // Launched by the in-app song Download action, not the old A0 tool entry.
         val fromSongDownload = intent.hasExtra("bitchord.soulseek.manual.query")
+        val hasBatch=intent.hasExtra("bitchord.soulseek.batch.queries")
+        val batchEntries=if(hasBatch)SoulseekBatchPayload.decode(
+            intent.getStringArrayListExtra("bitchord.soulseek.batch.queries"),
+            intent.getStringArrayListExtra("bitchord.soulseek.batch.albums"),
+            intent.getIntArrayExtra("bitchord.soulseek.batch.durations"),
+        )else null
+        if(hasBatch && batchEntries==null) {
+            Toast.makeText(this,"Lote inválido: nenhuma conexão iniciada.",
+                Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        val batch=batchEntries?.let(::SoulseekBatchSession)
         // The song search/candidates view has no visible credentials; allow
         // screenshots for QA. Legacy username/password tools stay protected.
         if (A0ScreenCapturePolicy.requiresSecureWindow(fromSongDownload)) {
@@ -173,6 +189,14 @@ class A0ManualLoginActivity : Activity() {
             "Depois do resultado, exporte os logs. Revise o relatório antes de compartilhar. " +
             "Não envie credenciais, capturas de rede ou logcat bruto.")
         val status = text("Nenhuma conexão iniciada.")
+        val batchStatus=if(batch!=null)text(
+            "Lote: faixa 1 de ${batch.entries.size} · 0 salvas · 0 puladas."
+        )else null
+        val nextTrack=if(batch!=null)Button(this).also {
+            it.text="Próxima faixa / Pular atual"
+            it.isEnabled=false
+            page.addView(it)
+        }else null
 
         val scroll = ScrollView(this).apply { addView(page) }
         setContentView(scroll)
@@ -191,6 +215,11 @@ class A0ManualLoginActivity : Activity() {
         ) {
             require(!transferObserved || performSearch)
             require(!saveToDevice || transferObserved)
+            if(batch?.isComplete==true || (saveToDevice && batch?.currentSaved==true)) {
+                status.text="Esta faixa já foi salva. Avance para a próxima do lote."
+                return
+            }
+            nextTrack?.isEnabled=false
             if(saveToDevice && !A5ManualSaveGate.canSave(transferObserved,saveConsent.isChecked)) {
                 status.text="Confirme antes que tem autorização para armazenar o arquivo."
                 return
@@ -305,6 +334,7 @@ class A0ManualLoginActivity : Activity() {
                 var finalOutcome = TraceOutcome.FAILED
                 var finalReason: A0SmokeTrace.Reason? = null
                 var transferAttempted=false
+                var publishedForCurrent=false
                 var lastTransferPhase:A0ServerAssociatedTransfer.Phase?=null
                 var packet: ByteArray? = null
                 var result = "Falha ao iniciar a verificação."
@@ -1030,6 +1060,7 @@ class A0ManualLoginActivity : Activity() {
                                                         }
                                                     )
                                                     trace.note(A0SmokeTrace.Stage.LOCAL_SAVE_PUBLISHED)
+                                                    publishedForCurrent=true
                                                     result="MÚSICA LOCAL SALVA: ${saved.byteCount} bytes. " +
                                                         "Confira Biblioteca → No dispositivo. " +
                                                         "SHA-256 observado não comprova autenticidade."
@@ -1203,6 +1234,15 @@ class A0ManualLoginActivity : Activity() {
                     runOnUiThread {
                         if (!stopping && !isFinishing && !isDestroyed) {
                             status.text = result
+                            if(batch!=null) {
+                                if(publishedForCurrent) batch.markSaved()
+                                batchStatus?.text="Lote: faixa ${batch.index+1} de " +
+                                    "${batch.entries.size} · ${batch.succeeded} salvas · " +
+                                    "${batch.skipped} puladas."
+                                nextTrack?.text=if(batch.currentSaved)
+                                    "Próxima faixa" else "Pular faixa (sem salvar)"
+                                nextTrack?.isEnabled=true
+                            }
                             // Legacy probe exposes credential fields again:
                             // restore protection before enabling/editing them.
                             if (!fromSongDownload) {
@@ -1259,6 +1299,7 @@ class A0ManualLoginActivity : Activity() {
             ).forEach { it.visibility = View.GONE }
 
             fun confirmSearch() {
+                if(batch?.isComplete==true || batch?.currentSaved==true)return
                 val saved = accountVault.read()
                 if (saved == null) {
                     status.text = "Configure sua conta em Configurações → Downloads → Soulseek."
@@ -1313,6 +1354,31 @@ class A0ManualLoginActivity : Activity() {
                         }
                         .setNegativeButton("Cancelar",null)
                         .show()
+                }
+            }
+            nextTrack?.setOnClickListener {
+                if(action.isEnabled && batch!=null) {
+                    val hasNext=batch.advance()
+                    if(!hasNext) {
+                        batchStatus?.text="Lote concluído: ${batch.succeeded} salvas, " +
+                            "${batch.skipped} puladas. Nenhum download adicional."
+                        nextTrack.isEnabled=false
+                        retry.isEnabled=false
+                        alternative.isEnabled=false
+                        status.text="Lote finalizado. Confira Biblioteca → Música local."
+                    }else {
+                        val entry=checkNotNull(batch.current)
+                        searchInput.setText(entry.query)
+                        albumInput.setText(entry.album.orEmpty())
+                        intent.putExtra("bitchord.soulseek.manual.duration_seconds",
+                            entry.durationSeconds ?: 0)
+                        batchStatus?.text="Lote: faixa ${batch.index+1} de " +
+                            "${batch.entries.size} · ${batch.succeeded} salvas · " +
+                            "${batch.skipped} puladas."
+                        nextTrack.isEnabled=false
+                        status.text="Faixa ${batch.index+1} preparada. Selecione um candidato."
+                        confirmSearch()
+                    }
                 }
             }
             confirmSearch()
