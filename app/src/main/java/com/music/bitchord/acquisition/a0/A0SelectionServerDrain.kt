@@ -1,7 +1,6 @@
 package com.music.bitchord.acquisition.a0
 
 import java.io.IOException
-import java.io.InputStream
 import java.net.Socket
 import java.net.SocketTimeoutException
 import java.util.concurrent.BlockingQueue
@@ -19,7 +18,6 @@ import java.util.concurrent.TimeUnit
 internal object A0SelectionServerDrain {
     data class Selection(val index:Int?,val discardedFrames:Int)
 
-    private const val MAX_FRAME_BYTES=1_048_576
     private const val MAX_TOTAL_BYTES=64L*1024*1024
     private const val MAX_FRAMES=65_536
 
@@ -33,44 +31,47 @@ internal object A0SelectionServerDrain {
         require(timeoutMillis in 1..35_000)
         val deadline=System.nanoTime()+TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
         val originalTimeout=server.soTimeout
-        val progress=A0FrameReadProgress(server.getInputStream())
+        val progress=A0ProgressiveServerFrameReader(server.getInputStream())
         var frames=0
         var bytes=0L
         try {
             while(!isCancelled()) {
                 val choice=choices.poll()
-                if(choice!=null)return Selection(choice,frames)
+                // Selection may arrive while we are partway through a TCP
+                // frame. Never transfer the socket to P/F until alignment.
+                if(choice!=null && progress.atFrameBoundary)
+                    return Selection(choice,frames)
                 val timeLeft=deadline-System.nanoTime()
-                if(timeLeft<=0L)break
+                if(timeLeft<=0L) {
+                    if(!progress.atFrameBoundary)
+                        throw IOException("A0 incomplete server frame during selection")
+                    break
+                }
                 // Use the existing 750ms frame timeout to avoid false partial
                 // failures on slow peers; no other thread reads this socket.
                 server.soTimeout=minOf(
                     750L,TimeUnit.NANOSECONDS.toMillis(timeLeft).coerceAtLeast(1L)
                 ).toInt()
-                progress.nextFrame()
                 try {
-                    val length=read32(progress)
-                    if(length !in 4..MAX_FRAME_BYTES) {
-                        throw IOException("A0 invalid server frame during selection")
-                    }
-                    val code=read32(progress)
+                    val frame=progress.readRawFrame()
+                    val code=(frame[4].toInt() and 255) or
+                        ((frame[5].toInt() and 255) shl 8) or
+                        ((frame[6].toInt() and 255) shl 16) or
+                        (frame[7].toInt() shl 24)
                     if(code==41)throw A0PeerRendezvousWire.SessionReplaced()
-                    skipExactly(progress,length-4)
                     frames++
-                    bytes+=length.toLong()+4
+                    bytes+=frame.size
                     if(frames>MAX_FRAMES || bytes>MAX_TOTAL_BYTES) {
                         throw IOException("A0 manual selection backlog safety budget exhausted")
                     }
-                    progress.nextFrame()
                     onFrameDrained()
-                }catch(error:SocketTimeoutException) {
-                    // A timeout in the middle of a server frame would leave
-                    // P/F parsing misaligned. Do not reuse that socket.
-                    if(!progress.atFrameBoundary) {
-                        throw IOException("A0 incomplete server frame during selection",error)
-                    }
+                }catch(_:SocketTimeoutException) {
+                    // Resume the same frame on the next bounded read.
+                    // Deadline and cancellation still fail closed if partial.
                 }
             }
+            if(!progress.atFrameBoundary)
+                throw IOException("A0 incomplete server frame during selection")
             return Selection(null,frames)
         } finally {
             // The caller remains the authenticated socket owner and starts
@@ -79,31 +80,4 @@ internal object A0SelectionServerDrain {
         }
     }
 
-    private fun read32(input:InputStream):Int {
-        val bytes=ByteArray(4)
-        readExactly(input,bytes,4)
-        return (bytes[0].toInt() and 255) or
-            ((bytes[1].toInt() and 255) shl 8) or
-            ((bytes[2].toInt() and 255) shl 16) or
-            ((bytes[3].toInt() and 255) shl 24)
-    }
-
-    private fun skipExactly(input:InputStream,count:Int) {
-        val buffer=ByteArray(4096)
-        var left=count
-        while(left>0) {
-            val n=input.read(buffer,0,minOf(left,buffer.size))
-            if(n<1)throw IOException("A0 incomplete server frame during selection")
-            left-=n
-        }
-    }
-
-    private fun readExactly(input:InputStream,bytes:ByteArray,count:Int) {
-        var read=0
-        while(read<count) {
-            val n=input.read(bytes,read,count-read)
-            if(n<1)throw IOException("A0 incomplete server frame during selection")
-            read+=n
-        }
-    }
 }
