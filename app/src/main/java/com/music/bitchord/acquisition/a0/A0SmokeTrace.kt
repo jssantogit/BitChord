@@ -57,6 +57,11 @@ internal class A0SmokeTrace private constructor(
     private val ignoredServerFrames = AtomicInteger(0)
     private val rejectedServerOffers = AtomicInteger(0)
     private val receivedServerOffers = AtomicInteger(0)
+    // Large peer-failure storms must not displace the search summary, later
+    // transfer evidence or root-cause counters in the 64-point trace budget.
+    private val indirectReadTimeouts = AtomicInteger(0)
+    private val indirectConnectFailures = AtomicInteger(0)
+    private val indirectReplyFailures = AtomicInteger(0)
     @Volatile private var continuation: StructuredTrace? = null
 
     /** Protect local-save evidence when noisy search uses all 64 trace points. */
@@ -91,6 +96,15 @@ internal class A0SmokeTrace private constructor(
         if (complete.get()) return
         if (stage == Stage.SOCKETS_CLOSED) socketsClosing.set(true)
         if (stage == Stage.SERVER_READ_FAILURE && socketsClosing.get()) return
+        // Count every P failure; emit at most two individual examples of each
+        // typed category. Never include an untrusted peer or exception body.
+        val peerOccurrences=when(stage) {
+            Stage.INDIRECT_READ_TIMEOUT -> indirectReadTimeouts.incrementAndGet()
+            Stage.INDIRECT_CONNECT_FAILED -> indirectConnectFailures.incrementAndGet()
+            Stage.INDIRECT_REPLY_REJECTED -> indirectReplyFailures.incrementAndGet()
+            else -> 0
+        }
+        if(peerOccurrences>2) return
         val attributes = linkedMapOf("elapsedMs" to elapsedMillis().toString())
         if (reason != null) attributes["reasonCode"] = reason.name.lowercase(Locale.ROOT)
         eventTrace(stage).event(
@@ -315,7 +329,10 @@ internal class A0SmokeTrace private constructor(
             "elapsedMs" to elapsedMillis().toString(),
             "ignoredServerFrames" to ignoredServerFrames.get().coerceAtMost(100000).toString(),
             "rejectedServerOffers" to rejectedServerOffers.get().coerceAtMost(100000).toString(),
-            "receivedServerOffers" to receivedServerOffers.get().coerceAtMost(100000).toString()
+            "receivedServerOffers" to receivedServerOffers.get().coerceAtMost(100000).toString(),
+            "indirectReadTimeouts" to indirectReadTimeouts.get().coerceAtMost(100000).toString(),
+            "indirectConnectFailures" to indirectConnectFailures.get().coerceAtMost(100000).toString(),
+            "indirectReplyFailures" to indirectReplyFailures.get().coerceAtMost(100000).toString()
         )
         if (reason != null) attributes["reasonCode"] = reason.name.lowercase(Locale.ROOT)
         continuation?.complete(outcome,attributes)
