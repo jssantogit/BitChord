@@ -64,4 +64,24 @@ class SoulseekBatchPlanTest {
             SoulseekBatchPlan.identityQuery(null,"Magnetic 320"))
     }
 
+
+    @Test fun batchExpectedDurationAlwaysComesFromCurrentCanonicalSlot() {
+        val entries=listOf(
+            SoulseekBatchPlan.Entry("1","ILLIT - Intro","BREAK EVEN",126),
+            SoulseekBatchPlan.Entry("2","ILLIT - More","BREAK EVEN",183),
+            SoulseekBatchPlan.Entry("3","ILLIT - Another","BREAK EVEN",null)
+        )
+        val session=SoulseekBatchSession(entries)
+        assertEquals(126,SoulseekBatchPlan.expectedDuration(session.current,126))
+        assertTrue(session.advance())
+        // A stale single-song Intent from the first track cannot override
+        // the second track's true duration or poison its preflight.
+        assertEquals(183,SoulseekBatchPlan.expectedDuration(session.current,126))
+        assertTrue(session.advance())
+        // Missing canonical duration must abstain, not inherit a prior slot.
+        assertNull(SoulseekBatchPlan.expectedDuration(session.current,126))
+        assertEquals(199,SoulseekBatchPlan.expectedDuration(null,199))
+        assertNull(SoulseekBatchPlan.expectedDuration(null,0))
+        assertNull(SoulseekBatchPlan.expectedDuration(null,9000))
+    }
 }
