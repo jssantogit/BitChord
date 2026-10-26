@@ -31,7 +31,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MusicBrainzCoverArtCacheEntity::class,
         CatalogReleaseTrackSourceEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
@@ -355,6 +355,13 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
             }
         }
 
+        /** Verified thumb and hero links belong to the same CAA Front. */
+        internal val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `catalog_cover_art_cache` ADD COLUMN `thumbnailUri` TEXT")
+            }
+        }
+
         @Volatile
         private var instance: CanonicalCatalogDatabase? = null
 
@@ -367,7 +374,7 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
-                        MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
+                        MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
                     )
                     .build()
                     .also { instance = it }
