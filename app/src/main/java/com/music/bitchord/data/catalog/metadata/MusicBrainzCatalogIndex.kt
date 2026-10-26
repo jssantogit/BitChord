@@ -166,7 +166,9 @@ internal class MusicBrainzCatalogIndex(
                 ?: return@withTransaction
             check(dao.artistById(artistId) != null) { "Orphaned MusicBrainz artist claim" }
             persistReleaseGroups(hits).values.forEach { groupId ->
-                dao.upsertMusicBrainzArtistGroup(CatalogMusicBrainzArtistGroupEntity(artistId, groupId))
+                dao.upsertMusicBrainzArtistGroup(CatalogMusicBrainzArtistGroupEntity(
+                    artistId, groupId, publicationEvidence = "website-default-v1",
+                ))
             }
         }
     }
