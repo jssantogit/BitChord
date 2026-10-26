@@ -106,12 +106,21 @@ internal fun canonicalCoverLookupTarget(
     CanonicalSearchKind.ARTIST -> null
 }
 
+/**
+ * Old builds persisted 250px CAA URLs. They are safe identity claims, but
+ * are not acceptable quality for a hero or a full-width Home release card.
+ * Never upgrade a generic image URL by guessing a different provider's asset.
+ */
+internal fun canonicalNeedsCoverRefresh(artwork: String?): Boolean =
+    artwork.isNullOrBlank() ||
+        (artwork.contains("coverartarchive.org/") && artwork.endsWith("-250.jpg"))
+
 /** Bound network enrichment to a small visible subset, with stable identities. */
 internal fun canonicalCoverLookupCandidates(
     rows: List<CanonicalCatalogSearchRow>,
     limit: Int,
 ): List<CanonicalCatalogSearchRow> = rows.asSequence()
-    .filter { it.artworkUri.isNullOrBlank() && canonicalCoverLookupTarget(it) != null }
+    .filter { canonicalNeedsCoverRefresh(it.artworkUri) && canonicalCoverLookupTarget(it) != null }
     .distinctBy { it.kind to it.musicBrainzId }
     .take(limit.coerceAtLeast(0))
     .toList()
