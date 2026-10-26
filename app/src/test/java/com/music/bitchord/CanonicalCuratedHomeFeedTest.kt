@@ -5,6 +5,7 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
 import com.music.bitchord.ui.canonicalCoverLookupTarget
 import com.music.bitchord.ui.canonicalCoverLookupCandidates
+import com.music.bitchord.ui.canonicalArtistArtworkCandidate
 import com.music.bitchord.ui.canonicalLocalPickCardId
 import com.music.bitchord.ui.canonicalRemotePickCardId
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
@@ -152,6 +153,22 @@ class CanonicalCuratedHomeFeedTest {
         assertEquals("Escolha a dedo", shelf.title)
         assertEquals(2, shelf.items.size)
         assertTrue(shelf.items.all { it.videoId == null && it.browseId!!.startsWith("local:pick:") })
+    }
+
+    @Test fun onlyOneExactArtistGetsDecorativeSearchPortrait() {
+        val first = release.copy(kind = CanonicalSearchKind.ARTIST,
+            musicBrainzId = "artist-main", title = "ILLIT", artworkUri = null)
+        val namesake = first.copy(musicBrainzId = "artist-homonym")
+        val unrelated = first.copy(musicBrainzId = "other", title = "ILLIT Remix")
+        assertEquals(first, canonicalArtistArtworkCandidate(
+            listOf(unrelated, first, namesake), "illit",
+        ))
+        assertEquals(null, canonicalArtistArtworkCandidate(
+            listOf(unrelated), "illit",
+        ))
+        assertEquals(null, canonicalArtistArtworkCandidate(
+            listOf(first.copy(artworkUri = "https://example.com/artist.jpg")), "illit",
+        ))
     }
 
     @Test fun artworkEnrichmentOnlyRequestsIdentitySafeReleaseOrGroupCovers() {
