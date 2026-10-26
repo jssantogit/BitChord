@@ -119,6 +119,32 @@ class A0SoulseekSearchResponseParserTest {
         assertTrue(parsed.hasFreeUploadSlot)
     }
 
+    @Test
+    fun retainsLargeButBoundedPeerLibraryReplyInsteadOfRejectingAllTracks() {
+        // Popular Soulseek peers announce hundreds or thousands of files in one
+        // message. Losing the entire frame also loses the user's MP3 320 copy.
+        val entry = fileField(
+            "BTS\\BE\\" + "Archive".repeat(37) + "\\08 - Dynamite.mp3",
+            8_000_000L, "mp3", mapOf(0 to 320, 1 to 199),
+        )
+        val count = 2_000
+        val payload = ByteArrayOutputStream().apply {
+            write(str("fixture-peer"))
+            write(i32(42))
+            write(i32(count))
+            repeat(count) { write(entry) }
+            write(1)
+            write(i32(128_000))
+            write(i32(0))
+        }.toByteArray()
+        assertTrue("Fixture must exceed old 512 KiB inflation budget", payload.size > 524_288)
+        val decoded = A0SoulseekSearchResponseParser.parse(compressedFrame(payload), 42)
+        assertEquals(count, decoded.files.size)
+        assertEquals(320, decoded.files.last().attributes[0])
+        assertEquals(199, decoded.files.last().attributes[1])
+        assertEquals(0, decoded.queueLength)
+    }
+
     private fun responseFrame(
         token: Int,
         file: ByteArray = fileField("fixture.wav", 4096, "wav", emptyMap()),
