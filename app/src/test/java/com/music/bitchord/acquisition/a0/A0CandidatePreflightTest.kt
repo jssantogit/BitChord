@@ -219,4 +219,20 @@ class A0CandidatePreflightTest {
         assertFalse(A0CandidateRank.Warning.VERSION_MISMATCH in rank.warnings)
     }
 
+
+    @Test fun compatibleAdtsAac256CanBeStrongOnPlausibleMetadataOnly() {
+        val assessed=inspect(name="ILLIT - Magnetic.aac",ext="aac",
+            bitrate=256,size=5_150_000L)
+        assertEquals(A0CandidatePreflight.Confidence.STRONG,assessed.confidence)
+        assertTrue(assessed.reasons.isEmpty())
+    }
+
+    @Test fun aacClaimTooLowOrImplausiblyHighRequiresManualReview() {
+        assertEquals(A0CandidatePreflight.Confidence.REVIEW,
+            inspect(name="ILLIT - Magnetic.aac",ext="aac",
+                bitrate=128,size=2_576_000L).confidence)
+        assertEquals(A0CandidatePreflight.Confidence.REVIEW,
+            inspect(name="ILLIT - Magnetic.aac",ext="aac",
+                bitrate=768,size=15_456_000L).confidence)
+    }
 }
