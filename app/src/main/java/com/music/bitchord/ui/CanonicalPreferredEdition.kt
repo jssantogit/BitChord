@@ -31,7 +31,7 @@ internal fun canonicalArtworkEditionsForGroup(
                 edition.hasFrontCover != false &&
                 // Packaging/territorial “ver.” covers are edition-specific
                 // collectibles, not the unqualified sleeve of the work.
-                !Regex("""(?i)\\([^)]*\\b(?:ver\\.?|version|mix|edition|reissue|remaster)\\b[^)]*\\)""")
+                !Regex("""(?i)\([^)]*\b(?:ver\.?|version|mix|edition|reissue|remaster)\b[^)]*\)""")
                     .containsMatchIn(edition.title)
         }
         // Artwork choice is separate from tracklist edition preference:
