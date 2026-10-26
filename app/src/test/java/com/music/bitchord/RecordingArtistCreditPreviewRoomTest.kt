@@ -71,7 +71,7 @@ class RecordingArtistCreditPreviewRoomTest {
             assertEquals("asset", reopened.mediaAsset("local", "one")?.id)
             db.openHelper.readableDatabase.query("PRAGMA user_version").use { cur ->
                 assertTrue(cur.moveToFirst())
-                assertEquals(7, cur.getInt(0))
+                assertEquals(9, cur.getInt(0))
             }
         } finally {
             db.close()
