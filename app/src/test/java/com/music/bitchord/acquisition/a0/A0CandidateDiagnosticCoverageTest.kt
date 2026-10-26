@@ -45,7 +45,7 @@ class A0CandidateDiagnosticCoverageTest {
             responses=4,publicFiles=7,lockedFiles=0,tooLarge=0,
             unsupportedFormat=0,unsafePath=0,noSlot=0,accepted=3,
             albumMatches=1,albumUnknown=1,albumConflicts=1,
-            qualityMismatches=2,
+            qualityMismatches=2,manualPrimary=2,shadowStrong=1,
         )
         trace.canonicalCandidateScreening(report,"LOSSLESS")
         val event=points.single { it.stage=="canonical_candidate_screening" }
@@ -54,6 +54,8 @@ class A0CandidateDiagnosticCoverageTest {
         assertEquals("1",event.attributes["albumMatches"])
         assertEquals("2",event.attributes["qualityMismatches"])
         assertEquals("LOSSLESS",event.attributes["qualityPreset"])
+        assertEquals("2",event.attributes["manualPrimary"])
+        assertEquals("1",event.attributes["shadowStrong"])
         assertFalse(event.attributes.toString().contains("Greatest Hits"))
         assertFalse(event.attributes.toString().contains("soulseek_user"))
     }
