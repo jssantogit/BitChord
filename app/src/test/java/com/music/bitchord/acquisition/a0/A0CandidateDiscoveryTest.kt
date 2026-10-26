@@ -466,4 +466,30 @@ class A0CandidateDiscoveryTest {
         )),"p")
         assertFalse(handoff.hasRelevantCandidateForSearchRecovery())
     }
+
+    @Test fun releaseShadowKeepsTwentyPeerTracksWithoutCrowdingManualSelector() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="Artist - Song 1",collectReleaseShadow=true)
+        val files=(1..20).map { n -> A0SoulseekSearchFile(
+            "Music\\Artist\\Album\\Artist - Song $n.mp3",7_200_000L,
+            "mp3",mapOf(0 to 320,1 to 180)) }
+        handoff.offerParsed(reply("peer",files),"peer")
+        assertEquals(10,handoff.choices().size)
+        assertEquals(20,handoff.releaseShadowChoices().size)
+        assertFalse(handoff.releaseShadowChoices().toString().contains("Artist"))
+        handoff.cancel()
+        assertTrue(handoff.releaseShadowChoices().isEmpty())
+    }
+    @Test fun releaseShadowIsDisabledOutsideBatchAndCannotGrowUnbounded() {
+        val manual=A0ObservedCandidateHandoff(Socket(),"local",177,true)
+        val many=(1..150).map { n -> A0SoulseekSearchFile(
+            "Music\\Artist\\Album\\Track $n.mp3",7_200_000L,
+            "mp3",mapOf(0 to 320,1 to 180)) }
+        manual.offerParsed(reply("one",many),"one")
+        assertTrue(manual.releaseShadowChoices().isEmpty())
+        val shadow=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            collectReleaseShadow=true)
+        shadow.offerParsed(reply("one",many),"one")
+        assertEquals(64,shadow.releaseShadowChoices().size)
+    }
 }
