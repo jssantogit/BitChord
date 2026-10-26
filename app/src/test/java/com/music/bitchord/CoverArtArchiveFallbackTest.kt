@@ -11,6 +11,26 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class CoverArtArchiveFallbackTest {
+    @Test fun stalledCoverApiRequestIsBoundedAndMayRecoverOnRetry() = runBlocking {
+        var calls = 0
+        val archive = CoverArtArchive(
+            transport = object : CoverArtArchiveTransport {
+                override suspend fun get(path: String): CoverArtArchiveResponse {
+                    calls++
+                    if (calls == 1) kotlinx.coroutines.delay(120L)
+                    return CoverArtArchiveResponse(200,
+                        """{"images":[{"front":true,"types":["Front"],
+                        "image":"https://archive.org/recovered-cover.jpg"}]}""")
+                }
+            },
+            requestTimeoutMs = 20L,
+        )
+        assertNull(archive.findCover(release, null))
+        assertEquals("https://archive.org/recovered-cover.jpg",
+            archive.findCover(release, null))
+        assertEquals(2, calls)
+    }
+
     @Test fun release503DoesNotSilentlyReplaceEditionCoverWithGroupArtwork() = runBlocking {
         val requests = mutableListOf<String>()
         var releaseRecovered = false
