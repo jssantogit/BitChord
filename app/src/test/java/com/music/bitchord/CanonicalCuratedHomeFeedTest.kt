@@ -230,4 +230,13 @@ class CanonicalCuratedHomeFeedTest {
         // not for any name-derived fallback cover.
         assertEquals(listOf(release, recording), candidates)
     }
+    @Test fun legacyCaaFront250WithoutJpgIsStillRecognizedAsSmallArtwork() {
+        assertTrue(com.music.bitchord.ui.canonicalNeedsCoverRefresh(
+            "https://coverartarchive.org/release/00000000-0000-0000-0000-000000000001/front-250"))
+        assertTrue(com.music.bitchord.ui.canonicalNeedsCoverRefresh(
+            "https://archive.org/download/cover/front-250.jpg"))
+        assertFalse(com.music.bitchord.ui.canonicalNeedsCoverRefresh(
+            "https://coverartarchive.org/release/00000000-0000-0000-0000-000000000001/front-1200"))
+    }
+
 }
