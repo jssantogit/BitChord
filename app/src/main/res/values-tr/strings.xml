@@ -66,6 +66,7 @@
     </plurals>
     <string name="songs">Şarkılar</string>
     <string name="artists">Sanatçılar</string>
+    <string name="canonical_singles_eps">Single\'lar ve EP\'ler</string>
     <string name="albums">Albümler</string>
     <string name="no_album_metadata">Bu parçaların hiçbiri hangi albümden geldiğini belirtmiyor.</string>
     <string name="search_empty">YouTube Music\'te milyonlarca şarkı arayın.</string>
