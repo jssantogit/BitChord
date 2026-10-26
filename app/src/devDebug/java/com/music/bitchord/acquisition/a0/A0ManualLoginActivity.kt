@@ -418,6 +418,7 @@ class A0ManualLoginActivity : Activity() {
                                         requestedAlbum=albumConstraint,
                                         qualityProfile=selectedQuality,
                                         peerReliability=peerReliability,
+                                        collectReleaseShadow=batch!=null,
                                     ).also { transfer ->
                                         if (!SoulseekActiveSession.registerTransfer(
                                                 transfer, accountGeneration
@@ -809,7 +810,7 @@ class A0ManualLoginActivity : Activity() {
                                             // an otherwise usable manual download.
                                             runCatching {
                                                 A0ReleaseDiscoveryShadowAdapter.preview(
-                                                    batch.entries,checkNotNull(handoff).choices(),
+                                                    batch.entries,checkNotNull(handoff).releaseShadowChoices(),
                                                     selectedQuality,peerReliability)
                                             }.onSuccess { trace.releaseDiscoveryCoverage(it) }
                                         }
