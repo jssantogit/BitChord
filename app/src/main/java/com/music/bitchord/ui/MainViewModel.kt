@@ -781,6 +781,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                             heading = getApplication<Application>().getString(
                                                 R.string.shelf_new_albums_singles,
                                             ),
+                                            albumsHeading = getApplication<Application>().getString(R.string.albums),
+                                            singlesHeading = getApplication<Application>().getString(R.string.canonical_singles_eps),
                                         ),
                                     )
                                 }
@@ -1180,6 +1182,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                     if (entry.kind == CanonicalSearchKind.ARTIST) R.string.shelf_new_albums_singles
                                     else R.string.albums,
                                 ),
+                                albumsHeading = getApplication<Application>().getString(R.string.albums),
+                                singlesHeading = getApplication<Application>().getString(R.string.canonical_singles_eps),
                             ),
                             thumbnailUrl = output.data.artworkUri ?: page.thumbnailUrl,
                         )
