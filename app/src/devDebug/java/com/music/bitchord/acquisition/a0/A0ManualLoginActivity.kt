@@ -1198,10 +1198,13 @@ class A0ManualLoginActivity : Activity() {
                         A0SmokeTrace.Reason.LOCAL_SAVE_FAILURE
                     else A0SmokeTrace.Reason.READ_TIMEOUT
                     val readProgress = loginReplyProgress
-                    if (!searchSubmitted && readProgress != null) {
-                        trace.loginResponseProblem(readProgress.phase, timedOut = true)
-                    } else {
-                        trace.note(A0SmokeTrace.Stage.SERVER_READ_TIMEOUT, TraceOutcome.DEGRADED, finalReason)
+                    if(!bytesStagedForCurrent) {
+                        if (!searchSubmitted && readProgress != null) {
+                            trace.loginResponseProblem(readProgress.phase, timedOut = true)
+                        } else {
+                            trace.note(A0SmokeTrace.Stage.SERVER_READ_TIMEOUT,
+                                TraceOutcome.DEGRADED,finalReason)
+                        }
                     }
                     result = if(bytesStagedForCurrent) {
                         "Áudio recebido, mas a publicação local não terminou. " +
@@ -1222,8 +1225,12 @@ class A0ManualLoginActivity : Activity() {
                     finalReason = if(bytesStagedForCurrent)
                         A0SmokeTrace.Reason.LOCAL_SAVE_FAILURE
                     else A0SmokeTrace.Reason.INVALID_INPUT
-                    trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE, TraceOutcome.FAILED, finalReason)
-                    result = "ENTRADA INVÁLIDA. Confira usuário e senha de teste."
+                    if(!bytesStagedForCurrent)
+                        trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE,TraceOutcome.FAILED,finalReason)
+                    result = if(bytesStagedForCurrent)
+                        "Arquivo recebido, mas a publicação local foi recusada. " +
+                            "Nenhum novo item foi confirmado na biblioteca."
+                    else "ENTRADA INVÁLIDA. Confira usuário e senha de teste."
                 } catch (error: IOException) {
                     if(bytesStagedForCurrent)
                         trace.localSaveFailure(A0LocalSaveFailure.classify(error))
@@ -1241,7 +1248,8 @@ class A0ManualLoginActivity : Activity() {
                         is SocketException -> A0SmokeTrace.Reason.SOCKET_CLOSED
                         else -> A0SmokeTrace.Reason.SERVER_IO_FAILURE
                     }
-                    trace.note(A0SmokeTrace.Stage.IO_FAILURE, TraceOutcome.FAILED, finalReason)
+                    if(!bytesStagedForCurrent)
+                        trace.note(A0SmokeTrace.Stage.IO_FAILURE,TraceOutcome.FAILED,finalReason)
                     result = when {
                         bytesStagedForCurrent -> when(A0LocalSaveFailure.classify(error)) {
                             A0LocalSaveFailure.Kind.DESTINATION_COLLISION ->
@@ -1282,8 +1290,12 @@ class A0ManualLoginActivity : Activity() {
                     finalReason = if(bytesStagedForCurrent)
                         A0SmokeTrace.Reason.LOCAL_SAVE_FAILURE
                     else A0SmokeTrace.Reason.UNKNOWN_FAILURE
-                    trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE, TraceOutcome.FAILED, finalReason)
-                    result = "ERRO NO TESTE. Nenhuma credencial foi armazenada."
+                    if(!bytesStagedForCurrent)
+                        trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE,TraceOutcome.FAILED,finalReason)
+                    result = if(bytesStagedForCurrent)
+                        "Arquivo recebido, mas não foi possível concluir a publicação local. " +
+                            "Nenhum novo item foi confirmado na biblioteca."
+                    else "ERRO NO TESTE. Nenhuma credencial foi armazenada."
                 } finally {
                     val id=saveJobId
                     val journal=saveLedger
