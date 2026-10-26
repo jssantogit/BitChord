@@ -23,14 +23,11 @@ internal fun canonicalPreferredEditions(
     // "Official" is positive release evidence. A Bootleg, Promotion, withdrawn
     // or pseudo-release must not become the user's default tracklist merely
     // because it is the earliest/only edition with a playable-looking title.
-    // Unknown statuses may be retained only when no verified official edition
-    // has been discovered, without calling them official.
+    // Unknown status does not prove an official audio release, even if this is
+    // the only edition in the local cache. It remains stored for verification,
+    // but must never become the default "official" streaming tracklist.
     val official = unique.filter { it.status.equals("Official", ignoreCase = true) }
-    val eligible = when {
-        official.isNotEmpty() -> official
-        else -> unique.filter { it.status.isNullOrBlank() }
-    }
-    return eligible.sortedWith(
+    return official.sortedWith(
         compareBy<MusicBrainzReleaseHit> {
             when (it.status?.lowercase(Locale.ROOT)) {
                 "official" -> 0
