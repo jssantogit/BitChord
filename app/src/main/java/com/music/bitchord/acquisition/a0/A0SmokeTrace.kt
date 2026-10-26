@@ -55,6 +55,8 @@ internal class A0SmokeTrace private constructor(
     private val complete = AtomicBoolean(false)
     private val socketsClosing = AtomicBoolean(false)
     private val ignoredServerFrames = AtomicInteger(0)
+    private val rejectedServerOffers = AtomicInteger(0)
+    private val receivedServerOffers = AtomicInteger(0)
     @Volatile private var continuation: StructuredTrace? = null
 
     /** Protect local-save evidence when noisy search uses all 64 trace points. */
@@ -96,6 +98,25 @@ internal class A0SmokeTrace private constructor(
             outcome = outcome,
             attributes = attributes
         )
+    }
+
+    /**
+     * Large public searches may receive hundreds of valid and malformed
+     * third-party offers. Record at most two examples per class, retaining
+     * final aggregate counts even when the trace has a 64-point budget.
+     */
+    fun serverOfferRejected() {
+        if (complete.get()) return
+        if (rejectedServerOffers.incrementAndGet() <= 2) {
+            note(Stage.SERVER_OFFER_REJECTED,TraceOutcome.DEGRADED,Reason.WIRE_REJECTED)
+        }
+    }
+
+    fun serverOfferReceived() {
+        if (complete.get()) return
+        if (receivedServerOffers.incrementAndGet() <= 2) {
+            note(Stage.SERVER_OFFER_RECEIVED)
+        }
     }
 
     /** Only known enum phases; never emit peer identity, remote path or frame data. */
@@ -290,7 +311,9 @@ internal class A0SmokeTrace private constructor(
         if (!complete.compareAndSet(false, true)) return
         val attributes = linkedMapOf(
             "elapsedMs" to elapsedMillis().toString(),
-            "ignoredServerFrames" to ignoredServerFrames.get().coerceAtMost(100000).toString()
+            "ignoredServerFrames" to ignoredServerFrames.get().coerceAtMost(100000).toString(),
+            "rejectedServerOffers" to rejectedServerOffers.get().coerceAtMost(100000).toString(),
+            "receivedServerOffers" to receivedServerOffers.get().coerceAtMost(100000).toString()
         )
         if (reason != null) attributes["reasonCode"] = reason.name.lowercase(Locale.ROOT)
         continuation?.complete(outcome,attributes)
