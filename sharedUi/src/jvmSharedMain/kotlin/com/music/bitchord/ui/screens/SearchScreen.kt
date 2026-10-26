@@ -573,8 +573,29 @@ private fun LazyListScope.canonicalMusicBrainzResults(
         is UiState.Success -> if (rows.data.isEmpty()) {
             item(key = "musicbrainz:empty") { MessageState(stringResource(Res.string.canonical_empty_search)) }
         } else {
-            itemsIndexed(
-                items = rows.data,
+            // Exactly the same native category grouping as legacy Search:
+            // Artists lead General, then Songs, then Albums. Switching a
+            // filter removes the headers rather than duplicating that UI.
+            canonicalSearchDisplaySections(rows.data, filter).forEach { section ->
+                section.first?.let { type ->
+                    item(key = "musicbrainz:section:${type.name}") {
+                        Text(
+                            text = stringResource(when (type) {
+                                SearchFilter.ARTISTS -> Res.string.artists
+                                SearchFilter.SONGS -> Res.string.canonical_filter_songs
+                                else -> Res.string.albums
+                            }),
+                            modifier = Modifier.padding(
+                                start = PAGE_GUTTER, end = PAGE_GUTTER,
+                                top = 16.dp, bottom = 6.dp,
+                            ),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+                itemsIndexed(
+                items = section.second,
                 key = { _, row -> "mb:${row.kind}:${row.trackMbid ?: row.musicBrainzId}" },
             ) { index, row ->
                 val kind = when (row.kind) {
@@ -597,12 +618,13 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                         else -> null
                     },
                 )
-                if (index < rows.data.lastIndex) {
+                if (index < section.second.lastIndex) {
                     HorizontalDivider(
                         modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
                         thickness = 0.5.dp,
                         color = MaterialTheme.colorScheme.outline,
                     )
+                }
                 }
             }
             if (detail is UiState.Success && detail.data.nextOffset != null) {
@@ -639,6 +661,21 @@ fun canonicalRowAsBrowseItem(row: CanonicalCatalogSearchRow): BrowseItem = Brows
     thumbnailUrl = row.artworkUri,
     type = if (row.kind == CanonicalSearchKind.ARTIST) BrowseType.ARTIST else BrowseType.ALBUM,
 )
+
+/** Presentation-only grouping; never changes the underlying indexed identities. */
+fun canonicalSearchDisplaySections(
+    rows: List<CanonicalCatalogSearchRow>,
+    filter: SearchFilter,
+): List<Pair<SearchFilter?, List<CanonicalCatalogSearchRow>>> {
+    if (filter != SearchFilter.ALL) return listOf(null to rows)
+    return listOf(
+        SearchFilter.ARTISTS to rows.filter { it.kind == CanonicalSearchKind.ARTIST },
+        SearchFilter.SONGS to rows.filter { it.kind == CanonicalSearchKind.RECORDING },
+        SearchFilter.ALBUMS to rows.filter {
+            it.kind == CanonicalSearchKind.RELEASE_GROUP || it.kind == CanonicalSearchKind.RELEASE
+        },
+    ).filter { it.second.isNotEmpty() }
+}
 
 fun canonicalRowsForFilter(
     rows: List<CanonicalCatalogSearchRow>,
