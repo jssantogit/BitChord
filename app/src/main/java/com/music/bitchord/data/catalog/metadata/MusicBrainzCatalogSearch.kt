@@ -55,6 +55,8 @@ internal data class MusicBrainzReleaseGroupHit(
     val firstReleaseDate: String?,
     val artistDisplay: String?,
     val artworkUri: String? = null,
+    /** Pipe-separated official MusicBrainz secondary types; unknown remains null. */
+    val secondaryTypes: String? = null,
 )
 
 internal data class MusicBrainzReleaseHit(
@@ -165,6 +167,8 @@ internal class MusicBrainzCatalogSearch(
                     MusicBrainzReleaseGroupHit(
                         mbid, title, group.primaryType.nonEmpty(),
                         group.firstReleaseDate.nonEmpty(), group.artistCredit.displayArtistCredit(),
+                        secondaryTypes = group.secondaryTypes?.filter(String::isNotBlank)
+                            ?.joinToString("|")?.ifBlank { null },
                     )
                 }
             }
@@ -362,6 +366,7 @@ private data class SearchReleaseGroupEntry(
     val id: String? = null,
     val title: String? = null,
     @SerialName("primary-type") val primaryType: String? = null,
+    @SerialName("secondary-types") val secondaryTypes: List<String>? = null,
     @SerialName("first-release-date") val firstReleaseDate: String? = null,
     @SerialName("artist-credit") val artistCredit: List<SearchArtistCredit>? = null,
 )
