@@ -28,7 +28,7 @@ _REASONS = {
     "CI_TIMEOUT": "ci_timeout",
     "REVIEW_BLOCKED": "review",
 }
-_LANES = ('main', 'pr_a', 'pr_b', 'pr_c', 'unknown')
+_LANES = ('main', 'pr_a', 'pr_b', 'pr_c', 'pr_d', 'unknown')
 _CONCLUSIONS = {None, "success", "failure", "cancelled", "skipped",
                 "timed_out", "action_required", "neutral"}
 
