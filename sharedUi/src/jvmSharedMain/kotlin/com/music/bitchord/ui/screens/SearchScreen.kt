@@ -110,6 +110,8 @@ data class CanonicalCatalogSearchRow(
     val releaseKind: String? = null,
     /** Cached authorized cover art; not an implied playable asset. */
     val artworkUri: String? = null,
+    /** Verifiable scoped search relation returned by MusicBrainz arid, not a text match. */
+    val artistScopeMbid: String? = null,
 )
 
 /**
@@ -720,7 +722,8 @@ fun canonicalRowsForQuery(
             (row.kind == CanonicalSearchKind.ARTIST &&
                 row.musicBrainzId == primaryArtist.musicBrainzId) ||
                 (row.kind != CanonicalSearchKind.ARTIST &&
-                    canonicalCreditsMentionArtist(row.subtitle, normalized))
+                    (row.artistScopeMbid == primaryArtist.musicBrainzId ||
+                        canonicalCreditsMentionArtist(row.subtitle, normalized)))
         }
     } else candidates
     return identityScoped.sortedWith(
