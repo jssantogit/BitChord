@@ -124,4 +124,15 @@ class A0CandidateDiagnosticCoverageTest {
         assertEquals("25",end.attributes["indirectRepliesAccepted"])
         assertFalse(end.attributes.toString().contains("peerUsername"))
     }
+
+    @Test fun perPeerFairnessRejectionsRemainDistinctFromWorkerBackpressure() {
+        val points=mutableListOf<StructuredTracePoint>()
+        val tracer=StructuredTracer(sink=StructuredTraceSink { points.add(it) },
+            traceIdFactory={ "peer-fairness-budget" })
+        val trace=A0SmokeTrace.start(tracer,observedTransfer=true)
+        trace.peerSearchBackpressure(dropped=31,perPeerDropped=7)
+        val event=points.single { it.stage=="peer_search_backpressure" }
+        assertEquals("31",event.attributes["droppedOffers"])
+        assertEquals("7",event.attributes["perPeerDropped"])
+    }
 }
