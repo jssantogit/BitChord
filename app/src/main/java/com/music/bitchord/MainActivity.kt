@@ -2056,8 +2056,16 @@ private fun BitChordApp(
     // Issue #172: no YT Music acquisition, even for album/playlist actions.
     // Each supported request opens a manual Soulseek search; the picker alone
     // can authorize a specific file, and only in devDebug.
-    val startDownload: (List<Song>, DownloadTarget?) -> Unit = { requested, _ ->
+    val startDownload: (List<Song>, DownloadTarget?) -> Unit = { requested, from ->
         val song = requested.singleOrNull()
+        val playingSameTrack=player.song?.videoId==song?.videoId && song!=null
+        val albumHint=SoulseekDownloadRouting.albumHint(
+            songAlbum=song?.albumName,
+            playingAlbum=player.song?.albumName,
+            targetAlbum=from?.title,
+            samePlayingTrack=playingSameTrack,
+            fromAlbum=from!=null && !from.playlist,
+        )
         val decision = SoulseekDownloadRouting.route(
             artist = song?.artist.orEmpty(),
             title = song?.title.orEmpty(),
@@ -2073,8 +2081,7 @@ private fun BitChordApp(
                 ).putExtra("bitchord.soulseek.manual.query", decision.query)
                     // Album name is an editable target hint, not an authenticated
                     // MusicBrainz Release ID or proof of the peer's file.
-                    .putExtra("bitchord.soulseek.manual.album",
-                        song?.albumName?.trim()?.take(120))
+                    .putExtra("bitchord.soulseek.manual.album",albumHint)
                     .putExtra("bitchord.soulseek.manual.duration_seconds",
                         SoulseekDownloadRouting.durationSeconds(song?.durationText) ?: 0)
                 runCatching { context.startActivity(intent) }.onFailure {
