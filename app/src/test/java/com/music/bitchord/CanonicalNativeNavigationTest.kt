@@ -201,4 +201,18 @@ class CanonicalNativeNavigationTest {
             .isEmpty())
     }
 
+
+    @Test fun artworkSkipsConfirmedMissingFrontAndTriesKnownPositiveBeforeUnknown() {
+        val original = MusicBrainzReleaseHit("old-no-art", "Get Up", "KR",
+            "2023-07-21", "NewJeans", status = "Official", hasFrontCover = false)
+        val unknown = original.copy(musicBrainzId = "unknown-front",
+            releaseDate = "2023-07-22", hasFrontCover = null)
+        val positive = original.copy(musicBrainzId = "confirmed-front",
+            releaseDate = "2023-07-23", hasFrontCover = true)
+        assertEquals(listOf("confirmed-front", "unknown-front"),
+            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
+                listOf(original, unknown, positive), "Get Up"
+            ).map { it.musicBrainzId })
+    }
+
 }
