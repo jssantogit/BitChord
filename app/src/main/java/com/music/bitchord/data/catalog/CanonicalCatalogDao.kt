@@ -523,7 +523,7 @@ internal interface CanonicalCatalogDao {
         SELECT identity.externalId AS musicBrainzId, grp.title AS title,
                grp.primaryType AS primaryType, grp.firstReleaseDate AS firstReleaseDate,
                grp.artistDisplay AS artistDisplay, grp.secondaryTypes AS secondaryTypes,
-               art.artworkUri AS artworkUri
+               COALESCE(art.thumbnailUri, art.artworkUri) AS artworkUri
         FROM catalog_external_identity identity
         JOIN catalog_release_group grp ON grp.id = identity.entityId
         LEFT JOIN catalog_cover_art_cache art
@@ -542,7 +542,7 @@ internal interface CanonicalCatalogDao {
     @Query("""
         SELECT identity.externalId AS musicBrainzId, edition.title AS title,
             edition.artistDisplay AS artistDisplay, info.country AS country,
-            info.releaseDate AS releaseDate, art.artworkUri AS artworkUri
+            info.releaseDate AS releaseDate, COALESCE(art.thumbnailUri, art.artworkUri) AS artworkUri
         FROM catalog_external_identity identity
         JOIN catalog_release edition ON edition.id = identity.entityId
         LEFT JOIN musicbrainz_release_enrichment info
