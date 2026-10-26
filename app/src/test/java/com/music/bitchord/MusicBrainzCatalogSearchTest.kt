@@ -120,8 +120,8 @@ class MusicBrainzCatalogSearchTest {
         val transport = object : MusicBrainzTransport {
             override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String =
                 """{"count":1,"offset":0,"recordings":[{"id":"$recordingId","title":"Magnetic",
-                "releases":[{"id":"$release2","status":"Official","date":"2025-01-01"},
-                            {"id":"$release1","status":"Official","date":"2024-03-25"},
+                "releases":[{"id":"$release2","status":"Official","date":"2025-01-01","release-group":{"primary-type":"EP"}},
+                            {"id":"$release1","status":"Official","date":"2024-03-25","release-group":{"primary-type":"EP"}},
                             {"id":"untrusted","date":"2023-01-01"}]}]}"""
         }
         val result = MusicBrainzCatalogSearch(MusicBrainzClient(transport = transport))
@@ -219,6 +219,55 @@ class MusicBrainzCatalogSearchTest {
         assertEquals(listOf(group), page.items.map { it.musicBrainzId })
         assertEquals(2, page.consumedCount)
         assertEquals(2, page.nextOffset)
+    }
+
+    @Test fun recordingSearchRejectsUnofficialVideoAndRemixCandidatesForCuratedPresentation() = runBlocking {
+        val artist = "NewJeans"
+        val original = "11111111-1111-4111-8111-111111111111"
+        val video = "22222222-2222-4222-8222-222222222222"
+        val flip = "33333333-3333-4333-8333-333333333333"
+        val performance = "44444444-4444-4444-8444-444444444444"
+        val officialRemix = "55555555-5555-4555-8555-555555555555"
+        val release = "66666666-6666-4666-8666-666666666666"
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String,String>, userAgent: String) =
+                    """{"count":5,"offset":0,"recordings":[
+                      {"id":"$original","title":"Hurt","artist-credit":[{"name":"$artist"}],
+                       "releases":[{"id":"$release","status":"Official","release-group":{"primary-type":"EP"}}]},
+                      {"id":"$video","title":"Hurt","video":true,
+                       "releases":[{"id":"$release","status":"Official","release-group":{"primary-type":"EP"}}]},
+                      {"id":"$flip","title":"OMG (Jersey flip)",
+                       "releases":[{"id":"$release","status":"Bootleg","release-group":{"primary-type":"Single"}}]},
+                      {"id":"$performance","title":"Cool With You (performance ver.)",
+                       "releases":[{"id":"$release","status":"Official","release-group":{"primary-type":"Single"}}]},
+                      {"id":"$officialRemix","title":"Hurt (250 Remix)",
+                       "releases":[{"id":"$release","status":"Official","release-group":{"primary-type":"Album"}}]}
+                    ]}"""
+            }
+        ))
+        val rows = (search.searchRecordings(artist) as
+            MusicBrainzCatalogSearchResult.Success<com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit>).page.items
+        assertEquals(listOf("Hurt", "Hurt (250 Remix)"),
+            rows.filter { com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRecording(it) }.map { it.title })
+        assertEquals(release, rows.first().coverReleaseMbid)
+        assertEquals(null, rows[1].coverReleaseMbid)
+        assertEquals(null, rows[2].coverReleaseMbid)
+    }
+
+    @Test fun musicVideoPracticeAndUnverifiedRecordingAreNotPromotedToOfficialAudio() {
+        val good = com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit(
+            "11111111-1111-4111-8111-111111111111", "Super Shy", "NewJeans", 180000,
+            hasOfficialAudioRelease = true,
+        )
+        val check: (com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit) -> Boolean = { com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRecording(it) }
+        assertTrue(check(good))
+        assertTrue(!check(good.copy(title = "New Jeans (dance practice fix ver.)")))
+        assertTrue(!check(good.copy(title = "Hype Boy (DANIELLE&HAERIN ver.)")))
+        assertTrue(!check(good.copy(title = "OMG (ric3show3r \"who is he?\" Jersey flip)")))
+        assertTrue(!check(good.copy(title = "Hype Boy (sped up)")))
+        assertTrue(!check(good.copy(isVideo = true)))
+        assertTrue(!check(good.copy(hasOfficialAudioRelease = false)))
     }
 
 }
