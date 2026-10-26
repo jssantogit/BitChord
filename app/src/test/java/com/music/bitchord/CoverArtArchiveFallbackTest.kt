@@ -202,8 +202,10 @@ class CoverArtArchiveFallbackTest {
     @Test fun strictFrontPolicyUsesSeparatePersistentKeysFromLegacyCoverCache() {
         assertEquals("release:front-v2",
             com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType("release"))
-        assertEquals("release-group:front-v3",
+        assertEquals("release-group:front-v2",
             com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType("release-group"))
+        assertEquals("release-group:front-v3",
+            com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType("verified-artist-group"))
     }
 
     @Test fun oldFrontCacheCannotBlockNewPolicyAndNewCacheIsReusable() = runBlocking {
@@ -401,6 +403,10 @@ class CoverArtArchiveFallbackTest {
             store = store, nowEpochMs = { now + 1000L },
         )
         assertNull(cover.cachedVerifiedGroupCover(group))
+        // Generic group fallback is not evidence for an Official edition;
+        // it must never write into the verified front-v3 artist namespace.
+        assertEquals("release-group:front-v2",
+            com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType("release-group"))
         records["release-group:front-v3"] = MusicBrainzCoverArtCacheEntry(
             "release-group", group,
             "https://archive.org/official-1200.jpg", now,
