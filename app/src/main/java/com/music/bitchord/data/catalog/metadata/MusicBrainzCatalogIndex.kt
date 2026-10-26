@@ -125,12 +125,26 @@ internal class MusicBrainzCatalogIndex(
                 if (!MBID.matches(mbid) || hit.title.isBlank() || mbid in indexed) return@forEach
                 val existing = dao.entityIdForExternalIdentity("musicbrainz", "release-group", mbid)
                 if (existing != null) {
-                    if (dao.catalogReleaseGroup(existing) != null) indexed[mbid] = existing
+                    val previous = dao.catalogReleaseGroup(existing)
+                    if (previous != null) {
+                        // Sparse MusicBrainz responses must not erase stronger,
+                        // previously confirmed editorial classification.
+                        val merged = previous.copy(
+                            primaryType = hit.primaryType?.takeIf(String::isNotBlank)
+                                ?: previous.primaryType,
+                            firstReleaseDate = hit.firstReleaseDate?.takeIf(String::isNotBlank)
+                                ?: previous.firstReleaseDate,
+                            secondaryTypes = hit.secondaryTypes?.takeIf(String::isNotBlank)
+                                ?: previous.secondaryTypes,
+                        )
+                        if (merged != previous) dao.upsertCatalogReleaseGroup(merged)
+                        indexed[mbid] = existing
+                    }
                 } else {
                     val created = idFactory()
                     dao.upsertCatalogReleaseGroup(CatalogReleaseGroupEntity(
                         created, hit.title.trim(), hit.artistDisplay,
-                        hit.primaryType, hit.firstReleaseDate,
+                        hit.primaryType, hit.firstReleaseDate, hit.secondaryTypes,
                     ))
                     claim(dao, "release-group", mbid, created)
                     indexed[mbid] = created
@@ -169,7 +183,8 @@ internal class MusicBrainzCatalogIndex(
                     "musicbrainz", "release-group", group.id,
                 ).singleOrNull()?.externalId ?: return@mapNotNull null
                 MusicBrainzReleaseGroupHit(mbid, group.title, group.primaryType,
-                    group.firstReleaseDate, group.artistDisplay)
+                    group.firstReleaseDate, group.artistDisplay,
+                    secondaryTypes = group.secondaryTypes)
             }
         }
 
