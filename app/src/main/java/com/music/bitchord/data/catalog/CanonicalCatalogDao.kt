@@ -130,7 +130,7 @@ internal interface CanonicalCatalogDao {
     suspend fun musicBrainzCoverArtCache(entityType: String, mbid: String): MusicBrainzCoverArtCacheEntity?
 
     /** Batch lookup prevents one Room round trip per artist shelf card. */
-    @Query("SELECT * FROM catalog_cover_art_cache WHERE entityType = 'release-group:front-v2' AND mbid IN (:mbids)")
+    @Query("SELECT * FROM catalog_cover_art_cache WHERE entityType = 'release-group:front-v3' AND mbid IN (:mbids)")
     suspend fun verifiedGroupFronts(mbids: List<String>): List<MusicBrainzCoverArtCacheEntity>
 
     @Query("SELECT * FROM catalog_musicbrainz_track WHERE trackMbid = :trackMbid LIMIT 1")
@@ -559,7 +559,7 @@ internal interface CanonicalCatalogDao {
         FROM catalog_external_identity identity
         JOIN catalog_release_group grp ON grp.id = identity.entityId
         LEFT JOIN catalog_cover_art_cache art
-            ON art.entityType = 'release-group:front-v2' AND art.mbid = identity.externalId
+            ON art.entityType = 'release-group:front-v3' AND art.mbid = identity.externalId
         WHERE identity.provider = 'musicbrainz' AND identity.entityType = 'release-group'
           AND (instr(lower(grp.title), lower(:query)) > 0
             OR instr(lower(grp.artistDisplay), lower(:query)) > 0)
