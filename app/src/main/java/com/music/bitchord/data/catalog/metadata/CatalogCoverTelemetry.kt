@@ -12,6 +12,8 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         val positiveCacheHits: Int,
         val negativeCacheHits: Int,
         val coalescedRequests: Int,
+        /** CAA CDN URLs handed to Coil; not measured image successes. */
+        val directFrontCandidates: Int,
         val networkRequests: Int,
         val successfulNetworkRequests: Int,
         val networkNotFound: Int,
@@ -24,6 +26,7 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
     private var cached = 0
     private var negative = 0
     private var coalesced = 0
+    private var direct = 0
     private var network = 0
     private var successful = 0
     private var missing = 0
@@ -35,6 +38,7 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         cached = 0
         negative = 0
         coalesced = 0
+        direct = 0
         network = 0
         successful = 0
         missing = 0
@@ -45,6 +49,7 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
     @Synchronized fun recordCacheHit() { cached++ }
     @Synchronized fun recordNegativeCacheHit() { negative++ }
     @Synchronized fun recordJoinedRequest() { coalesced++ }
+    @Synchronized fun recordDirectFrontCandidate() { direct++ }
     @Synchronized fun recordNetwork(status: Int, durationMs: Long) {
         network++
         when (status) {
@@ -63,7 +68,7 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
             val rank = ((percent * sorted.size + 99) / 100).coerceIn(1, sorted.size)
             return sorted[rank - 1]
         }
-        return Snapshot(cached, negative, coalesced, network, successful,
+        return Snapshot(cached, negative, coalesced, direct, network, successful,
             missing, transient, sorted.size, quantile(50), quantile(95))
     }
 
