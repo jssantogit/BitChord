@@ -557,8 +557,13 @@ fun DetailScreen(
                         sleeveSize = sleeveSize,
                         canvas = canvas,
                         songs = songs,
-                        onPlay = { onSongClick(songs, 0) },
-                        onShuffle = { onShuffle(songs) },
+                        canonicalTracks = canonicalTracks,
+                        onPlay = {
+                            if (songs.isNotEmpty()) onSongClick(songs, 0)
+                            else canonicalTracks.firstOrNull { it.hasCatalogedAsset }
+                                ?.musicBrainzId?.let { onCanonicalTrackPlay?.invoke(it) }
+                        },
+                        onShuffle = { if (songs.isNotEmpty()) onShuffle(songs) },
                         // A folder's credit says where its tracks live, not who made them.
                         onArtistClick = onArtistClick.takeIf { folder == null },
                         onToggleLibrary = onToggleLibrary,
@@ -723,6 +728,17 @@ fun DetailScreen(
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                 }
+                            }
+                            row.durationMs?.takeIf { it > 0L }?.let { duration ->
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = String.format(
+                                        Locale.ROOT, "%d:%02d",
+                                        duration / 60_000L, (duration / 1_000L) % 60L,
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = palette.onBackgroundVariant,
+                                )
                             }
                         }
                         if (index < canonicalTracks.lastIndex) {
@@ -929,12 +945,25 @@ private fun ReleaseHeader(
     sleeveSize: Dp,
     canvas: CanvasArtwork?,
     songs: List<Song>,
+    canonicalTracks: List<CanonicalCatalogSearchRow>,
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
     onArtistClick: ((String, String) -> Unit)?,
     onToggleLibrary: (() -> Unit)?,
 ) {
-    val (credit, meta) = page.headerLines(songs.size, songs.playtime())
+    val canonicalMinutes = canonicalTracks.sumOf { (it.durationMs ?: 0L).coerceAtLeast(0L) } / 60_000
+    val canonicalTime = when {
+        canonicalMinutes <= 0L -> null
+        canonicalMinutes < 60L -> stringResource(R.string.minutes_short, canonicalMinutes.toInt())
+        else -> stringResource(
+            R.string.hours_minutes_short,
+            (canonicalMinutes / 60L).toInt(), (canonicalMinutes % 60L).toInt(),
+        )
+    }
+    val (credit, meta) = page.headerLines(
+        if (songs.isNotEmpty()) songs.size else canonicalTracks.size,
+        if (songs.isNotEmpty()) songs.playtime() else canonicalTime,
+    )
     // Every row on a release carries the same credit — see [pageCredit] — so
     // the first one speaks for the whole page, the same source the rows'
     // own long-press "Open artist" already reads from.
@@ -1035,7 +1064,7 @@ private fun ReleaseHeader(
             )
         }
 
-        if (songs.isNotEmpty()) {
+        if (songs.isNotEmpty() || canonicalTracks.any { it.hasCatalogedAsset }) {
             // Only where YouTube said the release can be saved and the caller
             // is willing to take the write — see [onToggleLibrary].
             val library = page.library?.takeIf { onToggleLibrary != null }
@@ -1077,6 +1106,7 @@ private fun ReleaseHeader(
                     onClick = onShuffle,
                     haptic = Haptic.Resume,
                     size = RELEASE_SIDE_BUTTON,
+                    enabled = songs.isNotEmpty(),
                 )
                 ActionPill(
                     icon = BitChordIcons.Play,
