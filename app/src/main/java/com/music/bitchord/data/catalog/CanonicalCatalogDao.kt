@@ -113,7 +113,7 @@ internal interface CanonicalCatalogDao {
         JOIN catalog_external_identity AS ident ON ident.entityId = grp.id
             AND ident.provider = 'musicbrainz' AND ident.entityType = 'release-group'
         LEFT JOIN catalog_cover_art_cache AS art
-            ON art.entityType = 'release-group:front-v2' AND art.mbid = ident.externalId
+            ON art.entityType = 'release-group:front-v3' AND art.mbid = ident.externalId
         WHERE membership.artistId = :artistId
           AND membership.publicationEvidence = 'website-default-v1'
         ORDER BY grp.firstReleaseDate DESC, grp.title COLLATE NOCASE, ident.externalId
