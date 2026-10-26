@@ -37,6 +37,40 @@ class MusicBrainzCatalogGraphTest {
     private val original = "e614e432-ca77-41c1-82c1-4e3a24ebbb0c"
     private val sped = "3e619ba2-34f0-4649-83d8-05483e2fabe5"
 
+    @Test fun artistOfficialEditionBatchProvidesExactGroupEdgesForFastArtworkEnrichment() = runBlocking {
+        val artist = "b51c672b-85e0-48fe-8648-470a2422229f"
+        var calls = 0
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>,
+                    userAgent: String): String {
+                    calls++
+                    assertEquals("release", path)
+                    assertEquals(artist, parameters["artist"])
+                    assertEquals("official", parameters["status"])
+                    assertEquals("release-groups", parameters["inc"])
+                    return """{"release-count":3,"release-offset":0,"releases":[
+                        {"id":"$worldwide","title":"SUPER REAL ME","status":"Official",
+                         "release-group":{"id":"$group"}},
+                        {"id":"bad-id","title":"SUPER REAL ME","status":"Official",
+                         "release-group":{"id":"$group"}},
+                        {"id":"271b31f8-8ab6-483c-97d9-8f0fabb2d4f4","title":"EP video",
+                         "status":"Bootleg","release-group":{"id":"$group"}}
+                    ]}"""
+                }
+            },
+        ))
+        val output = graph.browseOfficialReleasesForArtist(artist, limit = 100) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogPage<MusicBrainzReleaseHit>>
+        assertEquals(1, calls)
+        assertEquals(3, output.value.consumedCount)
+        assertEquals(2, output.value.items.size)
+        assertEquals(group, output.value.items.first().releaseGroupMbid)
+        assertEquals(listOf(worldwide), output.value.items
+            .filter { it.status.equals("Official", ignoreCase = true) }
+            .map { it.musicBrainzId })
+    }
+
     @Test fun artistToGroupToReleaseToMediumTrackGraphKeepsIdentityBoundaries() = runBlocking {
         val requests = mutableListOf<Pair<String, Map<String, String>>>()
         val transport = object : MusicBrainzTransport {
