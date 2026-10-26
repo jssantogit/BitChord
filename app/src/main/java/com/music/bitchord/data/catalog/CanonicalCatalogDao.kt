@@ -85,11 +85,15 @@ internal interface CanonicalCatalogDao {
 
     @Upsert suspend fun upsertMusicBrainzArtistGroup(entity: CatalogMusicBrainzArtistGroupEntity)
 
+    @Query("SELECT COUNT(*) FROM catalog_musicbrainz_artist_group WHERE artistId = :artistId")
+    suspend fun musicBrainzArtistGroupMembershipCount(artistId: String): Int
+
     @Query("""
         SELECT groupEntity.*
         FROM catalog_musicbrainz_artist_group AS association
         JOIN catalog_release_group AS groupEntity ON groupEntity.id = association.releaseGroupId
         WHERE association.artistId = :artistId
+          AND association.publicationEvidence = 'website-default-v1'
         ORDER BY groupEntity.firstReleaseDate DESC, groupEntity.title COLLATE NOCASE, groupEntity.id
     """)
     suspend fun musicBrainzGroupsForArtist(artistId: String): List<CatalogReleaseGroupEntity>
@@ -111,6 +115,7 @@ internal interface CanonicalCatalogDao {
         LEFT JOIN catalog_cover_art_cache AS art
             ON art.entityType = 'release-group:front-v2' AND art.mbid = ident.externalId
         WHERE membership.artistId = :artistId
+          AND membership.publicationEvidence = 'website-default-v1'
         ORDER BY grp.firstReleaseDate DESC, grp.title COLLATE NOCASE, ident.externalId
     """)
     suspend fun verifiedArtistDiscographyRows(
