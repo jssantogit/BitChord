@@ -339,7 +339,26 @@ fun SearchScreen(
             contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
         ) {
             when {
-                searchingCanonical -> canonicalMusicBrainzResults(
+                searchingCanonical -> if (query.isBlank() &&
+                    canonicalResults == null && canonicalDetail == null
+                ) {
+                    // Same recent-search row, clear/remove actions, and persisted
+                    // list as the original Search; never route legacy video IDs
+                    // through a MusicBrainz-only history entry.
+                    val recent = canonicalRecentSearchEntries(history)
+                    if (recent.isEmpty()) {
+                        item { MessageState(stringResource(Res.string.search_empty)) }
+                    } else {
+                        recentSearches(
+                            history = recent,
+                            currentSong = currentSong,
+                            isPlaying = isPlaying,
+                            onClick = onHistoryClick,
+                            onRemove = onHistoryRemove,
+                            onClear = onHistoryClear,
+                        )
+                    }
+                } else canonicalMusicBrainzResults(
                     query, canonicalResults, canonicalDetail, filter, onCanonicalOpen, onCanonicalBack,
                     onCanonicalLoadMore, canonicalLoadingMore,
                     onCanonicalSearchLoadMore, canonicalSearchHasMore,
@@ -667,6 +686,10 @@ private fun LazyListScope.canonicalMusicBrainzResults(
         }
     }
 }
+
+/** Show only terms, not YouTube media IDs, in the canonical empty-query surface. */
+fun canonicalRecentSearchEntries(history: List<SearchHistoryEntity>): List<SearchHistoryEntity> =
+    history.filter { it.id.startsWith("q:") }
 
 /** Identity-preserving, client-side category view over four MusicBrainz types. */
 /** A display-only adapter: never turn a public MBID into a videoId or stream URI. */
