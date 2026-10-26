@@ -113,7 +113,8 @@ internal fun canonicalCoverLookupTarget(
  */
 internal fun canonicalNeedsCoverRefresh(artwork: String?): Boolean =
     artwork.isNullOrBlank() ||
-        (artwork.contains("coverartarchive.org/") && artwork.endsWith("-250.jpg"))
+        ((artwork.contains("coverartarchive.org/") || artwork.contains("archive.org/")) &&
+            artwork.endsWith("-250.jpg"))
 
 /** Bound network enrichment to a small visible subset, with stable identities. */
 internal fun canonicalCoverLookupCandidates(
