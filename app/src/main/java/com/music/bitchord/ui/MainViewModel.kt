@@ -652,6 +652,72 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     private val canonicalPath = mutableListOf<CanonicalCatalogSearchRow>()
+    private var canonicalDetailCoverJob: Job? = null
+
+    /**
+     * Fill visible native artist shelves progressively. Group MBIDs are the
+     * identity boundary; fallback artwork may be from a Release known to
+     * belong to that exact group, never from fuzzy name matching.
+     */
+    private fun enrichCanonicalNativeDetailCovers(artist: CanonicalCatalogSearchRow) {
+        canonicalDetailCoverJob?.cancel()
+        val initial = (_canonicalDetail.value as? UiState.Success)?.data?.rows
+            .orEmpty().filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
+            .filter { it.artworkUri.isNullOrBlank() }.take(12)
+        if (initial.isEmpty()) return
+        canonicalDetailCoverJob = viewModelScope.launch(Dispatchers.IO) {
+            for (group in initial) {
+                if (_searchSource.value != SearchSource.CANONICAL ||
+                    canonicalPath.lastOrNull() != artist
+                ) return@launch
+                val artwork = try {
+                    coverArtArchive.findCover(null, group.musicBrainzId) ?: run {
+                        // A group can have no group-level image even though
+                        // one of its explicitly related editions has one.
+                        val related = musicBrainzGraph.browseGroupReleases(
+                            group.musicBrainzId, limit = 16,
+                        )
+                        val first = (related as? MusicBrainzCatalogGraphResult.Success)
+                            ?.value?.items?.let {
+                                canonicalPreferredEditions(it, group.title).take(3)
+                            }.orEmpty()
+                        var found: String? = null
+                        for (release in first) {
+                            found = coverArtArchive.findCover(
+                                release.musicBrainzId, group.musicBrainzId,
+                            )
+                            if (found != null) break
+                        }
+                        found
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { null } ?: continue
+                if (_searchSource.value != SearchSource.CANONICAL ||
+                    canonicalPath.lastOrNull() != artist
+                ) return@launch
+                val current = (_canonicalDetail.value as? UiState.Success)?.data ?: continue
+                val updated = current.copy(rows = current.rows.map {
+                    if (it.kind == group.kind && it.musicBrainzId == group.musicBrainzId &&
+                        it.artworkUri.isNullOrBlank()
+                    ) it.copy(artworkUri = artwork) else it
+                })
+                _canonicalDetail.value = UiState.Success(updated)
+                val artistId = canonicalNativeBrowseId(artist)
+                _detailStack.value = _detailStack.value.map { page ->
+                    if (page.browseId != artistId) page else page.copy(
+                        sections = canonicalNativeSections(
+                            parentKind = CanonicalSearchKind.ARTIST,
+                            rows = updated.rows,
+                            heading = getApplication<Application>().getString(
+                                R.string.shelf_new_albums_singles,
+                            ),
+                        ),
+                    )
+                }
+            }
+        }
+    }
 
     /**
      * Canonical identity uses the same native DetailScreen as the rest of
@@ -711,6 +777,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun clearCanonicalCatalogNavigation() {
+        canonicalDetailCoverJob?.cancel()
         canonicalBrowseJob?.cancel()
         canonicalPagingJob?.cancel()
         _canonicalLoadingMore.value = false
@@ -773,6 +840,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun showCanonicalCatalogEntry(entry: CanonicalCatalogSearchRow) {
+        canonicalDetailCoverJob?.cancel()
         canonicalBrowseJob?.cancel()
         canonicalPagingJob?.cancel()
         _canonicalLoadingMore.value = false
@@ -996,6 +1064,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (_searchSource.value == SearchSource.CANONICAL && canonicalPath.lastOrNull() == entry) {
                 _canonicalDetail.value = output
+                if (entry.kind == CanonicalSearchKind.ARTIST && output is UiState.Success) {
+                    enrichCanonicalNativeDetailCovers(entry)
+                }
                 val nativeId = canonicalNativeBrowseId(entry)
                 _detailStack.value = _detailStack.value.map { page ->
                     if (page.browseId != nativeId) page else when (output) {
