@@ -121,7 +121,8 @@ internal fun canonicalCoverLookupCandidates(
     rows: List<CanonicalCatalogSearchRow>,
     limit: Int,
 ): List<CanonicalCatalogSearchRow> = rows.asSequence()
-    .filter { canonicalNeedsCoverRefresh(it.artworkUri) && canonicalCoverLookupTarget(it) != null }
+    .filter { canonicalNeedsCoverRefresh(it.artworkUri) &&
+        (canonicalCoverLookupTarget(it) != null || it.kind == CanonicalSearchKind.RECORDING) }
     .distinctBy { it.kind to it.musicBrainzId }
     .take(limit.coerceAtLeast(0))
     .toList()
