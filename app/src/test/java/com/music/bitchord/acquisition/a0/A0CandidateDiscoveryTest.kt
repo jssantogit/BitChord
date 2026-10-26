@@ -388,4 +388,44 @@ class A0CandidateDiscoveryTest {
         assertEquals(0,collector.screening().simulatedSuggested)
         assertEquals(1,collector.screening().simulatedNoStrong)
     }
+
+    @Test fun shadowSuggestionCannotPreferWrongQualityOrConflictingAlbum() {
+        val handoff=A0ObservedCandidateHandoff(
+            Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",saveFormatsOnly=true,
+            expectedDurationSeconds=161,requestedAlbum="SUPER REAL ME",
+            qualityProfile=A0SoulseekQualityProfiles.snapshot(
+                com.music.bitchord.data.settings.DownloadQualityProfile.HIGH_QUALITY)
+        )
+        val lossless=A0SoulseekSearchFile(
+            "Music\\SUPER REAL ME\\ILLIT - Magnetic.flac",25_000_000,
+            "flac",mapOf(1 to 161,4 to 44_100,5 to 16))
+        val wrongAlbum=A0SoulseekSearchFile(
+            "Music\\OTHER EDITION\\ILLIT - Magnetic.mp3",6_400_000,
+            "mp3",mapOf(0 to 320,1 to 161))
+        val matching=A0SoulseekSearchFile(
+            "Music\\SUPER REAL ME\\ILLIT - Magnetic.mp3",6_400_000,
+            "mp3",mapOf(0 to 320,1 to 161))
+        handoff.offerParsed(reply("flac-peer",listOf(lossless)),"flac-peer")
+        handoff.offerParsed(reply("wrong-album-peer",listOf(wrongAlbum)),"wrong-album-peer")
+        handoff.offerParsed(reply("matching-peer",listOf(matching)),"matching-peer")
+        val all=handoff.choices()
+        assertEquals(3,all.size)
+        assertTrue(all.any {
+            it.preflight.confidence==A0CandidatePreflight.Confidence.STRONG &&
+                it.qualityEvidence.status==A0DownloadQualityPolicy.Status.INCOMPATIBLE
+        })
+        assertTrue(all.any {
+            it.albumEvidence.status==A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM
+        })
+        val preview=handoff.claimPreview()
+        assertEquals(3,preview.totalCandidates)
+        assertEquals(A0CandidatePreflight.SimulationStatus.SUGGESTED,preview.status)
+        val selected=all[checkNotNull(preview.preferredIndex)]
+        assertTrue(selected.displayName.endsWith(".mp3"))
+        assertEquals(A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED,
+            selected.albumEvidence.status)
+        assertEquals(A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED,
+            selected.qualityEvidence.status)
+    }
 }
