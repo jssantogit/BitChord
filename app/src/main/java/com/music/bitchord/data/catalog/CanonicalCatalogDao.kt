@@ -574,7 +574,8 @@ internal interface CanonicalCatalogDao {
     @Query("""
         SELECT identity.externalId AS musicBrainzId, edition.title AS title,
             edition.artistDisplay AS artistDisplay, info.country AS country,
-            info.releaseDate AS releaseDate, COALESCE(art.thumbnailUri, art.artworkUri) AS artworkUri
+            info.releaseDate AS releaseDate, info.status AS status,
+            COALESCE(art.thumbnailUri, art.artworkUri) AS artworkUri
         FROM catalog_external_identity identity
         JOIN catalog_release edition ON edition.id = identity.entityId
         LEFT JOIN musicbrainz_release_enrichment info
