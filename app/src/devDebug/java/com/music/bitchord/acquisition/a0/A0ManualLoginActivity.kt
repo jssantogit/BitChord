@@ -15,6 +15,7 @@ import com.music.bitchord.download.A3AcquisitionLedger
 import com.music.bitchord.download.A3AndroidAcquisitionLedger
 import com.music.bitchord.download.SoulseekBatchPayload
 import com.music.bitchord.download.SoulseekBatchSession
+import com.music.bitchord.download.SoulseekBatchPlan
 import android.widget.Toast
 import android.text.InputType
 import android.text.InputFilter
@@ -393,7 +394,9 @@ class A0ManualLoginActivity : Activity() {
                                 val handoff = if (transferObserved) {
                                     A0ObservedCandidateHandoff(
                                         connection, username, token,
-                                        searchPhrase=checkNotNull(enteredSearch),
+                                        searchPhrase=SoulseekBatchPlan.identityQuery(
+                                            batch?.current,checkNotNull(enteredSearch)
+                                        ),
                                         saveFormatsOnly=saveToDevice,
                                         expectedDurationSeconds=expectedDuration,
                                         requestedAlbum=albumConstraint,
