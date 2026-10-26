@@ -758,8 +758,9 @@ class A0ManualLoginActivity : Activity() {
                                         activePeerWorkers=null
                                         trace.note(A0SmokeTrace.Stage.SEARCH_READERS_JOINED)
                                         trace.peerSearchBackpressure(
-                                            peerOfferBackpressure.get()+directOfferBackpressure.get()+
-                                                offerGate.capacityDropped)
+                                            dropped=peerOfferBackpressure.get()+directOfferBackpressure.get()+
+                                                offerGate.capacityDropped+offerGate.perPeerDropped,
+                                            perPeerDropped=offerGate.perPeerDropped)
                                     } else {
                                         listener.close()
                                         directCollector.cancel()
