@@ -504,8 +504,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             canonicalEditorialReleaseType(row) == null
         ) return null
         if (row.kind == CanonicalSearchKind.RELEASE_GROUP) {
-            // Fast path on revisit: only art copied from a verified Official
-            // exact-title Release is stored under group front-v3.
+            // Fast path on revisit: group art must come from a vetted
+            // Official edition linked by MBID, not matching group title.
             coverArtArchive.cachedVerifiedGroupCover(row.musicBrainzId, size)?.let {
                 return it
             }
@@ -541,6 +541,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     edition.musicBrainzId, null, CoverArtSize.THUMBNAIL,
                 ) ?: hero
                 try {
+                    // Preserve the actual Official Release metadata too: cold
+                    // sessions can reuse both its Front and editorial title.
+                    // Only exact group-membership releases are supplied here.
+                    index.persistGroupEditions(row.musicBrainzId, listOf(edition))
                     RoomMusicBrainzCoverArtStore(
                         CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao(),
                     ).write(MusicBrainzCoverArtCacheEntry(
@@ -852,7 +856,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Exception) { null }
-                        cover?.let { group.musicBrainzId to it }
+                        val releaseEvidence = artistEditions[group.musicBrainzId]
+                            ?: try {
+                                MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
+                                    getApplication<Application>(),
+                                )).cachedGroupReleases(group.musicBrainzId)
+                            } catch (cancelled: CancellationException) { throw cancelled }
+                              catch (_: Exception) { emptyList() }
+                        cover?.let {
+                            group.musicBrainzId to (it to canonicalOfficialGroupDisplayTitle(
+                                group.title, releaseEvidence,
+                            ))
+                        }
                     },
                     publish = paint@{ ready ->
                         if (_searchSource.value != SearchSource.CANONICAL ||
@@ -864,7 +879,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                     val cover = results[it.musicBrainzId]
                                     if (it.kind == CanonicalSearchKind.RELEASE_GROUP &&
                                         it.artworkUri.isNullOrBlank() && cover != null
-                                    ) it.copy(artworkUri = cover) else it
+                                    ) it.copy(artworkUri = cover.first, title = cover.second)
+                                    else it
                                 }),
                             )
                         }
@@ -1064,14 +1080,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ) {
                     is MusicBrainzCatalogGraphResult.Success -> {
                         artistFirstPage = result.value
-                        val verifiedCovers = try {
+                        val verifiedGroups = try {
                             withContext(Dispatchers.IO) {
                                 val index = MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
                                     getApplication<Application>(),
                                 ))
                                 index.persistArtistGroups(entry.musicBrainzId, result.value.items)
                                 index.cachedArtistGroups(entry.musicBrainzId)
-                                    .associate { it.musicBrainzId to it.artworkUri }
+                                    .associateBy { it.musicBrainzId }
                             }
                         } catch (cancelled: CancellationException) {
                             throw cancelled
@@ -1079,12 +1095,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         UiState.Success(CanonicalCatalogDetailPage(entry.title,
                             "Release groups · showing ${result.value.items.size} of ${result.value.total}",
                             result.value.items.map { hit -> CanonicalCatalogSearchRow(
-                                hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
+                                hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP,
+                                verifiedGroups[hit.musicBrainzId]?.title ?: hit.title,
                                 hit.artistDisplay?.takeUnless { it.equals("Other", true) },
                                 releaseDate = hit.firstReleaseDate,
                                 releaseKind = hit.primaryType?.takeUnless { it.equals("Other", true) },
                                 secondaryTypes = hit.secondaryTypes,
-                                artworkUri = verifiedCovers[hit.musicBrainzId],
+                                artworkUri = verifiedGroups[hit.musicBrainzId]?.artworkUri,
                             ) },
                             nextOffset = result.value.nextOffset,
                             totalCount = result.value.total,
