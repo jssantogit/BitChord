@@ -650,33 +650,31 @@ class A0ManualLoginActivity : Activity() {
                                         }
                                     }
                                     val peerStatus = if (transferObserved) {
-                                        // One user-initiated search may contain a bounded
-                                        // title-only recovery. Soulseek uses word intersection:
-                                        // artist names can overconstrain results. Reuse the
-                                        // search ticket so the existing P validation remains
-                                        // strict and candidates keep their ORIGINAL identity.
-                                        val early = inbox.poll(6, TimeUnit.SECONDS)
-                                        val fallback = A0SearchQuery.titleOnlyFallback(
+                                        // Keep at most two variants INSIDE the original
+                                        // 18s discovery window, without a reconnect or
+                                        // new search token. The canonical request remains
+                                        // unchanged for title/album/quality verification.
+                                        val recovery=A0SearchRecoveryPlan(
                                             checkNotNull(enteredSearch))
-                                        // A bitrate-compatible but wrong album/version/title
-                                        // must not prevent the single bounded rescue query.
-                                        // The ORIGINAL target still governs ranking and gates.
-                                        val relevant = handoff?.hasRelevantCandidateForSearchRecovery() == true
-                                        if (early == null && fallback != null && !relevant &&
-                                            !failedServerReader.get() && readerGate.isOpen() &&
-                                            !stopping && !Thread.currentThread().isInterrupted
-                                        ) {
+                                        val sent=mutableSetOf(checkNotNull(requestedSearch))
+                                        fun sendRescue(elapsedMillis:Long) {
+                                            if (failedServerReader.get() || !readerGate.isOpen() ||
+                                                stopping || Thread.currentThread().isInterrupted)
+                                                return
+                                            val variant=recovery.next(elapsedMillis,
+                                                handoff?.hasRelevantCandidateForSearchRecovery()==true,
+                                                sent) ?: return
                                             try {
                                                 connection.getOutputStream().apply {
-                                                    write(A0OneShotPublicSearchWire.fileSearch(token, fallback))
+                                                    write(A0OneShotPublicSearchWire.fileSearch(token,variant))
                                                     flush()
                                                 }
+                                                sent.add(variant)
                                                 trace.note(A0SmokeTrace.Stage.SEARCH_VARIANT_SENT)
                                                 runOnUiThread {
-                                                    if (!stopping && readerGate.isOpen()) {
-                                                        status.text = "Buscando também apenas pelo título " +
-                                                            "(qualidade e identidade originais preservadas)."
-                                                    }
+                                                    if(!stopping && readerGate.isOpen())
+                                                        status.text="Buscando outra variação segura; " +
+                                                            "identidade, álbum e qualidade preservados."
                                                 }
                                             } catch (_: IOException) {
                                                 trace.note(A0SmokeTrace.Stage.SEARCH_VARIANT_FAILED,
@@ -684,8 +682,12 @@ class A0ManualLoginActivity : Activity() {
                                                     A0SmokeTrace.Reason.SERVER_IO_FAILURE)
                                             }
                                         }
-                                        early ?: inbox.poll(12, TimeUnit.SECONDS)
-                                    } else inbox.poll(12, TimeUnit.SECONDS)
+                                        val early=inbox.poll(6,TimeUnit.SECONDS)
+                                        if(early==null)sendRescue(6000L)
+                                        val middle=early ?: inbox.poll(6,TimeUnit.SECONDS)
+                                        if(middle==null)sendRescue(12000L)
+                                        middle ?: inbox.poll(6,TimeUnit.SECONDS)
+                                    } else inbox.poll(12,TimeUnit.SECONDS)
                                     readerGate.stop()
                                     result = peerStatus ?: when {
                                         failedServerReader.get() ->
