@@ -1381,7 +1381,7 @@ class A0ManualLoginActivity : Activity() {
                     if(!hasNext) {
                         batchStatus?.text="Lote concluído: ${batch.succeeded} salvas, " +
                             "${batch.skipped} puladas. Nenhum download adicional."
-                        nextTrack.isEnabled=false
+                        nextTrack?.isEnabled=false
                         retry.isEnabled=false
                         alternative.isEnabled=false
                         status.text="Lote finalizado. Confira Biblioteca → Música local."
@@ -1394,7 +1394,7 @@ class A0ManualLoginActivity : Activity() {
                         batchStatus?.text="Lote: faixa ${batch.index+1} de " +
                             "${batch.entries.size} · ${batch.succeeded} salvas · " +
                             "${batch.skipped} puladas."
-                        nextTrack.isEnabled=false
+                        nextTrack?.isEnabled=false
                         status.text="Faixa ${batch.index+1} preparada. Selecione um candidato."
                         confirmSearch()
                     }
