@@ -411,6 +411,15 @@ class CoverArtArchiveFallbackTest {
         assertEquals("https://archive.org/official-1200.jpg",
             cover.cachedVerifiedGroupCover(group, CoverArtSize.HERO))
         assertEquals(0, network)
+        records["release-group:front-v3"] = MusicBrainzCoverArtCacheEntry(
+            "release-group", group, null, now,
+            "https://coverartarchive.org/release/$release/front-500",
+        )
+        assertEquals("https://coverartarchive.org/release/$release/front-500",
+            cover.cachedVerifiedGroupCover(group, CoverArtSize.THUMBNAIL))
+        assertNull("A 500px shortcut cannot pretend to be high-quality hero art",
+            cover.cachedVerifiedGroupCover(group, CoverArtSize.HERO))
+        assertEquals(0, network)
     }
 
     @Test fun staleOrUntrustedGroupV3ArtworkCannotBeRenderedAsVerified() = runBlocking {
