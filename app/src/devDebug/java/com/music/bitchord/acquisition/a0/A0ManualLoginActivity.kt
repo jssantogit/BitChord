@@ -51,6 +51,8 @@ import java.util.UUID
  */
 class A0ManualLoginActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
+    // Memory-only comparison; scoped to this Activity, never persisted.
+    private val searchComparison=A0SearchComparison()
     @Volatile private var activeSocket: Socket? = null
     @Volatile private var activeListener: ServerSocket? = null
     @Volatile private var activeDirectCollector:A0DirectPeerSearchCollector?=null
@@ -780,6 +782,9 @@ class A0ManualLoginActivity : Activity() {
                                     if(report!=null) {
                                         trace.candidateScreening(report)
                                         trace.canonicalCandidateScreening(report,preset.name)
+                                        trace.searchComparison(searchComparison.observe(
+                                            checkNotNull(requestedSearch),albumConstraint,
+                                            preset.name,report.manualPrimary,report.responses))
                                     }
                                     if (handoff?.hasCandidates() == true) {
                                         checkNotNull(handoff).markReadersStopped()
