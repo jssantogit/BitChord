@@ -171,10 +171,7 @@ internal fun canonicalCuratedHomeShelves(
             it.kind == CanonicalSearchKind.RELEASE_GROUP ||
                 it.kind == CanonicalSearchKind.RELEASE
         }
-        .filter { row ->
-            val kind = row.releaseKind?.lowercase()
-            kind == null || kind == "album" || kind == "single" || kind == "ep"
-        }
+        .filter { row -> canonicalEditorialReleaseType(row) != null }
         .filter { row ->
             val date = row.releaseDate ?: return@filter true
             val normalized = when {
