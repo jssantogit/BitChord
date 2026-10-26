@@ -22,16 +22,40 @@ internal fun canonicalArtworkEditionsForGroup(
 ): List<MusicBrainzReleaseHit> =
     canonicalPreferredEditions(editions, groupTitle)
         .filter { edition ->
+            // A ReleaseGroup's conceptual title is not necessarily the official
+            // Release title: “How Sweet & Bubble Gum” owns official “How Sweet”
+            // editions. MBID membership + Official status, NOT string equality,
+            // is the provenance boundary. Curated title rejects video variants.
             isCuratedMusicBrainzRelease(edition) &&
-                edition.title.trim().equals(groupTitle.trim(), ignoreCase = true) &&
                 // MusicBrainz can tell us that an edition has no CAA Front.
-                // Don't spend another archive round-trip to confirm a 404.
                 edition.hasFrontCover != false
         }
         // Artwork choice is separate from tracklist edition preference:
         // positively known covers avoid slow dead-end CAA requests.
         .sortedByDescending { it.hasFrontCover == true }
         .take(2)
+
+/**
+ * An edition's public title is distinct from its parent ReleaseGroup title.
+ * On composite group labels, use a verified Official edition's shorter
+ * leading title as the displayed label; do not mutate the canonical group ID.
+ * Never infer a title from an artist, recording, track count or an unrelated
+ * release; inconclusive cases retain the original MusicBrainz group label.
+ */
+internal fun canonicalOfficialGroupDisplayTitle(
+    groupTitle: String,
+    editions: List<MusicBrainzReleaseHit>,
+): String {
+    val prefix = groupTitle.trim()
+    val matching = canonicalPreferredEditions(editions, groupTitle).filter { edition ->
+        isCuratedMusicBrainzRelease(edition) &&
+            edition.title.isNotBlank() &&
+            // Only a clear composite-group -> edition relationship is
+            // unambiguous enough for offline editorial display.
+            prefix.startsWith(edition.title.trim() + " & ", ignoreCase = true)
+    }
+    return matching.firstOrNull()?.title?.trim() ?: groupTitle
+}
 
 internal fun canonicalPreferredEditions(
     editions: List<MusicBrainzReleaseHit>,
