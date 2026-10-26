@@ -17,10 +17,11 @@ import java.util.zip.InflaterInputStream
  */
 internal object A0SoulseekSearchResponseParser {
     private const val MAX_WIRE_BYTES = 1_048_576
-    private const val MAX_DECODED_BYTES = 524_288
-    // A peer may announce more than the original A0 pilot's 128 entries.
-    // The 512 KiB inflated payload budget still enforces a stricter byte cap.
-    private const val MAX_FILES = 512
+    private const val MAX_DECODED_BYTES = 2_097_152
+    // Peers with large shared libraries can send thousands of files in one
+    // reply. Keep both the inflated byte limit and the decoded entry limit;
+    // never discard all of a peer's results merely because it has >512 files.
+    private const val MAX_FILES = 4096
     private const val MAX_ATTRIBUTES = 32
     private const val MAX_FIELD_BYTES = 2_048
     private const val SEARCH_RESPONSE_CODE = 9
