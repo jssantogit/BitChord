@@ -76,6 +76,9 @@ internal data class MusicBrainzRecordingHit(
     val durationMs: Long?,
     /** Art comes from an actual linked MusicBrainz Release, never title matching. */
     val coverReleaseMbid: String? = null,
+    /** A matching published release is evidence, unlike an arbitrary Recording MBID. */
+    val hasOfficialAudioRelease: Boolean = false,
+    val isVideo: Boolean = false,
 )
 
 /**
@@ -85,6 +88,29 @@ internal data class MusicBrainzRecordingHit(
  * videoId-based play path could silently resolve a metadata hit via YouTube.
  * The shared MusicBrainzClient rate limiter protects lookups and search alike.
  */
+/**
+ * Search's raw MusicBrainz corpus is retained in the index, but General's
+ * streaming-oriented rows expose only recordings with an official audio
+ * release. Avoid blocking legitimate label-issued remixes/instrumentals.
+ * Reject video-only and user-edited titles even if mislabeled "Official".
+ */
+internal fun isCuratedMusicBrainzRecording(hit: MusicBrainzRecordingHit): Boolean =
+    hit.hasOfficialAudioRelease && !hit.isVideo && canonicalStreamingTitleIsSafe(hit.title)
+
+internal fun canonicalStreamingTitleIsSafe(title: String): Boolean {
+    if (title.isBlank()) return false
+    val normalized = title.trim()
+    if (NON_STREAMING_TITLE.containsMatchIn(normalized)) return false
+    return !MEMBER_PRACTICE_VERSION.containsMatchIn(normalized)
+}
+
+private val NON_STREAMING_TITLE = Regex(
+    """(?i)\b(?:performance\s*(?:ver(?:sion)?\.?|video)|dance\s*(?:practice|fix|performance)|practice\s*ver(?:sion)?\.?|jersey\s*flip|fan[- ]?(?:edit|made)|fancam|music\s*video|sped\s*up|slowed(?:\s*(?:and|&)\s*reverb)?|nightcore|mashup|rehearsal|fix\s*ver(?:sion)?\.?)\b"""
+)
+private val MEMBER_PRACTICE_VERSION = Regex(
+    """\([A-Z]{3,}(?:\s*&\s*[A-Z]{3,})+\s+ver\.?\)"""
+)
+
 internal class MusicBrainzCatalogSearch(
     private val client: MusicBrainzClient = MusicBrainzClient(),
 ) {
@@ -202,17 +228,27 @@ internal class MusicBrainzCatalogSearch(
                 result.recordings?.mapNotNull { recording ->
                     val mbid = recording.id.validSearchMbidOrNull() ?: return@mapNotNull null
                     val title = recording.title.nonEmpty() ?: return@mapNotNull null
-                    val releaseForArt = recording.releases.orEmpty().mapNotNull { release ->
-                        release.id.validSearchMbidOrNull()?.let { id -> release.copy(id = id) }
-                    }.sortedWith(
-                        compareBy<SearchRecordingRelease> {
-                            !it.status.equals("Official", ignoreCase = true)
-                        }.thenBy { it.date.orEmpty().ifBlank { "9999-12-31" } },
-                    ).firstOrNull()?.id
+                    val official = recording.releases.orEmpty().filter { release ->
+                        release.status.equals("Official", ignoreCase = true) &&
+                            release.id.validSearchMbidOrNull() != null
+                    }
+                    // An official release alone does not prove that its cover
+                    // depicts an audio sleeve: a MusicBrainz "Other" / video
+                    // release can have a video still marked Front by CAA.
+                    val audioReleases = official.filter { release ->
+                        release.releaseGroup?.primaryType?.trim()?.lowercase(Locale.ROOT) in
+                            setOf("album", "ep", "single")
+                    }
+                    val releaseForArt = if (recording.video == true) null else
+                        audioReleases.sortedWith(compareBy<SearchRecordingRelease> {
+                            it.date.orEmpty().ifBlank { "9999-12-31" }
+                        }.thenBy { it.id.orEmpty() }).firstOrNull()?.id
                     MusicBrainzRecordingHit(
                         mbid, title, recording.artistCredit.displayArtistCredit(),
                         recording.length?.takeIf { it >= 0 },
                         coverReleaseMbid = releaseForArt,
+                        hasOfficialAudioRelease = official.isNotEmpty(),
+                        isVideo = recording.video == true,
                     )
                 }
             }
@@ -327,7 +363,10 @@ private data class SearchReleaseGroupEntry(
 )
 
 @Serializable
-private data class SearchReleaseGroupReference(val id: String? = null)
+private data class SearchReleaseGroupReference(
+    val id: String? = null,
+    @SerialName("primary-type") val primaryType: String? = null,
+)
 
 @Serializable
 private data class SearchReleaseEntry(
@@ -345,6 +384,7 @@ private data class SearchRecordingRelease(
     val id: String? = null,
     val date: String? = null,
     val status: String? = null,
+    @SerialName("release-group") val releaseGroup: SearchReleaseGroupReference? = null,
 )
 
 @Serializable
@@ -352,6 +392,7 @@ private data class SearchRecordingEntry(
     val id: String? = null,
     val title: String? = null,
     val length: Long? = null,
+    val video: Boolean? = null,
     @SerialName("artist-credit") val artistCredit: List<SearchArtistCredit>? = null,
     val releases: List<SearchRecordingRelease>? = null,
 )
