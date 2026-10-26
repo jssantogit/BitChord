@@ -152,4 +152,20 @@ class A0CandidateDiagnosticCoverageTest {
         assertFalse(event.attributes.toString().contains("ILLIT"))
         assertFalse(event.attributes.toString().contains("SUPER REAL ME"))
     }
+
+    @Test fun albumCoverageDiagnosticsContainOnlyBoundedCounts() {
+        val points=mutableListOf<StructuredTracePoint>()
+        val tracer=StructuredTracer(sink=StructuredTraceSink { points.add(it) },
+            traceIdFactory={ "release-shadow-metrics" })
+        val trace=A0SmokeTrace.start(tracer,observedTransfer=true)
+        val report=A0ReleaseDiscoveryPlanner.preview(
+            listOf(A0ReleaseDiscoveryPlanner.Target("song",180)),
+            emptyList())
+        trace.releaseDiscoveryCoverage(report)
+        val event=points.single { it.stage=="release_discovery_shadow" }
+        assertEquals("0",event.attributes["autoReadyTracks"])
+        assertEquals("1",event.attributes["manualReviewTracks"])
+        assertEquals("0",event.attributes["bestFolderCoverage"])
+        assertFalse(event.attributes.toString().contains("song"))
+    }
 }
