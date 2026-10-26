@@ -243,6 +243,8 @@ internal class A0SmokeTrace private constructor(
                 "albumUnknown" to n(report.albumUnknown),
                 "albumConflicts" to n(report.albumConflicts),
                 "qualityMismatches" to n(report.qualityMismatches),
+                "manualPrimary" to n(report.manualPrimary),
+                "shadowStrong" to n(report.shadowStrong),
             ),
         )
     }
