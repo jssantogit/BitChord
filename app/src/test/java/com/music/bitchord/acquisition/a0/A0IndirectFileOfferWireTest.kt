@@ -22,6 +22,30 @@ class A0IndirectFileOfferWireTest {
         assertEquals(local,offer.address)
     }
 
+    @Test fun acceptsLegacyOffersWithoutModernNineByteTail() {
+        val full=frame("owned_peer","F",byteArrayOf(1,0,0,127),38891,84)
+        val legacy=full.copyOf(full.size-9).also { bytes ->
+            val newLength=bytes.size-4
+            for(i in 0..3) bytes[i]=(newLength ushr (8*i)).toByte()
+        }
+        val offered=A0IndirectFileOfferWire.readServerEvent(
+            ByteArrayInputStream(legacy),"owned_peer",local)
+        assertTrue(offered is A0IndirectFileOfferWire.Event.Offer)
+        assertEquals(38891,(offered as A0IndirectFileOfferWire.Event.Offer).port)
+    }
+
+    @Test fun rejectsPartialModernTailEvenIfIdentityIsCorrect() {
+        val full=frame("owned_peer","F",byteArrayOf(1,0,0,127),38891,84)
+        val broken=full.copyOf(full.size-4).also { bytes ->
+            val newLength=bytes.size-4
+            for(i in 0..3) bytes[i]=(newLength ushr (8*i)).toByte()
+        }
+        try {
+            A0IndirectFileOfferWire.readServerEvent(ByteArrayInputStream(broken),"owned_peer",local)
+            fail("Partial tail must not become valid F offer")
+        }catch(_:IOException){}
+    }
+
     @Test fun wrongPeerWrongAddressAndUnexpectedTypeCannotAuthorizeFileSocket() {
         for (input in listOf(
             frame("someone_else","F",byteArrayOf(1,0,0,127),38891,84),
