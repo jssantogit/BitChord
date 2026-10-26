@@ -27,7 +27,9 @@ internal object A0CandidateRank {
         val quality:Quality=Quality.UNKNOWN_ADVERTISED,
         val warnings:List<Warning> = emptyList()
     )
-    private fun tokens(value:String):List<String> {
+    // Shared by the release shadow's cheap *necessary-condition* gate.
+    // Never duplicate Unicode/token semantics in a separate prefilter.
+    internal fun tokens(value:String):List<String> {
         val folded=Normalizer.normalize(value,Normalizer.Form.NFKD)
             .replace(Regex("\\p{M}+"),"").lowercase(Locale.ROOT)
         return folded.split(Regex("[^\\p{L}\\p{N}]+")).filter(String::isNotBlank)
