@@ -15,7 +15,7 @@ import java.security.MessageDigest
  * NOT proof that Android can decode the complete content.
  */
 internal object A2LocalAudioPublisher {
-    private const val MAX_BYTES=64L*1024L*1024L
+    private const val MAX_BYTES=com.music.bitchord.acquisition.a0.A0ObservedTransferLimits.MAX_AUDIO_BYTES
     private val DIGEST=Regex("[0-9a-fA-F]{64}")
     private val BAD_NAME=Regex("""[\\/:*?"<>|\u0000-\u001f\u007f]""")
 
