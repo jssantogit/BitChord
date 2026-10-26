@@ -2063,9 +2063,12 @@ private fun BitChordApp(
             // Playlists, artist pages and loose multi-selection do not become
             // unconsented bulk transfers. The devDebug pilot is explicit.
             val plan=SoulseekBatchPlan.prepare(
-                requested.map { track ->
+                requested.mapIndexed { ordinal,track ->
                     SoulseekBatchPlan.SourceTrack(
-                        trackId=track.videoId,
+                        // Position is only a transient batch slot fallback; it
+                        // is NEVER minted as a recording or release identity.
+                        trackId=track.videoId.takeIf(String::isNotBlank)
+                            ?: "batch-slot-${ordinal+1}",
                         artist=track.artist,
                         title=track.title,
                         creditedArtists=track.artists.map { it.name },
