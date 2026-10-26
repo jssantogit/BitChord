@@ -29,6 +29,7 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
 import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRecording
+import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.ui.screens.CanonicalCatalogDetailPage
@@ -700,7 +701,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             } catch (cancelled: CancellationException) {
                                 throw cancelled
                             } catch (_: Exception) { /* No false offline claim; live list still usable. */ }
-                            result.value.items.map { hit ->
+                            result.value.items.filter(::isCuratedMusicBrainzRelease).map { hit ->
                                 CanonicalCatalogSearchRow(hit.musicBrainzId, CanonicalSearchKind.RELEASE,
                                     hit.title, listOfNotNull(hit.country, hit.releaseDate).joinToString(" · "),
                                     releaseDate = hit.releaseDate,
@@ -2624,7 +2625,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             artworkUri = hit.artworkUri,
                         ))
                     }
-                    dao.searchKnownMusicBrainzReleases("", limit = 300).forEach { hit ->
+                    dao.searchKnownMusicBrainzReleases("", limit = 300)
+                        .filter(::isCuratedMusicBrainzRelease).forEach { hit ->
                         add(CanonicalCatalogSearchRow(
                             hit.musicBrainzId, CanonicalSearchKind.RELEASE, hit.title,
                             listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
@@ -2633,7 +2635,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             artworkUri = hit.artworkUri,
                         ))
                     }
-                    recordings.forEach { hit ->
+                    recordings.filter(::isCuratedMusicBrainzRecording).forEach { hit ->
                         add(CanonicalCatalogSearchRow(
                             hit.musicBrainzId, CanonicalSearchKind.RECORDING, hit.title,
                             hit.artistDisplay,
@@ -3628,7 +3630,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 fromOfflineCache = true,
                             ))
                         }
-                        dao.searchKnownMusicBrainzReleases(query, 6).forEach { release ->
+                        dao.searchKnownMusicBrainzReleases(query, 6)
+                            .filter(::isCuratedMusicBrainzRelease).forEach { release ->
                             add(CanonicalCatalogSearchRow(
                                 release.musicBrainzId, CanonicalSearchKind.RELEASE,
                                 release.title,
@@ -3778,7 +3781,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 if (editions is MusicBrainzCatalogSearchResult.Success) {
-                    editions.page.items.forEach { hit ->
+                    editions.page.items.filter(::isCuratedMusicBrainzRelease).forEach { hit ->
                         add(CanonicalCatalogSearchRow(
                             musicBrainzId = hit.musicBrainzId,
                             kind = CanonicalSearchKind.RELEASE,
@@ -3846,7 +3849,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             }
                         }
                         if (CanonicalSearchKind.RELEASE in failedKinds) {
-                            dao.searchKnownMusicBrainzReleases(query, 25).forEach { hit ->
+                            dao.searchKnownMusicBrainzReleases(query, 25)
+                                .filter(::isCuratedMusicBrainzRelease).forEach { hit ->
                                 add(CanonicalCatalogSearchRow(
                                     hit.musicBrainzId, CanonicalSearchKind.RELEASE, hit.title,
                                     listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
@@ -3979,7 +3983,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                     }
                     if (editions is MusicBrainzCatalogSearchResult.Success) {
-                        editions.page.items.forEach { hit ->
+                        editions.page.items.filter(::isCuratedMusicBrainzRelease).forEach { hit ->
                             add(CanonicalCatalogSearchRow(
                                 hit.musicBrainzId, CanonicalSearchKind.RELEASE, hit.title,
                                 listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
