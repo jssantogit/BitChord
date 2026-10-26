@@ -147,10 +147,13 @@ internal fun canonicalCoverLookupTarget(
  * are not acceptable quality for a hero or a full-width Home release card.
  * Never upgrade a generic image URL by guessing a different provider's asset.
  */
-internal fun canonicalNeedsCoverRefresh(artwork: String?): Boolean =
-    artwork.isNullOrBlank() ||
-        ((artwork.contains("coverartarchive.org/") || artwork.contains("archive.org/")) &&
-            artwork.endsWith("-250.jpg"))
+internal fun canonicalNeedsCoverRefresh(artwork: String?): Boolean {
+    if (artwork.isNullOrBlank()) return true
+    if (!artwork.contains("coverartarchive.org/") && !artwork.contains("archive.org/")) return false
+    // CAA commonly serves low-resolution art as /front-250 without a .jpg suffix.
+    val path = artwork.substringBefore('?')
+    return path.endsWith("-250.jpg") || path.endsWith("-250")
+}
 
 /** Bound network enrichment to a small visible subset, with stable identities. */
 internal fun canonicalCoverLookupCandidates(
