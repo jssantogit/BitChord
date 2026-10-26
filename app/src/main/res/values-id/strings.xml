@@ -58,6 +58,7 @@
     </plurals>
     <string name="songs">Lagu</string>
     <string name="artists">Artis</string>
+    <string name="canonical_singles_eps">Singel dan EP</string>
     <string name="albums">Album</string>
     <string name="no_album_metadata">Tidak ada trek ini yang menunjukkan asal albumnya.</string>
     <string name="search_empty">Cari jutaan lagu di YouTube Music.</string>
