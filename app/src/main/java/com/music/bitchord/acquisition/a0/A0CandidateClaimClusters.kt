@@ -28,6 +28,7 @@ internal object A0CandidateClaimClusters {
         val assessment:A0CandidatePreflight.Assessment,
         val score:Int,
         val availability:A0PeerAvailability.Assessment,
+        val transportReliability:Int=0,
     )
 
     data class Preview(
@@ -100,6 +101,9 @@ internal object A0CandidateClaimClusters {
             group.filter { eligibleIndices==null || it.index in eligibleIndices }
                 .sortedWith(compareByDescending<IndexedValue<Entry>> {
                     it.value.score
+                }.thenByDescending {
+                    // Only inside identical metadata + preflight evidence.
+                    it.value.transportReliability
                 }.thenComparator { a,b ->
                     A0PeerAvailability.compareSource(
                         b.value.availability,a.value.availability)
