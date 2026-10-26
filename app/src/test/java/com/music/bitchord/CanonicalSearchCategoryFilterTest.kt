@@ -211,4 +211,14 @@ class CanonicalSearchCategoryFilterTest {
         assertEquals("EP", canonicalDisplaySubtitle(ep, "Álbum"))
     }
 
+    @Test fun canonicalQueryHistoryReusesExistingRecentRowsAndRejectsEmptyTerms() {
+        val value = com.music.bitchord.data.settings.canonicalQueryHistoryEntry("  NewJeans  ")!!
+        assertEquals("q:newjeans", value.id)
+        assertEquals("NewJeans", value.title)
+        assertEquals(null, com.music.bitchord.data.settings.canonicalQueryHistoryEntry("  "))
+        val youtubeEntity = value.copy(id = "legacy-video-123", title = "Hurt")
+        assertEquals(listOf(value),
+            com.music.bitchord.ui.screens.canonicalRecentSearchEntries(listOf(youtubeEntity, value)))
+    }
+
 }
