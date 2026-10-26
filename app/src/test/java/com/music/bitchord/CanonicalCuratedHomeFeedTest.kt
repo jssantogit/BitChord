@@ -192,6 +192,8 @@ class CanonicalCuratedHomeFeedTest {
             listOf(artist, release, release, recording, edition),
             limit = 2,
         )
-        assertEquals(listOf(release, edition), candidates)
+        // A Recording is now eligible for a separate explicit MBID graph lookup,
+        // not for any name-derived fallback cover.
+        assertEquals(listOf(release, recording), candidates)
     }
 }
