@@ -187,7 +187,7 @@ internal class A0ObservedCandidateHandoff(
                 unsupported=(unsupported+1).coerceAtMost(100000)
                 continue
             }
-            if(file.sizeBytes !in 44L..64L*1024L*1024L) {
+            if(file.sizeBytes !in A0ObservedTransferLimits.MIN_AUDIO_BYTES..A0ObservedTransferLimits.MAX_AUDIO_BYTES) {
                 oversized=(oversized+1).coerceAtMost(100000)
                 continue
             }
