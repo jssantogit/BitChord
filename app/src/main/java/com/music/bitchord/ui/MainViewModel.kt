@@ -961,6 +961,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     for (candidate in ranked.take(4)) {
                         val detail = musicBrainzGraph.lookupRelease(candidate.musicBrainzId)
                         if (detail is MusicBrainzCatalogGraphResult.Success &&
+                            detail.value.groupMbid == entry.musicBrainzId &&
                             detail.value.tracks.isNotEmpty()
                         ) {
                             chosen = detail.value
@@ -975,7 +976,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Exception) { null }
-                        if (cached?.tracks?.isNotEmpty() == true) {
+                        if (cached?.groupMbid == entry.musicBrainzId &&
+                            cached.tracks.isNotEmpty()
+                        ) {
                             chosen = cached
                             break
                         }
