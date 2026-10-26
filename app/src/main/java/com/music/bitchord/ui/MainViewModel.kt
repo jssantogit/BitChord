@@ -3331,6 +3331,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             title = hit.title,
                             subtitle = hit.artistDisplay,
                             hasCatalogedAsset = hit.musicBrainzId in catalogedAssetMbids,
+                            artistScopeMbid = artistScopeMbid,
                         ))
                     }
                 }
@@ -3343,6 +3344,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             subtitle = hit.artistDisplay ?: hit.primaryType,
                             releaseDate = hit.firstReleaseDate,
                             releaseKind = hit.primaryType,
+                            artistScopeMbid = artistScopeMbid,
                         ))
                     }
                 }
@@ -3355,6 +3357,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             subtitle = listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
                                 .joinToString(" · "),
                             releaseDate = hit.releaseDate,
+                            artistScopeMbid = artistScopeMbid,
                         ))
                     }
                 }
@@ -3518,6 +3521,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             add(CanonicalCatalogSearchRow(
                                 hit.musicBrainzId, CanonicalSearchKind.RECORDING, hit.title,
                                 hit.artistDisplay, hasCatalogedAsset = hit.musicBrainzId in assetMbids,
+                                artistScopeMbid = cursor.artistScopeMbid,
                             ))
                         }
                     }
@@ -3526,6 +3530,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             add(CanonicalCatalogSearchRow(
                                 hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
                                 hit.artistDisplay ?: hit.primaryType,
+                                artistScopeMbid = cursor.artistScopeMbid,
                             ))
                         }
                     }
@@ -3535,6 +3540,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 hit.musicBrainzId, CanonicalSearchKind.RELEASE, hit.title,
                                 listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
                                     .joinToString(" · "),
+                                artistScopeMbid = cursor.artistScopeMbid,
                             ))
                         }
                     }
