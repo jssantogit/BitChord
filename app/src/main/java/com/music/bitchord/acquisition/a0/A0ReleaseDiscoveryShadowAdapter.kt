@@ -16,6 +16,18 @@ import java.util.Locale
  */
 internal object A0ReleaseDiscoveryShadowAdapter {
     private const val MAX_OBSERVED_CHOICES=512
+
+    // Necessary-only match condition: title terms must be in the filename for
+    // A0CandidateRank to return ALL_TERMS. File and query use the exact same
+    // tokenization as the scorer. Artist may still be supplied by a folder.
+    internal fun titleTokens(query:String):Set<String> {
+        val parts=query.split(Regex("\\s+[-–—]\\s+"),limit=2)
+        val title=if(parts.size==2)parts[1] else query
+        return A0CandidateRank.tokens(title).toSet()
+    }
+
+    internal fun fileTokens(name:String):Set<String> =
+        A0CandidateRank.tokens(name.substringBeforeLast('.',name)).toSet()
     private data class Ranked(
         val candidate:A0ObservedCandidateHandoff.Choice,
         val ranking:A0CandidateRank.Ranking,
@@ -48,14 +60,21 @@ internal object A0ReleaseDiscoveryShadowAdapter {
             A0CanonicalAcquisitionIntent.Codec.FLAC,
             A0CanonicalAcquisitionIntent.Codec.PCM_WAV,
             A0CanonicalAcquisitionIntent.Codec.AAC_ADTS)
+        // Cache title-word sets exactly once per advertised file, not once per
+        // release track. Avoid heavy rank/preflight for unrelated titles.
+        val indexed=choices.take(MAX_OBSERVED_CHOICES).map { candidate ->
+            candidate to fileTokens(candidate.claim.filename)
+        }
         for(entry in entries) {
+            val title=titleTokens(entry.query)
             val expectedArtist=entry.query.split(
                 Regex("\\s+[-–—]\\s+"),limit=2).firstOrNull()
             // Score the entire bounded release shadow, not the first 128/192
             // offers that happened to arrive. Those early offers may belong
             // to other songs or advertise the wrong quality/album.
-            val shortlisted=choices.asSequence().take(MAX_OBSERVED_CHOICES)
-                .mapNotNull { candidate ->
+            val shortlisted=indexed.asSequence()
+                .filter { title.isNotEmpty() && it.second.containsAll(title) }
+                .mapNotNull { (candidate,_) ->
                     val name=candidate.claim.filename
                     val path=candidate.remotePath
                     val ext=candidate.claim.format.lowercase(Locale.ROOT)
