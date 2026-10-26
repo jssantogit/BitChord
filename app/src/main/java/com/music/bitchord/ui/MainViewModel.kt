@@ -24,6 +24,8 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
+import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRecording
+import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.ui.screens.CanonicalCatalogDetailPage
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
@@ -491,29 +493,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             canonicalEditorialReleaseType(row) == null
         ) return null
         val target = canonicalCoverLookupTarget(row)
-        if (target == null && row.kind == CanonicalSearchKind.RECORDING) {
-            // MusicBrainz search does not always send the release relation.
-            // Obtain it with a Recording MBID lookup before requesting any art.
-            val releases = musicBrainzGraph.lookupRecordingCoverReleases(row.musicBrainzId)
-            for (release in releases) {
-                val cover = coverArtArchive.findCover(release, null)
-                if (cover != null) return cover
-            }
-            return null
+        if (row.kind == CanonicalSearchKind.RECORDING) {
+            // Search can only nominate a release with Official status and
+            // audio Album/EP/Single classification. Never fetch another
+            // edition merely because it contains the same Recording MBID:
+            // that may be a music-video or performance release with still art.
+            val verifiedEdition = row.coverReleaseMbid ?: return null
+            return coverArtArchive.findCover(verifiedEdition, null)
         }
         if (target == null) return null
         val direct = coverArtArchive.findCover(target.first, target.second)
         if (direct != null) return direct
-        if (row.kind == CanonicalSearchKind.RECORDING) {
-            // Search's shortened list may nominate an edition with no front.
-            // Try only other verified Release links for this same Recording.
-            for (release in musicBrainzGraph.lookupRecordingCoverReleases(row.musicBrainzId)) {
-                if (release == row.coverReleaseMbid) continue
-                val cover = coverArtArchive.findCover(release, null)
-                if (cover != null) return cover
-            }
-            return null
-        }
         if (row.kind != CanonicalSearchKind.RELEASE_GROUP ||
             canonicalEditorialReleaseType(row) == null
         ) return null
@@ -545,10 +535,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             canonicalCoverLookupCandidates(prioritized.filter {
                 it.kind == CanonicalSearchKind.RELEASE ||
                     it.kind == CanonicalSearchKind.RELEASE_GROUP
-            }, limit = 12) +
+            }, limit = 8) +
             canonicalCoverLookupCandidates(prioritized.filter {
                 it.kind == CanonicalSearchKind.RECORDING
-            }, limit = 12)
+            }, limit = 4)
         ).distinctBy { it.kind to it.musicBrainzId }
         // Independent Apple artwork is a visual fallback for the best exact
         // artist-name hit, not an identity link between Apple and MusicBrainz.
@@ -3385,6 +3375,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 runAddonSearch(term.trim(), recordHistory = false)
             }
             SearchSource.CANONICAL -> {
+                SearchHistory.recordCanonicalQuery(term)
                 runCanonicalCatalogSearch(term.trim())
                 runAddonSearch(term.trim(), recordHistory = false)
             }
@@ -3464,6 +3455,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         if (_searchSource.value == SearchSource.CANONICAL) {
+            SearchHistory.recordCanonicalQuery(q)
             runCanonicalCatalogSearch(q)
             runAddonSearch(q, recordHistory = false)
             return
@@ -3517,7 +3509,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 fromOfflineCache = true,
                             ))
                         }
-                        recordings.forEach { recording ->
+                        recordings.filter { canonicalStreamingTitleIsSafe(it.title) }.forEach { recording ->
                             add(CanonicalCatalogSearchRow(
                                 recording.musicBrainzId, CanonicalSearchKind.RECORDING,
                                 recording.title, recording.artistDisplay,
@@ -3630,7 +3622,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } else emptySet()
             val rows = buildList {
                 if (recordings is MusicBrainzCatalogSearchResult.Success) {
-                    recordings.page.items.forEach { hit ->
+                    recordings.page.items.filter(::isCuratedMusicBrainzRecording).forEach { hit ->
                         add(CanonicalCatalogSearchRow(
                             musicBrainzId = hit.musicBrainzId,
                             kind = CanonicalSearchKind.RECORDING,
@@ -3706,7 +3698,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             val available = dao.musicBrainzRecordingMbidsWithAssets(
                                 known.map { it.musicBrainzId },
                             ).toSet()
-                            known.forEach { hit -> add(CanonicalCatalogSearchRow(
+                            known.filter { canonicalStreamingTitleIsSafe(it.title) }.forEach { hit -> add(CanonicalCatalogSearchRow(
                                 hit.musicBrainzId, CanonicalSearchKind.RECORDING,
                                 hit.title, hit.artistDisplay,
                                 hasCatalogedAsset = hit.musicBrainzId in available,
@@ -3750,7 +3742,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 return@launch
             }
             val combined = withVerifiedLocalBadges(
-                mergeCanonicalSearchRows(rows, cached, failedKinds),
+                mergeCanonicalSearchRows(rows, cached, failedKinds).filter { row ->
+                    row.kind != CanonicalSearchKind.RECORDING || canonicalStreamingTitleIsSafe(row.title)
+                },
             )
             if (_searchSource.value != SearchSource.CANONICAL ||
                 _query.value.trim() != query
@@ -3832,7 +3826,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ) return@launch
                 val additional = buildList {
                     if (recordings is MusicBrainzCatalogSearchResult.Success) {
-                        recordings.page.items.forEach { hit ->
+                        recordings.page.items.filter(::isCuratedMusicBrainzRecording).forEach { hit ->
                             add(CanonicalCatalogSearchRow(
                                 hit.musicBrainzId, CanonicalSearchKind.RECORDING, hit.title,
                                 hit.artistDisplay, hasCatalogedAsset = hit.musicBrainzId in assetMbids,
