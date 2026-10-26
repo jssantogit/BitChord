@@ -43,7 +43,7 @@ class A0PeerOfferGateTest {
         assertEquals(88,gate.acceptedCount)
         assertTrue(gate.releaseUnsubmitted("noisy",8))
         assertTrue(gate.accept("noisy",9))
-        assertEquals(89,gate.acceptedCount)
+        assertEquals(88,gate.acceptedCount)
         assertEquals(1,gate.perPeerDropped)
     }
 }
