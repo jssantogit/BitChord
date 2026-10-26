@@ -40,35 +40,50 @@ internal class MusicBrainzCatalogIndex(
                 if (!MBID.matches(mbid) || mbid in indexed) continue
                 val title = hit.title.trim().takeIf(String::isNotEmpty) ?: continue
                 val existing = dao.entityIdForExternalIdentity("musicbrainz", "recording", mbid)
-                if (existing != null) {
+                val recordingId = if (existing != null) {
                     // A stale alias is an integrity problem; do not transfer it.
-                    if (dao.recordingById(existing) != null) indexed[mbid] = existing
-                    continue
+                    if (dao.recordingById(existing) == null) continue
+                    existing
+                } else {
+                    val created = idFactory()
+                    dao.upsertRecording(
+                        RecordingEntity(
+                            id = created,
+                            title = title,
+                            artistDisplay = hit.artistDisplay?.trim()?.takeIf(String::isNotEmpty)
+                                ?: "Unknown Artist",
+                            durationMs = hit.durationMs?.takeIf { it >= 0 },
+                        ),
+                    )
+                    val claim = dao.claimExternalIdentityExclusivelyForEntity(
+                        ExternalIdentityEntity(
+                            provider = "musicbrainz", entityType = "recording",
+                            externalId = mbid, entityId = created,
+                        ),
+                    )
+                    check(claim.inserted && claim.candidateOwnerEntityId == created) {
+                        "MusicBrainz Recording identity claim conflict"
+                    }
+                    created
                 }
-
-                val recordingId = idFactory()
-                dao.upsertRecording(
-                    RecordingEntity(
-                        id = recordingId,
-                        title = title,
-                        artistDisplay = hit.artistDisplay?.trim()?.takeIf(String::isNotEmpty)
-                            ?: "Unknown Artist",
-                        durationMs = hit.durationMs?.takeIf { it >= 0 },
+                val previousEvidence = dao.musicBrainzRecordingEnrichment(recordingId)
+                check(previousEvidence == null || previousEvidence.mbid.equals(mbid, true)) {
+                    "MusicBrainz Recording enrichment conflicts with canonical MBID"
+                }
+                // Only recording search can positively verify audio/visual status.
+                // Sparse Track or ISRC lookups may not erase this evidence.
+                dao.upsertMusicBrainzRecordingEnrichment(
+                    MusicBrainzRecordingEnrichmentEntity(
+                        recordingId = recordingId, mbid = mbid,
+                        title = previousEvidence?.title ?: title,
+                        durationMs = previousEvidence?.durationMs ?: hit.durationMs,
+                        artistDisplay = previousEvidence?.artistDisplay ?: hit.artistDisplay,
+                        fetchedAtEpochMs = System.currentTimeMillis(),
+                        hasOfficialAudioRelease = hit.hasOfficialAudioRelease
+                            ?: previousEvidence?.hasOfficialAudioRelease,
+                        isVideo = hit.isVideo ?: previousEvidence?.isVideo,
                     ),
                 )
-                val claim = dao.claimExternalIdentityExclusivelyForEntity(
-                    ExternalIdentityEntity(
-                        provider = "musicbrainz",
-                        entityType = "recording",
-                        externalId = mbid,
-                        entityId = recordingId,
-                    ),
-                )
-                // A transaction aborts on a concurrent claim rather than
-                // leaving an orphaned Recording or silently stealing an MBID.
-                check(claim.inserted && claim.candidateOwnerEntityId == recordingId) {
-                    "MusicBrainz Recording identity claim conflict"
-                }
                 indexed[mbid] = recordingId
             }
             indexed
@@ -358,6 +373,8 @@ internal class MusicBrainzCatalogIndex(
                         durationMs = track.recordingDurationMs ?: previousEvidence?.durationMs,
                         artistDisplay = recordingCredit ?: previousEvidence?.artistDisplay,
                         fetchedAtEpochMs = System.currentTimeMillis(),
+                        hasOfficialAudioRelease = previousEvidence?.hasOfficialAudioRelease,
+                        isVideo = previousEvidence?.isVideo,
                     ))
                 }
                 val existingTrack = dao.catalogMusicBrainzTrack(trackMbid)
