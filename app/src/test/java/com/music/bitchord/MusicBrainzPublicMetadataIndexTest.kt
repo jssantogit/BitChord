@@ -5,6 +5,8 @@ import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.MusicBrainzCoverArtCacheEntity
 import com.music.bitchord.data.catalog.CatalogMusicBrainzArtistGroupEntity
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
+import com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit
+import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRecording
 import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistHit
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
@@ -184,6 +186,53 @@ class MusicBrainzPublicMetadataIndexTest {
             assertEquals(groupMbid, cached.musicBrainzId)
             assertEquals("Remix", cached.secondaryTypes)
             assertEquals("https://archive.org/verified-album-500.jpg", cached.artworkUri)
+        } finally { db.close() }
+    }
+
+    @Test fun offlineCuratedRecordingsRequireVerifiedAudioEvidenceAndRejectLegacyVideos() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            var next = 0
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "audio-${++next}" })
+            val valid = MusicBrainzRecordingHit(
+                "11111111-1111-4111-8111-111111111111", "Hurt", "NewJeans", 180000,
+                hasOfficialAudioRelease = true, isVideo = false,
+            )
+            val video = valid.copy(
+                musicBrainzId = "22222222-2222-4222-8222-222222222222",
+                isVideo = true,
+            )
+            val other = valid.copy(
+                musicBrainzId = "33333333-3333-4333-8333-333333333333",
+                hasOfficialAudioRelease = false,
+            )
+            val legacy = valid.copy(
+                musicBrainzId = "44444444-4444-4444-8444-444444444444",
+                hasOfficialAudioRelease = null, isVideo = null,
+            )
+            index.persistRecordings(listOf(valid, video, other, legacy))
+            val raw = db.catalogDao().searchKnownMusicBrainzRecordings("Hurt", 20)
+                .associateBy { it.musicBrainzId }
+            assertEquals(4, raw.size)
+            assertEquals(listOf(valid.musicBrainzId), raw.values
+                .filter(::isCuratedMusicBrainzRecording)
+                .map { it.musicBrainzId })
+            // Sparse edition/index lookups cannot erase confirmed evidence.
+            index.persistRecordings(listOf(valid.copy(
+                hasOfficialAudioRelease = null, isVideo = null)))
+            val again = db.catalogDao().searchKnownMusicBrainzRecordings("Hurt", 20)
+                .associateBy { it.musicBrainzId }
+            assertEquals(true, again[valid.musicBrainzId]?.hasOfficialAudioRelease)
+            assertEquals(false, again[valid.musicBrainzId]?.isVideo)
+            // A previously saved (unverified) recording can become discoverable
+            // after a real MusicBrainz audio-release verification.
+            index.persistRecordings(listOf(legacy.copy(
+                hasOfficialAudioRelease = true, isVideo = false)))
+            assertEquals(setOf(valid.musicBrainzId, legacy.musicBrainzId),
+                db.catalogDao().searchKnownMusicBrainzRecordings("Hurt", 20)
+                    .filter(::isCuratedMusicBrainzRecording)
+                    .map { it.musicBrainzId }.toSet())
         } finally { db.close() }
     }
 
