@@ -33,6 +33,14 @@ internal object SoulseekBatchPlan {
     fun identityQuery(entry:Entry?,editedSearch:String):String =
         entry?.query ?: editedSearch
 
+    /**
+     * On a release batch, never read the duration of a different slot from
+     * the Activity Intent. Missing per-track duration must stay unknown.
+     */
+    fun expectedDuration(entry:Entry?,singleDuration:Int?):Int? =
+        if(entry!=null)entry.durationSeconds?.takeIf { it in 15..7200 }
+        else singleDuration?.takeIf { it in 15..7200 }
+
     data class SourceTrack(
         val trackId: String,
         val artist: String,
