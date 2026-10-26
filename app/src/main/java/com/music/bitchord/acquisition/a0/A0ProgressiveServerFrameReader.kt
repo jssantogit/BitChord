@@ -23,7 +23,12 @@ internal class A0ProgressiveServerFrameReader(
 
     val atFrameBoundary:Boolean get()=lengthReceived==0 && body==null
 
-    fun readEvent(onIgnoredCode:(Int)->Unit = {}):A0IndirectSearchWire.Offer? {
+    fun readEvent(onIgnoredCode:(Int)->Unit = {}):A0IndirectSearchWire.Offer? =
+        A0IndirectSearchWire.readServerEvent(
+            ByteArrayInputStream(readRawFrame()),onIgnoredCode)
+
+    /** Complete server message, including its 4-byte length. */
+    fun readRawFrame():ByteArray {
         if(body==null) {
             while(lengthReceived<4) {
                 val n=input.read(lengthField,lengthReceived,4-lengthReceived)
@@ -51,7 +56,7 @@ internal class A0ProgressiveServerFrameReader(
         lengthReceived=0
         bodyReceived=0
         body=null
-        return A0IndirectSearchWire.readServerEvent(ByteArrayInputStream(complete),onIgnoredCode)
+        return complete
     }
 
 }
