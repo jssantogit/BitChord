@@ -48,11 +48,43 @@ class A0SmokeTraceTest {
             trace.note(stage, TraceOutcome.SUCCEEDED)
         }
         trace.finish(TraceOutcome.SUCCEEDED)
-        val output = points.toString()
+        // Do not scan StructuredTracePoint.toString(): it includes salted
+        // flow IDs, monotonic timings and elapsed counters which can contain
+        // arbitrary digit substrings (e.g. "2416") with NO leaked peer data.
+        // Inspect the *exported semantic fields* instead.
+        assertTrue(points.isNotEmpty())
+        val allowedKeys = setOf(
+            "environment", "mode", "elapsedMs", "reasonCode", "ignoredServerFrames",
+        )
+        val reasons = A0SmokeTrace.Reason.values().map { it.name.lowercase() }.toSet()
+        points.forEach { point ->
+            assertTrue("Unexpected operation ${point.operation}",
+                point.operation in setOf("a0_soulseek_one_shot", "a0_soulseek_file_outcome"))
+            assertTrue("Non-allowlisted key ${point.attributes.keys}",
+                point.attributes.keys.all { it in allowedKeys })
+            point.attributes.forEach { (key, value) ->
+                when (key) {
+                    "environment" -> assertEquals("devdebug", value)
+                    "mode" -> assertTrue(value in setOf("read_only", "manual_observed_one_file"))
+                    "reasonCode" -> assertTrue(value in reasons)
+                    "elapsedMs", "ignoredServerFrames" ->
+                        assertTrue("Numeric metric must be nonnegative and bounded",
+                            value.toLongOrNull()?.let { it in 0..1_000_000_000_000L } == true)
+                }
+            }
+            if (point.stage != null) {
+                assertTrue("Unexpected stage ${point.stage}",
+                    point.stage in A0SmokeTrace.Stage.values().map { it.name.lowercase() })
+            }
+        }
+        val exported = points.flatMap { point ->
+            listOf(point.operation, point.stage.orEmpty()) +
+                point.attributes.flatMap { (key, value) -> listOf(key, value) }
+        }.joinToString(" ")
         for (secret in listOf(
             "username", "password", "remoteFilename", "peerAddress", "token=",
-            "Ringingsound.wav", "2416", "127.0.0.1"
-        )) assertFalse("Unsafe field $secret", output.contains(secret, ignoreCase = true))
+            "Ringingsound.wav", "127.0.0.1",
+        )) assertFalse("Unsafe field $secret", exported.contains(secret, ignoreCase = true))
     }
 
     @Test fun ignoredServerCodesRemainBoundedAndIncludeSafeNumericFrameTypes() {
