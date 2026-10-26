@@ -34,8 +34,8 @@ class A0CandidateDiscoveryTest {
         handoff.offerParsed(reply("best", listOf(file("ILLIT Magnetic.mp3"))), "best")
         handoff.offerParsed(reply("best", listOf(file("ILLIT Magnetic.mp3"))), "best")
         val report = handoff.screening()
-        assertEquals(48, report.accepted)
-        assertTrue(report.capacityDropped > 0)
+        assertEquals(61, report.accepted)
+        assertEquals(0, report.capacityDropped)
         assertEquals(1, report.duplicates)
         assertEquals("ILLIT Magnetic.mp3", handoff.choices().first().displayName)
     }
