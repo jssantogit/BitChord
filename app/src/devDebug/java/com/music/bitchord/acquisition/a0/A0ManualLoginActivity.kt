@@ -744,10 +744,9 @@ class A0ManualLoginActivity : Activity() {
                                         // Only supported compatible advertised files are in
                                         // the default list. Other claims require an explicit
                                         // manual "inspect others" action, never silently win.
-                                        val profileIndices=selectableIndices.filter { i ->
-                                            choices[i].qualityEvidence.status==
-                                                A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED
-                                        }
+                                        val profileIndices=A0ManualCandidatePolicy.primaryIndices(
+                                            choices,selectableIndices
+                                        )
                                         trace.note(A0SmokeTrace.Stage.CANDIDATES_AVAILABLE)
                                         if(saveToDevice)saveLedger?.advance(
                                             checkNotNull(saveJobId),
