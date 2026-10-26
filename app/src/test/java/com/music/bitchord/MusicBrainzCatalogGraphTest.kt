@@ -45,6 +45,7 @@ class MusicBrainzCatalogGraphTest {
                 return when (path) {
                     "release-group" -> """{"release-group-count":1,"release-group-offset":0,
                         "release-groups":[{"id":"$group","title":"SUPER REAL ME","primary-type":"EP",
+                        "secondary-types":["Remix","Compilation"],
                         "artist-credit":[{"name":"ILLIT"}]}]}"""
                     "release" -> """{"release-count":1,"release-offset":0,
                         "releases":[{"id":"$worldwide","title":"SUPER REAL ME","date":"2024-03-25","country":"XW"}]}"""
@@ -70,6 +71,7 @@ class MusicBrainzCatalogGraphTest {
         val editions = graph.browseGroupReleases(group) as MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogPage<MusicBrainzReleaseHit>>
         val detail = graph.lookupRelease(worldwide) as MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>
         assertEquals(group, artistGroups.value.items.single().musicBrainzId)
+        assertEquals("Remix|Compilation", artistGroups.value.items.single().secondaryTypes)
         // Mirror MusicBrainz's official website artist release-group policy
         // instead of fetching promotional/bootleg-only discography groups.
         assertEquals("website-default", requests.first().second["release-group-status"])
