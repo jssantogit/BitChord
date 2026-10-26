@@ -80,6 +80,24 @@ class CanonicalSearchCategoryFilterTest {
         assertEquals(listOf("artist-1", "artist-2"), displayed.map { it.musicBrainzId })
     }
 
+    @Test fun generalSearchDoesNotPresentMultipleExactHomonymsAsOneArtist() {
+        val primary = CanonicalCatalogSearchRow("illit-kpop", CanonicalSearchKind.ARTIST,
+            "ILLIT", "South Korean girl group")
+        val namesake = CanonicalCatalogSearchRow("illit-other", CanonicalSearchKind.ARTIST,
+            "Illit", "Unrelated namesake")
+        val matchingSong = CanonicalCatalogSearchRow("magnetic", CanonicalSearchKind.RECORDING,
+            "Magnetic", "ILLIT")
+        val general = canonicalRowsForQuery(
+            listOf(primary, namesake, matchingSong), "illit", SearchFilter.ALL,
+        )
+        assertEquals(listOf("illit-kpop", "magnetic"), general.map { it.musicBrainzId })
+        // Do not delete another artist identity from the explicit artist filter.
+        val artists = canonicalRowsForQuery(
+            listOf(primary, namesake), "illit", SearchFilter.ARTISTS,
+        )
+        assertEquals(2, artists.size)
+    }
+
     @Test fun canonicalSearchSubtitlesAreMusicFacingNotInternalDiagnostics() {
         val song = CanonicalCatalogSearchRow("recording", CanonicalSearchKind.RECORDING,
             "Magnetic", "ILLIT", hasCatalogedAsset = false)
