@@ -116,6 +116,7 @@ internal class CoverArtArchive(
     private val store: MusicBrainzCoverArtStore = MemoryCoverArtStore(),
     private val nowEpochMs: () -> Long = System::currentTimeMillis,
     private val requestTimeoutMs: Long = 6_000L,
+    private val telemetry: CatalogCoverTelemetry = CatalogCoverTelemetry.process,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -156,7 +157,10 @@ internal class CoverArtArchive(
         val key = type to mbid
         val proposed = CompletableDeferred<CoverLookup>()
         val existing = inFlight.putIfAbsent(key, proposed)
-        if (existing != null) return existing.await()
+        if (existing != null) {
+            telemetry.recordJoinedRequest()
+            return existing.await()
+        }
         try {
             val result = fetchUnshared(type, mbid)
             proposed.complete(result)
@@ -187,7 +191,10 @@ internal class CoverArtArchive(
         ) {
             // Room cache is a persistence boundary: never trust old or tampered
             // artwork URLs without the same allowlist used for fresh responses.
-            if (cached.artworkUri == null) return CoverLookup.Missing
+            if (cached.artworkUri == null) {
+                telemetry.recordNegativeCacheHit()
+                return CoverLookup.Missing
+            }
             // A 250px image can be the ONLY artwork the archive publishes.
             // Re-probe it periodically, not on every card composition/visit.
             val smallArtwork = cached.artworkUri.substringBefore('?').let {
@@ -196,6 +203,7 @@ internal class CoverArtArchive(
             if (safeImageUrl(cached.artworkUri) &&
                 (!smallArtwork || now - cached.fetchedAtEpochMs < SMALL_ART_RECHECK_MS)
             ) {
+                telemetry.recordCacheHit()
                 return CoverLookup.Found(
                     cached.artworkUri, cached.thumbnailUri?.takeIf(::safeImageUrl),
                 )
@@ -204,17 +212,25 @@ internal class CoverArtArchive(
             // must be revalidated rather than rendered or treated as a 404.
         }
 
+        val started = System.nanoTime()
+        fun elapsedMs(): Long = ((System.nanoTime() - started) / 1_000_000L)
+            .coerceAtLeast(0L)
         val answer = try {
             // A stalled archive endpoint must not hold a screen's artwork
             // pipeline indefinitely. Timeout is transient, never a cached 404.
             withTimeoutOrNull(requestTimeoutMs) {
                 transport.get("$type/$mbid")
-            } ?: return CoverLookup.Unavailable
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
+            null
+        }
+        if (answer == null) {
+            telemetry.recordNetwork(-1, elapsedMs())
             return CoverLookup.Unavailable
         }
+        telemetry.recordNetwork(answer.status, elapsedMs())
         val art: CoverLookup.Found? = when (answer.status) {
             200 -> try {
                 val root = json.parseToJsonElement(answer.body.orEmpty()) as? JsonObject
