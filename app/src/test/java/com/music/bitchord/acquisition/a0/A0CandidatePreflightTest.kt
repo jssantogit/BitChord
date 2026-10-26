@@ -189,4 +189,34 @@ class A0CandidatePreflightTest {
         assertEquals(A0CandidatePreflight.Confidence.STRONG,outcome.confidence)
     }
 
+    @Test fun unrequestedRemasterOrRadioEditIsNotPromotedAsOriginalMaster() {
+        listOf(
+            "Michael Jackson Billie Jean (2015 Remastered).mp3" to
+                "Music/Michael Jackson/Thriller",
+            "Michael Jackson Billie Jean.mp3" to
+                "Music/Michael Jackson/Thriller (2015 Remastered)",
+            "Michael Jackson Billie Jean (Radio Edit).mp3" to
+                "Music/Michael Jackson/Thriller",
+        ).forEach { (name,path) ->
+            val rank=A0CandidateRank.rank("Michael Jackson - Billie Jean",name,320,
+                remotePath="$path/$name",format="mp3",
+                declaredDurationSeconds=294,expectedDurationSeconds=294,
+                sizeBytes=11_760_000L)
+            val assessed=A0CandidatePreflight.assess("Michael Jackson - Billie Jean",
+                rank,320,294,294,"mp3",11_760_000L)
+            assertTrue(name, A0CandidateRank.Warning.VERSION_MISMATCH in rank.warnings)
+            assertEquals(name,A0CandidatePreflight.Confidence.UNSAFE,assessed.confidence)
+            assertTrue(name,A0CandidatePreflight.Reason.VERSION_CONFLICT in assessed.reasons)
+        }
+    }
+
+    @Test fun explicitlyRequestedRadioEditDoesNotCountAsVersionConflict() {
+        val query="Michael Jackson - Billie Jean Radio Edit"
+        val name="Michael Jackson Billie Jean Radio Edit.mp3"
+        val rank=A0CandidateRank.rank(query,name,320,
+            remotePath="Music/Michael Jackson/Thriller/$name",format="mp3",
+            declaredDurationSeconds=230,expectedDurationSeconds=230,sizeBytes=9_200_000L)
+        assertFalse(A0CandidateRank.Warning.VERSION_MISMATCH in rank.warnings)
+    }
+
 }
