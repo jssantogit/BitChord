@@ -641,11 +641,11 @@ class A0ManualLoginActivity : Activity() {
                                         val early = inbox.poll(6, TimeUnit.SECONDS)
                                         val fallback = A0SearchQuery.titleOnlyFallback(
                                             checkNotNull(enteredSearch))
-                                        val compatible = handoff?.choices()?.any {
-                                            it.qualityEvidence.status ==
-                                                A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED
-                                        } == true
-                                        if (early == null && fallback != null && !compatible &&
+                                        // A bitrate-compatible but wrong album/version/title
+                                        // must not prevent the single bounded rescue query.
+                                        // The ORIGINAL target still governs ranking and gates.
+                                        val relevant = handoff?.hasRelevantCandidateForSearchRecovery() == true
+                                        if (early == null && fallback != null && !relevant &&
                                             !failedServerReader.get() && readerGate.isOpen() &&
                                             !stopping && !Thread.currentThread().isInterrupted
                                         ) {
