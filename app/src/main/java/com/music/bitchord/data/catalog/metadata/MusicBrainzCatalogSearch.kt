@@ -216,7 +216,7 @@ internal class MusicBrainzCatalogSearch(
     ): MusicBrainzCatalogSearchResult<MusicBrainzRecordingHit> {
         val id = artistMbid.validSearchMbidOrNull()
             ?: return MusicBrainzCatalogSearchResult.Failure(MusicBrainzCatalogSearchFailure.INVALID_QUERY)
-        return searchRecordingsInternal("arid:$id", limit, offset, fieldedQuery = true)
+        return searchRecordingsInternal("arid:$id AND status:official", limit, offset, fieldedQuery = true)
     }
 
     private suspend fun searchRecordingsInternal(
