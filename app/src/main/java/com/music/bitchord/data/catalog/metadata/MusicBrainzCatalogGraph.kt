@@ -81,6 +81,7 @@ internal class MusicBrainzCatalogGraph(
         artistMbid: String, limit: Int = 25, offset: Int = 0,
     ): MusicBrainzCatalogGraphResult<MusicBrainzCatalogPage<MusicBrainzReleaseGroupHit>> =
         paged("release-group", "artist", artistMbid, limit, offset,
+            extraParameters = mapOf("release-group-status" to "website-default"),
             countKey = "release-group-count", offsetKey = "release-group-offset", arrayKey = "release-groups",
             identity = MusicBrainzReleaseGroupHit::musicBrainzId,
         ) { row ->
@@ -185,6 +186,7 @@ internal class MusicBrainzCatalogGraph(
 
     private suspend fun <T> paged(
         path: String, relation: String, mbid: String, limit: Int, offset: Int,
+        extraParameters: Map<String, String> = emptyMap(),
         countKey: String, offsetKey: String, arrayKey: String,
         identity: (T) -> String,
         decode: (JsonObject) -> T?,
@@ -198,7 +200,7 @@ internal class MusicBrainzCatalogGraph(
             client.get(path, mapOf(
                 "fmt" to "json", relation to normalized,
                 "limit" to limit.toString(), "offset" to offset.toString(),
-            ))
+            ) + extraParameters)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
