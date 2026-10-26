@@ -107,7 +107,14 @@ class MusicBrainzPublicMetadataIndexTest {
             assertEquals(null, dao.searchKnownMusicBrainzGroups("New Jeans", 10).single().artworkUri)
             assertEquals(null, dao.searchKnownMusicBrainzReleases("New Jeans", 10).single().artworkUri)
             dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
-                "release-group:front-v3", groupId, "https://archive.org/verified-group-front.jpg",
+                "release-group:front-v3", groupId, "https://archive.org/stale-unverified-video.jpg",
+                1000L, thumbnailUri = "https://archive.org/stale-poster-thumb.jpg",
+            ))
+            assertEquals(null, dao.searchKnownMusicBrainzGroups("New Jeans", 10).single().artworkUri)
+            assertEquals(emptyList<MusicBrainzCoverArtCacheEntity>(),
+                dao.verifiedGroupFronts(listOf(groupId)))
+            dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
+                "release-group:front-v4", groupId, "https://archive.org/verified-group-front.jpg",
                 2000L, thumbnailUri = "https://archive.org/verified-group-thumb-500.jpg",
             ))
             dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
@@ -116,7 +123,7 @@ class MusicBrainzPublicMetadataIndexTest {
             assertEquals("https://archive.org/verified-group-thumb-500.jpg",
                 dao.searchKnownMusicBrainzGroups("New Jeans", 10).single().artworkUri)
             assertEquals("https://archive.org/verified-group-front.jpg",
-                dao.musicBrainzCoverArtCache("release-group:front-v3", groupId)?.artworkUri)
+                dao.musicBrainzCoverArtCache("release-group:front-v4", groupId)?.artworkUri)
             assertEquals("https://archive.org/verified-release-front.jpg",
                 dao.searchKnownMusicBrainzReleases("New Jeans", 10).single().artworkUri)
         } finally { db.close() }
@@ -174,6 +181,12 @@ class MusicBrainzPublicMetadataIndexTest {
             )))
             db.catalogDao().upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
                 "release-group:front-v3", groupMbid,
+                "https://archive.org/stale-direct-shortcut.jpg", 10_000L,
+                thumbnailUri = "https://archive.org/stale-direct-500.jpg",
+            ))
+            assertEquals(null, index.cachedArtistGroups(artistMbid).single().artworkUri)
+            db.catalogDao().upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
+                "release-group:front-v4", groupMbid,
                 "https://archive.org/verified-album-1200.jpg", 20_000L,
                 thumbnailUri = "https://archive.org/verified-album-500.jpg",
             ))
