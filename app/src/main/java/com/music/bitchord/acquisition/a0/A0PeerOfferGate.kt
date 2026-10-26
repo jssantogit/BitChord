@@ -14,6 +14,14 @@ internal class A0PeerOfferGate(private val capacity:Int=160) {
         private set
     val acceptedCount:Int get()=seen.size
 
+    /** A ticket rejected by the bounded worker queue was never processed.
+     * Releasing that reservation keeps both capacity and retry accounting
+     * truthful; accepted tasks must never call this rollback.
+     */
+    @Synchronized
+    fun releaseUnsubmitted(username:String,token:Int):Boolean =
+        seen.remove(username to token)
+
     @Synchronized
     fun accept(username:String,token:Int):Boolean {
         val key=username to token
