@@ -58,6 +58,7 @@
     </plurals>
     <string name="songs">歌曲</string>
     <string name="artists">艺人</string>
+    <string name="canonical_singles_eps">单曲与EP</string>
     <string name="albums">专辑</string>
     <string name="no_album_metadata">这些曲目均未标明所属专辑。</string>
     <string name="search_empty">在 YouTube Music 上搜索数百万首歌曲。</string>
