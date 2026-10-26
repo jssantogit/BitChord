@@ -36,6 +36,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.NorthWest
@@ -114,6 +115,8 @@ data class CanonicalCatalogSearchRow(
     val artistScopeMbid: String? = null,
     /** Exact Release MBID explicitly listed by MusicBrainz for this recording. */
     val coverReleaseMbid: String? = null,
+    /** UI decoration only: strong canonical MBID -> readable local MediaAsset. */
+    val hasVerifiedLocalAsset: Boolean = false,
 )
 
 /**
@@ -621,6 +624,8 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                         row.hasCatalogedAsset -> ({ onPlay(row.musicBrainzId) })
                         else -> null
                     },
+                    localDownloaded = row.kind == CanonicalSearchKind.RECORDING &&
+                        row.hasVerifiedLocalAsset,
                 )
                 if (index < section.second.lastIndex) {
                     HorizontalDivider(
@@ -1366,7 +1371,12 @@ private fun RecentSearchEntityRow(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BrowseRow(item: BrowseItem, onClick: (() -> Unit)?, onLongPress: (() -> Unit)? = null) {
+private fun BrowseRow(
+    item: BrowseItem,
+    onClick: (() -> Unit)?,
+    onLongPress: (() -> Unit)? = null,
+    localDownloaded: Boolean = false,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1377,21 +1387,40 @@ private fun BrowseRow(item: BrowseItem, onClick: (() -> Unit)?, onLongPress: (()
             .padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AsyncImage(
-            model = item.thumbnailUrl.artworkAt(ROW_ART_PX),
-            contentDescription = null,
-            modifier = Modifier
-                .size(52.dp)
-                .clip(
-                    if (item.type == BrowseType.ARTIST) CircleShape
-                    else RoundedCornerShape(8.dp),
-                )
-                .thumbnailBorder(
-                    if (item.type == BrowseType.ARTIST) CircleShape
-                    else RoundedCornerShape(8.dp),
-                )
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-        )
+        Box(Modifier.size(52.dp)) {
+            AsyncImage(
+                model = item.thumbnailUrl.artworkAt(ROW_ART_PX),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(
+                        if (item.type == BrowseType.ARTIST) CircleShape
+                        else RoundedCornerShape(8.dp),
+                    )
+                    .thumbnailBorder(
+                        if (item.type == BrowseType.ARTIST) CircleShape
+                        else RoundedCornerShape(8.dp),
+                    )
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            )
+            if (localDownloaded && item.type != BrowseType.ARTIST) {
+                Box(
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                        .padding(2.dp)
+                        .size(17.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.82f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Rounded.DownloadDone,
+                        contentDescription = stringResource(Res.string.downloaded),
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
+            }
+        }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(
