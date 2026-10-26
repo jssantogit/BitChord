@@ -110,6 +110,7 @@
     </plurals>
     <string name="songs">Songs</string>
     <string name="artists">Artists</string>
+    <string name="canonical_singles_eps">Singles &amp; EPs</string>
     <string name="albums">Albums</string>
     <string name="no_album_metadata">None of these tracks say what album they are from.</string>
     <string name="search_empty">Search millions of songs on YouTube Music.</string>
