@@ -420,6 +420,49 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _canonicalSearchLoadingMore.value = false
     }
 
+    /**
+     * Device-possession decoration, separate from Media3's playable-asset gate.
+     * Use only a strong MusicBrainz Recording -> local-mediastore join, then
+     * probe real content URIs on IO. A Server asset or title match is not a download.
+     */
+    private suspend fun withVerifiedLocalBadges(
+        rows: List<CanonicalCatalogSearchRow>,
+    ): List<CanonicalCatalogSearchRow> {
+        val mbids = rows.asSequence()
+            .filter { it.kind == CanonicalSearchKind.RECORDING }
+            .map { it.musicBrainzId }
+            .distinct().toList()
+        if (mbids.isEmpty()) return rows
+        return withContext(Dispatchers.IO) {
+            val app = getApplication<Application>()
+            val claims = try {
+                CanonicalCatalogDatabase.get(app).catalogDao()
+                    .musicBrainzRecordingLocalAssetClaims(mbids)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val readability = mutableMapOf<String, Boolean>()
+            val local = canonicalVerifiedLocalBadgeMbids(claims) { rawUri ->
+                readability.getOrPut(rawUri) {
+                    try {
+                        app.contentResolver.openFileDescriptor(
+                            android.net.Uri.parse(rawUri), "r",
+                        )?.use { it.statSize != 0L } == true
+                    } catch (_: Exception) {
+                        false
+                    }
+                }
+            }
+            rows.map { row ->
+                if (row.kind == CanonicalSearchKind.RECORDING) {
+                    row.copy(hasVerifiedLocalAsset = row.musicBrainzId in local)
+                } else row
+            }
+        }
+    }
+
     private val musicBrainzSearch by lazy { MusicBrainzCatalogSearch() }
     private val musicBrainzGraph by lazy { MusicBrainzCatalogGraph() }
     private val coverArtArchive by lazy {
@@ -3243,7 +3286,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
             if (!searchSubmitted && _searchSource.value == SearchSource.CANONICAL &&
                 _query.value.trim() == query && cached.isNotEmpty()
-            ) _canonicalResults.value = UiState.Success(cached)
+            ) {
+                val verified = withVerifiedLocalBadges(cached)
+                if (!searchSubmitted && _searchSource.value == SearchSource.CANONICAL &&
+                    _query.value.trim() == query
+                ) _canonicalResults.value = UiState.Success(verified)
+            }
         }
     }
 
@@ -3450,7 +3498,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (_searchSource.value != SearchSource.CANONICAL || _query.value.trim() != query) {
                 return@launch
             }
-            val combined = mergeCanonicalSearchRows(rows, cached, failedKinds)
+            val combined = withVerifiedLocalBadges(
+                mergeCanonicalSearchRows(rows, cached, failedKinds),
+            )
+            if (_searchSource.value != SearchSource.CANONICAL ||
+                _query.value.trim() != query
+            ) return@launch
             _canonicalResults.value =
                 if (failedKinds.size == CanonicalSearchKind.entries.size && combined.isEmpty()) {
                     UiState.Error("MusicBrainz unavailable and no local matches")
@@ -3566,9 +3619,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 val existing = (_canonicalResults.value as? UiState.Success)?.data ?: return@launch
-                _canonicalResults.value = UiState.Success(
+                val verified = withVerifiedLocalBadges(
                     (existing + additional).distinctBy { it.kind to it.musicBrainzId },
                 )
+                if (_searchSource.value != SearchSource.CANONICAL ||
+                    _query.value.trim() != cursor.query ||
+                    canonicalSearchPageCursors !== cursor || _canonicalDetail.value != null
+                ) return@launch
+                _canonicalResults.value = UiState.Success(verified)
                 enrichCanonicalSearchCovers(cursor.query)
                 val advanced = cursor.advance(recordings, groups, editions, artists)
                 canonicalSearchPageCursors = advanced
