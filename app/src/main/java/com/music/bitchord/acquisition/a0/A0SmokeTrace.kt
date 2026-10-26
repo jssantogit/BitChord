@@ -62,6 +62,10 @@ internal class A0SmokeTrace private constructor(
     private val indirectReadTimeouts = AtomicInteger(0)
     private val indirectConnectFailures = AtomicInteger(0)
     private val indirectReplyFailures = AtomicInteger(0)
+    private val indirectAttempts = AtomicInteger(0)
+    private val indirectConnected = AtomicInteger(0)
+    private val indirectPierceSent = AtomicInteger(0)
+    private val indirectRepliesAccepted = AtomicInteger(0)
     @Volatile private var continuation: StructuredTrace? = null
 
     /** Protect local-save evidence when noisy search uses all 64 trace points. */
@@ -102,6 +106,10 @@ internal class A0SmokeTrace private constructor(
             Stage.INDIRECT_READ_TIMEOUT -> indirectReadTimeouts.incrementAndGet()
             Stage.INDIRECT_CONNECT_FAILED -> indirectConnectFailures.incrementAndGet()
             Stage.INDIRECT_REPLY_REJECTED -> indirectReplyFailures.incrementAndGet()
+            Stage.INDIRECT_CONNECT_STARTED -> indirectAttempts.incrementAndGet()
+            Stage.INDIRECT_CONNECTED -> indirectConnected.incrementAndGet()
+            Stage.PIERCE_SENT -> indirectPierceSent.incrementAndGet()
+            Stage.INDIRECT_REPLY_ACCEPTED -> indirectRepliesAccepted.incrementAndGet()
             else -> 0
         }
         if(peerOccurrences>2) return
@@ -332,7 +340,11 @@ internal class A0SmokeTrace private constructor(
             "receivedServerOffers" to receivedServerOffers.get().coerceAtMost(100000).toString(),
             "indirectReadTimeouts" to indirectReadTimeouts.get().coerceAtMost(100000).toString(),
             "indirectConnectFailures" to indirectConnectFailures.get().coerceAtMost(100000).toString(),
-            "indirectReplyFailures" to indirectReplyFailures.get().coerceAtMost(100000).toString()
+            "indirectReplyFailures" to indirectReplyFailures.get().coerceAtMost(100000).toString(),
+            "indirectAttempts" to indirectAttempts.get().coerceAtMost(100000).toString(),
+            "indirectConnected" to indirectConnected.get().coerceAtMost(100000).toString(),
+            "indirectPierceSent" to indirectPierceSent.get().coerceAtMost(100000).toString(),
+            "indirectRepliesAccepted" to indirectRepliesAccepted.get().coerceAtMost(100000).toString()
         )
         if (reason != null) attributes["reasonCode"] = reason.name.lowercase(Locale.ROOT)
         continuation?.complete(outcome,attributes)
