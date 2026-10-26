@@ -20,10 +20,26 @@ import org.junit.Test
 class CanonicalSearchCategoryFilterTest {
     private val rows = listOf(
         CanonicalCatalogSearchRow("rec", CanonicalSearchKind.RECORDING, "Magnetic", "ILLIT"),
-        CanonicalCatalogSearchRow("group", CanonicalSearchKind.RELEASE_GROUP, "SUPER REAL ME", "ILLIT"),
-        CanonicalCatalogSearchRow("edition", CanonicalSearchKind.RELEASE, "SUPER REAL ME", "ILLIT"),
+        CanonicalCatalogSearchRow("group", CanonicalSearchKind.RELEASE_GROUP, "SUPER REAL ME", "ILLIT", releaseKind = "EP"),
+        CanonicalCatalogSearchRow("edition", CanonicalSearchKind.RELEASE, "SUPER REAL ME", "ILLIT", releaseKind = "EP"),
         CanonicalCatalogSearchRow("artist", CanonicalSearchKind.ARTIST, "ILLIT", null),
     )
+
+    @Test fun albumsTabRejectsUnclassifiedWorksAndSongRecordings() {
+        val unknown = CanonicalCatalogSearchRow("right-now", CanonicalSearchKind.RELEASE_GROUP,
+            "Right Now", "NewJeans", releaseKind = "Other")
+        val untypedEdition = unknown.copy(musicBrainzId = "edition", kind = CanonicalSearchKind.RELEASE,
+            releaseKind = null)
+        val track = CanonicalCatalogSearchRow("hypeboy", CanonicalSearchKind.RECORDING,
+            "Hype Boy", "NewJeans")
+        val typed = unknown.copy(musicBrainzId = "group-single", title = "OMG", releaseKind = "Single")
+        assertEquals(listOf("group-single"), canonicalRowsForFilter(
+            listOf(unknown, untypedEdition, track, typed), SearchFilter.ALBUMS,
+        ).map { it.musicBrainzId })
+        assertEquals(listOf("hypeboy"), canonicalRowsForFilter(
+            listOf(unknown, untypedEdition, track, typed), SearchFilter.SONGS,
+        ).map { it.musicBrainzId })
+    }
 
     @Test fun artistsShowsArtistsOnly() {
         assertEquals(listOf("artist"), canonicalRowsForFilter(rows, SearchFilter.ARTISTS).map { it.musicBrainzId })
@@ -97,7 +113,7 @@ class CanonicalSearchCategoryFilterTest {
     @Test fun generalSearchUsesNativeArtistSongsAlbumsSectionOrder() {
         val artist = CanonicalCatalogSearchRow("artist-k", CanonicalSearchKind.ARTIST, "ILLIT", null)
         val song = CanonicalCatalogSearchRow("recording-k", CanonicalSearchKind.RECORDING, "Magnetic", "ILLIT")
-        val group = CanonicalCatalogSearchRow("group-k", CanonicalSearchKind.RELEASE_GROUP, "SUPER REAL ME", "ILLIT")
+        val group = CanonicalCatalogSearchRow("group-k", CanonicalSearchKind.RELEASE_GROUP, "SUPER REAL ME", "ILLIT", releaseKind = "EP")
         val sections = canonicalSearchDisplaySections(listOf(group, song, artist), SearchFilter.ALL)
         assertEquals(listOf(SearchFilter.ARTISTS, SearchFilter.SONGS, SearchFilter.ALBUMS),
             sections.map { it.first })
