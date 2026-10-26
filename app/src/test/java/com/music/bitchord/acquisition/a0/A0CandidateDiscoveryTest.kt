@@ -22,7 +22,7 @@ class A0CandidateDiscoveryTest {
             handoff.offerParsed(
                 A0SoulseekSearchResponse(
                     peer,81,listOf(A0SoulseekSearchFile(
-                        "Music\\\\Artist\\\\Song ${i}.mp3",
+                        "Music\\Artist\\Song ${i}.mp3",
                         5_000_000L+i,"mp3",mapOf(0 to 320)
                     )),emptyList(),true,3000,0
                 ),peer
