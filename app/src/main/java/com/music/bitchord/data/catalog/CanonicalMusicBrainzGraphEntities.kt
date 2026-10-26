@@ -99,8 +99,9 @@ internal data class MusicBrainzCoverArtCacheEntity(
     val mbid: String,
     val artworkUri: String?,
     val fetchedAtEpochMs: Long,
+    /** Thumbnail URL from this SAME verified CAA Front entry, not URL guessing. */
+    val thumbnailUri: String? = null,
 )
-    
 
 /**
  * Provenance belongs to an edge, not just to the Release: two providers may
