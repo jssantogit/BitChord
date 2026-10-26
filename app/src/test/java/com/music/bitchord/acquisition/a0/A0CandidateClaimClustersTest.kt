@@ -104,4 +104,23 @@ class A0CandidateClaimClustersTest {
         assertNull(abstain.preferredIndex)
         assertEquals(2,abstain.distinctClaims)
     }
+
+    @Test fun realPeerReplyEvidenceBreaksTieOnlyInsideIdenticalClaimPopulation() {
+        val claims=listOf(
+            entry(ready=true),entry(ready=false)
+        )
+        val reliable=listOf(
+            claims[0].copy(transportReliability=-8),
+            claims[1].copy(transportReliability=4)
+        )
+        val preview=A0CandidateClaimClusters.preview(reliable)
+        assertEquals(A0CandidatePreflight.SimulationStatus.SUGGESTED,preview.status)
+        assertEquals(1,preview.preferredIndex)
+        val different=listOf(
+            entry(filename="ILLIT Magnetic different version.mp3",score=95)
+                .copy(transportReliability=-8),
+            entry(score=70).copy(transportReliability=16))
+        val other=A0CandidateClaimClusters.preview(different)
+        assertEquals(0,other.preferredIndex)
+    }
 }
