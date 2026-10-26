@@ -53,17 +53,29 @@ internal interface MusicBrainzCoverArtStore {
     suspend fun write(value: MusicBrainzCoverArtCacheEntry)
 }
 
+/**
+ * The 2026-10-26 strict Front/Poster/approval policy uses a new Room cache key.
+ * Pre-policy artwork may have been cached at 1200px yet depict a music video.
+ * Keep legacy rows intact for migration safety, but never read them again.
+ */
+internal fun verifiedFrontCacheType(type: String): String =
+    when (type) {
+        "release", "release-group" -> "$type:front-v2"
+        else -> error("Unsupported cover cache entity type")
+    }
+
 internal class RoomMusicBrainzCoverArtStore(
     private val dao: CanonicalCatalogDao,
 ) : MusicBrainzCoverArtStore {
     override suspend fun read(type: String, mbid: String): MusicBrainzCoverArtCacheEntry? =
-        dao.musicBrainzCoverArtCache(type, mbid)?.let {
-            MusicBrainzCoverArtCacheEntry(it.entityType, it.mbid, it.artworkUri, it.fetchedAtEpochMs)
+        dao.musicBrainzCoverArtCache(verifiedFrontCacheType(type), mbid)?.let {
+            MusicBrainzCoverArtCacheEntry(type, it.mbid, it.artworkUri, it.fetchedAtEpochMs)
         }
 
     override suspend fun write(value: MusicBrainzCoverArtCacheEntry) {
         dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
-            value.entityType, value.mbid, value.artworkUri, value.fetchedAtEpochMs,
+            verifiedFrontCacheType(value.entityType), value.mbid,
+            value.artworkUri, value.fetchedAtEpochMs,
         ))
     }
 }
@@ -138,13 +150,7 @@ internal class CoverArtArchive(
             // Room cache is a persistence boundary: never trust old or tampered
             // artwork URLs without the same allowlist used for fresh responses.
             if (cached.artworkUri == null) return CoverLookup.Missing
-            if (safeImageUrl(cached.artworkUri) && !cached.artworkUri.endsWith("-250.jpg") &&
-                // Positive entries created before the approved-Front policy
-                // may point at video posters despite being 1200px. Revalidate
-                // them once; fresh values still use the normal 30-day TTL.
-                (now < VERIFIED_FRONT_POLICY_EPOCH_MS ||
-                    cached.fetchedAtEpochMs >= VERIFIED_FRONT_POLICY_EPOCH_MS)
-            ) {
+            if (safeImageUrl(cached.artworkUri) && !cached.artworkUri.endsWith("-250.jpg")) {
                 return CoverLookup.Found(cached.artworkUri)
             }
             // 250px legacy entries were correct at the time but blur in the
@@ -240,10 +246,6 @@ internal class CoverArtArchive(
     private fun validMbid(value: String): Boolean = MBID.matches(value.lowercase(Locale.ROOT))
 
     private companion object {
-        // 2026-10-26 UTC: migration boundary for previously unvalidated front art.
-        // No Room schema change; tests with synthetic clocks before this date
-        // preserve ordinary cache TTL semantics.
-        const val VERIFIED_FRONT_POLICY_EPOCH_MS = 1_792_972_800_000L
         const val POSITIVE_TTL_MS = 30L * 24 * 60 * 60 * 1_000
         const val NEGATIVE_TTL_MS = 24L * 60 * 60 * 1_000
         val MBID = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
