@@ -63,6 +63,7 @@
     </plurals>
     <string name="songs">Chansons</string>
     <string name="artists">Artistes</string>
+    <string name="canonical_singles_eps">Singles et EP</string>
     <string name="albums">Albums</string>
     <string name="no_album_metadata">Aucun de ces titres n\'indique son album.</string>
     <string name="search_empty">Recherchez des millions de chansons sur YouTube Music.</string>
