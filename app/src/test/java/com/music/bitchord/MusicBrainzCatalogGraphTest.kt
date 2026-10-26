@@ -51,6 +51,7 @@ class MusicBrainzCatalogGraphTest {
                     assertEquals("release-groups", parameters["inc"])
                     return """{"release-count":3,"release-offset":0,"releases":[
                         {"id":"$worldwide","title":"SUPER REAL ME","status":"Official",
+                         "cover-art-archive":{"front":true,"artwork":true},
                          "release-group":{"id":"$group"}},
                         {"id":"bad-id","title":"SUPER REAL ME","status":"Official",
                          "release-group":{"id":"$group"}},
@@ -66,9 +67,32 @@ class MusicBrainzCatalogGraphTest {
         assertEquals(3, output.value.consumedCount)
         assertEquals(2, output.value.items.size)
         assertEquals(group, output.value.items.first().releaseGroupMbid)
+        assertEquals(true, output.value.items.first().hasFrontCover)
+        assertEquals("https://coverartarchive.org/release/$worldwide/front-500",
+            com.music.bitchord.data.catalog.metadata.verifiedCaaFront500Url(
+                output.value.items.first()))
         assertEquals(listOf(worldwide), output.value.items
             .filter { it.status.equals("Official", ignoreCase = true) }
             .map { it.musicBrainzId })
+    }
+
+    @Test fun directCaaThumbnailRequiresPositiveFrontAndOfficialRelease() {
+        val release = MusicBrainzReleaseHit(worldwide, "SUPER REAL ME", "XW",
+            "2024-03-25", "ILLIT", status = "Official", hasFrontCover = true)
+        val expected = "https://coverartarchive.org/release/$worldwide/front-500"
+        assertEquals(expected,
+            com.music.bitchord.data.catalog.metadata.verifiedCaaFront500Url(release))
+        for (flag in listOf(null, false)) {
+            assertEquals(null,
+                com.music.bitchord.data.catalog.metadata.verifiedCaaFront500Url(
+                    release.copy(hasFrontCover = flag)))
+        }
+        assertEquals(null,
+            com.music.bitchord.data.catalog.metadata.verifiedCaaFront500Url(
+                release.copy(status = "Bootleg")))
+        assertEquals(null,
+            com.music.bitchord.data.catalog.metadata.verifiedCaaFront500Url(
+                release.copy(musicBrainzId = "invalid")))
     }
 
     @Test fun artistToGroupToReleaseToMediumTrackGraphKeepsIdentityBoundaries() = runBlocking {
