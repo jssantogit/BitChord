@@ -65,6 +65,8 @@ internal data class MusicBrainzReleaseHit(
     val artworkUri: String? = null,
     /** Release status is supplied by MusicBrainz, never inferred from its title. */
     val status: String? = null,
+    /** Search response's exact Release -> ReleaseGroup association, not a title match. */
+    val releaseGroupMbid: String? = null,
 )
 
 internal data class MusicBrainzRecordingHit(
@@ -168,6 +170,7 @@ internal class MusicBrainzCatalogSearch(
                         mbid, title, release.country.nonEmpty(),
                         release.date.nonEmpty(), release.artistCredit.displayArtistCredit(),
                         status = release.status.nonEmpty(),
+                        releaseGroupMbid = release.releaseGroup?.id.validSearchMbidOrNull(),
                     )
                 }
             }
@@ -324,6 +327,10 @@ private data class SearchReleaseGroupEntry(
 )
 
 @Serializable
+@Serializable
+private data class SearchReleaseGroupReference(val id: String? = null)
+
+@Serializable
 private data class SearchReleaseEntry(
     val id: String? = null,
     val title: String? = null,
@@ -331,6 +338,7 @@ private data class SearchReleaseEntry(
     val date: String? = null,
     val country: String? = null,
     @SerialName("artist-credit") val artistCredit: List<SearchArtistCredit>? = null,
+    @SerialName("release-group") val releaseGroup: SearchReleaseGroupReference? = null,
 )
 
 @Serializable
