@@ -22,6 +22,7 @@ internal class A0ObservedCandidateHandoff(
     private val requestedAlbum:String?=null,
     private val qualityProfile:A0CanonicalAcquisitionIntent.QualityProfileSnapshot=
         A0CanonicalAcquisitionIntent.QualityProfileSnapshot(),
+    private val peerReliability:A0PeerReliabilityEvidence=A0PeerReliabilityEvidence(),
 ) {
     class Choice internal constructor(
         val displayName:String,
@@ -414,7 +415,8 @@ internal class A0ObservedCandidateHandoff(
     fun claimPreview():A0CandidateClaimClusters.Preview {
         return A0CandidateClaimClusters.preview(candidates.map {
             A0CandidateClaimClusters.Entry(
-                it.claim,it.preflight,it.matchScore,it.peerAvailability
+                it.claim,it.preflight,it.matchScore,it.peerAvailability,
+                transportReliability=peerReliability.score(it.peerUsername)
             )
         },eligibleIndices=shadowEligibleIndices())
     }
