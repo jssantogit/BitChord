@@ -17,6 +17,7 @@ import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.catalog.allowedCanonicalLyricsSources
 import com.music.bitchord.data.catalog.metadata.CoverArtArchive
+import com.music.bitchord.data.catalog.metadata.CoverArtSize
 import com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult
@@ -486,7 +487,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * to it has the cover. No fuzzy title/artist search, even as fallback.
      * An actual edition must always retain its own artwork authority.
      */
-    private suspend fun canonicalArtworkForRow(row: CanonicalCatalogSearchRow): String? {
+    private suspend fun canonicalArtworkForRow(
+        row: CanonicalCatalogSearchRow,
+        size: CoverArtSize = CoverArtSize.THUMBNAIL,
+    ): String? {
         // MusicBrainz "Other" is not positive evidence for a release sleeve.
         // An unrelated release edition might be a video whose art is a still.
         if (row.kind == CanonicalSearchKind.RELEASE_GROUP &&
@@ -499,10 +503,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // edition merely because it contains the same Recording MBID:
             // that may be a music-video or performance release with still art.
             val verifiedEdition = row.coverReleaseMbid ?: return null
-            return coverArtArchive.findCover(verifiedEdition, null)
+            return coverArtArchive.findCover(verifiedEdition, null, size)
         }
         if (target == null) return null
-        val direct = coverArtArchive.findCover(target.first, target.second)
+        val direct = coverArtArchive.findCover(target.first, target.second, size)
         if (direct != null) return direct
         if (row.kind != CanonicalSearchKind.RELEASE_GROUP ||
             canonicalEditorialReleaseType(row) == null
@@ -517,7 +521,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 .take(2)
         } else emptyList()
         for (release in versions) {
-            val image = coverArtArchive.findCover(release.musicBrainzId, null)
+            val image = coverArtArchive.findCover(release.musicBrainzId, null, size)
             if (image != null) return image
         }
         return null
@@ -864,7 +868,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         ) return
         canonicalDetailCoverJob = viewModelScope.launch(Dispatchers.IO) {
             val artwork = try {
-                canonicalArtworkForRow(entry)
+                canonicalArtworkForRow(entry, CoverArtSize.HERO)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) { null } ?: return@launch
