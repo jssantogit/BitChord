@@ -2,6 +2,8 @@ package com.music.bitchord
 
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.MusicBrainzCoverArtCacheEntity
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
 import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistHit
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
@@ -70,4 +72,40 @@ class MusicBrainzPublicMetadataIndexTest {
                 .map { it.musicBrainzId })
         } finally { db.close() }
     }
+    @Test fun offlineReleaseCoversUseValidatedFrontV2AndNeverSurfaceLegacyPoster() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            var id = 0
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "front-test-${++id}" })
+            val groupId = "22222222-2222-4222-8222-222222222222"
+            val editionId = "33333333-3333-4333-8333-333333333333"
+            index.persistReleaseGroups(listOf(MusicBrainzReleaseGroupHit(
+                groupId, "New Jeans", "EP", "2022-08-01", "NewJeans",
+            )))
+            index.persistReleases(listOf(MusicBrainzReleaseHit(
+                editionId, "New Jeans", "KR", "2022-08-01", "NewJeans",
+            )))
+            val dao = db.catalogDao()
+            dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
+                "release-group", groupId, "https://archive.org/legacy-poster.jpg", 1000L,
+            ))
+            dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
+                "release", editionId, "https://archive.org/legacy-video.jpg", 1000L,
+            ))
+            assertEquals(null, dao.searchKnownMusicBrainzGroups("New Jeans", 10).single().artworkUri)
+            assertEquals(null, dao.searchKnownMusicBrainzReleases("New Jeans", 10).single().artworkUri)
+            dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
+                "release-group:front-v2", groupId, "https://archive.org/verified-group-front.jpg", 2000L,
+            ))
+            dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
+                "release:front-v2", editionId, "https://archive.org/verified-release-front.jpg", 2000L,
+            ))
+            assertEquals("https://archive.org/verified-group-front.jpg",
+                dao.searchKnownMusicBrainzGroups("New Jeans", 10).single().artworkUri)
+            assertEquals("https://archive.org/verified-release-front.jpg",
+                dao.searchKnownMusicBrainzReleases("New Jeans", 10).single().artworkUri)
+        } finally { db.close() }
+    }
+
 }
