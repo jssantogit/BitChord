@@ -81,7 +81,7 @@ internal class A0ObservedCandidateHandoff(
         val qualityMismatches:Int=0,
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
-    private val candidates=ArrayList<Choice>(256)
+    private val candidates=ArrayList<Choice>(384)
     private val canonicalManualTarget by lazy {
         // Badly formatted untrusted/search text must not crash the collector.
         // An invalid album claim loses confidence; it never grants one.
@@ -312,7 +312,7 @@ internal class A0ObservedCandidateHandoff(
                 candidates.removeAt(sameClaim.last().index)
                 claimBudgetDropped=(claimBudgetDropped+1).coerceAtMost(100000)
             }
-            if(candidates.size>256) {
+            if(candidates.size>384) {
                 candidates.removeAt(candidates.lastIndex)
                 capDropped=(capDropped+1).coerceAtMost(100000)
             }
