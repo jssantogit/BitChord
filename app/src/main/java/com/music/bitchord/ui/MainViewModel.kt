@@ -965,6 +965,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 hit.artistDisplay?.takeUnless { it.equals("Other", true) },
                                 releaseDate = hit.firstReleaseDate,
                                 releaseKind = hit.primaryType?.takeUnless { it.equals("Other", true) },
+                                secondaryTypes = hit.secondaryTypes,
                             ) },
                             nextOffset = result.value.nextOffset,
                             totalCount = result.value.total,
@@ -989,6 +990,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 hit.title, hit.artistDisplay?.takeUnless { it.equals("Other", true) },
                                 releaseDate = hit.firstReleaseDate,
                                 releaseKind = hit.primaryType?.takeUnless { it.equals("Other", true) },
+                                secondaryTypes = hit.secondaryTypes,
                                 fromOfflineCache = true,
                             ) },
                         ))
@@ -2495,6 +2497,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
                             hit.artistDisplay ?: hit.primaryType, fromOfflineCache = true,
                             releaseDate = hit.firstReleaseDate, releaseKind = hit.primaryType,
+                            secondaryTypes = hit.secondaryTypes,
                             artworkUri = hit.artworkUri,
                         ))
                     }
@@ -3497,6 +3500,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             add(CanonicalCatalogSearchRow(
                                 group.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP,
                                 group.title, group.artistDisplay ?: group.primaryType,
+                                releaseDate = group.firstReleaseDate, releaseKind = group.primaryType,
+                                secondaryTypes = group.secondaryTypes,
                                 fromOfflineCache = true,
                             ))
                         }
@@ -3644,6 +3649,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             subtitle = hit.artistDisplay ?: hit.primaryType,
                             releaseDate = hit.firstReleaseDate,
                             releaseKind = hit.primaryType,
+                            secondaryTypes = hit.secondaryTypes,
                             artistScopeMbid = artistScopeMbid,
                         ))
                     }
@@ -3711,6 +3717,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 add(CanonicalCatalogSearchRow(
                                     hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
                                     hit.artistDisplay ?: hit.primaryType, fromOfflineCache = true,
+                                    releaseDate = hit.firstReleaseDate,
+                                    releaseKind = hit.primaryType, secondaryTypes = hit.secondaryTypes,
                                 ))
                             }
                         }
@@ -3841,6 +3849,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             add(CanonicalCatalogSearchRow(
                                 hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
                                 hit.artistDisplay ?: hit.primaryType,
+                                releaseDate = hit.firstReleaseDate, releaseKind = hit.primaryType,
+                                secondaryTypes = hit.secondaryTypes,
                                 artistScopeMbid = cursor.artistScopeMbid,
                             ))
                         }
