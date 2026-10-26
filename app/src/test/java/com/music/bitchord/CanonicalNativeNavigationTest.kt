@@ -175,4 +175,30 @@ class CanonicalNativeNavigationTest {
         ), "Get Up").isEmpty())
     }
 
+
+    @Test fun artistCoverCandidatesRejectVideoVariantsAndUnknownEditionStatus() {
+        val groupTitle = "Almond Chocolate"
+        val base = MusicBrainzReleaseHit("official-xw", groupTitle, "XW", "2025-02-15",
+            "ILLIT", status = "Official")
+        val options = listOf(
+            base.copy(musicBrainzId = "video", title = "Almond Chocolate (performance ver.)"),
+            base.copy(musicBrainzId = "bootleg", status = "Bootleg"),
+            base.copy(musicBrainzId = "unknown", status = null),
+            base.copy(musicBrainzId = "korean-version", title = "Almond Chocolate (Korean ver.)"),
+            base,
+        )
+        assertEquals(listOf("official-xw"),
+            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(options, groupTitle)
+                .map { it.musicBrainzId })
+    }
+
+    @Test fun missingVerifiedEditionMustNotChooseArbitraryReleaseGroupArtwork() {
+        val options = listOf(
+            MusicBrainzReleaseHit("post", "Topping", null, "2025-07-05", "ILLIT", status = "Promotion"),
+            MusicBrainzReleaseHit("other", "Topping (Music Video)", null, null, "ILLIT", status = "Official"),
+        )
+        assertTrue(com.music.bitchord.ui.canonicalArtworkEditionsForGroup(options, "Topping")
+            .isEmpty())
+    }
+
 }
