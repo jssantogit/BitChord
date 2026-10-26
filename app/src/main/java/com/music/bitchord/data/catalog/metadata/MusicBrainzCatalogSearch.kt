@@ -255,7 +255,11 @@ internal class MusicBrainzCatalogSearch(
                         mbid, title, recording.artistCredit.displayArtistCredit(),
                         recording.length?.takeIf { it >= 0 },
                         coverReleaseMbid = releaseForArt,
-                        hasOfficialAudioRelease = official.isNotEmpty(),
+                        // A clean recording title on an Official video/Other
+                        // edition is still not positive evidence of official
+                        // audio. Match the *same* supported Album/EP/Single
+                        // evidence required for trustworthy cover association.
+                        hasOfficialAudioRelease = audioReleases.isNotEmpty(),
                         isVideo = recording.video == true,
                     )
                 }
