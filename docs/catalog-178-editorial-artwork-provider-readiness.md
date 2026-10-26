@@ -1,7 +1,17 @@
-# Catalog #178 — Editorial, artwork and future-provider readiness (proposed)
+# Catalog #178 — Editorial, artwork and future-provider readiness
 Date: 2026-10-26
 Scope: Android only; PR #183 draft, no merge or removal of YouTube discovery until physical acceptance.
-Status: **PROPOSED ROADMAP**, not implemented unless identified in an existing commit. Do not silently convert a proposal into a claim of shipped features.
+Status: **PARTIALLY IMPLEMENTED, PHYSICAL VALIDATION PENDING**. The proposals below are future-state, not claims of shipped behavior.
+
+## Implemented in the pre-smoke consolidation on PR #183
+- Room v7→8 adds nullable ReleaseGroup secondary types; MusicBrainz browse/search reads `secondary-types` and persists them, and online/offline Android group rows preserve them. Sparse results do not overwrite stronger prior evidence.
+- `CanonicalEditorialDiscography` classifies **only** MB `Album`, `Single`, `EP` as such; Live, Remix, Compilation, Soundtrack, etc. remain qualifiers rather than invented formats. Existing native shelves show secondary qualifiers. Unknown/Other remain unclassified.
+- `canonicalPreferredEditions` selects documented Official editions ahead of unknown status and excludes explicitly non-official variants. No title-only identity merges or synthetic playable assets.
+- Room v8→9 adds `thumbnailUri` to the validated CAA artwork cache. One Front JSON response retains both thumbnail (500px preferred) and hero (1200px preferred), with unchanged MBID/versioned front-v2 boundaries and URL allowlist. Native cards request thumbnails and release detail requests hero; grouped Room lookups hydrate cached artist artwork online/offline.
+- `ExternalEditorialEvidence` and `CanonicalProviderEnrichmentPolicy` provide **read-only testable contracts** for Last.fm, ListenBrainz and Apple Music; scoped Apple storefront keys, MBID/candidate distinction, genre/listen counts vs canonical type, artwork display-rights gates. **No provider network integration or Apple image reuse has been enabled.**
+- TDD coverage includes classification, secondary-type parsing/persistence, official edition precedence, both CAA image sizes, Room cache/artist artwork, provider identity/rights, plus an incremental 7→9 old-SQLite migration smoke.
+- CI/physical outcomes must be verified against the exact latest SHA, not inferred from past green APKs. Artwork latency and final discography completeness remain unproven on device.
+
 
 ## Immediate verified defect and fix
 - `RoomMusicBrainzCoverArtStore` writes `release:front-v2` and `release-group:front-v2`.
