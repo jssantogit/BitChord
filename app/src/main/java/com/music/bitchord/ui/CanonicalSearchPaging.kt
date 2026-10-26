@@ -17,6 +17,8 @@ internal data class CanonicalSearchPageCursors(
     val groups: Int?,
     val releases: Int?,
     val artists: Int?,
+    /** Null for text search; stable MusicBrainz artist MBID for scoped works. */
+    val artistScopeMbid: String? = null,
 ) {
     val hasMore: Boolean get() = listOf(recordings, groups, releases, artists).any { it != null }
 
@@ -39,12 +41,14 @@ internal data class CanonicalSearchPageCursors(
             groups: MusicBrainzCatalogSearchResult<*>,
             releases: MusicBrainzCatalogSearchResult<*>,
             artists: MusicBrainzCatalogSearchResult<*>,
+            artistScopeMbid: String? = null,
         ): CanonicalSearchPageCursors = CanonicalSearchPageCursors(
             query = query,
             recordings = initialOffset(recordings),
             groups = initialOffset(groups),
             releases = initialOffset(releases),
             artists = initialOffset(artists),
+            artistScopeMbid = artistScopeMbid,
         )
 
         private fun initialOffset(page: MusicBrainzCatalogSearchResult<*>): Int? =
