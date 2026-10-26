@@ -9,6 +9,7 @@ import com.music.bitchord.ui.screens.canonicalServerRowAsBrowseItem
 import com.music.bitchord.ui.screens.canonicalRowsForFilter
 import com.music.bitchord.ui.screens.canonicalRowsForQuery
 import com.music.bitchord.ui.screens.canonicalDisplaySubtitle
+import com.music.bitchord.ui.screens.canonicalSearchDisplaySections
 import com.music.bitchord.ui.screens.canonicalRowAsBrowseItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -78,6 +79,21 @@ class CanonicalSearchCategoryFilterTest {
         val unrelated = CanonicalCatalogSearchRow("artist-2", CanonicalSearchKind.ARTIST, "Illit", "Unrelated artist")
         val displayed = canonicalRowsForQuery(listOf(primary, primary, unrelated), "illit", SearchFilter.ARTISTS)
         assertEquals(listOf("artist-1", "artist-2"), displayed.map { it.musicBrainzId })
+    }
+
+    @Test fun generalSearchUsesNativeArtistSongsAlbumsSectionOrder() {
+        val artist = CanonicalCatalogSearchRow("artist-k", CanonicalSearchKind.ARTIST, "ILLIT", null)
+        val song = CanonicalCatalogSearchRow("recording-k", CanonicalSearchKind.RECORDING, "Magnetic", "ILLIT")
+        val group = CanonicalCatalogSearchRow("group-k", CanonicalSearchKind.RELEASE_GROUP, "SUPER REAL ME", "ILLIT")
+        val sections = canonicalSearchDisplaySections(listOf(group, song, artist), SearchFilter.ALL)
+        assertEquals(listOf(SearchFilter.ARTISTS, SearchFilter.SONGS, SearchFilter.ALBUMS),
+            sections.map { it.first })
+        assertEquals(listOf("artist-k", "recording-k", "group-k"),
+            sections.flatMap { it.second }.map { it.musicBrainzId })
+        val onlySongs = canonicalSearchDisplaySections(listOf(group, song, artist), SearchFilter.SONGS)
+        assertEquals(1, onlySongs.size)
+        assertEquals(null, onlySongs.single().first)
+        assertEquals(3, onlySongs.single().second.size)
     }
 
     @Test fun generalSearchDoesNotPresentMultipleExactHomonymsAsOneArtist() {
