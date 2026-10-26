@@ -572,7 +572,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Read only linked, Official edition titles; never match by artist/title. */
     private suspend fun canonicalSavedGroupDisplayTitle(row: CanonicalCatalogSearchRow): String {
-        if (row.kind != CanonicalSearchKind.RELEASE_GROUP) return row.title
+        // Only clear composite group labels qualify for an edition-backed
+        // display rename. Most shelves contain ordinary titles; avoid one
+        // Room edition traversal per ordinary visible card.
+        if (row.kind != CanonicalSearchKind.RELEASE_GROUP ||
+            !row.title.contains(" & ")
+        ) return row.title
         val editions = try {
             MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
                 getApplication<Application>(),
