@@ -59,7 +59,7 @@ class A0CandidateCalibrationV4Test {
     }
 
     @Test fun policyAndFixturesHaveAnExplicitVersion() {
-        assertEquals("preflight-v4",A0CandidatePreflight.POLICY_VERSION)
+        assertEquals("preflight-v5",A0CandidatePreflight.POLICY_VERSION)
         assertEquals(12,pack.size)
         assertEquals(12,pack.map { it.id }.distinct().size)
         assertEquals(4,pack.count { it.expected==S })
