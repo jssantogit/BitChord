@@ -5,6 +5,21 @@ import org.junit.Test
 
 /** Issue #172: every acquisition intent must be explicitly manual, no YT fallback. */
 class SoulseekDownloadRoutingTest {
+    @Test fun albumFallbackUsesOnlyConfirmedSongOrReleaseContexts() {
+        assertEquals("SUPER REAL ME",SoulseekDownloadRouting.albumHint(
+            songAlbum="SUPER REAL ME",playingAlbum="OTHER",targetAlbum="BAD",
+            samePlayingTrack=true,fromAlbum=true))
+        assertEquals("Thriller",SoulseekDownloadRouting.albumHint(
+            songAlbum=null,playingAlbum="Thriller",targetAlbum=null,
+            samePlayingTrack=true,fromAlbum=false))
+        assertEquals("BE",SoulseekDownloadRouting.albumHint(
+            songAlbum=null,playingAlbum=null,targetAlbum="BE",
+            samePlayingTrack=false,fromAlbum=true))
+        assertNull(SoulseekDownloadRouting.albumHint(
+            songAlbum=null,playingAlbum="Wrong record",targetAlbum="Playlist name",
+            samePlayingTrack=false,fromAlbum=false))
+    }
+
     @Test fun oneTrackOpensManualSoulseekSearch() {
         assertEquals(
             SoulseekDownloadRouting.Decision.ManualSearch("NewJeans - OMG"),
