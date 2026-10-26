@@ -12,6 +12,7 @@ import com.music.bitchord.auth.profileId
 import com.music.bitchord.auth.sessionId
 import com.music.bitchord.auth.adjacentProfile
 import com.music.bitchord.data.AppUpdateChecker
+import com.music.bitchord.data.canvas.AppleArtistArtRepository
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.catalog.allowedCanonicalLyricsSources
@@ -440,8 +441,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             row.subtitle?.contains(query, ignoreCase = true) == true
         }
         val candidates = canonicalCoverLookupCandidates(prioritized, limit = 12)
-        if (candidates.isEmpty()) return
+        // Independent Apple artwork is a visual fallback for the best exact
+        // artist-name hit, not an identity link between Apple and MusicBrainz.
+        val portrait = canonicalArtistArtworkCandidate(visible, query)
+        if (candidates.isEmpty() && portrait == null) return
         canonicalSearchCoverJob = viewModelScope.launch(Dispatchers.IO) {
+            if (portrait != null) {
+                val art = try {
+                    AppleArtistArtRepository.artFor(portrait.title)?.heroUrl
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { null }
+                if (art != null && _searchSource.value == SearchSource.CANONICAL &&
+                    _query.value.trim() == query
+                ) {
+                    val current = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
+                    _canonicalResults.value = UiState.Success(current.map {
+                        if (it.kind == CanonicalSearchKind.ARTIST &&
+                            it.musicBrainzId == portrait.musicBrainzId &&
+                            it.artworkUri.isNullOrBlank()) it.copy(artworkUri = art) else it
+                    })
+                }
+            }
             for (row in candidates) {
                 if (_searchSource.value != SearchSource.CANONICAL ||
                     _query.value.trim() != query) return@launch
