@@ -9,6 +9,8 @@ import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -112,6 +114,11 @@ internal class CoverArtArchive(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
+    // Different Home/search cards often resolve the same Release concurrently.
+    // Share only simultaneous lookups; do not convert transient failures into
+    // a long-lived negative cache. Other MBIDs proceed independently.
+    private val inFlight = ConcurrentHashMap<Pair<String, String>, CompletableDeferred<CoverLookup>>()
+
     suspend fun findCover(releaseMbid: String?, groupMbid: String?): String? {
         // Invalid supplied IDs fail closed, including before attempting group art.
         if (releaseMbid != null && !validMbid(releaseMbid)) return null
@@ -135,6 +142,26 @@ internal class CoverArtArchive(
     }
 
     private suspend fun fetch(type: String, mbid: String): CoverLookup {
+        val key = type to mbid
+        val proposed = CompletableDeferred<CoverLookup>()
+        val existing = inFlight.putIfAbsent(key, proposed)
+        if (existing != null) return existing.await()
+        try {
+            val result = fetchUnshared(type, mbid)
+            proposed.complete(result)
+            return result
+        } catch (cancelled: CancellationException) {
+            proposed.cancel(cancelled)
+            throw cancelled
+        } catch (_: Exception) {
+            proposed.complete(CoverLookup.Unavailable)
+            return CoverLookup.Unavailable
+        } finally {
+            inFlight.remove(key, proposed)
+        }
+    }
+
+    private suspend fun fetchUnshared(type: String, mbid: String): CoverLookup {
         val now = nowEpochMs()
         val cached = try {
             store.read(type, mbid)
@@ -150,13 +177,18 @@ internal class CoverArtArchive(
             // Room cache is a persistence boundary: never trust old or tampered
             // artwork URLs without the same allowlist used for fresh responses.
             if (cached.artworkUri == null) return CoverLookup.Missing
-            if (safeImageUrl(cached.artworkUri) && !cached.artworkUri.endsWith("-250.jpg")) {
+            // A 250px image can be the ONLY artwork the archive publishes.
+            // Re-probe it periodically, not on every card composition/visit.
+            val smallArtwork = cached.artworkUri.substringBefore('?').let {
+                it.endsWith("-250.jpg") || it.endsWith("-250")
+            }
+            if (safeImageUrl(cached.artworkUri) &&
+                (!smallArtwork || now - cached.fetchedAtEpochMs < SMALL_ART_RECHECK_MS)
+            ) {
                 return CoverLookup.Found(cached.artworkUri)
             }
-            // 250px legacy entries were correct at the time but blur in the
-            // native album hero; ask CAA for a larger canonical image on demand.
-            // Invalid positive entries must be refreshed, not rendered or
-            // downgraded into cached "missing" evidence.
+            // Old small covers get a chance to upgrade; a suspicious cached URL
+            // must be revalidated rather than rendered or treated as a 404.
         }
 
         val answer = try {
@@ -183,9 +215,12 @@ internal class CoverArtArchive(
                         // MusicBrainz CAA has separate Track, Poster and Front types.
                         // A poster marked front is not evidence of an audio sleeve.
                         val types = entry["types"] as? JsonArray
-                        types == null || types.isEmpty() || types.any {
-                            it.jsonPrimitive.contentOrNull.equals("Front", ignoreCase = true)
-                        }
+                        val labels = types?.mapNotNull {
+                            runCatching { it.jsonPrimitive.contentOrNull?.lowercase(Locale.ROOT) }
+                                .getOrNull()
+                        }.orEmpty()
+                        (labels.isEmpty() || "front" in labels) &&
+                            "poster" !in labels && "track" !in labels
                     }
                 val front = frontImages.firstNotNullOfOrNull { entry ->
                     val thumbs = entry["thumbnails"] as? JsonObject
@@ -246,6 +281,7 @@ internal class CoverArtArchive(
     private fun validMbid(value: String): Boolean = MBID.matches(value.lowercase(Locale.ROOT))
 
     private companion object {
+        const val SMALL_ART_RECHECK_MS = 6L * 60 * 60 * 1_000
         const val POSITIVE_TTL_MS = 30L * 24 * 60 * 60 * 1_000
         const val NEGATIVE_TTL_MS = 24L * 60 * 60 * 1_000
         val MBID = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
