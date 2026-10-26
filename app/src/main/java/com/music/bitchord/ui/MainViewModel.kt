@@ -572,21 +572,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     })
                 }
             }
-            for (row in candidates) {
-                if (_searchSource.value != SearchSource.CANONICAL ||
-                    _query.value.trim() != query) return@launch
-                val artwork = try {
-                    canonicalArtworkForRow(row)
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) { null } ?: continue
-                if (_searchSource.value != SearchSource.CANONICAL ||
-                    _query.value.trim() != query) return@launch
-                val current = (_canonicalResults.value as? UiState.Success)?.data ?: continue
-                _canonicalResults.value = UiState.Success(current.map {
-                    if (it.kind == row.kind && it.musicBrainzId == row.musicBrainzId &&
-                        canonicalNeedsCoverRefresh(it.artworkUri)) it.copy(artworkUri = artwork) else it
-                })
+            // Visible results should not wait behind one stalled CAA request.
+            // CAA enrichment is bounded; MusicBrainz lookups retain their own
+            // process-wide rate limiter. Different rows must update atomically.
+            val permits = Semaphore(3)
+            candidates.forEach { row ->
+                launch {
+                    permits.withPermit {
+                        if (_searchSource.value != SearchSource.CANONICAL ||
+                            _query.value.trim() != query) return@withPermit
+                        val artwork = try {
+                            canonicalArtworkForRow(row)
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { null } ?: return@withPermit
+                        if (_searchSource.value != SearchSource.CANONICAL ||
+                            _query.value.trim() != query) return@withPermit
+                        _canonicalResults.update { old ->
+                            if (old !is UiState.Success) old else UiState.Success(
+                                old.data.map {
+                                    if (it.kind == row.kind && it.musicBrainzId == row.musicBrainzId &&
+                                        canonicalNeedsCoverRefresh(it.artworkUri)
+                                    ) it.copy(artworkUri = artwork) else it
+                                },
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -601,21 +613,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val candidates = canonicalCoverLookupCandidates(prioritized, limit = 24)
         if (candidates.isEmpty()) return
         canonicalHomeCoverJob = viewModelScope.launch(Dispatchers.IO) {
-            for (row in candidates) {
-                if (!canonicalDiscoveryCatalogEpoch.isCurrent(generation) ||
-                    !isCanonicalDiscoverySelected()) return@launch
-                val artwork = try {
-                    canonicalArtworkForRow(row)
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) { null } ?: continue
-                if (!canonicalDiscoveryCatalogEpoch.isCurrent(generation) ||
-                    !isCanonicalDiscoverySelected()) return@launch
-                val latest = (_canonicalDiscoveryCatalog.value as? UiState.Success)?.data ?: continue
-                _canonicalDiscoveryCatalog.value = UiState.Success(latest.map {
-                    if (it.kind == row.kind && it.musicBrainzId == row.musicBrainzId &&
-                        canonicalNeedsCoverRefresh(it.artworkUri)) it.copy(artworkUri = artwork) else it
-                })
+            val permits = Semaphore(3)
+            candidates.forEach { row ->
+                launch {
+                    permits.withPermit {
+                        if (!canonicalDiscoveryCatalogEpoch.isCurrent(generation) ||
+                            !isCanonicalDiscoverySelected()) return@withPermit
+                        val artwork = try {
+                            canonicalArtworkForRow(row)
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { null } ?: return@withPermit
+                        if (!canonicalDiscoveryCatalogEpoch.isCurrent(generation) ||
+                            !isCanonicalDiscoverySelected()) return@withPermit
+                        _canonicalDiscoveryCatalog.update { old ->
+                            if (old !is UiState.Success) old else UiState.Success(
+                                old.data.map {
+                                    if (it.kind == row.kind && it.musicBrainzId == row.musicBrainzId &&
+                                        canonicalNeedsCoverRefresh(it.artworkUri)
+                                    ) it.copy(artworkUri = artwork) else it
+                                },
+                            )
+                        }
+                    }
+                }
             }
         }
     }
