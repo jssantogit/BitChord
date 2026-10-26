@@ -56,4 +56,12 @@ class SoulseekBatchPlanTest {
         assertEquals(2,session.succeeded)
         assertEquals(1,session.skipped)
     }
+    @Test fun editingWireQueryDoesNotChangeAlbumTrackIdentityForRanking() {
+        val entry=SoulseekBatchPlan.Entry("2","ILLIT - Magnetic","SUPER REAL ME",161)
+        assertEquals("ILLIT - Magnetic",
+            SoulseekBatchPlan.identityQuery(entry,"Magnetic 320"))
+        assertEquals("Magnetic 320",
+            SoulseekBatchPlan.identityQuery(null,"Magnetic 320"))
+    }
+
 }
