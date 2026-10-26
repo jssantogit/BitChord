@@ -47,7 +47,7 @@ class A0CandidateCalibrationV3Test {
     }
 
     @Test fun policyAndFrozenPackAreVersioned() {
-        assertEquals("preflight-v4",A0CandidatePreflight.POLICY_VERSION)
+        assertEquals("preflight-v5",A0CandidatePreflight.POLICY_VERSION)
         assertEquals(5,pack.size)
         assertEquals(5,pack.map { it.id }.distinct().size)
         assertEquals(3,pack.count { it.expected==STRONG })
