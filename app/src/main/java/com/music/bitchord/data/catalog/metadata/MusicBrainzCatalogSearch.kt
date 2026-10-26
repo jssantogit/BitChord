@@ -63,6 +63,8 @@ internal data class MusicBrainzReleaseHit(
     val releaseDate: String?,
     val artistDisplay: String?,
     val artworkUri: String? = null,
+    /** Release status is supplied by MusicBrainz, never inferred from its title. */
+    val status: String? = null,
 )
 
 internal data class MusicBrainzRecordingHit(
@@ -165,6 +167,7 @@ internal class MusicBrainzCatalogSearch(
                     MusicBrainzReleaseHit(
                         mbid, title, release.country.nonEmpty(),
                         release.date.nonEmpty(), release.artistCredit.displayArtistCredit(),
+                        status = release.status.nonEmpty(),
                     )
                 }
             }
@@ -324,6 +327,7 @@ private data class SearchReleaseGroupEntry(
 private data class SearchReleaseEntry(
     val id: String? = null,
     val title: String? = null,
+    val status: String? = null,
     val date: String? = null,
     val country: String? = null,
     @SerialName("artist-credit") val artistCredit: List<SearchArtistCredit>? = null,
