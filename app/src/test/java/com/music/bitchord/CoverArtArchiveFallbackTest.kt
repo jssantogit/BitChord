@@ -265,12 +265,80 @@ class CoverArtArchiveFallbackTest {
                     entries[value.entityType to value.mbid] = value
                 }
             },
-            nowEpochMs = { 1100L },
+            nowEpochMs = { 8L * 60 * 60 * 1000 + 1100L },
         )
         assertEquals("https://coverartarchive.org/release/$release/art-1200.jpg",
             cover.findCover(release, null))
         assertEquals(1, calls)
     }
 
+
+    @Test fun repeatedRequestsReuseFreshSmallCoverInsteadOfRefetchingForever() = runBlocking {
+        var calls = 0
+        val cache = mutableMapOf<Pair<String, String>, MusicBrainzCoverArtCacheEntry>()
+        val cover = CoverArtArchive(
+            transport = object : CoverArtArchiveTransport {
+                override suspend fun get(path: String): CoverArtArchiveResponse {
+                    calls++
+                    return CoverArtArchiveResponse(200,
+                        """{"images":[{"front":true,"types":["Front"],"approved":true,
+                            "thumbnails":{"250":"https://coverartarchive.org/release/$release/front-250.jpg"}}]}""")
+                }
+            },
+            store = object : MusicBrainzCoverArtStore {
+                override suspend fun read(type: String, mbid: String) = cache[type to mbid]
+                override suspend fun write(value: MusicBrainzCoverArtCacheEntry) {
+                    cache[value.entityType to value.mbid] = value
+                }
+            },
+            nowEpochMs = { 50_000L },
+        )
+        val uri = "https://coverartarchive.org/release/$release/front-250.jpg"
+        assertEquals(uri, cover.findCover(release, null))
+        assertEquals(uri, cover.findCover(release, null))
+        assertEquals(1, calls)
+    }
+
+    @Test fun concurrentlyRequestedSameReleaseSharesOneArtworkLookup() = runBlocking {
+        val releaseStarted = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val releaseContinue = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var calls = 0
+        val cover = CoverArtArchive(transport = object : CoverArtArchiveTransport {
+            override suspend fun get(path: String): CoverArtArchiveResponse {
+                calls++
+                releaseStarted.complete(Unit)
+                releaseContinue.await()
+                return CoverArtArchiveResponse(200,
+                    """{"images":[{"front":true,"types":["Front"],"approved":true,
+                        "image":"https://archive.org/shared-front.jpg"}]}""")
+            }
+        })
+        val first = kotlinx.coroutines.async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            cover.findCover(release, null)
+        }
+        releaseStarted.await()
+        val second = kotlinx.coroutines.async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            cover.findCover(release, null)
+        }
+        assertEquals(1, calls)
+        releaseContinue.complete(Unit)
+        assertEquals("https://archive.org/shared-front.jpg", first.await())
+        assertEquals("https://archive.org/shared-front.jpg", second.await())
+        assertEquals(1, calls)
+    }
+
+    @Test fun frontPosterMixedTypeCannotBeUsedAsAlbumCover() = runBlocking {
+        val cover = CoverArtArchive(transport = object : CoverArtArchiveTransport {
+            override suspend fun get(path: String) = CoverArtArchiveResponse(
+                200, """{"images":[
+                    {"front":true,"types":["Poster","Front"],"approved":true,
+                     "image":"https://archive.org/video-poster.jpg"},
+                    {"front":true,"types":["Front"],"approved":true,
+                     "image":"https://archive.org/actual-release-cover.jpg"}
+                ]}""",
+            )
+        })
+        assertEquals("https://archive.org/actual-release-cover.jpg", cover.findCover(release, null))
+    }
 
 }
