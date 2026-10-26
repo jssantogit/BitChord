@@ -135,5 +135,11 @@ class CanonicalSearchCategoryFilterTest {
         assertEquals("ILLIT", canonicalDisplaySubtitle(song, "Gravação"))
         assertEquals("Artista", canonicalDisplaySubtitle(artist, "Artista"))
         assertEquals("Single", canonicalDisplaySubtitle(release, "Álbum"))
+        val withoutCredits = song.copy(subtitle = null)
+        assertEquals("", canonicalDisplaySubtitle(withoutCredits, "Gravação"))
+        assertEquals("", canonicalDisplaySubtitle(artist, "Artista · discografia").substringAfter("Artista", ""))
+        val edition = release.copy(kind = CanonicalSearchKind.RELEASE,
+            releaseKind = null, subtitle = "ILLIT · Japão · 2024")
+        assertEquals("ILLIT", canonicalDisplaySubtitle(edition, "Edição · faixas"))
     }
 }
