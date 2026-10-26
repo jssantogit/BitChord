@@ -8,6 +8,12 @@ package com.music.bitchord.download
 internal object SoulseekBatchPlan {
     const val MAX_TRACKS = 64
 
+    /** A user may vary the network search, but never the release slot's
+     * original artist/title identity or its album/version preflight.
+     */
+    fun identityQuery(entry:Entry?,editedSearch:String):String =
+        entry?.query ?: editedSearch
+
     data class SourceTrack(
         val trackId: String,
         val artist: String,
