@@ -65,18 +65,9 @@ object AudioOutputStatus {
         val decoderOutputEncoding: String? = null,
         val dspFormat: String = "Float32",
         /**
-         * Whether the DSP chain can run on the playing track at all.
-         *
-         * False only on the sink's legacy path, which a stream that was never
-         * decoded to linear PCM takes — a passthrough or offload bitstream.
-         * There is nothing to filter there, so the equaliser and spatial audio
-         * are genuinely inert, and the equaliser screen says so.
-         *
-         * Notably *not* tied to the output encoding. The DSP chain runs inside
-         * `PrecisionAudioSink`, upstream of Media3's own processor list, so a
-         * float AudioTrack makes no difference to it — an older readout keyed
-         * off exactly that and spent months telling people their equaliser was
-         * off while it was working.
+         * Whether custom audio effects are available on the active route.
+         * Neutral Android playback reports false, even when its decoder
+         * supplies linear PCM; format conversion is not an audio effect.
          */
         val dspAvailable: Boolean = true,
         val directUsbProbe: DirectUsbProbeResult? = null,

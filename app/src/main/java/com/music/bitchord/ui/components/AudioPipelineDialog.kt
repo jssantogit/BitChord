@@ -413,10 +413,12 @@ fun AudioPipelineDialog(
             ) {
                 PipelineRow(stringResource(R.string.pipeline_pcm_format), pcmFormat)
                 PipelineRow(stringResource(R.string.pipeline_sample_rate), dspRateText)
-                PipelineRow(stringResource(R.string.pipeline_loudness_gain), loudnessGainText)
-                PipelineRow(stringResource(R.string.pipeline_loudness_measured), loudnessMeasuredText)
-                PipelineRow(stringResource(R.string.pipeline_eq_preset), eqPresetText)
-                PipelineRow(stringResource(R.string.pipeline_stereo_expand), stereoExpandText)
+                if (outputStatus.dspAvailable) {
+                    PipelineRow(stringResource(R.string.pipeline_loudness_gain), loudnessGainText)
+                    PipelineRow(stringResource(R.string.pipeline_loudness_measured), loudnessMeasuredText)
+                    PipelineRow(stringResource(R.string.pipeline_eq_preset), eqPresetText)
+                    PipelineRow(stringResource(R.string.pipeline_stereo_expand), stereoExpandText)
+                }
                 PipelineRow(stringResource(R.string.pipeline_buffers), buffersText)
                 PipelineRow(stringResource(R.string.pipeline_output_api), outputStatus.sink.ifBlank { "AAudio" })
                 // The verdict, rather than the settings. Names whichever
@@ -430,9 +432,10 @@ fun AudioPipelineDialog(
                         dsd = dsdRateHz != null,
                         outputExact = outputStatus.outputExact,
                         outputExactDetail = outputStatus.outputExactDetail,
-                        loudnessActive = loudnessNormalization && outputStatus.loudnessGainDb != null,
-                        eqActive = eqEnabled,
-                        spatialActive = spatialAudio,
+                        loudnessActive = outputStatus.dspAvailable &&
+                            loudnessNormalization && outputStatus.loudnessGainDb != null,
+                        eqActive = outputStatus.dspAvailable && eqEnabled,
+                        spatialActive = outputStatus.dspAvailable && spatialAudio,
                         routeActuallyObserved = outputStatus.directPlaybackActual,
                     ),
                 )
