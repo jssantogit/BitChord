@@ -37,6 +37,8 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                 lastAudibleAtEpochMs = events?.lastAudibleAtEpochMs,
                 durationMs = recording.durationMs,
                 available = true,
+                title = recording.title,
+                artistDisplay = recording.artistDisplay,
             )
         }
     }

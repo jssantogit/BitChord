@@ -54,6 +54,8 @@ internal data class RuleBasedRecordingCandidate(
     val durationMs: Long?,
     val available: Boolean,
     val ratingEvidenceUnknown: Boolean = false,
+    val title: String? = null,
+    val artistDisplay: String? = null,
 )
 
 internal data class RuleBasedSmartPlaylistQuery(
@@ -212,6 +214,8 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
                     lastAudibleAtEpochMs = audibleAt,
                     durationMs = recording.durationMs,
                     available = true,
+                    title = recording.title,
+                    artistDisplay = recording.artistDisplay,
                 )
             }
         }

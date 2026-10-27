@@ -31,6 +31,8 @@ import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
+import com.music.bitchord.data.listening.allowedOperators
+import com.music.bitchord.data.listening.isTextField
 import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
 import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
 import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
@@ -59,6 +61,8 @@ private fun fieldLabel(value: SmartPlaylistRuleField): String = when (value) {
     SmartPlaylistRuleField.AUDIBLE_COMPLETIONS -> "Reproduções concluídas"
     SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE -> "Dias desde última reprodução concluída"
     SmartPlaylistRuleField.DURATION_MS -> "Duração (milissegundos)"
+    SmartPlaylistRuleField.TITLE -> "Título da faixa"
+    SmartPlaylistRuleField.ARTIST_DISPLAY -> "Artista (catálogo)"
 }
 
 private fun operatorLabel(value: SmartPlaylistRuleOperator): String = when (value) {
@@ -70,6 +74,10 @@ private fun operatorLabel(value: SmartPlaylistRuleOperator): String = when (valu
     SmartPlaylistRuleOperator.LESS_OR_EQUAL -> "No máximo"
     SmartPlaylistRuleOperator.IS_PRESENT -> "Possui valor"
     SmartPlaylistRuleOperator.IS_MISSING -> "Sem valor"
+    SmartPlaylistRuleOperator.CONTAINS -> "Contém"
+    SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> "Não contém"
+    SmartPlaylistRuleOperator.STARTS_WITH -> "Começa com"
+    SmartPlaylistRuleOperator.ENDS_WITH -> "Termina com"
 }
 
 @Composable
@@ -159,31 +167,64 @@ private fun V2RuleNode(
                 V2Option(
                     "Campo", rule.field, SmartPlaylistRuleField.entries,
                     ::fieldLabel,
-                ) { onChange(rule.copy(field = it)) }
+                ) { newField ->
+                    val op = rule.operator.takeIf { it in newField.allowedOperators() }
+                        ?: if (newField.isTextField()) SmartPlaylistRuleOperator.CONTAINS
+                        else SmartPlaylistRuleOperator.GREATER_OR_EQUAL
+                    val presence = op == SmartPlaylistRuleOperator.IS_PRESENT ||
+                        op == SmartPlaylistRuleOperator.IS_MISSING
+                    onChange(SmartPlaylistRule.Comparison(
+                        field = newField,
+                        operator = op,
+                        value = if (!newField.isTextField() && !presence) rule.value ?: 1.0 else null,
+                        textValue = if (newField.isTextField() && !presence)
+                            rule.textValue ?: "" else null,
+                    ))
+                }
                 V2Option(
-                    "Condição", rule.operator, SmartPlaylistRuleOperator.entries,
+                    "Condição", rule.operator, rule.field.allowedOperators(),
                     ::operatorLabel,
-                ) { op -> onChange(rule.copy(
-                    operator = op,
-                    value = if (op == SmartPlaylistRuleOperator.IS_PRESENT ||
-                        op == SmartPlaylistRuleOperator.IS_MISSING) null
-                    else rule.value ?: 1.0,
-                )) }
+                ) { op ->
+                    val presence = op == SmartPlaylistRuleOperator.IS_PRESENT ||
+                        op == SmartPlaylistRuleOperator.IS_MISSING
+                    onChange(rule.copy(
+                        operator = op,
+                        value = if (presence || rule.field.isTextField()) null
+                            else rule.value ?: 1.0,
+                        textValue = if (presence || !rule.field.isTextField()) null
+                            else rule.textValue ?: "",
+                    ))
+                }
                 if (rule.operator != SmartPlaylistRuleOperator.IS_PRESENT &&
                     rule.operator != SmartPlaylistRuleOperator.IS_MISSING
                 ) {
-                    var entered by remember(rule.field, rule.operator) {
-                        mutableStateOf(rule.value?.toString().orEmpty())
+                    if (rule.field.isTextField()) {
+                        var entered by remember(rule.field, rule.operator) {
+                            mutableStateOf(rule.textValue.orEmpty())
+                        }
+                        OutlinedTextField(
+                            value = entered,
+                            onValueChange = { raw ->
+                                entered = raw
+                                onChange(rule.copy(value = null, textValue = raw))
+                            },
+                            label = { Text("Texto a procurar") }, singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        var entered by remember(rule.field, rule.operator) {
+                            mutableStateOf(rule.value?.toString().orEmpty())
+                        }
+                        OutlinedTextField(
+                            value = entered,
+                            onValueChange = { raw ->
+                                entered = raw
+                                onChange(rule.copy(value = raw.toDoubleOrNull(), textValue = null))
+                            },
+                            label = { Text("Valor") }, singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
-                    OutlinedTextField(
-                        value = entered,
-                        onValueChange = { raw ->
-                            entered = raw
-                            onChange(rule.copy(value = raw.toDoubleOrNull()))
-                        },
-                        label = { Text("Valor") }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (depth < 7) TextButton(onClick = {

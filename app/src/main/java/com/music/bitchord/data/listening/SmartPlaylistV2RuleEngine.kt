@@ -2,6 +2,7 @@ package com.music.bitchord.data.listening
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.util.Locale
 
 /**
  * V2 rule language is independent of provider IDs, Room entities and Media3.
@@ -22,6 +23,7 @@ internal sealed interface SmartPlaylistRule {
         val field: SmartPlaylistRuleField,
         val operator: SmartPlaylistRuleOperator,
         val value: Double? = null,
+        val textValue: String? = null,
     ) : SmartPlaylistRule
 
     @Serializable
@@ -38,12 +40,15 @@ internal enum class SmartPlaylistRuleField {
     AUDIBLE_COMPLETIONS,
     DAYS_SINCE_LAST_AUDIBLE,
     DURATION_MS,
+    TITLE,
+    ARTIST_DISPLAY,
 }
 
 @Serializable
 internal enum class SmartPlaylistRuleOperator {
     EQUAL, NOT_EQUAL, GREATER_THAN, GREATER_OR_EQUAL, LESS_THAN, LESS_OR_EQUAL,
     IS_PRESENT, IS_MISSING,
+    CONTAINS, DOES_NOT_CONTAIN, STARTS_WITH, ENDS_WITH,
 }
 
 @Serializable
@@ -53,7 +58,36 @@ internal enum class SmartPlaylistV2Sort {
     DURATION_DESC, DURATION_ASC,
     LAST_AUDIBLE_DESC, LAST_AUDIBLE_ASC,
     RECORDING_ID_ASC, STABLE_RANDOM,
+    TITLE_ASC, TITLE_DESC, ARTIST_ASC, ARTIST_DESC,
 }
+
+internal fun SmartPlaylistRuleField.isTextField(): Boolean =
+    this == SmartPlaylistRuleField.TITLE || this == SmartPlaylistRuleField.ARTIST_DISPLAY
+
+internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOperator> =
+    if (isTextField()) listOf(
+        SmartPlaylistRuleOperator.CONTAINS,
+        SmartPlaylistRuleOperator.DOES_NOT_CONTAIN,
+        SmartPlaylistRuleOperator.EQUAL,
+        SmartPlaylistRuleOperator.NOT_EQUAL,
+        SmartPlaylistRuleOperator.STARTS_WITH,
+        SmartPlaylistRuleOperator.ENDS_WITH,
+        SmartPlaylistRuleOperator.IS_PRESENT,
+        SmartPlaylistRuleOperator.IS_MISSING,
+    ) else listOf(
+        SmartPlaylistRuleOperator.EQUAL,
+        SmartPlaylistRuleOperator.NOT_EQUAL,
+        SmartPlaylistRuleOperator.GREATER_THAN,
+        SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+        SmartPlaylistRuleOperator.LESS_THAN,
+        SmartPlaylistRuleOperator.LESS_OR_EQUAL,
+        SmartPlaylistRuleOperator.IS_PRESENT,
+        SmartPlaylistRuleOperator.IS_MISSING,
+    )
+
+private fun String?.normalizedSmartPlaylistText(): String? =
+    this?.trim()?.takeIf(String::isNotEmpty)?.lowercase(Locale.ROOT)
+
 
 /**
  * Query validation is strict, but a missing piece of candidate evidence is not
@@ -82,15 +116,34 @@ internal data class SmartPlaylistV2Query(
                 is SmartPlaylistRule.Comparison -> {
                     val presence = node.operator == SmartPlaylistRuleOperator.IS_PRESENT ||
                         node.operator == SmartPlaylistRuleOperator.IS_MISSING
-                    if (presence) {
-                        require(node.value == null) { "Presence tests must not carry a value" }
-                    } else {
-                        require(node.value?.isFinite() == true) { "Comparison requires a finite value" }
+                    require(node.operator in node.field.allowedOperators()) {
+                        "Operator cannot be applied to field type"
                     }
-                    if (node.field == SmartPlaylistRuleField.AUDIBLE_COMPLETIONS &&
-                        !presence) {
-                        require(node.value!! >= 0.0 && node.value % 1.0 == 0.0) {
-                            "Completion count must be a nonnegative integer"
+                    if (node.field.isTextField()) {
+                        require(node.value == null) { "Text rules cannot carry numeric values" }
+                        if (presence) {
+                            require(node.textValue == null) { "Presence tests must not carry a value" }
+                        } else {
+                            require(node.textValue != null &&
+                                node.textValue.isNotBlank() &&
+                                node.textValue.trim().length <= 160) {
+                                "Text comparison requires a nonblank, bounded value"
+                            }
+                        }
+                    } else {
+                        require(node.textValue == null) { "Numeric rules cannot carry text" }
+                        if (presence) {
+                            require(node.value == null) { "Presence tests must not carry a value" }
+                        } else {
+                            require(node.value?.isFinite() == true) {
+                                "Comparison requires a finite value"
+                            }
+                        }
+                        if (node.field == SmartPlaylistRuleField.AUDIBLE_COMPLETIONS &&
+                            !presence) {
+                            require(node.value!! >= 0.0 && node.value % 1.0 == 0.0) {
+                                "Completion count must be a nonnegative integer"
+                            }
                         }
                     }
                 }
@@ -168,6 +221,22 @@ internal class SmartPlaylistV2RuleEngine(
                 compareBy<RuleBasedRecordingCandidate> { it.lastAudibleAtEpochMs ?: Long.MAX_VALUE }
                     .thenBy { it.recordingId },
             )
+            SmartPlaylistV2Sort.TITLE_ASC -> candidateRows.sortedWith(
+                compareBy<RuleBasedRecordingCandidate> { it.title.normalizedSmartPlaylistText() == null }
+                    .thenBy { it.title.normalizedSmartPlaylistText() ?: "" }.thenBy { it.recordingId },
+            )
+            SmartPlaylistV2Sort.TITLE_DESC -> candidateRows.sortedWith(
+                compareBy<RuleBasedRecordingCandidate> { it.title.normalizedSmartPlaylistText() == null }
+                    .thenByDescending { it.title.normalizedSmartPlaylistText() ?: "" }.thenBy { it.recordingId },
+            )
+            SmartPlaylistV2Sort.ARTIST_ASC -> candidateRows.sortedWith(
+                compareBy<RuleBasedRecordingCandidate> { it.artistDisplay.normalizedSmartPlaylistText() == null }
+                    .thenBy { it.artistDisplay.normalizedSmartPlaylistText() ?: "" }.thenBy { it.recordingId },
+            )
+            SmartPlaylistV2Sort.ARTIST_DESC -> candidateRows.sortedWith(
+                compareBy<RuleBasedRecordingCandidate> { it.artistDisplay.normalizedSmartPlaylistText() == null }
+                    .thenByDescending { it.artistDisplay.normalizedSmartPlaylistText() ?: "" }.thenBy { it.recordingId },
+            )
             SmartPlaylistV2Sort.RECORDING_ID_ASC -> candidateRows.sortedBy { it.recordingId }
             SmartPlaylistV2Sort.STABLE_RANDOM -> candidateRows.sortedWith(
                 compareBy<RuleBasedRecordingCandidate> { it.recordingId.hashCode() xor query.randomSeed }
@@ -215,6 +284,31 @@ internal class SmartPlaylistV2RuleEngine(
         row: RuleBasedRecordingCandidate,
         now: Long,
     ): RuleTruth {
+        if (rule.field.isTextField()) {
+            val actual = when (rule.field) {
+                SmartPlaylistRuleField.TITLE -> row.title
+                SmartPlaylistRuleField.ARTIST_DISPLAY -> row.artistDisplay
+                else -> null
+            }.normalizedSmartPlaylistText()
+            val expected = rule.textValue.normalizedSmartPlaylistText()
+            val matches = when (rule.operator) {
+                SmartPlaylistRuleOperator.IS_PRESENT -> actual != null
+                SmartPlaylistRuleOperator.IS_MISSING -> actual == null
+                else -> {
+                    if (actual == null || expected == null) return RuleTruth.UNKNOWN
+                    when (rule.operator) {
+                        SmartPlaylistRuleOperator.EQUAL -> actual == expected
+                        SmartPlaylistRuleOperator.NOT_EQUAL -> actual != expected
+                        SmartPlaylistRuleOperator.CONTAINS -> actual.contains(expected)
+                        SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> !actual.contains(expected)
+                        SmartPlaylistRuleOperator.STARTS_WITH -> actual.startsWith(expected)
+                        SmartPlaylistRuleOperator.ENDS_WITH -> actual.endsWith(expected)
+                        else -> return RuleTruth.UNKNOWN
+                    }
+                }
+            }
+            return if (matches) RuleTruth.TRUE else RuleTruth.FALSE
+        }
         if (rule.field == SmartPlaylistRuleField.EXPLICIT_RATING &&
             row.ratingEvidenceUnknown
         ) return RuleTruth.UNKNOWN
@@ -226,6 +320,7 @@ internal class SmartPlaylistV2RuleEngine(
                 if (row.audibleCompletions > 0) {
                     row.lastAudibleAtEpochMs?.let { ((now - it) / 86_400_000L).toDouble() }
                 } else null
+            SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY -> null
         }
         if (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE &&
             row.audibleCompletions > 0 && row.lastAudibleAtEpochMs == null
