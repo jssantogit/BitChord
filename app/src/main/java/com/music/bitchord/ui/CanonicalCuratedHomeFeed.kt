@@ -115,13 +115,13 @@ internal fun canonicalArtistShelvesWithCoverUpdates(
     var changedAny = false
     val updated = sections.map { shelf ->
         var changedShelf = false
-        val cards = shelf.items.map { item ->
+        val cards = shelf.items.map card@{ item ->
             val browseId = item.browseId.orEmpty()
             if (!browseId.startsWith("catalog:RELEASE_GROUP:") ||
                 !item.thumbnailUrl.isNullOrBlank()
-            ) return@map item
+            ) return@card item
             val groupMbid = browseId.removePrefix("catalog:RELEASE_GROUP:")
-            val ready = covers[groupMbid] ?: return@map item
+            val ready = covers[groupMbid] ?: return@card item
             changedShelf = true
             item.copy(title = ready.second, thumbnailUrl = ready.first)
         }
