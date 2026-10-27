@@ -110,7 +110,7 @@ class SmartPlaylistV2DefinitionStoreTest {
             """.trimIndent())
             oldSqlite.execSQL(
                 "INSERT INTO smart_playlist_definition " +
-                    "(id, name, schemaVersion, minimumExplicitRating, limit) " +
+                    "(id, name, schemaVersion, minimumExplicitRating, `limit`) " +
                     "VALUES ('legacy', 'Saved before migration', 1, 5.0, 50)",
             )
             oldSqlite.version = 1
