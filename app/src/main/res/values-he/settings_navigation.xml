@@ -27,4 +27,6 @@
     <string name="settings_nav_desc_wear">שילוב עם שעון</string>
     <string name="settings_nav_desc_about">גרסה ומידע על הפרויקט</string>
     <string name="settings_nav_desc_sources">ספקי מוזיקה והרחבות</string>
+    <string name="settings_nav_diagnostics_title">אבחון</string>
+    <string name="settings_nav_diagnostics_subtitle">איסוף, בדיקה ושיתוף של דוחות אבחון</string>
 </resources>
