@@ -161,7 +161,6 @@ import com.music.bitchord.data.canvas.CanvasSource
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsSource
 import com.music.bitchord.data.settings.LastPlayerScreen
-import com.music.bitchord.data.model.LikeStatus
 import com.music.bitchord.data.model.PlaybackSourceType
 import com.music.bitchord.data.model.PLAYER_ART_PX
 import com.music.bitchord.data.model.Song
@@ -660,8 +659,6 @@ fun NowPlayingScreen(
     /** A version switch (video vs audio-only), triggered from the player's
      * menu, is fetching and measuring the target cut. */
     audioVersionSwitching: Boolean,
-    /** The player has just swapped this item to a higher-quality source. */
-    qualityUpgraded: Boolean,
     queue: List<Song>,
     queueIndex: Int,
     hasPrevious: Boolean,
@@ -671,8 +668,6 @@ fun NowPlayingScreen(
     autoplayEnabled: Boolean,
     signedIn: Boolean,
     accountName: String?,
-    likeStatus: LikeStatus,
-    onToggleLike: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -1009,20 +1004,6 @@ fun NowPlayingScreen(
     // so the words change underneath them and the panel stays. Closing it
     // dropped them back onto the artwork every few minutes with no gesture of
     // their own behind it.
-    // A brief, non-modal confirmation that the three-dot menu now contains a
-    // way back to the original YouTube rendition. The control keeps its usual
-    // action — opening the menu — so the cue teaches rather than surprises.
-    var showRevertCue by remember(song.videoId) { mutableStateOf(false) }
-    LaunchedEffect(song.videoId, qualityUpgraded) {
-        if (!qualityUpgraded) {
-            showRevertCue = false
-            return@LaunchedEffect
-        }
-        showRevertCue = true
-        delay(REVERT_CUE_MS)
-        showRevertCue = false
-    }
-
     // Lyrics are meant to be read continuously, so hold off the device's normal
     // screen timeout — but only while the panel is actually up. Closing it hands
     // the screen back, and the system starts its own timeout from that moment
@@ -1915,9 +1896,6 @@ fun NowPlayingScreen(
                                 LandscapeCredits(
                                     song = song,
                                     signedIn = signedIn,
-                                    likeStatus = likeStatus,
-                                    showRevertCue = showRevertCue,
-                                    onToggleLike = onToggleLike,
                                     onOpenMenu = openMenuWithArtwork,
                                     onOpenAlbum = onOpenAlbum,
                                     onOpenArtist = onOpenArtist,
@@ -3292,28 +3270,6 @@ fun NowPlayingScreen(
                                 }
                             }
                             Spacer(Modifier.width(10.dp))
-                            // Beside the credits rather than down in the toggle row:
-                            // liking is about *this song*, and the row below is about
-                            // how the queue plays. Guests get nothing to tap, since
-                            // there's no account to record it against — and neither
-                            // does a local file or a finished download, which carries
-                            // no YouTube identity to rate.
-                            // Queue header follows the compact Apple Music hierarchy:
-                            // artwork + song + overflow, not an extra favourite disc.
-                            // Rating remains in the Now Playing view and song menu.
-                            if (signedIn && song.localUri == null && !queueOpen) {
-                                val liked = likeStatus == LikeStatus.LIKE
-                                CircleGlyph(
-                                    icon = if (liked) BitChordIcons.HeartFilled else BitChordIcons.Heart,
-                                    contentDescription = stringResource(
-                                        if (liked) Res.string.remove_from_liked else Res.string.like,
-                                    ),
-                                    onClick = onToggleLike,
-                                    active = liked,
-                                    haptic = if (liked) Haptic.ToggleOff else Haptic.ToggleOn,
-                                )
-                                Spacer(Modifier.width(8.dp))
-                            }
                             // While the lyrics are up the menu glyph becomes the share
                             // entry: the same pick mode a long-press on a line opens,
                             // only on phones where a card can actually be made. While
@@ -3329,26 +3285,23 @@ fun NowPlayingScreen(
                                 !lyrics.isNullOrEmpty() && (!lyricsControlsOpen || lyricPicker.picking)
                             CircleGlyph(
                                 icon = when {
-                                    showRevertCue -> Icons.AutoMirrored.Rounded.Undo
                                     lyricsShareGlyphVisible && lyricPicker.picking -> Icons.Rounded.Close
                                     lyricsShareGlyphVisible -> Icons.Rounded.IosShare
                                     else -> Icons.Rounded.MoreHoriz
                                 },
                                 contentDescription = stringResource(
                                     when {
-                                        showRevertCue -> Res.string.more
                                         lyricsShareGlyphVisible && lyricPicker.picking -> Res.string.cancel
                                         lyricsShareGlyphVisible -> Res.string.share
                                         else -> Res.string.more
                                     },
                                 ),
                                 onClick = when {
-                                    showRevertCue -> openMenuWithArtwork
                                     lyricsShareGlyphVisible && lyricPicker.picking -> lyricPicker.cancel
                                     lyricsShareGlyphVisible -> lyricPicker.beginPicking
                                     else -> openMenuWithArtwork
                                 },
-                                haptic = if (lyricsShareGlyphVisible && !showRevertCue) {
+                                haptic = if (lyricsShareGlyphVisible) {
                                     Haptic.Select
                                 } else {
                                     Haptic.Tap
