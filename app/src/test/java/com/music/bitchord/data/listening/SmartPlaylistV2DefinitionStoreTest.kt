@@ -144,4 +144,31 @@ class SmartPlaylistV2DefinitionStoreTest {
         }
     }
 
+    @Test fun textRulesRoundTripWithOldNumericRulesAndJsonDefaults() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val db = Room.inMemoryDatabaseBuilder(context, SmartPlaylistDefinitionDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val repo = SmartPlaylistV2DefinitionRepository(db.v2DefinitionDao())
+            val query = SmartPlaylistV2Query(
+                rules = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+                    SmartPlaylistRule.Comparison(
+                        SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.ENDS_WITH,
+                        textValue = "shy",
+                    ),
+                    SmartPlaylistRule.Comparison(
+                        SmartPlaylistRuleField.EXPLICIT_RATING,
+                        SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+                        value = 4.0,
+                    ),
+                )),
+                sort = SmartPlaylistV2Sort.ARTIST_ASC,
+            )
+            repo.save(SavedSmartPlaylistV2Definition("text-case", "Case", query))
+            assertEquals(query, repo.list().single().query)
+        } finally {
+            db.close()
+        }
+    }
+
 }

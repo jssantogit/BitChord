@@ -109,4 +109,36 @@ class SmartPlaylistBatchEvidenceRoomTest {
             listening.close()
         }
     }
+    @Test fun catalogBatchReadsActualRecordingTextWithoutInventingForMissingId() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            catalog.catalogDao().upsertRecording(
+                RecordingEntity("rec:one", "Super Shy", "NewJeans", 150_000L),
+            )
+            val batch = RoomSmartPlaylistBatchEvidenceReader(
+                catalog.catalogDao(), listening.listeningEventDao(), listening.recordingRatingDao(),
+            ).read(listOf("rec:missing", "rec:one"))
+            assertEquals(1, batch.size)
+            assertEquals("Super Shy", batch.single().title)
+            assertEquals("NewJeans", batch.single().artistDisplay)
+            val filter = SmartPlaylistV2Query(
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.ARTIST_DISPLAY,
+                    SmartPlaylistRuleOperator.CONTAINS,
+                    textValue = "newjeans",
+                ),
+            )
+            assertEquals(listOf("rec:one"), SmartPlaylistV2RuleEngine().preview(
+                batch, filter,
+            ).map { it.recordingId })
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
 }

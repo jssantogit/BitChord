@@ -152,4 +152,115 @@ class SmartPlaylistV2RuleEngineTest {
         assertTrue(planner.preview(listOf(unknown), notOneStar).isEmpty())
     }
 
+    @Test fun titleAndArtistTextRulesAreCaseInsensitiveAndNested() {
+        val matches = listOf(
+            candidate("one").copy(title = "Super Shy", artistDisplay = "NewJeans"),
+            candidate("two").copy(title = "Hype Boy", artistDisplay = "NEWJEANS"),
+            candidate("three").copy(title = "Supernova", artistDisplay = "aespa"),
+        )
+        val query = SmartPlaylistV2Query(
+            rules = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.ARTIST_DISPLAY, SmartPlaylistRuleOperator.EQUAL,
+                    textValue = "newjeans",
+                ),
+                SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(
+                    SmartPlaylistRule.Comparison(
+                        SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.CONTAINS,
+                        textValue = "SHY",
+                    ),
+                    SmartPlaylistRule.Comparison(
+                        SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.STARTS_WITH,
+                        textValue = "hype",
+                    ),
+                )),
+            )),
+            sort = SmartPlaylistV2Sort.TITLE_ASC,
+        )
+        assertEquals(listOf("two", "one"), planner.preview(matches, query).map { it.recordingId })
+    }
+
+    @Test fun negativeTextComparisonMustNotIncludeBlankOrUnknownMetadata() {
+        val query = SmartPlaylistV2Query(
+            rules = SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE,
+                SmartPlaylistRuleOperator.DOES_NOT_CONTAIN,
+                textValue = "live",
+            ),
+        )
+        val input = listOf(
+            candidate("unknown"),
+            candidate("blank").copy(title = "  "),
+            candidate("studio").copy(title = "Studio Mix"),
+            candidate("live").copy(title = "Live Mix"),
+        )
+        assertEquals(listOf("studio"), planner.preview(input, query).map { it.recordingId })
+        val negated = SmartPlaylistV2Query(
+            rules = SmartPlaylistRule.Not(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.CONTAINS,
+                textValue = "live",
+            )),
+        )
+        assertEquals(listOf("studio"), planner.preview(input, negated).map { it.recordingId })
+        val missing = SmartPlaylistV2Query(
+            rules = SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_MISSING,
+            ),
+            sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+        )
+        assertEquals(listOf("blank", "unknown"), planner.preview(input, missing).map { it.recordingId })
+    }
+
+    @Test fun metadataSortHasDeterministicTieBreakAndMissingValuesLast() {
+        val rows = listOf(
+            candidate("z").copy(title = "Alpha", artistDisplay = "Beta"),
+            candidate("b").copy(title = "alpha", artistDisplay = "beta"),
+            candidate("m").copy(title = "Zulu", artistDisplay = "Alpha"),
+            candidate("a"),
+        )
+        val rule = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
+            SmartPlaylistRuleOperator.GREATER_OR_EQUAL, 0.0,
+        )
+        assertEquals(listOf("b", "z", "m", "a"), planner.preview(
+            rows, SmartPlaylistV2Query(rule, sort = SmartPlaylistV2Sort.TITLE_ASC),
+        ).map { it.recordingId })
+        assertEquals(listOf("m", "b", "z", "a"), planner.preview(
+            rows, SmartPlaylistV2Query(rule, sort = SmartPlaylistV2Sort.ARTIST_ASC),
+        ).map { it.recordingId })
+    }
+
+    @Test fun invalidTextValueAndOperatorTypesAreRejectedBeforeEvaluation() {
+        assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.GREATER_THAN,
+                textValue = "Hello",
+            ))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.EXPLICIT_RATING, SmartPlaylistRuleOperator.CONTAINS,
+                textValue = "5",
+            ))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.CONTAINS,
+                textValue = "   ",
+            ))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_MISSING,
+                textValue = "x",
+            ))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.AUDIBLE_COMPLETIONS, SmartPlaylistRuleOperator.EQUAL,
+                value = 2.0, textValue = "x",
+            ))
+        }
+    }
+
 }
