@@ -1073,6 +1073,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (entry.kind == CanonicalSearchKind.RELEASE_GROUP &&
             canonicalEditorialReleaseType(entry) == null
         ) return
+        // The artist shelf already owns a verified 500px bitmap key. Keep
+        // that exact URL on the header instead of replacing it with the 1200px
+        // variant and making Coil fetch the same sleeve a second time.
+        // Detail tracks also inherit this URL in the initial state.
+        if (!entry.artworkUri.isNullOrBlank()) return
         canonicalDetailCoverJob = viewModelScope.launch(Dispatchers.IO) {
             val artwork = try {
                 canonicalArtworkForRow(entry, CoverArtSize.HERO)
@@ -1083,7 +1088,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 canonicalPath.lastOrNull() != entry) return@launch
             val current = (_canonicalDetail.value as? UiState.Success)?.data
                 ?: return@launch
-            _canonicalDetail.value = UiState.Success(current.copy(artworkUri = artwork))
+            _canonicalDetail.value = UiState.Success(current.copy(
+                artworkUri = artwork,
+                rows = canonicalReleaseTracksWithArtwork(current.rows, artwork),
+            ))
             val id = canonicalNativeBrowseId(entry)
             _detailStack.value = _detailStack.value.map {
                 if (it.browseId == id) it.copy(thumbnailUrl = artwork) else it
@@ -1353,7 +1361,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             artworkUri = entry.artworkUri.takeIf {
                                 canonicalEditorialReleaseType(entry) != null
                             },
-                            rows = detail.tracks.map { track ->
+                            rows = canonicalReleaseTracksWithArtwork(detail.tracks.map { track ->
                                 CanonicalCatalogSearchRow(
                                     musicBrainzId = track.recordingMbid,
                                     kind = CanonicalSearchKind.RECORDING,
@@ -1363,7 +1371,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                     trackMbid = track.trackMbid,
                                     durationMs = track.durationMs,
                                 )
-                            },
+                            }, entry.artworkUri),
                         ))
                     }
                 }
@@ -1390,7 +1398,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             artworkUri = entry.artworkUri,
                             summary = listOfNotNull(details.country, details.releaseDate)
                                 .joinToString(" · "),
-                            rows = details.tracks.map { track -> CanonicalCatalogSearchRow(
+                            rows = canonicalReleaseTracksWithArtwork(details.tracks.map { track -> CanonicalCatalogSearchRow(
                                 musicBrainzId = track.recordingMbid,
                                 kind = CanonicalSearchKind.RECORDING,
                                 title = "${track.mediumNumber}.${track.trackNumber}  ${track.title}",
@@ -1398,7 +1406,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 hasCatalogedAsset = track.recordingMbid in available,
                                 trackMbid = track.trackMbid,
                                 durationMs = track.durationMs,
-                            ) },
+                            ) }, entry.artworkUri),
                         ))
                     }
                     is MusicBrainzCatalogGraphResult.Failure -> {
@@ -1430,7 +1438,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 fromOfflineCache = true,
                                 trackMbid = track.trackMbid,
                                 durationMs = track.durationMs,
-                            ) },
+                            ) }, entry.artworkUri),
                         ))
                     }
                 }
