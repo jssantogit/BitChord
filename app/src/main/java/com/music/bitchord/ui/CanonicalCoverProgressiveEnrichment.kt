@@ -55,6 +55,33 @@ internal suspend fun <K, V : Any> loadCanonicalCoversProgressively(
 }
 
 /**
+ * The first covers are already visible. Later MusicBrainz artist edition
+ * pages are complementary evidence, not a barrier before the second image
+ * wave. Fetch them as a sibling of the bounded cover worker pool, and await
+ * both before the caller inspects newly discovered group IDs for a retry.
+ * Edition-page failures are opportunistic; cancellation is never swallowed.
+ */
+internal suspend fun <K, V : Any> loadCanonicalCoversWhileExpandingEditions(
+    keys: List<K>,
+    maxConcurrent: Int = 3,
+    expandEditions: suspend () -> Unit,
+    fetch: suspend (K) -> V?,
+    publish: suspend (Map<K, V>) -> Unit,
+) = coroutineScope {
+    val expansion = launch {
+        try {
+            expandEditions()
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // The existing edition evidence and cached art remain valid.
+        }
+    }
+    loadCanonicalCoversProgressively(keys, maxConcurrent, fetch, publish)
+    expansion.join()
+}
+
+/**
  * Long discographies can contain hundreds of Official releases. Fetching an
  * entire second/third 100-edition artist page costs one MusicBrainz request
  * per page, versus one rate-limited /release?release-group= request per
