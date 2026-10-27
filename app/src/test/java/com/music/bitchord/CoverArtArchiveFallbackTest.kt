@@ -204,7 +204,7 @@ class CoverArtArchiveFallbackTest {
             com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType("release"))
         assertEquals("release-group:front-v2",
             com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType("release-group"))
-        assertEquals("release-group:front-v4",
+        assertEquals("release-group:front-v5",
             com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType("verified-artist-group"))
     }
 
@@ -400,7 +400,7 @@ class CoverArtArchiveFallbackTest {
             transport = object : CoverArtArchiveTransport {
                 override suspend fun get(path: String): CoverArtArchiveResponse {
                     network++
-                    error("V4 cache probe must not make a request")
+                    error("V5 cache probe must not make a request")
                 }
             },
             store = store, nowEpochMs = { now + 1000L },
@@ -411,6 +411,11 @@ class CoverArtArchiveFallbackTest {
         assertEquals("release-group:front-v2",
             com.music.bitchord.data.catalog.metadata.verifiedFrontCacheType("release-group"))
         records["release-group:front-v4"] = MusicBrainzCoverArtCacheEntry(
+            "release-group", group, "https://archive.org/old-package.jpg", now,
+        )
+        assertNull("Pre-versioned group artwork may contain a TWICE alternate sleeve",
+            cover.cachedVerifiedGroupCover(group))
+        records["release-group:front-v5"] = MusicBrainzCoverArtCacheEntry(
             "release-group", group,
             "https://archive.org/official-1200.jpg", now,
             "https://archive.org/official-500.jpg",
@@ -420,7 +425,7 @@ class CoverArtArchiveFallbackTest {
         assertEquals("https://archive.org/official-1200.jpg",
             cover.cachedVerifiedGroupCover(group, CoverArtSize.HERO))
         assertEquals(0, network)
-        records["release-group:front-v4"] = MusicBrainzCoverArtCacheEntry(
+        records["release-group:front-v5"] = MusicBrainzCoverArtCacheEntry(
             "release-group", group, null, now,
             "https://coverartarchive.org/release/$release/front-500",
         )
@@ -454,11 +459,11 @@ class CoverArtArchiveFallbackTest {
             cover.findCover(null, group))
         assertEquals("https://archive.org/video-misclassified-front.jpg",
             rows["release-group:front-v2"]?.artworkUri)
-        assertNull(rows["release-group:front-v4"])
+        assertNull(rows["release-group:front-v5"])
         assertNull(cover.cachedVerifiedGroupCover(group))
     }
 
-    @Test fun staleOrUntrustedGroupV4ArtworkCannotBeRenderedAsVerified() = runBlocking {
+    @Test fun staleOrUntrustedGroupV5ArtworkCannotBeRenderedAsVerified() = runBlocking {
         val now = 1_793_034_000_000L
         var entry = MusicBrainzCoverArtCacheEntry(
             "release-group", group, "https://evil.invalid/wrong.jpg", now,
