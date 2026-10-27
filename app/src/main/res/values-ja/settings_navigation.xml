@@ -2,7 +2,7 @@
     <string name="settings_nav_group_account">アカウント</string>
     <string name="settings_nav_group_music">音楽</string>
     <string name="settings_nav_group_experience">体験</string>
-    <string name="settings_nav_group_data">データ</string>
+    <string name="settings_nav_group_data">データとダウンロード</string>
     <string name="settings_nav_group_system">システム</string>
     <string name="settings_nav_group_about">アプリ情報</string>
     <string name="settings_nav_lyrics">歌詞</string>
