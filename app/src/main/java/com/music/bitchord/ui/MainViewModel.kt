@@ -646,28 +646,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // loaded album cannot trigger a redundant remote lookup.
             val reusedRecordingCovers = async {
                 if (knownTracks.isEmpty()) return@async emptyMap<String, String>()
-                val proven = linkedMapOf<String, String>()
-                val imageByGroup = mutableMapOf<String, String?>()
-                try {
+                val proven = try {
                     val dao = CanonicalCatalogDatabase.get(getApplication<Application>())
                         .catalogDao()
-                    val linked = dao.verifiedRecordingCoverGroupMbids(
-                        knownTracks.map { it.musicBrainzId }.distinct(),
-                    )
-                    for (relation in linked) {
-                        currentCoroutineContext().ensureActive()
-                        if (relation.recordingMbid in proven) continue
-                        val thumbnail = if (imageByGroup.containsKey(relation.groupMbid)) {
-                            imageByGroup[relation.groupMbid]
-                        } else {
+                    canonicalCachedRecordingArtForVisibleRows(
+                        rows = knownTracks,
+                        databaseLinks = { mbids ->
+                            dao.verifiedRecordingCoverGroupMbids(mbids)
+                        },
+                        cachedCover = { group ->
                             coverArtArchive.cachedVerifiedGroupCover(
-                                relation.groupMbid, CoverArtSize.THUMBNAIL,
-                            ).also { imageByGroup[relation.groupMbid] = it }
-                        }
-                        if (thumbnail != null) proven[relation.recordingMbid] = thumbnail
-                    }
+                                group, CoverArtSize.THUMBNAIL,
+                            )
+                        },
+                    )
                 } catch (cancelled: CancellationException) { throw cancelled }
-                  catch (_: Exception) { /* Unresolved recordings retain remote fallback. */ }
+                  catch (_: Exception) {
+                    // A damaged/missing Room cache must not block search.
+                    emptyMap<String, String>()
+                }
                 if (proven.isNotEmpty() &&
                     _searchSource.value == SearchSource.CANONICAL &&
                     _query.value.trim() == query
