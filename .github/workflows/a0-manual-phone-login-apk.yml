@@ -60,7 +60,7 @@ jobs:
       - name: Record exact build revision and APK checksums
         run: |
           destination=app/build/outputs/apk/dev/debug
-          printf 'sourceRevision=%s\\n' "$(git rev-parse HEAD)" > "$destination/source-revision.txt"
+          printf 'sourceRevision=%s\n' "$(git rev-parse HEAD)" > "$destination/source-revision.txt"
           sha256sum "$destination"/*.apk >> "$destination/source-revision.txt"
 
       - name: Upload short-lived test APK
