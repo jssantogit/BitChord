@@ -9,6 +9,7 @@ import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CompletableDeferred
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.withTimeoutOrNull
@@ -235,24 +236,35 @@ internal class CoverArtArchive(
 
     private suspend fun fetch(type: String, mbid: String): CoverLookup {
         val key = type to mbid
-        val proposed = CompletableDeferred<CoverLookup>()
-        val existing = inFlight.putIfAbsent(key, proposed)
-        if (existing != null) {
-            telemetry.recordJoinedRequest()
-            return existing.await()
-        }
-        try {
-            val result = fetchUnshared(type, mbid)
-            proposed.complete(result)
-            return result
-        } catch (cancelled: CancellationException) {
-            proposed.cancel(cancelled)
-            throw cancelled
-        } catch (_: Exception) {
-            proposed.complete(CoverLookup.Unavailable)
-            return CoverLookup.Unavailable
-        } finally {
-            inFlight.remove(key, proposed)
+        while (true) {
+            val proposed = CompletableDeferred<CoverLookup>()
+            val existing = inFlight.putIfAbsent(key, proposed)
+            if (existing != null) {
+                telemetry.recordJoinedRequest()
+                try {
+                    return existing.await()
+                } catch (cancelled: CancellationException) {
+                    // A prior screen may own this fetch and be closed while
+                    // the next screen is waiting. Retry only when our own
+                    // navigation scope is alive; never poison unrelated cards.
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    inFlight.remove(key, existing)
+                    continue
+                }
+            }
+            try {
+                val result = fetchUnshared(type, mbid)
+                proposed.complete(result)
+                return result
+            } catch (cancelled: CancellationException) {
+                proposed.cancel(cancelled)
+                throw cancelled
+            } catch (_: Exception) {
+                proposed.complete(CoverLookup.Unavailable)
+                return CoverLookup.Unavailable
+            } finally {
+                inFlight.remove(key, proposed)
+            }
         }
     }
 
