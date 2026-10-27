@@ -258,4 +258,38 @@ class CanonicalNativeNavigationTest {
             ).map { it.musicBrainzId })
     }
 
+
+    @Test fun groupArtworkNeverBorrowsAnotherEditionWithUnrelatedOrCollectorTitle() {
+        val normal = MusicBrainzReleaseHit("official", "Taste of Love", "XW",
+            "2021-06-11", "TWICE", status = "Official", hasFrontCover = true)
+        val variant = normal.copy(musicBrainzId = "product", title = "Taste of Love (Taste ver.)")
+        val unrelated = normal.copy(musicBrainzId = "unrelated", title = "Perfect World")
+        assertEquals(listOf("official"),
+            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
+                listOf(variant, unrelated, normal), "Taste of Love",
+            ).map { it.musicBrainzId })
+        assertTrue(com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
+            listOf(variant, unrelated), "Taste of Love",
+        ).isEmpty())
+    }
+
+    @Test fun verifiedAlbumArtworkBelongsToItsTracksWithoutNewCoverSearch() {
+        val cover = "https://archive.org/verified-release-group-cover-500.jpg"
+        val tracks = listOf(
+            CanonicalCatalogSearchRow("r1", CanonicalSearchKind.RECORDING,
+                "Alcohol-Free", "TWICE"),
+            CanonicalCatalogSearchRow("r2", CanonicalSearchKind.RECORDING,
+                "First Time", "TWICE"),
+        )
+        val inherited = com.music.bitchord.ui.canonicalReleaseTracksWithArtwork(tracks, cover)
+        assertEquals(listOf(cover, cover), inherited.map { it.artworkUri })
+        assertEquals(listOf("r1", "r2"), inherited.map { it.musicBrainzId })
+        assertEquals(tracks, com.music.bitchord.ui.canonicalReleaseTracksWithArtwork(tracks, null))
+        val previouslyOwned = tracks.first().copy(artworkUri = "content://own-cover")
+        assertEquals("content://own-cover",
+            com.music.bitchord.ui.canonicalReleaseTracksWithArtwork(
+                listOf(previouslyOwned), cover,
+            ).single().artworkUri)
+    }
+
 }
