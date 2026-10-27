@@ -1606,12 +1606,18 @@ class CrossfadeController(
         // player's own silenced audio, so that player is kept until its tail
         // has been heard out.
         val tailDone = !render.echo || elapsed / wallSpan >= render.echoAt + render.echoTailMs / wallSpan
-        val done = (progress >= 1f && tailDone) || settingSwitchedOff
-        if (done) {
-            // A blend cut short before its midpoint still ends on the incoming
-            // track — it is the one playing on, and what [finish] keeps.
-            handOff(out, player)
-            finish()
+        when (NeutralFadeExitPolicy.decide(progress, tailDone, settingSwitchedOff)) {
+            FadeExit.BAIL -> {
+                // Disabling the feature mid-blend must not jump one fader to
+                // unity while the other is still playing. Keep the current
+                // session deck and gently release the non-session deck.
+                bail()
+            }
+            FadeExit.FINISH -> {
+                handOff(out, player)
+                finish()
+            }
+            FadeExit.CONTINUE -> Unit
         }
     }
 
