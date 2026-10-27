@@ -100,6 +100,39 @@ internal fun canonicalNativeSections(
     return if (eligible.isNotEmpty()) listOf(HomeShelf(heading, cards(eligible))) else emptyList()
 }
 
+/**
+ * A large artist can have hundreds of cards. Rebuilding and re-sorting both
+ * shelves for every CAA completion causes unnecessary allocations and Compose
+ * invalidation. Update just the affected artwork/title, retaining the
+ * original card and shelf instances when no field changes. Identity stays the
+ * actual MusicBrainz ReleaseGroup browse key; no title-based join.
+ */
+internal fun canonicalArtistShelvesWithCoverUpdates(
+    sections: List<HomeShelf>,
+    covers: Map<String, Pair<String, String>>,
+): List<HomeShelf> {
+    if (covers.isEmpty()) return sections
+    var changedAny = false
+    val updated = sections.map { shelf ->
+        var changedShelf = false
+        val cards = shelf.items.map { item ->
+            val browseId = item.browseId.orEmpty()
+            if (!browseId.startsWith("catalog:RELEASE_GROUP:") ||
+                !item.thumbnailUrl.isNullOrBlank()
+            ) return@map item
+            val groupMbid = browseId.removePrefix("catalog:RELEASE_GROUP:")
+            val ready = covers[groupMbid] ?: return@map item
+            changedShelf = true
+            item.copy(title = ready.second, thumbnailUrl = ready.first)
+        }
+        if (changedShelf) {
+            changedAny = true
+            shelf.copy(items = cards)
+        } else shelf
+    }
+    return if (changedAny) updated else sections
+}
+
 /** A server asset is a verified catalog selection, never a synthetic video or stream URL. */
 internal fun canonicalRemotePickCardId(row: CanonicalServerSearchRow): String {
     require(isTrustedHomeServerAsset(row)) { "Home Server picks require a trusted MediaAsset" }
