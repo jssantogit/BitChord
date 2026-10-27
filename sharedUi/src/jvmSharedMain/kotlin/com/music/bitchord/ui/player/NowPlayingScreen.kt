@@ -3298,7 +3298,10 @@ fun NowPlayingScreen(
                             // there's no account to record it against — and neither
                             // does a local file or a finished download, which carries
                             // no YouTube identity to rate.
-                            if (signedIn && song.localUri == null) {
+                            // Queue header follows the compact Apple Music hierarchy:
+                            // artwork + song + overflow, not an extra favourite disc.
+                            // Rating remains in the Now Playing view and song menu.
+                            if (signedIn && song.localUri == null && !queueOpen) {
                                 val liked = likeStatus == LikeStatus.LIKE
                                 CircleGlyph(
                                     icon = if (liked) BitChordIcons.HeartFilled else BitChordIcons.Heart,
