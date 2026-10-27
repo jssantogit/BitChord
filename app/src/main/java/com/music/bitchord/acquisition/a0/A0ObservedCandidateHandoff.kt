@@ -300,7 +300,7 @@ internal class A0ObservedCandidateHandoff(
                     sampleRateHz=sampleRate,bitDepth=bitDepth
                 )
             )
-            candidates.add(observedChoice)
+            A0StableCandidateInsertion.add(candidates,observedChoice,choiceOrder)
             if(collectReleaseShadow) {
                 val peer=result.peerUsername
                 val peerCount=releaseShadowPerPeer[peer] ?: 0
@@ -331,7 +331,6 @@ internal class A0ObservedCandidateHandoff(
                     }
                 }
             }
-            candidates.sortWith(choiceOrder)
             // A single enthusiastic peer cannot displace every other source.
             val fromPeer=candidates.withIndex()
                 .filter { it.value.peerUsername==result.peerUsername }
