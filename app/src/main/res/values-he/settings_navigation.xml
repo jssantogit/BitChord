@@ -1,0 +1,30 @@
+<resources>
+    <string name="settings_nav_group_account">חשבון</string>
+    <string name="settings_nav_group_music">מוזיקה</string>
+    <string name="settings_nav_group_experience">חוויה</string>
+    <string name="settings_nav_group_data">נתונים</string>
+    <string name="settings_nav_group_system">מערכת</string>
+    <string name="settings_nav_group_about">אודות</string>
+    <string name="settings_nav_lyrics">מילים</string>
+    <string name="settings_nav_about">אודות</string>
+    <string name="settings_nav_filtered">תוצאות עבור: %1$s</string>
+    <string name="settings_nav_show_all">הצגת הכול</string>
+    <string name="settings_nav_controls">פקדים והתנהגות</string>
+    <string name="settings_nav_advanced">מתקדם</string>
+    <string name="settings_nav_desc_account">חשבונות ושילובי מוזיקה</string>
+    <string name="settings_nav_desc_audio">מקורות, Wi-Fi ונתונים סלולריים</string>
+    <string name="settings_nav_desc_playback">פלט שמע, מעברים ותור</string>
+    <string name="settings_nav_desc_local">תיקיות ומסנני שמע מקומי</string>
+    <string name="settings_nav_desc_appearance">ערכת נושא, עטיפות ואפקטים</string>
+    <string name="settings_nav_desc_lyrics">סנכרון, מקורות ותרגום</string>
+    <string name="settings_nav_desc_downloads">Soulseek, איכות ויעד</string>
+    <string name="settings_nav_desc_storage">מטמון שמע ושטח אחסון</string>
+    <string name="settings_nav_desc_data">Replay, גיבויים וייבוא</string>
+    <string name="settings_nav_desc_performance">קצב רענון וסוללה</string>
+    <string name="settings_nav_desc_misc">מחוות והתנהגות ניגון</string>
+    <string name="settings_nav_desc_language">שפת הממשק</string>
+    <string name="settings_nav_desc_advanced">אבחון והגדרות טכניות</string>
+    <string name="settings_nav_desc_wear">שילוב עם שעון</string>
+    <string name="settings_nav_desc_about">גרסה ומידע על הפרויקט</string>
+    <string name="settings_nav_desc_sources">ספקי מוזיקה והרחבות</string>
+</resources>
