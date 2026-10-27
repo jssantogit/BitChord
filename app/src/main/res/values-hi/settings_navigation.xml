@@ -27,4 +27,6 @@
     <string name="settings_nav_desc_wear">घड़ी एकीकरण</string>
     <string name="settings_nav_desc_about">संस्करण और प्रोजेक्ट जानकारी</string>
     <string name="settings_nav_desc_sources">संगीत प्रदाता और एक्सटेंशन</string>
+    <string name="settings_nav_diagnostics_title">निदान</string>
+    <string name="settings_nav_diagnostics_subtitle">निदान रिपोर्ट कैप्चर करें, देखें और साझा करें</string>
 </resources>
