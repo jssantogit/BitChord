@@ -16,6 +16,11 @@ internal object CatalogCoverDiagnostics {
         add("cache_hits=${s.positiveCacheHits} negative_cache_hits=${s.negativeCacheHits}" +
             " coalesced_requests=${s.coalescedRequests}")
         add("direct_front_candidates=${s.directFrontCandidates} source=legacy_front_presence_counter")
+        // Separate the metadata-stage bottleneck from album-cache rehydration.
+        // Only counts are exported; no artist, album, URL or MBID is retained.
+        add("artist_cache_batch_reads=${s.artistCachedBatchReads}" +
+            " artist_rows_reused=${s.artistCachedRowsReused}")
+        add("recovered_join_owner_cancellations=${s.recoveredCoalescedOwnerCancellations}")
         add("network_requests=${s.networkRequests} success=${s.successfulNetworkRequests}" +
             " not_found=${s.networkNotFound} transient_failures=${s.transientFailures}")
         add("coil_load_success=${s.imageRenderSuccesses} coil_load_errors=${s.imageRenderFailures}")
