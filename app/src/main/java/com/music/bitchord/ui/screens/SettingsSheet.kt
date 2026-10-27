@@ -288,7 +288,7 @@ internal fun SettingsScreen(
 
     // Filters the rows below — see [SettingsSearch]. Blank shows everything,
     // exactly as if the field weren't there.
-    var searchQuery by remember { mutableStateOf("") }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     var picking by remember { mutableStateOf<QualityTarget?>(null) }
     var pickingDownloadQuality by remember { mutableStateOf(false) }
     var pickingAutomixPerformance by remember { mutableStateOf(false) }
@@ -415,7 +415,13 @@ internal fun SettingsScreen(
             )
             if (searchQuery.isBlank()) {
                 SettingsHome(
-                    onSelect = { onSelectSection(it) },
+                    onSelect = { section ->
+                        when (section) {
+                            SettingsSection.SOURCES -> onSources()
+                            SettingsSection.WEAR -> onWearOs()
+                            else -> onSelectSection(section)
+                        }
+                    },
                     showWear = remember(context) { WatchInstaller.available(context) },
                     onListenTogether = onListenTogether,
                 )
