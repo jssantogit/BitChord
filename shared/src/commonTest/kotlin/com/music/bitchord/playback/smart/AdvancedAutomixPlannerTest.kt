@@ -51,6 +51,18 @@ class AdvancedAutomixPlannerTest {
 
 
     @Test
+    fun neutralTemposOnlyShareBeatAlignedPlanningWhenTheyReallyMatch() {
+        assertTrue(temposAlignWithoutStretch(120.0, 120.0))
+        assertTrue(temposAlignWithoutStretch(120.0, 121.0))
+        assertTrue(temposAlignWithoutStretch(120.0, 240.0))
+        assertTrue(!temposAlignWithoutStretch(120.0, 127.0))
+        assertTrue(!temposAlignWithoutStretch(120.0, 135.0))
+        assertTrue(!temposAlignWithoutStretch(0.0, 120.0))
+        assertTrue(!temposAlignWithoutStretch(Double.NaN, 120.0))
+        assertTrue(!temposAlignWithoutStretch(Double.POSITIVE_INFINITY, 120.0))
+    }
+
+    @Test
     fun advancedNeutralPlaybackUsesRichAnalysisWithoutRateOrEffectChanges() {
         val current = track("rich-out", 120.0, "C major", vocal = 0.92)
         val next = track("rich-in", 127.0, "G major", vocal = 0.93)

@@ -270,6 +270,21 @@ private fun normalizedTempoRatio(currentBpm: Double, nextBpm: Double): Double {
     return ratio
 }
 
+/**
+ * Beat-aligned mixing without time stretching must only pair tempos that
+ * genuinely coincide. The legacy DJ planner can tolerate 5–8% mismatch by
+ * retiming; neutral Android playback intentionally cannot.
+ *
+ * Fold half/double tempo into the same octave, but never treat missing,
+ * infinite or NaN BPM metadata as evidence of beat alignment.
+ */
+internal fun temposAlignWithoutStretch(currentBpm: Double, nextBpm: Double): Boolean {
+    if (!currentBpm.isFinite() || !nextBpm.isFinite() ||
+        currentBpm <= 0.0 || nextBpm <= 0.0
+    ) return false
+    return abs(1.0 - normalizedTempoRatio(currentBpm, nextBpm)) <= 0.015
+}
+
 private fun splitKey(key: String): Pair<Int?, String?> {
     val parts = key.trim().split(' ')
     return KEY_INDEX[parts.firstOrNull()] to parts.getOrNull(1)
@@ -1631,12 +1646,24 @@ private fun mixPlan(
     val handoffBpm = if (currentBpm > 0) currentBpm else nextBpm
     // Advanced also blends any pair a speed-up matches on two trusted grids —
     // the 5-10% apart that used to be left to a filter ride.
-    val sameBeatBlend = (traits == null || incomingPlaybackRate >= 1.0) && (
-        currentBpm > 0 && nextBpm > 0 &&
-            abs(1 - normalizedTempoRatio(currentBpm, nextBpm)) <= 0.05 &&
-            (analysis.beatConfidence.orZero() >= 0.2 || nextAnalysis.beatConfidence.orZero() >= 0.2) ||
-            traits?.phaseLockable == true
-        )
+    val sameBeatBlend = if (neutralPlayback) {
+        // With playback rates fixed to 1x, the old phaseLockable branch was
+        // unsafe: a 120/127 BPM pair could be classified as beat-matched even
+        // though no timestretch or phase-lock runs on the Android renderer.
+        temposAlignWithoutStretch(currentBpm, nextBpm) &&
+            (analysis.beatConfidence.orZero() >= 0.2 ||
+                nextAnalysis.beatConfidence.orZero() >= 0.2)
+    } else {
+        // Preserve the historical DJ planner for non-neutral consumers, where
+        // beatmatching actually changes playback speed.
+        (traits == null || incomingPlaybackRate >= 1.0) && (
+            currentBpm > 0 && nextBpm > 0 &&
+                abs(1 - normalizedTempoRatio(currentBpm, nextBpm)) <= 0.05 &&
+                (analysis.beatConfidence.orZero() >= 0.2 ||
+                    nextAnalysis.beatConfidence.orZero() >= 0.2) ||
+                traits?.phaseLockable == true
+            )
+    }
     val outgoingArrangementOverlap =
         if (sameBeatBlend && mixOutType == "content_end") {
             min(ARRANGEMENT_OVERLAP_BEATS * 60 / currentBpm, MAX_DISCARDED_MUSIC_SECONDS)
