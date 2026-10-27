@@ -49,6 +49,15 @@ internal object A0ReleaseDiscoveryPlanner {
     ) {
         override fun toString()="TrackDecision(redacted)"
     }
+    data class Intake(
+        val targetSlots:Int=0,
+        val observedOffers:Int=0,
+        val titleMatchedPairs:Int=0,
+        val rankMatchedPairs:Int=0,
+        val shortlistedPairs:Int=0,
+        val slotsWithTitleMatch:Int=0,
+        val slotsWithRankMatch:Int=0,
+    )
     class Preview(
         val autoReadyTracks:Int,
         val manualReviewTracks:Int,
@@ -58,7 +67,13 @@ internal object A0ReleaseDiscoveryPlanner {
         val examinedOffers:Int,
         val trackDecisions:List<TrackDecision>,
         val rejections:Map<Rejection,Int> = emptyMap(),
+        val intake:Intake=Intake(),
     ) {
+        // Offline-only intake provenance from the shadow adapter. The raw
+        // planner may leave this empty when given already prepared offers.
+        fun withIntake(value:Intake):Preview=Preview(
+            autoReadyTracks,manualReviewTracks,ambiguousTracks,bestFolderCoverage,
+            foldersConsidered,examinedOffers,trackDecisions,rejections,value)
         val canTransfer:Boolean get()=false
         override fun toString()="ReleasePreview(aggregated)"
     }

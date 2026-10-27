@@ -65,7 +65,13 @@ internal object A0ReleaseDiscoveryShadowAdapter {
         val indexed=choices.take(MAX_OBSERVED_CHOICES).map { candidate ->
             candidate to fileTokens(candidate.claim.filename)
         }
+        var titleMatchedPairs=0
+        var rankMatchedPairs=0
+        var slotsWithTitleMatch=0
+        var slotsWithRankMatch=0
         for(entry in entries) {
+            val titleStart=titleMatchedPairs
+            val rankStart=rankMatchedPairs
             val title=titleTokens(entry.query)
             val expectedArtist=entry.query.split(
                 Regex("\\s+[-–—]\\s+"),limit=2).firstOrNull()
@@ -73,7 +79,11 @@ internal object A0ReleaseDiscoveryShadowAdapter {
             // offers that happened to arrive. Those early offers may belong
             // to other songs or advertise the wrong quality/album.
             val shortlisted=indexed.asSequence()
-                .filter { title.isNotEmpty() && it.second.containsAll(title) }
+                .filter {
+                    val matches=title.isNotEmpty() && it.second.containsAll(title)
+                    if(matches)titleMatchedPairs++
+                    matches
+                }
                 .mapNotNull { (candidate,_) ->
                     val name=candidate.claim.filename
                     val path=candidate.remotePath
@@ -90,6 +100,7 @@ internal object A0ReleaseDiscoveryShadowAdapter {
                         sizeBytes=candidate.sizeBytes)
                     if(ranked.match!=A0CandidateRank.Match.ALL_TERMS)
                         return@mapNotNull null
+                    rankMatchedPairs++
                     val immediate=path.replace('\\','/')
                         .substringBeforeLast('/',"").substringAfterLast('/',"")
                     val album=A0CanonicalAlbumPolicy.assess(
@@ -114,6 +125,8 @@ internal object A0ReleaseDiscoveryShadowAdapter {
                     .thenBy { it.candidate.peerUsername }
                     .thenBy { it.candidate.remotePath })
                 .take(sourceCap).toList()
+            if(titleMatchedPairs>titleStart)slotsWithTitleMatch++
+            if(rankMatchedPairs>rankStart)slotsWithRankMatch++
             for(observation in shortlisted) {
                 val candidate=observation.candidate
                 val ranked=observation.ranking
@@ -151,6 +164,15 @@ internal object A0ReleaseDiscoveryShadowAdapter {
                 ))
             }
         }
-        return SoulseekBatchPlan.previewDiscovery(entries,observations,evidence)
+        val preview=SoulseekBatchPlan.previewDiscovery(entries,observations,evidence)
+        return preview.withIntake(A0ReleaseDiscoveryPlanner.Intake(
+            targetSlots=entries.size,
+            observedOffers=indexed.size,
+            titleMatchedPairs=titleMatchedPairs,
+            rankMatchedPairs=rankMatchedPairs,
+            shortlistedPairs=observations.size,
+            slotsWithTitleMatch=slotsWithTitleMatch,
+            slotsWithRankMatch=slotsWithRankMatch,
+        ))
     }
 }

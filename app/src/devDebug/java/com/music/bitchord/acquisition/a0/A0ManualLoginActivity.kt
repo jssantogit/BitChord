@@ -719,7 +719,13 @@ class A0ManualLoginActivity : Activity() {
                                             windowEvidence.record(12,it.responses,it.provisionalClaims)
                                         }
                                         if(middle==null)sendRescue(12000L)
-                                        middle ?: inbox.poll(6,TimeUnit.SECONDS)
+                                        val finalStatus=middle ?: inbox.poll(6,TimeUnit.SECONDS)
+                                        // Capture the actual window-end observation BEFORE
+                                        // server/peer shutdown and any later drain callbacks.
+                                        handoff?.progress()?.let {
+                                            windowEvidence.record(18,it.responses,it.provisionalClaims)
+                                        }
+                                        finalStatus
                                     } else inbox.poll(12,TimeUnit.SECONDS)
                                     readerGate.stop()
                                     result = peerStatus ?: when {

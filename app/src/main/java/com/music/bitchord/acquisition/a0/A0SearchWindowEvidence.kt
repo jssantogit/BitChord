@@ -1,12 +1,9 @@
 package com.music.bitchord.acquisition.a0
 
 /**
- * Shadow-only discovery timing curve for #177. Never closes the search,
- * approves a candidate or authorizes a transfer. Only aggregate counts
- * (not track, peer or filename identifiers) may be exported.
- *
- * Net candidate counts are not recall: candidates may be displaced by
- * higher-ranked offers, and a plateau does NOT prove no valuable late peers.
+ * Shadow-only snapshots taken at the search window boundaries and after
+ * worker teardown. A value observed after drainage must never be reported
+ * as though it arrived by second 18. No transfer or early-stop authority.
  */
 internal class A0SearchWindowEvidence {
     internal data class Sample(val replies:Int,val claims:Int) {
@@ -14,35 +11,52 @@ internal class A0SearchWindowEvidence {
     }
     internal data class Summary(
         val hasBothCheckpoints:Boolean,
+        val hasWindowEndCheckpoint:Boolean,
         val at6:Sample,
         val at12:Sample,
         val at18:Sample,
+        val afterDrain:Sample,
         val netRepliesAfter12:Int,
         val netClaimsAfter12:Int,
         val netClaims6To12:Int,
-    )
+        val repliesDuringDrain:Int,
+        val claimsDuringDrain:Int,
+    ) {
+        val checkpointsComplete:Boolean
+            get()=hasBothCheckpoints && hasWindowEndCheckpoint
+    }
 
     private var at6:Sample?=null
     private var at12:Sample?=null
+    private var at18:Sample?=null
 
     fun record(second:Int,replies:Int,claims:Int) {
-        require(second==6 || second==12)
+        require(second in setOf(6,12,18))
         val sample=Sample(replies.coerceIn(0,100000),claims.coerceIn(0,100000))
-        if(second==6)at6=sample else at12=sample
+        when(second) {
+            6 -> at6=sample
+            12 -> at12=sample
+            else -> at18=sample
+        }
     }
 
     fun finish(replies:Int,claims:Int):Summary {
-        val last=Sample(replies.coerceIn(0,100000),claims.coerceIn(0,100000))
+        val drained=Sample(replies.coerceIn(0,100000),claims.coerceIn(0,100000))
         val first=at6
         val middle=at12
+        val end=at18
         return Summary(
             hasBothCheckpoints=first!=null && middle!=null,
+            hasWindowEndCheckpoint=end!=null,
             at6=first ?: Sample(0,0),
             at12=middle ?: Sample(0,0),
-            at18=last,
-            netRepliesAfter12=if(middle!=null)last.replies-middle.replies else 0,
-            netClaimsAfter12=if(middle!=null)last.claims-middle.claims else 0,
+            at18=end ?: Sample(0,0),
+            afterDrain=drained,
+            netRepliesAfter12=if(middle!=null && end!=null)end.replies-middle.replies else 0,
+            netClaimsAfter12=if(middle!=null && end!=null)end.claims-middle.claims else 0,
             netClaims6To12=if(first!=null && middle!=null)middle.claims-first.claims else 0,
+            repliesDuringDrain=if(end!=null)drained.replies-end.replies else 0,
+            claimsDuringDrain=if(end!=null)drained.claims-end.claims else 0,
         )
     }
 }

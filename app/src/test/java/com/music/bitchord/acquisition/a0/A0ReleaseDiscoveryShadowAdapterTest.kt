@@ -106,6 +106,40 @@ class A0ReleaseDiscoveryShadowAdapterTest {
         assertFalse(preview.canTransfer)
     }
 
+    @Test fun noTitleHitProducesZeroPlannerRejectionsButNonzeroIntakeEvidence() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",requestedAlbum="SUPER REAL ME",
+            expectedDurationSeconds=161,qualityProfile=profile,
+            collectReleaseShadow=true)
+        handoff.offerParsed(reply(file("ILLIT - Something Else",161)),"peer")
+        val preview=A0ReleaseDiscoveryShadowAdapter.preview(
+            entries,handoff.releaseShadowChoices(),profile)
+        assertEquals(0,preview.examinedOffers)
+        assertTrue(preview.rejections.isEmpty())
+        assertEquals(1,preview.intake.observedOffers)
+        assertEquals(2,preview.intake.targetSlots)
+        assertEquals(0,preview.intake.titleMatchedPairs)
+        assertEquals(0,preview.intake.rankMatchedPairs)
+        assertEquals(0,preview.intake.slotsWithTitleMatch)
+        assertFalse(preview.canTransfer)
+    }
+
+    @Test fun titleHitCanStillBeRejectedByLaterIdentityOrQualityGates() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",requestedAlbum="SUPER REAL ME",
+            expectedDurationSeconds=161,qualityProfile=profile,
+            collectReleaseShadow=true)
+        handoff.offerParsed(reply(file("ILLIT - Magnetic",161)),"peer")
+        val preview=A0ReleaseDiscoveryShadowAdapter.preview(
+            entries,handoff.releaseShadowChoices(),profile)
+        assertEquals(1,preview.intake.observedOffers)
+        assertEquals(1,preview.intake.slotsWithTitleMatch)
+        assertEquals(1,preview.intake.rankMatchedPairs)
+        assertEquals(1,preview.intake.shortlistedPairs)
+        assertEquals(1,preview.autoReadyTracks)
+        assertFalse(preview.canTransfer)
+    }
+
     @Test fun titleGateOnlyRejectsCandidatesRankerCanNeverAccept() {
         val inputs=listOf(
             Triple("ILLIT - More","ILLIT - More.mp3","Music/ILLIT/BREAK EVEN/ILLIT - More.mp3"),
