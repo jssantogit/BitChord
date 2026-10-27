@@ -257,13 +257,16 @@ internal class MusicBrainzCatalogIndex(
                 ?: return@withTransaction emptyList()
             val groupId = dao.entityIdForExternalIdentity("musicbrainz", "release-group", normalized)
                 ?: return@withTransaction emptyList()
-            dao.catalogGroupEditions(groupId).mapNotNull { edition ->
-                val mbid = dao.externalIdentitiesForEntity("musicbrainz", "release", edition.releaseId)
-                    .singleOrNull()?.externalId ?: return@mapNotNull null
-                val release = dao.releaseById(edition.releaseId) ?: return@mapNotNull null
-                val info = dao.musicBrainzReleaseEnrichment(edition.releaseId)
-                MusicBrainzReleaseHit(mbid, release.title, info?.country, info?.releaseDate,
-                    info?.artistDisplay ?: release.artistDisplay, status = info?.status)
+            // One snapshot read for every cached group edition. The previous
+            // per-edition loop performed three Room calls per Release; large
+            // TWICE discographies repeatedly paid that overhead on refresh.
+            dao.cachedGroupEditionRows(groupId).map { edition ->
+                MusicBrainzReleaseHit(
+                    edition.musicBrainzId, edition.title,
+                    edition.country, edition.releaseDate,
+                    edition.artistDisplay, status = edition.status,
+                    releaseGroupMbid = normalized,
+                )
             }
         }
 
