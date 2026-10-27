@@ -923,9 +923,10 @@ class CrossfadeController(
         val currentAnalysis = analysisFor(currentItem)
         val nextAnalysis = analysisFor(nextItem)
         val analysisState = AppSettings.smartAnalysis.value
-        // Keep analysis-based cueing and overlap, not tempo stretching,
-        // phase-lock nudges or DJ-style sound transformations.
-        val advanced = false
+        // Keep full musical planning (energy, vocal-aware alternate exits,
+        // phrasing) while neutralPlayback=true guarantees 1x source timing.
+        // Filters, echo, phase nudges and DSP stay disconnected at rendering.
+        val advanced = true
 
         val plan = planTransition(
             analysis = currentAnalysis,

@@ -51,6 +51,32 @@ class AdvancedAutomixPlannerTest {
 
 
     @Test
+    fun advancedNeutralPlaybackUsesRichAnalysisWithoutRateOrEffectChanges() {
+        val current = track("rich-out", 120.0, "C major", vocal = 0.92)
+        val next = track("rich-in", 127.0, "G major", vocal = 0.93)
+        val plan = planTransition(
+            analysis = current,
+            nextAnalysis = next,
+            currentTrack = TransitionTrackInfo(current.trackId, 200_000),
+            nextTrack = TransitionTrackInfo(next.trackId, 200_000),
+            currentTime = 10.0,
+            duration = 200.0,
+            mode = CrossfadeMode.SMART,
+            advanced = true,
+            neutralPlayback = true,
+        )
+        assertTrue(!plan.blocked)
+        assertTrue(plan.fadeSeconds > 0)
+        assertEquals(1.0, plan.incomingPlaybackRate, 0.0)
+        assertEquals(1.0, plan.outgoingPlaybackRate, 0.0)
+        assertEquals(TransitionStyle.EQUAL_POWER, plan.transitionStyle)
+        assertEquals(0.0, plan.echoSeconds, 0.0)
+        assertEquals(0.0, plan.filterSweep, 0.0)
+        assertTrue(!plan.bassSwap)
+        assertTrue(!plan.phaseLock)
+    }
+
+    @Test
     fun neutralPlaybackKeepsSmartTimingWithoutChangingPlaybackSpeed() {
         val outgoing = track("neutral-out", 120.0, "C major", vocal = 0.1)
         val incoming = track("neutral-in", 130.0, "C major", vocal = 0.1)

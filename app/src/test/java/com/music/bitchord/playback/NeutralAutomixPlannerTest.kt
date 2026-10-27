@@ -58,6 +58,32 @@ class NeutralAutomixPlannerTest {
     }
 
     @Test
+    fun `advanced neutral Automix keeps source speed and effect outputs inactive`() {
+        val outgoing = analyzed("advanced-a", 120.0)
+        val incoming = analyzed("advanced-b", 129.0)
+        val plan = planTransition(
+            analysis = outgoing,
+            nextAnalysis = incoming,
+            currentTrack = TransitionTrackInfo("advanced-a", 200_000),
+            nextTrack = TransitionTrackInfo("advanced-b", 200_000),
+            currentTime = 10.0,
+            duration = 200.0,
+            mode = CrossfadeMode.SMART,
+            advanced = true,
+            neutralPlayback = true,
+        )
+        assertFalse(plan.blocked)
+        assertTrue(plan.fadeSeconds > 0)
+        assertEquals(1.0, plan.incomingPlaybackRate, 0.0)
+        assertEquals(1.0, plan.outgoingPlaybackRate, 0.0)
+        assertEquals(TransitionStyle.EQUAL_POWER, plan.transitionStyle)
+        assertFalse(plan.bassSwap)
+        assertFalse(plan.phaseLock)
+        assertEquals(0.0, plan.filterSweep, 0.0)
+        assertEquals(0.0, plan.echoSeconds, 0.0)
+    }
+
+    @Test
     fun `regular shared planner is unchanged for non Android consumers`() {
         val outgoing = analyzed("a", 120.0)
         val incoming = analyzed("b", 130.0)
