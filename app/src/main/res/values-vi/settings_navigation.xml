@@ -27,4 +27,6 @@
     <string name="settings_nav_desc_wear">Tích hợp đồng hồ</string>
     <string name="settings_nav_desc_about">Phiên bản và thông tin dự án</string>
     <string name="settings_nav_desc_sources">Nhà cung cấp nhạc và tiện ích mở rộng</string>
+    <string name="settings_nav_diagnostics_title">Chẩn đoán</string>
+    <string name="settings_nav_diagnostics_subtitle">Ghi, xem và chia sẻ báo cáo chẩn đoán</string>
 </resources>
