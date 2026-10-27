@@ -1,0 +1,30 @@
+<resources>
+    <string name="settings_nav_group_account">АККАУНТ</string>
+    <string name="settings_nav_group_music">МУЗЫКА</string>
+    <string name="settings_nav_group_experience">ИНТЕРФЕЙС</string>
+    <string name="settings_nav_group_data">ДАННЫЕ</string>
+    <string name="settings_nav_group_system">СИСТЕМА</string>
+    <string name="settings_nav_group_about">О ПРИЛОЖЕНИИ</string>
+    <string name="settings_nav_lyrics">Тексты песен</string>
+    <string name="settings_nav_about">О приложении</string>
+    <string name="settings_nav_filtered">Результаты для: %1$s</string>
+    <string name="settings_nav_show_all">Показать всё</string>
+    <string name="settings_nav_controls">Управление и поведение</string>
+    <string name="settings_nav_advanced">Дополнительно</string>
+    <string name="settings_nav_desc_account">Аккаунты и музыкальные интеграции</string>
+    <string name="settings_nav_desc_audio">Источники, Wi-Fi и мобильные данные</string>
+    <string name="settings_nav_desc_playback">Аудиовыход, переходы и очередь</string>
+    <string name="settings_nav_desc_local">Папки и фильтры локального аудио</string>
+    <string name="settings_nav_desc_appearance">Тема, обложки и эффекты</string>
+    <string name="settings_nav_desc_lyrics">Синхронизация, источники и перевод</string>
+    <string name="settings_nav_desc_downloads">Soulseek, качество и место сохранения</string>
+    <string name="settings_nav_desc_storage">Аудиокэш и память</string>
+    <string name="settings_nav_desc_data">Replay, резервные копии и импорт</string>
+    <string name="settings_nav_desc_performance">Частота обновления и батарея</string>
+    <string name="settings_nav_desc_misc">Жесты и поведение воспроизведения</string>
+    <string name="settings_nav_desc_language">Язык интерфейса</string>
+    <string name="settings_nav_desc_advanced">Диагностика и технические настройки</string>
+    <string name="settings_nav_desc_wear">Интеграция с часами</string>
+    <string name="settings_nav_desc_about">Версия и сведения о проекте</string>
+    <string name="settings_nav_desc_sources">Провайдеры и музыкальные расширения</string>
+</resources>
