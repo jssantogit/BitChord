@@ -423,6 +423,7 @@ class A0ManualLoginActivity : Activity() {
                                         qualityProfile=selectedQuality,
                                         peerReliability=peerReliability,
                                         collectReleaseShadow=batch!=null,
+                                        releaseQueries=batch?.entries?.map { it.query }.orEmpty(),
                                     ).also { transfer ->
                                         if (!SoulseekActiveSession.registerTransfer(
                                                 transfer, accountGeneration

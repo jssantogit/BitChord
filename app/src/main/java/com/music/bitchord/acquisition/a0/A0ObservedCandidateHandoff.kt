@@ -24,6 +24,7 @@ internal class A0ObservedCandidateHandoff(
         A0CanonicalAcquisitionIntent.QualityProfileSnapshot(),
     private val peerReliability:A0PeerReliabilityEvidence=A0PeerReliabilityEvidence(),
     private val collectReleaseShadow:Boolean=false,
+    private val releaseQueries:List<String> = emptyList(),
 ) {
     class Choice internal constructor(
         val displayName:String,
@@ -90,6 +91,38 @@ internal class A0ObservedCandidateHandoff(
     // from the same peer, but the actual manual selector retains max 10/peer.
     private val releaseShadow=ArrayList<Choice>(512)
     private val releaseShadowPerPeer=HashMap<String,Int>()
+    // Only an already-requested release may influence this read-only cache.
+    // Matching a file's title is a DISCOVERY hint, not identity proof or
+    // permission to transfer. No peer names or paths enter diagnostics.
+    private val releaseSlotTokens=releaseQueries.take(64)
+        .map(A0ReleaseDiscoveryShadowAdapter::titleTokens)
+        .filter { it.isNotEmpty() }
+
+    private fun releaseSlotHits(choice:Choice):List<Int> {
+        if(releaseSlotTokens.isEmpty())return emptyList()
+        val file=A0ReleaseDiscoveryShadowAdapter.fileTokens(choice.claim.filename)
+        return releaseSlotTokens.indices.filter { file.containsAll(releaseSlotTokens[it]) }
+    }
+
+    /**
+     * Evict an overrepresented, unrelated file ONLY to preserve previously
+     * absent release slots from the SAME peer. A peer still gets at most 64
+     * observations and global shadow memory still stays at 512.
+     */
+    private fun releaseSamePeerVictim(peer:String,incoming:Choice):Choice? {
+        val related=releaseSlotHits(incoming)
+        if(related.isEmpty())return null
+        val siblings=releaseShadow.filter { it.peerUsername==peer }
+        val hitCounts=IntArray(releaseSlotTokens.size)
+        for(sibling in siblings)
+            for(slot in releaseSlotHits(sibling))hitCounts[slot]++
+        if(related.none { hitCounts[it]==0 })return null
+        return siblings.firstOrNull { releaseSlotHits(it).isEmpty() }
+            ?: siblings.firstOrNull { choice ->
+                val slots=releaseSlotHits(choice)
+                slots.isNotEmpty() && slots.all { hitCounts[it]>1 }
+            }
+    }
     private val canonicalManualTarget by lazy {
         // Badly formatted untrusted/search text must not crash the collector.
         // An invalid album claim loses confidence; it never grants one.
@@ -304,31 +337,30 @@ internal class A0ObservedCandidateHandoff(
             if(collectReleaseShadow) {
                 val peer=result.peerUsername
                 val peerCount=releaseShadowPerPeer[peer] ?: 0
-                if(peerCount<64) {
-                    if(releaseShadow.size==512) {
-                        // One early burst cannot monopolize all 512 shadow
-                        // observations and hide later release-wide sources.
-                        // Evict only from a strictly better-represented peer
-                        // (or the oldest one when every peer has one slot).
-                        // This cache does NOT change the manual choices or P/F.
+                val victim=when {
+                    // Previously, 64 unrelated files from one peer forever
+                    // hid later tracks from that same release and source.
+                    peerCount>=64 -> releaseSamePeerVictim(peer,observedChoice)
+                    releaseShadow.size==512 -> {
+                        // Retain prior cross-peer fairness: only replace
+                        // an entry from a more heavily represented peer.
                         val maxCount=releaseShadowPerPeer.values.maxOrNull() ?: 0
-                        if(maxCount>peerCount) {
-                            val victim=releaseShadow.firstOrNull {
-                                releaseShadowPerPeer[it.peerUsername]==maxCount
-                            }
-                            if(victim!=null) {
-                                releaseShadow.remove(victim)
-                                val remainder=checkNotNull(
-                                    releaseShadowPerPeer[victim.peerUsername])-1
-                                if(remainder==0)releaseShadowPerPeer.remove(victim.peerUsername)
-                                else releaseShadowPerPeer[victim.peerUsername]=remainder
-                            }
-                        }
+                        if(maxCount>peerCount)releaseShadow.firstOrNull {
+                            releaseShadowPerPeer[it.peerUsername]==maxCount
+                        } else null
                     }
-                    if(releaseShadow.size<512) {
-                        releaseShadow.add(observedChoice)
-                        releaseShadowPerPeer[peer]=peerCount+1
-                    }
+                    else -> null
+                }
+                if(victim!=null) {
+                    releaseShadow.remove(victim)
+                    val remainder=checkNotNull(releaseShadowPerPeer[victim.peerUsername])-1
+                    if(remainder==0)releaseShadowPerPeer.remove(victim.peerUsername)
+                    else releaseShadowPerPeer[victim.peerUsername]=remainder
+                }
+                if(releaseShadow.size<512 &&
+                    (releaseShadowPerPeer[peer] ?: 0)<64) {
+                    releaseShadow.add(observedChoice)
+                    releaseShadowPerPeer[peer]=(releaseShadowPerPeer[peer] ?: 0)+1
                 }
             }
             // A single enthusiastic peer cannot displace every other source.
