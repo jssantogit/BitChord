@@ -59,7 +59,7 @@ internal interface MusicBrainzCoverArtStore {
 }
 
 /**
- * The 2026-10-26 strict Front/Poster/approval policy uses a new Room cache key.
+ * The strict Front/Poster/approval and 2026-10-27 edition-title policy use versioned Room keys.
  * Pre-policy artwork may have been cached at 1200px yet depict a music video.
  * Keep legacy rows intact for migration safety, but never read them again.
  */
@@ -69,9 +69,9 @@ internal fun verifiedFrontCacheType(type: String): String =
         // A generic group fallback has no Official-edition provenance and
         // must NEVER poison the verified artist shelf's v4 namespace.
         "release-group" -> "release-group:front-v2"
-        // Only the MainViewModel path proving an MBID-linked Official Release
+        // Only the MainViewModel path proving a title-vetted MBID-linked Official Release
         // inside this group's MBID can write this positive v4 evidence.
-        "verified-artist-group" -> "release-group:front-v4"
+        "verified-artist-group" -> "release-group:front-v5"
         else -> error("Unsupported cover cache entity type")
     }
 
@@ -157,7 +157,7 @@ internal class CoverArtArchive(
     }
 
     /**
-     * Cached v4 group artwork has already been sourced from an Official
+     * Cached v5 group artwork has already been sourced from an Official
      * exact-title edition. Never make an unverified group CAA request here.
      */
     suspend fun cachedVerifiedGroupCover(
