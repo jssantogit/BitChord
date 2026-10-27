@@ -83,6 +83,26 @@ internal fun canonicalRowsWithVerifiedRecordingArt(
         ) row.copy(artworkUri = cover) else row
     }
 
+
+/**
+ * When an Official ReleaseGroup cover arrives after search results, publish it
+ * to recordings which have the same direct upstream group MBID. This costs no
+ * new Room/CAA lookup and never equates works by their title or artist.
+ * Room graph-based links remain a separate, stronger revisit fallback.
+ */
+internal fun canonicalRowsWithNewVerifiedGroupArt(
+    rows: List<com.music.bitchord.ui.screens.CanonicalCatalogSearchRow>,
+    groupMbid: String,
+    artwork: String,
+): List<com.music.bitchord.ui.screens.CanonicalCatalogSearchRow> {
+    if (groupMbid.isBlank() || artwork.isBlank()) return rows
+    val direct = rows.asSequence().filter {
+        it.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING &&
+            it.coverGroupMbid == groupMbid
+    }.associate { it.musicBrainzId to artwork }
+    return canonicalRowsWithVerifiedRecordingArt(rows, direct)
+}
+
 /**
  * Deliver verified covers as soon as each independent lookup finishes.
  *
