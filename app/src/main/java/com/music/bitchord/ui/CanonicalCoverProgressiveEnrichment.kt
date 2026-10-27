@@ -8,8 +8,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 
 /**
  * Deliver verified covers as soon as each independent lookup finishes.
@@ -27,17 +25,23 @@ internal suspend fun <K, V : Any> loadCanonicalCoversProgressively(
     publish: suspend (Map<K, V>) -> Unit,
 ) = coroutineScope {
     require(maxConcurrent > 0)
-    val permits = Semaphore(maxConcurrent)
+    // Long artist pages may contain hundreds of groups. Use exactly
+    // maxConcurrent worker coroutines rather than spawning one suspended
+    // coroutine per artwork candidate. Producers never wait for a slow wave
+    // to finish before fast downstream covers can be delivered.
+    val queue = Channel<K>(Channel.UNLIMITED)
     val completions = Channel<Pair<K, V>>(Channel.UNLIMITED)
-    val jobs = keys.map { key ->
+    keys.forEach { queue.trySend(it).getOrThrow() }
+    queue.close()
+    val workers = List(minOf(maxConcurrent, keys.size)) {
         launch {
-            permits.withPermit {
+            for (key in queue) {
                 fetch(key)?.let { completions.send(key to it) }
             }
         }
     }
     launch {
-        jobs.joinAll()
+        workers.joinAll()
         completions.close()
     }
     for ((key, value) in completions) {
