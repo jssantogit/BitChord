@@ -10,6 +10,53 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 
 /**
+ * A MusicBrainz Recording search hit already carries a direct Official
+ * audio Release -> ReleaseGroup association. Check that group's Front-v5
+ * *before* traversing Room or contacting CAA. If it is unavailable, one
+ * batched indexed Room query may supply an independently proven Track edge.
+ *
+ * Several tracks of the same album share ONE cache read and exact URL.
+ * Neither common track titles nor common artists are identity evidence.
+ * Caller supplies the CoverArtArchive Front-v5 validator as cachedCover.
+ */
+internal suspend fun canonicalCachedRecordingArtForVisibleRows(
+    rows: List<com.music.bitchord.ui.screens.CanonicalCatalogSearchRow>,
+    databaseLinks: suspend (List<String>) ->
+        List<com.music.bitchord.data.catalog.CanonicalRecordingCoverGroupRow>,
+    cachedCover: suspend (String) -> String?,
+): Map<String, String> {
+    val recordings = rows.filter {
+        it.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING
+    }.distinctBy { it.musicBrainzId }
+    if (recordings.isEmpty()) return emptyMap()
+    val proven = linkedMapOf<String, String>()
+    val groupCache = mutableMapOf<String, String?>()
+    suspend fun adopt(recordingMbid: String, groupMbid: String) {
+        if (recordingMbid in proven) return
+        val thumbnail = if (groupCache.containsKey(groupMbid)) {
+            groupCache[groupMbid]
+        } else {
+            cachedCover(groupMbid).also { groupCache[groupMbid] = it }
+        }
+        if (thumbnail != null) proven[recordingMbid] = thumbnail
+    }
+    // Prioritize the direct upstream Official edge: otherwise Room may pick
+    // an unrelated compilation/edition where this recording also appears.
+    recordings.forEach { row ->
+        row.coverGroupMbid?.let { adopt(row.musicBrainzId, it) }
+    }
+    val missing = recordings.map { it.musicBrainzId }.filterNot(proven::containsKey)
+    if (missing.isNotEmpty()) {
+        val eligible = missing.toSet()
+        for (edge in databaseLinks(missing)) {
+            if (edge.recordingMbid in eligible)
+                adopt(edge.recordingMbid, edge.groupMbid)
+        }
+    }
+    return proven
+}
+
+/**
  * Deliver verified covers as soon as each independent lookup finishes.
  *
  * Waiting for the entire CAA wave previously made a quick 500px cover wait
