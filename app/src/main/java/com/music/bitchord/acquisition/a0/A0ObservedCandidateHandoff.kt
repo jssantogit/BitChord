@@ -362,6 +362,18 @@ internal class A0ObservedCandidateHandoff(
         return true
     }
 
+    /** Cheap on-wire UI counters. Do not group, score, cluster or persist
+     * candidate identities for each peer response; do that once at search end.
+     */
+    data class Progress(
+        val responses:Int,
+        val publicFiles:Int,
+        val provisionalClaims:Int,
+    )
+
+    @Synchronized
+    fun progress():Progress=Progress(replies,publicSeen,candidates.size)
+
     @Synchronized
     fun screening():Screening {
         // A decision *simulation*, only one sanitized outcome per search.
