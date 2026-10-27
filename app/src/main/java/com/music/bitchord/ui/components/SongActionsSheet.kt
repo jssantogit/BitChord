@@ -83,7 +83,6 @@ import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.data.webdav.WebDavUploads
 import com.music.bitchord.download.DownloadState
 import com.music.bitchord.download.Downloads
-import com.music.bitchord.playback.SleepTimer
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.theme.ArtworkPalette
@@ -106,19 +105,10 @@ import java.util.Locale
  * identity the file doesn't carry, so those rows drop out regardless of
  * [signedIn].
  *
- * [showSleepTimer] and [onShare] are the player's extras: a sleep timer isn't a
- * property of some row in a list, so it only appears where it means something.
- *
- * [onDownload] is only the *start* of a download — cancelling one and deleting
- * a saved file are answered here, because neither needs anything the caller
- * has. Starting one might: below API 29 it needs a storage permission that only
- * an Activity can ask for.
- *
- * The sheet is painted in the track's own colours, the same way its album page
- * is — it is opened *from* that artwork, usually with it still on screen behind
- * the scrim, and a slab of flat grey in front of a coloured page reads as
- * something borrowed from another app. The host supplies no container colour
- * and no drag handle; both are drawn here, over the tint.
+ * The player's menu keeps only actionable music operations; previously shown
+ * sleep, manual conversion, technical log and lyric timing entries are retired
+ * from this surface. Playback and diagnostic services remain available in their
+ * owning layers.
  */
 @Composable
 fun SongActionsSheet(
@@ -569,135 +559,6 @@ private fun WebDavUploadRow(
             accent = palette.accent,
             onClick = onUpload,
         )
-    }
-}
-
-/** End of track or a duration, plus a way out once one is running. */
-@Composable
-private fun SleepTimerPicker(palette: ArtworkPalette, onBack: () -> Unit) {
-    val chosen by SleepTimer.minutes.collectAsStateWithLifecycle()
-    val afterTrack by SleepTimer.afterTrack.collectAsStateWithLifecycle()
-    val countdown = sleepTimerCountdown()
-
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 8.dp, end = 22.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = stringResource(R.string.back),
-                    tint = MaterialTheme.colorScheme.onBackground,
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.sleep_timer),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Text(
-                    text = when {
-                        countdown != null -> stringResource(R.string.pause_countdown, countdown)
-                        afterTrack -> stringResource(R.string.pause_after_song)
-                        else -> stringResource(R.string.pause_after_a_while)
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        HorizontalDivider(thickness = 0.5.dp, color = palette.divider)
-
-        // Finishing the song is the one people reach for at the end of a
-        // listen, so it leads rather than sitting under the durations.
-        SleepOption(
-            label = stringResource(R.string.after_this_song),
-            selected = afterTrack,
-            accent = palette.accent,
-        ) {
-            SleepTimer.startAfterTrack()
-            onBack()
-        }
-        SleepTimer.PRESETS.forEach { minutes ->
-            SleepOption(
-                label = if (minutes == 60) {
-                    stringResource(R.string.one_hour)
-                } else {
-                    pluralStringResource(R.plurals.minute_count, minutes, minutes)
-                },
-                selected = minutes == chosen,
-                accent = palette.accent,
-            ) {
-                SleepTimer.start(minutes)
-                onBack()
-            }
-        }
-        if (chosen != null || afterTrack) {
-            ActionRow(Icons.Rounded.Close, stringResource(R.string.turn_off_timer), accent = palette.accent) {
-                SleepTimer.cancel()
-                onBack()
-            }
-        }
-        Spacer(Modifier.height(24.dp))
-    }
-}
-
-@Composable
-private fun SleepOption(
-    label: String,
-    selected: Boolean,
-    accent: Color,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 22.dp, vertical = 15.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.weight(1f),
-        )
-        if (selected) {
-            Icon(
-                Icons.Rounded.Check,
-                contentDescription = stringResource(R.string.running),
-                tint = accent,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-    }
-}
-
-/** What the sleep timer row shows on the right, or null when none is armed. */
-@Composable
-private fun sleepTimerStatus(): String? {
-    val afterTrack by SleepTimer.afterTrack.collectAsStateWithLifecycle()
-    return sleepTimerCountdown() ?: stringResource(R.string.after_this_song).takeIf { afterTrack }
-}
-
-/** Live "m:ss" until the sleep timer fires, or null when none is running. */
-@Composable
-private fun sleepTimerCountdown(): String? {
-    val deadline by SleepTimer.deadline.collectAsStateWithLifecycle()
-    val remaining by produceState<Long?>(initialValue = SleepTimer.remainingMs(), deadline) {
-        while (deadline != null) {
-            value = SleepTimer.remainingMs()
-            delay(1_000)
-        }
-        value = null
-    }
-    return remaining?.let {
-        val seconds = it / 1000
-        "%d:%02d".format(Locale.ROOT, seconds / 60, seconds % 60)
     }
 }
 
