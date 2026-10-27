@@ -19,6 +19,10 @@ internal object CatalogCoverDiagnostics {
         add("network_requests=${s.networkRequests} success=${s.successfulNetworkRequests}" +
             " not_found=${s.networkNotFound} transient_failures=${s.transientFailures}")
         add("coil_load_success=${s.imageRenderSuccesses} coil_load_errors=${s.imageRenderFailures}")
+        // Coil's actual result dataSource distinguishes bitmap cache reuse
+        // from disk reads and network downloads, without recording URLs.
+        add("coil_sources memory=${s.coilMemoryHits} disk=${s.coilDiskHits}" +
+            " network=${s.coilNetworkFetches} other=${s.coilOtherSources}")
         if (s.imageLoadSampleCount > 0 &&
             s.p50ImageLoadMs != null && s.p95ImageLoadMs != null
         ) {
