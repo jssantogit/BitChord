@@ -56,6 +56,8 @@ internal data class RuleBasedRecordingCandidate(
     val ratingEvidenceUnknown: Boolean = false,
     val title: String? = null,
     val artistDisplay: String? = null,
+    val earlySkips: Long = 0,
+    val lateSkips: Long = 0,
 )
 
 internal data class RuleBasedSmartPlaylistQuery(
@@ -216,6 +218,8 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
                     available = true,
                     title = recording.title,
                     artistDisplay = recording.artistDisplay,
+                    earlySkips = summary.earlySkips,
+                    lateSkips = summary.lateSkips,
                 )
             }
         }

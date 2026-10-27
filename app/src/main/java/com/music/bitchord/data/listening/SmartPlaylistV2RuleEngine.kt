@@ -42,6 +42,8 @@ internal enum class SmartPlaylistRuleField {
     DURATION_MS,
     TITLE,
     ARTIST_DISPLAY,
+    EARLY_SKIPS,
+    LATE_SKIPS,
 }
 
 @Serializable
@@ -139,8 +141,11 @@ internal data class SmartPlaylistV2Query(
                                 "Comparison requires a finite value"
                             }
                         }
-                        if (node.field == SmartPlaylistRuleField.AUDIBLE_COMPLETIONS &&
-                            !presence) {
+                        if (node.field in listOf(
+                            SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
+                            SmartPlaylistRuleField.EARLY_SKIPS,
+                            SmartPlaylistRuleField.LATE_SKIPS,
+                        ) && !presence) {
                             require(node.value!! >= 0.0 && node.value % 1.0 == 0.0) {
                                 "Completion count must be a nonnegative integer"
                             }
@@ -180,6 +185,7 @@ internal class SmartPlaylistV2RuleEngine(
                 val item = grouped.firstOrNull() ?: return@mapNotNull null
                 if (item.recordingId.isBlank() || grouped.any { it != item } ||
                     !item.available || item.audibleCompletions < 0 ||
+                    item.earlySkips < 0 || item.lateSkips < 0 ||
                     (item.explicitRating != null &&
                         (!item.explicitRating.isFinite() ||
                             item.explicitRating !in 1.0..5.0)) ||
@@ -316,6 +322,8 @@ internal class SmartPlaylistV2RuleEngine(
             SmartPlaylistRuleField.EXPLICIT_RATING -> row.explicitRating
             SmartPlaylistRuleField.AUDIBLE_COMPLETIONS -> row.audibleCompletions.toDouble()
             SmartPlaylistRuleField.DURATION_MS -> row.durationMs?.toDouble()
+            SmartPlaylistRuleField.EARLY_SKIPS -> row.earlySkips.toDouble()
+            SmartPlaylistRuleField.LATE_SKIPS -> row.lateSkips.toDouble()
             SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE ->
                 if (row.audibleCompletions > 0) {
                     row.lastAudibleAtEpochMs?.let { ((now - it) / 86_400_000L).toDouble() }

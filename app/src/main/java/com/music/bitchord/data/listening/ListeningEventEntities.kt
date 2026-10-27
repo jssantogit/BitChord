@@ -59,4 +59,6 @@ internal data class SmartPlaylistBehaviorEvidenceRow(
     val recordingId: String,
     val completions: Long,
     val lastAudibleAtEpochMs: Long?,
+    val earlySkips: Long,
+    val lateSkips: Long,
 )

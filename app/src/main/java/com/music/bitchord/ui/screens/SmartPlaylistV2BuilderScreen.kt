@@ -66,6 +66,8 @@ private fun fieldLabel(value: SmartPlaylistRuleField): String = when (value) {
     SmartPlaylistRuleField.DURATION_MS -> "Duração (milissegundos)"
     SmartPlaylistRuleField.TITLE -> "Título da faixa"
     SmartPlaylistRuleField.ARTIST_DISPLAY -> "Artista (catálogo)"
+    SmartPlaylistRuleField.EARLY_SKIPS -> "Pulos antecipados"
+    SmartPlaylistRuleField.LATE_SKIPS -> "Pulos tardios"
 }
 
 private fun operatorLabel(value: SmartPlaylistRuleOperator): String = when (value) {
