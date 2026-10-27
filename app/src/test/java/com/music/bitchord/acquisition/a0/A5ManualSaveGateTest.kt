@@ -8,6 +8,7 @@ class A5ManualSaveGateTest {
         assertEquals("Live Song.flac",A5ManualSaveGate.safeDestinationName("Live Song.flac",1024))
         assertEquals("Track.MP3",A5ManualSaveGate.safeDestinationName("Track.MP3",1024))
         assertEquals("sample.wav",A5ManualSaveGate.safeDestinationName("sample.wav",1024))
+        assertEquals("radio.aac",A5ManualSaveGate.safeDestinationName("radio.aac",1024))
         assertNull(A5ManualSaveGate.safeDestinationName("sound.ogg",1024))
         assertNull(A5ManualSaveGate.safeDestinationName("song.opus",1024))
         assertNull(A5ManualSaveGate.safeDestinationName("song.m4a",1024))
@@ -23,9 +24,11 @@ class A5ManualSaveGateTest {
     @Test fun enforceObservedPilotSizeAndRequireUserSaveConsent() {
         assertNull(A5ManualSaveGate.safeDestinationName("sample.wav",0))
         assertNull(A5ManualSaveGate.safeDestinationName("sample.wav",43))
-        assertNull(A5ManualSaveGate.safeDestinationName("sample.wav",64L*1024*1024+1))
+        assertNull(A5ManualSaveGate.safeDestinationName("sample.wav",256L*1024*1024+1))
         assertEquals("sample.wav",
-            A5ManualSaveGate.safeDestinationName("sample.wav",64L*1024*1024))
+            A5ManualSaveGate.safeDestinationName("sample.wav",256L*1024*1024))
+        assertEquals("hires.flac",
+            A5ManualSaveGate.safeDestinationName("hires.flac",96L*1024*1024))
         assertFalse(A5ManualSaveGate.canSave(true,false))
         assertFalse(A5ManualSaveGate.canSave(false,true))
         assertTrue(A5ManualSaveGate.canSave(true,true))

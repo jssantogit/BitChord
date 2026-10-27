@@ -113,6 +113,26 @@ class A0IndirectSearchWireTest {
         assertEquals(0,observed)
     }
 
+    @Test fun legacyConnectToPeerWithoutExtendedFieldsRemainsDiscoverable() {
+        // Older Soulseek clients advertise only the original five fields.
+        val legacy = frame(18,
+            field("peer") + field("P") + byteArrayOf(4,4,8,8) +
+                le(4815) + le(31415))
+        val event = requireNotNull(
+            A0IndirectSearchWire.readServerEvent(ByteArrayInputStream(legacy))
+        )
+        assertEquals("peer", event.username)
+        assertEquals("8.8.4.4", event.address.hostAddress)
+        assertEquals(4815, event.port)
+        assertEquals(31415, event.token)
+        // Partial optional tail must still fail closed.
+        reject { A0IndirectSearchWire.readServerEvent(
+            ByteArrayInputStream(frame(18,
+                field("peer") + field("P") + byteArrayOf(4,4,8,8) +
+                    le(4815) + le(31415) + byteArrayOf(1,2)))
+        ) }
+    }
+
     private fun offer(
         username:String="peer", type:String="P", ip:ByteArray=byteArrayOf(4,4,8,8),
         port:Int=4815, token:Int=31415, obfuscation:Int=0,

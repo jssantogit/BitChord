@@ -1,0 +1,143 @@
+name: Acquisition Offline Benchmark
+
+# This workflow is new on #181 and is not registered for manual
+# workflow_dispatch until the file lands on the repository default branch.
+# Bootstrap the one-time pre-merge synthetic run only when THIS YAML changes
+# in its dedicated PR branch. No second build on unrelated PR pushes.
+# No Soulseek/slskd login, peer search, transport or download happens here.
+# Album labels and folder hints remain untrusted; no Release MBID or audio master is verified.
+# Gate: the Kotlin album-hint tests and the paired v4/album/Flux replay must all pass.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - acquisition/issue-177-soulseek-discovery
+    paths:
+      - .github/workflows/acquisition-offline-benchmark.yml
+
+concurrency:
+  group: acquisition-offline-benchmark-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-head-to-head:
+    name: A0 · synthetic ranking comparator
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout BitChord
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned Noqlen Flux Core comparator
+        uses: actions/checkout@v4
+        with:
+          repository: jssantogit/noqlen-flux-core
+          ref: 3e6fa935fc139ed80e4e75ae3aa7c88ebd36747d
+          path: .offline-flux
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure Android tests
+        shell: bash
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+
+      - name: Python benchmark unit tests
+        run: python3 -m unittest discover -s tools/benchmarks/soulseek -p 'test_*.py' -v
+
+      - name: Android pure scorer replay
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest --tests 'com.music.bitchord.acquisition.a0.A0CanonicalBenchmarkReplayTest'
+
+      - name: Produce blind fixture and pinned Flux ranking
+        shell: bash
+        run: |
+          python3 tools/benchmarks/soulseek/evaluate.py \
+            --cases app/src/test/resources/soulseek/synthetic-cases.jsonl \
+            --export-blind /tmp/bitchord-blind.jsonl
+          python3 tools/benchmarks/soulseek/run_flux_baseline.py \
+            --blind /tmp/bitchord-blind.jsonl \
+            --flux-root .offline-flux \
+            --output /tmp/flux-ranking.jsonl
+
+      - name: Compare same inputs without claiming real accuracy
+        shell: bash
+        run: |
+          mkdir -p build/soulseek-benchmark
+          python3 tools/benchmarks/soulseek/evaluate.py \
+            --cases app/src/test/resources/soulseek/synthetic-cases.jsonl \
+            --left app/build/benchmark/soulseek/bitchord-preflight-v4.jsonl \
+            --right /tmp/flux-ranking.jsonl \
+            --allow-synthetic \
+            --output build/soulseek-benchmark/synthetic-report.json
+          # Replay the album-claim prototype on the same frozen inputs.
+          # Its metadata are untrusted, and the result stays synthetic-only.
+          python3 tools/benchmarks/soulseek/evaluate.py \
+            --cases app/src/test/resources/soulseek/synthetic-cases.jsonl \
+            --left app/build/benchmark/soulseek/bitchord-album-gate-v1.jsonl \
+            --right /tmp/flux-ranking.jsonl \
+            --allow-synthetic \
+            --output build/soulseek-benchmark/synthetic-album-gate-report.json
+          cp app/build/benchmark/soulseek/bitchord-preflight-v4.jsonl \
+            build/soulseek-benchmark/bitchord-ranking.jsonl
+          cp app/build/benchmark/soulseek/bitchord-album-gate-v1.jsonl \
+            build/soulseek-benchmark/bitchord-album-gate-ranking.jsonl
+          cp /tmp/flux-ranking.jsonl build/soulseek-benchmark/flux-ranking.jsonl
+          python3 tools/benchmarks/soulseek/evaluate.py \
+            --cases app/src/test/resources/soulseek/synthetic-cases.jsonl \
+            --left app/build/benchmark/soulseek/bitchord-preflight-v4.jsonl \
+            --right app/build/benchmark/soulseek/bitchord-album-gate-v1.jsonl \
+            --allow-synthetic \
+            --output build/soulseek-benchmark/synthetic-v4-vs-album-gate.json
+
+      - name: Show synthetic-only ranking trade-offs
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root=Path("build/soulseek-benchmark")
+          old=json.loads((root/"synthetic-report.json").read_text())
+          new=json.loads((root/"synthetic-album-gate-report.json").read_text())
+          columns=[old["left"], new["left"], old["right"]]
+          def row(label,field):
+              return "| "+label+" | "+" | ".join(str(col[field]) for col in columns)+" |"
+          lines=[
+              "### Soulseek ranking: SYNTHETIC ONLY (18 invented cases)",
+              "",
+              "These are NOT measured music accuracy, live peers or audio verification.",
+              "",
+              "| Metric | BitChord v4 | BitChord v4 + album claims | Flux default_v1 |",
+              "|---|---:|---:|---:|",
+              row("Exact-labelled top offer","exact_top1"),
+              row("Wrong-edition top offer","wrong_version_top1"),
+              row("Wrong-artist top offer","wrong_artist_top1"),
+              row("Unknown top offer","unknown_recommendations"),
+              row("Abstentions","abstentions"),
+              row("Recommendations","recommendations"),
+          ]
+          summary="\n".join(lines)+"\n"
+          print(summary)
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a",encoding="utf-8") as file:
+              file.write(summary)
+          PY
+
+      - name: Upload synthetic-only count reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: soulseek-synthetic-compare-${{ github.sha }}
+          path: build/soulseek-benchmark/
+          if-no-files-found: error
+          retention-days: 7

@@ -158,4 +158,38 @@ class A2LocalAudioPublisherTest {
             fail("Collision must fail")
         }catch(_:IOException){}
     }
+    @Test fun realAdtsAacHeaderMayPublishAsAacButNeverAsM4a() {
+        val bytes=ByteArray(128).also { out ->
+            // MPEG-4 AAC-LC, 44.1 kHz, stereo, ADTS frame length 128.
+            byteArrayOf(0xff.toByte(),0xf1.toByte(),0x50,0x80.toByte(),
+                0x10,0x1f,0xfc.toByte()).copyInto(out)
+        }
+        val factory=RecordingFactory()
+        val saved=A2LocalAudioPublisher.publish(
+            file(bytes),"Sample.aac",bytes.size.toLong(),sha(bytes),factory)
+        assertEquals("audio/aac",saved.mimeType)
+        assertTrue(factory.sink.published)
+        val otherFactory=RecordingFactory()
+        try {
+            A2LocalAudioPublisher.publish(
+                file(bytes),"Sample.m4a",bytes.size.toLong(),sha(bytes),otherFactory)
+            fail("ADTS is not an ISO-BMFF M4A container")
+        } catch(_:IOException) {}
+        assertEquals(0,otherFactory.opened)
+    }
+
+    @Test fun largeStagedFilePassesSizeGateButCancellationPreventsPublication() {
+        val large=temp.newFile("large-hires-stage.flac")
+        java.io.RandomAccessFile(large,"rw").use { it.setLength(96L*1024L*1024L) }
+        val factory=RecordingFactory()
+        try {
+            A2LocalAudioPublisher.publish(large,"large-hires.flac",large.length(),
+                "0".repeat(64),factory,isCancelled={true})
+            fail("Cancelled publication must not reserve MediaStore")
+        } catch (e:IOException) {
+            assertTrue(e.message.orEmpty().contains("cancelled"))
+        }
+        assertEquals(0,factory.opened)
+    }
+
 }

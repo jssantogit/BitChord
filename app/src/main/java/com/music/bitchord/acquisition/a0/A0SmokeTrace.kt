@@ -26,6 +26,7 @@ internal class A0SmokeTrace private constructor(
         LOGIN_PACKET_SENT, LOGIN_RESPONSE_FIRST_BYTE, LOGIN_RESPONSE_TIMEOUT,
         LOGIN_RESPONSE_READ_FAILURE, LOGIN_ACCEPTED, SEARCH_LISTENER_OPEN,
         SEARCH_PORT_ANNOUNCED, SEARCH_SENT, SEARCH_WAIT_STARTED,
+        SEARCH_VARIANT_SENT, SEARCH_VARIANT_FAILED,
         DIRECT_ACCEPTED, DIRECT_FRAME_RECEIVED, DIRECT_REPLY_REJECTED,
         DIRECT_REPLY_ACCEPTED, DIRECT_READ_TIMEOUT, DIRECT_IO_FAILURE,
         SERVER_FRAME_IGNORED, SERVER_OFFER_RECEIVED, SERVER_OFFER_REJECTED,
@@ -46,7 +47,7 @@ internal class A0SmokeTrace private constructor(
         LOGIN_DENIED, DNS_FAILURE,
         CONNECT_FAILED, CONNECT_TIMEOUT, READ_TIMEOUT, SOCKET_CLOSED,
         SERVER_IO_FAILURE, PEER_IO_FAILURE, CANCELLED, INVALID_INPUT,
-        UNKNOWN_FAILURE
+        LOCAL_SAVE_FAILURE, UNKNOWN_FAILURE
     }
 
     enum class Transport { WIFI, CELLULAR, VPN, ETHERNET, OTHER, DISCONNECTED, UNKNOWN }
@@ -54,6 +55,17 @@ internal class A0SmokeTrace private constructor(
     private val complete = AtomicBoolean(false)
     private val socketsClosing = AtomicBoolean(false)
     private val ignoredServerFrames = AtomicInteger(0)
+    private val rejectedServerOffers = AtomicInteger(0)
+    private val receivedServerOffers = AtomicInteger(0)
+    // Large peer-failure storms must not displace the search summary, later
+    // transfer evidence or root-cause counters in the 64-point trace budget.
+    private val indirectReadTimeouts = AtomicInteger(0)
+    private val indirectConnectFailures = AtomicInteger(0)
+    private val indirectReplyFailures = AtomicInteger(0)
+    private val indirectAttempts = AtomicInteger(0)
+    private val indirectConnected = AtomicInteger(0)
+    private val indirectPierceSent = AtomicInteger(0)
+    private val indirectRepliesAccepted = AtomicInteger(0)
     @Volatile private var continuation: StructuredTrace? = null
 
     /** Protect local-save evidence when noisy search uses all 64 trace points. */
@@ -76,7 +88,8 @@ internal class A0SmokeTrace private constructor(
             Stage.LOCAL_SAVE_STAGED,Stage.LOCAL_SAVE_PUBLISHED,
             Stage.LOCAL_SAVE_FAILED,Stage.SCRATCH_CLEANUP,
             Stage.SOCKETS_CLOSED,Stage.IO_FAILURE,Stage.UNEXPECTED_FAILURE,
-            Stage.LOGIN_DENIED,Stage.SERVER_READ_TIMEOUT,Stage.STOP_REQUESTED
+            Stage.LOGIN_DENIED,Stage.SERVER_READ_TIMEOUT,Stage.STOP_REQUESTED,
+            Stage.SEARCH_VARIANT_SENT,Stage.SEARCH_VARIANT_FAILED
         )) continuationTrace() else trace
 
     fun note(
@@ -87,6 +100,19 @@ internal class A0SmokeTrace private constructor(
         if (complete.get()) return
         if (stage == Stage.SOCKETS_CLOSED) socketsClosing.set(true)
         if (stage == Stage.SERVER_READ_FAILURE && socketsClosing.get()) return
+        // Count every P failure; emit at most two individual examples of each
+        // typed category. Never include an untrusted peer or exception body.
+        val peerOccurrences=when(stage) {
+            Stage.INDIRECT_READ_TIMEOUT -> indirectReadTimeouts.incrementAndGet()
+            Stage.INDIRECT_CONNECT_FAILED -> indirectConnectFailures.incrementAndGet()
+            Stage.INDIRECT_REPLY_REJECTED -> indirectReplyFailures.incrementAndGet()
+            Stage.INDIRECT_CONNECT_STARTED -> indirectAttempts.incrementAndGet()
+            Stage.INDIRECT_CONNECTED -> indirectConnected.incrementAndGet()
+            Stage.PIERCE_SENT -> indirectPierceSent.incrementAndGet()
+            Stage.INDIRECT_REPLY_ACCEPTED -> indirectRepliesAccepted.incrementAndGet()
+            else -> 0
+        }
+        if(peerOccurrences>2) return
         val attributes = linkedMapOf("elapsedMs" to elapsedMillis().toString())
         if (reason != null) attributes["reasonCode"] = reason.name.lowercase(Locale.ROOT)
         eventTrace(stage).event(
@@ -94,6 +120,25 @@ internal class A0SmokeTrace private constructor(
             outcome = outcome,
             attributes = attributes
         )
+    }
+
+    /**
+     * Large public searches may receive hundreds of valid and malformed
+     * third-party offers. Record at most two examples per class, retaining
+     * final aggregate counts even when the trace has a 64-point budget.
+     */
+    fun serverOfferRejected() {
+        if (complete.get()) return
+        if (rejectedServerOffers.incrementAndGet() <= 2) {
+            note(Stage.SERVER_OFFER_REJECTED,TraceOutcome.DEGRADED,Reason.WIRE_REJECTED)
+        }
+    }
+
+    fun serverOfferReceived() {
+        if (complete.get()) return
+        if (receivedServerOffers.incrementAndGet() <= 2) {
+            note(Stage.SERVER_OFFER_RECEIVED)
+        }
     }
 
     /** Only known enum phases; never emit peer identity, remote path or frame data. */
@@ -116,6 +161,16 @@ internal class A0SmokeTrace private constructor(
                 "elapsedMs" to elapsedMillis().toString(),
                 "discardedFrames" to discardedFrames.coerceIn(0,65_536).toString()
             )
+        )
+    }
+
+    /** Receipt already staged; never blame P/F for a later publication fault. */
+    fun localSaveFailure(kind:A0LocalSaveFailure.Kind) {
+        if(complete.get())return
+        continuationTrace().event(
+            stage="local_save_failure_diagnostic",
+            outcome=TraceOutcome.FAILED,
+            attributes=mapOf("kind" to kind.name.lowercase(Locale.ROOT))
         )
     }
 
@@ -153,7 +208,13 @@ internal class A0SmokeTrace private constructor(
         )
     }
 
-    /** Redacted filter coverage: never store query, peer or file names. */
+    /**
+     * Redacted filter coverage: 24 attribute keys is a hard StructuredTrace
+     * limit. Keep policyVersion, claim diversity and abstention in the emitted
+     * record rather than silently losing the last five map entries. Legacy
+     * score buckets and derived tiers/outcomes stay in Screening for UI/tests.
+     */
+
     fun candidateScreening(report:A0ObservedCandidateHandoff.Screening) {
         if(complete.get())return
         fun n(value:Int)=value.coerceIn(0,100000).toString()
@@ -170,7 +231,199 @@ internal class A0SmokeTrace private constructor(
                 "unsupportedFormat" to n(report.unsupportedFormat),
                 "unsafePath" to n(report.unsafePath),
                 "noSlot" to n(report.noSlot),
+                "validBeforeLimit" to n(report.validBeforeLimit),
+                "duplicates" to n(report.duplicates),
+                "capacityDropped" to n(report.capacityDropped),
+                "perPeerDropped" to n(report.perPeerDropped),
+                "claimBudgetDropped" to n(report.claimBudgetDropped),
+                "preflightStrong" to n(report.preflightStrong),
+                "preflightReview" to n(report.preflightReview),
+                "preflightUnsafe" to n(report.preflightUnsafe),
+                "peerReady" to n(report.peersReady),
+                "peerCongested" to n(report.peersCongested),
+                "simulationAmbiguous" to n(report.simulatedAmbiguous),
+                "simulationNoStrong" to n(report.simulatedNoStrong),
+                "distinctClaims" to n(report.claimsDistinct),
+                "repeatedClaims" to n(report.claimsRepeated),
+                "policyVersion" to A0CandidatePreflight.POLICY_VERSION,
                 "selectable" to n(report.accepted)
+            )
+        )
+    }
+
+    /**
+     * #177 manual ranking telemetry: counts and enum version only, never
+     * album text, peer identity, filenames or user input. Kept in a separate
+     * event so the existing 24-key transport diagnostic remains intact.
+     */
+    fun canonicalCandidateScreening(
+        report:A0ObservedCandidateHandoff.Screening,
+        presetKey:String,
+    ) {
+        if(complete.get())return
+        fun n(value:Int)=value.coerceIn(0,100000).toString()
+        val acceptedPreset=setOf("ANY","HI_RES","LOSSLESS","HIGH_QUALITY",
+            "HIGH_EFFICIENCY","MP3_256","FLAC_24_96","CUSTOM")
+        continuationTrace().event(
+            stage="canonical_candidate_screening",
+            outcome=TraceOutcome.SUCCEEDED,
+            attributes=mapOf(
+                "policyVersion" to "identity-v1-manual",
+                "qualityPreset" to presetKey.takeIf { it in acceptedPreset }.orEmpty(),
+                "total" to n(report.accepted),
+                "albumMatches" to n(report.albumMatches),
+                "albumUnknown" to n(report.albumUnknown),
+                "albumConflicts" to n(report.albumConflicts),
+                "qualityMismatches" to n(report.qualityMismatches),
+                "manualPrimary" to n(report.manualPrimary),
+                "shadowStrong" to n(report.shadowStrong),
+            ),
+        )
+    }
+
+    /**
+     * Compares identical user requests only inside a running Activity.
+     * Never emits a query, canonical title, hash, account or path.
+     */
+    fun searchComparison(observation:A0SearchComparison.Observation) {
+        if(complete.get()) return
+        fun n(value:Int)=value.coerceIn(0,100000).toString()
+        continuationTrace().event(
+            stage="search_comparison",outcome=TraceOutcome.SUCCEEDED,
+            attributes=mapOf(
+                "kind" to observation.kind.name.lowercase(Locale.ROOT),
+                "previousCandidates" to n(observation.previousCandidates),
+                "currentCandidates" to n(observation.currentCandidates),
+                "previousPeerReplies" to n(observation.previousPeerReplies),
+                "currentPeerReplies" to n(observation.currentPeerReplies),
+            )
+        )
+    }
+
+    /** Album discovery shadow: aggregate-only counters, never file/peer identity. */
+    fun releaseDiscoveryCoverage(report:A0ReleaseDiscoveryPlanner.Preview) {
+        if(complete.get())return
+        fun n(v:Int)=v.coerceIn(0,100000).toString()
+        continuationTrace().event(
+            stage="release_discovery_shadow",
+            outcome=TraceOutcome.SUCCEEDED,
+            attributes=mapOf(
+                "autoReadyTracks" to n(report.autoReadyTracks),
+                "manualReviewTracks" to n(report.manualReviewTracks),
+                "ambiguousTracks" to n(report.ambiguousTracks),
+                "bestFolderCoverage" to n(report.bestFolderCoverage),
+                "foldersConsidered" to n(report.foldersConsidered),
+                "examinedOffers" to n(report.examinedOffers),
+                "inputTracks" to n(report.intake.targetSlots),
+                "observedOffers" to n(report.intake.observedOffers),
+                "titleMatchedPairs" to n(report.intake.titleMatchedPairs),
+                "rankMatchedPairs" to n(report.intake.rankMatchedPairs),
+                "shortlistedPairs" to n(report.intake.shortlistedPairs),
+                "slotsWithTitle" to n(report.intake.slotsWithTitleMatch),
+                "slotsWithRank" to n(report.intake.slotsWithRankMatch),
+                "rejectedUnknownSlot" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.UNKNOWN_SLOT] ?: 0),
+                "rejectedDurationMissing" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.MISSING_DURATION] ?: 0),
+                "rejectedDurationDrift" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.DURATION_MISMATCH] ?: 0),
+                "rejectedLowScore" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.LOW_SCORE] ?: 0),
+                "rejectedNotStrong" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.NOT_STRONG] ?: 0),
+                "rejectedQuality" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.QUALITY] ?: 0),
+                "rejectedAlbum" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.ALBUM] ?: 0),
+                "rejectedIdentity" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.IDENTITY] ?: 0),
+                "rejectedVersion" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.VERSION] ?: 0),
+                "rejectedAvailability" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.AVAILABILITY] ?: 0),
+                "rejectedInvalidSource" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.INVALID_SOURCE] ?: 0)
+            )
+        )
+    }
+
+    /** Only bounded counts: never log peer identity, offer tickets or paths.
+     * The total excludes duplicate tickets, which were not enqueued.
+     */
+    fun peerSearchBackpressure(
+        dropped:Int,
+        perPeerDropped:Int=0,
+        workerQueueDropped:Int=0,
+        directCollectorDropped:Int=0,
+        globalCapacityDropped:Int=0,
+        duplicateTickets:Int=0,
+    ) {
+        if(complete.get())return
+        continuationTrace().event(
+            stage="peer_search_backpressure",
+            outcome=if(dropped>0)TraceOutcome.DEGRADED else TraceOutcome.SUCCEEDED,
+            attributes=mapOf(
+                "droppedOffers" to dropped.coerceIn(0,100000).toString(),
+                "perPeerDropped" to perPeerDropped.coerceIn(0,100000).toString(),
+                "workerQueueDropped" to workerQueueDropped.coerceIn(0,100000).toString(),
+                "directCollectorDropped" to directCollectorDropped.coerceIn(0,100000).toString(),
+                "globalCapacityDropped" to globalCapacityDropped.coerceIn(0,100000).toString(),
+                "duplicateTickets" to duplicateTickets.coerceIn(0,100000).toString(),
+            )
+        )
+    }
+
+    /** Queue occupancy shows whether drops reflect full peer worker pools. */
+    fun peerSearchWorkerPressure(
+        indirect:A0PeerSearchWorkers.Stats,
+        direct:A0PeerSearchWorkers.Stats,
+    ) {
+        if(complete.get())return
+        fun n(v:Int)=v.coerceIn(0,100000).toString()
+        continuationTrace().event(
+            stage="peer_search_worker_pressure",
+            outcome=if(indirect.rejected+direct.rejected>0) TraceOutcome.DEGRADED
+                else TraceOutcome.SUCCEEDED,
+            attributes=mapOf(
+                "indirectAccepted" to n(indirect.accepted),
+                "indirectRejected" to n(indirect.rejected),
+                "indirectStarted" to n(indirect.started),
+                "indirectCompleted" to n(indirect.completed),
+                "indirectPeakActive" to n(indirect.peakActive),
+                "indirectPeakQueued" to n(indirect.peakQueued),
+                "directAccepted" to n(direct.accepted),
+                "directRejected" to n(direct.rejected),
+                "directStarted" to n(direct.started),
+                "directCompleted" to n(direct.completed),
+                "directPeakActive" to n(direct.peakActive),
+                "directPeakQueued" to n(direct.peakQueued),
+            )
+        )
+    }
+
+    /** Shadow-only curve. Net deltas are NOT music recall or early-stop approval. */
+    fun searchWindowEvidence(summary:A0SearchWindowEvidence.Summary) {
+        if(complete.get())return
+        fun n(v:Int)=v.coerceIn(0,100000).toString()
+        continuationTrace().event(
+            stage="search_window_shadow",
+            outcome=TraceOutcome.SUCCEEDED,
+            attributes=mapOf(
+                "checkpointsComplete" to summary.checkpointsComplete.toString(),
+                "replies6" to n(summary.at6.replies),
+                "claims6" to n(summary.at6.claims),
+                "replies12" to n(summary.at12.replies),
+                "claims12" to n(summary.at12.claims),
+                "repliesFinal" to n(summary.at18.replies),
+                "claimsFinal" to n(summary.at18.claims),
+                "repliesAfterDrain" to n(summary.afterDrain.replies),
+                "claimsAfterDrain" to n(summary.afterDrain.claims),
+                "repliesDuringDrain" to summary.repliesDuringDrain.coerceIn(-100000,100000).toString(),
+                "claimsDuringDrain" to summary.claimsDuringDrain.coerceIn(-100000,100000).toString(),
+                "netRepliesAfter12" to summary.netRepliesAfter12.coerceIn(-100000,100000).toString(),
+                "netClaimsAfter12" to summary.netClaimsAfter12.coerceIn(-100000,100000).toString(),
+                "netClaims6To12" to summary.netClaims6To12.coerceIn(-100000,100000).toString(),
+                "mode" to "shadow_only",
             )
         )
     }
@@ -229,7 +482,16 @@ internal class A0SmokeTrace private constructor(
         if (!complete.compareAndSet(false, true)) return
         val attributes = linkedMapOf(
             "elapsedMs" to elapsedMillis().toString(),
-            "ignoredServerFrames" to ignoredServerFrames.get().coerceAtMost(100000).toString()
+            "ignoredServerFrames" to ignoredServerFrames.get().coerceAtMost(100000).toString(),
+            "rejectedServerOffers" to rejectedServerOffers.get().coerceAtMost(100000).toString(),
+            "receivedServerOffers" to receivedServerOffers.get().coerceAtMost(100000).toString(),
+            "indirectReadTimeouts" to indirectReadTimeouts.get().coerceAtMost(100000).toString(),
+            "indirectConnectFailures" to indirectConnectFailures.get().coerceAtMost(100000).toString(),
+            "indirectReplyFailures" to indirectReplyFailures.get().coerceAtMost(100000).toString(),
+            "indirectAttempts" to indirectAttempts.get().coerceAtMost(100000).toString(),
+            "indirectConnected" to indirectConnected.get().coerceAtMost(100000).toString(),
+            "indirectPierceSent" to indirectPierceSent.get().coerceAtMost(100000).toString(),
+            "indirectRepliesAccepted" to indirectRepliesAccepted.get().coerceAtMost(100000).toString()
         )
         if (reason != null) attributes["reasonCode"] = reason.name.lowercase(Locale.ROOT)
         continuation?.complete(outcome,attributes)

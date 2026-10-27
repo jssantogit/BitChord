@@ -9,13 +9,13 @@ package com.music.bitchord.acquisition.a0
  */
 internal object A5ManualSaveGate {
     private val badName=Regex("""[\\/:*?"<>|\x00-\x1F\x7F]""")
-    private val supported=setOf("wav","flac","mp3")
+    private val supported=setOf("wav","flac","mp3","aac")
 
     fun canSave(transferObserved:Boolean,userConfirmedSave:Boolean):Boolean=
         transferObserved && userConfirmedSave
 
     fun safeDestinationName(displayName:String,sizeBytes:Long):String? {
-        if(sizeBytes !in 44L..64L*1024L*1024L ||
+        if(sizeBytes !in A0ObservedTransferLimits.MIN_AUDIO_BYTES..A0ObservedTransferLimits.MAX_AUDIO_BYTES ||
             displayName.length !in 1..160 ||
             displayName!=displayName.trim() ||
             displayName in setOf(".","..") ||

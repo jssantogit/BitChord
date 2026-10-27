@@ -1,5 +1,6 @@
 package com.music.bitchord.acquisition.a0
 
+import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -52,7 +53,7 @@ internal object A0FileChannelRendezvous {
         }
         val priorServerTimeout=server.soTimeout
         val priorListenerTimeout=listener.soTimeout
-        val readProgress=A0FrameReadProgress(server.getInputStream())
+        val readProgress=A0ProgressiveServerFrameReader(server.getInputStream())
 
         val future=acceptor.submit {
             try {
@@ -104,15 +105,15 @@ internal object A0FileChannelRendezvous {
                 }
                 val leftMillis=(absoluteDeadlineNanos-System.nanoTime())/1_000_000L
                 server.soTimeout=minOf(200L,leftMillis).toInt().coerceAtLeast(1)
-                readProgress.nextFrame()
                 val evt=try {
                     A0IndirectFileOfferWire.readServerEvent(
-                        readProgress,selectedPeerUsername,selectedPeerAddress
+                        ByteArrayInputStream(readProgress.readRawFrame()),
+                        selectedPeerUsername,selectedPeerAddress
                     )
                 }catch (_:SocketTimeoutException) {
-                    // The server stream cannot be resumed after partial framing.
-                    if(!readProgress.atFrameBoundary)
-                        throw TruncatedControlFrame()
+                    // TCP frames may legitimately arrive in segments. The
+                    // reader retains them while the bounded F deadline runs.
+                    // Unfinished frames still fail closed at expiry.
                     continue
                 }
                 if(evt is A0IndirectFileOfferWire.Event.Offer) {

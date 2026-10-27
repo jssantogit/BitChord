@@ -15,7 +15,7 @@ class A0ObservedCandidateHandoffTest {
                 A0SoulseekSearchFile("Songs\\newjeans - omg.mp3",40000,"mp3",emptyMap()),
                 A0SoulseekSearchFile("Songs\\other track.flac",110000,"flac",emptyMap()),
                 A0SoulseekSearchFile("../invalid.mp3",80000,"mp3",emptyMap()),
-                A0SoulseekSearchFile("Songs\\oversize.mp3",65L*1024*1024,"mp3",emptyMap())
+                A0SoulseekSearchFile("Songs\\oversize.mp3",257L*1024*1024,"mp3",emptyMap())
             ),
             lockedFiles=emptyList(),hasFreeUploadSlot=true,uploadSpeed=1000,queueLength=0
         )
@@ -81,7 +81,7 @@ class A0ObservedCandidateHandoffTest {
         val audio=A0SoulseekSearchFile("Album\\sample.mp3",5L*1024*1024,"mp3",emptyMap())
         handoff.offerParsed(response(listOf(audio),free=false),"somepeer")
         handoff.offerParsed(response(listOf(
-            A0SoulseekSearchFile("Album\\huge.flac",65L*1024*1024,"flac",emptyMap()),
+            A0SoulseekSearchFile("Album\\huge.flac",257L*1024*1024,"flac",emptyMap()),
             A0SoulseekSearchFile("Album\\cover.jpg",20000,"jpg",emptyMap()),
             A0SoulseekSearchFile("../escape.mp3",20000,"mp3",emptyMap())
         ),locked=listOf(audio)),"somepeer")
@@ -99,4 +99,79 @@ class A0ObservedCandidateHandoffTest {
         assertFalse(report.toString().contains("somepeer"))
     }
 
+    @Test fun boundedLargeHiResFileRemainsAvailableForManualReview() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"ouruser",81,true)
+        val large=A0SoulseekSearchFile("Albums\\long-hires.flac",
+            96L*1024L*1024L,"flac",emptyMap())
+        handoff.offerParsed(A0SoulseekSearchResponse("somepeer",81,
+            listOf(large),emptyList(),true,1000,0),"somepeer")
+        assertEquals(1,handoff.choices().size)
+        assertEquals(0,handoff.screening().tooLarge)
+    }
+
+
+    @Test(timeout=12000)
+    fun boundedReleaseShadowRetainsLateNewPeerAfterEarlierPeersFill512Slots() {
+        val handoff=A0ObservedCandidateHandoff(java.net.Socket(),"local",81,true,
+            searchPhrase="Artist - Song",collectReleaseShadow=true)
+        repeat(8) { group ->
+            val peer="group-$group"
+            val files=(1..64).map { n ->
+                A0SoulseekSearchFile(
+                    "Music\\Artist\\Album\\Artist - Noise ${group*64+n}.mp3",
+                    6_400_000L,"mp3",mapOf(0 to 320,1 to 161))
+            }
+            handoff.offerParsed(A0SoulseekSearchResponse(
+                peer,81,files,emptyList(),true,128_000,0),peer)
+        }
+        val before=handoff.releaseShadowChoices()
+        assertEquals(512,before.size)
+        assertFalse(before.any { it.peerUsername=="late" })
+        handoff.offerParsed(A0SoulseekSearchResponse("late",81,listOf(
+            A0SoulseekSearchFile("Music\\Artist\\Album\\Artist - Song.mp3",
+                6_400_000L,"mp3",mapOf(0 to 320,1 to 161))),
+            emptyList(),true,128_000,0),"late")
+        val after=handoff.releaseShadowChoices()
+        assertEquals(512,after.size)
+        assertTrue(after.any { it.peerUsername=="late" })
+        assertTrue(after.groupBy { it.peerUsername }.values.all { it.size<=64 })
+        assertEquals(1,after.count { it.peerUsername=="late" })
+        handoff.cancel()
+        assertTrue(handoff.releaseShadowChoices().isEmpty())
+    }
+
+    @Test fun onlyValidatedParsedPeerRepliesMayBeCreditedAsSuccessful() {
+        val handoff=A0ObservedCandidateHandoff(java.net.Socket(),"local",81,true)
+        assertFalse(handoff.offerSearchResult(byteArrayOf(1,2,3),"claimed"))
+        assertEquals(0,handoff.screening().responses)
+        val valid=A0SoulseekSearchResponse("claimed",81,
+            listOf(A0SoulseekSearchFile("Music\\Artist - Song.mp3",
+                6_400_000L,"mp3",mapOf(0 to 320,1 to 161))),
+            emptyList(),true,128_000,0)
+        assertFalse(handoff.offerParsed(valid,"other-peer"))
+        assertEquals(0,handoff.screening().responses)
+        assertTrue(handoff.offerParsed(valid,"claimed"))
+        assertEquals(1,handoff.screening().responses)
+        handoff.cancel()
+        assertFalse(handoff.offerParsed(valid,"claimed"))
+    }
+
+    @Test fun cheapProgressCountersTrackOffersWithoutClaimClustering() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",81,true,
+            searchPhrase="ILLIT - More")
+        assertEquals(A0ObservedCandidateHandoff.Progress(0,0,0),handoff.progress())
+        val valid=A0SoulseekSearchResponse("source",81,listOf(
+            A0SoulseekSearchFile("Music\\ILLIT - More.mp3",
+                6_400_000L,"mp3",mapOf(0 to 320,1 to 180)),
+            A0SoulseekSearchFile("Music\\other.mp3",
+                6_400_000L,"mp3",emptyMap())),
+            emptyList(),true,80_000,0)
+        assertTrue(handoff.offerParsed(valid,"source"))
+        assertEquals(A0ObservedCandidateHandoff.Progress(1,2,2),handoff.progress())
+        assertTrue(handoff.offerParsed(valid,"source"))
+        assertEquals(A0ObservedCandidateHandoff.Progress(2,4,2),handoff.progress())
+        assertEquals(2,handoff.screening().accepted)
+        handoff.cancel()
+        assertEquals(A0ObservedCandidateHandoff.Progress(2,4,0),handoff.progress())
+    }
 }

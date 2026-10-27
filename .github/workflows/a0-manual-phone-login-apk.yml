@@ -5,6 +5,11 @@ on:
     types: [opened, synchronize]
     paths:
       - "app/src/devDebug/**"
+      - "app/src/main/java/com/music/bitchord/acquisition/a0/**"
+      - "app/src/main/java/com/music/bitchord/data/settings/SoulseekQualityPreset.kt"
+      - "app/src/main/java/com/music/bitchord/data/settings/AppSettings.kt"
+      - "app/src/main/java/com/music/bitchord/ui/screens/SettingsSheet.kt"
+      - "app/src/main/java/com/music/bitchord/MainActivity.kt"
       - "app/src/main/java/com/music/bitchord/acquisition/a0/A0ExperimentalLoginCodec.kt"
       - ".github/workflows/a0-manual-phone-login-apk.yml"
 
@@ -17,13 +22,20 @@ concurrency:
 
 jobs:
   apk:
-    if: (github.event.pull_request.number == 171 || github.event.pull_request.number == 173) && github.event.pull_request.head.repo.full_name == github.repository
+    if: (github.event.pull_request.number == 171 || github.event.pull_request.number == 173 || github.event.pull_request.number == 181) && github.event.pull_request.head.repo.full_name == github.repository
     name: Soulseek · secretless devDebug APK
     runs-on: ubuntu-latest
     timeout-minutes: 50
     steps:
-      - name: Checkout PR revision (NO secrets)
+      - name: Checkout exact PR HEAD (NO secrets)
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Verify source revision before any build
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -41,12 +53,22 @@ jobs:
         env:
           LASTFM_API_KEY: ""
           LASTFM_SECRET: ""
-        run: ./gradlew --no-daemon -Pbitchord.bundleWear=false :app:assembleDevDebug
+          BITCHORD_SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        # Unit tests now cover the identical HEAD packaged in this APK.
+        run: ./gradlew --no-daemon -Pbitchord.bundleWear=false :app:testDevDebugUnitTest :app:assembleDevDebug
+
+      - name: Record exact build revision and APK checksums
+        run: |
+          destination=app/build/outputs/apk/dev/debug
+          printf 'sourceRevision=%s\n' "$(git rev-parse HEAD)" > "$destination/source-revision.txt"
+          sha256sum "$destination"/*.apk >> "$destination/source-revision.txt"
 
       - name: Upload short-lived test APK
         uses: actions/upload-artifact@v4
         with:
           name: a0-phone-login-apk-${{ github.event.pull_request.head.sha }}
-          path: app/build/outputs/apk/dev/debug/*.apk
+          path: |
+            app/build/outputs/apk/dev/debug/*.apk
+            app/build/outputs/apk/dev/debug/source-revision.txt
           if-no-files-found: error
           retention-days: 2

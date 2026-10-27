@@ -185,6 +185,16 @@ object AppSettings {
     val downloadQuality = MutableStateFlow(DownloadQuality.LOSSLESS)
 
     /**
+     * Explicit Soulseek pre-download choice. Old preferences and downloads
+     * stay untouched; these heuristics affect MANUAL candidate ordering only.
+     */
+    val soulseekQualityPreset = MutableStateFlow(SoulseekQualityPreset.ANY)
+
+    /** Canonical quality control shared by every download source. */
+    val downloadQualityProfile = MutableStateFlow(DownloadQualityProfile.LOSSLESS)
+    val downloadCustomOptions = MutableStateFlow(DownloadCustomOptions())
+
+    /**
      * Refuse to start a download while the connection charges for data.
      *
      * Metered rather than literally-Wi-Fi, the same test [effectiveAudioQuality]
@@ -814,6 +824,39 @@ object AppSettings {
         ).coerceIn(MIN_UPGRADE_LENGTH_SLACK_SECONDS, MAX_UPGRADE_LENGTH_SLACK_SECONDS)
         migrateDownloadQuality()
         downloadQuality.value = readDownloadQuality()
+        soulseekQualityPreset.value = SoulseekQualityPreset.parse(
+            prefs.getString(KEY_SOULSEEK_QUALITY_PRESET, null)
+        )
+        val olderSoulseek = soulseekQualityPreset.value
+        val previousUnified = prefs.getString(KEY_DOWNLOAD_QUALITY_PROFILE_V2,null)
+        downloadQualityProfile.value = if(previousUnified!=null) {
+            DownloadQualityProfile.parse(previousUnified)
+        } else when(olderSoulseek) {
+            SoulseekQualityPreset.HI_RES,SoulseekQualityPreset.FLAC_24_96 ->
+                DownloadQualityProfile.HI_RES
+            SoulseekQualityPreset.LOSSLESS -> DownloadQualityProfile.LOSSLESS
+            SoulseekQualityPreset.HIGH_QUALITY,SoulseekQualityPreset.MP3_256 ->
+                DownloadQualityProfile.HIGH_QUALITY
+            SoulseekQualityPreset.HIGH_EFFICIENCY -> DownloadQualityProfile.HIGH_QUALITY
+            SoulseekQualityPreset.ANY -> DownloadQualityProfile.fromLegacy(downloadQuality.value)
+        }
+        downloadCustomOptions.value=runCatching {
+            DownloadCustomOptions(
+                format=prefs.getString(KEY_CUSTOM_DOWNLOAD_FORMAT,null) ?: "mp3",
+                bitrateKbps=prefs.getInt(KEY_CUSTOM_DOWNLOAD_BITRATE,320).takeIf { it>0 },
+                sampleRateHz=prefs.getInt(KEY_CUSTOM_DOWNLOAD_SAMPLE_RATE,0).takeIf { it>0 },
+                bitDepth=prefs.getInt(KEY_CUSTOM_DOWNLOAD_BIT_DEPTH,0).takeIf { it>0 },
+            )
+        }.getOrDefault(DownloadCustomOptions())
+        // A legacy app may have written separate source settings. Collapse
+        // them exactly once to the visible canonical choice, without erasing
+        // unrelated Wi-Fi or storage preferences.
+        val fallback=downloadQualityProfile.value.legacyQuality(downloadCustomOptions.value)
+        downloadQuality.value=fallback
+        if(previousUnified==null) prefs.edit()
+            .putString(KEY_DOWNLOAD_QUALITY_PROFILE_V2,downloadQualityProfile.value.name)
+            .putString(KEY_QUALITY_DOWNLOAD,fallback.name)
+            .apply()
         wifiOnlyDownloads.value = prefs.getBoolean(KEY_WIFI_ONLY_DOWNLOADS, true)
         exportDownloads.value = prefs.getBoolean(KEY_EXPORT_DOWNLOADS, false)
         crossfadeSeconds.value = prefs.getInt(KEY_CROSSFADE, 0)
@@ -1097,8 +1140,34 @@ object AppSettings {
     }
 
     fun setDownloadQuality(value: DownloadQuality) {
-        downloadQuality.value = value
-        prefs.edit().putString(KEY_QUALITY_DOWNLOAD, value.name).apply()
+        setDownloadQualityProfile(DownloadQualityProfile.fromLegacy(value))
+    }
+
+    fun setDownloadQualityProfile(value:DownloadQualityProfile) {
+        downloadQualityProfile.value=value
+        val fallback=value.legacyQuality(downloadCustomOptions.value)
+        downloadQuality.value=fallback
+        prefs.edit()
+            .putString(KEY_DOWNLOAD_QUALITY_PROFILE_V2,value.name)
+            .putString(KEY_QUALITY_DOWNLOAD,fallback.name)
+            .apply()
+    }
+
+    fun setDownloadCustomOptions(value:DownloadCustomOptions) {
+        downloadCustomOptions.value=value
+        prefs.edit()
+            .putString(KEY_CUSTOM_DOWNLOAD_FORMAT,value.format)
+            .putInt(KEY_CUSTOM_DOWNLOAD_BITRATE,value.bitrateKbps ?: 0)
+            .putInt(KEY_CUSTOM_DOWNLOAD_SAMPLE_RATE,value.sampleRateHz ?: 0)
+            .putInt(KEY_CUSTOM_DOWNLOAD_BIT_DEPTH,value.bitDepth ?: 0)
+            .apply()
+        if(downloadQualityProfile.value==DownloadQualityProfile.CUSTOM)
+            setDownloadQualityProfile(DownloadQualityProfile.CUSTOM)
+    }
+
+    fun setSoulseekQualityPreset(value: SoulseekQualityPreset) {
+        soulseekQualityPreset.value = value
+        prefs.edit().putString(KEY_SOULSEEK_QUALITY_PRESET, value.name).apply()
     }
 
     fun setWifiOnlyDownloads(value: Boolean) {
@@ -1989,6 +2058,12 @@ object AppSettings {
     private const val KEY_QUALITY_CELLULAR = "audio_quality_cellular"
     private const val KEY_UPGRADE_LENGTH_SLACK_SECONDS = "upgrade_length_slack_seconds"
     private const val KEY_QUALITY_DOWNLOAD = "audio_quality_download"
+    private const val KEY_SOULSEEK_QUALITY_PRESET = "soulseek_quality_preset_v1"
+    private const val KEY_DOWNLOAD_QUALITY_PROFILE_V2 = "download_quality_profile_v2"
+    private const val KEY_CUSTOM_DOWNLOAD_FORMAT = "download_custom_format_v2"
+    private const val KEY_CUSTOM_DOWNLOAD_BITRATE = "download_custom_bitrate_v2"
+    private const val KEY_CUSTOM_DOWNLOAD_SAMPLE_RATE = "download_custom_sample_rate_v2"
+    private const val KEY_CUSTOM_DOWNLOAD_BIT_DEPTH = "download_custom_bit_depth_v2"
     private const val KEY_WIFI_ONLY_DOWNLOADS = "wifi_only_downloads"
     private const val KEY_EXPORT_DOWNLOADS = "export_downloads"
     private const val KEY_LOSSLESS = "lossless_audio"

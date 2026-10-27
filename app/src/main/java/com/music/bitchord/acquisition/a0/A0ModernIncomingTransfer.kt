@@ -25,7 +25,7 @@ internal object A0ModernIncomingTransfer {
 
     private const val MAX_FRAME_BYTES = 4096
     private const val MAX_FILENAME_BYTES = 1024
-    private const val MAX_PROBE_BYTES = 64L * 1024L * 1024L
+    private const val MAX_PROBE_BYTES = A0ObservedTransferLimits.MAX_AUDIO_BYTES
     private val SHA256 = Regex("[a-fA-F0-9]{64}")
 
     internal class Ticket internal constructor(
@@ -57,8 +57,8 @@ internal object A0ModernIncomingTransfer {
         expectedRemoteFilename:String,
         expectedByteCount:Long
     ):Ticket {
-        require(expectedByteCount in 44L..64L*1024L*1024L) {
-            "A0 observed mode is capped at 64 MiB"
+        require(expectedByteCount in A0ObservedTransferLimits.MIN_AUDIO_BYTES..A0ObservedTransferLimits.MAX_AUDIO_BYTES) {
+            "A0 observed mode exceeds the bounded audio file limit"
         }
         return acceptInternal(incomingP,outgoingP,expectedRemoteFilename,
             expectedByteCount,null)

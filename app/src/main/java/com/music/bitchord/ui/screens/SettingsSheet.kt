@@ -156,6 +156,8 @@ import com.music.bitchord.R
 import com.music.bitchord.data.sources.DeviceCodecs
 import com.music.bitchord.data.settings.AudioQuality
 import com.music.bitchord.data.settings.DownloadQuality
+import com.music.bitchord.data.settings.DownloadQualityProfile
+import com.music.bitchord.data.settings.DownloadCustomOptions
 import com.music.bitchord.data.settings.ThemeMode
 import com.music.bitchord.data.stats.Backup
 import com.music.bitchord.playback.AudioCache
@@ -237,6 +239,8 @@ fun SettingsScreen(
     val cacheLimitBytes by AppSettings.audioCacheLimitBytes.collectAsStateWithLifecycle()
     val showCacheFolder by AppSettings.showCacheFolder.collectAsStateWithLifecycle()
     val downloadQuality by AppSettings.downloadQuality.collectAsStateWithLifecycle()
+    val unifiedDownloadQuality by AppSettings.downloadQualityProfile.collectAsStateWithLifecycle()
+    val downloadCustom by AppSettings.downloadCustomOptions.collectAsStateWithLifecycle()
     val wifiOnlyDownloads by AppSettings.wifiOnlyDownloads.collectAsStateWithLifecycle()
     val exportDownloads by AppSettings.exportDownloads.collectAsStateWithLifecycle()
     val stopOnTaskRemoved by AppSettings.stopOnTaskRemoved.collectAsStateWithLifecycle()
@@ -530,13 +534,14 @@ fun SettingsScreen(
                 )
             }
             val downloadQualityTitle = stringResource(R.string.download_quality)
-            row(downloadQualityTitle, "offline", "lossless") {
+            row(downloadQualityTitle, "soulseek", "codec", "flac", "aac", "hi-res", "offline") {
                 SettingsRow(
                     icon = Icons.Rounded.Download,
                     title = downloadQualityTitle,
-                    subtitle = stringResource(R.string.download_quality_subtitle, downloadQuality.perTrack) +
-                        " · " + stringResource(R.string.acquisition_quality_separate),
-                    value = downloadQuality.localizedLabel(),
+                    subtitle = "Uma única qualidade para todas as fontes. " +
+                        "Cada provedor oferece somente formatos que realmente suporta.",
+                    value = if(unifiedDownloadQuality==DownloadQualityProfile.CUSTOM)
+                        downloadCustom.description else unifiedDownloadQuality.label,
                     onClick = { pickingDownloadQuality = true },
                 )
             }
@@ -1653,17 +1658,127 @@ fun SettingsScreen(
     }
 
     if (pickingDownloadQuality) {
+        var customFormat by remember { mutableStateOf(downloadCustom.format) }
+        var customBitrate by remember { mutableStateOf(downloadCustom.bitrateKbps?.toString().orEmpty()) }
+        var customRate by remember { mutableStateOf(downloadCustom.sampleRateHz?.let {
+            if(it%1000==0)(it/1000).toString() else (it/1000.0).toString()
+        }.orEmpty()) }
+        var customDepth by remember { mutableStateOf(downloadCustom.bitDepth?.toString().orEmpty()) }
         ModalBottomSheet(
             onDismissRequest = { pickingDownloadQuality = false },
             containerColor = MaterialTheme.colorScheme.background,
         ) {
-            DownloadQualitySheet(
-                selected = downloadQuality,
-                onSelect = { quality ->
-                    AppSettings.setDownloadQuality(quality)
-                    pickingDownloadQuality = false
-                },
-            )
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text("Qualidade de download",style=MaterialTheme.typography.titleLarge)
+                Text(
+                    "A escolha vale para todas as fontes. Formato e resolução só podem " +
+                        "ser atendidos quando a fonte fornece um arquivo compatível; " +
+                        "nenhuma qualidade é inventada por conversão.",
+                    style=MaterialTheme.typography.bodySmall,
+                    color=MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier=Modifier.padding(vertical=8.dp),
+                )
+                DownloadQualityProfile.entries.forEach { profile ->
+                    SettingsRow(
+                        icon=Icons.Rounded.Download,
+                        title=profile.label,
+                        subtitle=profile.explanation,
+                        value=if(profile==unifiedDownloadQuality) "Selecionado" else null,
+                        onClick={
+                            AppSettings.setDownloadQualityProfile(profile)
+                            if(profile!=DownloadQualityProfile.CUSTOM)
+                                pickingDownloadQuality=false
+                        }
+                    )
+                }
+                if(unifiedDownloadQuality==DownloadQualityProfile.CUSTOM) {
+                    Text("Formato desejado",style=MaterialTheme.typography.titleMedium,
+                        modifier=Modifier.padding(top=14.dp))
+                    Row(modifier=Modifier.horizontalScroll(rememberScrollState())) {
+                        listOf("mp3","flac","wav","aac","m4a").forEach { format ->
+                            TextButton(onClick={
+                                customFormat=format
+                                if(format in setOf("flac","wav")) {
+                                    customBitrate=""
+                                } else {
+                                    customRate=""
+                                    customDepth=""
+                                }
+                            }) {
+                                Text((if(format==customFormat) "✓ " else "")+
+                                    format.uppercase())
+                            }
+                        }
+                    }
+                    if(customFormat=="m4a") {
+                        Text(
+                            "M4A (AAC/ALAC) ainda não é validado pelo salvamento " +
+                                "piloto Soulseek. AAC .aac (ADTS) é suportado quando anunciado.",
+                            color=MaterialTheme.colorScheme.onSurfaceVariant,
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    if(customFormat in setOf("mp3","aac","m4a")) {
+                        OutlinedTextField(
+                            value=customBitrate,
+                            onValueChange={customBitrate=it.filter(Char::isDigit).take(4)},
+                            label={Text("Bitrate mínimo (kbps; vazio = automático)")},
+                            singleLine=true,
+                            modifier=Modifier.fillMaxWidth(),
+                        )
+                    } else {
+                        OutlinedTextField(
+                            value=customRate,
+                            onValueChange={
+                                customRate=it.filter {c->c.isDigit() || c=='.' || c==','}.take(6)
+                            },
+                            label={Text("Frequência mínima (kHz; vazio = automática)")},
+                            singleLine=true,
+                            modifier=Modifier.fillMaxWidth(),
+                        )
+                        OutlinedTextField(
+                            value=customDepth,
+                            onValueChange={customDepth=it.filter(Char::isDigit).take(2)},
+                            label={Text("Profundidade mínima (bits; vazio = automática)")},
+                            singleLine=true,
+                            modifier=Modifier.fillMaxWidth(),
+                        )
+                    }
+                    val bitrate=customBitrate.toIntOrNull()
+                    val rate=customRate.replace(',','.').toDoubleOrNull()
+                        ?.takeIf { it.isFinite() }?.times(1000)?.toInt()
+                    val depth=customDepth.toIntOrNull()
+                    val valid=(customBitrate.isBlank() || (bitrate!=null && bitrate in 32..1536)) &&
+                        (customRate.isBlank() || (rate!=null && rate in 8000..384000)) &&
+                        (customDepth.isBlank() || (depth!=null && depth in 8..32)) &&
+                        ((customFormat!="mp3" && customFormat!="aac") ||
+                            (customRate.isBlank() && customDepth.isBlank()))
+                    if(!valid) Text(
+                        "Parâmetros inválidos: MP3/AAC usam bitrate, não profundidade PCM. " +
+                            "Bitrate 32–1536 kbps, frequência 8–384 kHz " +
+                            "(ex.: 44,1 ou 96) e 8–32 bits.",
+                        color=MaterialTheme.colorScheme.error,
+                        style=MaterialTheme.typography.bodySmall,
+                    )
+                    TextButton(
+                        enabled=valid,
+                        onClick={
+                            AppSettings.setDownloadCustomOptions(
+                                DownloadCustomOptions(
+                                    customFormat,
+                                    bitrate.takeIf { customFormat in setOf("mp3","aac","m4a") },
+                                    rate.takeIf { customFormat in setOf("flac","wav") },
+                                    depth.takeIf { customFormat in setOf("flac","wav") }
+                                ))
+                            pickingDownloadQuality=false
+                        }
+                    ) { Text("Salvar configuração personalizada") }
+                }
+                Spacer(Modifier.height(24.dp))
+            }
         }
     }
 

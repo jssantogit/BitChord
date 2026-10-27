@@ -136,6 +136,51 @@ class A0FileChannelRendezvousTest {
         }
     }
 
+    @Test(timeout=9500)
+    fun fileOfferSplitAcrossServerReadTimeoutResumesAndConnects() {
+        ServerSocket(0,1,host).use { fakeServer ->
+            ServerSocket(0,1,host).use { fakeUploader ->
+                ServerSocket(0,1,host).use { listener ->
+                    val pool=Executors.newFixedThreadPool(2)
+                    try {
+                        val uploader=pool.submit {
+                            fakeUploader.accept().use { peer ->
+                                peer.soTimeout=4000
+                                assertArrayEquals(le(5)+byteArrayOf(0)+le(991),
+                                    readExactly(peer,9))
+                                peer.getOutputStream().apply {write(le(811));flush()}
+                            }
+                        }
+                        val control=pool.submit {
+                            fakeServer.accept().use { server ->
+                                val offer=fileOffer("source_peer",fakeUploader.localPort,991)
+                                server.getOutputStream().apply {
+                                    write(offer,0,3)
+                                    flush()
+                                    Thread.sleep(420) // >200 ms read timeout
+                                    write(offer,3,offer.size-3)
+                                    flush()
+                                }
+                                Thread.sleep(300)
+                            }
+                        }
+                        Socket(host,fakeServer.localPort).use { login ->
+                            A0FileChannelRendezvous.awaitFileSocket(
+                                login,listener,"source_peer",host,
+                                System.nanoTime()+TimeUnit.SECONDS.toNanos(5),
+                                allowLoopbackForLocalTest=true
+                            ).use { file ->
+                                assertArrayEquals(le(811),readExactly(file,4))
+                            }
+                        }
+                        uploader.get(3,TimeUnit.SECONDS)
+                        control.get(3,TimeUnit.SECONDS)
+                    }finally { pool.shutdownNow() }
+                }
+            }
+        }
+    }
+
     @Test(timeout=7500)
     fun partialServerFOfferTimeoutFailsClosedEvenIfDirectPeerAppearsLater() {
         ServerSocket(0,1,host).use{fakeServer ->

@@ -53,6 +53,13 @@ val listenTogetherServer: String = (
         ?: "https://bitchord-listen-together.onrender.com"
     ).trim().trimEnd('/')
 
+// A validated, reproducible source identity is supplied by the secretless
+// PR APK workflow. Local/dev builds without an explicit revision show UNKNOWN
+// rather than falsely attributing a binary to a Git commit.
+val sourceRevision = providers.environmentVariable("BITCHORD_SOURCE_SHA").orNull
+    ?.trim()?.lowercase()?.takeIf { it.matches(Regex("[0-9a-f]{40}")) }
+    ?: "unknown"
+
 // See the root build.gradle.kts: one version for the phone and its watch app.
 val betaSuffix = rootProject.extra["bitchordBetaSuffix"] as String
 
@@ -84,6 +91,7 @@ android {
         // the same GitHub release, told apart by file name. See
         // AppUpdateChecker.apkAssetUrl.
         buildConfigField("String", "UPDATE_APK_PREFIX", "\"BitChord-\"")
+        buildConfigField("String", "SOURCE_REVISION", "\"$sourceRevision\"")
     }
 
     splits {

@@ -15,13 +15,35 @@ internal class A0ObservedCandidateHandoff(
     private val authenticatedServer:Socket,
     private val localUsername:String,
     private val searchToken:Int,
-    allowLoopbackForLocalTest:Boolean=false
+    allowLoopbackForLocalTest:Boolean=false,
+    private val searchPhrase:String?=null,
+    private val saveFormatsOnly:Boolean=false,
+    private val expectedDurationSeconds:Int?=null,
+    private val requestedAlbum:String?=null,
+    private val qualityProfile:A0CanonicalAcquisitionIntent.QualityProfileSnapshot=
+        A0CanonicalAcquisitionIntent.QualityProfileSnapshot(),
+    private val peerReliability:A0PeerReliabilityEvidence=A0PeerReliabilityEvidence(),
+    private val collectReleaseShadow:Boolean=false,
 ) {
     class Choice internal constructor(
         val displayName:String,
         val sizeBytes:Long,
         internal val peerUsername:String,
         internal val remotePath:String,
+        val matchScore:Int,
+        val matchSignal:A0CandidateRank.Match,
+        val declaredBitrateKbps:Int?,
+        val quality:A0CandidateRank.Quality,
+        val warnings:List<A0CandidateRank.Warning>,
+        val declaredDurationSeconds:Int?,
+        val declaredSampleRateHz:Int?,
+        val declaredBitDepth:Int?,
+        val preflight:A0CandidatePreflight.Assessment,
+        val peerAvailability:A0PeerAvailability.Assessment,
+        val albumEvidence:A0CanonicalAlbumPolicy.Assessment,
+        val identityEvidence:A0CanonicalIdentityPolicy.Decision,
+        val qualityEvidence:A0DownloadQualityPolicy.Assessment,
+        internal val claim:A0CandidateClaimClusters.Claim,
     ) {
         override fun toString()="A0 observed candidate (redacted)"
     }
@@ -35,10 +57,95 @@ internal class A0ObservedCandidateHandoff(
         val unsupportedFormat:Int,
         val unsafePath:Int,
         val noSlot:Int,
-        val accepted:Int
+        val accepted:Int,
+        val validBeforeLimit:Int=0,
+        val duplicates:Int=0,
+        val capacityDropped:Int=0,
+        val perPeerDropped:Int=0,
+        val claimBudgetDropped:Int=0,
+        val strongMatches:Int=0,
+        val weakMatches:Int=0,
+        val lowQuality:Int=0,
+        val preflightStrong:Int=0,
+        val preflightReview:Int=0,
+        val preflightUnsafe:Int=0,
+        val peersReady:Int=0,
+        val peersUnknown:Int=0,
+        val peersCongested:Int=0,
+        val simulatedSuggested:Int=0,
+        val simulatedAmbiguous:Int=0,
+        val simulatedNoStrong:Int=0,
+        val claimsDistinct:Int=0,
+        val claimsRepeated:Int=0,
+        val albumMatches:Int=0,
+        val albumUnknown:Int=0,
+        val albumConflicts:Int=0,
+        val qualityMismatches:Int=0,
+        val manualPrimary:Int=0,
+        val shadowStrong:Int=0,
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
-    private val candidates=ArrayList<Choice>(12)
+    private val candidates=ArrayList<Choice>(384)
+    // Separate bounded observation cache: long releases need up to 64 tracks
+    // from the same peer, but the actual manual selector retains max 10/peer.
+    private val releaseShadow=ArrayList<Choice>(512)
+    private val releaseShadowPerPeer=HashMap<String,Int>()
+    private val canonicalManualTarget by lazy {
+        // Badly formatted untrusted/search text must not crash the collector.
+        // An invalid album claim loses confidence; it never grants one.
+        runCatching {
+            val pieces=searchPhrase?.split(Regex("\\s+[-–—]\\s+"),limit=2).orEmpty()
+            A0CanonicalAcquisitionIntent.manual(
+                title=pieces.lastOrNull()?.takeIf(String::isNotBlank) ?: "Manual search",
+                artistCredits=if(pieces.size==2 && pieces[0].isNotBlank())
+                    listOf(pieces[0]) else emptyList(),
+                requestedAlbum=requestedAlbum,
+            )
+        }.getOrElse { A0CanonicalAcquisitionIntent.manual(title="Pesquisa manual") }
+    }
+    private val albumOrQualitySelected =
+        !requestedAlbum.isNullOrBlank() ||
+            qualityProfile.preset!=A0CanonicalAcquisitionIntent.QualityPreset.LEGACY_UNSPECIFIED
+
+    private fun claimRisk(choice:Choice):Int = if(!albumOrQualitySelected) 0 else when {
+        choice.preflight.confidence==A0CandidatePreflight.Confidence.UNSAFE -> 4
+        choice.identityEvidence.verdict==A0CanonicalIdentityPolicy.Verdict.INCOMPATIBLE -> 3
+        choice.qualityEvidence.status in setOf(
+            A0DownloadQualityPolicy.Status.INCOMPATIBLE,
+            A0DownloadQualityPolicy.Status.INVALID_PROFILE,
+            A0DownloadQualityPolicy.Status.UNAVAILABLE) -> 2
+        choice.albumEvidence.status==A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL ||
+            choice.qualityEvidence.status==A0DownloadQualityPolicy.Status.INCONCLUSIVE_MANUAL -> 1
+        else -> 0
+    }
+
+    private val choiceOrder = compareBy<Choice> { claimRisk(it) }
+        .thenByDescending {
+        when(it.preflight.confidence) {
+            A0CandidatePreflight.Confidence.STRONG -> 2
+            A0CandidatePreflight.Confidence.REVIEW -> 1
+            A0CandidatePreflight.Confidence.UNSAFE -> 0
+        }
+    }.thenByDescending { it.matchScore }
+        .thenByDescending { it.declaredBitrateKbps ?: 0 }
+        // Availability is a source property, not musical identity. Its
+        // priority applies only within equal metadata AND equal risk.
+        .thenComparator { a,b ->
+            A0CandidateClaimClusters.compareEvidence(
+                a.claim,a.preflight,b.claim,b.preflight)
+        }
+        .thenComparator { a,b ->
+            A0PeerAvailability.compareSource(b.peerAvailability,a.peerAvailability)
+        }
+        .thenBy { it.displayName.lowercase(java.util.Locale.ROOT) }
+        .thenBy { it.peerUsername }
+        .thenBy { it.remotePath }
+    private var eligible=0
+    private var duplicateCount=0
+    private var capDropped=0
+    private var perPeerDropped=0
+    private var claimBudgetDropped=0
+    private val seen=HashSet<Pair<String,String>>()
     private var replies=0
     private var publicSeen=0
     private var lockedSeen=0
@@ -52,24 +159,29 @@ internal class A0ObservedCandidateHandoff(
 
     init {require(searchToken>0)}
 
-    fun offerSearchResult(frame:ByteArray,claimedPeerUsername:String) {
+    /** A wire frame is credited as a valid peer reply only after the
+     * authenticated search token and claimed peer identity pass every gate.
+     * Invalid peer bytes must never inflate availability/reliability metrics.
+     */
+    fun offerSearchResult(frame:ByteArray,claimedPeerUsername:String):Boolean {
         val result=try {
             A0SoulseekSearchResponseParser.parse(frame,searchToken)
-        } catch (_:IOException) {return} catch (_:IllegalArgumentException) {return}
-        offerParsed(result,claimedPeerUsername)
+        } catch (_:IOException) {return false} catch (_:IllegalArgumentException) {return false}
+        return offerParsed(result,claimedPeerUsername)
     }
 
     @Synchronized
-    fun offerParsed(result:A0SoulseekSearchResponse,claimedPeerUsername:String) {
+    fun offerParsed(result:A0SoulseekSearchResponse,claimedPeerUsername:String):Boolean {
         if(cancelled||spent||readersStopped||result.token!=searchToken ||
-            result.peerUsername!=claimedPeerUsername) return
+            result.peerUsername!=claimedPeerUsername) return false
         try { A0PeerRendezvousWire.getPeerAddress(result.peerUsername) }
-        catch (_:IllegalArgumentException) { return }
+        catch (_:IllegalArgumentException) { return false }
         replies=(replies+1).coerceAtMost(100000)
         publicSeen=(publicSeen+result.files.size).coerceAtMost(100000)
         lockedSeen=(lockedSeen+result.lockedFiles.size).coerceAtMost(100000)
 
-        val validExtensions=setOf("mp3","flac","wav","ogg","m4a","aac","opus")
+        val validExtensions=if(saveFormatsOnly) setOf("mp3","flac","wav","aac")
+            else setOf("mp3","flac","wav","ogg","m4a","aac","opus")
         val locked=result.lockedFiles.map{it.remoteFilename}.toHashSet()
         for(file in result.files) {
             val path=file.remoteFilename
@@ -87,7 +199,7 @@ internal class A0ObservedCandidateHandoff(
                 unsupported=(unsupported+1).coerceAtMost(100000)
                 continue
             }
-            if(file.sizeBytes !in 44L..64L*1024L*1024L) {
+            if(file.sizeBytes !in A0ObservedTransferLimits.MIN_AUDIO_BYTES..A0ObservedTransferLimits.MAX_AUDIO_BYTES) {
                 oversized=(oversized+1).coerceAtMost(100000)
                 continue
             }
@@ -95,18 +207,179 @@ internal class A0ObservedCandidateHandoff(
                 noSlotSeen=(noSlotSeen+1).coerceAtMost(100000)
                 continue
             }
-            if(candidates.size>=12 || candidates.any {
-                it.peerUsername==result.peerUsername && it.remotePath==path
-            })continue
-            candidates.add(Choice(
-                displayName=basename.take(82),sizeBytes=file.sizeBytes,
-                peerUsername=result.peerUsername,remotePath=path
-            ))
+            val identity=result.peerUsername to path
+            if(!seen.add(identity)) {
+                duplicateCount=(duplicateCount+1).coerceAtMost(100000)
+                continue
+            }
+            // Cap untrusted identity storage, never persist it or print it.
+            if(seen.size>8192) seen.clear()
+            eligible=(eligible+1).coerceAtMost(100000)
+            // Preserve out-of-range claims for the codec conflict gate: dropping
+            // an impossible MP3 bitrate would quietly downgrade UNSAFE to
+            // REVIEW/UNKNOWN. Only the UI exposure is bounded.
+            val bitrateRaw=file.attributes[0]
+            val bitrate=bitrateRaw?.takeIf { it in 32..1536 }
+            val duration=file.attributes[1]?.takeIf { it in 1..14400 }
+            val sampleRate=file.attributes[4]?.takeIf { it in 8000..384000 }
+            val bitDepth=file.attributes[5]?.takeIf { it in 8..32 }
+            val ranking=A0CandidateRank.rank(
+                searchPhrase,basename,bitrateRaw,remotePath=path,format=ext,
+                declaredDurationSeconds=duration,expectedDurationSeconds=expectedDurationSeconds,
+                declaredSampleRateHz=sampleRate,declaredBitDepth=bitDepth,
+                sizeBytes=file.sizeBytes,queueLength=result.queueLength
+            )
+            val preflight=A0CandidatePreflight.assess(
+                searchPhrase,ranking,bitrateRaw,
+                declaredDurationSeconds=duration,expectedDurationSeconds=expectedDurationSeconds,
+                format=ext,sizeBytes=file.sizeBytes,
+                declaredSampleRateHz=sampleRate,declaredBitDepth=bitDepth
+            )
+            // Only these (already admitted) peer claims affect a source
+            // tie-breaker. They do not contribute to preflight confidence.
+            val peerAvailability=A0PeerAvailability.assess(
+                hasFreeUploadSlot=result.hasFreeUploadSlot,locked=path in locked,
+                queueLength=result.queueLength,uploadSpeedBytesPerSecond=result.uploadSpeed
+            )
+            // A0's original take(82) could cut off ".mp3" and hide an
+            // otherwise eligible file from the save selector.
+            val suffix=".$ext"
+            // The peer's remote path is still passed verbatim to P/F; only
+            // on-screen/saved labels mask bidi and zero-width spoofing controls.
+            val safeBasename=A0CandidateRank.safeDisplayName(basename)
+            val displayName=if(safeBasename.length<=82) safeBasename
+                else safeBasename.take(82-suffix.length)+suffix
+            val immediateFolder=path.replace('\\','/').substringBeforeLast('/',"")
+                .substringAfterLast('/',"")
+            val album=A0CanonicalAlbumPolicy.assess(
+                A0CanonicalAlbumPolicy.Target(
+                    requestedAlbum=requestedAlbum,
+                    expectedArtist=canonicalManualTarget.artistCredits.firstOrNull()
+                ),
+                A0CanonicalAlbumPolicy.Claim(immediateFolder,
+                    A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT)
+            )
+            // The live search knows only a user-entered title/album.
+            // Never turn its text into a confirmed canonical relationship.
+            val identityDecision=A0CanonicalIdentityPolicy.assess(
+                canonicalManualTarget,
+                A0CanonicalAcquisitionResolver.Resolution(
+                    A0CanonicalAcquisitionResolver.Status.MISSING),
+                A0CanonicalAlbumPolicy.Claim(immediateFolder,
+                    A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT),
+                preflight,
+            )
+            val codec=when(ext) {
+                "mp3" -> A0CanonicalAcquisitionIntent.Codec.MP3
+                "flac" -> A0CanonicalAcquisitionIntent.Codec.FLAC
+                "wav" -> A0CanonicalAcquisitionIntent.Codec.PCM_WAV
+                "aac" -> A0CanonicalAcquisitionIntent.Codec.AAC_ADTS
+                else -> null
+            }
+            val qualityAssessment=A0DownloadQualityPolicy.evaluate(
+                qualityProfile,
+                A0DownloadQualityPolicy.Offer(codec,ext,bitrateRaw,sampleRate,bitDepth),
+                setOf(A0CanonicalAcquisitionIntent.Codec.MP3,
+                    A0CanonicalAcquisitionIntent.Codec.FLAC,
+                    A0CanonicalAcquisitionIntent.Codec.PCM_WAV,
+                    A0CanonicalAcquisitionIntent.Codec.AAC_ADTS),
+            )
+            val observedChoice=Choice(
+                displayName=displayName,sizeBytes=file.sizeBytes,
+                peerUsername=result.peerUsername,remotePath=path,
+                matchScore=ranking.score, matchSignal=ranking.match,
+                declaredBitrateKbps=bitrate,quality=ranking.quality,
+                warnings=ranking.warnings,declaredDurationSeconds=duration,
+                declaredSampleRateHz=sampleRate,declaredBitDepth=bitDepth,
+                preflight=preflight,peerAvailability=peerAvailability,
+                albumEvidence=album,identityEvidence=identityDecision,
+                qualityEvidence=qualityAssessment,
+                claim=A0CandidateClaimClusters.Claim(
+                    filename=basename,format=ext,sizeBytes=file.sizeBytes,
+                    bitrateKbps=bitrateRaw,durationSeconds=duration,
+                    sampleRateHz=sampleRate,bitDepth=bitDepth
+                )
+            )
+            A0StableCandidateInsertion.add(candidates,observedChoice,choiceOrder)
+            if(collectReleaseShadow) {
+                val peer=result.peerUsername
+                val peerCount=releaseShadowPerPeer[peer] ?: 0
+                if(peerCount<64) {
+                    if(releaseShadow.size==512) {
+                        // One early burst cannot monopolize all 512 shadow
+                        // observations and hide later release-wide sources.
+                        // Evict only from a strictly better-represented peer
+                        // (or the oldest one when every peer has one slot).
+                        // This cache does NOT change the manual choices or P/F.
+                        val maxCount=releaseShadowPerPeer.values.maxOrNull() ?: 0
+                        if(maxCount>peerCount) {
+                            val victim=releaseShadow.firstOrNull {
+                                releaseShadowPerPeer[it.peerUsername]==maxCount
+                            }
+                            if(victim!=null) {
+                                releaseShadow.remove(victim)
+                                val remainder=checkNotNull(
+                                    releaseShadowPerPeer[victim.peerUsername])-1
+                                if(remainder==0)releaseShadowPerPeer.remove(victim.peerUsername)
+                                else releaseShadowPerPeer[victim.peerUsername]=remainder
+                            }
+                        }
+                    }
+                    if(releaseShadow.size<512) {
+                        releaseShadow.add(observedChoice)
+                        releaseShadowPerPeer[peer]=peerCount+1
+                    }
+                }
+            }
+            // A single enthusiastic peer cannot displace every other source.
+            val fromPeer=candidates.withIndex()
+                .filter { it.value.peerUsername==result.peerUsername }
+            if(fromPeer.size>10) {
+                candidates.removeAt(fromPeer.last().index)
+                perPeerDropped=(perPeerDropped+1).coerceAtMost(100000)
+            }
+            // Up to six apparent copies are useful as alternate peers;
+            // allowing dozens of identical claims would hide other song versions.
+            // This is strictly claimed metadata equality, never a hash.
+            val sameClaim=candidates.withIndex().filter {
+                it.value.preflight==preflight &&
+                A0CandidateClaimClusters.sameClaim(it.value.claim,
+                    A0CandidateClaimClusters.Claim(
+                        filename=basename,format=ext,sizeBytes=file.sizeBytes,
+                        bitrateKbps=bitrateRaw,durationSeconds=duration,
+                        sampleRateHz=sampleRate,bitDepth=bitDepth
+                    ))
+            }
+            if(sameClaim.size>6) {
+                candidates.removeAt(sameClaim.last().index)
+                claimBudgetDropped=(claimBudgetDropped+1).coerceAtMost(100000)
+            }
+            if(candidates.size>384) {
+                candidates.removeAt(candidates.lastIndex)
+                capDropped=(capDropped+1).coerceAtMost(100000)
+            }
         }
+        return true
     }
 
+    /** Cheap on-wire UI counters. Do not group, score, cluster or persist
+     * candidate identities for each peer response; do that once at search end.
+     */
+    data class Progress(
+        val responses:Int,
+        val publicFiles:Int,
+        val provisionalClaims:Int,
+    )
+
     @Synchronized
-    fun screening():Screening=Screening(
+    fun progress():Progress=Progress(replies,publicSeen,candidates.size)
+
+    @Synchronized
+    fun screening():Screening {
+        // A decision *simulation*, only one sanitized outcome per search.
+        // Never yields transfer authority or stores candidate identities.
+        val preview=claimPreview()
+        return Screening(
         responses=replies,
         publicFiles=publicSeen,
         lockedFiles=lockedSeen,
@@ -114,11 +387,126 @@ internal class A0ObservedCandidateHandoff(
         unsupportedFormat=unsupported,
         unsafePath=unsafe,
         noSlot=noSlotSeen,
-        accepted=candidates.size
-    )
+        accepted=candidates.size,
+        manualPrimary=A0ManualCandidatePolicy.primaryIndices(
+            candidates,candidates.indices.toList()).size,
+        shadowStrong=shadowEligibleIndices().size,
+        validBeforeLimit=eligible,
+        duplicates=duplicateCount,
+        capacityDropped=capDropped,
+        perPeerDropped=perPeerDropped,
+        claimBudgetDropped=claimBudgetDropped,
+        strongMatches=candidates.count {
+            it.matchScore>=65 && it.warnings.isEmpty() &&
+                it.quality!=A0CandidateRank.Quality.LOW_ADVERTISED
+        },
+        weakMatches=candidates.count {
+            it.matchScore<40 || A0CandidateRank.Warning.DURATION_MISMATCH in it.warnings
+        },
+        lowQuality=candidates.count {
+            it.quality==A0CandidateRank.Quality.LOW_ADVERTISED
+        },
+        preflightStrong=candidates.count {
+            it.preflight.confidence==A0CandidatePreflight.Confidence.STRONG
+        },
+        preflightReview=candidates.count {
+            it.preflight.confidence==A0CandidatePreflight.Confidence.REVIEW
+        },
+        preflightUnsafe=candidates.count {
+            it.preflight.confidence==A0CandidatePreflight.Confidence.UNSAFE
+        },
+        peersReady=candidates.count {
+            it.peerAvailability.tier==A0PeerAvailability.Tier.READY
+        },
+        peersUnknown=candidates.count {
+            it.peerAvailability.tier==A0PeerAvailability.Tier.UNKNOWN
+        },
+        peersCongested=candidates.count {
+            it.peerAvailability.tier==A0PeerAvailability.Tier.CONGESTED
+        },
+        simulatedSuggested=if(preview.status==A0CandidatePreflight.SimulationStatus.SUGGESTED) 1 else 0,
+        simulatedAmbiguous=if(preview.status==A0CandidatePreflight.SimulationStatus.AMBIGUOUS) 1 else 0,
+        simulatedNoStrong=if(preview.status==A0CandidatePreflight.SimulationStatus.NO_STRONG) 1 else 0,
+        claimsDistinct=preview.distinctClaims,
+        claimsRepeated=preview.repeatedClaims,
+        albumMatches=candidates.count {
+            it.albumEvidence.status==A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED
+        },
+        albumUnknown=candidates.count {
+            it.albumEvidence.status==A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL
+        },
+        albumConflicts=candidates.count {
+            it.albumEvidence.status==A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM
+        },
+        qualityMismatches=candidates.count {
+            it.qualityEvidence.status in setOf(
+                A0DownloadQualityPolicy.Status.INCOMPATIBLE,
+                A0DownloadQualityPolicy.Status.UNAVAILABLE,
+                A0DownloadQualityPolicy.Status.INVALID_PROFILE)
+        }
+        )
+    }
+
+    // This stricter counterfactual is NEVER transfer authorization.
+    // Unknown album evidence is review-only, even if a filename scores well.
+    private fun shadowEligibleIndices():Set<Int> =
+        A0ManualCandidatePolicy.primaryIndices(
+            candidates,candidates.indices.toList()
+        ).filter { index ->
+            val choice=candidates[index]
+            choice.preflight.confidence==A0CandidatePreflight.Confidence.STRONG &&
+                choice.albumEvidence.status in setOf(
+                    A0CanonicalAlbumPolicy.Status.UNCONSTRAINED,
+                    A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED
+                )
+        }.toSet()
+
+    // Pure shadow suggestion. Never called from transferChoice() or any
+    // side-effectful operation. Candidate data remains in-memory only.
+    @Synchronized
+    fun claimPreview():A0CandidateClaimClusters.Preview {
+        return A0CandidateClaimClusters.preview(candidates.map {
+            A0CandidateClaimClusters.Entry(
+                it.claim,it.preflight,it.matchScore,it.peerAvailability,
+                transportReliability=peerReliability.score(it.peerUsername)
+            )
+        },eligibleIndices=shadowEligibleIndices())
+    }
+
+    /**
+     * Never display a legacy v4 "most suggested" label when the caller added
+     * edition/quality constraints that the legacy preflight never evaluated.
+     * Candidates are still ranked for a HUMAN, not auto-selected.
+     */
+    @Synchronized
+    fun manualSuggestionIndex():Int? =
+        if(albumOrQualitySelected) null else claimPreview().preferredIndex
+
+    /**
+     * A good codec claim alone must not suppress the one bounded title-only
+     * recovery query. Only primary-list offers that actually match the
+     * requested artist/title count as usable search coverage. This is still
+     * manual discovery, not a transfer/auto-selection decision.
+     */
+    @Synchronized
+    fun hasRelevantCandidateForSearchRecovery():Boolean {
+        if(cancelled||spent) return false
+        return A0ManualCandidatePolicy.primaryIndices(
+            candidates,candidates.indices.toList()
+        ).any { index ->
+            val choice=candidates[index]
+            choice.matchScore>=65 &&
+                choice.matchSignal==A0CandidateRank.Match.ALL_TERMS
+        }
+    }
 
     @Synchronized
     fun choices():List<Choice> = if(cancelled||spent)emptyList() else candidates.toList()
+
+    @Synchronized
+    fun releaseShadowChoices():List<Choice> =
+        if(!collectReleaseShadow || cancelled || spent)emptyList()
+        else releaseShadow.toList()
 
     @Synchronized
     fun hasCandidates()=candidates.isNotEmpty()&&!cancelled&&!spent
@@ -143,6 +531,8 @@ internal class A0ObservedCandidateHandoff(
             selected=candidates[index]
             spent=true
             candidates.clear()
+            releaseShadow.clear()
+            releaseShadowPerPeer.clear()
         }
         return transport.runObservedOnce(
             authenticatedServer,localUsername,selected.peerUsername,
@@ -156,6 +546,8 @@ internal class A0ObservedCandidateHandoff(
     fun cancel(){
         cancelled=true
         candidates.clear()
+        releaseShadow.clear()
+        releaseShadowPerPeer.clear()
         transport.cancel()
     }
 

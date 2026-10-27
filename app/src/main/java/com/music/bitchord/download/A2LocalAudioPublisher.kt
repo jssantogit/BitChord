@@ -15,7 +15,7 @@ import java.security.MessageDigest
  * NOT proof that Android can decode the complete content.
  */
 internal object A2LocalAudioPublisher {
-    private const val MAX_BYTES=64L*1024L*1024L
+    private const val MAX_BYTES=com.music.bitchord.acquisition.a0.A0ObservedTransferLimits.MAX_AUDIO_BYTES
     private val DIGEST=Regex("[0-9a-fA-F]{64}")
     private val BAD_NAME=Regex("""[\\/:*?"<>|\u0000-\u001f\u007f]""")
 
@@ -114,6 +114,14 @@ internal object A2LocalAudioPublisher {
         return when {
             extension=="wav" && marker(0,"RIFF") && marker(8,"WAVE")->"audio/x-wav"
             extension=="flac" && marker(0,"fLaC")->"audio/flac"
+            // ADTS AAC only; this does NOT grant ISO-BMFF .m4a/ALAC support.
+            // Validate sync, layer, sample-rate index and 13-bit frame size.
+            extension=="aac" && (header[0].toInt() and 255)==0xff &&
+                (header[1].toInt() and 0xf6)==0xf0 &&
+                (header[2].toInt() and 0x3c)!=0x3c &&
+                (((header[3].toInt() and 3) shl 11) or
+                    ((header[4].toInt() and 255) shl 3) or
+                    ((header[5].toInt() and 0xe0) ushr 5))>=7 -> "audio/aac"
             extension=="mp3" && marker(0,"ID3")->"audio/mpeg"
             // MPEG frame sync: 11 set bits, valid version, layer, bitrate and rate.
             extension=="mp3" && (header[0].toInt() and 255)==0xff &&

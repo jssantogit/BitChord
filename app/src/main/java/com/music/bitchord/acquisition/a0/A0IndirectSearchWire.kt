@@ -44,9 +44,18 @@ internal object A0IndirectSearchWire {
         val ip = exact(payload, 4).reversedArray() // Nicotine+ unpack_ip uses reverse byte order.
         val port = le32(payload)
         val token = le32(payload)
-        val privileged = payload.read()
-        val obfuscation = le32(payload)
-        val obfuscatedPort = le32(payload)
+        // Legacy Soulseek peers omit the modern optional 9-byte tail.
+        // A partially present tail is malformed, and obfuscated sockets
+        // remain unsupported rather than being silently used as cleartext.
+        var privileged = 0
+        var obfuscation = 0
+        var obfuscatedPort = 0
+        if (payload.available() > 0) {
+            if (payload.available() != 9) invalid()
+            privileged = payload.read()
+            obfuscation = le32(payload)
+            obfuscatedPort = le32(payload)
+        }
         if (username.isEmpty() || username.length > MAX_USERNAME_BYTES ||
             username.any { it.code < 33 || it.code > 126 } ||
             type != "P" || token <= 0 || port !in 1..65535 ||

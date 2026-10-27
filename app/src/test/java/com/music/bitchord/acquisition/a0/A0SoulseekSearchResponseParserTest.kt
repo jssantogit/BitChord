@@ -102,6 +102,49 @@ class A0SoulseekSearchResponseParserTest {
         assertEquals("café.mp3", result.files.single().remoteFilename)
     }
 
+    @Test
+    fun acceptsMoreThan128BoundedResultsWithoutDiscardingWholePeerReply() {
+        val entry = fileField("Albums\\ILLIT Magnetic.mp3", 4096, "mp3", mapOf(0 to 320))
+        val payload = ByteArrayOutputStream().apply {
+            write(str("fixture-peer"))
+            write(i32(42))
+            write(i32(129))
+            repeat(129) { write(entry) }
+            write(1) // has free upload slot
+            write(i32(1_000)) // speed
+            write(i32(0)) // queue length
+        }.toByteArray()
+        val parsed = A0SoulseekSearchResponseParser.parse(compressedFrame(payload), 42)
+        assertEquals(129, parsed.files.size)
+        assertTrue(parsed.hasFreeUploadSlot)
+    }
+
+    @Test
+    fun retainsLargeButBoundedPeerLibraryReplyInsteadOfRejectingAllTracks() {
+        // Popular Soulseek peers announce hundreds or thousands of files in one
+        // message. Losing the entire frame also loses the user's MP3 320 copy.
+        val entry = fileField(
+            "BTS\\BE\\" + "Archive".repeat(37) + "\\08 - Dynamite.mp3",
+            8_000_000L, "mp3", mapOf(0 to 320, 1 to 199),
+        )
+        val count = 2_000
+        val payload = ByteArrayOutputStream().apply {
+            write(str("fixture-peer"))
+            write(i32(42))
+            write(i32(count))
+            repeat(count) { write(entry) }
+            write(1)
+            write(i32(128_000))
+            write(i32(0))
+        }.toByteArray()
+        assertTrue("Fixture must exceed old 512 KiB inflation budget", payload.size > 524_288)
+        val decoded = A0SoulseekSearchResponseParser.parse(compressedFrame(payload), 42)
+        assertEquals(count, decoded.files.size)
+        assertEquals(320, decoded.files.last().attributes[0])
+        assertEquals(199, decoded.files.last().attributes[1])
+        assertEquals(0, decoded.queueLength)
+    }
+
     private fun responseFrame(
         token: Int,
         file: ByteArray = fileField("fixture.wav", 4096, "wav", emptyMap()),

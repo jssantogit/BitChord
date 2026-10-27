@@ -83,7 +83,7 @@ class A0OpenAudioCandidateGateTest {
     @Test
     fun oversizedOrNegativePayloadNeverPassesTheProbe() {
         assertRejected(A0OpenAudioCandidateGate.Rejection.FILE_OUTSIDE_TEST_LIMIT,
-            vetted(bytes = 67_108_865L), candidate(bytes = 67_108_865L))
+            vetted(bytes = 268_435_457L), candidate(bytes = 268_435_457L))
         assertRejected(A0OpenAudioCandidateGate.Rejection.FILE_OUTSIDE_TEST_LIMIT,
             vetted(bytes = -1L), candidate(bytes = -1L))
     }

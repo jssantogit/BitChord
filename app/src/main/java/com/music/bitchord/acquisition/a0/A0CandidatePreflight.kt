@@ -1,0 +1,183 @@
+package com.music.bitchord.acquisition.a0
+
+import kotlin.math.abs
+
+/**
+ * Conservative pre-download assessment of *untrusted peer metadata*.
+ *
+ * Strong means "sufficiently plausible to consider in a future opt-in mode",
+ * NOT verified audio, a trusted source, or permission to initiate a transfer.
+ * This policy has no network, filesystem, or playback side effects.
+ */
+internal object A0CandidatePreflight {
+    const val POLICY_VERSION="preflight-v5"
+    enum class Confidence { STRONG, REVIEW, UNSAFE }
+
+    enum class Reason {
+        TITLE_MISMATCH,
+        ARTIST_UNCONFIRMED,
+        ARTIST_CONFLICT,
+        IDENTITY_AMBIGUOUS,
+        VERSION_CONFLICT,
+        DURATION_UNCONFIRMED,
+        DURATION_CONFLICT,
+        SIZE_CONFLICT,
+        ENCODING_CONFLICT,
+        QUALITY_UNCONFIRMED,
+    }
+
+    data class Assessment(
+        val confidence:Confidence,
+        val reasons:List<Reason>,
+    )
+
+    /** Separate confidence from ranking. The user may still manually inspect all choices. */
+    fun assess(
+        searchPhrase:String?,
+        ranking:A0CandidateRank.Ranking,
+        declaredBitrateKbps:Int?,
+        declaredDurationSeconds:Int?,
+        expectedDurationSeconds:Int?,
+        format:String,
+        sizeBytes:Long,
+        declaredSampleRateHz:Int?=null,
+        declaredBitDepth:Int?=null,
+    ):Assessment {
+        val reasons=linkedSetOf<Reason>()
+        val hard=linkedSetOf<Reason>()
+        val queryParts=searchPhrase.orEmpty().split(Regex("\\s+[-–—]\\s+"),limit=2)
+        val hasArtistAndTitle=queryParts.size==2 &&
+            queryParts.all { it.isNotBlank() }
+
+        // A title-only request may find the correct song, but it cannot prove
+        // the artist. Never let a high bitrate compensate for this ambiguity.
+        when(ranking.match) {
+            A0CandidateRank.Match.NO_TERMS,
+            A0CandidateRank.Match.SOME_TERMS -> {
+                reasons.add(Reason.TITLE_MISMATCH)
+                hard.add(Reason.TITLE_MISMATCH)
+            }
+            A0CandidateRank.Match.ALL_TERMS -> Unit
+        }
+        if(!hasArtistAndTitle) reasons.add(Reason.ARTIST_UNCONFIRMED)
+
+        if(A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in ranking.warnings) {
+            reasons.add(Reason.IDENTITY_AMBIGUOUS)
+        }
+        if(A0CandidateRank.Warning.ARTIST_CONFLICT in ranking.warnings) {
+            reasons.add(Reason.ARTIST_CONFLICT)
+            hard.add(Reason.ARTIST_CONFLICT)
+        }
+        if(A0CandidateRank.Warning.VERSION_MISMATCH in ranking.warnings) {
+            reasons.add(Reason.VERSION_CONFLICT)
+            hard.add(Reason.VERSION_CONFLICT)
+        }
+        if(A0CandidateRank.Warning.ENCODING_CONFLICT in ranking.warnings) {
+            reasons.add(Reason.ENCODING_CONFLICT)
+            hard.add(Reason.ENCODING_CONFLICT)
+        }
+        if(A0CandidateRank.Warning.SIZE_SUSPICIOUS in ranking.warnings) {
+            reasons.add(Reason.SIZE_CONFLICT)
+            hard.add(Reason.SIZE_CONFLICT)
+        }
+
+        val length=declaredDurationSeconds?.takeIf { it in 15..7200 }
+        val targetLength=expectedDurationSeconds?.takeIf { it in 15..7200 }
+        if(length==null || targetLength==null) {
+            reasons.add(Reason.DURATION_UNCONFIRMED)
+        } else if(abs(length.toLong()-targetLength.toLong())>8L) {
+            reasons.add(Reason.DURATION_CONFLICT)
+            hard.add(Reason.DURATION_CONFLICT)
+        }
+
+        // Approximate CBR-size check. A peer's bitrate is unverified and may
+        // be an average for VBR. Keep broad tolerance to avoid false precision.
+        val ext=format.lowercase(java.util.Locale.ROOT)
+        val maxClaimedBitrate=when(ext) {
+            "mp3" -> 320
+            // AAC ADTS beyond 512 kbps is unusual for the supported
+            // high-quality music preset. Keep it manually inspectable,
+            // not strong evidence for future unattended selection.
+            "aac" -> 512
+            else -> 1536
+        }
+        val goodBitrate=declaredBitrateKbps?.takeIf {
+            it in 32..maxClaimedBitrate
+        }
+        when(ext) {
+            "mp3", "aac" -> {
+                if(goodBitrate==null || goodBitrate<256) {
+                    reasons.add(Reason.QUALITY_UNCONFIRMED)
+                }
+                if(goodBitrate!=null && length!=null) {
+                    val predicted=goodBitrate.toLong()*125L*length
+                    if(predicted>0 && (sizeBytes<predicted*55L/100L ||
+                        sizeBytes>predicted*165L/100L)) {
+                        reasons.add(Reason.SIZE_CONFLICT)
+                        hard.add(Reason.SIZE_CONFLICT)
+                    }
+                }
+            }
+            "flac", "wav" -> {
+                if(ranking.quality!=A0CandidateRank.Quality.LOSSLESS_ADVERTISED ||
+                    declaredSampleRateHz==null || declaredSampleRateHz<44_100 ||
+                    declaredBitDepth==null || declaredBitDepth<16) {
+                    reasons.add(Reason.QUALITY_UNCONFIRMED)
+                }
+                // Very small files claimed as full-length FLAC/WAV demand
+                // review. This is not a proof of compression quality.
+                if(length!=null && sizeBytes<length.toLong()*5_000L) {
+                    reasons.add(Reason.SIZE_CONFLICT)
+                    hard.add(Reason.SIZE_CONFLICT)
+                }
+                // A WAV label and sample metadata do not prove lossless PCM.
+                // Still, a file far smaller than even MONO uncompressed PCM
+                // cannot support an unattended lossless-quality inference.
+                // Apply a 50% floor only to WAV, not compressible FLAC;
+                // compressed WAVs remain available for manual review.
+                if(ext=="wav" && length!=null) {
+                    val rate=declaredSampleRateHz?.takeIf { it in 44_100..384_000 }
+                    val depth=declaredBitDepth?.takeIf { it in 16..32 }
+                    if(rate!=null && depth!=null) {
+                        val monoBytes=length.toLong()*rate.toLong()*depth.toLong()/8L
+                        if(sizeBytes<monoBytes/2L) {
+                            reasons.add(Reason.SIZE_CONFLICT)
+                            hard.add(Reason.SIZE_CONFLICT)
+                        }
+                    }
+                }
+            }
+            else -> reasons.add(Reason.QUALITY_UNCONFIRMED)
+        }
+        val confidence=when {
+            hard.isNotEmpty() -> Confidence.UNSAFE
+            reasons.isNotEmpty() || ranking.score<65 -> Confidence.REVIEW
+            else -> Confidence.STRONG
+        }
+        return Assessment(confidence,reasons.toList())
+    }
+
+    data class Weighted(val assessment:Assessment,val score:Int)
+    enum class SimulationStatus { SUGGESTED, NO_STRONG, AMBIGUOUS }
+    data class Simulation(val status:SimulationStatus,val index:Int?=null)
+
+    /**
+     * A pure *counterfactual* preview, NEVER a transfer instruction. Returns
+     * an index only when a strong candidate clearly exceeds other strong
+     * candidates. An ambiguous result must remain manual even if one source
+     * advertises better availability.
+     */
+    fun simulate(candidates:List<Weighted>):Simulation {
+        val strong=candidates.withIndex()
+            .filter { it.value.assessment.confidence==Confidence.STRONG }
+            .sortedWith(compareByDescending<IndexedValue<Weighted>> { it.value.score }
+                .thenBy { it.index })
+        if(strong.isEmpty()) return Simulation(SimulationStatus.NO_STRONG)
+        if(strong.size>1 && strong[0].value.score-strong[1].value.score<12)
+            return Simulation(SimulationStatus.AMBIGUOUS)
+        return Simulation(SimulationStatus.SUGGESTED,strong[0].index)
+    }
+
+    /** Compatibility entry point for the existing read-only manual UI label. */
+    fun suggestIndex(candidates:List<Weighted>):Int?=simulate(candidates).index
+}

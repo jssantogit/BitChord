@@ -65,6 +65,70 @@ class A0SelectionServerDrainTest {
         }
     }
 
+    @Test(timeout=6500)
+    fun partialServerOfferDuringManualChoiceResumesWithoutBreakingNextFrame() {
+        val choices=LinkedBlockingQueue<Int>(1)
+        ServerSocket(0,1,loopback).use { listener ->
+            val workers=Executors.newSingleThreadExecutor()
+            try {
+                val fakeServer=workers.submit {
+                    listener.accept().use { remote ->
+                        val first=frame(18,byteArrayOf(1,2,3,4))
+                        remote.getOutputStream().apply {
+                            write(first,0,3)
+                            flush()
+                            Thread.sleep(920) // Exceeds former 750ms frame timeout.
+                            write(first,3,first.size-3)
+                            write(frame(64,byteArrayOf(5,6)))
+                            flush()
+                        }
+                        Thread.sleep(100)
+                    }
+                }
+                Socket(loopback,listener.localPort).use { client ->
+                    var drained=0
+                    val choice=A0SelectionServerDrain.awaitChoice(
+                        client,choices,3000,{false},
+                        onFrameDrained={ if(++drained==2) choices.offer(4) })
+                    assertEquals(4,choice.index)
+                    assertEquals(2,choice.discardedFrames)
+                }
+                fakeServer.get(3,TimeUnit.SECONDS)
+            }finally {workers.shutdownNow()}
+        }
+    }
+
+    @Test(timeout=6500)
+    fun choiceArrivingDuringPartialControlFrameIsNotLost() {
+        val choices=LinkedBlockingQueue<Int>(1)
+        ServerSocket(0,1,loopback).use { listener ->
+            val workers=Executors.newSingleThreadExecutor()
+            try {
+                val sender=workers.submit {
+                    listener.accept().use { peer ->
+                        val packet=frame(18,byteArrayOf(1,2,3,4))
+                        peer.getOutputStream().apply {write(packet,0,5);flush()}
+                        Thread.sleep(180)
+                        choices.offer(7)
+                        Thread.sleep(850)
+                        peer.getOutputStream().apply {
+                            write(packet,5,packet.size-5)
+                            flush()
+                        }
+                        Thread.sleep(250)
+                    }
+                }
+                Socket(loopback,listener.localPort).use { peer ->
+                    val result=A0SelectionServerDrain.awaitChoice(
+                        peer,choices,3000,{false})
+                    assertEquals(7,result.index)
+                    assertEquals(1,result.discardedFrames)
+                }
+                sender.get(3,TimeUnit.SECONDS)
+            }finally {workers.shutdownNow()}
+        }
+    }
+
     @Test(timeout=4000)
     fun partialServerFrameTimeoutFailsClosedInsteadOfDesynchronizingStream() {
         ServerSocket(0,1,loopback).use { listener ->

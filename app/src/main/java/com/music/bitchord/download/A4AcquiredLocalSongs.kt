@@ -3,6 +3,8 @@ package com.music.bitchord.download
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import com.music.bitchord.data.model.Song
 import kotlinx.coroutines.Dispatchers
@@ -25,8 +27,59 @@ internal object A4AcquiredLocalSongs {
             val entries=runCatching {
                 A3AndroidAcquisitionLedger.get(context).all()
             }.getOrElse { return@withContext scanned }
-            val already=scanned.mapNotNull(Song::localUri).toSet()
-            val uris=A4AvailableLocalUriSelection.choose(entries,already) { raw ->
+            val already=scanned.mapNotNull { song ->
+                song.localUri ?: song.videoId.takeIf { it.startsWith("content://") }
+            }.toSet()
+            // The same published song can be exposed as a MediaStore row and
+            // a SAF document URI. Keep the scanner's tagged/artwork row; do
+            // not append a second, metadata-poor entry for the same bytes.
+            val alreadyPaths=scanned.mapNotNull(Song::localPath)
+                .map { path ->
+                    if(path.startsWith("content://")) A4LocalPhysicalIdentity.key(path)
+                    else A4LocalPhysicalIdentity.pathKey(path)
+                }.toSet()
+            fun mediaAliasKeys(raw:String):Set<String> {
+                val uri=Uri.parse(raw)
+                val mapped=if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.Q) {
+                    runCatching { MediaStore.getMediaUri(context,uri) }.getOrNull()
+                } else null
+                val media=mapped ?: uri
+                if(media.authority!="media")return emptySet()
+                val aliases=mutableSetOf(A4LocalPhysicalIdentity.key(media.toString()))
+                // Scanner may identify the exact MediaStore asset by DATA path
+                // while the download ledger has only the content URI. Query
+                // the trusted provider for its physical path when available.
+                runCatching {
+                    resolver.query(media,arrayOf(MediaStore.MediaColumns.DATA),
+                        null,null,null)?.use { cursor ->
+                        if(cursor.moveToFirst()) {
+                            val index=cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                            if(index>=0 && !cursor.isNull(index)) {
+                                val path=cursor.getString(index)
+                                if(path?.startsWith("/")==true)
+                                    aliases.add(A4LocalPhysicalIdentity.pathKey(path))
+                            }
+                        }
+                    }
+                }
+                return aliases
+            }
+            val uris=A4AvailableLocalUriSelection.choose(
+                entries,alreadyScanned=already,alreadyIdentities=alreadyPaths,
+                identityOf={ raw ->
+                    val original=A4LocalPhysicalIdentity.key(raw)
+                    // Android 10+: official provider mapping is the safest
+                    // MediaStore ↔ SAF equivalence, even if DATA is unavailable.
+                    if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.Q &&
+                        !original.startsWith("media:")) {
+                        val equivalent=runCatching {
+                            MediaStore.getMediaUri(context,Uri.parse(raw))
+                        }.getOrNull()
+                        equivalent?.toString()?.let(A4LocalPhysicalIdentity::key) ?: original
+                    } else original
+                },
+                aliasesOf=::mediaAliasKeys
+            ) { raw ->
                 runCatching {
                     resolver.openFileDescriptor(Uri.parse(raw),"r")?.use { descriptor ->
                         descriptor.statSize!=0L

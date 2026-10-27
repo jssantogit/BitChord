@@ -176,4 +176,21 @@ class A0ModernIncomingTransferTest {
         ascii(36, "data"); dword(40, 160)
         return h + ByteArray(160) { 0 }
     }
+    @Test fun observedPWireAcceptsLargeBoundedTransferWithoutAllocatingItsBytes() {
+        val size=96L*1024L*1024L
+        val response=ByteArrayOutputStream()
+        A0ModernIncomingTransfer.acceptObservedUpload(
+            ByteArrayInputStream(uploadRequest(109,filename,size)),
+            response,filename,size
+        )
+        assertEquals(13,response.size()) // four-byte frame length + 9-byte response
+        try {
+            A0ModernIncomingTransfer.acceptObservedUpload(
+                ByteArrayInputStream(ByteArray(0)),ByteArrayOutputStream(),
+                filename,256L*1024L*1024L+1L
+            )
+            fail("Bounded observed transfer must reject oversized bytes before network I/O")
+        } catch (_:IllegalArgumentException) {}
+    }
+
 }

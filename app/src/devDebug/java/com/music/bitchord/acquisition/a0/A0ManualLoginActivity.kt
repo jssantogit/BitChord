@@ -8,10 +8,15 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import com.music.bitchord.diagnostics.Diagnostics
+import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.diagnostics.DiagnosticsShare
 import com.music.bitchord.observability.TraceOutcome
 import com.music.bitchord.download.A3AcquisitionLedger
 import com.music.bitchord.download.A3AndroidAcquisitionLedger
+import com.music.bitchord.download.SoulseekBatchPayload
+import com.music.bitchord.download.SoulseekBatchSession
+import com.music.bitchord.download.SoulseekBatchPlan
+import android.widget.Toast
 import android.text.InputType
 import android.text.InputFilter
 import android.view.View
@@ -46,10 +51,13 @@ import java.util.UUID
  */
 class A0ManualLoginActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
+    // Memory-only comparison; scoped to this Activity, never persisted.
+    private val searchComparison=A0SearchComparison()
     @Volatile private var activeSocket: Socket? = null
     @Volatile private var activeListener: ServerSocket? = null
-    @Volatile private var activeDirectPeer: Socket? = null
-    @Volatile private var activeIndirectPeer: Socket? = null
+    @Volatile private var activeDirectCollector:A0DirectPeerSearchCollector?=null
+    private val activeIndirectPeers=java.util.concurrent.ConcurrentHashMap.newKeySet<Socket>()
+    @Volatile private var activePeerWorkers:A0PeerSearchWorkers?=null
     @Volatile private var stopping = false
     @Volatile private var activeTrace: A0SmokeTrace? = null
     @Volatile private var activeTransfer: A0ObservedCandidateHandoff? = null
@@ -57,13 +65,39 @@ class A0ManualLoginActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE
-        )
-
         // Launched by the in-app song Download action, not the old A0 tool entry.
         val fromSongDownload = intent.hasExtra("bitchord.soulseek.manual.query")
+        val hasBatch=intent.hasExtra("bitchord.soulseek.batch.queries")
+        // Process death cannot be assumed to preserve the completion of a
+        // MediaStore commit. Fail closed instead of silently restarting at
+        // track one and risking a duplicate physical download.
+        if(hasBatch && savedInstanceState!=null) {
+            Toast.makeText(this,
+                "Lote interrompido. Faixas já salvas permanecem na biblioteca; " +
+                    "abra o lançamento novamente para continuar manualmente.",
+                Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        val batchEntries=if(hasBatch)SoulseekBatchPayload.decode(
+            intent.getStringArrayListExtra("bitchord.soulseek.batch.queries"),
+            intent.getStringArrayListExtra("bitchord.soulseek.batch.albums"),
+            intent.getIntArrayExtra("bitchord.soulseek.batch.durations"),
+        )else null
+        if(hasBatch && batchEntries==null) {
+            Toast.makeText(this,"Lote inválido: nenhuma conexão iniciada.",
+                Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        val batch=batchEntries?.let(::SoulseekBatchSession)
+        // The song search/candidates view has no visible credentials; allow
+        // screenshots for QA. Legacy username/password tools stay protected.
+        if (A0ScreenCapturePolicy.requiresSecureWindow(fromSongDownload)) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
 
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -87,7 +121,7 @@ class A0ManualLoginActivity : Activity() {
                 "O protocolo Soulseek envia a senha por TCP SEM TLS. " +
                 "Não reutilize senhas de outros serviços.")
         if (!fromSongDownload) text("A pesquisa digitável não baixa arquivos. No teste separado de transporte, " +
-             "você escolhe manualmente um arquivo público anunciado (até 64 MiB) " +
+             "você escolhe manualmente um arquivo público anunciado (até 256 MiB) " +
              "para o qual tenha autorização. Os bytes ficam só temporariamente: " +
              "tamanho e SHA-256 observado são medidos, depois apagados. " +
              "O hash NÃO comprova autenticidade da fonte. Soulseek usa TCP sem TLS. " +
@@ -125,6 +159,20 @@ class A0ManualLoginActivity : Activity() {
             importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
         }
         page.addView(searchInput)
+        text("Álbum solicitado (opcional)")
+        val albumInput=EditText(this).apply {
+            hint="Álbum da faixa (deixe vazio se desconhecido)"
+            setText(intent.getStringExtra("bitchord.soulseek.manual.album")?.take(120).orEmpty())
+            inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_NORMAL
+            isSingleLine=true
+            filters=arrayOf(InputFilter.LengthFilter(120))
+            isSaveEnabled=false
+            importantForAutofill=View.IMPORTANT_FOR_AUTOFILL_NO
+        }
+        page.addView(albumInput)
+        val currentProfile=AppSettings.downloadQualityProfile.value
+        text("Qualidade: ${currentProfile.label}. Ajustar em Configurações → Downloads. " +
+            "Resultados do peer não comprovam a qualidade acústica.")
         val acknowledge = CheckBox(this).apply {
             text = "Confirmo que é uma senha exclusiva de testes e aceito " +
                 "a transmissão TCP sem TLS exigida pelo protocolo."
@@ -137,7 +185,7 @@ class A0ManualLoginActivity : Activity() {
         }
         page.addView(searchAction)
         val transferAction = Button(this).apply {
-            text = "Teste de transporte: escolher 1 arquivo (até 64 MiB)"
+            text = "Teste de transporte: escolher 1 arquivo (até 256 MiB)"
         }
         page.addView(transferAction)
         val saveConsent=CheckBox(this).apply {
@@ -151,10 +199,20 @@ class A0ManualLoginActivity : Activity() {
         page.addView(saveAction)
         val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
         page.addView(exportAction)
-        if (!fromSongDownload) text("Captura temporária iniciada automaticamente ao testar. " +
+        if (!fromSongDownload) text("Captura temporária se não existir uma captura manual ativa. " +
             "Depois do resultado, exporte os logs. Revise o relatório antes de compartilhar. " +
             "Não envie credenciais, capturas de rede ou logcat bruto.")
         val status = text("Nenhuma conexão iniciada.")
+        val batchStatus=if(batch!=null)text(
+            "Lote guiado: faixa 1 de ${batch.entries.size} · 0 salvas · 0 puladas. " +
+                "Cada faixa exige escolha manual. Sair interrompe o lote, " +
+                "sem excluir downloads já concluídos."
+        )else null
+        val nextTrack=if(batch!=null)Button(this).also {
+            it.text="Próxima faixa / Pular atual"
+            it.isEnabled=false
+            page.addView(it)
+        }else null
 
         val scroll = ScrollView(this).apply { addView(page) }
         setContentView(scroll)
@@ -173,6 +231,11 @@ class A0ManualLoginActivity : Activity() {
         ) {
             require(!transferObserved || performSearch)
             require(!saveToDevice || transferObserved)
+            if(batch?.isComplete==true || (saveToDevice && batch?.currentSaved==true)) {
+                status.text="Esta faixa já foi salva. Avance para a próxima do lote."
+                return
+            }
+            nextTrack?.isEnabled=false
             if(saveToDevice && !A5ManualSaveGate.canSave(transferObserved,saveConsent.isChecked)) {
                 status.text="Confirme antes que tem autorização para armazenar o arquivo."
                 return
@@ -187,9 +250,23 @@ class A0ManualLoginActivity : Activity() {
             }
             // Validate on the UI thread BEFORE login or server I/O.
             // Never place search text in traces, diagnostics or exception messages.
+            // Keep the validated but unnormalized artist/title delimiter for
+            // local ranking. Only the normalized term is sent over Soulseek.
+            val enteredSearch=if(performSearch) searchInput.text.toString() else null
+            val albumConstraint=albumInput.text.toString().trim().takeIf(String::isNotBlank)
+            // Single Downloads quality setting is shared by all providers.
+            val preset=AppSettings.downloadQualityProfile.value
+            val selectedQuality=A0SoulseekQualityProfiles.snapshot(
+                preset,AppSettings.downloadCustomOptions.value)
+            if(albumConstraint!=null && runCatching {
+                A0CanonicalAcquisitionIntent.manual("Busca manual",requestedAlbum=albumConstraint)
+            }.isFailure) {
+                status.text="Álbum inválido: remova caracteres de controle."
+                return
+            }
             val requestedSearch = if (performSearch) {
                 try {
-                    A0SearchQuery.normalize(searchInput.text.toString())
+                    A0SearchQuery.normalize(checkNotNull(enteredSearch))
                 } catch (_: IllegalArgumentException) {
                     status.text = "Pesquisa inválida: digite termos curtos, sem controles."
                     return
@@ -209,6 +286,14 @@ class A0ManualLoginActivity : Activity() {
             // Clear both controls before any packet creation or network action.
             user.text.clear()
             password.text.clear()
+            // In a legacy manual search, stop exposing editable credentials
+            // before allowing screenshots of results and candidate dialogs.
+            user.isEnabled = false
+            password.isEnabled = false
+            if (performSearch && !A0ScreenCapturePolicy.requiresSecureWindow(
+                    fromSongDownload, credentialsVisible = false)) {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
             acknowledge.isChecked = false
             saveConsent.isChecked = false
             action.isEnabled = false
@@ -216,7 +301,8 @@ class A0ManualLoginActivity : Activity() {
             transferAction.isEnabled = false
             saveAction.isEnabled = false
             status.text = if(saveToDevice) {
-                "Buscando WAV/FLAC/MP3 autorizados; salva somente após escolha manual."
+                "Pesquisando arquivos autorizados para ${preset.label}; " +
+                    "somente formatos compatíveis serão sugeridos para seleção."
             } else if (transferObserved) {
                 "Buscando candidatos pequenos; escolha manual obrigatória, sem download automático."
             } else if (performSearch) {
@@ -227,9 +313,10 @@ class A0ManualLoginActivity : Activity() {
             val accountGeneration = SoulseekActiveSession.generation()
             worker.execute {
                 // Existing Diagnostics capture and structured tracing; no raw inputs.
-                val captureEnabled = runCatching {
-                    Diagnostics.startCapture(180_000L).active
-                }.getOrDefault(false)
+                val featureCapture = runCatching {
+                    Diagnostics.beginFeatureCapture(180_000L)
+                }.getOrNull()
+                val captureEnabled = featureCapture?.active == true
                 val trace = A0SmokeTrace.start(
                     Diagnostics.structuredTracer(), observedTransfer = transferObserved
                 )
@@ -263,6 +350,10 @@ class A0ManualLoginActivity : Activity() {
                 var finalOutcome = TraceOutcome.FAILED
                 var finalReason: A0SmokeTrace.Reason? = null
                 var transferAttempted=false
+                // A completed P/F receipt can still fail the independent A2/A3
+                // local publication. Never mislabel that as a peer failure.
+                var bytesStagedForCurrent=false
+                var publishedForCurrent=false
                 var lastTransferPhase:A0ServerAssociatedTransfer.Phase?=null
                 var packet: ByteArray? = null
                 var result = "Falha ao iniciar a verificação."
@@ -310,14 +401,28 @@ class A0ManualLoginActivity : Activity() {
                             result = "LOGIN CONFIRMADO. Sessão encerrada, sem buscas ou downloads."
                             finalOutcome = TraceOutcome.SUCCEEDED
                         } else {
-                            ServerSocket(0, 1).use { listener ->
+                            ServerSocket(0, 128).use { listener ->
                                 activeListener = listener
                                 trace.note(A0SmokeTrace.Stage.SEARCH_LISTENER_OPEN)
-                                listener.soTimeout = 12_000
+                                listener.soTimeout = 18_000
                                 val token = SecureRandom().nextInt(Int.MAX_VALUE - 1) + 1
+                                val expectedDuration=SoulseekBatchPlan.expectedDuration(
+                                    batch?.current,
+                                    intent.getIntExtra("bitchord.soulseek.manual.duration_seconds",0)
+                                )
+                                val peerReliability=A0PeerReliabilityEvidence()
                                 val handoff = if (transferObserved) {
                                     A0ObservedCandidateHandoff(
-                                        connection, username, token
+                                        connection, username, token,
+                                        searchPhrase=SoulseekBatchPlan.identityQuery(
+                                            batch?.current,checkNotNull(enteredSearch)
+                                        ),
+                                        saveFormatsOnly=saveToDevice,
+                                        expectedDurationSeconds=expectedDuration,
+                                        requestedAlbum=albumConstraint,
+                                        qualityProfile=selectedQuality,
+                                        peerReliability=peerReliability,
+                                        collectReleaseShadow=batch!=null,
                                     ).also { transfer ->
                                         if (!SoulseekActiveSession.registerTransfer(
                                                 transfer, accountGeneration
@@ -346,57 +451,99 @@ class A0ManualLoginActivity : Activity() {
                                 val attemptedIndirect = AtomicBoolean(false)
                                 val receivedValidP2pReply = AtomicBoolean(false)
                                 val failedServerReader = AtomicBoolean(false)
-                                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(12)
+                                val progressGate=A0ProgressUpdateGate(700L)
+                                // Track 6/12/18s candidate growth without reducing the
+                                // live search window or changing manual choices.
+                                val windowEvidence=A0SearchWindowEvidence()
+                                fun discoveryProgress() {
+                                    // Building the full claim clustering preview on
+                                    // every P2P reply stalls discovery and floods
+                                    // main-thread status updates. Only cheap counts
+                                    // are needed while the reader is still open.
+                                    if(!progressGate.shouldPublish(
+                                            TimeUnit.NANOSECONDS.toMillis(System.nanoTime())
+                                        ))return
+                                    val report=handoff?.progress() ?: return
+                                    runOnUiThread {
+                                        if (!stopping && !isFinishing && !isDestroyed &&
+                                            readerGate.isOpen()) {
+                                            status.text="Pesquisando Soulseek: " +
+                                                report.responses + " respostas, " +
+                                                report.publicFiles + " arquivos anunciados, " +
+                                                report.provisionalClaims + " arquivos pré-filtrados " +
+                                                "(qualidade e álbum ainda em análise)."
+                                        }
+                                    }
+                                }
+                                // Collect peers over a fixed window; never stop at first match.
+                                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(18)
+                                // The server reader only parses frames; indirect peer
+                                // handshakes run concurrently on peer-only sockets.
+                                val peerWorkers=A0PeerSearchWorkers(queueCapacity=128,parallelism=12)
+                                val offerGate=A0PeerOfferGate(160)
+                                activePeerWorkers=peerWorkers
+                                val peerOfferBackpressure=java.util.concurrent.atomic.AtomicInteger(0)
+                                val directOfferBackpressure=java.util.concurrent.atomic.AtomicInteger(0)
+                                val directWaits=java.util.concurrent.atomic.AtomicInteger(0)
+                                val directCollector=A0DirectPeerSearchCollector { peer ->
+                                    if(readerGate.isOpen() && !stopping) {
+                                        try {
+                                            peer.soTimeout = 3500
+                                            val observation=A0OneShotPublicSearchWire.readOneDirectPeerReply(
+                                                peer.getInputStream(),token
+                                            ) { verifiedFrame, claimedPeer ->
+                                                // The outer wire reader checks protocol framing;
+                                                // the handoff also verifies token, identity and
+                                                // full search-response decoding. Only after both
+                                                // may this source receive a reliability credit.
+                                                if(handoff?.offerSearchResult(verifiedFrame,claimedPeer)==false)
+                                                    throw IOException("Invalid peer search response")
+                                                receivedValidP2pReply.set(true)
+                                                peerReliability.observe(claimedPeer,
+                                                    A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
+                                                discoveryProgress()
+                                            }
+                                            trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_ACCEPTED)
+                                            if (!transferObserved) {
+                                                readerGate.publish(inbox,
+                                                    "RESPOSTA P2P DIRETA: " +
+                                                    "${observation.untrustedResultCount} entradas declaradas.")
+                                            }
+                                        } catch (_: SocketTimeoutException) {
+                                            if(directWaits.incrementAndGet()<=2)
+                                                trace.note(A0SmokeTrace.Stage.DIRECT_READ_TIMEOUT,
+                                                    TraceOutcome.SKIPPED,A0SmokeTrace.Reason.READ_TIMEOUT)
+                                        } catch (_: IOException) {
+                                            if(readerGate.isOpen())
+                                                trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_REJECTED,
+                                                    TraceOutcome.DEGRADED,A0SmokeTrace.Reason.PEER_IO_FAILURE)
+                                        }
+                                    }
+                                }
+                                activeDirectCollector=directCollector
                                 val readers = Executors.newFixedThreadPool(2)
                                 try {
                                     readers.execute {
-                                        listener.soTimeout = 1000
-                                        var directWaits = 0
+                                        // Accept continuously; each P read runs on a bounded
+                                        // independent worker instead of blocking the listener
+                                        // for up to four seconds per slow/unreachable peer.
+                                        listener.soTimeout=750
                                         while (!Thread.currentThread().isInterrupted &&
                                             !listener.isClosed && System.nanoTime() < deadline &&
                                             readerGate.isOpen()
                                         ) {
                                             try {
-                                                listener.accept().use { peer ->
-                                                    if (!readerGate.isOpen()) return@use
-                                                    trace.note(A0SmokeTrace.Stage.DIRECT_ACCEPTED)
-                                                    activeDirectPeer = peer
-                                                    peer.soTimeout = 4000
-                                                    val observation =
-                                                        A0OneShotPublicSearchWire.readOneDirectPeerReply(
-                                                            peer.getInputStream(), token
-                                                        ) { verifiedFrame, claimedPeer ->
-                                                            receivedValidP2pReply.set(true)
-                                                            handoff?.offerSearchResult(
-                                                                verifiedFrame, claimedPeer
-                                                            )
-                                                        }
-                                                    trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_ACCEPTED)
-                                                    if (!transferObserved ||
-                                                        handoff?.hasCandidates() == true
-                                                    ) {
-                                                        readerGate.publish(
-                                                            inbox, "RESPOSTA P2P DIRETA: " +
-                                                                "${observation.untrustedResultCount} entradas " +
-                                                                "declaradas, não verificadas."
-                                                        )
-                                                    }
-                                                }
+                                                val peer=listener.accept()
+                                                trace.note(A0SmokeTrace.Stage.DIRECT_ACCEPTED)
+                                                if(!directCollector.offer(peer))
+                                                    directOfferBackpressure.incrementAndGet()
                                             } catch (_: SocketTimeoutException) {
-                                                if (++directWaits <= 2) trace.note(
-                                                    A0SmokeTrace.Stage.DIRECT_READ_TIMEOUT,
-                                                    TraceOutcome.SKIPPED,
-                                                    A0SmokeTrace.Reason.READ_TIMEOUT
-                                                )
+                                                // No inbound peers yet; keep listening.
                                             } catch (_: IOException) {
-                                                if (listener.isClosed) break
-                                                trace.note(
-                                                    A0SmokeTrace.Stage.DIRECT_REPLY_REJECTED,
+                                                if (listener.isClosed || !readerGate.isOpen()) break
+                                                trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_REJECTED,
                                                     TraceOutcome.DEGRADED,
-                                                    A0SmokeTrace.Reason.PEER_IO_FAILURE
-                                                )
-                                            } finally {
-                                                activeDirectPeer = null
+                                                    A0SmokeTrace.Reason.PEER_IO_FAILURE)
                                             }
                                         }
                                     }
@@ -404,125 +551,204 @@ class A0ManualLoginActivity : Activity() {
                                         // A bounded socket timeout lets this reader
                                         // relinquish server ownership before P/F routing.
                                         connection.soTimeout = 750
-                                        val framedServer = A0FrameReadProgress(
+                                        val framedServer = A0ProgressiveServerFrameReader(
                                             connection.getInputStream()
                                         )
                                         var attempts = 0
                                         try {
                                             while (!Thread.currentThread().isInterrupted &&
                                                 System.nanoTime() < deadline &&
-                                                readerGate.isOpen() && attempts < 6
+                                                readerGate.isOpen() && attempts < 160
                                             ) {
-                                                framedServer.nextFrame()
                                                 val offer = try {
-                                                    A0IndirectSearchWire.readServerEvent(
-                                                        framedServer
-                                                    ) { code -> trace.ignoredServerFrame(code) }
-                                                } catch (_: SocketTimeoutException) {
-                                                    if (!framedServer.atFrameBoundary) {
-                                                        // A frame was only partially consumed.
-                                                        // Never hand its corrupted stream to P/F.
-                                                        failedServerReader.set(true)
-                                                        trace.note(
-                                                            A0SmokeTrace.Stage.SERVER_READ_FAILURE,
-                                                            TraceOutcome.DEGRADED,
-                                                            A0SmokeTrace.Reason.SERVER_IO_FAILURE
-                                                        )
-                                                        break
+                                                    framedServer.readEvent { code ->
+                                                        trace.ignoredServerFrame(code)
                                                     }
+                                                } catch (_: SocketTimeoutException) {
+                                                    // Preserve bytes already read: TCP may split
+                                                    // legitimate server frames across timeouts.
+                                                    // The progressive reader will finish the
+                                                    // same frame on the next iteration.
                                                     continue
                                                 } catch (_: A0IndirectSearchWire.RejectedPeerOffer) {
-                                                    trace.note(
-                                                        A0SmokeTrace.Stage.SERVER_OFFER_REJECTED,
-                                                        TraceOutcome.DEGRADED,
-                                                        A0SmokeTrace.Reason.WIRE_REJECTED
-                                                    )
+                                                    trace.serverOfferRejected()
                                                     continue
                                                 }
                                                 if (offer == null) continue
                                                 if (!readerGate.isOpen()) break
-                                                trace.note(A0SmokeTrace.Stage.SERVER_OFFER_RECEIVED)
-                                                attemptedIndirect.set(true)
-                                                attempts++
-                                                try {
-                                                    trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECT_STARTED)
-                                                    Socket().use { peer ->
-                                                        activeIndirectPeer = peer
-                                                        if (!readerGate.isOpen()) return@use
-                                                        peer.connect(
-                                                            InetSocketAddress(offer.address, offer.port), 2500
-                                                        )
-                                                        peer.soTimeout = 4000
-                                                        trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECTED)
-                                                        peer.getOutputStream().apply {
-                                                            write(A0IndirectSearchWire.pierceFirewall(offer.token))
-                                                            flush()
+                                                trace.serverOfferReceived()
+                                                if(!offerGate.accept(offer.username,offer.token))continue
+                                                if (peerWorkers.submit {
+                                                    try {
+                                                        trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECT_STARTED)
+                                                        Socket().use { peer ->
+                                                            activeIndirectPeers.add(peer)
+                                                            try {
+                                                                if (stopping || !readerGate.isOpen()) return@use
+                                                                peer.connect(
+                                                                    InetSocketAddress(offer.address,offer.port),1800
+                                                                )
+                                                                peer.soTimeout=2300
+                                                                trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECTED)
+                                                                peer.getOutputStream().apply {
+                                                                    write(A0IndirectSearchWire.pierceFirewall(offer.token))
+                                                                    flush()
+                                                                }
+                                                                trace.note(A0SmokeTrace.Stage.PIERCE_SENT)
+                                                                val observation=A0IndirectSearchWire.readIndirectReply(
+                                                                    peer.getInputStream(),token,offer.username
+                                                                ) { frame, claimedPeer ->
+                                                                    if(handoff?.offerSearchResult(frame,claimedPeer)==false)
+                                                                        throw IOException("Invalid peer search response")
+                                                                    receivedValidP2pReply.set(true)
+                                                                    peerReliability.observe(claimedPeer,
+                                                                        A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
+                                                                    discoveryProgress()
+                                                                }
+                                                                trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_ACCEPTED)
+                                                                if (!transferObserved) {
+                                                                    readerGate.publish(inbox,
+                                                                        "RESPOSTA P2P INDIRETA: " +
+                                                                        "${observation.untrustedResultCount} entradas declaradas.")
+                                                                }
+                                                            } finally {
+                                                                activeIndirectPeers.remove(peer)
+                                                            }
                                                         }
-                                                        trace.note(A0SmokeTrace.Stage.PIERCE_SENT)
-                                                        val observation = A0IndirectSearchWire.readIndirectReply(
-                                                            peer.getInputStream(), token, offer.username
-                                                        ) { verifiedFrame, claimedPeer ->
-                                                            receivedValidP2pReply.set(true)
-                                                            handoff?.offerSearchResult(
-                                                                verifiedFrame, claimedPeer
-                                                            )
-                                                        }
-                                                        trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_ACCEPTED)
-                                                        if (!transferObserved ||
-                                                            handoff?.hasCandidates() == true
-                                                        ) {
-                                                            readerGate.publish(
-                                                                inbox, "RESPOSTA P2P INDIRETA: " +
-                                                                    "${observation.untrustedResultCount} entradas " +
-                                                                    "declaradas, não verificadas."
-                                                            )
-                                                        }
+                                                    } catch (_: SocketTimeoutException) {
+                                                        if(!stopping && readerGate.isOpen())
+                                                            peerReliability.observe(offer.username,
+                                                                A0PeerReliabilityEvidence.Outcome.READ_TIMEOUT)
+                                                        trace.note(A0SmokeTrace.Stage.INDIRECT_READ_TIMEOUT,
+                                                            TraceOutcome.DEGRADED,A0SmokeTrace.Reason.READ_TIMEOUT)
+                                                    } catch (_: ConnectException) {
+                                                        if(!stopping && readerGate.isOpen())
+                                                            peerReliability.observe(offer.username,
+                                                                A0PeerReliabilityEvidence.Outcome.CONNECT_FAILED)
+                                                        trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECT_FAILED,
+                                                            TraceOutcome.DEGRADED,A0SmokeTrace.Reason.CONNECT_FAILED)
+                                                    } catch (_: IOException) {
+                                                        if(!stopping && readerGate.isOpen())
+                                                            peerReliability.observe(offer.username,
+                                                                A0PeerReliabilityEvidence.Outcome.INVALID_REPLY)
+                                                        trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_REJECTED,
+                                                            TraceOutcome.DEGRADED,A0SmokeTrace.Reason.PEER_IO_FAILURE)
                                                     }
-                                                } catch (_: SocketTimeoutException) {
-                                                    trace.note(
-                                                        A0SmokeTrace.Stage.INDIRECT_READ_TIMEOUT,
-                                                        TraceOutcome.DEGRADED,
-                                                        A0SmokeTrace.Reason.READ_TIMEOUT
-                                                    )
-                                                } catch (_: ConnectException) {
-                                                    trace.note(
-                                                        A0SmokeTrace.Stage.INDIRECT_CONNECT_FAILED,
-                                                        TraceOutcome.DEGRADED,
-                                                        A0SmokeTrace.Reason.CONNECT_FAILED
-                                                    )
-                                                } catch (_: IOException) {
-                                                    trace.note(
-                                                        A0SmokeTrace.Stage.INDIRECT_REPLY_REJECTED,
-                                                        TraceOutcome.DEGRADED,
-                                                        A0SmokeTrace.Reason.PEER_IO_FAILURE
-                                                    )
-                                                } finally {
-                                                    activeIndirectPeer = null
+                                                }) {
+                                                    attemptedIndirect.set(true)
+                                                    attempts++
+                                                } else {
+                                                    // Rejected before execution: do not burn a
+                                                    // unique P ticket or our admitted-offer budget.
+                                                    offerGate.releaseUnsubmitted(
+                                                        offer.username,offer.token)
+                                                    peerOfferBackpressure.incrementAndGet()
                                                 }
                                             }
+                                            if (!framedServer.finishPendingFrame() &&
+                                                A0ServerReaderShutdownPolicy.shouldReportPendingFrameFailure(
+                                                    stopping)) {
+                                                // A live, incomplete server frame is still
+                                                // fail-closed before P/F reuses this socket.
+                                                // Explicit cancellation already closed it.
+                                                failedServerReader.set(true)
+                                                trace.note(
+                                                    A0SmokeTrace.Stage.SERVER_READ_FAILURE,
+                                                    TraceOutcome.DEGRADED,
+                                                    A0SmokeTrace.Reason.SERVER_IO_FAILURE
+                                                )
+                                            }
                                         } catch (_: SocketTimeoutException) {
-                                            trace.note(
-                                                A0SmokeTrace.Stage.SERVER_READ_TIMEOUT,
-                                                TraceOutcome.DEGRADED,
-                                                A0SmokeTrace.Reason.READ_TIMEOUT
-                                            )
+                                            if(A0ServerReaderShutdownPolicy.shouldReportReadFailure(stopping))
+                                                trace.note(
+                                                    A0SmokeTrace.Stage.SERVER_READ_TIMEOUT,
+                                                    TraceOutcome.DEGRADED,
+                                                    A0SmokeTrace.Reason.READ_TIMEOUT
+                                                )
                                         } catch (_: IOException) {
-                                            trace.note(
-                                                A0SmokeTrace.Stage.SERVER_READ_FAILURE,
-                                                TraceOutcome.DEGRADED,
-                                                A0SmokeTrace.Reason.SERVER_IO_FAILURE
-                                            )
-                                            failedServerReader.set(true)
+                                            if(A0ServerReaderShutdownPolicy.shouldReportReadFailure(stopping)) {
+                                                trace.note(
+                                                    A0SmokeTrace.Stage.SERVER_READ_FAILURE,
+                                                    TraceOutcome.DEGRADED,
+                                                    A0SmokeTrace.Reason.SERVER_IO_FAILURE
+                                                )
+                                                failedServerReader.set(true)
+                                            }
                                         }
                                     }
-                                    val peerStatus = inbox.poll(12, TimeUnit.SECONDS)
+                                    val peerStatus = if (transferObserved) {
+                                        // Keep at most two variants INSIDE the original
+                                        // 18s discovery window, without a reconnect or
+                                        // new search token. The canonical request remains
+                                        // unchanged for title/album/quality verification.
+                                        val recovery=A0SearchRecoveryPlan(
+                                            checkNotNull(enteredSearch))
+                                        val sent=mutableSetOf(checkNotNull(requestedSearch))
+                                        fun sendRescue(elapsedMillis:Long) {
+                                            if (failedServerReader.get() || !readerGate.isOpen() ||
+                                                stopping || Thread.currentThread().isInterrupted)
+                                                return
+                                            val variant=recovery.next(elapsedMillis,
+                                                handoff?.hasRelevantCandidateForSearchRecovery()==true,
+                                                sent) ?: return
+                                            try {
+                                                connection.getOutputStream().apply {
+                                                    write(A0OneShotPublicSearchWire.fileSearch(token,variant))
+                                                    flush()
+                                                }
+                                                sent.add(variant)
+                                                trace.note(A0SmokeTrace.Stage.SEARCH_VARIANT_SENT)
+                                                runOnUiThread {
+                                                    if(!stopping && readerGate.isOpen())
+                                                        status.text="Buscando outra variação segura; " +
+                                                            "identidade, álbum e qualidade preservados."
+                                                }
+                                            } catch (_: IOException) {
+                                                trace.note(A0SmokeTrace.Stage.SEARCH_VARIANT_FAILED,
+                                                    TraceOutcome.DEGRADED,
+                                                    A0SmokeTrace.Reason.SERVER_IO_FAILURE)
+                                            }
+                                        }
+                                        val early=inbox.poll(6,TimeUnit.SECONDS)
+                                        handoff?.progress()?.let {
+                                            windowEvidence.record(6,it.responses,it.provisionalClaims)
+                                        }
+                                        if(early==null)sendRescue(6000L)
+                                        val middle=early ?: inbox.poll(6,TimeUnit.SECONDS)
+                                        handoff?.progress()?.let {
+                                            windowEvidence.record(12,it.responses,it.provisionalClaims)
+                                        }
+                                        if(middle==null)sendRescue(12000L)
+                                        val finalStatus=middle ?: inbox.poll(6,TimeUnit.SECONDS)
+                                        // Capture the actual window-end observation BEFORE
+                                        // server/peer shutdown and any later drain callbacks.
+                                        handoff?.progress()?.let {
+                                            windowEvidence.record(18,it.responses,it.provisionalClaims)
+                                        }
+                                        finalStatus
+                                    } else inbox.poll(12,TimeUnit.SECONDS)
                                     readerGate.stop()
                                     result = peerStatus ?: when {
                                         failedServerReader.get() ->
                                             "O canal do servidor foi interrompido durante a busca. " +
                                                 "Nenhuma transferência iniciada."
+                                        transferObserved && handoff?.hasCandidates() == true ->
+                                            "Coleta concluída: " +
+                                                (handoff?.screening()?.accepted ?: 0) +
+                                                " candidatos disponíveis para seleção manual."
+                                        transferObserved && receivedValidP2pReply.get() ->
+                                            handoff?.screening()?.let { report ->
+                                                "Recebidas " + report.responses + " respostas com " +
+                                                    report.publicFiles + " arquivos públicos e " +
+                                                    report.lockedFiles + " bloqueados. " +
+                                                    "Descartados: " + report.unsupportedFormat +
+                                                    " por formato, " + report.tooLarge +
+                                                    " por tamanho, " + report.noSlot +
+                                                    " por falta de slot, " + report.unsafePath +
+                                                    " por nome inválido. Nenhum candidato selecionável."
+                                            } ?: "Respostas sem candidatos elegíveis; nada foi baixado."
                                         transferObserved ->
-                                            "Nenhum candidato elegível encontrado nesta busca de até 12 segundos. " +
+                                            "Nenhuma resposta P2P utilizável na janela de 18 segundos. " +
                                                 "Tente outro termo ou outra rede; nada foi baixado."
                                         attemptedIndirect.get() ->
                                             "NEGOCIAÇÃO INDIRETA TENTADA; NENHUMA RESPOSTA P2P " +
@@ -533,7 +759,7 @@ class A0ManualLoginActivity : Activity() {
                                             "BUSCA ENVIADA; NENHUMA RESPOSTA P2P RECEBIDA. " +
                                                 "A rede pode bloquear conexões de entrada."
                                     }
-                                    if (peerStatus == null) {
+                                    if (peerStatus == null && handoff?.hasCandidates() != true) {
                                         val cause = A0CandidateOutcome.classify(
                                             handoff?.screening() ?: A0ObservedCandidateHandoff.Screening(
                                                 0,0,0,0,0,0,0,0
@@ -573,16 +799,43 @@ class A0ManualLoginActivity : Activity() {
                                             readers,
                                             closeSearchSockets={
                                                 listener.close()
-                                                activeDirectPeer?.close()
-                                                activeIndirectPeer?.close()
+                                                directCollector.closeSockets()
                                             },
                                             timeoutMillis=5000
                                         )
+                                        // The only remaining work owns separate P sockets.
+                                        // Close them before P/F takes the server connection.
+                                        activeIndirectPeers.toList().forEach { runCatching { it.close() } }
+                                        if (!directCollector.stop(4500)) {
+                                            throw IOException("A0 direct peer tasks still active")
+                                        }
+                                        activeDirectCollector=null
+                                        if (!peerWorkers.stop(4500)) {
+                                            throw IOException("A0 indirect peer tasks still active")
+                                        }
+                                        activePeerWorkers=null
                                         trace.note(A0SmokeTrace.Stage.SEARCH_READERS_JOINED)
+                                        trace.peerSearchBackpressure(
+                                            dropped=peerOfferBackpressure.get()+directOfferBackpressure.get()+
+                                                offerGate.capacityDropped+offerGate.perPeerDropped,
+                                            perPeerDropped=offerGate.perPeerDropped,
+                                            workerQueueDropped=peerOfferBackpressure.get(),
+                                            directCollectorDropped=directOfferBackpressure.get(),
+                                            globalCapacityDropped=offerGate.capacityDropped,
+                                            duplicateTickets=offerGate.duplicateCount)
+                                        trace.peerSearchWorkerPressure(
+                                            peerWorkers.snapshot(),directCollector.workerSnapshot())
+                                        handoff?.progress()?.let {
+                                            trace.searchWindowEvidence(
+                                                windowEvidence.finish(it.responses,it.provisionalClaims))
+                                        }
                                     } else {
                                         listener.close()
-                                        activeDirectPeer?.close()
-                                        activeIndirectPeer?.close()
+                                        directCollector.cancel()
+                                        activeDirectCollector=null
+                                        activeIndirectPeers.toList().forEach { runCatching { it.close() } }
+                                        peerWorkers.cancel()
+                                        activePeerWorkers=null
                                         readers.shutdownNow()
                                     }
                                 }
@@ -592,15 +845,41 @@ class A0ManualLoginActivity : Activity() {
                                         throw IOException("A0 authenticated server frame was interrupted")
                                     }
                                     val report=handoff?.screening()
-                                    if(report!=null) trace.candidateScreening(report)
+                                    if(report!=null) {
+                                        trace.candidateScreening(report)
+                                        trace.canonicalCandidateScreening(report,preset.name)
+                                        trace.searchComparison(searchComparison.observe(
+                                            checkNotNull(requestedSearch),albumConstraint,
+                                            preset.name,report.manualPrimary,report.responses))
+                                        if(batch!=null) {
+                                            // Shadow-only: re-screen at most 8192
+                                            // offer/slot pairs without initiating P/F.
+                                            // Any observation failure must not break
+                                            // an otherwise usable manual download.
+                                            runCatching {
+                                                A0ReleaseDiscoveryShadowAdapter.preview(
+                                                    batch.entries,checkNotNull(handoff).releaseShadowChoices(),
+                                                    selectedQuality,peerReliability)
+                                            }.onSuccess { trace.releaseDiscoveryCoverage(it) }
+                                        }
+                                    }
                                     if (handoff?.hasCandidates() == true) {
                                         checkNotNull(handoff).markReadersStopped()
                                         val choices=handoff.choices()
+                                        // Observational hint only. Never initiates a transfer;
+                                        // A0 still requires an explicit user-selected index.
+                                        val suggestedIndex=handoff.manualSuggestionIndex()
                                         val selectableIndices=choices.indices.filter { i ->
                                             !saveToDevice || A5ManualSaveGate.safeDestinationName(
                                                 choices[i].displayName,choices[i].sizeBytes
                                             )!=null
                                         }
+                                        // Only supported compatible advertised files are in
+                                        // the default list. Other claims require an explicit
+                                        // manual "inspect others" action, never silently win.
+                                        val profileIndices=A0ManualCandidatePolicy.primaryIndices(
+                                            choices,selectableIndices
+                                        )
                                         trace.note(A0SmokeTrace.Stage.CANDIDATES_AVAILABLE)
                                         if(saveToDevice)saveLedger?.advance(
                                             checkNotNull(saveJobId),
@@ -612,37 +891,220 @@ class A0ManualLoginActivity : Activity() {
                                             if (stopping || isFinishing || isDestroyed ||
                                                 selectableIndices.isEmpty()) {
                                                 if(selectableIndices.isEmpty())status.text=
-                                                    "Nenhum WAV/FLAC/MP3 compatível nesta busca para salvar."
+                                                    "Nenhum candidato de formato suportado nesta busca para salvar."
                                                 choiceQueue.offer(-1)
                                             } else {
                                                 status.text = if(saveToDevice)
                                                     "Escolha UM arquivo autorizado para salvar como música local."
                                                 else "Selecione UM arquivo autorizado. Nenhum download automático."
-                                                val titles=selectableIndices.map { i ->
-                                                    val candidate=choices[i]
-                                                    val peer = candidate.peerUsername.filter {
-                                                        it.code in 33..126
-                                                    }.take(32)
-                                                    val format = candidate.displayName
-                                                        .substringAfterLast('.', "desconhecido")
-                                                        .uppercase().take(6)
-                                                    "${candidate.displayName} — formato indicado ${format} — " +
-                                                        "${candidate.sizeBytes} bytes — peer: ${peer}"
-                                                }.toTypedArray()
-                                                // A list dialog must not also setMessage():
-                                                // Android's content controller may hide its list.
-                                                AlertDialog.Builder(this@A0ManualLoginActivity)
-                                                    .setTitle("Escolha um arquivo autorizado (até 64 MiB)")
-                                                    .setItems(titles) { _, index ->
-                                                        choiceQueue.offer(selectableIndices[index])
+                                                // Filters affect only presentation; the full
+                                                // bounded ranked set stays in memory for retry.
+                                                fun showChoices(formatFilter:String?=null,
+                                                    qualityFilter:Int=0,
+                                                    inspectOthers:Boolean=false) {
+                                                    val scoped=if(inspectOthers) selectableIndices
+                                                        else profileIndices
+                                                    val visible=scoped.filter { i ->
+                                                        val file=choices[i]
+                                                        val ext=file.displayName.substringAfterLast('.', "")
+                                                        val formatOk=formatFilter==null ||
+                                                            ext.equals(formatFilter,ignoreCase=true)
+                                                        val qualityOk=when(qualityFilter) {
+                                                            1 -> file.matchScore>=65 &&
+                                                                file.preflight.confidence!=A0CandidatePreflight.Confidence.UNSAFE
+                                                            2 -> file.quality==A0CandidateRank.Quality.LOSSLESS_ADVERTISED
+                                                            3 -> ext.equals("mp3",ignoreCase=true) &&
+                                                                (file.declaredBitrateKbps ?: 0)>=256
+                                                            4 -> A0CandidateRank.Warning.VERSION_MISMATCH !in file.warnings
+                                                            else -> true
+                                                        }
+                                                        formatOk && qualityOk
                                                     }
-                                                    .setNegativeButton("Cancelar") { _, _ ->
-                                                        choiceQueue.offer(-1)
+                                                    if(visible.isEmpty()) {
+                                                        AlertDialog.Builder(this@A0ManualLoginActivity)
+                                                            .setTitle("Nenhum candidato atende à qualidade")
+                                                            .setMessage(
+                                                                if(inspectOthers)
+                                                                    "Nenhum arquivo corresponde ao filtro adicional. " +
+                                                                        "Volte ao perfil desejado ou cancele."
+                                                                else
+                                                                    "O Soulseek pesquisa por texto; nenhum arquivo " +
+                                                                        "anunciou o perfil ${preset.label}. " +
+                                                                        "Você pode inspecionar os demais candidatos " +
+                                                                        "sem alterar a qualidade escolhida.")
+                                                            .setPositiveButton(
+                                                                if(inspectOthers) "Perfil desejado" else "Inspecionar outros"
+                                                            ) { _, _ ->
+                                                                showChoices(inspectOthers=!inspectOthers)
+                                                            }
+                                                            .setNegativeButton("Cancelar") { _, _ ->
+                                                                choiceQueue.offer(-1)
+                                                            }
+                                                            .setOnCancelListener { choiceQueue.offer(-1) }
+                                                            .show()
+                                                        return
                                                     }
-                                                    .setOnCancelListener {
-                                                        choiceQueue.offer(-1)
-                                                    }
-                                                    .show()
+                                                    val titles=visible.map { i ->
+                                                        val candidate=choices[i]
+                                                        val peer=candidate.peerUsername.filter {
+                                                            it.code in 33..126
+                                                        }.take(32)
+                                                        val format=candidate.displayName
+                                                            .substringAfterLast('.', "desconhecido")
+                                                            .uppercase().take(6)
+                                                        val match=when(candidate.matchSignal) {
+                                                            A0CandidateRank.Match.ALL_TERMS ->
+                                                                "todos os termos"
+                                                            A0CandidateRank.Match.SOME_TERMS ->
+                                                                "parte dos termos"
+                                                            A0CandidateRank.Match.NO_TERMS ->
+                                                                "sem correspondência forte"
+                                                        }
+                                                        val bitrate=candidate.declaredBitrateKbps?.let {
+                                                            " — " + it + " kbps declarados"
+                                                        }.orEmpty()
+                                                        val quality=when(candidate.quality) {
+                                                            A0CandidateRank.Quality.LOSSLESS_ADVERTISED ->
+                                                                "lossless declarado"
+                                                            A0CandidateRank.Quality.HIGH_ADVERTISED ->
+                                                                "alta qualidade declarada"
+                                                            A0CandidateRank.Quality.MEDIUM_ADVERTISED ->
+                                                                "qualidade média declarada"
+                                                            A0CandidateRank.Quality.LOW_ADVERTISED ->
+                                                                "qualidade baixa declarada"
+                                                            A0CandidateRank.Quality.UNKNOWN_ADVERTISED ->
+                                                                "qualidade não confirmada"
+                                                        }
+                                                        val duration=candidate.declaredDurationSeconds?.let {
+                                                            " — " + (it/60) + ":" +
+                                                                (it%60).toString().padStart(2,'0')
+                                                        }.orEmpty()
+                                                        val flags=if(candidate.warnings.isEmpty()) ""
+                                                            else " — alerta: " + candidate.warnings.joinToString {
+                                                                it.name.lowercase()
+                                                            }
+                                                        val albumWarning=when(candidate.albumEvidence.status) {
+                                                            A0CanonicalAlbumPolicy.Status.UNCONSTRAINED -> ""
+                                                            A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED ->
+                                                                " — álbum declarado compatível (não verificado)"
+                                                            A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL ->
+                                                                " — álbum não comprovado; conferir"
+                                                            A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM ->
+                                                                " — ALERTA: pasta anuncia outro álbum"
+                                                        }
+                                                        val qualityWarning=when(candidate.qualityEvidence.status) {
+                                                            A0DownloadQualityPolicy.Status.NOT_CONSTRAINED,
+                                                            A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED -> ""
+                                                            A0DownloadQualityPolicy.Status.INCONCLUSIVE_MANUAL ->
+                                                                " — qualidade desejada inconclusiva"
+                                                            A0DownloadQualityPolicy.Status.INCOMPATIBLE ->
+                                                                " — perfil solicitado não atendido"
+                                                            A0DownloadQualityPolicy.Status.UNAVAILABLE ->
+                                                                " — codec/preset indisponível"
+                                                            A0DownloadQualityPolicy.Status.INVALID_PROFILE ->
+                                                                " — restrição personalizada inválida"
+                                                        }
+                                                        val preflight=when(candidate.preflight.confidence) {
+                                                            A0CandidatePreflight.Confidence.STRONG ->
+                                                                "correspondência forte (não verificada)"
+                                                            A0CandidatePreflight.Confidence.REVIEW ->
+                                                                "conferir dados antes de baixar"
+                                                            A0CandidatePreflight.Confidence.UNSAFE ->
+                                                                "divergências nos metadados"
+                                                        }
+                                                        val reasons=when {
+                                                            candidate.preflight.reasons.isEmpty() -> ""
+                                                            else -> " — " + candidate.preflight.reasons.joinToString(
+                                                                separator=", ",limit=3,truncated="..."
+                                                            ) { reason -> when(reason) {
+                                                                A0CandidatePreflight.Reason.TITLE_MISMATCH ->
+                                                                    "título/artista divergentes"
+                                                                A0CandidatePreflight.Reason.ARTIST_UNCONFIRMED ->
+                                                                    "artista sem confirmação"
+                                                                A0CandidatePreflight.Reason.ARTIST_CONFLICT ->
+                                                                    "artista divergente no arquivo"
+                                                                A0CandidatePreflight.Reason.IDENTITY_AMBIGUOUS ->
+                                                                    "termos extras não identificados"
+                                                                A0CandidatePreflight.Reason.VERSION_CONFLICT ->
+                                                                    "versão alternativa"
+                                                                A0CandidatePreflight.Reason.DURATION_UNCONFIRMED ->
+                                                                    "duração não comparável"
+                                                                A0CandidatePreflight.Reason.DURATION_CONFLICT ->
+                                                                    "duração divergente"
+                                                                A0CandidatePreflight.Reason.SIZE_CONFLICT ->
+                                                                    "tamanho improvável"
+                                                                A0CandidatePreflight.Reason.ENCODING_CONFLICT ->
+                                                                    "codificação inconsistente"
+                                                                A0CandidatePreflight.Reason.QUALITY_UNCONFIRMED ->
+                                                                    "qualidade não confirmada"
+                                                            } }
+                                                        }
+                                                        val source=when(candidate.peerAvailability.tier) {
+                                                            A0PeerAvailability.Tier.READY ->
+                                                                "fonte favorável (anunciada)"
+                                                            A0PeerAvailability.Tier.UNKNOWN ->
+                                                                "disponibilidade incerta"
+                                                            A0PeerAvailability.Tier.CONGESTED ->
+                                                                "fonte congestionada/lenta"
+                                                            A0PeerAvailability.Tier.UNAVAILABLE ->
+                                                                "fonte indisponível"
+                                                        }
+                                                        val queue=candidate.peerAvailability.queueLength
+                                                            ?.let { " — fila anunciada " + it }.orEmpty()
+                                                        val speed=candidate.peerAvailability.speedKiBps
+                                                            ?.let { " — upload anunciado " + it + " KiB/s" }
+                                                            .orEmpty()
+                                                        val lead=if(i==suggestedIndex)
+                                                            "Mais indicado para conferir — " else ""
+                                                        lead + candidate.displayName + " — " + format + bitrate +
+                                                            duration + " — " + candidate.sizeBytes + " bytes" +
+                                                            " — " + quality + " — relevância " +
+                                                            candidate.matchScore + " (" + match + ")" +
+                                                            " — " + preflight + reasons + flags +
+                                                            albumWarning + qualityWarning +
+                                                            " — " + source + queue + speed +
+                                                            " — slot livre anunciado — peer: " + peer
+                                                    }.toTypedArray()
+                                                    AlertDialog.Builder(this@A0ManualLoginActivity)
+                                                        .setTitle("Candidatos (" + visible.size +
+                                                            "/" + selectableIndices.size + ", até 256 MiB)" +
+                                                            (if(inspectOthers) " · fora do perfil" else " · ${preset.label}"))
+                                                        .setItems(titles) { _, index ->
+                                                            choiceQueue.offer(visible[index])
+                                                        }
+                                                        .setNeutralButton("Filtrar formato") { _, _ ->
+                                                            val labels=arrayOf(
+                                                                "Todos","Mais relevantes","Lossless declarado",
+                                                                "MP3 ≥256 kbps","Ocultar versões alternativas",
+                                                                "MP3","FLAC","WAV","AAC"
+                                                            )
+                                                            val formats=arrayOf<String?>(
+                                                                null,null,null,null,null,
+                                                                "mp3","flac","wav","aac"
+                                                            )
+                                                            val qualities=intArrayOf(
+                                                                0,1,2,3,4,0,0,0,0
+                                                            )
+                                                            AlertDialog.Builder(this@A0ManualLoginActivity)
+                                                                .setTitle("Filtrar (reversível)")
+                                                                .setItems(labels) { _, index ->
+                                                                    showChoices(formats[index],qualities[index],inspectOthers)
+                                                                }
+                                                                .setNegativeButton("Voltar") { _, _ ->
+                                                                    showChoices(formatFilter,qualityFilter,inspectOthers)
+                                                                }
+                                                                .setOnCancelListener {
+                                                                    showChoices(formatFilter,qualityFilter,inspectOthers)
+                                                                }.show()
+                                                        }
+                                                        .setNegativeButton("Cancelar") { _, _ ->
+                                                            choiceQueue.offer(-1)
+                                                        }
+                                                        .setOnCancelListener {
+                                                            choiceQueue.offer(-1)
+                                                        }.show()
+                                                }
+                                                showChoices()
                                             }
                                         }
                                         // Retain exclusive server-stream ownership while
@@ -679,6 +1141,7 @@ class A0ManualLoginActivity : Activity() {
                                                 lastTransferPhase=phase
                                                 trace.transferPhase(phase)
                                             }
+                                            bytesStagedForCurrent=true
                                             try {
                                                 trace.note(A0SmokeTrace.Stage.P_F_TRANSFER_COMPLETED)
                                                 if(saveToDevice) {
@@ -705,6 +1168,7 @@ class A0ManualLoginActivity : Activity() {
                                                         }
                                                     )
                                                     trace.note(A0SmokeTrace.Stage.LOCAL_SAVE_PUBLISHED)
+                                                    publishedForCurrent=true
                                                     result="MÚSICA LOCAL SALVA: ${saved.byteCount} bytes. " +
                                                         "Confira Biblioteca → No dispositivo. " +
                                                         "SHA-256 observado não comprova autenticidade."
@@ -761,19 +1225,29 @@ class A0ManualLoginActivity : Activity() {
                     trace.note(A0SmokeTrace.Stage.LOGIN_DENIED, TraceOutcome.FAILED, finalReason)
                     result = "LOGIN RECUSADO. Confira a conta e desconecte o Seeker."
                 } catch (error: SocketTimeoutException) {
-                    if(transferAttempted) {
+                    if(bytesStagedForCurrent) {
+                        trace.localSaveFailure(A0LocalSaveFailure.classify(error))
+                    } else if(transferAttempted) {
                         trace.transferFailure(lastTransferPhase,error)
                     }
                     finalOutcome = if(transferAttempted) TraceOutcome.FAILED
                         else TraceOutcome.DEGRADED
-                    finalReason = A0SmokeTrace.Reason.READ_TIMEOUT
+                    finalReason = if(bytesStagedForCurrent)
+                        A0SmokeTrace.Reason.LOCAL_SAVE_FAILURE
+                    else A0SmokeTrace.Reason.READ_TIMEOUT
                     val readProgress = loginReplyProgress
-                    if (!searchSubmitted && readProgress != null) {
-                        trace.loginResponseProblem(readProgress.phase, timedOut = true)
-                    } else {
-                        trace.note(A0SmokeTrace.Stage.SERVER_READ_TIMEOUT, TraceOutcome.DEGRADED, finalReason)
+                    if(!bytesStagedForCurrent) {
+                        if (!searchSubmitted && readProgress != null) {
+                            trace.loginResponseProblem(readProgress.phase, timedOut = true)
+                        } else {
+                            trace.note(A0SmokeTrace.Stage.SERVER_READ_TIMEOUT,
+                                TraceOutcome.DEGRADED,finalReason)
+                        }
                     }
-                    result = if(transferAttempted) {
+                    result = if(bytesStagedForCurrent) {
+                        "Áudio recebido, mas a publicação local não terminou. " +
+                            "Confira destino/permissões sem iniciar downloads repetidos."
+                    } else if(transferAttempted) {
                         "TIMEOUT NA NEGOCIAÇÃO P/F. Nenhum arquivo concluído."
                     } else if (searchSubmitted) {
                         "BUSCA ENVIADA; NENHUMA RESPOSTA P2P RECEBIDA. " +
@@ -782,26 +1256,52 @@ class A0ManualLoginActivity : Activity() {
                         "TIMEOUT. A conexão ou resposta do servidor não chegou."
                     }
                 } catch (error: IllegalArgumentException) {
-                    if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
+                    if(bytesStagedForCurrent)
+                        trace.localSaveFailure(A0LocalSaveFailure.classify(error))
+                    else if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
                     finalOutcome=TraceOutcome.FAILED
-                    finalReason = A0SmokeTrace.Reason.INVALID_INPUT
-                    trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE, TraceOutcome.FAILED, finalReason)
-                    result = "ENTRADA INVÁLIDA. Confira usuário e senha de teste."
+                    finalReason = if(bytesStagedForCurrent)
+                        A0SmokeTrace.Reason.LOCAL_SAVE_FAILURE
+                    else A0SmokeTrace.Reason.INVALID_INPUT
+                    if(!bytesStagedForCurrent)
+                        trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE,TraceOutcome.FAILED,finalReason)
+                    result = if(bytesStagedForCurrent)
+                        "Arquivo recebido, mas a publicação local foi recusada. " +
+                            "Nenhum novo item foi confirmado na biblioteca."
+                    else "ENTRADA INVÁLIDA. Confira usuário e senha de teste."
                 } catch (error: IOException) {
-                    if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
+                    if(bytesStagedForCurrent)
+                        trace.localSaveFailure(A0LocalSaveFailure.classify(error))
+                    else if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
                     finalOutcome=TraceOutcome.FAILED
                     val readProgress = loginReplyProgress
                     if (!searchSubmitted && readProgress != null) {
                         trace.loginResponseProblem(readProgress.phase, timedOut = false)
                     }
-                    finalReason = when (error) {
+                    finalReason = if(bytesStagedForCurrent)
+                        A0SmokeTrace.Reason.LOCAL_SAVE_FAILURE
+                    else when (error) {
                         is UnknownHostException -> A0SmokeTrace.Reason.DNS_FAILURE
                         is ConnectException -> A0SmokeTrace.Reason.CONNECT_FAILED
                         is SocketException -> A0SmokeTrace.Reason.SOCKET_CLOSED
                         else -> A0SmokeTrace.Reason.SERVER_IO_FAILURE
                     }
-                    trace.note(A0SmokeTrace.Stage.IO_FAILURE, TraceOutcome.FAILED, finalReason)
+                    if(!bytesStagedForCurrent)
+                        trace.note(A0SmokeTrace.Stage.IO_FAILURE,TraceOutcome.FAILED,finalReason)
                     result = when {
+                        bytesStagedForCurrent -> when(A0LocalSaveFailure.classify(error)) {
+                            A0LocalSaveFailure.Kind.DESTINATION_COLLISION ->
+                                "Áudio recebido, mas já existe um arquivo com esse nome na pasta. " +
+                                    "Nenhum arquivo existente foi substituído."
+                            A0LocalSaveFailure.Kind.UNSUPPORTED_AUDIO ->
+                                "Áudio recebido, mas a assinatura do arquivo não combina " +
+                                    "com um formato de áudio suportado. Nenhum arquivo publicado."
+                            A0LocalSaveFailure.Kind.DESTINATION_UNAVAILABLE ->
+                                "Áudio recebido, mas o destino local está indisponível. " +
+                                    "Confira pasta/permissões em Configurações → Downloads."
+                            else -> "Áudio recebido, mas a publicação local falhou. " +
+                                "Nenhum novo arquivo foi confirmado na biblioteca."
+                        }
                         transferAttempted && error is A0IndirectFileOfferWire.MalformedFileOffer ->
                             "A oferta do canal F não corresponde ao protocolo esperado. " +
                                 "O peer foi recusado por segurança; tente outro candidato."
@@ -821,11 +1321,19 @@ class A0ManualLoginActivity : Activity() {
                         else -> "ERRO DE REDE OU PROTOCOLO. Nenhum arquivo foi baixado."
                     }
                 } catch (error: RuntimeException) {
-                    if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
+                    if(bytesStagedForCurrent)
+                        trace.localSaveFailure(A0LocalSaveFailure.classify(error))
+                    else if(transferAttempted)trace.transferFailure(lastTransferPhase,error)
                     finalOutcome=TraceOutcome.FAILED
-                    finalReason = A0SmokeTrace.Reason.UNKNOWN_FAILURE
-                    trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE, TraceOutcome.FAILED, finalReason)
-                    result = "ERRO NO TESTE. Nenhuma credencial foi armazenada."
+                    finalReason = if(bytesStagedForCurrent)
+                        A0SmokeTrace.Reason.LOCAL_SAVE_FAILURE
+                    else A0SmokeTrace.Reason.UNKNOWN_FAILURE
+                    if(!bytesStagedForCurrent)
+                        trace.note(A0SmokeTrace.Stage.UNEXPECTED_FAILURE,TraceOutcome.FAILED,finalReason)
+                    result = if(bytesStagedForCurrent)
+                        "Arquivo recebido, mas não foi possível concluir a publicação local. " +
+                            "Nenhum novo item foi confirmado na biblioteca."
+                    else "ERRO NO TESTE. Nenhuma credencial foi armazenada."
                 } finally {
                     val id=saveJobId
                     val journal=saveLedger
@@ -854,6 +1362,9 @@ class A0ManualLoginActivity : Activity() {
                         transfer.cancel()
                     }
                     activeTransfer = null
+                    activePeerWorkers?.cancel()
+                    activePeerWorkers=null
+                    activeIndirectPeers.toList().forEach { runCatching { it.close() } }
                     activeListener?.close()
                     activeListener = null
                     packet?.fill(0)
@@ -864,12 +1375,33 @@ class A0ManualLoginActivity : Activity() {
                     trace.note(A0SmokeTrace.Stage.SOCKETS_CLOSED)
                     trace.finish(finalOutcome, finalReason)
                     activeTrace = null
-                    if (captureEnabled) runCatching { Diagnostics.stopCapture() }
+                    // Release only the temporary capture this feature owns.
+                    // A pre-existing or subsequently restarted manual capture
+                    // must remain active with its original expiry.
+                    featureCapture?.let { owned ->
+                        runCatching { Diagnostics.endFeatureCapture(owned) }
+                    }
                 }
                 if (!stopping && !isFinishing && !isDestroyed) {
                     runOnUiThread {
                         if (!stopping && !isFinishing && !isDestroyed) {
                             status.text = result
+                            if(batch!=null) {
+                                if(publishedForCurrent) batch.markSaved()
+                                batchStatus?.text="Lote: faixa ${batch.index+1} de " +
+                                    "${batch.entries.size} · ${batch.succeeded} salvas · " +
+                                    "${batch.skipped} puladas."
+                                nextTrack?.text=if(batch.currentSaved)
+                                    "Próxima faixa" else "Pular faixa (sem salvar)"
+                                nextTrack?.isEnabled=true
+                            }
+                            // Legacy probe exposes credential fields again:
+                            // restore protection before enabling/editing them.
+                            if (!fromSongDownload) {
+                                window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                            }
+                            user.isEnabled = true
+                            password.isEnabled = true
                             action.isEnabled = true
                             val availableAccount = accountVault.read()
                             if (availableAccount != null) {
@@ -919,6 +1451,7 @@ class A0ManualLoginActivity : Activity() {
             ).forEach { it.visibility = View.GONE }
 
             fun confirmSearch() {
+                if(batch?.isComplete==true || batch?.currentSaved==true)return
                 val saved = accountVault.read()
                 if (saved == null) {
                     status.text = "Configure sua conta em Configurações → Downloads → Soulseek."
@@ -953,6 +1486,53 @@ class A0ManualLoginActivity : Activity() {
             }
             page.addView(retry, page.childCount - 1)
             retry.setOnClickListener { if (action.isEnabled) confirmSearch() }
+            val alternative=Button(this).apply {
+                text="Tentar variação da pesquisa"
+            }
+            page.addView(alternative,page.childCount - 1)
+            alternative.setOnClickListener {
+                if (!action.isEnabled) return@setOnClickListener
+                val suggestions=runCatching {
+                    A0SearchQuery.variants(searchInput.text.toString()).drop(1)
+                }.getOrDefault(emptyList())
+                if (suggestions.isEmpty()) {
+                    status.text="Edite o termo acima e use Pesquisar candidatos novamente."
+                } else {
+                    AlertDialog.Builder(this)
+                        .setTitle("Tentar outra consulta (manual)")
+                        .setItems(suggestions.toTypedArray()) { _, index ->
+                            searchInput.setText(suggestions[index])
+                            confirmSearch()
+                        }
+                        .setNegativeButton("Cancelar",null)
+                        .show()
+                }
+            }
+            nextTrack?.setOnClickListener {
+                if(action.isEnabled && batch!=null) {
+                    val hasNext=batch.advance()
+                    if(!hasNext) {
+                        batchStatus?.text="Lote concluído: ${batch.succeeded} salvas, " +
+                            "${batch.skipped} puladas. Nenhum download adicional."
+                        nextTrack?.isEnabled=false
+                        retry.isEnabled=false
+                        alternative.isEnabled=false
+                        status.text="Lote finalizado. Confira Biblioteca → Música local."
+                    }else {
+                        val entry=checkNotNull(batch.current)
+                        searchInput.setText(entry.query)
+                        albumInput.setText(entry.album.orEmpty())
+                        intent.putExtra("bitchord.soulseek.manual.duration_seconds",
+                            entry.durationSeconds ?: 0)
+                        batchStatus?.text="Lote: faixa ${batch.index+1} de " +
+                            "${batch.entries.size} · ${batch.succeeded} salvas · " +
+                            "${batch.skipped} puladas."
+                        nextTrack?.isEnabled=false
+                        status.text="Faixa ${batch.index+1} preparada. Selecione um candidato."
+                        confirmSearch()
+                    }
+                }
+            }
             confirmSearch()
         }
     }
@@ -967,8 +1547,9 @@ class A0ManualLoginActivity : Activity() {
             A0SmokeTrace.Reason.CANCELLED
         )
         activeListener?.close() // Interrupt any pending direct peer result.
-        activeDirectPeer?.close()
-        activeIndirectPeer?.close()
+        activeDirectCollector?.cancel()
+        activePeerWorkers?.cancel()
+        activeIndirectPeers.toList().forEach { runCatching { it.close() } }
         activeSocket?.close() // Interrupt unfinished server response.
         super.onStop()
     }
@@ -982,8 +1563,9 @@ class A0ManualLoginActivity : Activity() {
         activeSelectionQueue?.offer(-1)
         activeTransfer?.cancel()
         activeListener?.close()
-        activeDirectPeer?.close()
-        activeIndirectPeer?.close()
+        activeDirectCollector?.cancel()
+        activePeerWorkers?.cancel()
+        activeIndirectPeers.toList().forEach { runCatching { it.close() } }
         activeSocket?.close()
         worker.shutdownNow()
         super.onDestroy()

@@ -39,12 +39,22 @@ internal object A0IndirectFileOfferWire {
         if(code!=18) return Event.Unrelated
         val username=string(body)
         val connType=string(body)
+        // This authenticated-server frame is already completely consumed.
+        // A late SEARCH/P offer belongs to a different flow, and its optional
+        // fields should not be allowed to abort the selected upload's F wait.
+        // Never follow its endpoint or accept it as an F channel.
+        if(connType!="F" || username!=selectedPeerUsername)
+            return Event.Unrelated
         val ip=exact(body,4).reversedArray()
         val port=le32(body)
         val token=le32(body)
-        val privileged=body.read()
-        val obfuscated=le32(body)
-        val obfuscatedPort=le32(body)
+        // Legacy clients omit the optional modern nine-byte tail.
+        // Both complete shapes are valid, but partial tails are never safe.
+        val tailBytes=body.available()
+        if(tailBytes != 0 && tailBytes != 9)malformed()
+        val privileged=if(tailBytes == 9)body.read() else 0
+        val obfuscated=if(tailBytes == 9)le32(body) else 0
+        val obfuscatedPort=if(tailBytes == 9)le32(body) else 0
         if(body.available()!=0 || privileged !in 0..1 ||
             port !in 1..65535 || token<=0 ||
             obfuscated!=0 || obfuscatedPort!=0
@@ -55,8 +65,6 @@ internal object A0IndirectFileOfferWire {
         // Ignore unrelated senders without ever opening their sockets.
         // A claimed offer FROM the selected peer at the wrong server-address
         // still fails closed; never follow its endpoint.
-        if(connType!="F" || username!=selectedPeerUsername)
-            return Event.Unrelated
         if(!ip.contentEquals(selectedServerPeerAddress.address)) malformed()
         return Event.Offer(
             address=InetAddress.getByAddress(ip),port=port,token=token
