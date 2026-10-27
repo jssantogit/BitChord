@@ -1,0 +1,30 @@
+<resources>
+    <string name="settings_nav_group_account">COMPTE</string>
+    <string name="settings_nav_group_music">MUSIQUE</string>
+    <string name="settings_nav_group_experience">EXPÉRIENCE</string>
+    <string name="settings_nav_group_data">DONNÉES</string>
+    <string name="settings_nav_group_system">SYSTÈME</string>
+    <string name="settings_nav_group_about">À PROPOS</string>
+    <string name="settings_nav_lyrics">Paroles</string>
+    <string name="settings_nav_about">À propos</string>
+    <string name="settings_nav_filtered">Résultats pour : %1$s</string>
+    <string name="settings_nav_show_all">Tout afficher</string>
+    <string name="settings_nav_controls">Contrôles et comportement</string>
+    <string name="settings_nav_advanced">Avancé</string>
+    <string name="settings_nav_desc_account">Comptes et intégrations musicales</string>
+    <string name="settings_nav_desc_audio">Sources, Wi-Fi et données mobiles</string>
+    <string name="settings_nav_desc_playback">Sortie audio, transitions et file</string>
+    <string name="settings_nav_desc_local">Dossiers et filtres audio locaux</string>
+    <string name="settings_nav_desc_appearance">Thème, pochettes et effets visuels</string>
+    <string name="settings_nav_desc_lyrics">Synchronisation, sources et traduction</string>
+    <string name="settings_nav_desc_downloads">Soulseek, qualité et destination</string>
+    <string name="settings_nav_desc_storage">Cache audio et espace de stockage</string>
+    <string name="settings_nav_desc_data">Replay, sauvegardes et importations</string>
+    <string name="settings_nav_desc_performance">Fréquence de rafraîchissement et batterie</string>
+    <string name="settings_nav_desc_misc">Gestes et comportement de lecture</string>
+    <string name="settings_nav_desc_language">Langue de interface</string>
+    <string name="settings_nav_desc_advanced">Diagnostics et commandes techniques</string>
+    <string name="settings_nav_desc_wear">Intégration de montre</string>
+    <string name="settings_nav_desc_about">Version et informations du projet</string>
+    <string name="settings_nav_desc_sources">Fournisseurs et extensions musicales</string>
+</resources>
