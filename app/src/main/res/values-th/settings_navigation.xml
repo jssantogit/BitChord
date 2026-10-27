@@ -2,7 +2,7 @@
     <string name="settings_nav_group_account">บัญชี</string>
     <string name="settings_nav_group_music">เพลง</string>
     <string name="settings_nav_group_experience">ประสบการณ์</string>
-    <string name="settings_nav_group_data">ข้อมูล</string>
+    <string name="settings_nav_group_data">ข้อมูลและดาวน์โหลด</string>
     <string name="settings_nav_group_system">ระบบ</string>
     <string name="settings_nav_group_about">เกี่ยวกับ</string>
     <string name="settings_nav_lyrics">เนื้อเพลง</string>
