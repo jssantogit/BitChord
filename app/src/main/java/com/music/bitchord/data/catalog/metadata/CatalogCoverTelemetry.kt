@@ -26,6 +26,10 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         val imageLoadSampleCount: Int,
         val p50ImageLoadMs: Long?,
         val p95ImageLoadMs: Long?,
+        val coilMemoryHits: Int,
+        val coilDiskHits: Int,
+        val coilNetworkFetches: Int,
+        val coilOtherSources: Int,
     )
 
     private var cached = 0
@@ -40,6 +44,10 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
     private var loadedImages = 0
     private var failedImages = 0
     private val imageDurations = ArrayDeque<Long>()
+    private var imageMemory = 0
+    private var imageDisk = 0
+    private var imageNetwork = 0
+    private var imageOther = 0
 
     /** Start a clean anonymous metric window for each explicit capture. */
     @Synchronized fun reset() {
@@ -55,6 +63,10 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         loadedImages = 0
         failedImages = 0
         imageDurations.clear()
+        imageMemory = 0
+        imageDisk = 0
+        imageNetwork = 0
+        imageOther = 0
     }
 
     @Synchronized fun recordCacheHit() { cached++ }
@@ -77,8 +89,22 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
      * measured at the actual Android image consumer, not inferred from the
      * much faster MB flag/direct URL nomination.
      */
-    @Synchronized fun recordImageResult(success: Boolean, durationMs: Long) {
-        if (success) loadedImages++ else failedImages++
+    @Synchronized fun recordImageResult(
+        success: Boolean,
+        durationMs: Long,
+        source: String? = null,
+    ) {
+        if (success) {
+            loadedImages++
+            // Only a four-way aggregate, never the request URL, image key,
+            // album or source metadata, is retained in diagnostics.
+            when (source?.uppercase(java.util.Locale.ROOT)) {
+                "MEMORY", "MEMORY_CACHE" -> imageMemory++
+                "DISK" -> imageDisk++
+                "NETWORK" -> imageNetwork++
+                else -> imageOther++
+            }
+        } else failedImages++
         if (imageDurations.size == maxSamples) imageDurations.removeFirst()
         imageDurations.addLast(durationMs.coerceAtLeast(0))
     }
@@ -95,11 +121,28 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
             missing, transient, networkSorted.size,
             quantile(networkSorted, 50), quantile(networkSorted, 95),
             loadedImages, failedImages, imagesSorted.size,
-            quantile(imagesSorted, 50), quantile(imagesSorted, 95))
+            quantile(imagesSorted, 50), quantile(imagesSorted, 95),
+            imageMemory, imageDisk, imageNetwork, imageOther)
     }
 
     companion object {
         /** Shared only as an in-process diagnostic; it does not persist identity. */
         val process = CatalogCoverTelemetry()
     }
+}
+
+/**
+ * CAA images can resolve to per-shard Archive.org CDN hosts. The previous
+ * diagnostic observer counted only s3.us.archive.org and silently missed
+ * other valid shards, biasing reported Coil image timing.
+ */
+internal fun isCoverArchiveImageHost(url: String?): Boolean {
+    if (url.isNullOrBlank()) return false
+    return try {
+        val uri = java.net.URI(url)
+        val host = uri.host?.lowercase(java.util.Locale.ROOT)
+        uri.scheme.equals("https", ignoreCase = true) && uri.userInfo == null &&
+            (host == "coverartarchive.org" || host == "archive.org" ||
+                host?.endsWith(".archive.org") == true)
+    } catch (_: Exception) { false }
 }
