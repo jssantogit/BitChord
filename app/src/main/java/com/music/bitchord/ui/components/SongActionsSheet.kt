@@ -76,7 +76,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
-import com.music.bitchord.data.model.LikeStatus
 import com.music.bitchord.data.model.ROW_ART_PX
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.artworkAt
@@ -98,23 +97,17 @@ import java.util.Locale
  * what the menu is opened for; the queue and navigation rows below it were
  * always the fallback for "I meant to do something with this song".
  *
- * Everything that writes to the account is hidden outright when [signedIn] is
- * false rather than shown and refused. The same goes for a track that is
- * playing from a local file or a finished download (`song.localUri != null`):
- * rating, playlists, downloading it again and sharing all assume a YouTube
- * identity the file doesn't carry, so those rows drop out regardless of
- * [signedIn].
+ * The only track rating exposed here is the canonical star editor, when an
+ * exact Recording identity is available. Legacy provider reactions are not
+ * shown. Playlist operations still depend on the account capabilities and
+ * local files can be shared as plain song metadata.
  *
- * The player's menu keeps only actionable music operations; previously shown
- * sleep, manual conversion, technical log and lyric timing entries are retired
- * from this surface. Playback and diagnostic services remain available in their
- * owning layers.
+ * The playback engine and diagnostics are independent from this action menu.
  */
 @Composable
 fun SongActionsSheet(
     song: Song,
     signedIn: Boolean,
-    likeStatus: LikeStatus,
     onPlayNext: () -> Unit,
     onAddToQueue: () -> Unit,
     onStartRadio: () -> Unit,
@@ -126,21 +119,11 @@ fun SongActionsSheet(
      * re-runs it; the conflict dialog keeps that idempotent.
      */
     onUploadToWebDav: (() -> Unit)? = null,
-    onToggleLike: () -> Unit,
-    onToggleDislike: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onOpenAlbum: (String) -> Unit,
     onOpenArtist: (String) -> Unit,
     modifier: Modifier = Modifier,
     onRemoveFromPlaylist: (() -> Unit)? = null,
-    /**
-     * Sends the playing track back to YouTube's own upload, and keeps it there.
-     * Offered for any player item that has one behind it — a substituted copy
-     * can be the wrong recording from the first second, not only after a
-     * visible upgrade. See
-     * [com.music.bitchord.playback.hasYouTubeOriginal].
-     */
-    onRollbackToOriginal: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
     /**
      * True while a lookup for this track's album/artist ids is still in
@@ -160,7 +143,7 @@ fun SongActionsSheet(
     presentation: SongActionsPresentation = SongActionsPresentation.Sheet,
     /** The image already displayed in Now Playing when its ⋯ menu was opened. */
     preloadedArtworkModel: Any? = null,
-    /** First-party canonical rating UI; independent from account Likes. */
+    /** The only rating action shown: canonical stars by Recording identity. */
     canonicalRatingContent: (@Composable () -> Unit)? = null,
 ) {
     val menu = presentation == SongActionsPresentation.Menu
@@ -177,49 +160,11 @@ fun SongActionsSheet(
     } else {
         rememberArtworkPalette(song.thumbnailUrl, artPx = ROW_ART_PX)
     }
-    val liked = likeStatus == LikeStatus.LIKE
-    val disliked = likeStatus == LikeStatus.DISLIKE
-    // A local file or a finished download has no YouTube identity behind it to
-    // rate, save, queue into a playlist, fetch again, or share a link for.
+    // A local file may not have a provider-managed playlist entry.
     val isOffline = song.localUri != null
 
     val rows: @Composable ColumnScope.() -> Unit = {
-        // Leads the list whenever it's available: which recording is playing
-        // is the one question that has to be answered before any of the rows
-        // below mean anything — there is no point rating, queueing or
-        // downloading the wrong version of a song.
-        //
-        // The two are never both present — one is offered for a track playing
-        // a substituted copy, the other for a track held on YouTube's own —
-        // and between them they are the whole of the choice, which is why they
-        // sit in the same place under the same divider.
-        if (PlayerSongMenuPolicy.offers(PlayerMenuExtra.REVERT_ORIGINAL)) {
-            onRollbackToOriginal?.let {
-                ActionRow(
-                    icon = Icons.AutoMirrored.Rounded.Undo,
-                    label = stringResource(R.string.revert_to_original),
-                    accent = palette.accent,
-                    onClick = it,
-                )
-                GroupSeparator(palette)
-            }
-        }
-
         if (signedIn && !isOffline) {
-            ActionRow(
-                icon = if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                label = if (liked) stringResource(R.string.remove_from_liked) else stringResource(R.string.like),
-                tint = if (liked) palette.accent else null,
-                accent = palette.accent,
-                onClick = onToggleLike,
-            )
-            ActionRow(
-                icon = if (disliked) Icons.Rounded.ThumbDown else Icons.Rounded.ThumbDownOffAlt,
-                label = if (disliked) stringResource(R.string.undo_dislike) else stringResource(R.string.dislike),
-                tint = if (disliked) palette.accent else null,
-                accent = palette.accent,
-                onClick = onToggleDislike,
-            )
             ActionRow(
                 icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
                 label = stringResource(R.string.add_to_playlist),
@@ -280,10 +225,8 @@ fun SongActionsSheet(
                 accent = palette.accent,
             ) { onOpenArtist(id) }
         }
-        if (!isOffline) {
-            onShare?.let {
-                ActionRow(Icons.Rounded.Share, stringResource(R.string.share), accent = palette.accent, onClick = it)
-            }
+        onShare?.let {
+            ActionRow(Icons.Rounded.Share, stringResource(R.string.share), accent = palette.accent, onClick = it)
         }
     }
 
