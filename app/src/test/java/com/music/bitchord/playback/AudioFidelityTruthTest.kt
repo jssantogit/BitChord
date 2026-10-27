@@ -11,6 +11,13 @@ import org.junit.Test
 
 class AudioFidelityTruthTest {
     @Test
+    fun `unconfigured neutral playback does not advertise a DSP chain`() {
+        val initial = AudioOutputStatus.Snapshot()
+        assertFalse("No audio effects are connected in Android playback", initial.dspAvailable)
+        assertEquals("Bypassed", initial.dspFormat)
+    }
+
+    @Test
     fun `app PCM exact alone cannot prove end to end bit perfect on speaker bluetooth or usb`() {
         for (kind in listOf(AudioRouting.Kind.PHONE, AudioRouting.Kind.BLUETOOTH, AudioRouting.Kind.USB)) {
             assertEquals(

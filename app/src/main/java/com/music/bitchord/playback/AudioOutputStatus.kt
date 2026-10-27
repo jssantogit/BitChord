@@ -63,13 +63,14 @@ object AudioOutputStatus {
         val decoderName: String? = null,
         val bufferSize: Int? = null,
         val decoderOutputEncoding: String? = null,
-        val dspFormat: String = "Float32",
+        val dspFormat: String = "Bypassed",
         /**
-         * Whether custom audio effects are available on the active route.
-         * Neutral Android playback reports false, even when its decoder
-         * supplies linear PCM; format conversion is not an audio effect.
+         * The Android service intentionally does not instantiate the custom
+         * DSP chain. No playback configured yet must also report bypass, not
+         * claim that equalizer/spatial/loudness processors are available.
+         * Format conversion alone is not a custom audio effect.
          */
-        val dspAvailable: Boolean = true,
+        val dspAvailable: Boolean = false,
         val directUsbProbe: DirectUsbProbeResult? = null,
         val directSupport: DirectAudioProbe.DirectSupport? = null,
         val directPlaybackSupported: Boolean = false,
