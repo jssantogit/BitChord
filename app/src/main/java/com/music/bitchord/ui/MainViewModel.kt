@@ -559,10 +559,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         val target = canonicalCoverLookupTarget(row)
         if (row.kind == CanonicalSearchKind.RECORDING) {
-            // Search can only nominate a release with Official status and
-            // audio Album/EP/Single classification. Never fetch another
-            // edition merely because it contains the same Recording MBID:
-            // that may be a music-video or performance release with still art.
+            // When a listener has opened an Official release, its canonical
+            // Track->Recording association is persisted. Reuse the verified
+            // group sleeve for those exact recordings before any new remote
+            // lookups; never find artwork by matching song/artist titles.
+            val ownedGroupMbid = try {
+                CanonicalCatalogDatabase.get(getApplication<Application>())
+                    .catalogDao().verifiedRecordingCoverGroupMbid(row.musicBrainzId)
+            } catch (cancelled: CancellationException) { throw cancelled }
+              catch (_: Exception) { null }
+            if (ownedGroupMbid != null) {
+                coverArtArchive.cachedVerifiedGroupCover(ownedGroupMbid, size)?.let {
+                    return it
+                }
+            }
+            // Otherwise only an independently verified Official Release ID
+            // may supply this Recording's cover, not an arbitrary compilation
+            // or a similarly named video/performance recording.
             val verifiedEdition = row.coverReleaseMbid ?: return null
             return coverArtArchive.findCover(verifiedEdition, null, size)
         }
