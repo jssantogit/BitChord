@@ -1,0 +1,30 @@
+<resources>
+    <string name="settings_nav_group_account">खाता</string>
+    <string name="settings_nav_group_music">संगीत</string>
+    <string name="settings_nav_group_experience">अनुभव</string>
+    <string name="settings_nav_group_data">डेटा</string>
+    <string name="settings_nav_group_system">सिस्टम</string>
+    <string name="settings_nav_group_about">परिचय</string>
+    <string name="settings_nav_lyrics">गीत के बोल</string>
+    <string name="settings_nav_about">परिचय</string>
+    <string name="settings_nav_filtered">इसके परिणाम: %1$s</string>
+    <string name="settings_nav_show_all">सभी देखें</string>
+    <string name="settings_nav_controls">नियंत्रण और व्यवहार</string>
+    <string name="settings_nav_advanced">उन्नत</string>
+    <string name="settings_nav_desc_account">खाते और संगीत एकीकरण</string>
+    <string name="settings_nav_desc_audio">स्रोत, वाई-फ़ाई और मोबाइल डेटा</string>
+    <string name="settings_nav_desc_playback">ऑडियो आउटपुट, ट्रांज़िशन और कतार</string>
+    <string name="settings_nav_desc_local">स्थानीय ऑडियो फ़ोल्डर और फ़िल्टर</string>
+    <string name="settings_nav_desc_appearance">थीम, कवर और दृश्य प्रभाव</string>
+    <string name="settings_nav_desc_lyrics">सिंक, स्रोत और अनुवाद</string>
+    <string name="settings_nav_desc_downloads">Soulseek, गुणवत्ता और स्थान</string>
+    <string name="settings_nav_desc_storage">ऑडियो कैश और संग्रहण</string>
+    <string name="settings_nav_desc_data">Replay, बैकअप और आयात</string>
+    <string name="settings_nav_desc_performance">रीफ़्रेश दर और बैटरी</string>
+    <string name="settings_nav_desc_misc">जेस्चर और प्लेबैक व्यवहार</string>
+    <string name="settings_nav_desc_language">इंटरफ़ेस भाषा</string>
+    <string name="settings_nav_desc_advanced">डायग्नोस्टिक्स और तकनीकी नियंत्रण</string>
+    <string name="settings_nav_desc_wear">घड़ी एकीकरण</string>
+    <string name="settings_nav_desc_about">संस्करण और प्रोजेक्ट जानकारी</string>
+    <string name="settings_nav_desc_sources">संगीत प्रदाता और एक्सटेंशन</string>
+</resources>
