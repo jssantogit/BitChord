@@ -333,4 +333,30 @@ class CanonicalCoverProgressiveEnrichmentTest {
         assertEquals(null, updated[3].artworkUri)
         assertEquals(null, updated[4].artworkUri)
     }
+
+    @Test fun visibleSearchTracksDoNotWaitBehindAnEntireAlbumArtworkQueue() {
+        val song = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            "r-1", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+            "Attention", "NewJeans", coverReleaseMbid = "release-1",
+        )
+        val album = song.copy(
+            kind = com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP,
+            title = "Get Up", musicBrainzId = "g-1", coverReleaseMbid = null,
+            releaseKind = "EP",
+        )
+        val recordings = (1..12).map {
+            song.copy(musicBrainzId = "r-$it", coverReleaseMbid = "release-$it")
+        }
+        val groups = (1..8).map { album.copy(musicBrainzId = "g-$it") }
+        val queue = com.music.bitchord.ui.canonicalSearchCoverPriorityQueue(
+            groups + recordings,
+        )
+        assertEquals(20, queue.size)
+        assertEquals(listOf("r-1", "g-1", "r-2", "g-2"),
+            queue.take(4).map { it.musicBrainzId })
+        assertEquals(12, queue.count {
+            it.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING
+        })
+        assertEquals(20, queue.map { it.musicBrainzId }.distinct().size)
+    }
 }
