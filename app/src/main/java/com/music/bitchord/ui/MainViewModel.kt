@@ -629,28 +629,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }.take(24)
         if (candidates.isEmpty() && portrait == null && knownTracks.isEmpty()) return
         canonicalSearchCoverJob = viewModelScope.launch(Dispatchers.IO) {
-            if (knownTracks.isNotEmpty()) launch {
+            // First resolve the album artwork already in Room. One SQL
+            // snapshot for the visible recordings replaces up to 24 separate
+            // Recording→Track→Release→Group graph traversals.
+            // Search's recording CAA requests await this result so an already
+            // loaded album cannot trigger a redundant remote lookup.
+            val reusedRecordingCovers = async {
+                if (knownTracks.isEmpty()) return@async emptyMap<String, String>()
                 val proven = linkedMapOf<String, String>()
                 val imageByGroup = mutableMapOf<String, String?>()
                 try {
                     val dao = CanonicalCatalogDatabase.get(getApplication<Application>())
                         .catalogDao()
-                    for (track in knownTracks) {
+                    val linked = dao.verifiedRecordingCoverGroupMbids(
+                        knownTracks.map { it.musicBrainzId }.distinct(),
+                    )
+                    for (relation in linked) {
                         currentCoroutineContext().ensureActive()
-                        val groupMbid = dao.verifiedRecordingCoverGroupMbid(
-                            track.musicBrainzId,
-                        ) ?: continue
-                        val thumbnail = if (imageByGroup.containsKey(groupMbid)) {
-                            imageByGroup[groupMbid]
+                        if (relation.recordingMbid in proven) continue
+                        val thumbnail = if (imageByGroup.containsKey(relation.groupMbid)) {
+                            imageByGroup[relation.groupMbid]
                         } else {
                             coverArtArchive.cachedVerifiedGroupCover(
-                                groupMbid, CoverArtSize.THUMBNAIL,
-                            ).also { imageByGroup[groupMbid] = it }
+                                relation.groupMbid, CoverArtSize.THUMBNAIL,
+                            ).also { imageByGroup[relation.groupMbid] = it }
                         }
-                        if (thumbnail != null) proven[track.musicBrainzId] = thumbnail
+                        if (thumbnail != null) proven[relation.recordingMbid] = thumbnail
                     }
                 } catch (cancelled: CancellationException) { throw cancelled }
-                  catch (_: Exception) { /* Live search remains usable. */ }
+                  catch (_: Exception) { /* Unresolved recordings retain remote fallback. */ }
                 if (proven.isNotEmpty() &&
                     _searchSource.value == SearchSource.CANONICAL &&
                     _query.value.trim() == query
@@ -664,6 +671,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         },
                     )
                 }
+                proven
             }
             // Artist portrait is independent decoration: don't block the
             // entire album/recording cover queue on the Apple art endpoint.
@@ -689,6 +697,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val permits = Semaphore(3)
             candidates.forEach { row ->
                 launch {
+                    // Let release covers stream immediately. Recording covers
+                    // first reuse their actual Official Album sleeve from
+                    // Room; waiting here (outside the permit) preserves all
+                    // three CAA slots for genuinely missing artwork.
+                    if (row.kind == CanonicalSearchKind.RECORDING &&
+                        row.musicBrainzId in reusedRecordingCovers.await()
+                    ) return@launch
                     permits.withPermit {
                         if (_searchSource.value != SearchSource.CANONICAL ||
                             _query.value.trim() != query) return@withPermit
