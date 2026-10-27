@@ -119,6 +119,13 @@ class PrecisionAudioSink(
      */
     private var directInputBuffer: ByteBuffer? = null
 
+    /**
+     * The decoder buffer backing a pending format-converted output block.
+     * Keep its identity until the delegate has accepted that block; otherwise
+     * a second decoder packet could overtake it while the sink is blocked.
+     */
+    private var convertedInputBuffer: ByteBuffer? = null
+
     private var pendingPresentationTimeUs: Long = C.TIME_UNSET
     private var pendingAccessUnitCount: Int = 0
 
@@ -154,6 +161,7 @@ class PrecisionAudioSink(
         val format = audioSinkConfig.format
         activeFormat = format
         directInputBuffer = null
+        convertedInputBuffer = null
 
         if (shouldActivatePrecision(format)) {
             val encoding = mapToPcmEncoding(format.pcmEncoding)
@@ -300,7 +308,10 @@ class PrecisionAudioSink(
         // A partially consumed buffer belongs to DefaultAudioSink until it
         // reports completion. Its handleBuffer contract forbids replacing
         // that instance with the next decoder packet while still pending.
-        if (neutralPlayback && directInputBuffer != null && directInputBuffer !== inputBuffer) {
+        if (neutralPlayback &&
+            ((directInputBuffer != null && directInputBuffer !== inputBuffer) ||
+                (convertedInputBuffer != null && convertedInputBuffer !== inputBuffer))
+        ) {
             return false
         }
 
@@ -309,6 +320,7 @@ class PrecisionAudioSink(
         // The delegate owns partial consumption, which is why the same buffer
         // instance must be presented again until fully drained.
         if (neutralPlayback && inEncoding == outEncoding &&
+            convertedInputBuffer == null && !outputByteBuffer.hasRemaining() &&
             (directInputBuffer === inputBuffer ||
                 (directInputBuffer == null && inputBuffer.remaining() %
                     inEncoding.bytesPerFrame(audioBlock.channelCount) == 0))
@@ -403,6 +415,7 @@ class PrecisionAudioSink(
             pendingPresentationTimeUs = blockTimeUs
             pendingAccessUnitCount = blockAccessUnits
             framesEmittedForInput += decodedFrames
+            if (neutralPlayback) convertedInputBuffer = inputBuffer
 
             val consumed = delegate.handleBuffer(
                 outputByteBuffer,
@@ -421,6 +434,9 @@ class PrecisionAudioSink(
             inputBuffer.position(inputBuffer.limit())
         }
 
+        if (neutralPlayback && !inputBuffer.hasRemaining() && !outputByteBuffer.hasRemaining()) {
+            convertedInputBuffer = null
+        }
         return !inputBuffer.hasRemaining() && !outputByteBuffer.hasRemaining()
     }
 
@@ -465,6 +481,7 @@ class PrecisionAudioSink(
         if (!neutralPlayback) dspChain.transition.leadUs = 0L
         streaming = false
         directInputBuffer = null
+        convertedInputBuffer = null
         outputByteBuffer.clear()
         outputByteBuffer.flip()
         audioBlock.clear()
@@ -483,6 +500,7 @@ class PrecisionAudioSink(
         if (!neutralPlayback) dspChain.transition.leadUs = 0L
         streaming = false
         directInputBuffer = null
+        convertedInputBuffer = null
         processCounter = 0L
         outputByteBuffer.clear()
         outputByteBuffer.flip()
@@ -520,21 +538,31 @@ class PrecisionAudioSink(
         // The renderer will resend the exact pending input on its next tick.
         if (directInputBuffer != null) return
         if (isPrecisionActive && outputByteBuffer.hasRemaining()) {
-            delegate.handleBuffer(outputByteBuffer, pendingPresentationTimeUs, pendingAccessUnitCount)
-            if (outputByteBuffer.hasRemaining()) return
+            val drained = delegate.handleBuffer(
+                outputByteBuffer,
+                pendingPresentationTimeUs,
+                pendingAccessUnitCount,
+            )
+            if (!drained || outputByteBuffer.hasRemaining()) return
         }
+        if (convertedInputBuffer?.hasRemaining() == true) return
+        convertedInputBuffer = null
         delegate.playToEndOfStream()
     }
 
     override fun isEnded(): Boolean {
-        if (directInputBuffer != null || (isPrecisionActive && outputByteBuffer.hasRemaining())) {
+        if (directInputBuffer != null || convertedInputBuffer != null ||
+            (isPrecisionActive && outputByteBuffer.hasRemaining())
+        ) {
             return false
         }
         return delegate.isEnded()
     }
 
     override fun hasPendingData(): Boolean {
-        if (directInputBuffer != null || (isPrecisionActive && outputByteBuffer.hasRemaining())) {
+        if (directInputBuffer != null || convertedInputBuffer != null ||
+            (isPrecisionActive && outputByteBuffer.hasRemaining())
+        ) {
             return true
         }
         return delegate.hasPendingData()
