@@ -110,7 +110,6 @@ private fun bitExactVerdict(
     loudnessActive: Boolean,
     eqActive: Boolean,
     spatialActive: Boolean,
-    routeActuallyObserved: Boolean,
 ): String = when {
     // Not a fault to fix: there is no DSD output path (native DSD or DoP)
     // here, so the PCM conversion is a deviation every DSD track carries,
@@ -119,10 +118,10 @@ private fun bitExactVerdict(
     loudnessActive -> "No — loudness normalization"
     eqActive -> "No — equalizer"
     spatialActive -> "No — spatial audio"
-    else -> when (AudioFidelityTruth.classify(outputExact, anyDsp = false, routeActuallyObserved = routeActuallyObserved)) {
+    else -> when (AudioFidelityTruth.classify(outputExact, anyDsp = false)) {
         FidelityTruth.ALTERED -> "No — ${outputExactDetail ?: "converted downstream"}"
-        FidelityTruth.PCM_EXACT_ROUTE_NOT_PROVEN -> "Not proven — PCM exact to AudioTrack; output route not verified"
-        FidelityTruth.END_TO_END_VERIFIED -> "Yes${outputExactDetail?.let { " ($it)" }.orEmpty()}"
+        FidelityTruth.PCM_EXACT_ROUTE_NOT_PROVEN ->
+            "PCM preserved to AudioTrack — Android output not verified"
     }
 }
 
@@ -436,7 +435,6 @@ fun AudioPipelineDialog(
                             loudnessNormalization && outputStatus.loudnessGainDb != null,
                         eqActive = outputStatus.dspAvailable && eqEnabled,
                         spatialActive = outputStatus.dspAvailable && spatialAudio,
-                        routeActuallyObserved = outputStatus.directPlaybackActual,
                     ),
                 )
             }

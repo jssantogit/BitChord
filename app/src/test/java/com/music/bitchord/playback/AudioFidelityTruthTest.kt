@@ -16,18 +16,18 @@ class AudioFidelityTruthTest {
             assertEquals(
                 "Unobserved route $kind cannot claim bit perfect",
                 FidelityTruth.PCM_EXACT_ROUTE_NOT_PROVEN,
-                AudioFidelityTruth.classify(pcmExact = true, anyDsp = false, routeActuallyObserved = false),
+                AudioFidelityTruth.classify(pcmExact = true, anyDsp = false),
             )
         }
     }
 
     @Test
-    fun `DSP or PCM conversion is altered and end to end verified needs real route observation`() {
-        assertEquals(FidelityTruth.ALTERED, AudioFidelityTruth.classify(false, false, false))
-        assertEquals(FidelityTruth.ALTERED, AudioFidelityTruth.classify(true, true, true))
+    fun `DSP and PCM conversion remain altered but direct route is not end to end proof`() {
+        assertEquals(FidelityTruth.ALTERED, AudioFidelityTruth.classify(false, false))
+        assertEquals(FidelityTruth.ALTERED, AudioFidelityTruth.classify(true, true))
         // A direct AudioTrack observation is insufficient to prove the
         // intervening Android mixer/HAL or external output path.
-        assertEquals(FidelityTruth.PCM_EXACT_ROUTE_NOT_PROVEN, AudioFidelityTruth.classify(true, false, true))
+        assertEquals(FidelityTruth.PCM_EXACT_ROUTE_NOT_PROVEN, AudioFidelityTruth.classify(true, false))
     }
 
     @Test
