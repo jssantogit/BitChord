@@ -27,4 +27,6 @@
     <string name="settings_nav_desc_wear">Integración con reloj</string>
     <string name="settings_nav_desc_about">Versión e información del proyecto</string>
     <string name="settings_nav_desc_sources">Proveedores y extensiones musicales</string>
+    <string name="settings_nav_diagnostics_title">Diagnósticos</string>
+    <string name="settings_nav_diagnostics_subtitle">Capturar, revisar y compartir informes de diagnóstico</string>
 </resources>
