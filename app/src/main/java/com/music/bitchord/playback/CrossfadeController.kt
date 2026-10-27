@@ -154,23 +154,6 @@ class CrossfadeController(
      */
     private val analysisRunningFor: (MediaItem) -> Boolean = { false },
     /**
-     * The track about to be loaded onto the standby player, announced at the
-     * moment [begin] arms rather than at the handoff.
-     *
-     * The timing is the entire point. Anything keyed to the *incoming* track
-     * that lives on the standby player's audio path has to be set before that
-     * player renders a frame, and the handoff happens after the incoming track
-     * is already audible. Loudness normalization is the case that motivated
-     * it: the standby's processor has to be told which song it is about to
-     * level, or it spends the first half of the blend applying the outgoing
-     * track's gain to the incoming one.
-     *
-     * Also given the media id of whatever follows the incoming track on the
-     * standby's queue, so that player's per-track state can follow it across
-     * a later gapless boundary without waiting on the service.
-     */
-    private val onArmIncoming: (MediaItem, String?) -> Unit = { _, _ -> },
-    /**
      * True while the service is mid-swap between two versions/cuts of the
      * current track. That swap fades across the same active/standby pair
      * this controller does, so the two must never run at once — arming a
@@ -1260,14 +1243,6 @@ class CrossfadeController(
         into.setMediaItems(items, nextIndex, incomingCueTimeMs)
         val setDurationUs = (SystemClock.elapsedRealtimeNanos() - setNanos0) / 1000L
         Log.d(TAG, "standby setMediaItems: ${items.size} tracks in ${setDurationUs}µs")
-        // Before `prepare`, so the standby's per-player audio state is right
-        // for the incoming track from its very first decoded frame rather than
-        // from the handoff, which is half a blend too late.
-        items.getOrNull(nextIndex)?.let { item ->
-            val after = into.nextMediaItemIndex
-            val afterId = if (after == C.INDEX_UNSET) null else items.getOrNull(after)?.mediaId
-            onArmIncoming(item, afterId)
-        }
         // Buffers without sounding. Started for real in [startFade].
         into.playWhenReady = false
         into.prepare()

@@ -1701,10 +1701,8 @@ class PlaybackService : MediaLibraryService() {
         val sparePlayer = buildPlayer(deckA = false, ownsSession = false)
         player = exoPlayer
         spare = sparePlayer
-        // Both sinks feed the same session id, so the system equalizer and any
-        // other effect attached to the app applies to whichever player happens
-        // to be audible. Without it a crossfade would audibly change EQ halfway
-        // through, and again at every handoff.
+        // Both decks keep one audio session so focus and routing remain
+        // continuous when a crossfade or version swap hands over control.
         sparePlayer.audioSessionId = exoPlayer.audioSessionId
         audioManager?.registerAudioDeviceCallback(outputDeviceCallback, null)
         applyOutputRoute()
@@ -6445,8 +6443,8 @@ class PlaybackService : MediaLibraryService() {
         // (Plus, Atmos) on phones without Dolby's own decoder. Atmos then plays
         // as its 5.1 bed, folded down to stereo — the object layer needs
         // Dolby's decoder, which is the only thing that can read it.
-        // Same sink as the MediaCodec renderer, so the DSP chain and the
-        // precision path see no difference between the two.
+        // Both decoder paths share the same neutral PCM sink and output
+        // format negotiation, regardless of the input codec.
         override fun buildAudioRenderers(
             context: Context,
             extensionRendererMode: Int,
@@ -6487,10 +6485,8 @@ class PlaybackService : MediaLibraryService() {
                 // scaling, so the position clock drifted away from the sound.
                 // AudioTrack's own playback params work on either branch.
                 //
-                // Silence skipping is in that same dropped chain and has no
-                // such escape hatch; the equaliser screen says so, and the
-                // equaliser itself is unaffected because it runs upstream in
-                // [PrecisionAudioSink], not here.
+                // Silence skipping remains an explicit optional feature:
+                // neutral playback leaves it off unless requested.
                 .setEnableAudioTrackPlaybackParams(
                     enableAudioTrackPlaybackParams || enableFloatOutput,
                 )
@@ -8824,8 +8820,6 @@ class PlaybackService : MediaLibraryService() {
         const val MIN_LOUDNESS_GAIN_MB = -1500
         const val MAX_LOUDNESS_GAIN_MB = 300
 
-        /** How long [scheduleLoudnessRetry] waits for a still-resolving figure. */
-        const val LOUDNESS_RETRY_MS = 6_000L
 
         /**
          * How long a Discord teardown may spend clearing the presence before the
