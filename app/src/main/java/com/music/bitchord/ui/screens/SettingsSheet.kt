@@ -468,8 +468,15 @@ internal fun SettingsScreen(
         // above lists that as the module's own row now. Lossless itself is no
         // longer a setting at all — see
         // [SourceResolver.requestForNow][com.music.bitchord.data.sources.SourceResolver.requestForNow].
-        if (selectedSection == SettingsSection.AUDIO_QUALITY || (selectedSection == null && searchQuery.isNotBlank())) {
-        SearchableSettingsGroup(search, destination = SettingsSection.AUDIO_QUALITY, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.AUDIO_QUALITY) } else null, header = stringResource(R.string.audio_quality)) {
+        if (selectedSection == SettingsSection.SOURCES || (selectedSection == null && searchQuery.isNotBlank())) {
+            SearchableSettingsGroup(
+                search,
+                destination = SettingsSection.SOURCES,
+                onSearchNavigate = if (selectedSection == null) {
+                    _: String -> onSelectSection(SettingsSection.SOURCES)
+                } else null,
+                header = stringResource(R.string.sources),
+            ) {
             val sourceTitle = stringResource(R.string.source)
             val sourceSubtitle = stringResource(R.string.sources_subtitle)
             row(sourceTitle, sourceSubtitle, "addon", "lossless") {
@@ -480,6 +487,11 @@ internal fun SettingsScreen(
                     onClick = onSources,
                 )
             }
+            }
+        }
+
+        if (selectedSection == SettingsSection.AUDIO_QUALITY || (selectedSection == null && searchQuery.isNotBlank())) {
+        SearchableSettingsGroup(search, destination = SettingsSection.AUDIO_QUALITY, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.AUDIO_QUALITY) } else null, header = stringResource(R.string.audio_quality)) {
             val onWifiTitle = stringResource(R.string.on_wifi)
             row(onWifiTitle, "wi-fi", "streaming quality") {
                 SettingsRow(
