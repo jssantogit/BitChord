@@ -1,11 +1,15 @@
 package com.music.bitchord.ui.screens
 
 import android.app.Application
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -33,10 +37,12 @@ class SettingsNavigationTest {
         var opened: SettingsSection? = null
         compose.setContent {
             MaterialTheme {
-                SettingsHome(onSelect = { opened = it })
+                Column(androidx.compose.ui.Modifier.verticalScroll(rememberScrollState())) {
+                    SettingsHome(onSelect = { opened = it })
+                }
             }
         }
-        compose.onNodeWithTag("settings-category-APPEARANCE").performClick()
+        compose.onNodeWithTag("settings-category-APPEARANCE").performScrollTo().performClick()
         compose.runOnIdle { assertEquals(SettingsSection.APPEARANCE, opened) }
     }
 
