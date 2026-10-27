@@ -430,7 +430,6 @@ internal fun SettingsScreen(
             SettingsDetailHeader(
                 section = selectedSection,
                 filteredQuery = searchQuery,
-                onBack = { onSelectSection(null) },
                 onClearFilter = { searchQuery = "" },
             )
         }
