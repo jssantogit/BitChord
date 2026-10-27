@@ -135,4 +135,42 @@ class A0CanonicalAlbumPolicyTest {
         assertFalse(answer.authorizesTransfer)
     }
 
+
+    @Test fun compositePeerFolderContainingFullAlbumIsReviewNotConflictOrMatch() {
+        val target=A0CanonicalAlbumPolicy.Target("BREAK EVEN",expectedArtist="ILLIT")
+        for(folder in listOf(
+            "ILLIT - BREAK EVEN [FLAC]",
+            "BREAK EVEN (2026) 24bit",
+            "ILLIT - BREAK EVEN",
+            "Music - BREAK EVEN (Deluxe)"
+        )) {
+            val decision=policy.assess(target,A0CanonicalAlbumPolicy.Claim(
+                folder,A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
+            assertEquals(folder,A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL,decision.status)
+            assertEquals(A0CanonicalAlbumPolicy.Reason.ALBUM_HINT_COMPOSITE,decision.reason)
+            assertFalse(decision.authorizesTransfer)
+        }
+        val wrong=policy.assess(target,A0CanonicalAlbumPolicy.Claim(
+            "ILLIT - Another Album [FLAC]",
+            A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
+        assertEquals(A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM,wrong.status)
+    }
+
+    @Test fun compositeNamesNeverOverrideExplicitConflictOrAlternateVersion() {
+        val target=A0CanonicalAlbumPolicy.Target("BREAK EVEN",expectedArtist="ILLIT")
+        for(label in listOf("ILLIT - BREAK EVEN [FLAC]","BREAK EVEN (Deluxe)")) {
+            assertEquals(A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM,
+                policy.assess(target,A0CanonicalAlbumPolicy.Claim(label,
+                    A0CanonicalAlbumPolicy.ClaimSource.EXPLICIT_ALBUM_FIELD)).status)
+        }
+        for(folder in listOf("BREAK EVEN (Live)","BREAK EVEN - Remix",
+            "ILLIT - BREAK EVEN remastered 2023")) {
+            assertEquals(folder,A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM,
+                policy.assess(target,A0CanonicalAlbumPolicy.Claim(folder,
+                    A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT)).status)
+        }
+        val notSubstring=policy.assess(target,A0CanonicalAlbumPolicy.Claim(
+            "BREAK EVENT (2026)",A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
+        assertEquals(A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM,notSubstring.status)
+    }
 }
