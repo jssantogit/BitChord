@@ -487,6 +487,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                         }
                     }
                 }
+            }
             item(key = "v2-classic-heading") {
                 Text("Playlists clássicas", style = MaterialTheme.typography.titleMedium)
                 Text("Você pode converter uma cópia sem alterar a playlist original.",
@@ -513,7 +514,6 @@ internal fun SmartPlaylistV2BuilderScreen(
                         enabled = !loading,
                     ) { Text("Converter cópia") }
                 }
-            }
             }
         }
     }
