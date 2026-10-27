@@ -265,7 +265,6 @@ internal class MusicBrainzCatalogIndex(
                     edition.musicBrainzId, edition.title,
                     edition.country, edition.releaseDate,
                     edition.artistDisplay, status = edition.status,
-                    releaseGroupMbid = normalized,
                 )
             }
         }
