@@ -27,4 +27,6 @@
     <string name="settings_nav_desc_wear">Интеграция с часами</string>
     <string name="settings_nav_desc_about">Версия и сведения о проекте</string>
     <string name="settings_nav_desc_sources">Провайдеры и музыкальные расширения</string>
+    <string name="settings_nav_diagnostics_title">Диагностика</string>
+    <string name="settings_nav_diagnostics_subtitle">Создание, просмотр и отправка диагностических отчётов</string>
 </resources>
