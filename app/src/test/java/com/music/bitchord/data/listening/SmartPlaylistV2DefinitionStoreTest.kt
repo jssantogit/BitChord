@@ -171,4 +171,42 @@ class SmartPlaylistV2DefinitionStoreTest {
         }
     }
 
+    @Test fun classicDefinitionCopyCreatesDistinctV2RecordWithoutDeletingOriginal() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val db = Room.inMemoryDatabaseBuilder(context, SmartPlaylistDefinitionDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val legacy = SmartPlaylistDefinitionRepository(db.definitionDao())
+            val modern = SmartPlaylistV2DefinitionRepository(db.v2DefinitionDao())
+            val original = SavedSmartPlaylistDefinition(
+                id = "classic:1",
+                name = "Classics",
+                query = RuleBasedSmartPlaylistQuery(
+                    minimumExplicitRating = 2.0,
+                    minimumCompletions = 1,
+                    limit = 70,
+                ),
+            )
+            legacy.save(original)
+            val converted = original.toV2Copy("advanced:2")
+            modern.save(converted)
+            assertEquals("advanced:2", modern.list().single().id)
+            assertEquals("Classics (V2)", modern.list().single().name)
+            assertEquals(original.query.toV2(), modern.list().single().query)
+            assertEquals(original, legacy.list().single())
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test fun copyingClassicDefinitionToItsSameIdIsNeverAllowed() {
+        val original = SavedSmartPlaylistDefinition(
+            id = "old-id", name = "Old",
+            query = RuleBasedSmartPlaylistQuery(minimumCompletions = 1),
+        )
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            original.toV2Copy("old-id")
+        }
+    }
+
 }
