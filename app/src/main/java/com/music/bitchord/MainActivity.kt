@@ -226,6 +226,7 @@ import com.music.bitchord.ui.components.PlaylistPickerSheet
 import com.music.bitchord.ui.components.ReorderPlaylistSheet
 import com.music.bitchord.ui.components.LongPressOrigin
 import com.music.bitchord.ui.components.SongActionsPresentation
+import com.music.bitchord.ui.components.musicOnlyShareText
 import com.music.bitchord.ui.components.SongActionsSheet
 import com.music.bitchord.ui.components.HeldContextMenu
 import com.music.bitchord.ui.components.HeldItem
@@ -4282,7 +4283,7 @@ private fun BitChordApp(
             val share: () -> Unit = {
                 val sendIntent = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, "https://music.youtube.com/watch?v=${song.videoId}")
+                    putExtra(Intent.EXTRA_TEXT, musicOnlyShareText(song.title, song.artist))
                 }
                 context.startActivity(Intent.createChooser(sendIntent, song.title))
                 songActions = null
@@ -4297,10 +4298,6 @@ private fun BitChordApp(
                 val art = song.thumbnailUrl.takeUnless { type == BrowseType.ARTIST }
                 viewModel.openDetail(id, title, sub, art, type)
             }
-            // The library toggle needs tokens only YouTube can mint, and the
-            // rating it comes back with is more authoritative than anything
-            // the library feed knew — so the menu asks as it opens.
-            LaunchedEffect(song.videoId) { viewModel.loadSongMenu(song.videoId) }
             // "Remove from this playlist" is only a sentence on a playlist
             // page the account can actually edit, and only for a row that
             // carries the per-entry id a removal is expressed in.
@@ -4315,7 +4312,6 @@ private fun BitChordApp(
                     )
                 } else null,
                 signedIn = signedIn,
-                likeStatus = likeStatuses[song.videoId] ?: LikeStatus.INDIFFERENT,
                 canonicalRatingContent = { CanonicalSongMenuRating(song) },
                 onPlayNext = { playNext(song); songActions = null },
                 onAddToQueue = { addToQueue(song); songActions = null },
@@ -4338,22 +4334,6 @@ private fun BitChordApp(
                     } else {
                         null
                     },
-                // The sheet stays up for a rating: it shows the new state
-                // in place, and people often thumb a song and then queue it.
-                onToggleLike = { viewModel.toggleLike(song.videoId) },
-                onToggleDislike = {
-                    val previousStatus = viewModel.toggleDislike(song.videoId)
-                    if (
-                        previousStatus != null &&
-                        shouldSkipAfterDislike(
-                            previousStatus = previousStatus,
-                            targetVideoId = song.videoId,
-                            currentVideoId = player.song?.videoId,
-                        )
-                    ) {
-                        controller?.seekToNextMediaItem()
-                    }
-                },
                 onAddToPlaylist = {
                     songActions = null
                     viewModel.loadPlaylists()
@@ -4380,36 +4360,7 @@ private fun BitChordApp(
                 // and backfilling — a row opened from a list already has
                 // whatever ids it's ever going to have.
                 resolvingLinks = fromPlayer && linksLoading,
-                // Offered for every playing track with a YouTube upload
-                // behind it, not only for one an upgrade visibly swapped:
-                // a source ranked above YouTube can be playing its own
-                // idea of the song from the first second, and a wrong
-                // match sounds like a wrong match whether or not anything
-                // announced itself. See [Song.hasYouTubeOriginal].
-                onRollbackToOriginal = if (fromPlayer &&
-                    song.hasYouTubeOriginal() &&
-                    // Nothing to revert *from*: the listener is hearing a
-                    // file they saved, not a stream anything chose.
-                    song.localUri == null &&
-                    // Already there, and the menu says so with the row
-                    // below instead.
-                    song.videoId !in pinnedToOriginal &&
-                    // And the same for a track that got back here without
-                    // the listener asking: an upgrade that failed to prove
-                    // itself is reverted automatically and pins nothing, so
-                    // this row was being offered for a track already on
-                    // YouTube's own stream, where it does nothing.
-                    !playingYouTubesOwn(song.videoId, controller) &&
-                    controller?.currentMediaItem?.mediaId == song.videoId
-                ) {
-                    {
-                        controller?.revertToOriginal()
-                        songActions = null
-                    }
-                } else {
-                    null
-                },
-                onShare = share.takeIf { song.videoId.isNotBlank() },
+                onShare = share,
             )
         }
         songActions?.takeIf { songMenuOrigin == null }?.let { song ->
