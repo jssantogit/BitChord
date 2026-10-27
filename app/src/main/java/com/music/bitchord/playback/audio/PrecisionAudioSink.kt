@@ -479,14 +479,14 @@ class PrecisionAudioSink(
         val position = super.getCurrentPositionUs(sourceEnded)
         val processed = processedEndUs
         if (position != AudioSink.CURRENT_POSITION_NOT_SET && processed != C.TIME_UNSET) {
-            if (!neutralPlayback) dspChain?.transition?.leadUs = (processed - position).coerceAtLeast(0L)
+            if (!neutralPlayback) dspChain?.transition?.let { it.leadUs = (processed - position).coerceAtLeast(0L) }
         }
         return position
     }
 
     override fun flush() {
         processedEndUs = C.TIME_UNSET
-        if (!neutralPlayback) dspChain?.transition?.leadUs = 0L
+        if (!neutralPlayback) dspChain?.transition?.let { it.leadUs = 0L }
         streaming = false
         directInputBuffer = null
         convertedInputBuffer = null
@@ -505,7 +505,7 @@ class PrecisionAudioSink(
 
     override fun reset() {
         processedEndUs = C.TIME_UNSET
-        if (!neutralPlayback) dspChain?.transition?.leadUs = 0L
+        if (!neutralPlayback) dspChain?.transition?.let { it.leadUs = 0L }
         streaming = false
         directInputBuffer = null
         convertedInputBuffer = null
