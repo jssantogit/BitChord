@@ -309,4 +309,28 @@ class CanonicalCoverProgressiveEnrichmentTest {
         assertEquals(null, refreshed[2].artworkUri)
         assertEquals(null, refreshed[3].artworkUri)
     }
+
+    @Test fun lateVerifiedAlbumCoverImmediatelyFansOutAcrossDirectOfficialRecordingEdges() {
+        val official = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            "rec-1", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+            "Attention", "NewJeans", coverGroupMbid = "verified-group",
+        )
+        val sibling = official.copy(musicBrainzId = "rec-2")
+        val own = official.copy(musicBrainzId = "rec-3",
+            artworkUri = "https://archive.org/track-owned-front.jpg")
+        val unrelated = official.copy(musicBrainzId = "rec-other",
+            coverGroupMbid = "other-group")
+        val album = official.copy(musicBrainzId = "verified-group",
+            kind = com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP)
+        val updated = com.music.bitchord.ui.canonicalRowsWithNewVerifiedGroupArt(
+            listOf(official, sibling, own, unrelated, album),
+            "verified-group",
+            "https://archive.org/verified-group-front-500.jpg",
+        )
+        assertEquals("https://archive.org/verified-group-front-500.jpg", updated[0].artworkUri)
+        assertEquals(updated[0].artworkUri, updated[1].artworkUri)
+        assertEquals("https://archive.org/track-owned-front.jpg", updated[2].artworkUri)
+        assertEquals(null, updated[3].artworkUri)
+        assertEquals(null, updated[4].artworkUri)
+    }
 }
