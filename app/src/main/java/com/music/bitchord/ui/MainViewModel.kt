@@ -636,7 +636,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val knownTracks = visible.filter {
             it.kind == CanonicalSearchKind.RECORDING &&
                 canonicalNeedsCoverRefresh(it.artworkUri)
-        }.take(24)
+        }.take(48)
         if (candidates.isEmpty() && portrait == null && knownTracks.isEmpty()) return
         canonicalSearchCoverJob = viewModelScope.launch(Dispatchers.IO) {
             // First resolve the album artwork already in Room. One SQL
@@ -647,12 +647,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val reusedRecordingCovers = async {
                 if (knownTracks.isEmpty()) return@async emptyMap<String, String>()
                 val proven = try {
-                    val dao = CanonicalCatalogDatabase.get(getApplication<Application>())
-                        .catalogDao()
                     canonicalCachedRecordingArtForVisibleRows(
                         rows = knownTracks,
                         databaseLinks = { mbids ->
-                            dao.verifiedRecordingCoverGroupMbids(mbids)
+                            // Direct MusicBrainz -> verified Front-v5 cache
+                            // often resolves all songs. Don't initialize Room
+                            // unless unresolved recordings actually need it.
+                            CanonicalCatalogDatabase.get(getApplication<Application>())
+                                .catalogDao().verifiedRecordingCoverGroupMbids(mbids)
                         },
                         cachedCover = { group ->
                             coverArtArchive.cachedVerifiedGroupCover(
