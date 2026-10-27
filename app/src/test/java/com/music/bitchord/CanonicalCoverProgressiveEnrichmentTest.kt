@@ -117,4 +117,43 @@ class CanonicalCoverProgressiveEnrichmentTest {
                 peak.get() <= 3)
         }
 
+
+    @Test fun slowOfficialEditionPaginationCannotFreezeSecondCoverWave() = runBlocking {
+        val expansionStarted = CompletableDeferred<Unit>()
+        val finishExpansion = CompletableDeferred<Unit>()
+        val coverAppeared = CompletableDeferred<Unit>()
+        val observed = mutableMapOf<String, String>()
+        val worker = launch {
+            com.music.bitchord.ui.loadCanonicalCoversWhileExpandingEditions(
+                keys = listOf("second-wave-1", "second-wave-2"),
+                maxConcurrent = 2,
+                expandEditions = {
+                    expansionStarted.complete(Unit)
+                    finishExpansion.await()
+                },
+                fetch = { key -> "validated:$key" },
+                publish = { batch ->
+                    observed.putAll(batch)
+                    if ("second-wave-2" in observed) coverAppeared.complete(Unit)
+                },
+            )
+        }
+        withTimeout(5000L) { expansionStarted.await(); coverAppeared.await() }
+        assertFalse("MusicBrainz paging must not hold visible CAA completions", worker.isCompleted)
+        assertEquals("validated:second-wave-2", observed["second-wave-2"])
+        finishExpansion.complete(Unit)
+        withTimeout(5000L) { worker.join() }
+    }
+
+    @Test fun concurrentEditionExpansionFailureDoesNotPreventAvailableArtwork() = runBlocking {
+        val observed = mutableMapOf<Int, Int>()
+        com.music.bitchord.ui.loadCanonicalCoversWhileExpandingEditions(
+            keys = listOf(1, 2), maxConcurrent = 2,
+            expandEditions = { throw IllegalStateException("MusicBrainz unavailable") },
+            fetch = { it * 10 },
+            publish = { observed.putAll(it) },
+        )
+        assertEquals(mapOf(1 to 10, 2 to 20), observed)
+    }
+
 }
