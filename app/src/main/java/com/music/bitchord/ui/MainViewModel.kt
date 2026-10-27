@@ -899,22 +899,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val offlineOnly = (_canonicalDetail.value as? UiState.Success)
                 ?.data?.rows?.firstOrNull()?.fromOfflineCache == true
             var firstEditionPage: MusicBrainzCatalogPage<MusicBrainzReleaseHit>? = null
-            val artistEditions: MutableMap<String, List<MusicBrainzReleaseHit>> =
-                if (offlineOnly) mutableMapOf() else try {
-                    when (val batch = musicBrainzGraph.browseOfficialReleasesForArtist(
-                        artist.musicBrainzId, limit = 100,
-                    )) {
-                        is MusicBrainzCatalogGraphResult.Success -> {
-                            firstEditionPage = batch.value
-                            batch.value.items.filter { isCuratedMusicBrainzRelease(it) &&
-                                it.releaseGroupMbid != null
-                            }.groupBy { requireNotNull(it.releaseGroupMbid) }.toMutableMap()
-                        }
-                        is MusicBrainzCatalogGraphResult.Failure -> mutableMapOf()
+            // Additional edition pages now stream concurrently with CAA
+            // lookups. The map must support safe independent IO workers.
+            val artistEditions = java.util.concurrent.ConcurrentHashMap<
+                String, List<MusicBrainzReleaseHit>>()
+            if (!offlineOnly) try {
+                when (val batch = musicBrainzGraph.browseOfficialReleasesForArtist(
+                    artist.musicBrainzId, limit = 100,
+                )) {
+                    is MusicBrainzCatalogGraphResult.Success -> {
+                        firstEditionPage = batch.value
+                        artistEditions.putAll(batch.value.items.filter {
+                            isCuratedMusicBrainzRelease(it) && it.releaseGroupMbid != null
+                        }.groupBy { requireNotNull(it.releaseGroupMbid) })
                     }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) { mutableMapOf() }
+                    is MusicBrainzCatalogGraphResult.Failure -> Unit
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { /* Stored editions remain available. */ }
             // Editorial labels come from Official edition evidence, not CAA
             // availability: a correct name must survive even with no artwork.
             // Persist only the groups with a provable composite -> edition
@@ -980,31 +983,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // instead of N rate-limited group browse requests. Resolved
                 // MBIDs remain linked; a failed page never erases earlier art.
                 val firstPage = firstEditionPage
-                if (!expandedArtistEditionPages && attempted.size >= 6 &&
-                    firstPage?.nextOffset != null && !offlineOnly
-                ) {
-                    expandedArtistEditionPages = true
-                    val coveredBefore = artistEditions.keys.toSet()
-                    try {
-                        collectCanonicalArtistOfficialEditionPages(
-                            firstPage = firstPage,
-                            maxAdditionalPages = 3,
-                            fetch = { offset ->
-                                musicBrainzGraph.browseOfficialReleasesForArtist(
-                                    artist.musicBrainzId, limit = 100, offset = offset,
-                                )
-                            },
-                            onPage = { editions -> artistEditions.putAll(editions) },
-                        )
-                        // A previously attempted group may now have an actual
-                        // Official edition, without a speculative title match.
-                        attempted.removeAll(artistEditions.keys - coveredBefore)
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (_: Exception) {
-                        // Keep painting the first batch and known Room covers.
-                    }
-                }
+                val expandNow = !expandedArtistEditionPages &&
+                    attempted.size >= 6 && firstPage?.nextOffset != null && !offlineOnly
+                if (expandNow) expandedArtistEditionPages = true
+                val lateEditionGroups = java.util.concurrent.ConcurrentHashMap
+                    .newKeySet<String>()
                 val batch = (_canonicalDetail.value as? UiState.Success)?.data?.rows
                     .orEmpty().filter {
                         it.kind == CanonicalSearchKind.RELEASE_GROUP &&
@@ -1025,9 +1008,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // entire six-row wave behind the slowest CAA network lookup.
                 // At most three calls are active; bursts coalesce before state
                 // updates, and navigation checks prevent stale artwork.
-                loadCanonicalCoversProgressively(
+                // The edition-page fetch MUST NOT interrupt the next
+                // streaming cover wave: on TWICE-scale discographies three
+                // sequential rate-limited MusicBrainz pages were visibly
+                // freezing artwork after the first eight covers.
+                loadCanonicalCoversWhileExpandingEditions(
                     keys = batch,
                     maxConcurrent = 3,
+                    expandEditions = {
+                        if (expandNow && firstPage != null) {
+                            collectCanonicalArtistOfficialEditionPages(
+                                firstPage = firstPage,
+                                maxAdditionalPages = 3,
+                                fetch = { offset ->
+                                    musicBrainzGraph.browseOfficialReleasesForArtist(
+                                        artist.musicBrainzId, limit = 100, offset = offset,
+                                    )
+                                },
+                                onPage = { editions ->
+                                    lateEditionGroups.addAll(
+                                        editions.keys - artistEditions.keys,
+                                    )
+                                    artistEditions.putAll(editions)
+                                },
+                            )
+                        }
+                    },
                     fetch = { group ->
                         val cover = try {
                             canonicalArtworkForRow(
@@ -1088,6 +1094,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                     },
                 )
+                // Only groups newly supported by late, positively-linked
+                // Official editions may retry if their earlier cover failed.
+                // Existing success is never reloaded, and expansion is bounded.
+                if (expandNow) attempted.removeAll(lateEditionGroups)
                 if (_searchSource.value != SearchSource.CANONICAL ||
                     canonicalPath.lastOrNull() != artist) break
             }
