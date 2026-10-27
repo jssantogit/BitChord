@@ -27,4 +27,6 @@
     <string name="settings_nav_desc_wear">Intégration de montre</string>
     <string name="settings_nav_desc_about">Version et informations du projet</string>
     <string name="settings_nav_desc_sources">Fournisseurs et extensions musicales</string>
+    <string name="settings_nav_diagnostics_title">Diagnostics</string>
+    <string name="settings_nav_diagnostics_subtitle">Capturer, consulter et partager les rapports de diagnostic</string>
 </resources>
