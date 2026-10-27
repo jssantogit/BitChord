@@ -46,4 +46,48 @@ class CanonicalCoverProgressiveEnrichmentTest {
         )
         assertEquals(mapOf("available" to "verified-art"), published)
     }
+
+    @Test fun largeArtistUsesBoundedOfficialEditionPagesInsteadOfPerGroupLookups() = runBlocking {
+        val first = com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage(
+            items = listOf(com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit(
+                "edition1", "Get Up", "XW", "2023-07-21", "NewJeans",
+                status = "Official", releaseGroupMbid = "group1",
+            )),
+            total = 250, offset = 0, consumedCount = 100,
+        )
+        val requests = mutableListOf<Int>()
+        val published = mutableListOf<Map<String,
+            List<com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit>>>()
+        com.music.bitchord.ui.collectCanonicalArtistOfficialEditionPages(
+            firstPage = first,
+            maxAdditionalPages = 3,
+            fetch = { offset ->
+                requests += offset
+                com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult.Success(
+                    com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage(
+                        items = listOf(
+                            com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit(
+                                "edition" + offset, "How Sweet", "XW", "2024-05-24",
+                                "NewJeans", status = "Official",
+                                releaseGroupMbid = "group" + offset,
+                            ),
+                            com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit(
+                                "bootleg" + offset, "How Sweet", "XW", null,
+                                "NewJeans", status = "Bootleg",
+                                releaseGroupMbid = "bootleg-group",
+                            ),
+                        ),
+                        total = 250, offset = offset,
+                        consumedCount = if (offset == 100) 100 else 50,
+                    ),
+                )
+            },
+            onPage = { published += it },
+        )
+        assertEquals(listOf(100, 200), requests)
+        assertEquals(listOf("group1", "group100", "group200"),
+            published.last().keys.toList())
+        assertFalse(published.any { "bootleg-group" in it })
+    }
+
 }
