@@ -417,6 +417,7 @@ internal fun SettingsScreen(
                 SettingsHome(
                     onSelect = { onSelectSection(it) },
                     showWear = remember(context) { WatchInstaller.available(context) },
+                    onListenTogether = onListenTogether,
                 )
             }
         } else {
