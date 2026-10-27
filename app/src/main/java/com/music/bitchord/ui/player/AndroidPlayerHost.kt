@@ -25,7 +25,6 @@ import com.music.bitchord.data.lyrics.LyricsTranslation
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoadResult
 import com.music.bitchord.data.catalog.provider.opensubsonic.androidOpenSubsonicArtworkLoader
-import com.music.bitchord.ui.components.MusicOnlyArtwork
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.LastPlayerScreen
 import com.music.bitchord.playback.AudioOutputStatus
@@ -61,9 +60,7 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
     private val canonicalArtworkLoader by lazy { androidOpenSubsonicArtworkLoader(app) }
 
     override val settings: PlayerSettingsSource = object : PlayerSettingsSource {
-        // UI no longer offers animated artwork. Ignore a previously saved
-        // preference as well: never fetch or decode background music videos.
-        override val animatedCanvas get() = MusicOnlyArtwork.animatedArtworkEnabled
+        override val animatedCanvas get() = AppSettings.animatedCanvas
         override val audioQualityCellular get() = AppSettings.audioQualityCellular
         override val audioQualityWifi get() = AppSettings.audioQualityWifi
         override val canvasOverCellular get() = AppSettings.canvasOverCellular
