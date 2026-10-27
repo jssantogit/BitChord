@@ -3628,6 +3628,7 @@ private fun BitChordApp(
                     // circles over the shared gradient — no full-width pane.
                     transparentBackdrop = true,
                     artworkPageChrome = true,
+                    showActions = !homeRootVisible,
                     backButtonHazeState = hazeState,
                     trailingTitle = if (detail != null && detailActiveShelf != null) detail.title else null,
                     // Search has no large in-list header to hand the title back to —
@@ -3721,7 +3722,6 @@ private fun BitChordApp(
                         }
                     } else null,
                     actions = {
-                        if (!homeRootVisible) {
                         // This is intentionally scoped to Listen together: the
                         // round-trip time is meaningful while coordinating a
                         // party, but would be noise in the rest of the app.
@@ -3966,7 +3966,6 @@ private fun BitChordApp(
                                 },
                                 onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
                             )
-                        }
                         }
                     },
                 )
