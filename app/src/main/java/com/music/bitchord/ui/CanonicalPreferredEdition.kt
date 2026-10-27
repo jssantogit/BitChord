@@ -40,7 +40,7 @@ internal fun canonicalReleaseTracksWithArtwork(
  * The group's own CAA Front can originate from a video/alternate edition.
  */
 private val alternateArtworkPackaging = Regex(
-    """(?i)\b(?:ver\.?|version|vinyl|photobook|jewel\s*case|photocard|cover\s*ver\.?|limited|collector|reissue|remaster)\b"""
+    """(?i)\b(?:ver\.?|version|vinyl|photobook|jewel\s*case|photocard|cover\s*ver\.?|limited|collector|reissue|remaster|remix|instrumental|karaoke|deluxe|live|sped\s*up|slowed)\b"""
 )
 
 /**
@@ -53,9 +53,12 @@ internal fun canonicalEditionTitleIsSuitableForGroupArtwork(
 ): Boolean {
     val edition = editionTitle.trim()
     val group = groupTitle.trim()
-    if (edition.isEmpty() || group.isEmpty() ||
-        alternateArtworkPackaging.containsMatchIn(edition)
-    ) return false
+    if (edition.isEmpty() || group.isEmpty()) return false
+    // A ReleaseGroup can itself be explicitly labelled as a Remix/Live work;
+    // exact edition titles are valid there. Otherwise collector variants and
+    // remixes must never replace an ordinary parent release's main sleeve.
+    if (edition.equals(group, ignoreCase = true)) return true
+    if (alternateArtworkPackaging.containsMatchIn(edition)) return false
     return edition.contains(group, ignoreCase = true) ||
         group.startsWith("${edition} & ", ignoreCase = true)
 }
