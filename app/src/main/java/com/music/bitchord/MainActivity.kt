@@ -173,6 +173,7 @@ import com.music.bitchord.ui.screens.ListenTogetherScreen
 import com.music.bitchord.ui.screens.PartyServerEditor
 import com.music.bitchord.ui.screens.SignatureApiEditor
 import com.music.bitchord.ui.screens.SettingsScreen
+import com.music.bitchord.ui.screens.SettingsSection
 import com.music.bitchord.ui.screens.SourceEditorAlert
 import com.music.bitchord.ui.screens.SourcesScreen
 import com.music.bitchord.data.sources.TrackMatcher
@@ -571,6 +572,7 @@ private fun BitChordApp(
      */
     var webSession by remember { mutableStateOf<WebSessionMode?>(null) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var settingsSection by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
     // Replay: the page, the stories over it, and the share sheet over those.
     // Three states rather than one enum because they stack — the stories are
     // opened from the page and the share sheet from either, and closing one
@@ -873,6 +875,7 @@ private fun BitChordApp(
     LaunchedEffect(detail?.browseId) { detailActiveShelf = null }
     LaunchedEffect(showSettings) {
         if (!showSettings) {
+            settingsSection = null
             showAccountScrobbling = false
             showSpotify = false
         }
@@ -2551,11 +2554,13 @@ private fun BitChordApp(
         // Home rather than exiting — only Home itself hands back to the system,
         // which is what actually closes/minimizes the app.
         BackHandler(enabled = showSettings && settingsSubScreen == null && !showSpotify && !showAccountScrobbling && !showSources && !showListenTogether && !showWearOs && !showEqualizer && !showReplay) {
-            showSettings = false
-            // Only when Settings was the whole of what was on screen. Opened
-            // over Replay or over a release page, closing it reveals that again
-            // rather than throwing both away.
-            if (detail == null && !showReplay) selectedTab = TAB_HOME
+            if (settingsSection != null) {
+                settingsSection = null
+            } else {
+                showSettings = false
+                // Closing the root settings page, not a nested category.
+                if (detail == null && !showReplay) selectedTab = TAB_HOME
+            }
         }
         BackHandler(
             enabled = detail == null && !showSettings && !showAccountScrobbling && !showSpotify &&
@@ -2856,6 +2861,8 @@ private fun BitChordApp(
                     } else if (key == "settings") {
                         SettingsScreen(
                             windowWidth = windowWidth,
+                            selectedSection = settingsSection,
+                            onSelectSection = { settingsSection = it },
                             signedIn = signedIn,
                             account = account,
                             onSignIn = {
@@ -3582,7 +3589,8 @@ private fun BitChordApp(
                         showListenTogether -> stringResource(R.string.listen_together)
                         showWearOs -> stringResource(R.string.wear_os_page_title)
                         showEqualizer -> stringResource(R.string.equalizer)
-                        showSettings -> stringResource(R.string.settings)
+                        showSettings -> settingsSection?.let { stringResource(it.titleRes) }
+                            ?: stringResource(R.string.settings)
                         showReplay -> stringResource(R.string.replay)
                         detail != null && detailActiveShelf != null -> detailActiveShelf?.title.orEmpty()
                         detail != null -> detail.title
@@ -3640,7 +3648,10 @@ private fun BitChordApp(
                             if (settingsSubScreen == "equalizer") settingsSubScreen = null
                         })
                         settingsSubScreen != null -> ({ settingsSubScreen = null })
-                        showSettings -> ({ showSettings = false })
+                        showSettings -> ({
+                            if (settingsSection != null) settingsSection = null
+                            else showSettings = false
+                        })
                         showReplay -> ({ showReplay = false })
                         detailActiveShelf != null -> ({ detailActiveShelf = null })
                         detail != null -> ({ viewModel.closeDetail(); Unit })
