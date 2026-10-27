@@ -2,7 +2,7 @@
     <string name="settings_nav_group_account">帳號</string>
     <string name="settings_nav_group_music">音樂</string>
     <string name="settings_nav_group_experience">體驗</string>
-    <string name="settings_nav_group_data">資料</string>
+    <string name="settings_nav_group_data">資料與下載</string>
     <string name="settings_nav_group_system">系統</string>
     <string name="settings_nav_group_about">關於</string>
     <string name="settings_nav_lyrics">歌詞</string>
