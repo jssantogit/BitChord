@@ -61,7 +61,7 @@ import java.nio.ByteOrder
 @androidx.annotation.OptIn(UnstableApi::class)
 class PrecisionAudioSink(
     private val delegate: AudioSink,
-    val dspChain: DspChain,
+    val dspChain: DspChain? = null,
     private val enableFloatOutput: Boolean,
     /**
      * The Android fork's normal playback path: deliver matching PCM directly
@@ -84,7 +84,15 @@ class PrecisionAudioSink(
     private val isAudible: () -> Boolean = { true },
 ) : ForwardingAudioSink(delegate) {
 
-    /** Whether the precision Float32 DSP path is currently active for the configured format. */
+    init {
+        // Legacy precision tests may supply a processing chain, but the
+        // production Android neutral path must never allocate one.
+        require(neutralPlayback || dspChain != null) {
+            "A non-neutral PrecisionAudioSink requires a DSP chain"
+        }
+    }
+
+    /** Whether PCM boundary handling is active for the configured format. */
     var isPrecisionActive: Boolean = false
         private set
 
@@ -170,7 +178,7 @@ class PrecisionAudioSink(
                 val channelCount = format.channelCount
 
                 // Neutral playback never configures or runs effect processors.
-                if (!neutralPlayback) dspChain.configure(sampleRate, channelCount)
+                if (!neutralPlayback) dspChain?.configure(sampleRate, channelCount)
 
                 // 2. Ensure internal buffers are sized for max frames and channel count
                 ensureBuffers(channelCount)
@@ -394,7 +402,7 @@ class PrecisionAudioSink(
             // Neutral mode only uses the PCM boundary for necessary format
             // conversions (e.g. packed 24-bit → Float32 on a float route).
             // It must not apply any custom effect to the samples.
-            if (!neutralPlayback) dspChain.process(audioBlock)
+            if (!neutralPlayback) dspChain?.process(audioBlock)
 
             // Encode processed samples to target PCM output buffer (Float32 or PCM16)
             outputByteBuffer.clear()
@@ -456,7 +464,7 @@ class PrecisionAudioSink(
      * first, is not.
      */
     override fun setOutputStreamOffsetUs(outputStreamOffsetUs: Long) {
-        if (streaming && !neutralPlayback) dspChain.onStreamBoundary()
+        if (streaming && !neutralPlayback) dspChain?.onStreamBoundary()
         super.setOutputStreamOffsetUs(outputStreamOffsetUs)
     }
 
@@ -471,14 +479,14 @@ class PrecisionAudioSink(
         val position = super.getCurrentPositionUs(sourceEnded)
         val processed = processedEndUs
         if (position != AudioSink.CURRENT_POSITION_NOT_SET && processed != C.TIME_UNSET) {
-            if (!neutralPlayback) dspChain.transition.leadUs = (processed - position).coerceAtLeast(0L)
+            if (!neutralPlayback) dspChain?.transition?.leadUs = (processed - position).coerceAtLeast(0L)
         }
         return position
     }
 
     override fun flush() {
         processedEndUs = C.TIME_UNSET
-        if (!neutralPlayback) dspChain.transition.leadUs = 0L
+        if (!neutralPlayback) dspChain?.transition?.leadUs = 0L
         streaming = false
         directInputBuffer = null
         convertedInputBuffer = null
@@ -490,14 +498,14 @@ class PrecisionAudioSink(
         timestampedInputTimeUs = C.TIME_UNSET
         framesEmittedForInput = 0L
         if (isPrecisionActive && !neutralPlayback) {
-            dspChain.flush()
+            dspChain?.flush()
         }
         delegate.flush()
     }
 
     override fun reset() {
         processedEndUs = C.TIME_UNSET
-        if (!neutralPlayback) dspChain.transition.leadUs = 0L
+        if (!neutralPlayback) dspChain?.transition?.leadUs = 0L
         streaming = false
         directInputBuffer = null
         convertedInputBuffer = null
@@ -510,7 +518,7 @@ class PrecisionAudioSink(
         timestampedInputTimeUs = C.TIME_UNSET
         framesEmittedForInput = 0L
         if (isPrecisionActive && !neutralPlayback) {
-            dspChain.reset()
+            dspChain?.reset()
         }
         isPrecisionActive = false
         inputPcmEncoding = null

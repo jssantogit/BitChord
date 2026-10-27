@@ -84,7 +84,6 @@ import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.guava.future
-import com.music.bitchord.playback.audio.DspChain
 import com.music.bitchord.playback.cast.CastController
 import com.music.bitchord.playback.cast.CastPlayback
 import com.music.bitchord.playback.cast.CastSink
@@ -6596,18 +6595,11 @@ class PlaybackService : MediaLibraryService() {
                 )
                 .build()
 
-            // Transition filtering last of the three: widening is a
-            // property of the track, and a bass swap that ran before it
-            // would have its own low end fed back in by the crossfeed —
-            // or, once the equaliser is in the chain, by whatever the
-            // listener's low band was set to. The equaliser sits between
-            // them for the same reason: it belongs to the listener and
-            // the whole session, while the transition filter belongs to
-            // one handoff and has to have the last word on it.
-            val dspChain = DspChain(spatial, equalizer, transition, loudness)
+            // Neutral Android output negotiates PCM formats but never
+            // constructs a custom DSP chain or touches decoded samples
+            // unless the output encoding genuinely requires conversion.
             return PrecisionAudioSink(
                 delegate = defaultSink,
-                dspChain = dspChain,
                 enableFloatOutput = enableFloatOutput,
                 neutralPlayback = true,
                 preferredOutputEncodingProvider = { format -> resolvePreferredOutputEncoding(format) },
