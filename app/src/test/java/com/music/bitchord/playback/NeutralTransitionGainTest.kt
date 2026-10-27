@@ -44,6 +44,13 @@ class NeutralTransitionGainTest {
     }
 
     @Test
+    fun `aligned versions are not amplified at their swap midpoint`() {
+        val gains = NeutralTransitionGain.fromFaders(0.70710677f, 0.70710677f)
+        assertEquals(1f, gains.incoming + gains.outgoing, 1e-6f)
+        assertEquals(gains.incoming, gains.outgoing, 1e-6f)
+    }
+
+    @Test
     fun `nonfinite inputs cannot poison player volumes`() {
         val result = NeutralTransitionGain.fromFaders(Float.NaN, Float.POSITIVE_INFINITY)
         assertEquals(0f, result.incoming, 0f)

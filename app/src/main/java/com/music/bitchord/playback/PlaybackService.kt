@@ -2300,14 +2300,11 @@ class PlaybackService : MediaLibraryService() {
 
                     val inGain = sin(progress * (PI / 2.0)).toFloat()
                     val outGain = cos(progress * (PI / 2.0)).toFloat()
-                    standbyPlayer.volume = inGain
-                    activePlayer.volume = outGain
-                    // The same headroom a crossfade takes, and for the same
-                    // reason — see [LoudnessProcessor]. More so here: two
-                    // versions of one song line up peak for peak.
-                    val swapTrim = 1f / sqrt((inGain + outGain).coerceAtLeast(1f))
-                    loudnessA.setBlendTrim(swapTrim)
-                    loudnessB.setBlendTrim(swapTrim)
+                    // Two aligned versions may contain the same samples at the
+                    // same instant. Attenuate the players, not their PCM buffers.
+                    val gains = NeutralTransitionGain.fromFaders(inGain, outGain)
+                    standbyPlayer.volume = gains.incoming
+                    activePlayer.volume = gains.outgoing
 
                     if (progress >= 1f) break
                     delay(16)
@@ -2317,8 +2314,6 @@ class PlaybackService : MediaLibraryService() {
                 adoptPlayerForVersionSwap(outgoing = activePlayer, incoming = standbyPlayer)
                 onSwapCommitted?.invoke()
             } finally {
-                loudnessA.setBlendTrim(1f)
-                loudnessB.setBlendTrim(1f)
                 if (!smartAlignEnabled) {
                     AppSettings.smartMixInProgress.value = false
                 }
