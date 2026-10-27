@@ -607,6 +607,46 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return canonicalOfficialGroupDisplayTitle(row.title, editions)
     }
 
+    /** Album covers discovered after the initial search must propagate to
+     * still-visible recordings through MusicBrainz MBIDs, never title guesses.
+     * This refresh reads Room only; it does not enqueue more CAA HTTP calls. */
+    private var canonicalSearchAlbumFanoutJob: Job? = null
+
+    private fun refreshCanonicalSearchRecordingAlbumArtwork() {
+        val query = _query.value.trim()
+        if (_searchSource.value != SearchSource.CANONICAL || query.isEmpty()) return
+        val pending = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
+            .filter {
+                it.kind == CanonicalSearchKind.RECORDING && it.artworkUri.isNullOrBlank()
+            }.take(48)
+        if (pending.isEmpty()) return
+        canonicalSearchAlbumFanoutJob?.cancel()
+        canonicalSearchAlbumFanoutJob = viewModelScope.launch(Dispatchers.IO) {
+            val proven = try {
+                canonicalCachedRecordingArtForVisibleRows(
+                    rows = pending,
+                    databaseLinks = { ids ->
+                        CanonicalCatalogDatabase.get(getApplication<Application>())
+                            .catalogDao().verifiedRecordingCoverGroupMbids(ids)
+                    },
+                    cachedCover = { group ->
+                        coverArtArchive.cachedVerifiedGroupCover(group, CoverArtSize.THUMBNAIL)
+                    },
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { emptyMap() }
+            if (proven.isEmpty() ||
+                _searchSource.value != SearchSource.CANONICAL ||
+                _query.value.trim() != query
+            ) return@launch
+            _canonicalResults.update { old ->
+                if (old !is UiState.Success) old
+                else UiState.Success(canonicalRowsWithVerifiedRecordingArt(old.data, proven))
+            }
+        }
+    }
+
     private fun enrichCanonicalSearchCovers(query: String) {
         canonicalSearchCoverJob?.cancel()
         val visible = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
@@ -669,12 +709,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _query.value.trim() == query
                 ) _canonicalResults.update { old ->
                     if (old !is UiState.Success) old else UiState.Success(
-                        old.data.map { row ->
-                            val artwork = proven[row.musicBrainzId]
-                            if (row.kind == CanonicalSearchKind.RECORDING &&
-                                artwork != null && canonicalNeedsCoverRefresh(row.artworkUri)
-                            ) row.copy(artworkUri = artwork) else row
-                        },
+                        canonicalRowsWithVerifiedRecordingArt(old.data, proven),
                     )
                 }
                 proven
@@ -1178,6 +1213,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (canonicalPath.isEmpty()) {
             _canonicalDetail.value = null
             _searchScrollReset.value += 1
+            refreshCanonicalSearchRecordingAlbumArtwork()
         } else showCanonicalCatalogEntry(canonicalPath.last())
     }
 
@@ -1222,6 +1258,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _detailStack.value = _detailStack.value.map {
                 if (it.browseId == id) it.copy(thumbnailUrl = artwork) else it
             }
+            refreshCanonicalSearchRecordingAlbumArtwork()
         }
     }
 
@@ -1244,6 +1281,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _serverResults.value = null
         canonicalSearchJob?.cancel()
         canonicalSearchCoverJob?.cancel()
+        canonicalSearchAlbumFanoutJob?.cancel()
         canonicalTypeaheadJob?.cancel()
         resetCanonicalSearchPagination()
         canonicalBrowseJob?.cancel()
