@@ -33,6 +33,19 @@ class SettingsNavigationTest {
         assertTrue(SettingsNavigation.groups.all { it.sections.isNotEmpty() })
     }
 
+    @Test fun destinationPagesDoNotDuplicateTheirHeadingAsGroupCaption() {
+        assertEquals(null, settingsGroupCaption(isSearchResult = false, groupCaption = "LETRAS"))
+        assertEquals(null, settingsGroupCaption(isSearchResult = false, groupCaption = "REPRODUÇÃO"))
+        assertEquals("LETRAS", settingsGroupCaption(isSearchResult = true, groupCaption = "LETRAS"))
+    }
+
+    @Test fun playbackControlsBelongToMusicNotSystem() {
+        val music = SettingsNavigation.groups.single { it.titleRes == com.music.bitchord.R.string.settings_nav_group_music }
+        val system = SettingsNavigation.groups.single { it.titleRes == com.music.bitchord.R.string.settings_nav_group_system }
+        assertTrue(SettingsSection.MISCELLANEOUS in music.sections)
+        assertTrue(SettingsSection.MISCELLANEOUS !in system.sections)
+    }
+
     @Test fun selectingAppearanceNavigatesWithoutChangingAPreference() {
         var opened: SettingsSection? = null
         compose.setContent {
