@@ -2,7 +2,7 @@
     <string name="settings_nav_group_account">COMPTE</string>
     <string name="settings_nav_group_music">MUSIQUE</string>
     <string name="settings_nav_group_experience">EXPÉRIENCE</string>
-    <string name="settings_nav_group_data">DONNÉES</string>
+    <string name="settings_nav_group_data">DONNÉES ET TÉLÉCHARGEMENTS</string>
     <string name="settings_nav_group_system">SYSTÈME</string>
     <string name="settings_nav_group_about">À PROPOS</string>
     <string name="settings_nav_lyrics">Paroles</string>
