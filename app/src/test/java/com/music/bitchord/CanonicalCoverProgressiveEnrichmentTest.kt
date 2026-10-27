@@ -7,6 +7,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CanonicalCoverProgressiveEnrichmentTest {
@@ -89,5 +90,31 @@ class CanonicalCoverProgressiveEnrichmentTest {
             published.last().keys.toList())
         assertFalse(published.any { "bootleg-group" in it })
     }
+
+
+    @Test fun aLargeArtistBoundedWorkerPoolStreamsEveryCoverWithoutUnboundedConcurrency() =
+        runBlocking {
+            val active = java.util.concurrent.atomic.AtomicInteger()
+            val peak = java.util.concurrent.atomic.AtomicInteger()
+            val found = mutableMapOf<Int, Int>()
+            loadCanonicalCoversProgressively(
+                keys = (1..160).toList(), maxConcurrent = 3,
+                fetch = { key ->
+                    val current = active.incrementAndGet()
+                    peak.updateAndGet { old -> maxOf(old, current) }
+                    try {
+                        kotlinx.coroutines.delay(2)
+                        key * 2
+                    } finally {
+                        active.decrementAndGet()
+                    }
+                },
+                publish = { found.putAll(it) },
+            )
+            assertEquals(160, found.size)
+            assertEquals(0, active.get())
+            assertTrue("No batch may create more than three active lookups",
+                peak.get() <= 3)
+        }
 
 }
