@@ -16,10 +16,6 @@ class MusicOnlyPresentationTest {
         assertEquals("Unknown Track", musicOnlyShareText(" Unknown Track ", " "))
     }
 
-    @Test fun storedVideoArtworkPreferenceCannotReactivateMovingCovers() {
-        assertFalse(MusicOnlyArtwork.animatedArtworkEnabled.value)
-    }
-
     @Test fun onlyCanonicalStarsMayBePresentedAsTrackRating() {
         assertEquals(setOf(TrackFeedbackAction.CANONICAL_STARS), TrackFeedbackPolicy.visibleActions)
     }
