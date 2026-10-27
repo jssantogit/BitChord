@@ -55,4 +55,6 @@ internal class A0DirectPeerSearchCollector(
         closeSockets()
         workers.cancel()
     }
+
+    fun workerSnapshot():A0PeerSearchWorkers.Stats = workers.snapshot()
 }

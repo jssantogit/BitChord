@@ -344,6 +344,57 @@ internal class A0SmokeTrace private constructor(
         )
     }
 
+    /** Queue occupancy shows whether drops reflect full peer worker pools. */
+    fun peerSearchWorkerPressure(
+        indirect:A0PeerSearchWorkers.Stats,
+        direct:A0PeerSearchWorkers.Stats,
+    ) {
+        if(complete.get())return
+        fun n(v:Int)=v.coerceIn(0,100000).toString()
+        continuationTrace().event(
+            stage="peer_search_worker_pressure",
+            outcome=if(indirect.rejected+direct.rejected>0) TraceOutcome.DEGRADED
+                else TraceOutcome.SUCCEEDED,
+            attributes=mapOf(
+                "indirectAccepted" to n(indirect.accepted),
+                "indirectRejected" to n(indirect.rejected),
+                "indirectStarted" to n(indirect.started),
+                "indirectCompleted" to n(indirect.completed),
+                "indirectPeakActive" to n(indirect.peakActive),
+                "indirectPeakQueued" to n(indirect.peakQueued),
+                "directAccepted" to n(direct.accepted),
+                "directRejected" to n(direct.rejected),
+                "directStarted" to n(direct.started),
+                "directCompleted" to n(direct.completed),
+                "directPeakActive" to n(direct.peakActive),
+                "directPeakQueued" to n(direct.peakQueued),
+            )
+        )
+    }
+
+    /** Shadow-only curve. Net deltas are NOT music recall or early-stop approval. */
+    fun searchWindowEvidence(summary:A0SearchWindowEvidence.Summary) {
+        if(complete.get())return
+        fun n(v:Int)=v.coerceIn(0,100000).toString()
+        continuationTrace().event(
+            stage="search_window_shadow",
+            outcome=TraceOutcome.SUCCEEDED,
+            attributes=mapOf(
+                "checkpointsComplete" to summary.hasBothCheckpoints.toString(),
+                "replies6" to n(summary.at6.replies),
+                "claims6" to n(summary.at6.claims),
+                "replies12" to n(summary.at12.replies),
+                "claims12" to n(summary.at12.claims),
+                "repliesFinal" to n(summary.at18.replies),
+                "claimsFinal" to n(summary.at18.claims),
+                "netRepliesAfter12" to summary.netRepliesAfter12.coerceIn(-100000,100000).toString(),
+                "netClaimsAfter12" to summary.netClaimsAfter12.coerceIn(-100000,100000).toString(),
+                "netClaims6To12" to summary.netClaims6To12.coerceIn(-100000,100000).toString(),
+                "mode" to "shadow_only",
+            )
+        )
+    }
+
     /** Mark deliberate teardown before sockets are closed, suppressing read errors it causes. */
     fun beginSocketTeardown() {
         socketsClosing.set(true)

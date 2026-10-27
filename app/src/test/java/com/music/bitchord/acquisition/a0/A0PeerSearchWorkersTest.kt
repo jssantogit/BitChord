@@ -78,10 +78,40 @@ class A0PeerSearchWorkersTest {
             repeat(128){assertTrue(workers.submit{})}
             assertFalse(workers.submit{})
             assertEquals(12,peak.get())
+            val snapshot=workers.snapshot()
+            assertEquals(140,snapshot.accepted)
+            assertEquals(1,snapshot.rejected)
+            assertEquals(12,snapshot.peakActive)
+            assertEquals(128,snapshot.peakQueued)
+            assertEquals(128,snapshot.queuedNow)
+            assertEquals(12,snapshot.started)
         } finally {
             release.countDown()
             assertTrue(workers.stop(3000))
         }
+    }
+
+    @Test(timeout=5000)
+    fun cancelledWorkersRemainBoundedAndReportOnlyCounters() {
+        val gate=CountDownLatch(1)
+        val entered=CountDownLatch(4)
+        val workers=A0PeerSearchWorkers(action={ task ->
+            entered.countDown()
+            gate.await(2,TimeUnit.SECONDS)
+            task()
+        },queueCapacity=8,parallelism=4)
+        try {
+            repeat(4){ assertTrue(workers.submit {}) }
+            assertTrue(entered.await(2,TimeUnit.SECONDS))
+            repeat(8){ assertTrue(workers.submit {}) }
+            assertFalse(workers.submit {})
+            assertEquals(8,workers.snapshot().peakQueued)
+        } finally {
+            workers.cancel()
+            gate.countDown()
+        }
+        assertFalse(workers.submit {})
+        assertEquals(1,workers.snapshot().rejected)
     }
 
 }

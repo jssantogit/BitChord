@@ -452,6 +452,9 @@ class A0ManualLoginActivity : Activity() {
                                 val receivedValidP2pReply = AtomicBoolean(false)
                                 val failedServerReader = AtomicBoolean(false)
                                 val progressGate=A0ProgressUpdateGate(700L)
+                                // Track 6/12/18s candidate growth without reducing the
+                                // live search window or changing manual choices.
+                                val windowEvidence=A0SearchWindowEvidence()
                                 fun discoveryProgress() {
                                     // Building the full claim clustering preview on
                                     // every P2P reply stalls discovery and floods
@@ -707,8 +710,14 @@ class A0ManualLoginActivity : Activity() {
                                             }
                                         }
                                         val early=inbox.poll(6,TimeUnit.SECONDS)
+                                        handoff?.progress()?.let {
+                                            windowEvidence.record(6,it.responses,it.provisionalClaims)
+                                        }
                                         if(early==null)sendRescue(6000L)
                                         val middle=early ?: inbox.poll(6,TimeUnit.SECONDS)
+                                        handoff?.progress()?.let {
+                                            windowEvidence.record(12,it.responses,it.provisionalClaims)
+                                        }
                                         if(middle==null)sendRescue(12000L)
                                         middle ?: inbox.poll(6,TimeUnit.SECONDS)
                                     } else inbox.poll(12,TimeUnit.SECONDS)
@@ -808,6 +817,12 @@ class A0ManualLoginActivity : Activity() {
                                             directCollectorDropped=directOfferBackpressure.get(),
                                             globalCapacityDropped=offerGate.capacityDropped,
                                             duplicateTickets=offerGate.duplicateCount)
+                                        trace.peerSearchWorkerPressure(
+                                            peerWorkers.snapshot(),directCollector.workerSnapshot())
+                                        handoff?.progress()?.let {
+                                            trace.searchWindowEvidence(
+                                                windowEvidence.finish(it.responses,it.provisionalClaims))
+                                        }
                                     } else {
                                         listener.close()
                                         directCollector.cancel()

@@ -33,6 +33,18 @@ class A0PeerOfferGateTest {
         assertEquals(8,gate.acceptedCount)
     }
 
+    @Test fun releasingLastPeerReservationRestoresItsFairnessBudget() {
+        val gate=A0PeerOfferGate(16)
+        repeat(8){ assertTrue(gate.accept("noisy",it+1)) }
+        assertFalse(gate.accept("noisy",9))
+        repeat(8){ assertTrue(gate.releaseUnsubmitted("noisy",it+1)) }
+        assertEquals(0,gate.acceptedCount)
+        repeat(8){ assertTrue(gate.accept("noisy",it+10)) }
+        assertEquals(8,gate.acceptedCount)
+        assertFalse(gate.accept("noisy",100))
+        assertEquals(2,gate.perPeerDropped)
+    }
+
     @Test fun singlePeerCannotConsumeTheWholeIndirectSearchBudget() {
         val gate=A0PeerOfferGate(160)
         repeat(8) { assertTrue(gate.accept("noisy",it+1)) }

@@ -5,11 +5,11 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * A bounded pool for *peer-only* P sockets. It must never read or write the
- * authenticated Soulseek server socket (single reader, P/F handoff preserved).
- * Slow peers are independent, unlike A0's previous blocking offer loop.
+ * Bounded peer-only P sockets. Never consumes the authenticated server socket.
+ * Occupancy counters are local aggregates: no peer IDs, tokens, or paths.
  */
 internal class A0PeerSearchWorkers(
     private val action:(()->Unit)->Unit = { it() },
@@ -20,9 +20,26 @@ internal class A0PeerSearchWorkers(
         require(queueCapacity in 8..128)
         require(parallelism in 4..12)
     }
+
+    internal data class Stats(
+        val accepted:Int,
+        val rejected:Int,
+        val started:Int,
+        val completed:Int,
+        val peakActive:Int,
+        val peakQueued:Int,
+        val activeNow:Int,
+        val queuedNow:Int,
+    )
+
     private val closed=AtomicBoolean(false)
-    // Parallel reads remain bounded, with a short queue and deterministic
-    // shutdown. Configurable only for the guided A0 discovery session.
+    private val accepted=AtomicInteger()
+    private val rejected=AtomicInteger()
+    private val started=AtomicInteger()
+    private val completed=AtomicInteger()
+    private val active=AtomicInteger()
+    private val peakActive=AtomicInteger()
+    private val peakQueued=AtomicInteger()
     private val pool=ThreadPoolExecutor(
         parallelism,parallelism,0L,TimeUnit.MILLISECONDS,
         ArrayBlockingQueue<Runnable>(queueCapacity),
@@ -30,14 +47,38 @@ internal class A0PeerSearchWorkers(
     )
 
     fun submit(job:()->Unit):Boolean {
-        if(closed.get()) return false
+        if(closed.get())return false
         return try {
             pool.execute {
-                if(!closed.get()) action(job)
+                val current=active.incrementAndGet()
+                started.incrementAndGet()
+                peakActive.updateAndGet { maxOf(it,current) }
+                try {
+                    if(!closed.get()) action(job)
+                } finally {
+                    active.decrementAndGet()
+                    completed.incrementAndGet()
+                }
             }
+            accepted.incrementAndGet()
+            peakQueued.updateAndGet { maxOf(it,pool.queue.size) }
             true
-        }catch (_:RejectedExecutionException) {false}
+        } catch (_:RejectedExecutionException) {
+            rejected.incrementAndGet()
+            false
+        }
     }
+
+    fun snapshot():Stats = Stats(
+        accepted=accepted.get(),
+        rejected=rejected.get(),
+        started=started.get(),
+        completed=completed.get(),
+        peakActive=peakActive.get(),
+        peakQueued=peakQueued.get(),
+        activeNow=active.get(),
+        queuedNow=pool.queue.size,
+    )
 
     /** Never interrupts the authenticated server reader; only P workers. */
     fun stop(timeoutMillis:Long):Boolean {
