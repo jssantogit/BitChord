@@ -573,6 +573,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     return it
                 }
             }
+            // The MusicBrainz recording search result itself can prove an
+            // Official audio Release -> ReleaseGroup MBID. Use the already
+            // validated Front-v5 album sleeve immediately; this avoids
+            // asking CAA again when its track is searched without having
+            // opened a release detail (no title-based association).
+            row.coverGroupMbid?.let { officialGroup ->
+                coverArtArchive.cachedVerifiedGroupCover(officialGroup, size)?.let {
+                    return it
+                }
+            }
             // Otherwise only an independently verified Official Release ID
             // may supply this Recording's cover, not an arbitrary compilation
             // or a similarly named video/performance recording.
@@ -4124,6 +4134,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             hasCatalogedAsset = hit.musicBrainzId in catalogedAssetMbids,
                             artistScopeMbid = artistScopeMbid,
                             coverReleaseMbid = hit.coverReleaseMbid,
+                            coverGroupMbid = hit.coverGroupMbid,
                             durationMs = hit.durationMs,
                         ))
                     }
@@ -4329,6 +4340,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 hit.artistDisplay, hasCatalogedAsset = hit.musicBrainzId in assetMbids,
                                 artistScopeMbid = cursor.artistScopeMbid,
                                 coverReleaseMbid = hit.coverReleaseMbid,
+                            coverGroupMbid = hit.coverGroupMbid,
                                 durationMs = hit.durationMs,
                             ))
                         }
