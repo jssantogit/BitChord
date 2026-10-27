@@ -191,6 +191,28 @@ class PrecisionAudioSinkTest {
 
     // ---- Neutral Android route (issue #185) -------------------------------
 
+
+    @Test
+    fun `neutral 16-bit to native float is exact even though its representation changes`() {
+        val delegate = FakeAudioSink()
+        val sink = createSink(delegate, enableFloatOutput = true, neutralPlayback = true)
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_16BIT)).build())
+        assertEquals(PcmEncoding.PCM_FLOAT, sink.targetOutputEncoding)
+        assertTrue("16-bit integers fit exactly into float32", AudioOutputStatus.current.value.outputExact)
+
+        val input = ByteBuffer.allocateDirect(8).order(ByteOrder.LITTLE_ENDIAN)
+        shortArrayOf(Short.MIN_VALUE, Short.MAX_VALUE, 1, -1).forEach(input::putShort)
+        input.flip()
+        assertTrue(sink.handleBuffer(input, 1234L, 1))
+
+        val rendered = delegate.lastHandledBuffer!!.order(ByteOrder.LITTLE_ENDIAN)
+        rendered.rewind()
+        assertEquals(-1f, rendered.getFloat(), 0f)
+        assertEquals(32767f / 32768f, rendered.getFloat(), 0f)
+        assertEquals(1f / 32768f, rendered.getFloat(), 0f)
+        assertEquals(-1f / 32768f, rendered.getFloat(), 0f)
+    }
+
     @Test
     fun `neutral PCM16 forwards original buffer without conversion or effects`() {
         val delegate = FakeAudioSink()

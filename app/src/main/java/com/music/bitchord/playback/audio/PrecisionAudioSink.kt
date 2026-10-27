@@ -650,7 +650,7 @@ class PrecisionAudioSink(
      *
      * The combinations that are genuinely lossless:
      *
-     * - 16-bit source to a 16-bit track. [PcmBoundary] scales by 32768, a power
+     * - 16-bit source to a 16-bit or float track. [PcmBoundary] scales by 32768, a power
      *   of two, so the float round trip recovers every original integer.
      * - 24-bit source to a float track. Scaled by 8388608, likewise exact, and
      *   float32 has the 24 bits of significand to hold the result.
@@ -665,7 +665,7 @@ class PrecisionAudioSink(
      */
     private fun publishOutputExactness(source: PcmEncoding, target: PcmEncoding) {
         val exact = when (source) {
-            PcmEncoding.PCM_16BIT -> target == PcmEncoding.PCM_16BIT
+            PcmEncoding.PCM_16BIT -> target == PcmEncoding.PCM_16BIT || target == PcmEncoding.PCM_FLOAT
             PcmEncoding.PCM_24BIT_PACKED -> target == PcmEncoding.PCM_FLOAT
             PcmEncoding.PCM_FLOAT -> target == PcmEncoding.PCM_FLOAT
             // 24 bits of significand cannot hold 32.
