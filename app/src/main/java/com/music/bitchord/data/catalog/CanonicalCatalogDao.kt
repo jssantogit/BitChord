@@ -20,6 +20,16 @@ internal data class ExclusiveExternalIdentityClaimResult(
     val inserted: Boolean,
 )
 
+/** Cached ReleaseGroup editions materialized by one relational snapshot query. */
+internal data class CanonicalCachedGroupEditionRow(
+    val musicBrainzId: String,
+    val title: String,
+    val country: String?,
+    val releaseDate: String?,
+    val artistDisplay: String?,
+    val status: String?,
+)
+
 /** Exact Recording MBID to an already-verified Official ReleaseGroup cover. */
 internal data class CanonicalRecordingCoverGroupRow(
     val recordingMbid: String,
@@ -244,6 +254,30 @@ internal interface CanonicalCatalogDao {
 
     @Query("SELECT * FROM catalog_release_group WHERE id = :id LIMIT 1")
     suspend fun catalogReleaseGroup(id: String): CatalogReleaseGroupEntity?
+
+    /**
+     * Materialize Official/Promotion/other edition evidence in one statement,
+     * rather than one release + identity + enrichment Room read per edition.
+     * All real IDs and original status survive; filtering Official remains
+     * the caller's responsibility.
+     */
+    @Query("""
+        SELECT ident.externalId AS musicBrainzId,
+               release.title AS title,
+               info.country AS country, info.releaseDate AS releaseDate,
+               COALESCE(info.artistDisplay, release.artistDisplay) AS artistDisplay,
+               info.status AS status
+        FROM catalog_release_group_edition AS relation
+        JOIN catalog_release AS release ON release.id = relation.releaseId
+        JOIN catalog_external_identity AS ident
+          ON ident.entityId = release.id
+         AND ident.provider = 'musicbrainz' AND ident.entityType = 'release'
+        LEFT JOIN musicbrainz_release_enrichment AS info
+          ON info.releaseId = release.id AND info.mbid = ident.externalId
+        WHERE relation.releaseGroupId = :groupId
+        ORDER BY relation.releaseId, ident.externalId
+    """)
+    suspend fun cachedGroupEditionRows(groupId: String): List<CanonicalCachedGroupEditionRow>
 
     @Query("SELECT * FROM catalog_release_group_edition WHERE releaseGroupId = :groupId ORDER BY releaseId")
     suspend fun catalogGroupEditions(groupId: String): List<CatalogReleaseGroupEditionEntity>
