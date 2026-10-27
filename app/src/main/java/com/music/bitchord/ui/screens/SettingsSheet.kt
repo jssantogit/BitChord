@@ -212,7 +212,6 @@ internal fun SettingsScreen(
     // which caches the codec-list walk for the life of the process.
     val dolbyAtmosSupported = DeviceCodecs.playsDolbyAtmos
     val spatialAudio by AppSettings.spatialAudio.collectAsStateWithLifecycle()
-    val nerdStats by AppSettings.showNerdStats.collectAsStateWithLifecycle()
     val reduceAnimation by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
     val liquidGlass by AppSettings.liquidGlass.collectAsStateWithLifecycle()
@@ -244,8 +243,6 @@ internal fun SettingsScreen(
     val stopOnTaskRemoved by AppSettings.stopOnTaskRemoved.collectAsStateWithLifecycle()
     val hideVolumeBar by AppSettings.hideVolumeBar.collectAsStateWithLifecycle()
     val hideStatusBarInPlayer by AppSettings.hideStatusBarInPlayer.collectAsStateWithLifecycle()
-    val hideSongStatus by AppSettings.hideSongStatus.collectAsStateWithLifecycle()
-    val showQueueHistory by AppSettings.showQueueHistory.collectAsStateWithLifecycle()
     val swipeToPlayNext by AppSettings.swipeToPlayNext.collectAsStateWithLifecycle()
     val dontRepeatSuggestions by AppSettings.dontRepeatSuggestions.collectAsStateWithLifecycle()
     val preferMusicOnly by AppSettings.preferMusicOnly.collectAsStateWithLifecycle()
@@ -1555,44 +1552,7 @@ internal fun SettingsScreen(
                     onClick = { AppSettings.setHideStatusBarInPlayer(!hideStatusBarInPlayer) },
                 )
             }
-            val showQueueHistoryTitle = stringResource(R.string.show_queue_history)
-            row(showQueueHistoryTitle, "player", "queue", "history", "previously played") {
-                SettingsRow(
-                    icon = Icons.Rounded.History,
-                    title = showQueueHistoryTitle,
-                    subtitle = stringResource(R.string.show_queue_history_subtitle),
-                    trailing = {
-                        Switch(
-                            checked = showQueueHistory,
-                            onCheckedChange = AppSettings::setShowQueueHistory,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
-                        )
-                    },
-                    onClick = { AppSettings.setShowQueueHistory(!showQueueHistory) },
-                )
-            }
-            val hideSongStatusTitle = stringResource(R.string.hide_song_status)
-            row(hideSongStatusTitle, "player", "playing from", "played by") {
-                SettingsRow(
-                    icon = Icons.Rounded.VisibilityOff,
-                    title = hideSongStatusTitle,
-                    subtitle = stringResource(R.string.hide_song_status_subtitle),
-                    trailing = {
-                        Switch(
-                            checked = hideSongStatus,
-                            onCheckedChange = AppSettings::setHideSongStatus,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
-                        )
-                    },
-                    onClick = { AppSettings.setHideSongStatus(!hideSongStatus) },
-                )
-            }
+
         }
         }
 
@@ -1624,25 +1584,6 @@ internal fun SettingsScreen(
                         onClick = { DiagnosticsUiEntry.open(context) },
                     )
                 }
-            }
-            val showNerdStatsTitle = stringResource(R.string.show_nerd_stats)
-            row(showNerdStatsTitle, "debug", "bitrate", "codec") {
-                SettingsRow(
-                    icon = Icons.Rounded.BarChart,
-                    title = showNerdStatsTitle,
-                    subtitle = stringResource(R.string.show_nerd_stats_subtitle),
-                    trailing = {
-                        Switch(
-                            checked = nerdStats,
-                            onCheckedChange = AppSettings::setShowNerdStats,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
-                        )
-                    },
-                    onClick = { AppSettings.setShowNerdStats(!nerdStats) },
-                )
             }
 
         }
