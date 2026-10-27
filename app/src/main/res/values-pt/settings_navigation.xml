@@ -1,0 +1,12 @@
+<resources>
+    <string name="settings_nav_group_account">CONTA</string>
+    <string name="settings_nav_group_music">MÚSICA</string>
+    <string name="settings_nav_group_experience">EXPERIÊNCIA</string>
+    <string name="settings_nav_group_data">DADOS</string>
+    <string name="settings_nav_group_system">SISTEMA</string>
+    <string name="settings_nav_group_about">SOBRE</string>
+    <string name="settings_nav_lyrics">Letras</string>
+    <string name="settings_nav_about">Sobre</string>
+    <string name="settings_nav_filtered">Resultados para: %1$s</string>
+    <string name="settings_nav_show_all">Ver tudo</string>
+</resources>
