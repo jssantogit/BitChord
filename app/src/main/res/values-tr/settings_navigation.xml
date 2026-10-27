@@ -2,7 +2,7 @@
     <string name="settings_nav_group_account">HESAP</string>
     <string name="settings_nav_group_music">MÜZİK</string>
     <string name="settings_nav_group_experience">DENEYİM</string>
-    <string name="settings_nav_group_data">VERİLER</string>
+    <string name="settings_nav_group_data">VERİLER VE İNDİRMELER</string>
     <string name="settings_nav_group_system">SİSTEM</string>
     <string name="settings_nav_group_about">HAKKINDA</string>
     <string name="settings_nav_lyrics">Şarkı sözleri</string>
