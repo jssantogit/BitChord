@@ -3621,9 +3621,8 @@ private fun BitChordApp(
                         detail != null && detailActiveShelf != null -> detailActiveShelf?.title.orEmpty()
                         detail != null -> detail.title
                         selectedMoodGenre != null -> selectedMoodGenre?.title.orEmpty()
-                        else -> tabs[selectedTab].let {
-                            if (it.label == "Play") stringResource(R.string.listen_now) else it.label
-                        }
+                        selectedTab == TAB_HOME -> stringResource(R.string.home)
+                        else -> tabs[selectedTab].label
                     },
                     // Every page, in either material, uses separated floating
                     // circles over the shared gradient — no full-width pane.
