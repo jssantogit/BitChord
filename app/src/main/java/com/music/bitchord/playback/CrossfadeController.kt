@@ -1379,12 +1379,14 @@ class CrossfadeController(
         // fade starts — otherwise the incoming track's first seconds are heard
         // unfiltered. The outgoing sink crosses into the blend its lead before
         // the listener does, and its filter has to start moving then.
-        val outgoingAt = if (fadeMs > 0L && fadeEndMs > 0L) {
-            (out.currentPosition + tracks.outgoingLeadMs() - (fadeEndMs - fadeMs)).toFloat() / fadeMs
-        } else {
-            0f
+        if (NeutralFilterTickPolicy.shouldCompute(filters)) {
+            val outgoingAt = if (fadeMs > 0L && fadeEndMs > 0L) {
+                (out.currentPosition + tracks.outgoingLeadMs() - (fadeEndMs - fadeMs)).toFloat() / fadeMs
+            } else {
+                0f
+            }
+            rideFilters(0f, outgoingAt.takeIf { it > 0f }?.coerceAtMost(1f))
         }
-        rideFilters(0f, outgoingAt.takeIf { it > 0f }?.coerceAtMost(1f))
         if (rampSteps > 0) rampOutgoing(out)
 
         // Wait for the track to actually reach the fade point. [fadeEndMs] is
@@ -1564,12 +1566,9 @@ class CrossfadeController(
         // outgoing track runs out under it.
         if (!handedOff && player.playbackState == Player.STATE_IDLE) return bail()
 
-        // Faders act at the speaker; everything in the DSP chain — the filters
-        // and the headroom trim — acts where each sink is writing, its lead
-        // ahead of that. So those are aimed at the blend as it will be when the
-        // audio they touch is played, each side by its own lead.
-        val incomingAt = ((elapsed + tracks.incomingLeadMs()) / wallSpan).coerceIn(0f, 1f)
-        val outgoingAt = (progress + tracks.outgoingLeadMs() / span.toFloat()).coerceIn(0f, 1f)
+        // Only legacy callers with an actual filter port need the predictive
+        // DSP timeline. Android neutral output has no filter processors, so
+        // it skips both lead-time work and the per-tick DJ filter calculations.
 
         // Headroom is applied to the two ExoPlayer faders, never to every
         // decoded PCM sample. Their combined gain cannot exceed unity even
@@ -1588,7 +1587,12 @@ class CrossfadeController(
             handOff(out, player)
         }
         publishBlend(out, player)
-        rideFilters(incomingAt, outgoingAt)
+        if (NeutralFilterTickPolicy.shouldCompute(filters)) {
+            // Legacy non-neutral filter ports run ahead of what is heard.
+            val incomingAt = ((elapsed + tracks.incomingLeadMs()) / wallSpan).coerceIn(0f, 1f)
+            val outgoingAt = (progress + tracks.outgoingLeadMs() / span.toFloat()).coerceIn(0f, 1f)
+            rideFilters(incomingAt, outgoingAt)
+        }
 
         // Finish when the fade runs its course or its setting is switched off.
         // The outgoing decoder ending is not completion: its final sample may
