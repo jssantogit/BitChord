@@ -1214,7 +1214,7 @@
     <string name="settings_nav_group_account">ACCOUNT</string>
     <string name="settings_nav_group_music">MUSIC</string>
     <string name="settings_nav_group_experience">EXPERIENCE</string>
-    <string name="settings_nav_group_data">DATA</string>
+    <string name="settings_nav_group_data">DATA &amp; DOWNLOADS</string>
     <string name="settings_nav_group_system">SYSTEM</string>
     <string name="settings_nav_group_about">ABOUT</string>
     <string name="settings_nav_lyrics">Lyrics</string>
