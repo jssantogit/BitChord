@@ -758,8 +758,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         if (_searchSource.value != SearchSource.CANONICAL ||
                             _query.value.trim() != query) return@withPermit
                         _canonicalResults.update { old ->
-                            if (old !is UiState.Success) old else UiState.Success(
-                                old.data.map {
+                            if (old !is UiState.Success) old else {
+                                // The verified album sleeve can update multiple
+                                // same-group songs immediately, without
+                                // waiting for another search or Room traversal.
+                                val withAlbumArt = if (row.kind ==
+                                    CanonicalSearchKind.RELEASE_GROUP && artwork != null
+                                ) canonicalRowsWithNewVerifiedGroupArt(
+                                    old.data, row.musicBrainzId, artwork,
+                                ) else old.data
+                                UiState.Success(withAlbumArt.map {
                                     if (it.kind != row.kind || it.musicBrainzId != row.musicBrainzId) it
                                     else it.copy(
                                         title = officialTitle,
@@ -767,8 +775,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                             canonicalNeedsCoverRefresh(it.artworkUri))
                                             artwork else it.artworkUri,
                                     )
-                                },
-                            )
+                                })
+                            }
                         }
                     }
                 }
