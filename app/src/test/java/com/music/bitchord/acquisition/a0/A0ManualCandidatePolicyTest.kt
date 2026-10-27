@@ -96,8 +96,6 @@ class A0ManualCandidatePolicyTest {
         assertEquals(A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL,
             visible.albumEvidence.status)
         assertFalse(visible.identityEvidence.authorizesTransfer)
-        assertEquals(A0CanonicalAcquisitionIntent.QualityPreset.LOSSLESS,
-            A0CanonicalAcquisitionIntent.QualityPreset.LOSSLESS)
         assertEquals(2,handoff.releaseShadowChoices().size)
     }
 }
