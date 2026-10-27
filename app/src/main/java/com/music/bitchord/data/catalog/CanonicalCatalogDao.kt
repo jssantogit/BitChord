@@ -263,17 +263,17 @@ internal interface CanonicalCatalogDao {
      */
     @Query("""
         SELECT ident.externalId AS musicBrainzId,
-               release.title AS title,
+               edition.title AS title,
                info.country AS country, info.releaseDate AS releaseDate,
-               COALESCE(info.artistDisplay, release.artistDisplay) AS artistDisplay,
+               COALESCE(info.artistDisplay, edition.artistDisplay) AS artistDisplay,
                info.status AS status
         FROM catalog_release_group_edition AS relation
-        JOIN catalog_release AS release ON release.id = relation.releaseId
+        JOIN catalog_release AS edition ON edition.id = relation.releaseId
         JOIN catalog_external_identity AS ident
-          ON ident.entityId = release.id
+          ON ident.entityId = edition.id
          AND ident.provider = 'musicbrainz' AND ident.entityType = 'release'
         LEFT JOIN musicbrainz_release_enrichment AS info
-          ON info.releaseId = release.id AND info.mbid = ident.externalId
+          ON info.releaseId = edition.id AND info.mbid = ident.externalId
         WHERE relation.releaseGroupId = :groupId
         ORDER BY relation.releaseId, ident.externalId
     """)
