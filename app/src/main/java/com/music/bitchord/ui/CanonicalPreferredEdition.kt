@@ -84,7 +84,12 @@ internal fun canonicalArtworkEditionsForGroup(
         .sortedWith(
             compareByDescending<MusicBrainzReleaseHit> {
                 it.title.trim().equals(groupTitle.trim(), ignoreCase = true)
-            }.thenByDescending { it.hasFrontCover == true },
+            }.thenByDescending { it.hasFrontCover == true }
+                // When both editions are genuinely official and have the
+                // exact work title, the worldwide distribution is more
+                // representative of the default streaming sleeve than an
+                // earlier region-specific physical package.
+                .thenByDescending { it.country == "XW" },
         )
         .take(2)
 
