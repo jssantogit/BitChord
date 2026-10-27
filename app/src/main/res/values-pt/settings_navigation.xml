@@ -12,7 +12,7 @@
     <string name="settings_nav_controls">Controles e comportamento</string>
     <string name="settings_nav_advanced">Avançado</string>
     <string name="settings_nav_desc_account">Contas e integrações musicais</string>
-    <string name="settings_nav_desc_audio">Fontes, Wi-Fi e dados móveis</string>
+    <string name="settings_nav_desc_audio">Qualidade de streaming e versões de áudio</string>
     <string name="settings_nav_desc_playback">Saída, transições e fila</string>
     <string name="settings_nav_desc_local">Pastas e filtros de áudio local</string>
     <string name="settings_nav_desc_appearance">Tema, capas e efeitos visuais</string>
@@ -27,4 +27,6 @@
     <string name="settings_nav_desc_wear">Integração com relógio</string>
     <string name="settings_nav_desc_about">Versão e informações do projeto</string>
     <string name="settings_nav_desc_sources">Provedores e extensões de música</string>
+    <string name="settings_nav_diagnostics_title">Diagnósticos</string>
+    <string name="settings_nav_diagnostics_subtitle">Capturar, inspecionar e compartilhar relatórios de diagnóstico</string>
 </resources>
