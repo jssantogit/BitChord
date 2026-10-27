@@ -181,4 +181,25 @@ class A0CandidateDiagnosticCoverageTest {
         assertTrue(event.attributes.size<=24)
         assertFalse(event.attributes.toString().contains("remotePath"))
     }
+
+    @Test fun diagnosticSeparatesWorkerQueueLossFromFairnessAndDirectCollector() {
+        val points=mutableListOf<StructuredTracePoint>()
+        val tracer=StructuredTracer(sink=StructuredTraceSink { points.add(it) },
+            traceIdFactory={ "bounded-pressure-causes" })
+        val trace=A0SmokeTrace.start(tracer,observedTransfer=true)
+        trace.peerSearchBackpressure(
+            dropped=207,perPeerDropped=0,
+            workerQueueDropped=204,directCollectorDropped=3,
+            globalCapacityDropped=0,duplicateTickets=15
+        )
+        val event=points.single { it.stage=="peer_search_backpressure" }
+        assertEquals("207",event.attributes["droppedOffers"])
+        assertEquals("204",event.attributes["workerQueueDropped"])
+        assertEquals("3",event.attributes["directCollectorDropped"])
+        assertEquals("0",event.attributes["globalCapacityDropped"])
+        assertEquals("0",event.attributes["perPeerDropped"])
+        assertEquals("15",event.attributes["duplicateTickets"])
+        assertTrue(event.attributes.size<=24)
+        assertFalse(event.attributes.toString().contains("peerUsername"))
+    }
 }
