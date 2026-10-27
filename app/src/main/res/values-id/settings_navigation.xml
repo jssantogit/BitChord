@@ -1,0 +1,30 @@
+<resources>
+    <string name="settings_nav_group_account">AKUN</string>
+    <string name="settings_nav_group_music">MUSIK</string>
+    <string name="settings_nav_group_experience">PENGALAMAN</string>
+    <string name="settings_nav_group_data">DATA</string>
+    <string name="settings_nav_group_system">SISTEM</string>
+    <string name="settings_nav_group_about">TENTANG</string>
+    <string name="settings_nav_lyrics">Lirik</string>
+    <string name="settings_nav_about">Tentang</string>
+    <string name="settings_nav_filtered">Hasil untuk: %1$s</string>
+    <string name="settings_nav_show_all">Lihat semua</string>
+    <string name="settings_nav_controls">Kontrol dan perilaku</string>
+    <string name="settings_nav_advanced">Lanjutan</string>
+    <string name="settings_nav_desc_account">Akun dan integrasi musik</string>
+    <string name="settings_nav_desc_audio">Sumber, Wi-Fi, dan data seluler</string>
+    <string name="settings_nav_desc_playback">Keluaran, transisi, dan antrean</string>
+    <string name="settings_nav_desc_local">Folder dan filter audio lokal</string>
+    <string name="settings_nav_desc_appearance">Tema, sampul, dan efek visual</string>
+    <string name="settings_nav_desc_lyrics">Sinkronisasi, sumber, dan terjemahan</string>
+    <string name="settings_nav_desc_downloads">Soulseek, kualitas, dan tujuan</string>
+    <string name="settings_nav_desc_storage">Cache audio dan ruang penyimpanan</string>
+    <string name="settings_nav_desc_data">Replay, cadangan, dan impor</string>
+    <string name="settings_nav_desc_performance">Laju penyegaran dan baterai</string>
+    <string name="settings_nav_desc_misc">Gestur dan perilaku pemutaran</string>
+    <string name="settings_nav_desc_language">Bahasa antarmuka</string>
+    <string name="settings_nav_desc_advanced">Diagnostik dan kontrol teknis</string>
+    <string name="settings_nav_desc_wear">Integrasi jam tangan</string>
+    <string name="settings_nav_desc_about">Versi dan informasi proyek</string>
+    <string name="settings_nav_desc_sources">Penyedia dan ekstensi musik</string>
+</resources>
