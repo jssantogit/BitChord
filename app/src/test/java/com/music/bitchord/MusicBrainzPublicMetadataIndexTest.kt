@@ -340,6 +340,17 @@ class MusicBrainzPublicMetadataIndexTest {
             ))
             assertEquals(group, dao.verifiedRecordingCoverGroupMbid(record))
             assertEquals(null, dao.verifiedRecordingCoverGroupMbid(unrelated))
+            // Bulk hydration must share the same proven official-edition edge
+            // as the individual lookup. A twenty-song album cannot incur one
+            // expensive Room graph traversal per cover, and unrelated songs
+            // must not borrow the nearest album's artwork.
+            val batch = dao.verifiedRecordingCoverGroupMbids(
+                listOf(unrelated, record, record, "66666666-6666-4666-8666-666666666666"),
+            )
+            assertEquals(listOf(record to group), batch.map {
+                it.recordingMbid to it.groupMbid
+            }.distinct())
+
         } finally { db.close() }
     }
 
