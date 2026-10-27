@@ -9,6 +9,8 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Upsert
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -55,12 +57,33 @@ internal interface SmartPlaylistDefinitionDao {
  * Independent local database. We deliberately do NOT change ListeningEventDatabase,
  * its migrations, playback state, or provider-owned playlist storage.
  */
-@Database(entities = [SmartPlaylistDefinitionEntity::class], version = 1, exportSchema = false)
+@Database(
+    entities = [SmartPlaylistDefinitionEntity::class, SmartPlaylistV2DefinitionEntity::class],
+    version = 2,
+    exportSchema = false,
+)
 internal abstract class SmartPlaylistDefinitionDatabase : RoomDatabase() {
     abstract fun definitionDao(): SmartPlaylistDefinitionDao
+    abstract fun v2DefinitionDao(): SmartPlaylistV2DefinitionDao
 
     internal companion object {
         private const val DATABASE_NAME = "smart-playlist-definitions.db"
+
+        // V1 rows are intentionally untouched: V1 users lose neither rules nor
+        // names while V2 is introduced in a separate, versioned table.
+        internal val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `smart_playlist_v2_definition` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `schemaVersion` INTEGER NOT NULL,
+                        `queryJson` TEXT NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                """.trimIndent())
+            }
+        }
         @Volatile private var instance: SmartPlaylistDefinitionDatabase? = null
 
         fun get(context: Context): SmartPlaylistDefinitionDatabase =
@@ -69,7 +92,7 @@ internal abstract class SmartPlaylistDefinitionDatabase : RoomDatabase() {
                     context.applicationContext,
                     SmartPlaylistDefinitionDatabase::class.java,
                     DATABASE_NAME,
-                ).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2).build().also { instance = it }
             }
     }
 }
