@@ -66,6 +66,23 @@ internal suspend fun canonicalCachedRecordingArtForVisibleRows(
     return proven
 }
 
+
+/**
+ * Cache hydration is repeatable across search → artist → album → search.
+ * Only a proven Recording MBID may receive a previously verified album sleeve;
+ * unrelated release rows and track-owned artwork must never be overwritten.
+ */
+internal fun canonicalRowsWithVerifiedRecordingArt(
+    rows: List<com.music.bitchord.ui.screens.CanonicalCatalogSearchRow>,
+    proven: Map<String, String>,
+): List<com.music.bitchord.ui.screens.CanonicalCatalogSearchRow> =
+    rows.map { row ->
+        val cover = proven[row.musicBrainzId]
+        if (row.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING &&
+            row.artworkUri.isNullOrBlank() && cover != null
+        ) row.copy(artworkUri = cover) else row
+    }
+
 /**
  * Deliver verified covers as soon as each independent lookup finishes.
  *
