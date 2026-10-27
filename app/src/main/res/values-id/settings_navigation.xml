@@ -27,4 +27,6 @@
     <string name="settings_nav_desc_wear">Integrasi jam tangan</string>
     <string name="settings_nav_desc_about">Versi dan informasi proyek</string>
     <string name="settings_nav_desc_sources">Penyedia dan ekstensi musik</string>
+    <string name="settings_nav_diagnostics_title">Diagnostik</string>
+    <string name="settings_nav_diagnostics_subtitle">Ambil, tinjau, dan bagikan laporan diagnostik</string>
 </resources>
