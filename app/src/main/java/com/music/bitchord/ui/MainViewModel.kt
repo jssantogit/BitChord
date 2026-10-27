@@ -1528,7 +1528,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         else UiState.Success(CanonicalCatalogDetailPage(
                             title = details.title,
                             summary = "Saved release · offline catalog",
-                            rows = details.tracks.map { track -> CanonicalCatalogSearchRow(
+                            artworkUri = entry.artworkUri,
+                            rows = canonicalReleaseTracksWithArtwork(details.tracks.map { track -> CanonicalCatalogSearchRow(
                                 musicBrainzId = track.recordingMbid,
                                 kind = CanonicalSearchKind.RECORDING,
                                 title = "${track.mediumNumber}.${track.trackNumber}  ${track.title}",
