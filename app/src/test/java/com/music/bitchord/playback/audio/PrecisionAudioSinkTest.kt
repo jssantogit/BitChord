@@ -234,6 +234,65 @@ class PrecisionAudioSinkTest {
     }
 
     @Test
+    fun `neutral conversion refuses a new buffer until pending bytes of prior track packet drain`() {
+        val fake = FakeAudioSink().apply { bytesToConsumePerCall = 1 }
+        val sink = createSink(fake, enableFloatOutput = true, neutralPlayback = true)
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_24BIT)).build())
+
+        fun packet(byte: Byte): ByteBuffer =
+            ByteBuffer.allocateDirect(6).order(ByteOrder.LITTLE_ENDIAN).apply {
+                repeat(6) { put(byte) }
+                flip()
+            }
+        val first = packet(0x11.toByte())
+        val second = packet(0x22.toByte())
+        assertFalse(sink.handleBuffer(first, 1_000L, 1))
+        assertEquals(6, first.position())
+        val firstOutput = fake.lastHandledBuffer
+        val calls = fake.handleBufferCallCount
+        assertFalse("decoder packet two must not overtake pending converted PCM",
+            sink.handleBuffer(second, 2_000L, 1))
+        assertEquals(calls, fake.handleBufferCallCount)
+        assertEquals(0, second.position())
+        assertSame(firstOutput, fake.lastHandledBuffer)
+
+        fake.bytesToConsumePerCall = Int.MAX_VALUE
+        assertTrue(sink.handleBuffer(first, 1_000L, 1))
+        assertTrue(sink.handleBuffer(second, 2_000L, 1))
+        assertEquals(2_000L, fake.lastPresentationTimeUs)
+        assertEquals(6, second.position())
+    }
+
+    @Test
+    fun `converted large packet cannot end before unprocessed frames are resent`() {
+        val fake = FakeAudioSink().apply {
+            bytesToConsumePerCall = 1
+            isEndedReturn = true
+            hasPendingDataReturn = false
+        }
+        val sink = createSink(fake, enableFloatOutput = true, neutralPlayback = true)
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_24BIT)).build())
+        val frames = PrecisionAudioSink.DEFAULT_CAPACITY_FRAMES + 2
+        val input = ByteBuffer.allocateDirect(frames * 2 * 3).order(ByteOrder.LITTLE_ENDIAN)
+        repeat(frames * 2 * 3) { input.put(0x33.toByte()) }
+        input.flip()
+
+        assertFalse(sink.handleBuffer(input, 0L, 1))
+        assertTrue(input.hasRemaining())
+        assertTrue(sink.hasPendingData())
+        assertFalse(sink.isEnded())
+        fake.bytesToConsumePerCall = Int.MAX_VALUE
+        sink.playToEndOfStream()
+        assertFalse("remaining source PCM still needs conversion", fake.playedToEndOfStream)
+        assertTrue(sink.hasPendingData())
+
+        assertTrue(sink.handleBuffer(input, 0L, 1))
+        assertEquals(input.limit(), input.position())
+        sink.playToEndOfStream()
+        assertTrue(fake.playedToEndOfStream)
+    }
+
+    @Test
     fun `neutral converted PCM cannot end before pending float output drains`() {
         val fake = FakeAudioSink().apply {
             bytesToConsumePerCall = 1
