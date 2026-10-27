@@ -354,4 +354,37 @@ class MusicBrainzPublicMetadataIndexTest {
         } finally { db.close() }
     }
 
+
+    @Test fun cachedDiscographyEditionsRetainAllStrongIdsAndOfficialStatusesInOneRead() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            var next = 0
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "edition-batch-" + (++next) })
+            val group = "11111111-1111-4111-8111-111111111111"
+            index.persistReleaseGroups(listOf(
+                MusicBrainzReleaseGroupHit(group, "Get Up", "EP", "2023-07-21", "NewJeans"),
+            ))
+            val originals = (1..30).map { n ->
+                MusicBrainzReleaseHit(
+                    "22222222-2222-4222-8222-" + n.toString().padStart(12, '0'),
+                    "Get Up", if (n == 1) "XW" else "KR",
+                    "2023-07-21", "NewJeans",
+                    status = if (n % 7 == 0) "Promotion" else "Official",
+                )
+            }
+            index.persistGroupEditions(group, originals)
+            val cached = index.cachedGroupReleases(group)
+            assertEquals(30, cached.size)
+            assertEquals(originals.map { it.musicBrainzId }.toSet(),
+                cached.map { it.musicBrainzId }.toSet())
+            assertEquals("XW", cached.single {
+                it.musicBrainzId == originals[0].musicBrainzId
+            }.country)
+            assertEquals("Promotion", cached.single {
+                it.musicBrainzId == originals[6].musicBrainzId
+            }.status)
+        } finally { db.close() }
+    }
+
 }
