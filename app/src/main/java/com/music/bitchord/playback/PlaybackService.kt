@@ -6406,6 +6406,10 @@ class PlaybackService : MediaLibraryService() {
      * `skipSilenceEnabled` keeps driving it as before.
      */
     private fun silenceSkippingRenderers(deckA: Boolean) = object : DefaultRenderersFactory(this) {
+        // Captured before Media3 creates its AudioTracks. Old sink callbacks
+        // cannot publish telemetry after another renderer generation is built.
+        private val deckGeneration = audioDeckOwner.generation()
+
         init {
             // Do not force PCM_FLOAT onto an OEM speaker mixer merely because
             // the preference asks for it. The selected route must advertise
@@ -6515,7 +6519,7 @@ class PlaybackService : MediaLibraryService() {
                 preferredOutputEncodingProvider = { format -> resolvePreferredOutputEncoding(format) },
                 // The role moves at each crossfade or version swap. Only the
                 // audible deck is permitted to publish stream-format telemetry.
-                isAudible = { audioDeckOwner.isAudible(deckA) },
+                isAudible = { audioDeckOwner.isAudible(deckA, deckGeneration) },
             )
         }
     }

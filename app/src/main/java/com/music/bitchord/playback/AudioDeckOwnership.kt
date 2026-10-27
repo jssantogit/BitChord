@@ -9,19 +9,27 @@ package com.music.bitchord.playback
  * a new A/B pair and restores A to the audible role.
  */
 internal class AudioDeckOwnership {
-    // Updated by Media3's session thread and observed by both audio sink
-    // threads; the audible role must be visible without synchronization or
-    // locking on the real-time playback path.
+    // One volatile read atomically identifies renderer generation and audible
+    // deck. Old sinks may still reset after an output-route rebuild and must
+    // not publish stale telemetry over the new pair.
+    //
+    // Bits [63..1] = generation; bit 0 = physical deck (0=A, 1=B).
     @Volatile
-    private var activeDeckA = true
+    private var activeToken = 0L
 
-    fun isAudible(deckA: Boolean): Boolean = deckA == activeDeckA
+    /** Captured once by each renderer factory when it is constructed. */
+    fun generation(): Long = activeToken ushr 1
+
+    fun isAudible(deckA: Boolean, generation: Long): Boolean {
+        val deck = if (deckA) 0L else 1L
+        return activeToken == ((generation shl 1) or deck)
+    }
 
     fun handoff() {
-        activeDeckA = !activeDeckA
+        activeToken = activeToken xor 1L
     }
 
     fun reset() {
-        activeDeckA = true
+        activeToken = ((activeToken ushr 1) + 1L) shl 1
     }
 }
