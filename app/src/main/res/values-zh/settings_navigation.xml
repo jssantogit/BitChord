@@ -27,4 +27,6 @@
     <string name="settings_nav_desc_wear">手表集成</string>
     <string name="settings_nav_desc_about">版本与项目信息</string>
     <string name="settings_nav_desc_sources">音乐服务提供方与扩展</string>
+    <string name="settings_nav_diagnostics_title">诊断</string>
+    <string name="settings_nav_diagnostics_subtitle">采集、查看和共享诊断报告</string>
 </resources>
