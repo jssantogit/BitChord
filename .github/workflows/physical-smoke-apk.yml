@@ -33,7 +33,7 @@ jobs:
     steps:
       - name: Validate physical smoke request
         env:
-          SMOKE_PLAN: ${{ inputs.smoke_plan || 'Issue #187: Galaxy A54 settings navigation smoke; PR #189 HEAD 96508c6' }}
+          SMOKE_PLAN: "${{ inputs.smoke_plan || 'Issue 187 Galaxy A54 settings navigation smoke PR 189 HEAD 96508c6' }}"
         run: test -n "$SMOKE_PLAN"
 
       - name: Checkout
