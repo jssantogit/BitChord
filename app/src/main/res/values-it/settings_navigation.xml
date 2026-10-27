@@ -2,7 +2,7 @@
     <string name="settings_nav_group_account">ACCOUNT</string>
     <string name="settings_nav_group_music">MUSICA</string>
     <string name="settings_nav_group_experience">ESPERIENZA</string>
-    <string name="settings_nav_group_data">DATI</string>
+    <string name="settings_nav_group_data">DATI E DOWNLOAD</string>
     <string name="settings_nav_group_system">SISTEMA</string>
     <string name="settings_nav_group_about">INFORMAZIONI</string>
     <string name="settings_nav_lyrics">Testi</string>
