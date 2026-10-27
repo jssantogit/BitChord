@@ -411,7 +411,6 @@ internal fun LandscapeMainPane(
 @Composable
 internal fun LandscapeCredits(
     song: Song,
-    signedIn: Boolean,
     onOpenMenu: () -> Unit,
     onOpenAlbum: (String) -> Unit,
     /** Null browse id for anyone but the lead credit — see [NowPlayingScreen]. */
