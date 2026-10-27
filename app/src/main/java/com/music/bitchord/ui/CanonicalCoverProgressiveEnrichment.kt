@@ -48,7 +48,17 @@ internal suspend fun canonicalCachedRecordingArtForVisibleRows(
     val missing = recordings.map { it.musicBrainzId }.filterNot(proven::containsKey)
     if (missing.isNotEmpty()) {
         val eligible = missing.toSet()
-        for (edge in databaseLinks(missing)) {
+        // An unavailable Room graph is optional evidence, not a reason to
+        // discard sleeves already proven by the direct MusicBrainz edge.
+        // Cancellation still aborts navigation immediately.
+        val edges = try {
+            databaseLinks(missing)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyList()
+        }
+        for (edge in edges) {
             if (edge.recordingMbid in eligible)
                 adopt(edge.recordingMbid, edge.groupMbid)
         }
