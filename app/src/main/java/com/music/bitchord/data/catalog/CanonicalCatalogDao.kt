@@ -149,7 +149,7 @@ internal interface CanonicalCatalogDao {
     /** Batch lookup prevents one Room round trip per artist shelf card. */
     /**
      * A recording may reuse a verified cover only through a proven
-     * MusicBrainz Recording -> ReleaseTrack (provider-owned) -> Official
+     * MusicBrainz Recording -> indexed edition-specific MB Track -> Official
      * Release -> ReleaseGroup association. Never join titles, artists, or
      * arbitrary coverReleaseMbid candidates. Prefer non-compilation editions.
      * Return the MBID rather than trusting a raw URL; CoverArtArchive still
@@ -158,14 +158,13 @@ internal interface CanonicalCatalogDao {
     @Query("""
         SELECT groupIdentity.externalId
         FROM catalog_external_identity AS recordingIdentity
-        JOIN catalog_release_track_source AS owner
-            ON owner.recordingId = recordingIdentity.entityId
-                AND owner.provider = 'musicbrainz'
+        JOIN catalog_musicbrainz_track AS trackEvidence
+            ON trackEvidence.recordingId = recordingIdentity.entityId
         JOIN musicbrainz_release_enrichment AS releaseInfo
-            ON releaseInfo.releaseId = owner.releaseId
+            ON releaseInfo.releaseId = trackEvidence.releaseId
                 AND lower(releaseInfo.status) = 'official'
         JOIN catalog_release_group_edition AS relation
-            ON relation.releaseId = owner.releaseId
+            ON relation.releaseId = trackEvidence.releaseId
         JOIN catalog_release_group AS groupInfo
             ON groupInfo.id = relation.releaseGroupId
                 AND lower(groupInfo.primaryType) IN ('album', 'ep', 'single')
