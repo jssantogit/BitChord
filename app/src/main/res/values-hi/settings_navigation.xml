@@ -2,7 +2,7 @@
     <string name="settings_nav_group_account">खाता</string>
     <string name="settings_nav_group_music">संगीत</string>
     <string name="settings_nav_group_experience">अनुभव</string>
-    <string name="settings_nav_group_data">डेटा</string>
+    <string name="settings_nav_group_data">डेटा और डाउनलोड</string>
     <string name="settings_nav_group_system">सिस्टम</string>
     <string name="settings_nav_group_about">परिचय</string>
     <string name="settings_nav_lyrics">गीत के बोल</string>
