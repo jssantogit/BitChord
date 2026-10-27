@@ -463,6 +463,8 @@ class CrossfadeController(
      * out starts from where it actually is rather than from full volume.
      */
     private var bailFromGain = 0f
+    /** The session player also recovers smoothly rather than jumping to 100%. */
+    private var bailSurvivorFromGain = 1f
 
     /** Dedupes the per-tick plan log down to one line per distinct verdict. */
     private var lastPlanVerdict = ""
@@ -1739,14 +1741,20 @@ class CrossfadeController(
     /** Ramps the outgoing track away rather than cutting it, so an interruption has no click in it. */
     private fun driveBail() {
         val leaving = leavingOnBail()
-        if (leaving == null) {
+        val survivor = survivorOnBail()
+        if (leaving == null || survivor == null) {
             finish()
             return
         }
         val progress = (SystemClock.elapsedRealtime() - bailStartedAt).toFloat() / BAIL_MS
         if (progress < 1f) {
-            val fall = if (leaving === outgoing && ranOn(leaving)) 0f else bailFromGain * fallGain(progress)
-            leaving.volume = NeutralTransitionGain.fromFaders(1f, fall).outgoing
+            // Both gains follow the same ramp. Setting survivor.volume=1f
+            // immediately at bail() could sum two full-scale tracks and click.
+            val gains = NeutralTransitionGain.recoverSingleTrack(
+                bailSurvivorFromGain, bailFromGain, progress,
+            )
+            survivor.volume = gains.incoming
+            leaving.volume = if (leaving === outgoing && ranOn(leaving)) 0f else gains.outgoing
             return
         }
         finish()
@@ -1782,13 +1790,15 @@ class CrossfadeController(
         filters.open()
         // Whichever track is *not* the session's is the one ramped away: the
         // outgoing tail after the handoff, the incoming track before it.
-        if (handedOff) incoming?.volume = 1f else outgoing?.volume = 1f
+        bailSurvivorFromGain = survivorOnBail()?.volume ?: 1f
         bailFromGain = leavingOnBail()?.volume ?: 0f
         bailStartedAt = SystemClock.elapsedRealtime()
         phase = Phase.BAILING
     }
 
     private fun leavingOnBail(): ExoPlayer? = if (handedOff) outgoing else incoming
+
+    private fun survivorOnBail(): ExoPlayer? = if (handedOff) incoming else outgoing
 
     private fun finish() {
         val wasTransitioning = phase != Phase.IDLE
