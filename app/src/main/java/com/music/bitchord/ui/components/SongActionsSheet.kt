@@ -143,7 +143,6 @@ fun SongActionsSheet(
     onOpenArtist: (String) -> Unit,
     modifier: Modifier = Modifier,
     onRemoveFromPlaylist: (() -> Unit)? = null,
-    showSleepTimer: Boolean = false,
     /**
      * Sends the playing track back to YouTube's own upload, and keeps it there.
      * Offered for any player item that has one behind it — a substituted copy
@@ -152,32 +151,7 @@ fun SongActionsSheet(
      * [com.music.bitchord.playback.hasYouTubeOriginal].
      */
     onRollbackToOriginal: (() -> Unit)? = null,
-    /**
-     * The way back from a revert: available only for a player item the listener
-     * has pinned to YouTube's own upload, where nothing will go looking for a
-     * better copy again until they ask.
-     * See [com.music.bitchord.playback.OriginalVersion].
-     */
-    onUpgradeQuality: (() -> Unit)? = null,
-    /** Keeps the upgrade row visible but untappable while its lookup is running. */
-    upgradeQualityInProgress: Boolean = false,
-    /**
-     * Switches the playing track between its video and audio-only cuts. Null
-     * hides the row — offered only from the player, and only once an
-     * alternate cut is known to exist. See
-     * [com.music.bitchord.playback.PlaybackService.smoothSwapCurrentTrackVersion].
-     */
-    onToggleAudioVersion: (() -> Unit)? = null,
-    /** Which cut is playing now, so the row can offer the other one. */
-    isAudioVersion: Boolean = false,
     onShare: (() -> Unit)? = null,
-    /**
-     * Copies what the app logged while starting this track. Null everywhere
-     * except the player, where "this track" means something.
-     */
-    onCopyLog: (() -> Unit)? = null,
-    /** Opens the timing control offered only by the main player's menu. */
-    onLyricsOffset: (() -> Unit)? = null,
     /**
      * True while a lookup for this track's album/artist ids is still in
      * flight, so it isn't yet known whether "Open album" and "Open artist"
@@ -199,7 +173,6 @@ fun SongActionsSheet(
     /** First-party canonical rating UI; independent from account Likes. */
     canonicalRatingContent: (@Composable () -> Unit)? = null,
 ) {
-    var pickingSleepTimer by remember { mutableStateOf(false) }
     val menu = presentation == SongActionsPresentation.Menu
     // Read from the thumbnail the row that opened this sheet was already
     // showing, not a larger copy of it: the tint is a blur and a handful of
@@ -230,40 +203,16 @@ fun SongActionsSheet(
         // a substituted copy, the other for a track held on YouTube's own —
         // and between them they are the whole of the choice, which is why they
         // sit in the same place under the same divider.
-        if (onRollbackToOriginal != null || onUpgradeQuality != null || onToggleAudioVersion != null) {
-            (onRollbackToOriginal ?: onUpgradeQuality)?.let {
+        if (PlayerSongMenuPolicy.offers(PlayerMenuExtra.REVERT_ORIGINAL)) {
+            onRollbackToOriginal?.let {
                 ActionRow(
-                    icon = if (onRollbackToOriginal != null) {
-                        Icons.AutoMirrored.Rounded.Undo
-                    } else {
-                        Icons.Rounded.HighQuality
-                    },
-                    label = stringResource(
-                        if (onRollbackToOriginal != null) {
-                            R.string.revert_to_original
-                        } else {
-                            R.string.upgrade_quality
-                        },
-                    ),
-                    accent = palette.accent,
-                    enabled = onRollbackToOriginal != null || !upgradeQualityInProgress,
-                    onClick = it,
-                )
-            }
-            // Which recording, not which quality — a different question from
-            // the row above, so it sits right under it rather than merged
-            // into it, but still ahead of the divider both share.
-            onToggleAudioVersion?.let {
-                ActionRow(
-                    icon = if (isAudioVersion) Icons.Rounded.Videocam else BitChordIcons.MusicNote,
-                    label = stringResource(
-                        if (isAudioVersion) R.string.convert_to_video else R.string.convert_to_audio,
-                    ),
+                    icon = Icons.AutoMirrored.Rounded.Undo,
+                    label = stringResource(R.string.revert_to_original),
                     accent = palette.accent,
                     onClick = it,
                 )
+                GroupSeparator(palette)
             }
-            GroupSeparator(palette)
         }
 
         if (signedIn && !isOffline) {
@@ -341,36 +290,10 @@ fun SongActionsSheet(
                 accent = palette.accent,
             ) { onOpenArtist(id) }
         }
-        if (showSleepTimer) {
-            ActionRow(
-                icon = Icons.Rounded.Bedtime,
-                label = stringResource(R.string.sleep_timer),
-                value = sleepTimerStatus(),
-                accent = palette.accent,
-            ) { pickingSleepTimer = true }
-        }
-        // Deliberately outside the online-only block below. Local files and
-        // completed downloads use the same player lyric clock (including
-        // embedded synced lyrics), so they need this control just as much as
-        // streamed songs do.
-        onLyricsOffset?.let {
-            ActionRow(
-                icon = Icons.Rounded.Tune,
-                label = stringResource(R.string.lyrics_offset),
-                accent = palette.accent,
-                onClick = it,
-            )
-        }
         if (!isOffline) {
             onShare?.let {
                 ActionRow(Icons.Rounded.Share, stringResource(R.string.share), accent = palette.accent, onClick = it)
             }
-        }
-        // Last, and only from the player: it is about the track playing right
-        // now rather than about the song as a thing in a library, and it is
-        // the one row here nobody reaches for by accident.
-        onCopyLog?.let {
-            ActionRow(Icons.Rounded.BugReport, stringResource(R.string.copy_log), accent = palette.accent, onClick = it)
         }
     }
 
@@ -382,11 +305,6 @@ fun SongActionsSheet(
     }
 
     TintedSheet(palette = palette, imageUrl = song.thumbnailUrl, modifier = modifier) {
-        if (pickingSleepTimer) {
-            SleepTimerPicker(palette = palette, onBack = { pickingSleepTimer = false })
-            return@TintedSheet
-        }
-
         SheetTrackHeader(
             song,
             subtitleColor = palette.onBackgroundVariant,
