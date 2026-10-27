@@ -296,4 +296,51 @@ class MusicBrainzPublicMetadataIndexTest {
         } finally { db.close() }
     }
 
+
+    @Test fun aRecordingMayReuseOnlyItsOwnOfficialReleaseGroupFront() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            var n = 0
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "recording-cover-" + (++n) })
+            val group = "11111111-1111-4111-8111-111111111111"
+            val release = "22222222-2222-4222-8222-222222222222"
+            val record = "33333333-3333-4333-8333-333333333333"
+            val track = "44444444-4444-4444-8444-444444444444"
+            val unrelated = "55555555-5555-4555-8555-555555555555"
+            index.persistReleaseGroups(listOf(
+                MusicBrainzReleaseGroupHit(group, "Taste of Love", "EP", "2021-06-11", "TWICE"),
+            ))
+            index.persistGroupEditions(group, listOf(
+                MusicBrainzReleaseHit(release, "Taste of Love", "XW",
+                    "2021-06-11", "TWICE", status = "Official"),
+            ))
+            index.persistReleaseDetail(
+                com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail(
+                    musicBrainzId = release, groupMbid = group, title = "Taste of Love",
+                    artistDisplay = "TWICE", country = "XW", releaseDate = "2021-06-11",
+                    tracks = listOf(com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogTrack(
+                        trackMbid = track, recordingMbid = record, title = "Alcohol-Free",
+                        mediumNumber = 1, trackNumber = 1, durationMs = 200000L,
+                    )),
+                ),
+            )
+            val dao = db.catalogDao()
+            // A known Recording->Track->Official Release->Group claim is required.
+            assertEquals(null, dao.verifiedRecordingCoverGroupMbid(record))
+            assertEquals(null, dao.verifiedRecordingCoverGroupMbid(unrelated))
+            dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
+                "release-group:front-v4", group, "https://archive.org/old-collector.jpg",
+                1000L,
+            ))
+            assertEquals(null, dao.verifiedRecordingCoverGroupMbid(record))
+            dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
+                "release-group:front-v5", group, "https://archive.org/verified-main.jpg",
+                2000L,
+            ))
+            assertEquals(group, dao.verifiedRecordingCoverGroupMbid(record))
+            assertEquals(null, dao.verifiedRecordingCoverGroupMbid(unrelated))
+        } finally { db.close() }
+    }
+
 }
