@@ -27,4 +27,6 @@
     <string name="settings_nav_desc_wear">Uhrenintegration</string>
     <string name="settings_nav_desc_about">Version und Projektinformationen</string>
     <string name="settings_nav_desc_sources">Musikquellen und Erweiterungen</string>
+    <string name="settings_nav_diagnostics_title">Diagnose</string>
+    <string name="settings_nav_diagnostics_subtitle">Diagnoseberichte erfassen, prüfen und teilen</string>
 </resources>
