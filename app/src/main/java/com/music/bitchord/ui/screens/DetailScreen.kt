@@ -125,6 +125,7 @@ import com.music.bitchord.data.matchesSearch
 import com.music.bitchord.data.sortedForLibrary
 import com.music.bitchord.data.useTrackTags
 import com.music.bitchord.ui.components.CoverPlaceholder
+import com.music.bitchord.data.catalog.metadata.isCoverArchiveImageHost
 import com.music.bitchord.data.canvas.AppleArtistArt
 import com.music.bitchord.data.DebugLog as Log
 import com.music.bitchord.data.canvas.AppleArtistArtRepository
@@ -2286,9 +2287,7 @@ private fun rememberCaaCoverLoadObserver(
 ): (AsyncImagePainter.State) -> Unit {
     val beganAt = remember(url) { android.os.SystemClock.elapsedRealtime() }
     val seen = remember(url) { java.util.concurrent.atomic.AtomicBoolean(false) }
-    val isCaa = url?.startsWith("https://coverartarchive.org/") == true ||
-        url?.startsWith("https://archive.org/") == true ||
-        url?.startsWith("https://s3.us.archive.org/") == true
+    val isCaa = remember(url) { isCoverArchiveImageHost(url) }
     return remember(url, beganAt) {
         { state: AsyncImagePainter.State ->
             val done = state is AsyncImagePainter.State.Success ||
@@ -2298,6 +2297,8 @@ private fun rememberCaaCoverLoadObserver(
                     .recordImageResult(
                         state is AsyncImagePainter.State.Success,
                         android.os.SystemClock.elapsedRealtime() - beganAt,
+                        source = (state as? AsyncImagePainter.State.Success)
+                            ?.result?.dataSource?.name,
                     )
             }
         }
