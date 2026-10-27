@@ -416,6 +416,45 @@ class PrecisionAudioSinkTest {
     }
 
     @Test
+    fun `neutral Android sink has no custom DSP chain instance`() {
+        val fake = FakeAudioSink()
+        val sink = PrecisionAudioSink(
+            delegate = fake,
+            enableFloatOutput = false,
+            neutralPlayback = true,
+        )
+        assertNull("neutral mode should not instantiate a custom DSP chain", sink.dspChain)
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_16BIT)).build())
+        val input = ByteBuffer.allocateDirect(4).order(ByteOrder.LITTLE_ENDIAN).apply {
+            putShort(1234)
+            putShort((-1234).toShort())
+            flip()
+        }
+        assertTrue(sink.handleBuffer(input, 0L, 1))
+        assertSame(input, fake.lastHandledBuffer)
+        assertFalse(AudioOutputStatus.current.value.dspAvailable)
+    }
+
+    @Test
+    fun `neutral format conversion works without constructing effect processors`() {
+        val fake = FakeAudioSink()
+        val sink = PrecisionAudioSink(
+            delegate = fake,
+            enableFloatOutput = true,
+            neutralPlayback = true,
+        )
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_24BIT)).build())
+        val input = ByteBuffer.allocateDirect(6).order(ByteOrder.LITTLE_ENDIAN).apply {
+            repeat(2) { put(0); put(0); put(0x40.toByte()) }
+            flip()
+        }
+        assertTrue(sink.handleBuffer(input, 0L, 1))
+        assertNull(sink.dspChain)
+        assertEquals(C.ENCODING_PCM_FLOAT, fake.configuredConfig?.format?.pcmEncoding)
+        assertEquals(8, fake.lastHandledBuffer!!.limit())
+    }
+
+    @Test
     fun `neutral PCM16 forwards original buffer without conversion or effects`() {
         val delegate = FakeAudioSink()
         val sink = createSink(
