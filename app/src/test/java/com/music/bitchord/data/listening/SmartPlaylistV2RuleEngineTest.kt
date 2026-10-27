@@ -263,4 +263,54 @@ class SmartPlaylistV2RuleEngineTest {
         }
     }
 
+    @Test fun earlyAndLateSkipsUseOnlyExplicitNavigationEvidence() {
+        val rows = listOf(
+            candidate("early").copy(earlySkips = 3, lateSkips = 0),
+            candidate("late").copy(earlySkips = 0, lateSkips = 2),
+            candidate("never").copy(earlySkips = 0, lateSkips = 0),
+        )
+        val early = SmartPlaylistV2Query(
+            rules = SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.EARLY_SKIPS,
+                SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+                value = 2.0,
+            ),
+        )
+        assertEquals(listOf("early"), planner.preview(rows, early).map { it.recordingId })
+        val late = SmartPlaylistV2Query(
+            rules = SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.LATE_SKIPS,
+                SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+                value = 1.0,
+            ),
+        )
+        assertEquals(listOf("late"), planner.preview(rows, late).map { it.recordingId })
+        val neverSkipped = SmartPlaylistV2Query(
+            rules = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.EARLY_SKIPS, SmartPlaylistRuleOperator.EQUAL, 0.0,
+                ),
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.LATE_SKIPS, SmartPlaylistRuleOperator.EQUAL, 0.0,
+                ),
+            )),
+        )
+        assertEquals(listOf("never"), planner.preview(rows, neverSkipped).map { it.recordingId })
+    }
+
+    @Test fun skipCountMustBeNonnegativeInteger() {
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.EARLY_SKIPS, SmartPlaylistRuleOperator.EQUAL,
+                value = -1.0,
+            ))
+        }
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.LATE_SKIPS, SmartPlaylistRuleOperator.EQUAL,
+                value = 0.5,
+            ))
+        }
+    }
+
 }

@@ -141,4 +141,45 @@ class SmartPlaylistBatchEvidenceRoomTest {
         }
     }
 
+    @Test fun realRoomDistinguishesEarlySkipFromLateSkipAndInterruptions() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            catalog.catalogDao().upsertRecording(RecordingEntity("rec:skip", "Skip", "Artist", 200_000L))
+            var index = 0
+            val playback = RoomListeningEventStore(
+                listening.listeningEventDao(),
+                clock = ListeningClock { 1_000_000L },
+                idGenerator = ListeningIdGenerator { "event-" + (++index) },
+            )
+            playback.recordPlaybackStarted(PlaybackStart(recordingId = "rec:skip"))
+            playback.recordPlaybackEnded(PlaybackEnd(
+                recordingId = "rec:skip", listenedDurationMs = 10_000L,
+                recordingDurationMs = 200_000L, endCause = PlaybackEndCause.NEXT,
+            ))
+            playback.recordPlaybackStarted(PlaybackStart(recordingId = "rec:skip"))
+            playback.recordPlaybackEnded(PlaybackEnd(
+                recordingId = "rec:skip", listenedDurationMs = 100_000L,
+                recordingDurationMs = 200_000L, endCause = PlaybackEndCause.MANUAL_CHANGE,
+            ))
+            playback.recordPlaybackStarted(PlaybackStart(recordingId = "rec:skip"))
+            playback.recordPlaybackEnded(PlaybackEnd(
+                recordingId = "rec:skip", listenedDurationMs = 10_000L,
+                recordingDurationMs = 200_000L, endCause = PlaybackEndCause.ERROR,
+            ))
+            val row = RoomSmartPlaylistBatchEvidenceReader(
+                catalog.catalogDao(), listening.listeningEventDao(), listening.recordingRatingDao(),
+            ).read(listOf("rec:skip")).single()
+            assertEquals(1L, row.earlySkips)
+            assertEquals(1L, row.lateSkips)
+            assertEquals(0L, row.audibleCompletions)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
 }
