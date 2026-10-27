@@ -220,6 +220,8 @@ internal fun SettingsScreen(
     val signatureApiEnabled by AppSettings.signatureApiEnabled.collectAsStateWithLifecycle()
     val signatureApiUrl by AppSettings.signatureApiUrl.collectAsStateWithLifecycle()
     val fullBleedArtwork by AppSettings.fullBleedArtwork.collectAsStateWithLifecycle()
+    val animatedCanvas by AppSettings.animatedCanvas.collectAsStateWithLifecycle()
+    val canvasOverCellular by AppSettings.canvasOverCellular.collectAsStateWithLifecycle()
     val legacyMeshGradient by AppSettings.legacyMeshGradient.collectAsStateWithLifecycle()
     val syncedLyrics by AppSettings.syncedLyrics.collectAsStateWithLifecycle()
     val lyricsSources by AppSettings.lyricsSources.collectAsStateWithLifecycle()
@@ -936,6 +938,63 @@ internal fun SettingsScreen(
                     },
                     onClick = { AppSettings.setLegacyMeshGradient(!legacyMeshGradient) },
                 )
+            }
+            val animatedCoverArtTitle = stringResource(R.string.animated_cover_art)
+            // Carries the keywords of the rows that only appear once it is on,
+            // so searching "spotify" with animated covers switched off turns up
+            // the switch that brings the Spotify row back rather than nothing.
+            row(animatedCoverArtTitle, "canvas", "video", "spotify") {
+                SettingsRow(
+                    icon = Icons.Rounded.Animation,
+                    title = animatedCoverArtTitle,
+                    subtitle = stringResource(R.string.animated_cover_art_subtitle),
+                    trailing = {
+                        Switch(
+                            checked = animatedCanvas,
+                            onCheckedChange = AppSettings::setAnimatedCanvas,
+                            colors = SwitchDefaults.colors(
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                checkedBorderColor = MaterialTheme.colorScheme.primary,
+                            ),
+                        )
+                    },
+                    onClick = { AppSettings.setAnimatedCanvas(!animatedCanvas) },
+                )
+            }
+            // Reads as part of the Animated cover art option above it, not
+            // as a separate setting. Nothing to narrow while the clip itself
+            // is off. Defaults to off: a clip loops for as long as its track
+            // plays, so on cellular this is not a one-time video cost but
+            // that cost repeated on every loop — see AppSettings.canvasOverCellular.
+            if (animatedCanvas) {
+                val coverCellularTitle = stringResource(R.string.animated_cover_cellular)
+                row(coverCellularTitle, "canvas", "cellular", divided = false) {
+                    SettingsSubRow(
+                        title = coverCellularTitle,
+                        checked = canvasOverCellular,
+                        onCheckedChange = AppSettings::setCanvasOverCellular,
+                    )
+                }
+                val spotifyCanvasTitle = stringResource(R.string.integrate_spotify_canvas)
+                row(spotifyCanvasTitle, "spotify", "canvas", divided = false) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onSpotifyCanvasAuth)
+                            .padding(start = ROW_INSET, end = ROW_INSET, top = 4.dp, bottom = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = spotifyCanvasTitle,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Chevron()
+                    }
+                }
             }
             val artistSignaturesTitle = stringResource(R.string.artist_signatures)
             row(artistSignaturesTitle, "signature", "artist", "logo") {
