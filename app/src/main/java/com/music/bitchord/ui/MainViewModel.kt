@@ -926,6 +926,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             val attempted = mutableSetOf<String>()
+            var initialCoverWave = true
             var expandedArtistEditionPages = false
             while (true) {
                 currentCoroutineContext().ensureActive()
@@ -967,8 +968,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             canonicalEditorialReleaseType(it) != null &&
                             it.artworkUri.isNullOrBlank() &&
                             it.musicBrainzId !in attempted
-                    }.take(6)
+                    }.let { pending ->
+                        // Paint the first eight without holding them behind
+                        // additional artist browse pages. Once they complete,
+                        // stream the entire remaining queue with three fixed
+                        // workers, not another 6-at-a-time completion barrier.
+                        if (initialCoverWave) pending.take(8) else pending
+                    }
                 if (batch.isEmpty()) break
+                initialCoverWave = false
                 attempted.addAll(batch.map { it.musicBrainzId })
                 // Stream finished covers immediately instead of withholding an
                 // entire six-row wave behind the slowest CAA network lookup.
