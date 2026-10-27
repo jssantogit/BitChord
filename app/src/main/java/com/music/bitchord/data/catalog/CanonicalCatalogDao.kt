@@ -20,6 +20,12 @@ internal data class ExclusiveExternalIdentityClaimResult(
     val inserted: Boolean,
 )
 
+/** Exact Recording MBID to an already-verified Official ReleaseGroup cover. */
+internal data class CanonicalRecordingCoverGroupRow(
+    val recordingMbid: String,
+    val groupMbid: String,
+)
+
 /** Only strong MusicBrainz Recording links qualify; names never qualify. */
 internal data class CanonicalMusicBrainzLocalAssetClaim(
     val musicBrainzId: String,
@@ -185,6 +191,47 @@ internal interface CanonicalCatalogDao {
         LIMIT 1
     """)
     suspend fun verifiedRecordingCoverGroupMbid(recordingMbid: String): String?
+
+    /**
+     * One indexed join for all visible tracks, not one graph traversal per
+     * recording. The same Official Release + Track + Front-v5 provenance as
+     * the single-row resolver. Multiple eligible editions are returned in
+     * preference order; the UI uses the first valid cache entry per MBID.
+     */
+    @Query("""
+        SELECT recordingIdentity.externalId AS recordingMbid,
+               groupIdentity.externalId AS groupMbid
+        FROM catalog_external_identity AS recordingIdentity
+        JOIN catalog_musicbrainz_track AS trackEvidence
+            ON trackEvidence.recordingId = recordingIdentity.entityId
+        JOIN musicbrainz_release_enrichment AS releaseInfo
+            ON releaseInfo.releaseId = trackEvidence.releaseId
+               AND lower(releaseInfo.status) = 'official'
+        JOIN catalog_release_group_edition AS relation
+            ON relation.releaseId = trackEvidence.releaseId
+        JOIN catalog_release_group AS groupInfo
+            ON groupInfo.id = relation.releaseGroupId
+               AND lower(groupInfo.primaryType) IN ('album', 'ep', 'single')
+        JOIN catalog_external_identity AS groupIdentity
+            ON groupIdentity.entityId = groupInfo.id
+               AND groupIdentity.provider = 'musicbrainz'
+               AND groupIdentity.entityType = 'release-group'
+        JOIN catalog_cover_art_cache AS front
+            ON front.mbid = groupIdentity.externalId
+               AND front.entityType = 'release-group:front-v5'
+               AND front.artworkUri IS NOT NULL
+        WHERE recordingIdentity.provider = 'musicbrainz'
+          AND recordingIdentity.entityType = 'recording'
+          AND recordingIdentity.externalId IN (:recordingMbids)
+        GROUP BY recordingIdentity.externalId, groupIdentity.externalId
+        ORDER BY recordingIdentity.externalId,
+                 CASE WHEN lower(COALESCE(groupInfo.secondaryTypes, ''))
+                           LIKE '%compilation%' THEN 1 ELSE 0 END,
+                 groupInfo.firstReleaseDate, groupIdentity.externalId
+    """)
+    suspend fun verifiedRecordingCoverGroupMbids(
+        recordingMbids: List<String>,
+    ): List<CanonicalRecordingCoverGroupRow>
 
     @Query("SELECT * FROM catalog_cover_art_cache WHERE entityType = 'release-group:front-v5' AND mbid IN (:mbids)")
     suspend fun verifiedGroupFronts(mbids: List<String>): List<MusicBrainzCoverArtCacheEntity>
