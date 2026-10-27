@@ -70,6 +70,14 @@ internal enum class SettingsSection(@StringRes val titleRes: Int, val icon: Imag
     ABOUT(R.string.settings_nav_about, Icons.Rounded.Info, R.string.settings_nav_desc_about),
 }
 
+/**
+ * Category pages already have a prominent page title. A second group caption
+ * would redundantly repeat the same category; global search still needs labels
+ * to distinguish hits from different destinations.
+ */
+internal fun settingsGroupCaption(isSearchResult: Boolean, groupCaption: String?): String? =
+    if (isSearchResult) groupCaption else null
+
 internal data class SettingsSectionGroup(
     @StringRes val titleRes: Int,
     val sections: List<SettingsSection>,
@@ -85,12 +93,13 @@ internal object SettingsNavigation {
                 SettingsSection.SOURCES,
                 SettingsSection.AUDIO_QUALITY,
                 SettingsSection.PLAYBACK,
+                SettingsSection.MISCELLANEOUS,
                 SettingsSection.LOCAL_MUSIC,
             ),
         ),
         SettingsSectionGroup(
             R.string.settings_nav_group_experience,
-            listOf(SettingsSection.APPEARANCE, SettingsSection.LYRICS),
+            listOf(SettingsSection.APPEARANCE, SettingsSection.LYRICS, SettingsSection.LANGUAGE),
         ),
         SettingsSectionGroup(
             R.string.settings_nav_group_data,
@@ -100,8 +109,6 @@ internal object SettingsNavigation {
             R.string.settings_nav_group_system,
             listOf(
                 SettingsSection.PERFORMANCE,
-                SettingsSection.MISCELLANEOUS,
-                SettingsSection.LANGUAGE,
                 SettingsSection.ADVANCED,
                 SettingsSection.WEAR,
             ),
@@ -170,10 +177,10 @@ private fun SettingsCategoryRow(
             modifier = Modifier
                 .size(42.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.70f)),
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
         }
         Spacer(Modifier.width(14.dp))
         androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f)) {
