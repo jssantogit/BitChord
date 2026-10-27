@@ -264,12 +264,13 @@ class CanonicalNativeNavigationTest {
             "2021-06-11", "TWICE", status = "Official", hasFrontCover = true)
         val variant = normal.copy(musicBrainzId = "product", title = "Taste of Love (Taste ver.)")
         val unrelated = normal.copy(musicBrainzId = "unrelated", title = "Perfect World")
+        val remix = normal.copy(musicBrainzId = "remix", title = "Taste of Love (DJ remix)")
         assertEquals(listOf("official"),
             com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
-                listOf(variant, unrelated, normal), "Taste of Love",
+                listOf(variant, unrelated, remix, normal), "Taste of Love",
             ).map { it.musicBrainzId })
         assertTrue(com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
-            listOf(variant, unrelated), "Taste of Love",
+            listOf(variant, unrelated, remix), "Taste of Love",
         ).isEmpty())
     }
 
