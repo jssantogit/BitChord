@@ -9,6 +9,10 @@ package com.music.bitchord.playback
  * a new A/B pair and restores A to the audible role.
  */
 internal class AudioDeckOwnership {
+    // Updated by Media3's session thread and observed by both audio sink
+    // threads; the audible role must be visible without synchronization or
+    // locking on the real-time playback path.
+    @Volatile
     private var activeDeckA = true
 
     fun isAudible(deckA: Boolean): Boolean = deckA == activeDeckA
