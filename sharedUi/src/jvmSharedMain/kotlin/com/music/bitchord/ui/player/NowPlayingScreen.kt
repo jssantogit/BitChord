@@ -813,7 +813,6 @@ fun NowPlayingScreen(
         onSeek(adjustedLyricsSeekTarget(lineTimeMs, lyricsOffsetMs))
     }
     val hideVolumeBar by PlayerSettings.hideVolumeBar.collectAsStateWithLifecycle()
-    val hideSongStatus by PlayerSettings.hideSongStatus.collectAsStateWithLifecycle()
 
     // Animated cover art: the looping video some labels publish alongside a
     // release, laid over the sleeve. A miss is the normal answer — see
@@ -1535,12 +1534,10 @@ fun NowPlayingScreen(
             onListenTogether = onListenTogether,
             onOpenListenTogetherMembers = openListenTogetherMembers,
         )
-        // Keep the current output caption visible in every state.
-        Spacer(Modifier.height(18.dp))
-        Box(
-            modifier = Modifier.fillMaxWidth().height(20.dp),
-            contentAlignment = Alignment.TopCenter,
-        ) {
+        // The output selector already lives in PlayerActionRow. A persistent
+        // "This Phone" label duplicates it and adds no actionable information.
+        if (NowPlayingChrome.showOutputCaption) {
+            Spacer(Modifier.height(18.dp))
             OutputCaption(
                 accountName = accountName,
                 onOpenOutput = openAudioOutput,
@@ -1897,7 +1894,7 @@ fun NowPlayingScreen(
                         ) {
                             // The stats belong to the player, not to the sleeve, so
                             // they leave it along with the rest of the player.
-                            SleeveNerdStats(
+                            if (NowPlayingChrome.showTechnicalOverlay) SleeveNerdStats(
                                 song = song,
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
@@ -1912,7 +1909,7 @@ fun NowPlayingScreen(
                     mainPane = { compact ->
                         LandscapeMainPane(
                             compact = compact,
-                            caption = if (hideSongStatus) null else playbackOriginText(song, playedBy),
+                            caption = if (NowPlayingChrome.showPlaybackOrigin) playbackOriginText(song, playedBy) else null,
                             onOpenCaption = openPlaybackOrigin,
                             credits = {
                                 LandscapeCredits(
@@ -2410,16 +2407,16 @@ fun NowPlayingScreen(
                         // composition until its final frame gives the caption a real
                         // fade on both entry and exit, but removes its click target
                         // entirely once lyrics or the queue owns the player.
-                        if (!hideSongStatus) {
+                        // The title and artist already identify the recording.
+                        // Keep its origin in the playback model, not over the cover.
+                        if (NowPlayingChrome.showPlaybackOrigin) {
                             WhileShown({ !collapseAlmostDone }) {
                                 PlaybackOriginCaption(
                                     text = playbackOriginText(song, playedBy),
                                     onClick = openPlaybackOrigin,
                                     textAlign = TextAlign.Center,
-                                    contentPadding = PaddingValues(start = PLAYER_GUTTER, end = PLAYER_GUTTER, bottom = 1.dp),
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .graphicsLayer { alpha = (1f - p()) * spotifyChromeAlpha },
+                                    contentPadding = PaddingValues(horizontal = PLAYER_GUTTER),
+                                    modifier = Modifier.align(Alignment.BottomCenter),
                                 )
                             }
                         }
@@ -3128,7 +3125,7 @@ fun NowPlayingScreen(
                             // fade away with Spotify's lower control deck rather than
                             // following the compact credits to the bottom edge.
                             WhileShown({ !collapsePastHalf }) {
-                                SleeveNerdStats(
+                                if (NowPlayingChrome.showTechnicalOverlay) SleeveNerdStats(
                                     song = song,
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
