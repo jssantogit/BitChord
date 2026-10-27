@@ -1154,10 +1154,13 @@ internal fun SettingsScreen(
                     SettingsRow(
                         icon = Icons.Rounded.Language,
                         title = lyricsSourcesTitle,
-                        subtitle = lyricsSources
-                            .sortedBy { it.ordinal }
-                            .joinToString(", ") { it.label }
-                            .ifEmpty { stringResource(R.string.no_lyrics_sources_enabled) },
+                        subtitle = if (lyricsSources.isEmpty()) {
+                            stringResource(R.string.no_lyrics_sources_enabled)
+                        } else {
+                            // The provider names and priority already have a
+                            // dedicated manager; do not print their entire list.
+                            "${lyricsSources.size} ${stringResource(R.string.source).lowercase()}"
+                        },
                         trailing = { Chevron() },
                         onClick = onLyricsSources,
                     )
