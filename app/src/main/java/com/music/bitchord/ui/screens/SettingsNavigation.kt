@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.Brightness4
 import androidx.compose.material.icons.rounded.Download
@@ -34,7 +33,6 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.automirrored.rounded.Notes
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -218,27 +216,16 @@ internal fun SettingsSearchDestination(
 internal fun SettingsDetailHeader(
     section: SettingsSection,
     filteredQuery: String,
-    onBack: () -> Unit,
     onClearFilter: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 12.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Start,
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.Rounded.ArrowBack, contentDescription = stringResource(R.string.back))
-        }
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = stringResource(section.titleRes),
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.weight(1f),
-        )
-    }
+    // MainActivity owns the floating top-bar back button for both hierarchy levels.
+    // Rendering another arrow here would duplicate that navigation control.
+    Text(
+        text = stringResource(section.titleRes),
+        style = MaterialTheme.typography.displayLarge,
+        color = MaterialTheme.colorScheme.onBackground,
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 14.dp),
+    )
     if (filteredQuery.isNotBlank()) {
         Row(
             modifier = Modifier
