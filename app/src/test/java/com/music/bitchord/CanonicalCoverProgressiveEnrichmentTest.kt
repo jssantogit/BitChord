@@ -250,4 +250,38 @@ class CanonicalCoverProgressiveEnrichmentTest {
                 "recording-2" to "art:group-b"), results)
         }
 
+
+    @Test fun verifiedAlbumCoversSurviveAnUnavailableOfflineGraph() = runBlocking {
+        val group = "official-album-group"
+        val first = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            musicBrainzId = "recording-1",
+            kind = com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+            title = "First song",
+            subtitle = "Artist",
+            coverGroupMbid = group,
+        )
+        val second = first.copy(musicBrainzId = "recording-2")
+        val unresolved = first.copy(musicBrainzId = "recording-3", coverGroupMbid = null)
+        var lookups = 0
+        val result = com.music.bitchord.ui.canonicalCachedRecordingArtForVisibleRows(
+            rows = listOf(first, second, unresolved),
+            databaseLinks = {
+                assertEquals(listOf("recording-3"), it)
+                throw IllegalStateException("Room temporarily unavailable")
+            },
+            cachedCover = {
+                lookups++
+                assertEquals(group, it)
+                "https://archive.org/already-verified-500.jpg"
+            },
+        )
+        assertEquals(1, lookups)
+        assertEquals(
+            mapOf(
+                "recording-1" to "https://archive.org/already-verified-500.jpg",
+                "recording-2" to "https://archive.org/already-verified-500.jpg",
+            ),
+            result,
+        )
+    }
 }
