@@ -467,6 +467,7 @@ object Diagnostics {
             "versionCode=${BuildConfig.VERSION_CODE}",
             "buildType=${BuildConfig.BUILD_TYPE}",
             "flavor=${BuildConfig.FLAVOR}",
+            "sourceRevision=${BuildConfig.SOURCE_REVISION}",
             "sdk=${Build.VERSION.SDK_INT}",
             "device=${DiagnosticSanitizer.text("${Build.MANUFACTURER} ${Build.MODEL}")}",
             "session=$sessionId",
