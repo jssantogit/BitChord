@@ -27,4 +27,6 @@
     <string name="settings_nav_desc_wear">手錶整合</string>
     <string name="settings_nav_desc_about">版本與專案資訊</string>
     <string name="settings_nav_desc_sources">音樂服務供應商與擴充功能</string>
+    <string name="settings_nav_diagnostics_title">診斷</string>
+    <string name="settings_nav_diagnostics_subtitle">擷取、檢視及分享診斷報告</string>
 </resources>
