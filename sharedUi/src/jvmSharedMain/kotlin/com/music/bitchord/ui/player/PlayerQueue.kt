@@ -283,6 +283,11 @@ internal fun InlineQueue(
                 color = Color.White,
                 modifier = Modifier.weight(1f),
             )
+            // One Clear action beside the queue heading, never a second copy
+            // above the manual-track section.
+            if (tracks.user.isNotEmpty()) {
+                QueueClearButton(MaterialTheme.typography.titleMedium, controlsLocked, onClear)
+            }
         }
         Spacer(Modifier.height(4.dp))
         Box(
@@ -324,9 +329,7 @@ internal fun InlineQueue(
                         QueueHeading(
                             title = stringResource(Res.string.next_in_queue),
                             modifier = Modifier.padding(top = 16.dp, bottom = 6.dp).then(queueMotion()),
-                        ) {
-                            QueueClearButton(MaterialTheme.typography.labelLarge, controlsLocked, onClear)
-                        }
+                        )
                     }
                     queueSection(tracks.user, QueueSection.USER, drag, controlsLocked, onJumpTo, onRemove)
                 }
