@@ -17,6 +17,27 @@ import java.util.Locale
  * ReleaseGroup, with a verified Official status and matching edition title.
  * The group's own CAA Front can originate from a video/alternate edition.
  */
+private val alternateArtworkPackaging = Regex(
+    """(?i)\b(?:ver\.?|version|vinyl|photobook|jewel\s*case|photocard|cover\s*ver\.?|limited|collector|reissue|remaster)\b"""
+)
+
+/**
+ * Official status + group MBID proves group membership, not that an alternate
+ * edition's packaging depicts the canonical sleeve. Permit exact or clearly
+ * related work titles, including a composite Group's leading edition title.
+ */
+internal fun canonicalEditionTitleIsSuitableForGroupArtwork(
+    editionTitle: String, groupTitle: String,
+): Boolean {
+    val edition = editionTitle.trim()
+    val group = groupTitle.trim()
+    if (edition.isEmpty() || group.isEmpty() ||
+        alternateArtworkPackaging.containsMatchIn(edition)
+    ) return false
+    return edition.contains(group, ignoreCase = true) ||
+        group.startsWith("${edition} & ", ignoreCase = true)
+}
+
 internal fun canonicalArtworkEditionsForGroup(
     editions: List<MusicBrainzReleaseHit>, groupTitle: String,
 ): List<MusicBrainzReleaseHit> =
@@ -29,14 +50,17 @@ internal fun canonicalArtworkEditionsForGroup(
             isCuratedMusicBrainzRelease(edition) &&
                 // MusicBrainz can tell us that an edition has no CAA Front.
                 edition.hasFrontCover != false &&
-                // Packaging/territorial “ver.” covers are edition-specific
-                // collectibles, not the unqualified sleeve of the work.
-                !Regex("""(?i)\([^)]*\b(?:ver\.?|version|mix|edition|reissue|remaster)\b[^)]*\)""")
-                    .containsMatchIn(edition.title)
+                // Reject editions with unrelated work titles or alternate
+                // collectible packaging even when their group MBID matches.
+                canonicalEditionTitleIsSuitableForGroupArtwork(edition.title, groupTitle)
         }
         // Artwork choice is separate from tracklist edition preference:
         // positively known covers avoid slow dead-end CAA requests.
-        .sortedByDescending { it.hasFrontCover == true }
+        .sortedWith(
+            compareByDescending<MusicBrainzReleaseHit> {
+                it.title.trim().equals(groupTitle.trim(), ignoreCase = true)
+            }.thenByDescending { it.hasFrontCover == true },
+        )
         .take(2)
 
 /**
