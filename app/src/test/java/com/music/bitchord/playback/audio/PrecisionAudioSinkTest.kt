@@ -214,6 +214,84 @@ class PrecisionAudioSinkTest {
     }
 
     @Test
+    fun `neutral native PCM reports pending data and will not end a partially written buffer`() {
+        val fake = FakeAudioSink().apply {
+            bytesToConsumePerCall = 3
+            isEndedReturn = true
+            hasPendingDataReturn = false
+        }
+        val sink = createSink(fake, enableFloatOutput = false, neutralPlayback = true)
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_16BIT)).build())
+        val input = ByteBuffer.allocateDirect(16).order(ByteOrder.LITTLE_ENDIAN)
+        repeat(8) { input.putShort(it.toShort()) }
+        input.flip()
+
+        assertFalse(sink.handleBuffer(input, 7_000L, 1))
+        assertEquals(3, input.position())
+        assertTrue("direct input is waiting even if delegate lies about its own pending data", sink.hasPendingData())
+        assertFalse("a partially sent native buffer cannot be ended", sink.isEnded())
+
+        sink.playToEndOfStream()
+        assertFalse("do not signal end-of-stream until all native frames are sent", fake.playedToEndOfStream)
+
+        fake.bytesToConsumePerCall = Int.MAX_VALUE
+        assertTrue(sink.handleBuffer(input, 7_000L, 1))
+        assertSame(input, fake.lastHandledBuffer)
+        assertFalse(sink.hasPendingData())
+        sink.playToEndOfStream()
+        assertTrue(fake.playedToEndOfStream)
+    }
+
+    @Test
+    fun `neutral native PCM does not switch buffer identity while old write is pending`() {
+        val fake = FakeAudioSink().apply { bytesToConsumePerCall = 4 }
+        val sink = createSink(fake, enableFloatOutput = false, neutralPlayback = true)
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_16BIT)).build())
+
+        fun pcm(): ByteBuffer = ByteBuffer.allocateDirect(16).order(ByteOrder.LITTLE_ENDIAN).apply {
+            repeat(8) { putShort((it * 123).toShort()) }
+            flip()
+        }
+        val first = pcm()
+        val second = pcm()
+
+        assertFalse(sink.handleBuffer(first, 100L, 1))
+        assertEquals(4, first.position())
+        val callsBefore = fake.handleBufferCallCount
+        assertFalse("the next buffer must wait for the original ByteBuffer", sink.handleBuffer(second, 200L, 1))
+        assertEquals(callsBefore, fake.handleBufferCallCount)
+        assertEquals(0, second.position())
+        assertSame(first, fake.lastHandledBuffer)
+
+        fake.bytesToConsumePerCall = Int.MAX_VALUE
+        assertTrue(sink.handleBuffer(first, 100L, 1))
+        assertTrue(sink.handleBuffer(second, 200L, 1))
+        assertSame(second, fake.lastHandledBuffer)
+    }
+
+    @Test
+    fun `neutral flush discards partial native buffer and accepts new track cleanly`() {
+        val fake = FakeAudioSink().apply { bytesToConsumePerCall = 4 }
+        val sink = createSink(fake, enableFloatOutput = false, neutralPlayback = true)
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_16BIT)).build())
+        val first = ByteBuffer.allocateDirect(16).order(ByteOrder.LITTLE_ENDIAN)
+        repeat(8) { first.putShort(1200.toShort()) }
+        first.flip()
+        assertFalse(sink.handleBuffer(first, 0L, 1))
+        assertTrue(sink.hasPendingData())
+
+        sink.flush()
+        assertTrue(fake.flushed)
+        assertFalse(sink.hasPendingData())
+        fake.bytesToConsumePerCall = Int.MAX_VALUE
+        val next = ByteBuffer.allocateDirect(16).order(ByteOrder.LITTLE_ENDIAN)
+        repeat(8) { next.putShort((-900).toShort()) }
+        next.flip()
+        assertTrue(sink.handleBuffer(next, 500L, 1))
+        assertSame(next, fake.lastHandledBuffer)
+    }
+
+    @Test
     fun `neutral PCM16 forwards original buffer without conversion or effects`() {
         val delegate = FakeAudioSink()
         val sink = createSink(
