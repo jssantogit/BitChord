@@ -158,11 +158,11 @@ private fun V2RuleNode(
             is SmartPlaylistRule.Comparison -> {
                 V2Option(
                     "Campo", rule.field, SmartPlaylistRuleField.entries,
-                    fieldLabel,
+                    ::fieldLabel,
                 ) { onChange(rule.copy(field = it)) }
                 V2Option(
                     "Condição", rule.operator, SmartPlaylistRuleOperator.entries,
-                    operatorLabel,
+                    ::operatorLabel,
                 ) { op -> onChange(rule.copy(
                     operator = op,
                     value = if (op == SmartPlaylistRuleOperator.IS_PRESENT ||
@@ -276,7 +276,9 @@ internal fun SmartPlaylistV2BuilderScreen(
                         label = { Text("Nome da playlist") },
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
                     )
-                    V2RuleNode(rule, 0, onChange = { rule = it; preview = null; previewQuery = null })
+                    androidx.compose.runtime.key(editingId) {
+                        V2RuleNode(rule, 0, onChange = { rule = it; preview = null; previewQuery = null })
+                    }
                     V2Option("Ordenar por", sort, SmartPlaylistV2Sort.entries, { it.name.replace('_', ' ') }) {
                         sort = it
                         preview = null
