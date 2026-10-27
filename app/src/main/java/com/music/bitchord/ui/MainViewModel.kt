@@ -855,19 +855,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // when no matching verified edition was included in that page.
             val offlineOnly = (_canonicalDetail.value as? UiState.Success)
                 ?.data?.rows?.firstOrNull()?.fromOfflineCache == true
-            val artistEditions = if (offlineOnly) emptyMap() else try {
-                when (val batch = musicBrainzGraph.browseOfficialReleasesForArtist(
-                    artist.musicBrainzId, limit = 100,
-                )) {
-                    is MusicBrainzCatalogGraphResult.Success ->
-                        batch.value.items.filter { isCuratedMusicBrainzRelease(it) &&
-                            it.releaseGroupMbid != null
-                        }.groupBy { requireNotNull(it.releaseGroupMbid) }
-                    is MusicBrainzCatalogGraphResult.Failure -> emptyMap()
-                }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) { emptyMap() }
+            var firstEditionPage: MusicBrainzCatalogPage<MusicBrainzReleaseHit>? = null
+            val artistEditions: MutableMap<String, List<MusicBrainzReleaseHit>> =
+                if (offlineOnly) mutableMapOf() else try {
+                    when (val batch = musicBrainzGraph.browseOfficialReleasesForArtist(
+                        artist.musicBrainzId, limit = 100,
+                    )) {
+                        is MusicBrainzCatalogGraphResult.Success -> {
+                            firstEditionPage = batch.value
+                            batch.value.items.filter { isCuratedMusicBrainzRelease(it) &&
+                                it.releaseGroupMbid != null
+                            }.groupBy { requireNotNull(it.releaseGroupMbid) }.toMutableMap()
+                        }
+                        is MusicBrainzCatalogGraphResult.Failure -> mutableMapOf()
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { mutableMapOf() }
             // Editorial labels come from Official edition evidence, not CAA
             // availability: a correct name must survive even with no artwork.
             // Persist only the groups with a provable composite -> edition
@@ -922,10 +926,41 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             val attempted = mutableSetOf<String>()
+            var expandedArtistEditionPages = false
             while (true) {
                 currentCoroutineContext().ensureActive()
                 if (_searchSource.value != SearchSource.CANONICAL ||
                     canonicalPath.lastOrNull() != artist) break
+                // Front-load six covers. For long artist discographies, then
+                // collect another bounded set of 100-edition artist pages,
+                // instead of N rate-limited group browse requests. Resolved
+                // MBIDs remain linked; a failed page never erases earlier art.
+                val firstPage = firstEditionPage
+                if (!expandedArtistEditionPages && attempted.size >= 6 &&
+                    firstPage?.nextOffset != null && !offlineOnly
+                ) {
+                    expandedArtistEditionPages = true
+                    val coveredBefore = artistEditions.keys.toSet()
+                    try {
+                        collectCanonicalArtistOfficialEditionPages(
+                            firstPage = firstPage,
+                            maxAdditionalPages = 3,
+                            fetch = { offset ->
+                                musicBrainzGraph.browseOfficialReleasesForArtist(
+                                    artist.musicBrainzId, limit = 100, offset = offset,
+                                )
+                            },
+                            onPage = { editions -> artistEditions.putAll(editions) },
+                        )
+                        // A previously attempted group may now have an actual
+                        // Official edition, without a speculative title match.
+                        attempted.removeAll(artistEditions.keys - coveredBefore)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        // Keep painting the first batch and known Room covers.
+                    }
+                }
                 val batch = (_canonicalDetail.value as? UiState.Success)?.data?.rows
                     .orEmpty().filter {
                         it.kind == CanonicalSearchKind.RELEASE_GROUP &&
