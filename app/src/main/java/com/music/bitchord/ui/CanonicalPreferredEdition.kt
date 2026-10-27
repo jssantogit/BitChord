@@ -2,7 +2,29 @@ package com.music.bitchord.ui
 
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
 import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease
+import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
+import com.music.bitchord.ui.screens.CanonicalSearchKind
 import java.util.Locale
+
+/**
+ * A resolved release owns its track list. Every Recording in that list may
+ * reuse the already verified release sleeve, without a second MusicBrainz/CAA
+ * search per track. An explicit per-track image retains precedence.
+ *
+ * Only call with a cover vetted for this particular Release/ReleaseGroup;
+ * never use this to fuzzy-join unrelated recordings from search.
+ */
+internal fun canonicalReleaseTracksWithArtwork(
+    rows: List<CanonicalCatalogSearchRow>,
+    releaseArtworkUri: String?,
+): List<CanonicalCatalogSearchRow> {
+    if (releaseArtworkUri.isNullOrBlank()) return rows
+    return rows.map { row ->
+        if (row.kind == CanonicalSearchKind.RECORDING &&
+            row.artworkUri.isNullOrBlank()
+        ) row.copy(artworkUri = releaseArtworkUri) else row
+    }
+}
 
 /**
  * Release Groups are user-facing albums/EPs/singles; Releases are editions.
