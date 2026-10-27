@@ -1239,4 +1239,6 @@
     <string name="settings_nav_desc_wear">Watch integration</string>
     <string name="settings_nav_desc_about">Version and project information</string>
     <string name="settings_nav_desc_sources">Music source providers and extensions</string>
+    <string name="settings_nav_diagnostics_title">Diagnostics</string>
+    <string name="settings_nav_diagnostics_subtitle">Capture, inspect, and share diagnostic reports</string>
 </resources>
