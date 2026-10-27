@@ -3,6 +3,13 @@ name: Android Physical Smoke APK
 # An APK is prepared only when someone explicitly schedules a physical smoke.
 # The main Android CI remains test-only and keeps its required status context.
 on:
+  # One-shot build on this isolated smoke branch, explicitly requested for issue #187.
+  # No change to the protected main or to the source PR #189.
+  push:
+    branches:
+      - smoke/187-settings-apk-20261027
+    paths:
+      - .github/workflows/physical-smoke-apk.yml
   workflow_dispatch:
     inputs:
       smoke_plan:
@@ -26,7 +33,7 @@ jobs:
     steps:
       - name: Validate physical smoke request
         env:
-          SMOKE_PLAN: ${{ inputs.smoke_plan }}
+          SMOKE_PLAN: ${{ inputs.smoke_plan || 'Issue #187: Galaxy A54 settings navigation smoke; PR #189 HEAD 96508c6' }}
         run: test -n "$SMOKE_PLAN"
 
       - name: Checkout
