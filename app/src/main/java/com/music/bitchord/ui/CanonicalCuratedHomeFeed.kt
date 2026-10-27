@@ -224,8 +224,8 @@ internal fun canonicalSearchCoverPriorityQueue(
     }, recordingLimit)
     return buildList {
         for (i in 0 until maxOf(songs.size, albums.size)) {
-            songs.getOrNull(i)?.let(::add)
-            albums.getOrNull(i)?.let(::add)
+            songs.getOrNull(i)?.let { add(it) }
+            albums.getOrNull(i)?.let { add(it) }
         }
     }
 }
