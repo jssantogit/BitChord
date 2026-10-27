@@ -144,11 +144,13 @@ class PrecisionAudioSinkTest {
         delegate: AudioSink,
         enableFloatOutput: Boolean = true,
         dspChain: DspChain = idleDspChain(),
+        neutralPlayback: Boolean = false,
     ): PrecisionAudioSink {
         return PrecisionAudioSink(
             delegate = delegate,
             dspChain = dspChain,
             enableFloatOutput = enableFloatOutput,
+            neutralPlayback = neutralPlayback,
         )
     }
 
@@ -186,6 +188,102 @@ class PrecisionAudioSinkTest {
      * [PcmBoundary] scales by 32768 — a power of two — so the trip out to
      * float and back recovers every original integer, both extremes included.
      */
+
+    // ---- Neutral Android route (issue #185) -------------------------------
+
+    @Test
+    fun `neutral PCM16 forwards original buffer without conversion or effects`() {
+        val delegate = FakeAudioSink()
+        val sink = createSink(
+            delegate,
+            enableFloatOutput = false,
+            dspChain = DspChain(loudness = com.music.bitchord.playback.LoudnessProcessor().apply {
+                gainFor = { 0.25f }
+                track("music", null)
+            }),
+            neutralPlayback = true,
+        )
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_16BIT)).build())
+
+        val buffer = ByteBuffer.allocateDirect(16).order(ByteOrder.LITTLE_ENDIAN)
+        shortArrayOf(32767, -32768, 1, -1, 3, -3, 1234, -2345).forEach(buffer::putShort)
+        buffer.flip()
+        assertTrue(sink.handleBuffer(buffer, 100L, 1))
+        assertSame("No Float32 round trip for native PCM", buffer, delegate.lastHandledBuffer)
+        assertEquals(16, buffer.position())
+        assertTrue(AudioOutputStatus.current.value.outputExact)
+        assertFalse(AudioOutputStatus.current.value.dspAvailable)
+    }
+
+    @Test
+    fun `neutral float route passes raw float bytes directly`() {
+        val delegate = FakeAudioSink()
+        val sink = createSink(delegate, neutralPlayback = true)
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_FLOAT)).build())
+        val buffer = ByteBuffer.allocateDirect(16).order(ByteOrder.LITTLE_ENDIAN)
+        buffer.putInt(0x7fc00001) // noncanonical NaN payload must not be sanitized
+        buffer.putInt(0x3f800000)
+        buffer.putInt(0xbf800000.toInt())
+        buffer.putInt(0)
+        buffer.flip()
+        assertTrue(sink.handleBuffer(buffer, 1000L, 1))
+        assertSame(buffer, delegate.lastHandledBuffer)
+        assertEquals(16, buffer.position())
+    }
+
+    @Test
+    fun `neutral PCM16 keeps delegate buffer identity under byte partial consumption`() {
+        val delegate = FakeAudioSink().apply { bytesToConsumePerCall = 3 }
+        val sink = createSink(delegate, enableFloatOutput = false, neutralPlayback = true)
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_16BIT)).build())
+        val buffer = ByteBuffer.allocateDirect(16).order(ByteOrder.LITTLE_ENDIAN)
+        repeat(8) { buffer.putShort((it * 100).toShort()) }
+        buffer.flip()
+        assertFalse(sink.handleBuffer(buffer, 0L, 1))
+        assertSame(buffer, delegate.lastHandledBuffer)
+        assertEquals(3, buffer.position())
+
+        delegate.bytesToConsumePerCall = Int.MAX_VALUE
+        assertTrue(sink.handleBuffer(buffer, 0L, 1))
+        assertSame(buffer, delegate.lastHandledBuffer)
+        assertEquals(16, buffer.position())
+    }
+
+    @Test
+    fun `neutral packed 24-bit still converts into compatible float PCM`() {
+        val delegate = FakeAudioSink()
+        val sink = createSink(delegate, enableFloatOutput = true, neutralPlayback = true)
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_24BIT)).build())
+
+        val buffer = ByteBuffer.allocateDirect(6).order(ByteOrder.LITTLE_ENDIAN)
+        repeat(2) { buffer.put(0xff.toByte()); buffer.put(0xff.toByte()); buffer.put(0x7f.toByte()) }
+        buffer.flip()
+
+        assertTrue(sink.handleBuffer(buffer, 12345L, 1))
+        assertEquals(C.ENCODING_PCM_FLOAT, delegate.configuredConfig!!.format.pcmEncoding)
+        assertFalse("Required conversion is not a custom effect", AudioOutputStatus.current.value.dspAvailable)
+        val output = delegate.lastHandledBuffer!!.order(ByteOrder.LITTLE_ENDIAN)
+        output.rewind()
+        assertEquals(8388607.0f / 8388608.0f, output.getFloat(), 0f)
+    }
+
+    @Test
+    fun `neutral non aligned native buffer uses safe frame conversion fallback`() {
+        val delegate = FakeAudioSink()
+        val sink = createSink(delegate, enableFloatOutput = false, neutralPlayback = true)
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_16BIT)).build())
+
+        val buffer = ByteBuffer.allocateDirect(6).order(ByteOrder.LITTLE_ENDIAN)
+        buffer.putShort(200)
+        buffer.putShort(-200)
+        buffer.putShort(100)
+        buffer.flip()
+
+        assertTrue(sink.handleBuffer(buffer, 0L, 1))
+        assertFalse("Nonaligned buffer must use safe fallback", delegate.lastHandledBuffer === buffer)
+        assertEquals(6, buffer.position())
+    }
+
     @Test
     fun `16-bit round trip is exact with an idle chain`() {
         val fakeDelegate = FakeAudioSink()

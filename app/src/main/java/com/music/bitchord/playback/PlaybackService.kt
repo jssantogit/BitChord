@@ -6657,6 +6657,7 @@ class PlaybackService : MediaLibraryService() {
                 delegate = defaultSink,
                 dspChain = dspChain,
                 enableFloatOutput = enableFloatOutput,
+                neutralPlayback = true,
                 preferredOutputEncodingProvider = { format -> resolvePreferredOutputEncoding(format) },
                 // Which of the two sinks the listener can hear, told by the
                 // role its transition filter currently holds — [activeFilter]
