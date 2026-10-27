@@ -188,4 +188,66 @@ class CanonicalCoverProgressiveEnrichmentTest {
         assertTrue("Navigation cancels edition queries and queued cover workers", job.isCancelled)
     }
 
+
+    @Test fun twentyVisibleTracksShareOneCachedAlbumSleeveWithoutArchiveCalls() = runBlocking {
+        val group = "11111111-1111-4111-8111-111111111111"
+        val ids = (1..20).map { "recording-$it" }
+        val rows = ids.map { mbid ->
+            com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+                musicBrainzId = mbid,
+                kind = com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+                title = "Song", subtitle = "Artist", coverGroupMbid = group,
+            )
+        }
+        var cachedLookups = 0
+        var databaseCalls = 0
+        val proven = com.music.bitchord.ui.canonicalCachedRecordingArtForVisibleRows(
+            rows = rows,
+            databaseLinks = { requested ->
+                databaseCalls++
+                assertEquals(emptyList<String>(), requested)
+                emptyList()
+            },
+            cachedCover = { requested ->
+                cachedLookups++
+                assertEquals(group, requested)
+                "https://archive.org/verified-album-500.jpg"
+            },
+        )
+        assertEquals(20, proven.size)
+        assertEquals(1, cachedLookups)
+        assertEquals(0, databaseCalls)
+        assertTrue(proven.values.all { it == "https://archive.org/verified-album-500.jpg" })
+    }
+
+    @Test fun unavailableLiveGroupUsesOnlyVerifiedOfflineTrackLinksWithoutTitleMatching() =
+        runBlocking {
+            val r1 = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+                "recording-1", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+                "Identical title", "Artist", coverGroupMbid = "group-no-cover",
+            )
+            val r2 = r1.copy(musicBrainzId = "recording-2", coverGroupMbid = null)
+            val unrelated = r1.copy(musicBrainzId = "album-row",
+                kind = com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP)
+            val results = com.music.bitchord.ui.canonicalCachedRecordingArtForVisibleRows(
+                listOf(r1, r2, unrelated),
+                databaseLinks = { ids ->
+                    assertEquals(listOf("recording-1", "recording-2"), ids)
+                    listOf(
+                        com.music.bitchord.data.catalog.CanonicalRecordingCoverGroupRow(
+                            "recording-1", "group-a",
+                        ),
+                        com.music.bitchord.data.catalog.CanonicalRecordingCoverGroupRow(
+                            "recording-2", "group-b",
+                        ),
+                    )
+                },
+                cachedCover = { group ->
+                    if (group == "group-no-cover") null else "art:$group"
+                },
+            )
+            assertEquals(mapOf("recording-1" to "art:group-a",
+                "recording-2" to "art:group-b"), results)
+        }
+
 }
