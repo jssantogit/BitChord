@@ -1,26 +1,38 @@
 package com.music.bitchord.data.listening
 
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
 /**
  * V2 rule language is independent of provider IDs, Room entities and Media3.
  * It evaluates only canonical, already-authorized Recording evidence.
  */
+@Serializable
 internal sealed interface SmartPlaylistRule {
+    @Serializable
+    @SerialName("group")
     data class Group(
         val join: SmartPlaylistRuleJoin,
         val children: List<SmartPlaylistRule>,
     ) : SmartPlaylistRule
 
+    @Serializable
+    @SerialName("comparison")
     data class Comparison(
         val field: SmartPlaylistRuleField,
         val operator: SmartPlaylistRuleOperator,
         val value: Double? = null,
     ) : SmartPlaylistRule
 
+    @Serializable
+    @SerialName("not")
     data class Not(val child: SmartPlaylistRule) : SmartPlaylistRule
 }
 
+@Serializable
 internal enum class SmartPlaylistRuleJoin { ALL, ANY }
 
+@Serializable
 internal enum class SmartPlaylistRuleField {
     EXPLICIT_RATING,
     AUDIBLE_COMPLETIONS,
@@ -28,11 +40,13 @@ internal enum class SmartPlaylistRuleField {
     DURATION_MS,
 }
 
+@Serializable
 internal enum class SmartPlaylistRuleOperator {
     EQUAL, NOT_EQUAL, GREATER_THAN, GREATER_OR_EQUAL, LESS_THAN, LESS_OR_EQUAL,
     IS_PRESENT, IS_MISSING,
 }
 
+@Serializable
 internal enum class SmartPlaylistV2Sort {
     RATING_DESC, RATING_ASC,
     COMPLETIONS_DESC, COMPLETIONS_ASC,
@@ -45,6 +59,7 @@ internal enum class SmartPlaylistV2Sort {
  * Query validation is strict, but a missing piece of candidate evidence is not
  * interpreted as a rule validation error or silently replaced with zero.
  */
+@Serializable
 internal data class SmartPlaylistV2Query(
     val rules: SmartPlaylistRule,
     val sort: SmartPlaylistV2Sort = SmartPlaylistV2Sort.RATING_DESC,
@@ -206,7 +221,7 @@ internal class SmartPlaylistV2RuleEngine(
             SmartPlaylistRuleField.DURATION_MS -> row.durationMs?.toDouble()
             SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE ->
                 if (row.audibleCompletions > 0) {
-                    row.lastAudibleAtEpochMs?.let { (now - it) / 86_400_000L.toDouble() }
+                    row.lastAudibleAtEpochMs?.let { ((now - it) / 86_400_000L).toDouble() }
                 } else null
         }
         if (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE &&
