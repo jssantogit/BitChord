@@ -561,4 +561,39 @@ class CoverArtArchiveFallbackTest {
         assertEquals(1, batchReads)
         assertEquals(0, individualReads)
     }
+
+    @Test fun cancellingOneScreenCannotCancelOtherScreenWaitingForSameCover() =
+        runBlocking {
+            val ownerEntered = kotlinx.coroutines.CompletableDeferred<Unit>()
+            var networkRequests = 0
+            val archive = CoverArtArchive(
+                transport = object : CoverArtArchiveTransport {
+                    override suspend fun get(path: String): CoverArtArchiveResponse {
+                        networkRequests++
+                        if (networkRequests == 1) {
+                            ownerEntered.complete(Unit)
+                            kotlinx.coroutines.awaitCancellation()
+                        }
+                        return CoverArtArchiveResponse(200,
+                            """{"images":[{"front":true,"types":["Front"],
+                            "image":"https://archive.org/recovered-shared-cover.jpg"}]}""",
+                        )
+                    }
+                },
+            )
+            val owner = async(start = CoroutineStart.UNDISPATCHED) {
+                archive.findCover(release, null)
+            }
+            ownerEntered.await()
+            val nextScreen = async(start = CoroutineStart.UNDISPATCHED) {
+                archive.findCover(release, null)
+            }
+            owner.cancel()
+            owner.join()
+            assertEquals(
+                "https://archive.org/recovered-shared-cover.jpg",
+                kotlinx.coroutines.withTimeout(5000L) { nextScreen.await() },
+            )
+            assertEquals(2, networkRequests)
+        }
 }
