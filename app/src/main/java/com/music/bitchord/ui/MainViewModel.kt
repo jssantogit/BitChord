@@ -655,15 +655,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         // Balance visible release sleeves and song covers instead of allowing
         // twenty matching recordings to starve all release/group artwork.
-        val candidates = (
-            canonicalCoverLookupCandidates(prioritized.filter {
-                it.kind == CanonicalSearchKind.RELEASE ||
-                    it.kind == CanonicalSearchKind.RELEASE_GROUP
-            }, limit = 8) +
-            canonicalCoverLookupCandidates(prioritized.filter {
-                it.kind == CanonicalSearchKind.RECORDING
-            }, limit = 4)
-        ).distinctBy { it.kind to it.musicBrainzId }
+        val candidates = canonicalSearchCoverPriorityQueue(prioritized)
         // Independent Apple artwork is a visual fallback for the best exact
         // artist-name hit, not an identity link between Apple and MusicBrainz.
         val portrait = canonicalArtistArtworkCandidate(visible, query)
