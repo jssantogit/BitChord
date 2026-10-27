@@ -215,6 +215,9 @@ internal class SmartPlaylistV2RuleEngine(
         row: RuleBasedRecordingCandidate,
         now: Long,
     ): RuleTruth {
+        if (rule.field == SmartPlaylistRuleField.EXPLICIT_RATING &&
+            row.ratingEvidenceUnknown
+        ) return RuleTruth.UNKNOWN
         val value: Double? = when (rule.field) {
             SmartPlaylistRuleField.EXPLICIT_RATING -> row.explicitRating
             SmartPlaylistRuleField.AUDIBLE_COMPLETIONS -> row.audibleCompletions.toDouble()

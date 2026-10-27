@@ -53,6 +53,7 @@ internal data class RuleBasedRecordingCandidate(
     val lastAudibleAtEpochMs: Long?,
     val durationMs: Long?,
     val available: Boolean,
+    val ratingEvidenceUnknown: Boolean = false,
 )
 
 internal data class RuleBasedSmartPlaylistQuery(
@@ -215,10 +216,21 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
             }
         }
         return rows.map { row ->
-            row.copy(explicitRating = effectiveSmartPlaylistRating(
-                row.explicitRating,
-                remoteByRecording[row.recordingId].orEmpty(),
-            ))
+            val remote = remoteByRecording[row.recordingId].orEmpty()
+            val resolved = effectiveSmartPlaylistRating(row.explicitRating, remote)
+            // A missing value can be queried explicitly; conflicting,
+            // invalid or not-yet-loaded remote evidence is UNKNOWN instead.
+            // NOT(UNKNOWN) remains UNKNOWN in the V2 evaluator.
+            val ambiguous = resolved == null && (
+                row.explicitRating != null ||
+                    remote.any { it.kind == RemoteSmartPlaylistRatingKind.VALUE ||
+                        it.kind == RemoteSmartPlaylistRatingKind.INVALID }
+                )
+            row.copy(
+                explicitRating = resolved,
+                ratingEvidenceUnknown = ambiguous ||
+                    (!remoteSnapshot.complete && row.explicitRating == null),
+            )
         }
     }
 }

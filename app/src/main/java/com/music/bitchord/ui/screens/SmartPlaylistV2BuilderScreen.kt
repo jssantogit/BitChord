@@ -349,7 +349,11 @@ internal fun SmartPlaylistV2BuilderScreen(
                 item(key = "v2-preview-header") {
                     Text("Prévia • " + preview!!.size + " músicas",
                         style = MaterialTheme.typography.titleMedium)
-                    if (onPreviewAction != null && preview!!.isNotEmpty()) {
+                    if (preview!!.size > 100) {
+                        Text("A execução da fila ainda é limitada a 100 músicas; a prévia pode ser maior.",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (onPreviewAction != null && preview!!.isNotEmpty() && preview!!.size <= 100) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             TextButton(onClick = {
                                 previewQuery?.let { onPreviewAction(it, CanonicalCollectionIntent.PLAY_NOW) }
