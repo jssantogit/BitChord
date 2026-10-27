@@ -33,7 +33,7 @@ internal object A0CanonicalAlbumPolicy {
         MATCHING_NAME_IS_UNVERIFIED,
         ALBUM_NOT_ADVERTISED,
         ALBUM_CLAIM_CONFLICT,
-        ALBUM_HINT_GENERIC,
+        ALBUM_HINT_GENERIC, ALBUM_HINT_COMPOSITE,
         UNTRUSTED_FORMAT_CONTROL,
         EXACT_RELEASE_NOT_PROVEN,
     }
@@ -73,6 +73,28 @@ internal object A0CanonicalAlbumPolicy {
         val singleDescriptor = claim.source == ClaimSource.DIRECTORY_HINT &&
             observed == "$expected single"
         if (observed != expected && !singleDescriptor) {
+            // A peer's folder often combines artist, release, year and codec,
+            // e.g. "ILLIT - BREAK EVEN [FLAC]". Exact album matching must
+            // remain STRICT, but the composite hint cannot prove a conflict.
+            // Return review-only: never promote editions/masters from text.
+            // Explicit album fields remain conflicting if not equal.
+            if (claim.source == ClaimSource.DIRECTORY_HINT) {
+                val words=observed.split(' ')
+                val albumWords=expected.split(' ')
+                val includesOrderedAlbum=albumWords.isNotEmpty() &&
+                    words.windowed(albumWords.size).any { it==albumWords }
+                val suffixVersionWords=setOf(
+                    "live", "remix", "remixed", "remaster", "remastered",
+                    "demo", "acoustic", "instrumental", "karaoke",
+                    "nightcore", "slowed", "sped", "cover", "bootleg",
+                    "rerecorded", "re", "recorded"
+                )
+                val extras=words.filter { it !in albumWords.toSet() }
+                if(includesOrderedAlbum && extras.none { it in suffixVersionWords }) {
+                    return Assessment(Status.INCONCLUSIVE_MANUAL,
+                        Reason.ALBUM_HINT_COMPOSITE)
+                }
+            }
             // Incompatible with the album *claim*. The actual file is not
             // proven wrong; the manual choice still remains available.
             return Assessment(Status.CONFLICTING_CLAIM, Reason.ALBUM_CLAIM_CONFLICT)
