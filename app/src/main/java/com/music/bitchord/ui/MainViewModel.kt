@@ -559,27 +559,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         val target = canonicalCoverLookupTarget(row)
         if (row.kind == CanonicalSearchKind.RECORDING) {
-            // When a listener has opened an Official release, its canonical
-            // Track->Recording association is persisted. Reuse the verified
-            // group sleeve for those exact recordings before any new remote
-            // lookups; never find artwork by matching song/artist titles.
+            // The MusicBrainz search response already proves an Official
+            // Recording -> audio Release -> ReleaseGroup relationship.
+            // Reuse its verified Front-v5 before opening the Room database.
+            row.coverGroupMbid?.let { officialGroup ->
+                coverArtArchive.cachedVerifiedGroupCover(officialGroup, size)?.let {
+                    return it
+                }
+            }
+            // For revisits/offline rows, use an independently persisted exact
+            // Track -> Recording -> Official Release -> ReleaseGroup edge.
+            // No artist-name or song-title association is permitted.
             val ownedGroupMbid = try {
                 CanonicalCatalogDatabase.get(getApplication<Application>())
                     .catalogDao().verifiedRecordingCoverGroupMbid(row.musicBrainzId)
             } catch (cancelled: CancellationException) { throw cancelled }
               catch (_: Exception) { null }
-            if (ownedGroupMbid != null) {
+            if (ownedGroupMbid != null && ownedGroupMbid != row.coverGroupMbid) {
                 coverArtArchive.cachedVerifiedGroupCover(ownedGroupMbid, size)?.let {
-                    return it
-                }
-            }
-            // The MusicBrainz recording search result itself can prove an
-            // Official audio Release -> ReleaseGroup MBID. Use the already
-            // validated Front-v5 album sleeve immediately; this avoids
-            // asking CAA again when its track is searched without having
-            // opened a release detail (no title-based association).
-            row.coverGroupMbid?.let { officialGroup ->
-                coverArtArchive.cachedVerifiedGroupCover(officialGroup, size)?.let {
                     return it
                 }
             }
