@@ -297,6 +297,13 @@ class PrecisionAudioSink(
         )
 
 
+        // A partially consumed buffer belongs to DefaultAudioSink until it
+        // reports completion. Its handleBuffer contract forbids replacing
+        // that instance with the next decoder packet while still pending.
+        if (neutralPlayback && directInputBuffer != null && directInputBuffer !== inputBuffer) {
+            return false
+        }
+
         // For native PCM the decoder's ByteBuffer IS the AudioTrack input:
         // no Float32 intermediate, no extra quantization, no effects.
         // The delegate owns partial consumption, which is why the same buffer
@@ -508,21 +515,26 @@ class PrecisionAudioSink(
     }
 
     override fun playToEndOfStream() {
+        // Never mark a stream ended while the AudioTrack still owns an input
+        // buffer, or while a converted block is pending under backpressure.
+        // The renderer will resend the exact pending input on its next tick.
+        if (directInputBuffer != null) return
         if (isPrecisionActive && outputByteBuffer.hasRemaining()) {
             delegate.handleBuffer(outputByteBuffer, pendingPresentationTimeUs, pendingAccessUnitCount)
+            if (outputByteBuffer.hasRemaining()) return
         }
         delegate.playToEndOfStream()
     }
 
     override fun isEnded(): Boolean {
-        if (isPrecisionActive && outputByteBuffer.hasRemaining()) {
+        if (directInputBuffer != null || (isPrecisionActive && outputByteBuffer.hasRemaining())) {
             return false
         }
         return delegate.isEnded()
     }
 
     override fun hasPendingData(): Boolean {
-        if (isPrecisionActive && outputByteBuffer.hasRemaining()) {
+        if (directInputBuffer != null || (isPrecisionActive && outputByteBuffer.hasRemaining())) {
             return true
         }
         return delegate.hasPendingData()
