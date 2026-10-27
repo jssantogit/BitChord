@@ -205,6 +205,32 @@ internal fun canonicalCoverLookupCandidates(
     .toList()
 
 /**
+ * Search shows recordings before many album cards. Sharing three CAA workers
+ * in album-first order left all visible songs waiting behind eight slow metadata
+ * calls. Interleave proof-backed candidate types so both start progressively.
+ * Reuse of cached album art runs before this bounded network fallback.
+ */
+internal fun canonicalSearchCoverPriorityQueue(
+    rows: List<CanonicalCatalogSearchRow>,
+    albumLimit: Int = 8,
+    recordingLimit: Int = 12,
+): List<CanonicalCatalogSearchRow> {
+    val albums = canonicalCoverLookupCandidates(rows.filter {
+        it.kind == CanonicalSearchKind.RELEASE ||
+            it.kind == CanonicalSearchKind.RELEASE_GROUP
+    }, albumLimit)
+    val songs = canonicalCoverLookupCandidates(rows.filter {
+        it.kind == CanonicalSearchKind.RECORDING
+    }, recordingLimit)
+    return buildList {
+        for (i in 0 until maxOf(songs.size, albums.size)) {
+            songs.getOrNull(i)?.let(::add)
+            albums.getOrNull(i)?.let(::add)
+        }
+    }
+}
+
+/**
  * Producer-neutral Home content for the existing Android HomeScreen, not a parallel screen.
  *
  * MusicBrainz proves releases and names but NOT listening popularity or audio.
