@@ -816,11 +816,20 @@ object AppSettings {
             )
         }.getOrDefault(OutputPcmMode.PCM_16)
         preferUsbDac.value = prefs.getBoolean(KEY_PREFER_USB_DAC, false)
-        loudnessNormalization.value = prefs.getBoolean(KEY_LOUDNESS_NORMALIZATION, false)
-        loudnessOffOnSpeaker.value = prefs.getBoolean(KEY_LOUDNESS_OFF_ON_SPEAKER, true)
-        dolbyAtmos.value = prefs.getBoolean(KEY_DOLBY_ATMOS, false)
-        spatialAudio.value = prefs.getBoolean(KEY_SPATIAL_AUDIO, false)
-        equalizerEnabled.value = prefs.getBoolean(KEY_EQ_ENABLED, false)
+        // Issue #185: retire legacy sound enhancements, including saved ON
+        // states from older installs and restored backups. They must never
+        // silently reactivate behind the neutral-audio settings UI.
+        prefs.edit()
+            .remove(KEY_LOUDNESS_NORMALIZATION)
+            .remove(KEY_DOLBY_ATMOS)
+            .remove(KEY_SPATIAL_AUDIO)
+            .remove(KEY_EQ_ENABLED)
+            .apply()
+        loudnessNormalization.value = false
+        loudnessOffOnSpeaker.value = true
+        dolbyAtmos.value = false
+        spatialAudio.value = false
+        equalizerEnabled.value = false
         equalizerMode.value = runCatching {
             EqualizerMode.valueOf(prefs.getString(KEY_EQ_MODE, null) ?: EqualizerMode.DYNAMIC.name)
         }.getOrDefault(EqualizerMode.DYNAMIC)

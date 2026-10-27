@@ -7101,7 +7101,9 @@ class PlaybackService : MediaLibraryService() {
      * audio thread is the one place that must not do that.
      */
     private fun applyEqualizer() {
-        val enabled = AppSettings.equalizerEnabled.value
+        // EQ is retired from playback (#185). Existing config/history is
+        // not used to change decoded samples even if an old UI entry is reached.
+        val enabled = false
         val curve = when (AppSettings.equalizerMode.value) {
             EqualizerMode.DYNAMIC -> toneCurve(
                 x = AppSettings.equalizerToneX.value,
@@ -7123,7 +7125,8 @@ class PlaybackService : MediaLibraryService() {
      * processors are kept in lockstep rather than tracking a role swap.
      */
     private fun applySpatialAudioEnabled() {
-        val enabled = AppSettings.spatialAudio.value && !activeTrackIsDolbyAtmos
+        // Spatial widening is retired from playback (#185).
+        val enabled = false
         spatialAudioProcessorA.enabled = enabled
         spatialAudioProcessorB.enabled = enabled
     }
@@ -7147,15 +7150,9 @@ class PlaybackService : MediaLibraryService() {
         ?.let { 10.0.pow(it / 2000.0).toFloat() }
         ?: 1f
 
-    private fun loudnessGainMb(mediaId: String?): Int? {
-        if (!AppSettings.loudnessNormalization.value) return null
-        if (AppSettings.loudnessOffOnSpeaker.value &&
-            AudioOutputStatus.current.value.routeKind == AudioRouting.Kind.PHONE
-        ) return null
-        val id = mediaId?.takeIf { it.isNotBlank() } ?: return null
-        val loudnessDb = StreamResolver.loudnessDbFor(id) ?: return null
-        return (-loudnessDb * 100.0).roundToInt().coerceIn(MIN_LOUDNESS_GAIN_MB, MAX_LOUDNESS_GAIN_MB)
-    }
+    // Legacy loudness figures must not re-enable gain/limiting on restored
+    // configurations. The inactive LoudnessProcessor bypasses audio samples.
+    private fun loudnessGainMb(@Suppress("UNUSED_PARAMETER") mediaId: String?): Int? = null
 
     /**
      * Points the session player's loudness stage at [mediaId] and the track
