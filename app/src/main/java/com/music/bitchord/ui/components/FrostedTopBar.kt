@@ -170,6 +170,8 @@ fun FrostedTopBar(
      * Root tabs have no back button there for it to collide with.
      */
     accessory: (@Composable () -> Unit)? = null,
+    /** No empty action capsule on the Home root when its menu lives in the header. */
+    showActions: Boolean = true,
     actions: @Composable () -> Unit = {},
 ) {
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
@@ -308,23 +310,25 @@ fun FrostedTopBar(
             // The accessory takes everything from the leading gutter up to the
             // actions, which keep their own width at the trailing end.
             val edge = if (useFloatingChrome) BAR_GUTTER else 4.dp
-            Row(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .then(if (accessory != null) Modifier.fillMaxWidth().padding(start = edge) else Modifier)
-                    // Same outer edge as the navbar; PILL_INSET below is
-                    // internal padding around the icons, not extra margin.
-                    .padding(end = edge),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (accessory != null) {
-                    Box(Modifier.weight(1f)) { accessory() }
-                    Spacer(Modifier.width(ACCESSORY_GAP))
-                }
-                if (useFloatingChrome) {
-                    ArtworkPageActions(hazeState = backButtonHazeState, content = actions)
-                } else {
-                    actions()
+            if (showActions || accessory != null) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .then(if (accessory != null) Modifier.fillMaxWidth().padding(start = edge) else Modifier)
+                        .padding(end = edge),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (accessory != null) {
+                        Box(Modifier.weight(1f)) { accessory() }
+                        if (showActions) Spacer(Modifier.width(ACCESSORY_GAP))
+                    }
+                    if (showActions) {
+                        if (useFloatingChrome) {
+                            ArtworkPageActions(hazeState = backButtonHazeState, content = actions)
+                        } else {
+                            actions()
+                        }
+                    }
                 }
             }
         }
