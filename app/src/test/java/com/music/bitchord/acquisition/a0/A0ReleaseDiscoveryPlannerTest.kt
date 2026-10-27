@@ -73,6 +73,32 @@ class A0ReleaseDiscoveryPlannerTest {
         assertEquals(0,A0ReleaseDiscoveryPlanner.preview(listOf(track(1),track(1)),
             listOf(offer(1,"a"))).autoReadyTracks)
     }
+    @Test fun reasonsExplainZeroReadinessWithoutLeakingOfferIdentities() {
+        val tracks=listOf(track(1),track(2),track(3))
+        val offers=listOf(
+            offer(1,"peerA",qualityOk=false),
+            offer(2,"peerB",albumOk=false),
+            offer(3,"peerC",seconds=600)
+        )
+        val result=A0ReleaseDiscoveryPlanner.preview(tracks,offers)
+        assertEquals(0,result.autoReadyTracks)
+        assertEquals(3,result.manualReviewTracks)
+        assertEquals(1,result.rejections[A0ReleaseDiscoveryPlanner.Rejection.QUALITY])
+        assertEquals(1,result.rejections[A0ReleaseDiscoveryPlanner.Rejection.ALBUM])
+        assertEquals(1,result.rejections[A0ReleaseDiscoveryPlanner.Rejection.DURATION_MISMATCH])
+        assertEquals(3,result.rejections.values.sum())
+        assertFalse(result.canTransfer)
+        assertFalse(result.toString().contains("peerA"))
+    }
+
+    @Test fun missingDurationIsNotMistakenForBadAudioOrMissingPeers() {
+        val result=A0ReleaseDiscoveryPlanner.preview(
+            listOf(track(1).copy(expectedDurationSeconds=null)),
+            listOf(offer(1,"testPeer")))
+        assertEquals(0,result.autoReadyTracks)
+        assertEquals(1,result.rejections[A0ReleaseDiscoveryPlanner.Rejection.MISSING_DURATION])
+    }
+
     @Test(timeout=5000) fun twentyFourThousandOffersRemainBoundedAndNoUnexpectedTransfer() {
         val tracks=(1..64).map(::track)
         val offers=(0 until 24_000).map { index ->

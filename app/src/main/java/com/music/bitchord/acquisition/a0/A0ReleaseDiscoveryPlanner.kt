@@ -37,6 +37,11 @@ internal object A0ReleaseDiscoveryPlanner {
     }
 
     enum class Status { SUGGESTED, AMBIGUOUS, REVIEW }
+    /** Mutually exclusive first failing gate; aggregates never contain peer or track IDs. */
+    enum class Rejection {
+        UNKNOWN_SLOT, MISSING_DURATION, DURATION_MISMATCH, LOW_SCORE,
+        NOT_STRONG, QUALITY, ALBUM, IDENTITY, VERSION, AVAILABILITY, INVALID_SOURCE
+    }
     class TrackDecision(
         val slotId:String,
         val status:Status,
@@ -52,6 +57,7 @@ internal object A0ReleaseDiscoveryPlanner {
         val foldersConsidered:Int,
         val examinedOffers:Int,
         val trackDecisions:List<TrackDecision>,
+        val rejections:Map<Rejection,Int> = emptyMap(),
     ) {
         val canTransfer:Boolean get()=false
         override fun toString()="ReleasePreview(aggregated)"
@@ -86,20 +92,34 @@ internal object A0ReleaseDiscoveryPlanner {
             targets.map { TrackDecision(it.id,Status.REVIEW,emptyList()) })
 
         data class Selected(val value:Offer,val folder:String)
+        val rejected=mutableMapOf<Rejection,Int>()
+        fun reject(reason:Rejection):Selected? {
+            rejected[reason]=(rejected[reason] ?: 0)+1
+            return null
+        }
         val eligible=offers.take(MAX_OFFERS).mapNotNull { offer ->
-            val target=targetById[offer.slotId] ?: return@mapNotNull null
+            val target=targetById[offer.slotId]
+                ?: return@mapNotNull reject(Rejection.UNKNOWN_SLOT)
             val expected=target.expectedDurationSeconds?.takeIf { it in 15..7200 }
-                ?: return@mapNotNull null
+                ?: return@mapNotNull reject(Rejection.MISSING_DURATION)
             val reported=offer.declaredDurationSeconds?.takeIf { it in 15..7200 }
-                ?: return@mapNotNull null
-            if(abs(expected-reported)>8 || offer.score<65 ||
-                offer.preflight!=A0CandidatePreflight.Confidence.STRONG ||
-                !offer.qualityCompatible || !offer.albumCompatible ||
-                !offer.identityCompatible || !offer.versionCompatible ||
-                offer.availability==A0PeerAvailability.Tier.UNAVAILABLE ||
-                offer.peerKey.isBlank() || offer.peerKey.length>256 ||
-                offer.claimKey.isBlank() || offer.claimKey.length>512) return@mapNotNull null
-            val folder=safeFolder(offer.remotePath) ?: return@mapNotNull null
+                ?: return@mapNotNull reject(Rejection.MISSING_DURATION)
+            if(abs(expected-reported)>8)
+                return@mapNotNull reject(Rejection.DURATION_MISMATCH)
+            if(offer.score<65)return@mapNotNull reject(Rejection.LOW_SCORE)
+            if(offer.preflight!=A0CandidatePreflight.Confidence.STRONG)
+                return@mapNotNull reject(Rejection.NOT_STRONG)
+            if(!offer.qualityCompatible)return@mapNotNull reject(Rejection.QUALITY)
+            if(!offer.albumCompatible)return@mapNotNull reject(Rejection.ALBUM)
+            if(!offer.identityCompatible)return@mapNotNull reject(Rejection.IDENTITY)
+            if(!offer.versionCompatible)return@mapNotNull reject(Rejection.VERSION)
+            if(offer.availability==A0PeerAvailability.Tier.UNAVAILABLE)
+                return@mapNotNull reject(Rejection.AVAILABILITY)
+            if(offer.peerKey.isBlank() || offer.peerKey.length>256 ||
+                offer.claimKey.isBlank() || offer.claimKey.length>512)
+                return@mapNotNull reject(Rejection.INVALID_SOURCE)
+            val folder=safeFolder(offer.remotePath)
+                ?: return@mapNotNull reject(Rejection.INVALID_SOURCE)
             Selected(offer,folder)
         }
 
@@ -139,6 +159,6 @@ internal object A0ReleaseDiscoveryPlanner {
         }
         val ready=decisions.count { it.status==Status.SUGGESTED }
         return Preview(ready,targets.size-ready,ambiguous,bestCoverage,
-            folders.size,offers.size.coerceAtMost(MAX_OFFERS),decisions)
+            folders.size,offers.size.coerceAtMost(MAX_OFFERS),decisions,rejected.toMap())
     }
 }

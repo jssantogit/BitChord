@@ -313,7 +313,29 @@ internal class A0SmokeTrace private constructor(
                 "ambiguousTracks" to n(report.ambiguousTracks),
                 "bestFolderCoverage" to n(report.bestFolderCoverage),
                 "foldersConsidered" to n(report.foldersConsidered),
-                "examinedOffers" to n(report.examinedOffers)
+                "examinedOffers" to n(report.examinedOffers),
+                "rejectedUnknownSlot" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.UNKNOWN_SLOT] ?: 0),
+                "rejectedDurationMissing" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.MISSING_DURATION] ?: 0),
+                "rejectedDurationDrift" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.DURATION_MISMATCH] ?: 0),
+                "rejectedLowScore" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.LOW_SCORE] ?: 0),
+                "rejectedNotStrong" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.NOT_STRONG] ?: 0),
+                "rejectedQuality" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.QUALITY] ?: 0),
+                "rejectedAlbum" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.ALBUM] ?: 0),
+                "rejectedIdentity" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.IDENTITY] ?: 0),
+                "rejectedVersion" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.VERSION] ?: 0),
+                "rejectedAvailability" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.AVAILABILITY] ?: 0),
+                "rejectedInvalidSource" to n(report.rejections[
+                    A0ReleaseDiscoveryPlanner.Rejection.INVALID_SOURCE] ?: 0)
             )
         )
     }
