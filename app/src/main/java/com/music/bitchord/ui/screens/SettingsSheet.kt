@@ -1615,12 +1615,12 @@ internal fun SettingsScreen(
         if (selectedSection == SettingsSection.ADVANCED || (selectedSection == null && searchQuery.isNotBlank())) {
         SearchableSettingsGroup(search, destination = SettingsSection.ADVANCED, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.ADVANCED) } else null, header = stringResource(R.string.advanced_options)) {
             if (DiagnosticsUiEntry.isAvailable(context)) {
-                val diagnosticsTitle = "Diagnostics"
+                val diagnosticsTitle = stringResource(R.string.settings_nav_diagnostics_title)
                 row(diagnosticsTitle, "debug", "logs", "report", "capture") {
                     SettingsRow(
                         icon = Icons.Rounded.Tune,
                         title = diagnosticsTitle,
-                        subtitle = "Capture, inspect, and share diagnostic reports",
+                        subtitle = stringResource(R.string.settings_nav_diagnostics_subtitle),
                         onClick = { DiagnosticsUiEntry.open(context) },
                     )
                 }
