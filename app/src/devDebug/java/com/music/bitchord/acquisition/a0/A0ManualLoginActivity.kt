@@ -451,16 +451,24 @@ class A0ManualLoginActivity : Activity() {
                                 val attemptedIndirect = AtomicBoolean(false)
                                 val receivedValidP2pReply = AtomicBoolean(false)
                                 val failedServerReader = AtomicBoolean(false)
+                                val progressGate=A0ProgressUpdateGate(700L)
                                 fun discoveryProgress() {
-                                    val report=handoff?.screening() ?: return
+                                    // Building the full claim clustering preview on
+                                    // every P2P reply stalls discovery and floods
+                                    // main-thread status updates. Only cheap counts
+                                    // are needed while the reader is still open.
+                                    if(!progressGate.shouldPublish(
+                                            TimeUnit.NANOSECONDS.toMillis(System.nanoTime())
+                                        ))return
+                                    val report=handoff?.progress() ?: return
                                     runOnUiThread {
                                         if (!stopping && !isFinishing && !isDestroyed &&
                                             readerGate.isOpen()) {
                                             status.text="Pesquisando Soulseek: " +
                                                 report.responses + " respostas, " +
                                                 report.publicFiles + " arquivos anunciados, " +
-                                                report.accepted + " candidatos disponíveis " +
-                                                "(coleta ainda em andamento)."
+                                                report.provisionalClaims + " arquivos pré-filtrados " +
+                                                "(qualidade e álbum ainda em análise)."
                                         }
                                     }
                                 }
