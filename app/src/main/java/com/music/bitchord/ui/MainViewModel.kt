@@ -959,6 +959,53 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // lookups. The map must support safe independent IO workers.
             val artistEditions = java.util.concurrent.ConcurrentHashMap<
                 String, List<MusicBrainzReleaseHit>>()
+            // Navidrome/Auxio-inspired cache-first artist shelves: artwork already
+            // vetted in Room must never wait for an external MusicBrainz
+            // official-edition browse (which has a shared rate limit). A single
+            // SQL batch hydrates the still-blank cards while the online index
+            // is obtained independently. This does not invent group identity.
+            launch {
+                val waiting = (_canonicalDetail.value as? UiState.Success)?.data?.rows
+                    .orEmpty().filter {
+                        it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                            canonicalEditorialReleaseType(it) != null &&
+                            it.artworkUri.isNullOrBlank()
+                    }
+                if (waiting.isNotEmpty()) {
+                    val verified = coverArtArchive.cachedVerifiedGroupCovers(
+                        waiting.map { it.musicBrainzId }, CoverArtSize.THUMBNAIL,
+                    )
+                    if (verified.isNotEmpty() &&
+                        _searchSource.value == SearchSource.CANONICAL &&
+                        canonicalPath.lastOrNull() == artist
+                    ) {
+                        val titleById = waiting.associate { it.musicBrainzId to it.title }
+                        val updates = verified.mapValues { (id, url) ->
+                            url to (titleById[id] ?: "")
+                        }
+                        _canonicalDetail.update { old ->
+                            if (old !is UiState.Success) old else UiState.Success(
+                                old.data.copy(rows = old.data.rows.map { row ->
+                                    val url = verified[row.musicBrainzId]
+                                    if (row.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                                        row.artworkUri.isNullOrBlank() && url != null
+                                    ) row.copy(artworkUri = url) else row
+                                }),
+                            )
+                        }
+                        val artistId = canonicalNativeBrowseId(artist)
+                        _detailStack.update { pages ->
+                            pages.map { page ->
+                                if (page.browseId != artistId) page else page.copy(
+                                    sections = canonicalArtistShelvesWithCoverUpdates(
+                                        page.sections, updates,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             if (!offlineOnly) try {
                 when (val batch = musicBrainzGraph.browseOfficialReleasesForArtist(
                     artist.musicBrainzId, limit = 100,
