@@ -100,7 +100,6 @@ internal class RuleBasedSmartPlaylistPlanner(
         input: List<RuleBasedRecordingCandidate>,
         query: RuleBasedSmartPlaylistQuery,
     ): List<RuleBasedSmartPlaylistItem> {
-        if (input.size > 5_000) return emptyList() // no silently truncated population
         val now = nowEpochMs()
         if (now < 0L) return emptyList()
         return input.groupBy { it.recordingId }
@@ -111,8 +110,7 @@ internal class RuleBasedSmartPlaylistPlanner(
                 val item = grouped.first()
                 if (item.recordingId.isBlank() || !item.available ||
                     item.audibleCompletions < 0 ||
-                    item.explicitRating?.isFinite() == false ||
-                    (item.explicitRating != null && item.explicitRating < 3.0)
+                    item.explicitRating?.isFinite() == false
                 ) return@mapNotNull null
 
                 val reasons = linkedSetOf<RuleBasedInclusionReason>()
