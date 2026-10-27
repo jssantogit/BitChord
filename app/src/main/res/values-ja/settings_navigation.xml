@@ -1,0 +1,30 @@
+<resources>
+    <string name="settings_nav_group_account">アカウント</string>
+    <string name="settings_nav_group_music">音楽</string>
+    <string name="settings_nav_group_experience">体験</string>
+    <string name="settings_nav_group_data">データ</string>
+    <string name="settings_nav_group_system">システム</string>
+    <string name="settings_nav_group_about">アプリ情報</string>
+    <string name="settings_nav_lyrics">歌詞</string>
+    <string name="settings_nav_about">アプリ情報</string>
+    <string name="settings_nav_filtered">検索結果: %1$s</string>
+    <string name="settings_nav_show_all">すべて表示</string>
+    <string name="settings_nav_controls">操作と動作</string>
+    <string name="settings_nav_advanced">詳細設定</string>
+    <string name="settings_nav_desc_account">アカウントと音楽連携</string>
+    <string name="settings_nav_desc_audio">音源、Wi-Fi、モバイルデータ</string>
+    <string name="settings_nav_desc_playback">音声出力、切り替え、再生キュー</string>
+    <string name="settings_nav_desc_local">フォルダーとローカル音声フィルター</string>
+    <string name="settings_nav_desc_appearance">テーマ、ジャケット、視覚効果</string>
+    <string name="settings_nav_desc_lyrics">同期、歌詞ソース、翻訳</string>
+    <string name="settings_nav_desc_downloads">Soulseek、品質、保存先</string>
+    <string name="settings_nav_desc_storage">音声キャッシュと保存領域</string>
+    <string name="settings_nav_desc_data">Replay、バックアップ、インポート</string>
+    <string name="settings_nav_desc_performance">リフレッシュレートとバッテリー</string>
+    <string name="settings_nav_desc_misc">ジェスチャーと再生動作</string>
+    <string name="settings_nav_desc_language">表示言語</string>
+    <string name="settings_nav_desc_advanced">診断と技術設定</string>
+    <string name="settings_nav_desc_wear">スマートウォッチ連携</string>
+    <string name="settings_nav_desc_about">バージョンとプロジェクト情報</string>
+    <string name="settings_nav_desc_sources">音楽プロバイダーと拡張機能</string>
+</resources>
