@@ -408,7 +408,9 @@ private fun RemoteLibrarySection(
     val scope = rememberCoroutineScope()
     var testing by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<String?>(null) }
-    SettingsGroup(header = title, footer = description) {
+    // The first row names this connection already. Do not print
+    // WebDAV → WebDAV / SMB → SMB in adjacent headings.
+    SettingsGroup(header = null, footer = description) {
         SettingsRow(icon = icon, title = title, subtitle = subtitle, onClick = onEdit)
         if (configured) {
             RowDivider()
