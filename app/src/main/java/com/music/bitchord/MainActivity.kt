@@ -316,6 +316,7 @@ import com.music.bitchord.ui.screens.localizedLabel
 import com.music.bitchord.data.LocalGroups
 import com.music.bitchord.data.settings.LibraryViewType
 import com.music.bitchord.data.settings.LocalMusicSort
+import com.music.bitchord.ui.screens.HomeHeaderAction
 import com.music.bitchord.ui.screens.HomeScreen
 import com.music.bitchord.ui.screens.LibraryGridPage
 import com.music.bitchord.ui.screens.LibraryScreen
@@ -3091,9 +3092,27 @@ private fun BitChordApp(
                             listState = homeListState,
                             currentSong = player.song,
                             isPlaying = player.isPlaying,
-                            title = stringResource(R.string.listen_now),
+                            title = stringResource(R.string.home),
+                            headerActions = listOf(
+                                HomeHeaderAction(stringResource(R.string.settings)) {
+                                    showSettings = true
+                                },
+                                HomeHeaderAction(stringResource(R.string.downloads)) {
+                                    showDownloadManager = true
+                                },
+                                HomeHeaderAction(stringResource(R.string.account_integrations)) {
+                                    settingsSection = SettingsSection.ACCOUNT
+                                    showSettings = true
+                                },
+                            ) + (updateNotice?.let { update ->
+                                listOf(HomeHeaderAction(
+                                    stringResource(R.string.update_available, update.version),
+                                ) { showUpdateDialog = true })
+                            } ?: emptyList()),
                             signedIn = signedIn,
-                            onSignIn = { webSession = WebSessionMode.SIGN_IN },
+                            // Do not advertise YouTube authentication on a music-first
+                            // canonical home. Provider configuration remains in Settings.
+                            onSignIn = null,
                             onItemClick = { item, shelfTitle ->
                                 val song = shelfSong(item)
                                 // Hoisted because ShelfItem lives in :shared, and
@@ -3576,6 +3595,15 @@ private fun BitChordApp(
                         .graphicsLayer { alpha = topFadeAlpha },
                 )
 
+                // The Home has its own single Início / ⋮ row. Do not leave
+                // a second floating upload/profile pill above that header.
+                val homeRootVisible = selectedTab == TAB_HOME &&
+                    detail == null && selectedMoodGenre == null &&
+                    libraryShowAll == null && !showSettings &&
+                    !showAccountScrobbling && !showSources && !showListenTogether &&
+                    !showWearOs && !showEqualizer && !showDiscord &&
+                    !showHistory && !showSpotify && !showReplay
+
                 FrostedTopBar(
                     title = when {
                         showSpotify && detail == null -> stringResource(R.string.spotify)
@@ -3694,6 +3722,7 @@ private fun BitChordApp(
                         }
                     } else null,
                     actions = {
+                        if (!homeRootVisible) {
                         // This is intentionally scoped to Listen together: the
                         // round-trip time is meaningful while coordinating a
                         // party, but would be noise in the rest of the app.
@@ -3938,6 +3967,7 @@ private fun BitChordApp(
                                 },
                                 onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
                             )
+                        }
                         }
                     },
                 )
