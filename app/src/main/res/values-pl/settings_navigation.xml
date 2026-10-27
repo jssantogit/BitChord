@@ -2,7 +2,7 @@
     <string name="settings_nav_group_account">KONTO</string>
     <string name="settings_nav_group_music">MUZYKA</string>
     <string name="settings_nav_group_experience">DOŚWIADCZENIE</string>
-    <string name="settings_nav_group_data">DANE</string>
+    <string name="settings_nav_group_data">DANE I POBRANIA</string>
     <string name="settings_nav_group_system">SYSTEM</string>
     <string name="settings_nav_group_about">O APLIKACJI</string>
     <string name="settings_nav_lyrics">Teksty utworów</string>
