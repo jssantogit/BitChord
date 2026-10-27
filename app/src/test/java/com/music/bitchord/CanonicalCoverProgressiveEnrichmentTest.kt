@@ -284,4 +284,29 @@ class CanonicalCoverProgressiveEnrichmentTest {
             result,
         )
     }
+
+    @Test fun newVerifiedAlbumArtRefreshesOnlyMissingRecordingSleeves() {
+        val first = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            "recording-1", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+            "Zero", "NewJeans",
+        )
+        val second = first.copy(musicBrainzId = "recording-2",
+            artworkUri = "https://archive.org/own-front-500.jpg")
+        val unrelated = first.copy(musicBrainzId = "recording-3")
+        val album = first.copy(musicBrainzId = "album-id",
+            kind = com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP)
+        val rows = listOf(first, second, unrelated, album)
+        val refreshed = com.music.bitchord.ui.canonicalRowsWithVerifiedRecordingArt(
+            rows,
+            mapOf(
+                "recording-1" to "https://archive.org/newjeans-front-500.jpg",
+                "recording-2" to "https://archive.org/newjeans-front-500.jpg",
+                "album-id" to "https://archive.org/newjeans-front-500.jpg",
+            ),
+        )
+        assertEquals("https://archive.org/newjeans-front-500.jpg", refreshed[0].artworkUri)
+        assertEquals("https://archive.org/own-front-500.jpg", refreshed[1].artworkUri)
+        assertEquals(null, refreshed[2].artworkUri)
+        assertEquals(null, refreshed[3].artworkUri)
+    }
 }
