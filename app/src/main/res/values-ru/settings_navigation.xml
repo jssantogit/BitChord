@@ -2,7 +2,7 @@
     <string name="settings_nav_group_account">АККАУНТ</string>
     <string name="settings_nav_group_music">МУЗЫКА</string>
     <string name="settings_nav_group_experience">ИНТЕРФЕЙС</string>
-    <string name="settings_nav_group_data">ДАННЫЕ</string>
+    <string name="settings_nav_group_data">ДАННЫЕ И ЗАГРУЗКИ</string>
     <string name="settings_nav_group_system">СИСТЕМА</string>
     <string name="settings_nav_group_about">О ПРИЛОЖЕНИИ</string>
     <string name="settings_nav_lyrics">Тексты песен</string>
