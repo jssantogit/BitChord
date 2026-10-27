@@ -1325,6 +1325,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _canonicalDetail.value = UiState.Loading
         _searchScrollReset.value += 1
         canonicalBrowseJob = viewModelScope.launch {
+            // A card can be stale even after this group's Front-v5 has been
+            // saved by the artist shelf. Read that exact verified MBID once,
+            // then give the identical URL to both header and all tracks.
+            // No archive request or fuzzy artist/title fallback.
+            val groupArtwork = if (entry.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                entry.artworkUri.isNullOrBlank()
+            ) {
+                try {
+                    withContext(Dispatchers.IO) {
+                        coverArtArchive.cachedVerifiedGroupCover(
+                            entry.musicBrainzId, CoverArtSize.THUMBNAIL,
+                        )
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { null }
+            } else null
+            val initialArtwork = entry.artworkUri ?: groupArtwork
+            if (groupArtwork != null && _searchSource.value == SearchSource.CANONICAL &&
+                canonicalPath.lastOrNull() == entry
+            ) {
+                val pageId = canonicalNativeBrowseId(entry)
+                _detailStack.update { pages -> pages.map { page ->
+                    if (page.browseId == pageId && page.thumbnailUrl.isNullOrBlank())
+                        page.copy(thumbnailUrl = groupArtwork) else page
+                } }
+            }
             // Reopening an already browsed artist should paint persisted
             // metadata and verified Front-v4 artwork immediately. A slow
             // MusicBrainz browse refreshes this page later; it must not hold
@@ -1522,7 +1549,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         UiState.Success(CanonicalCatalogDetailPage(
                             title = editorialTitle,
                             summary = null,
-                            artworkUri = entry.artworkUri.takeIf {
+                            artworkUri = initialArtwork.takeIf {
                                 canonicalEditorialReleaseType(entry) != null
                             },
                             rows = canonicalReleaseTracksWithArtwork(detail.tracks.map { track ->
@@ -1535,7 +1562,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                     trackMbid = track.trackMbid,
                                     durationMs = track.durationMs,
                                 )
-                            }, entry.artworkUri),
+                            }, initialArtwork),
                         ))
                     }
                 }
