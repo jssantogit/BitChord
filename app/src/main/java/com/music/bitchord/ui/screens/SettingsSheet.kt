@@ -176,6 +176,8 @@ import java.util.Locale
 fun SettingsScreen(
     /** The window's width, for the gates that depend on it. */
     windowWidth: Dp,
+    selectedSection: SettingsSection?,
+    onSelectSection: (SettingsSection?) -> Unit,
     signedIn: Boolean,
     account: Account?,
     onSignIn: () -> Unit,
@@ -374,17 +376,21 @@ fun SettingsScreen(
 
     // What is left after a keystroke is a different list, and the offset the
     // last one was scrolled to means nothing in it.
-    val scrollState = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+    val landingScrollState = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+    val sectionScrollState = rememberSaveable(saver = ScrollState.Saver) { ScrollState(0) }
+    val scrollState = if (selectedSection == null) landingScrollState else sectionScrollState
     var isFirstSearchComposition by remember { mutableStateOf(true) }
     LaunchedEffect(searchQuery) {
         if (isFirstSearchComposition && searchQuery.isEmpty()) {
-            // Skip the initial composition during Activity recreation:
-            // rememberSaveable already restored the scroll position.
             isFirstSearchComposition = false
         } else {
             isFirstSearchComposition = false
-            scrollState.scrollTo(0)
+            landingScrollState.scrollTo(0)
+            sectionScrollState.scrollTo(0)
         }
+    }
+    LaunchedEffect(selectedSection) {
+        if (selectedSection != null) sectionScrollState.scrollTo(0)
     }
 
     Column(
@@ -393,21 +399,37 @@ fun SettingsScreen(
             .verticalScroll(scrollState)
             .padding(contentPadding),
     ) {
-        Text(
-            text = stringResource(R.string.settings),
-            style = MaterialTheme.typography.displayLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 14.dp),
-        )
-        SearchField(
-            query = searchQuery,
-            onQueryChange = { searchQuery = it },
-            onSubmit = {},
-            placeholder = stringResource(R.string.settings_search_hint),
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
-        )
+        if (selectedSection == null) {
+            Text(
+                text = stringResource(R.string.settings),
+                style = MaterialTheme.typography.displayLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 14.dp),
+            )
+            SearchField(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                onSubmit = {},
+                placeholder = stringResource(R.string.settings_search_hint),
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
+            )
+            if (searchQuery.isBlank()) {
+                SettingsHome(
+                    onSelect = { onSelectSection(it) },
+                    showWear = remember(context) { WatchInstaller.available(context) },
+                )
+            }
+        } else {
+            SettingsDetailHeader(
+                section = selectedSection,
+                filteredQuery = searchQuery,
+                onBack = { onSelectSection(null) },
+                onClearFilter = { searchQuery = "" },
+            )
+        }
 
-        SearchableSettingsGroup(search) {
+        if (selectedSection == SettingsSection.ACCOUNT || (selectedSection == null && searchQuery.isNotBlank())) {
+        SearchableSettingsGroup(search, destination = SettingsSection.ACCOUNT, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.ACCOUNT) } else null) {
             val accountTitle = stringResource(R.string.account_integrations)
             // What the row opens is the scrobbling screen, so the services it
             // signs into are worth typing at this field even though none of
@@ -437,6 +459,7 @@ fun SettingsScreen(
                 )
             }
         }
+        }
 
         // The row that used to sit at the top of this group was called
         // "Lossless / HQ Audio" and toggled `SourceRegistry.setModuleEnabled` —
@@ -444,7 +467,8 @@ fun SettingsScreen(
         // above lists that as the module's own row now. Lossless itself is no
         // longer a setting at all — see
         // [SourceResolver.requestForNow][com.music.bitchord.data.sources.SourceResolver.requestForNow].
-        SearchableSettingsGroup(search, header = stringResource(R.string.audio_quality)) {
+        if (selectedSection == SettingsSection.AUDIO_QUALITY || (selectedSection == null && searchQuery.isNotBlank())) {
+        SearchableSettingsGroup(search, destination = SettingsSection.AUDIO_QUALITY, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.AUDIO_QUALITY) } else null, header = stringResource(R.string.audio_quality)) {
             val sourceTitle = stringResource(R.string.source)
             val sourceSubtitle = stringResource(R.string.sources_subtitle)
             row(sourceTitle, sourceSubtitle, "addon", "lossless") {
@@ -513,13 +537,15 @@ fun SettingsScreen(
                 )
             }
         }
+        }
 
         // Its own group rather than rows bolted onto the two above, because a
         // download is not a third kind of connection. The ceilings answer "what
         // does this minute cost"; these answer "what am I keeping, and when may
         // it be fetched" — and those two questions only make sense read
         // together, which is what puts them side by side here.
-        SearchableSettingsGroup(search, header = stringResource(R.string.downloads)) {
+        if (selectedSection == SettingsSection.DOWNLOADS || (selectedSection == null && searchQuery.isNotBlank())) {
+        SearchableSettingsGroup(search, destination = SettingsSection.DOWNLOADS, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.DOWNLOADS) } else null, header = stringResource(R.string.downloads)) {
             row("Soulseek", "conta", "pesquisa", "baixar") {
                 SettingsRow(
                     icon = Icons.Rounded.Cloud,
@@ -569,8 +595,10 @@ fun SettingsScreen(
                 A1AcquisitionDestinationSettingsRow()
             }
         }
+        }
 
-        SearchableSettingsGroup(search, header = stringResource(R.string.playback)) {
+        if (selectedSection == SettingsSection.PLAYBACK || (selectedSection == null && searchQuery.isNotBlank())) {
+        SearchableSettingsGroup(search, destination = SettingsSection.PLAYBACK, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.PLAYBACK) } else null, header = stringResource(R.string.playback)) {
             val preferMusicOnlyTitle = stringResource(R.string.prefer_music_only)
             row(preferMusicOnlyTitle, "video", "audio", "music video") {
                 SettingsRow(
@@ -774,8 +802,10 @@ fun SettingsScreen(
                 )
             }
         }
+        }
 
-        SearchableSettingsGroup(search, header = stringResource(R.string.appearance)) {
+        if (selectedSection == SettingsSection.APPEARANCE || (selectedSection == null && searchQuery.isNotBlank())) {
+        SearchableSettingsGroup(search, destination = SettingsSection.APPEARANCE, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.APPEARANCE) } else null, header = stringResource(R.string.appearance)) {
             val themeTitle = stringResource(R.string.theme)
             row(themeTitle, "dark mode", "light mode") {
                 SettingsRow(icon = Icons.Rounded.Brightness4, title = themeTitle)
@@ -995,6 +1025,11 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
+        }
+
+        if (selectedSection == SettingsSection.LYRICS || (selectedSection == null && searchQuery.isNotBlank())) {
+        SearchableSettingsGroup(search, destination = SettingsSection.LYRICS, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.LYRICS) } else null, header = stringResource(R.string.settings_nav_lyrics)) {
             val syncedLyricsTitle = stringResource(R.string.synced_lyrics)
             // Same reasoning as Animated cover art above: the lyrics source and
             // translation rows are only here while this is on.
@@ -1071,8 +1106,10 @@ fun SettingsScreen(
                 }
             }
         }
+        }
 
-        SearchableSettingsGroup(search, header = stringResource(R.string.performance)) {
+        if (selectedSection == SettingsSection.PERFORMANCE || (selectedSection == null && searchQuery.isNotBlank())) {
+        SearchableSettingsGroup(search, destination = SettingsSection.PERFORMANCE, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.PERFORMANCE) } else null, header = stringResource(R.string.performance)) {
             val highPerformanceModeTitle = stringResource(R.string.high_performance_mode)
             row(highPerformanceModeTitle, "frame rate", "refresh rate", "hz", "battery", "smooth") {
                 SettingsRow(
@@ -1130,8 +1167,10 @@ fun SettingsScreen(
                 }
             }
         }
+        }
 
-        SearchableSettingsGroup(search, header = stringResource(R.string.local_music)) {
+        if (selectedSection == SettingsSection.LOCAL_MUSIC || (selectedSection == null && searchQuery.isNotBlank())) {
+        SearchableSettingsGroup(search, destination = SettingsSection.LOCAL_MUSIC, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.LOCAL_MUSIC) } else null, header = stringResource(R.string.local_music)) {
             val localMusicFolderTitle = stringResource(R.string.local_music_folder)
             row(localMusicFolderTitle, "folder", "offline", "files") {
                 SettingsRow(
@@ -1173,6 +1212,7 @@ fun SettingsScreen(
                 )
             }
         }
+        }
 
         val cacheUnlimited = cacheLimitBytes == AppSettings.UNLIMITED_CACHE_LIMIT_BYTES
         // The slider's last stop, one step past the largest fixed size, is
@@ -1180,7 +1220,8 @@ fun SettingsScreen(
         val cacheLimitMb = if (cacheUnlimited) CACHE_UNLIMITED_STOP_MB else (cacheLimitBytes / (1024 * 1024)).toInt()
         val unlimitedLabel = stringResource(R.string.song_cache_unlimited)
         val cacheLimitLabel = if (cacheUnlimited) unlimitedLabel else formatCacheSize(cacheLimitMb)
-        SearchableSettingsGroup(search, header = stringResource(R.string.storage)) {
+        if (selectedSection == SettingsSection.STORAGE || (selectedSection == null && searchQuery.isNotBlank())) {
+        SearchableSettingsGroup(search, destination = SettingsSection.STORAGE, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.STORAGE) } else null, header = stringResource(R.string.storage)) {
             val showCacheFolderTitle = stringResource(R.string.show_cache_folder)
             row(showCacheFolderTitle, "cache", "cached songs", "library", "folder") {
                 SettingsRow(
@@ -1245,17 +1286,21 @@ fun SettingsScreen(
                 )
             }
         }
+        }
 
         // Only in a build that carries the watch app — see app/build.gradle.kts.
         if (remember { WatchInstaller.available(context) }) {
-            SearchableSettingsGroup(search) {
+            if (selectedSection == SettingsSection.WEAR || (selectedSection == null && searchQuery.isNotBlank())) {
+        SearchableSettingsGroup(search, destination = SettingsSection.WEAR, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.WEAR) } else null) {
                 row(stringResource(R.string.wear_os_section), "watch", "wear os", "galaxy watch", "pixel watch", "install") {
                     WearOsSettingsRow(onClick = onWearOs)
                 }
             }
         }
+        }
 
-        SearchableSettingsGroup(search, header = stringResource(R.string.your_data)) {
+        if (selectedSection == SettingsSection.YOUR_DATA || (selectedSection == null && searchQuery.isNotBlank())) {
+        SearchableSettingsGroup(search, destination = SettingsSection.YOUR_DATA, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.YOUR_DATA) } else null, header = stringResource(R.string.your_data)) {
             val replayTitle = stringResource(R.string.replay)
             row(replayTitle, "stats", "history", "wrapped") {
                 SettingsRow(
@@ -1307,10 +1352,12 @@ fun SettingsScreen(
                 )
             }
         }
+        }
 
         // No footer: it only restated the stop-on-close row's own subtitle,
         // which sits four rows above it and says the same thing in fewer words.
-        SearchableSettingsGroup(search, header = stringResource(R.string.miscellaneous)) {
+        if (selectedSection == SettingsSection.MISCELLANEOUS || (selectedSection == null && searchQuery.isNotBlank())) {
+        SearchableSettingsGroup(search, destination = SettingsSection.MISCELLANEOUS, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.MISCELLANEOUS) } else null, header = stringResource(R.string.miscellaneous)) {
             val playNextOnSwipeTitle = stringResource(R.string.play_next_on_swipe)
             row(playNextOnSwipeTitle, "swipe", "queue") {
                 SettingsRow(
@@ -1449,8 +1496,10 @@ fun SettingsScreen(
                 )
             }
         }
+        }
 
-        SearchableSettingsGroup(search, header = stringResource(R.string.language)) {
+        if (selectedSection == SettingsSection.LANGUAGE || (selectedSection == null && searchQuery.isNotBlank())) {
+        SearchableSettingsGroup(search, destination = SettingsSection.LANGUAGE, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.LANGUAGE) } else null, header = stringResource(R.string.language)) {
             val appLanguageTitle = stringResource(R.string.app_language)
             row(appLanguageTitle, "locale", "translate") {
                 val selectedLanguage = AppCompatDelegate.getApplicationLocales().get(0)?.toLanguageTag()
@@ -1463,8 +1512,10 @@ fun SettingsScreen(
                 )
             }
         }
+        }
 
-        SearchableSettingsGroup(search, header = stringResource(R.string.advanced_options)) {
+        if (selectedSection == SettingsSection.ADVANCED || (selectedSection == null && searchQuery.isNotBlank())) {
+        SearchableSettingsGroup(search, destination = SettingsSection.ADVANCED, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.ADVANCED) } else null, header = stringResource(R.string.advanced_options)) {
             if (DiagnosticsUiEntry.isAvailable(context)) {
                 val diagnosticsTitle = "Diagnostics"
                 row(diagnosticsTitle, "debug", "logs", "report", "capture") {
@@ -1576,16 +1627,17 @@ fun SettingsScreen(
                 }
             }
         }
+        }
 
         // Read after every group above has had its turn at the query, which is
         // what makes this an accurate "nothing here" rather than a guess.
-        if (!search.anyMatch) {
+        if (searchQuery.isNotBlank() && !search.anyMatch) {
             MessageState(stringResource(R.string.settings_search_empty, searchQuery))
         }
 
         // The version line is the page's colophon, not a setting: it belongs to
         // the whole list, so it goes when the list is narrowed to a few rows.
-        if (searchQuery.isBlank()) {
+        if (selectedSection == SettingsSection.ABOUT && searchQuery.isBlank()) {
         Text(
             text = buildAnnotatedString {
                 append("bitchord $version  ")
@@ -2344,7 +2396,7 @@ private class SettingsGroupScope(
     private val search: SettingsSearch,
     private val header: String?,
 ) {
-    class Entry(val divided: Boolean, val content: @Composable () -> Unit)
+    class Entry(val divided: Boolean, val title: String, val content: @Composable () -> Unit)
 
     val entries = mutableListOf<Entry>()
 
@@ -2365,7 +2417,7 @@ private class SettingsGroupScope(
     ) {
         // The header counts for every row beneath it: searching "playback"
         // should turn up the playback group entire, not nothing at all.
-        if (search.matches(header, *keywords)) entries += Entry(divided, content)
+        if (search.matches(header, *keywords)) entries += Entry(divided, keywords.firstOrNull().orEmpty(), content)
     }
 }
 
@@ -2378,6 +2430,8 @@ private class SettingsGroupScope(
 @Composable
 private fun SearchableSettingsGroup(
     search: SettingsSearch,
+    destination: SettingsSection,
+    onSearchNavigate: ((String) -> Unit)? = null,
     header: String? = null,
     footer: String? = null,
     topSpacing: Dp = 26.dp,
@@ -2395,7 +2449,15 @@ private fun SearchableSettingsGroup(
                 // has nothing to sit under, so it is given that room back.
                 index == 0 && !entry.divided -> Spacer(Modifier.height(10.dp))
             }
-            entry.content()
+            if (onSearchNavigate == null) {
+                entry.content()
+            } else {
+                SettingsSearchDestination(
+                    section = destination,
+                    title = entry.title,
+                    onNavigate = { _, title -> onSearchNavigate(title) },
+                )
+            }
         }
     }
 }
