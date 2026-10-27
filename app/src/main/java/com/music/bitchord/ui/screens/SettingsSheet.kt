@@ -173,7 +173,7 @@ import java.util.Locale
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(
+internal fun SettingsScreen(
     /** The window's width, for the gates that depend on it. */
     windowWidth: Dp,
     selectedSection: SettingsSection?,
