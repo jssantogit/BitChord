@@ -1211,4 +1211,14 @@
     <string name="playback_recovery_retry">Try again</string>
     <string name="playback_recovery_retrying">Trying…</string>
     <string name="playback_recovery_dismiss">Dismiss</string>
+    <string name="settings_nav_group_account">ACCOUNT</string>
+    <string name="settings_nav_group_music">MUSIC</string>
+    <string name="settings_nav_group_experience">EXPERIENCE</string>
+    <string name="settings_nav_group_data">DATA</string>
+    <string name="settings_nav_group_system">SYSTEM</string>
+    <string name="settings_nav_group_about">ABOUT</string>
+    <string name="settings_nav_lyrics">Lyrics</string>
+    <string name="settings_nav_about">About</string>
+    <string name="settings_nav_filtered">Results for: %1$s</string>
+    <string name="settings_nav_show_all">Show all</string>
 </resources>
