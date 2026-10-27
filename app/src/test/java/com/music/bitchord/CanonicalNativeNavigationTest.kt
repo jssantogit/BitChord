@@ -293,4 +293,16 @@ class CanonicalNativeNavigationTest {
             ).single().artworkUri)
     }
 
+
+    @Test fun identicalOfficialAlbumTitlesPreferWorldwideCoverOverEarlyLocalPackaging() {
+        val korean = MusicBrainzReleaseHit("kr", "Taste of Love", "KR",
+            "2021-06-09", "TWICE", status = "Official", hasFrontCover = true)
+        val worldwide = korean.copy(musicBrainzId = "xw", country = "XW",
+            releaseDate = "2021-06-11")
+        assertEquals(listOf("xw", "kr"),
+            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
+                listOf(korean, worldwide), "Taste of Love",
+            ).map { it.musicBrainzId })
+    }
+
 }
