@@ -33,6 +33,7 @@ class PrecisionAudioSinkTest {
         var resetCount: Int = 0
         var discontinuityHandled: Boolean = false
         var playedToEndOfStream: Boolean = false
+        var streamOffsetUs: Long? = null
         var isEndedReturn: Boolean = false
         var hasPendingDataReturn: Boolean = false
 
@@ -75,6 +76,10 @@ class PrecisionAudioSinkTest {
 
         override fun handleDiscontinuity() {
             discontinuityHandled = true
+        }
+
+        override fun setOutputStreamOffsetUs(outputStreamOffsetUs: Long) {
+            streamOffsetUs = outputStreamOffsetUs
         }
 
         override fun handleBuffer(
@@ -191,6 +196,66 @@ class PrecisionAudioSinkTest {
 
     // ---- Neutral Android route (issue #185) -------------------------------
 
+
+
+    @Test
+    fun `neutral multichannel PCM16 streams 5 point 1 untouched`() {
+        val fake = FakeAudioSink()
+        val sink = createSink(fake, enableFloatOutput = false, neutralPlayback = true)
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_16BIT, channelCount = 6)).build())
+        val input = ByteBuffer.allocateDirect(24).order(ByteOrder.LITTLE_ENDIAN)
+        repeat(12) { input.putShort((it * 101 - 500).toShort()) }
+        input.flip()
+
+        assertTrue(sink.handleBuffer(input, 200L, 1))
+        assertSame(input, fake.lastHandledBuffer)
+        assertEquals(24, input.position())
+        assertEquals(6, sink.activeFormat?.channelCount)
+    }
+
+    @Test
+    fun `neutral gapless stream offset flows to delegate without reinvoking DSP`() {
+        val fake = FakeAudioSink()
+        val sink = createSink(fake, enableFloatOutput = false, neutralPlayback = true)
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_16BIT)).build())
+
+        fun frame(value: Short) = ByteBuffer.allocateDirect(4).order(ByteOrder.LITTLE_ENDIAN).apply {
+            putShort(value)
+            putShort(value)
+            flip()
+        }
+        val first = frame(1200)
+        assertTrue(sink.handleBuffer(first, 0L, 1))
+        sink.setOutputStreamOffsetUs(3_000_000L)
+        assertEquals(3_000_000L, fake.streamOffsetUs)
+        val next = frame((-1200).toShort())
+        assertTrue(sink.handleBuffer(next, 3_000_000L, 1))
+        assertSame(next, fake.lastHandledBuffer)
+    }
+
+    @Test
+    fun `neutral converted PCM cannot end before pending float output drains`() {
+        val fake = FakeAudioSink().apply {
+            bytesToConsumePerCall = 1
+            isEndedReturn = true
+            hasPendingDataReturn = false
+        }
+        val sink = createSink(fake, enableFloatOutput = true, neutralPlayback = true)
+        sink.configure(AudioSink.AudioSinkConfig.Builder(rawFormat(C.ENCODING_PCM_24BIT)).build())
+        val input = ByteBuffer.allocateDirect(6).order(ByteOrder.LITTLE_ENDIAN)
+        repeat(6) { input.put(0x12.toByte()) }
+        input.flip()
+
+        assertFalse(sink.handleBuffer(input, 50L, 1))
+        assertTrue(sink.hasPendingData())
+        assertFalse(sink.isEnded())
+        sink.playToEndOfStream()
+        assertFalse(fake.playedToEndOfStream)
+
+        fake.bytesToConsumePerCall = Int.MAX_VALUE
+        sink.playToEndOfStream()
+        assertTrue(fake.playedToEndOfStream)
+    }
 
     @Test
     fun `neutral 16-bit to native float is exact even though its representation changes`() {
