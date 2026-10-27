@@ -195,7 +195,6 @@ private suspend fun currentSmartPlaylistQueryIds(
     query: RuleBasedSmartPlaylistQuery,
 ): List<String>? {
     val availability = CanonicalLibraryAvailabilityReaders.persistent(context)
-    if (availability.availableRecordingIds().size > 5_000) return null
     return persistentSmartPlaylistPreview(context, availability)
         .preview(query).map { it.recordingId }
 }

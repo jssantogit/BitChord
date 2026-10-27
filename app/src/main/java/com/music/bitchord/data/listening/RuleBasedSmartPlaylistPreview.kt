@@ -172,36 +172,53 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
     private val remoteRatings: RemoteSmartPlaylistRatingReader = RemoteSmartPlaylistRatingReader {
         RemoteSmartPlaylistRatingSnapshot(complete = false, evidence = emptyList())
     },
+    private val batchReader: SmartPlaylistBatchEvidenceReader? = null,
+    private val v2Planner: SmartPlaylistV2RuleEngine = SmartPlaylistV2RuleEngine(),
 ) {
-    suspend fun preview(query: RuleBasedSmartPlaylistQuery): List<RuleBasedSmartPlaylistItem> {
+    suspend fun preview(query: RuleBasedSmartPlaylistQuery): List<RuleBasedSmartPlaylistItem> =
+        planner.preview(candidates(), query)
+
+    suspend fun preview(query: SmartPlaylistV2Query): List<SmartPlaylistV2Match> =
+        v2Planner.preview(candidates(), query)
+
+    /** One account-scoped snapshot, then 400-id chunks with bounded read pressure. */
+    private suspend fun candidates(): List<RuleBasedRecordingCandidate> {
         val ids = availability.availableRecordingIds().distinct().sorted()
-        if (ids.size > 5_000 || ids.any(String::isBlank)) return emptyList()
-        // Read one validated account snapshot for this evaluation, never once per track.
-        // A failed/changed account is unavailable, not a stale cached permission.
-        val snapshot = remoteRatings.read()
-        val remoteByRecording = if (snapshot.complete) {
-            snapshot.evidence.filter { it.recordingId.isNotBlank() }
+        if (ids.any(String::isBlank)) return emptyList()
+        val remoteSnapshot = remoteRatings.read()
+        val remoteByRecording = if (remoteSnapshot.complete) {
+            remoteSnapshot.evidence.filter { it.recordingId.isNotBlank() }
                 .groupBy { it.recordingId }
         } else emptyMap()
-        val rows = ids.mapNotNull { id ->
-            val metadata = catalog.recordingById(id) ?: return@mapNotNull null
-            val summary = listening.behaviorSummary(id)
-            val audibleAt = listening.recentEventsForRecording(id).asSequence()
-                .filter { it.type == ListeningEventType.PLAYBACK_COMPLETED &&
-                    (it.listenedDurationMs ?: 0L) > 0L }
-                .map { it.occurredAtEpochMs }.maxOrNull()
-            RuleBasedRecordingCandidate(
-                recordingId = metadata.id,
-                explicitRating = effectiveSmartPlaylistRating(
-                    ratings.currentRating(id)?.value,
-                    remoteByRecording[id].orEmpty(),
-                ),
-                audibleCompletions = summary.completions,
-                lastAudibleAtEpochMs = audibleAt,
-                durationMs = metadata.durationMs,
-                available = true,
-            )
+
+        // The fallback is for existing test adapters only. Production always
+        // passes a RoomSmartPlaylistBatchEvidenceReader with three indexed
+        // queries per batch; there is no per-track DAO loop in that path.
+        val rows = if (batchReader != null) {
+            ids.chunked(400).flatMap { chunk -> batchReader.read(chunk) }
+        } else {
+            ids.mapNotNull { id ->
+                val recording = catalog.recordingById(id) ?: return@mapNotNull null
+                val summary = listening.behaviorSummary(id)
+                val audibleAt = listening.recentEventsForRecording(id).asSequence()
+                    .filter { it.type == ListeningEventType.PLAYBACK_COMPLETED &&
+                        (it.listenedDurationMs ?: 0L) > 0L }
+                    .map { it.occurredAtEpochMs }.maxOrNull()
+                RuleBasedRecordingCandidate(
+                    recordingId = recording.id,
+                    explicitRating = ratings.currentRating(id)?.value,
+                    audibleCompletions = summary.completions,
+                    lastAudibleAtEpochMs = audibleAt,
+                    durationMs = recording.durationMs,
+                    available = true,
+                )
+            }
         }
-        return planner.preview(rows, query)
+        return rows.map { row ->
+            row.copy(explicitRating = effectiveSmartPlaylistRating(
+                row.explicitRating,
+                remoteByRecording[row.recordingId].orEmpty(),
+            ))
+        }
     }
 }

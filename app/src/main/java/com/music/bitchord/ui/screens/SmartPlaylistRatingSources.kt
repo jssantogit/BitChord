@@ -17,6 +17,7 @@ import com.music.bitchord.data.listening.RemoteSmartPlaylistRatingReader
 import com.music.bitchord.data.listening.RemoteSmartPlaylistRatingSnapshot
 import com.music.bitchord.data.listening.RoomListeningEventStore
 import com.music.bitchord.data.listening.RoomRecordingRatingStore
+import com.music.bitchord.data.listening.RoomSmartPlaylistBatchEvidenceReader
 
 /**
  * The ONE production rule evaluator for editor preview and saved playlist actions.
@@ -38,6 +39,9 @@ internal fun persistentSmartPlaylistPreview(
         catalog = catalog.catalogDao(),
         ratings = RoomRecordingRatingStore(listening.recordingRatingDao()),
         listening = RoomListeningEventStore(listening.listeningEventDao()),
+        batchReader = RoomSmartPlaylistBatchEvidenceReader(
+            catalog.catalogDao(), listening.listeningEventDao(), listening.recordingRatingDao(),
+        ),
         remoteRatings = RemoteSmartPlaylistRatingReader {
             mapRemoteRatingSnapshotForSmartPlaylist(remoteReader.read())
         },

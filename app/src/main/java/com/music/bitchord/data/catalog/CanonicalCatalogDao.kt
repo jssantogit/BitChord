@@ -59,6 +59,9 @@ internal interface CanonicalCatalogDao {
     )
     suspend fun reconciledRemoteRatings(providerKey: String, scopeId: String): List<RemoteRatingEvidenceEntity>
 
+    @Query("SELECT * FROM catalog_recording WHERE id IN (:recordingIds)")
+    suspend fun recordingsByIds(recordingIds: List<String>): List<RecordingEntity>
+
     @Query("SELECT * FROM catalog_recording WHERE id = :recordingId LIMIT 1")
     suspend fun recordingById(recordingId: String): RecordingEntity?
 
