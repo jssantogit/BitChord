@@ -32,6 +32,11 @@ import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.RoomListeningEventStore
 import com.music.bitchord.data.listening.RoomRecordingRatingStore
 import com.music.bitchord.data.listening.RuleBasedSmartPlaylistQuery
+import com.music.bitchord.data.listening.SmartPlaylistV2Query
+import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
+import com.music.bitchord.data.listening.SmartPlaylistRule
+import com.music.bitchord.data.listening.SmartPlaylistRuleField
+import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
 import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.diagnostics.Diagnostics
 import java.util.UUID
@@ -66,6 +71,8 @@ internal sealed interface SmartCollectionActionSource {
     data class Adaptive(val kind: AdaptiveCollectionKind) : SmartCollectionActionSource
     data class SavedDefinition(val id: String) : SmartCollectionActionSource
     data class PreviewQuery(val query: RuleBasedSmartPlaylistQuery) : SmartCollectionActionSource
+    data class SavedV2Definition(val id: String) : SmartCollectionActionSource
+    data class PreviewV2Query(val query: SmartPlaylistV2Query) : SmartCollectionActionSource
 }
 
 internal sealed interface SmartCollectionBatchResult {
@@ -103,6 +110,8 @@ internal class SmartCollectionBatchHandoff(
                 is SmartCollectionActionSource.Adaptive -> "adaptive"
                 is SmartCollectionActionSource.SavedDefinition -> "saved"
                 is SmartCollectionActionSource.PreviewQuery -> "preview"
+                is SmartCollectionActionSource.SavedV2Definition -> "saved_v2"
+                is SmartCollectionActionSource.PreviewV2Query -> "preview_v2"
             },
         )
         fun mark(stage: String, extra: Map<String, String> = emptyMap()) {
@@ -187,6 +196,16 @@ private suspend fun currentSmartCollectionIds(
     is SmartCollectionActionSource.PreviewQuery -> {
         currentSmartPlaylistQueryIds(context, source.query)
     }
+    is SmartCollectionActionSource.SavedV2Definition -> {
+        val repo = SmartPlaylistV2DefinitionRepository(
+            SmartPlaylistDefinitionDatabase.get(context).v2DefinitionDao(),
+        )
+        val definition = repo.list().firstOrNull { it.id == source.id } ?: return null
+        currentSmartPlaylistV2QueryIds(context, definition.query)
+    }
+    is SmartCollectionActionSource.PreviewV2Query -> {
+        currentSmartPlaylistV2QueryIds(context, source.query)
+    }
     }
 }
 
@@ -198,6 +217,12 @@ private suspend fun currentSmartPlaylistQueryIds(
     return persistentSmartPlaylistPreview(context, availability)
         .preview(query).map { it.recordingId }
 }
+
+private suspend fun currentSmartPlaylistV2QueryIds(
+    context: Context,
+    query: SmartPlaylistV2Query,
+): List<String> = persistentSmartPlaylistPreview(context)
+    .preview(query).map { it.recordingId }
 
 /**
  * Catalog-owned source evidence only: a uniquely rated MediaAsset can break
@@ -211,6 +236,8 @@ private suspend fun currentScopedRatedAssetHints(
 ): Map<String, CanonicalBrowseMediaAsset> {
     val query = when (source) {
         is SmartCollectionActionSource.Adaptive -> null
+        is SmartCollectionActionSource.PreviewV2Query -> null
+        is SmartCollectionActionSource.SavedV2Definition -> null
         is SmartCollectionActionSource.PreviewQuery -> source.query
         is SmartCollectionActionSource.SavedDefinition -> {
             val repo = SmartPlaylistDefinitionRepository(
