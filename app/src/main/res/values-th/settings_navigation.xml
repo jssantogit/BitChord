@@ -27,4 +27,6 @@
     <string name="settings_nav_desc_wear">การเชื่อมต่อนาฬิกา</string>
     <string name="settings_nav_desc_about">เวอร์ชันและข้อมูลโครงการ</string>
     <string name="settings_nav_desc_sources">ผู้ให้บริการเพลงและส่วนขยาย</string>
+    <string name="settings_nav_diagnostics_title">การวินิจฉัย</string>
+    <string name="settings_nav_diagnostics_subtitle">บันทึก ตรวจสอบ และแชร์รายงานการวินิจฉัย</string>
 </resources>
