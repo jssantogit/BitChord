@@ -27,4 +27,6 @@
     <string name="settings_nav_desc_wear">Saat entegrasyonu</string>
     <string name="settings_nav_desc_about">Sürüm ve proje bilgileri</string>
     <string name="settings_nav_desc_sources">Müzik sağlayıcıları ve eklentiler</string>
+    <string name="settings_nav_diagnostics_title">Tanılama</string>
+    <string name="settings_nav_diagnostics_subtitle">Tanılama raporlarını kaydedin, inceleyin ve paylaşın</string>
 </resources>
