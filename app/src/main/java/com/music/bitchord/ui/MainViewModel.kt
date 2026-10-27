@@ -620,8 +620,51 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Independent Apple artwork is a visual fallback for the best exact
         // artist-name hit, not an identity link between Apple and MusicBrainz.
         val portrait = canonicalArtistArtworkCandidate(visible, query)
-        if (candidates.isEmpty() && portrait == null) return
+        // A release already inspected by this user has verified Track ->
+        // Recording associations in Room. Rehydrate those visible songs from
+        // the same group sleeve without replaying up to 24 archive lookups.
+        val knownTracks = visible.filter {
+            it.kind == CanonicalSearchKind.RECORDING &&
+                canonicalNeedsCoverRefresh(it.artworkUri)
+        }.take(24)
+        if (candidates.isEmpty() && portrait == null && knownTracks.isEmpty()) return
         canonicalSearchCoverJob = viewModelScope.launch(Dispatchers.IO) {
+            if (knownTracks.isNotEmpty()) launch {
+                val proven = linkedMapOf<String, String>()
+                val imageByGroup = mutableMapOf<String, String?>()
+                try {
+                    val dao = CanonicalCatalogDatabase.get(getApplication<Application>())
+                        .catalogDao()
+                    for (track in knownTracks) {
+                        currentCoroutineContext().ensureActive()
+                        val groupMbid = dao.verifiedRecordingCoverGroupMbid(
+                            track.musicBrainzId,
+                        ) ?: continue
+                        val thumbnail = if (imageByGroup.containsKey(groupMbid)) {
+                            imageByGroup[groupMbid]
+                        } else {
+                            coverArtArchive.cachedVerifiedGroupCover(
+                                groupMbid, CoverArtSize.THUMBNAIL,
+                            ).also { imageByGroup[groupMbid] = it }
+                        }
+                        if (thumbnail != null) proven[track.musicBrainzId] = thumbnail
+                    }
+                } catch (cancelled: CancellationException) { throw cancelled }
+                  catch (_: Exception) { /* Live search remains usable. */ }
+                if (proven.isNotEmpty() &&
+                    _searchSource.value == SearchSource.CANONICAL &&
+                    _query.value.trim() == query
+                ) _canonicalResults.update { old ->
+                    if (old !is UiState.Success) old else UiState.Success(
+                        old.data.map { row ->
+                            val artwork = proven[row.musicBrainzId]
+                            if (row.kind == CanonicalSearchKind.RECORDING &&
+                                artwork != null && canonicalNeedsCoverRefresh(row.artworkUri)
+                            ) row.copy(artworkUri = artwork) else row
+                        },
+                    )
+                }
+            }
             // Artist portrait is independent decoration: don't block the
             // entire album/recording cover queue on the Apple art endpoint.
             if (portrait != null) launch {
