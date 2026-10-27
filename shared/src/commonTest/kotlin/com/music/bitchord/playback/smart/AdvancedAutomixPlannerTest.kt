@@ -49,6 +49,48 @@ class AdvancedAutomixPlannerTest {
         advanced = advanced,
     )
 
+
+    @Test
+    fun neutralPlaybackKeepsSmartTimingWithoutChangingPlaybackSpeed() {
+        val outgoing = track("neutral-out", 120.0, "C major", vocal = 0.1)
+        val incoming = track("neutral-in", 130.0, "C major", vocal = 0.1)
+
+        val classic = planTransition(
+            analysis = outgoing,
+            nextAnalysis = incoming,
+            currentTrack = TransitionTrackInfo(outgoing.trackId, 200_000),
+            nextTrack = TransitionTrackInfo(incoming.trackId, 200_000),
+            currentTime = 10.0,
+            duration = 200.0,
+            mode = CrossfadeMode.SMART,
+            advanced = false,
+        )
+        // Existing shared/desktop consumers keep their historical time-stretch
+        // plans. Only Android opts into neutral planning.
+        assertTrue(classic.incomingPlaybackRate < 1.0)
+
+        val neutral = planTransition(
+            analysis = outgoing,
+            nextAnalysis = incoming,
+            currentTrack = TransitionTrackInfo(outgoing.trackId, 200_000),
+            nextTrack = TransitionTrackInfo(incoming.trackId, 200_000),
+            currentTime = 10.0,
+            duration = 200.0,
+            mode = CrossfadeMode.SMART,
+            advanced = false,
+            neutralPlayback = true,
+        )
+        assertTrue(!neutral.blocked)
+        assertTrue(neutral.fadeSeconds > 0)
+        assertTrue(neutral.incomingCueTime >= 0.0)
+        assertEquals(1.0, neutral.incomingPlaybackRate, 0.0)
+        assertEquals(1.0, neutral.outgoingPlaybackRate, 0.0)
+        assertEquals(TransitionStyle.EQUAL_POWER, neutral.transitionStyle)
+        assertEquals(0.0, neutral.echoSeconds, 0.0)
+        assertTrue(!neutral.bassSwap)
+        assertEquals(0.0, neutral.filterSweep, 0.0)
+    }
+
     @Test
     fun offLeavesEveryPlanAsItWas() {
         val current = track("a", 120.0, "C major", vocal = 0.9)
