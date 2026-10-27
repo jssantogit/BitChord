@@ -45,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.R
 
@@ -128,6 +129,7 @@ internal fun SettingsHome(
                         title = stringResource(section.titleRes),
                         subtitle = stringResource(section.subtitleRes),
                         onClick = { onSelect(section) },
+                        testTag = "settings-category-${section.name}",
                     )
                 }
                 if (group.titleRes == R.string.settings_nav_group_account && onListenTogether != null) {
@@ -137,6 +139,7 @@ internal fun SettingsHome(
                         title = stringResource(R.string.listen_together),
                         subtitle = stringResource(R.string.listen_together_subtitle),
                         onClick = onListenTogether,
+                        testTag = "settings-category-LISTEN_TOGETHER",
                     )
                 }
             }
@@ -154,11 +157,13 @@ private fun SettingsCategoryRow(
     title: String,
     subtitle: String,
     onClick: () -> Unit,
+    testTag: String,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
+            .testTag(testTag)
             .heightIn(min = 64.dp)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
