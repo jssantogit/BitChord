@@ -28,6 +28,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
+import com.music.bitchord.data.listening.SavedSmartPlaylistDefinition
+import com.music.bitchord.data.listening.SmartPlaylistDefinitionRepository
+import com.music.bitchord.data.listening.toV2Copy
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
@@ -256,6 +259,11 @@ internal fun SmartPlaylistV2BuilderScreen(
             SmartPlaylistDefinitionDatabase.get(context).v2DefinitionDao(),
         )
     }
+    val classicRepo = remember(context) {
+        SmartPlaylistDefinitionRepository(
+            SmartPlaylistDefinitionDatabase.get(context).definitionDao(),
+        )
+    }
     val catalog = remember(context) { CanonicalCatalogDatabase.get(context).catalogDao() }
     val evaluator = remember(context) { persistentSmartPlaylistPreview(context) }
     val scope = rememberCoroutineScope()
@@ -272,6 +280,8 @@ internal fun SmartPlaylistV2BuilderScreen(
     var preview by remember { mutableStateOf<List<V2DisplayRow>?>(null) }
     var previewQuery by remember { mutableStateOf<SmartPlaylistV2Query?>(null) }
     var savedFailure by remember { mutableStateOf(false) }
+    var legacyFailure by remember { mutableStateOf(false) }
+    var editorEpoch by remember { mutableStateOf(0) }
     val saved by produceState(initialValue = emptyList<SavedSmartPlaylistV2Definition>(), key1 = repo) {
         try {
             repo.observe().collect { value = it; savedFailure = false }
@@ -282,7 +292,18 @@ internal fun SmartPlaylistV2BuilderScreen(
         }
     }
 
+    val legacySaved by produceState(initialValue = emptyList<SavedSmartPlaylistDefinition>(), key1 = classicRepo) {
+        try {
+            classicRepo.observe().collect { value = it; legacyFailure = false }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            legacyFailure = true
+        }
+    }
+
     fun reset() {
+        editorEpoch++
         editingId = null
         name = ""
         rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(newRule()))
@@ -317,7 +338,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                         label = { Text("Nome da playlist") },
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
                     )
-                    androidx.compose.runtime.key(editingId) {
+                    androidx.compose.runtime.key(editingId, editorEpoch) {
                         V2RuleNode(rule, 0, onChange = { rule = it; preview = null; previewQuery = null })
                     }
                     V2Option("Ordenar por", sort, SmartPlaylistV2Sort.entries, { it.name.replace('_', ' ') }) {
@@ -428,6 +449,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(item.name, modifier = Modifier.weight(1f))
                         TextButton(onClick = {
+                            editorEpoch++
                             editingId = item.id
                             name = item.name
                             rule = item.query.rules
@@ -465,6 +487,33 @@ internal fun SmartPlaylistV2BuilderScreen(
                         }
                     }
                 }
+            item(key = "v2-classic-heading") {
+                Text("Playlists clássicas", style = MaterialTheme.typography.titleMedium)
+                Text("Você pode converter uma cópia sem alterar a playlist original.",
+                    style = MaterialTheme.typography.bodySmall)
+                if (legacyFailure) Text("Não foi possível carregar as playlists clássicas")
+            }
+            items(legacySaved, key = { "v2-classic-" + it.id }) { original ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(original.name, modifier = Modifier.weight(1f).padding(top = 12.dp))
+                    TextButton(
+                        onClick = {
+                            val copy = original.toV2Copy(UUID.randomUUID().toString())
+                            editorEpoch++
+                            editingId = copy.id
+                            name = copy.name
+                            rule = copy.query.rules
+                            sort = copy.query.sort
+                            limit = copy.query.limit.toString()
+                            seed = copy.query.randomSeed.toString()
+                            preview = null
+                            previewQuery = null
+                            error = null
+                        },
+                        enabled = !loading,
+                    ) { Text("Converter cópia") }
+                }
+            }
             }
         }
     }

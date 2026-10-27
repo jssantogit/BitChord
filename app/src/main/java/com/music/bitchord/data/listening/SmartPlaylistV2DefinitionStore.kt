@@ -115,3 +115,21 @@ internal fun RuleBasedSmartPlaylistQuery.toV2(): SmartPlaylistV2Query {
         limit = limit,
     )
 }
+
+
+/**
+ * Explicit copy into V2, never an in-place rewrite of a persisted V1 definition.
+ * A new ID is mandatory; the original can still be played or edited in V1.
+ */
+internal fun SavedSmartPlaylistDefinition.toV2Copy(newId: String): SavedSmartPlaylistV2Definition {
+    require(newId.isNotBlank() && newId.length <= 100 && newId != id) {
+        "A V2 copy needs a new canonical local definition ID"
+    }
+    val suffix = " (V2)"
+    val copiedName = name.trim().take(80 - suffix.length) + suffix
+    return SavedSmartPlaylistV2Definition(
+        id = newId,
+        name = copiedName,
+        query = query.toV2(),
+    )
+}
