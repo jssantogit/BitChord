@@ -1,0 +1,70 @@
+name: Issue #185 · Galaxy A54 smoke APK
+
+# Single authorized physical test; only a push to this isolated branch fires.
+# All Android source files are byte-for-byte the verified PR #188 HEAD 96acabb.
+on:
+  push:
+    branches:
+      - 'smoke/185-a54-96acabb'
+
+concurrency:
+  group: android-physical-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-smoke-apk:
+    name: Android · physical smoke APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Validate physical smoke request
+        env:
+          SMOKE_PLAN: 'Issue #185 Galaxy A54 | neutral PCM, Crossfade, Automix, gapless'
+        run: test -n "$SMOKE_PLAN"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Write local.properties
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+
+      - name: Grant Gradle wrapper execute permission
+        run: chmod +x gradlew
+
+      - name: Run Android unit tests
+        run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+
+      - name: Build dev smoke APK
+        run: ./gradlew -Pbitchord.bundleWear=false :app:assembleDevDebug
+
+      - name: Upload dev smoke APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitchord-physical-smoke-dev-debug-${{ github.sha }}
+          path: app/build/outputs/apk/dev/debug/*.apk
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Upload Android test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-smoke-test-reports-${{ github.sha }}
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3

@@ -2,12 +2,7 @@ name: Android Physical Smoke APK
 
 # An APK is prepared only when someone explicitly schedules a physical smoke.
 # The main Android CI remains test-only and keeps its required status context.
-# Authorized one-shot Galaxy A54 smoke of issue #185, code pinned to
-# 96acabb849565951ea37f67c14f115329e3ddb8d. Branch is isolated from PR.
 on:
-  push:
-    branches:
-      - 'smoke/185-a54-96acabb'
   workflow_dispatch:
     inputs:
       smoke_plan:
@@ -31,7 +26,7 @@ jobs:
     steps:
       - name: Validate physical smoke request
         env:
-          SMOKE_PLAN: ${{ github.event_name == 'push' && 'Issue #185 Galaxy A54 | neutral PCM, Crossfade, Automix, gapless | base 96acabb' || inputs.smoke_plan }}
+          SMOKE_PLAN: ${{ inputs.smoke_plan }}
         run: test -n "$SMOKE_PLAN"
 
       - name: Checkout
