@@ -5,19 +5,21 @@ Escopo: somente Android. Referência de origem: `main` no commit `c02fb87ab69b96
 | Grupo da tela antiga | Destino na nova raiz | Regra de preservação |
 | --- | --- | --- |
 | Conta / Ouvir junto (grupo sem título) | Conta e integrações; atalho Ouvir junto | Mantidos callbacks de autenticação, scrobbling e sessão |
-| Qualidade de áudio | Fontes; Qualidade de áudio | Entrada Fontes separada dos limites Wi-Fi/dados móveis e Dolby |
+| Qualidade de áudio | Fontes; Qualidade de áudio | Entrada Fontes separada dos limites Wi-Fi/dados móveis e Dolby; preferência por versão somente música realocada de Reprodução |
 | Downloads | Downloads | Soulseek, qualidade, Wi-Fi, exportação e pasta |
-| Reprodução | Reprodução | Modos de áudio/PCM/DAC, normalização, crossfade, Automix, silêncio, espacial e EQ |
-| Aparência | Aparência; Letras | Letras sincronizadas, fontes e tradução passam à categoria própria; demais controles visuais preservados |
+| Reprodução | Reprodução | Modos de áudio/PCM/DAC, normalização, crossfade, Automix, silêncio, espacial e EQ; alinhamento de áudio inteligente realocado de Avançado |
+| Aparência | Aparência; Letras | Letras sincronizadas, fontes e tradução passam à categoria própria; o seletor de ícone do aplicativo migra de Avançado para Aparência |
 | Desempenho | Desempenho | Preferências e confirmação de alto desempenho |
 | Música local | Música local | Pastas e filtro |
 | Armazenamento | Armazenamento | Cache, limpeza e opções |
 | Wear (condicional, sem título) | Wear (sob Sistema) | Continua oculto quando indisponível |
 | Seus dados | Seus dados | Replay, backup e restauração |
-| Diversos | Controles e comportamento | Gestos, indicadores, histórico de fila e encerramento |
-| Idioma | Idioma | Seletor de idioma existente |
-| Avançado | Avançado | Diagnósticos, alinhamento, estatísticas e ícone |
+| Diversos | Controles e comportamento (Música) | Gestos, indicadores, histórico de fila e encerramento; destino no grupo Música, não Sistema |
+| Idioma | Idioma (Experiência) | Seletor de idioma existente; destino no grupo Experiência |
+| Avançado | Avançado | Diagnósticos e estatísticas técnicas preservados; alinhamento de áudio movido para Reprodução e ícone do app para Aparência |
 | Rodapé de versão/links | Sobre | Conteúdo preservado sem repetir no hub |
+
+O hub agrupa **Dados e Downloads** em lugar do título genérico "Dados". A navegação exibe ícones com `MaterialTheme.colorScheme.onSurface` para manter contraste no modo escuro. Páginas de detalhe não repetem o nome da categoria em um cabeçalho de grupo idêntico ao título grande; a busca global conserva esses cabeçalhos para identificar grupos de resultados. A UI continua reutilizando os mesmos controles e callbacks.
 
 Os destinos são `SettingsSection`, agrupados em `SettingsNavigation.groups` e exibidos em `SettingsHome`. O host Android mantém `settingsSection` via `rememberSaveable`; o botão superior e o Back do sistema fecham primeiro o destino, depois a raiz. A rolagem da raiz é independente da de detalhe.
 
