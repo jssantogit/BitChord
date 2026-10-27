@@ -27,4 +27,6 @@
     <string name="settings_nav_desc_wear">スマートウォッチ連携</string>
     <string name="settings_nav_desc_about">バージョンとプロジェクト情報</string>
     <string name="settings_nav_desc_sources">音楽プロバイダーと拡張機能</string>
+    <string name="settings_nav_diagnostics_title">診断</string>
+    <string name="settings_nav_diagnostics_subtitle">診断レポートを収集、確認、共有</string>
 </resources>
