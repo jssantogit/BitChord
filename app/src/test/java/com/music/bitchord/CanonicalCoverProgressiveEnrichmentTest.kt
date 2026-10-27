@@ -156,4 +156,36 @@ class CanonicalCoverProgressiveEnrichmentTest {
         assertEquals(mapOf(1 to 10, 2 to 20), observed)
     }
 
+
+    @Test fun cancellingArtistNavigationCancelsSlowEditionExpansion() = runBlocking {
+        val expansionStarted = CompletableDeferred<Unit>()
+        val fetchStarted = CompletableDeferred<Unit>()
+        val editionCancelled = CompletableDeferred<Unit>()
+        val coverGate = CompletableDeferred<Unit>()
+        val job = launch {
+            com.music.bitchord.ui.loadCanonicalCoversWhileExpandingEditions(
+                keys = listOf("cover"),
+                maxConcurrent = 1,
+                expandEditions = {
+                    expansionStarted.complete(Unit)
+                    try {
+                        kotlinx.coroutines.awaitCancellation()
+                    } finally {
+                        editionCancelled.complete(Unit)
+                    }
+                },
+                fetch = {
+                    fetchStarted.complete(Unit)
+                    coverGate.await()
+                    "art"
+                },
+                publish = { _ -> },
+            )
+        }
+        withTimeout(5000L) { expansionStarted.await(); fetchStarted.await() }
+        job.cancel()
+        withTimeout(5000L) { editionCancelled.await(); job.join() }
+        assertTrue("Navigation cancels edition queries and queued cover workers", job.isCancelled)
+    }
+
 }
