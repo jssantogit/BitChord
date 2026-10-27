@@ -244,26 +244,11 @@ object AppSettings {
     val preferUsbDac = MutableStateFlow(false)
 
     /**
-     * Level every track to the same loudness, using YouTube's own
-     * normalization figure for it — see
-     * [com.music.bitchord.playback.PlaybackService.setupLoudnessEnhancer].
-     *
-     * On by default, which is the one genuinely contentious thing about it.
-     * The case for it: a queue drawn from several sources is a queue of
-     * several mastering eras, and the gap between a 1980s CD transfer and a
-     * modern master is routinely fifteen decibels — loud enough that the
-     * listener's own volume control is the wrong tool, because the setting
-     * that suits one track hurts at the next. Every streaming service
-     * normalizes by default for the same reason.
-     *
-     * The case against it is that a constant gain is still a multiplication,
-     * so this is the first thing in BitChord that is *on* out of the box and
-     * alters samples. Rather than hide that, the Audio Pipeline readout names
-     * it: its Bit-exact row reports the first stage in the chain that is
-     * altering samples, and switching this off is the first thing a listener
-     * chasing an untouched signal would do.
+     * Optional source-dependent loudness adjustment. Neutral playback leaves
+     * this off by default; persisted user choices are still respected while
+     * the audio-settings UI is being simplified under issue #185.
      */
-    val loudnessNormalization = MutableStateFlow(true)
+    val loudnessNormalization = MutableStateFlow(false)
 
     /** Skip loudness normalization while the active output is the phone's own speaker. */
     val loudnessOffOnSpeaker = MutableStateFlow(true)
@@ -290,7 +275,7 @@ object AppSettings {
      * that cannot honour it (a restored backup, a swapped device) without
      * quietly rewriting itself.
      */
-    val dolbyAtmos = MutableStateFlow(true)
+    val dolbyAtmos = MutableStateFlow(false)
 
     /**
      * Widens stereo output via [com.music.bitchord.playback.SpatialAudioProcessor],
@@ -831,9 +816,9 @@ object AppSettings {
             )
         }.getOrDefault(OutputPcmMode.PCM_16)
         preferUsbDac.value = prefs.getBoolean(KEY_PREFER_USB_DAC, false)
-        loudnessNormalization.value = prefs.getBoolean(KEY_LOUDNESS_NORMALIZATION, true)
+        loudnessNormalization.value = prefs.getBoolean(KEY_LOUDNESS_NORMALIZATION, false)
         loudnessOffOnSpeaker.value = prefs.getBoolean(KEY_LOUDNESS_OFF_ON_SPEAKER, true)
-        dolbyAtmos.value = prefs.getBoolean(KEY_DOLBY_ATMOS, true)
+        dolbyAtmos.value = prefs.getBoolean(KEY_DOLBY_ATMOS, false)
         spatialAudio.value = prefs.getBoolean(KEY_SPATIAL_AUDIO, false)
         equalizerEnabled.value = prefs.getBoolean(KEY_EQ_ENABLED, false)
         equalizerMode.value = runCatching {

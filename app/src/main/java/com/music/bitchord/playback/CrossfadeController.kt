@@ -171,17 +171,6 @@ class CrossfadeController(
      */
     private val onArmIncoming: (MediaItem, String?) -> Unit = { _, _ -> },
     /**
-     * A smooth headroom trim for both players while two tracks overlap:
-     * `1 / sqrt(incomingGain + outgoingGain)`, 1 otherwise.
-     *
-     * Equal-power gains sum to more than 1 — up to 1.41 at the midpoint — so
-     * two loud masters peaking together pass full scale in the platform mixer
-     * and are hard-clipped into a crackle. The trim holds that to 1.19 at a
-     * cost of at most 1.5 dB mid-blend. A gain rather than a limiter on
-     * purpose — see [LoudnessProcessor].
-     */
-    private val onBlendHeadroom: (Float) -> Unit = {},
-    /**
      * True while the service is mid-swap between two versions/cuts of the
      * current track. That swap fades across the same active/standby pair
      * this controller does, so the two must never run at once — arming a
@@ -712,7 +701,6 @@ class CrossfadeController(
         AppSettings.smartMixBlend.value = null
         filters.open()
         filters.parkEchoes()
-        onBlendHeadroom(1f)
     }
 
     // ---- Entry points -------------------------------------------------------
@@ -950,8 +938,9 @@ class CrossfadeController(
         val currentAnalysis = analysisFor(currentItem)
         val nextAnalysis = analysisFor(nextItem)
         val analysisState = AppSettings.smartAnalysis.value
-        // The DJ planner is Automix now; there is no separate mode switch.
-        val advanced = true
+        // Keep analysis-based cueing and overlap, not tempo stretching,
+        // phase-lock nudges or DJ-style sound transformations.
+        val advanced = false
 
         val plan = planTransition(
             analysis = currentAnalysis,
@@ -1055,21 +1044,10 @@ class CrossfadeController(
             endMs = (plan.transitionEnd * 1000).roundToLong(),
             smart = true,
             cueTimeMs = (plan.incomingCueTime * 1000).roundToLong(),
-            playbackRate = plan.incomingPlaybackRate,
-            outgoingRate = plan.outgoingPlaybackRate,
-            beatMs = beatMs,
-            renderStyle = Render(
-                style = plan.transitionStyle,
-                bassSwap = plan.bassSwap,
-                bassSwapFraction = plan.bassSwapFraction,
-                filterSweep = plan.filterSweep,
-                filterVariant = plan.filterVariant,
-                vocalOverlap = plan.vocalOverlap,
-                advanced = advanced,
-                beats = if (plan.beatSeconds > 0) plan.fadeSeconds / plan.beatSeconds else 0.0,
-                lockPhase = plan.phaseLock,
-                echoSeconds = plan.echoSeconds,
-            ),
+            playbackRate = 1.0,
+            outgoingRate = 1.0,
+            beatMs = 0L,
+            renderStyle = Render(),
         )
     }
 
@@ -1615,13 +1593,13 @@ class CrossfadeController(
         val incomingAt = ((elapsed + tracks.incomingLeadMs()) / wallSpan).coerceIn(0f, 1f)
         val outgoingAt = (progress + tracks.outgoingLeadMs() / span.toFloat()).coerceIn(0f, 1f)
 
-        val rise = mixRise(progress)
-        val fall = mixFall(progress)
-        player.volume = rise
-        out.volume = if (ranOn(out)) 0f else fall
-        onBlendHeadroom(
-            headroomFor(mixRise(outgoingAt), outgoingLevel(elapsed / wallSpan + tracks.outgoingLeadMs() / span.toFloat(), wallSpan)),
-        )
+        // Headroom is applied to the two ExoPlayer faders, never to every
+        // decoded PCM sample. Their combined gain cannot exceed unity even
+        // when two loud masters overlap constructively.
+        val fall = if (ranOn(out)) 0f else mixFall(progress)
+        val gains = NeutralTransitionGain.fromFaders(mixRise(progress), fall)
+        player.volume = gains.incoming
+        out.volume = gains.outgoing
         if (render.phaseLock) holdPhase(out, player, progress)
 
         // The midpoint, or sooner if the outgoing track is about to run out
@@ -1792,8 +1770,7 @@ class CrossfadeController(
         val progress = (SystemClock.elapsedRealtime() - bailStartedAt).toFloat() / BAIL_MS
         if (progress < 1f) {
             val fall = if (leaving === outgoing && ranOn(leaving)) 0f else bailFromGain * fallGain(progress)
-            leaving.volume = fall
-            onBlendHeadroom(headroomFor(1f, fall))
+            leaving.volume = NeutralTransitionGain.fromFaders(1f, fall).outgoing
             return
         }
         finish()
@@ -1862,7 +1839,6 @@ class CrossfadeController(
         if (handedOff && render.echo) outgoing?.volume = 0f
         filters.open()
         filters.parkEchoes()
-        onBlendHeadroom(1f)
         render = Render()
         nudgeUntil = 0L
 
@@ -2378,7 +2354,7 @@ class CrossfadeController(
      *    vocals collide;
      *  - a filter ride brings it up a little early, behind its high-pass.
      *
-     * [headroomFor] keeps two faders at full from summing past full scale.
+     * [NeutralTransitionGain] keeps two faders from summing past full scale.
      */
     private fun mixRise(progress: Float): Float {
         if (!render.advanced) return riseGain(progress)
@@ -2696,12 +2672,6 @@ class CrossfadeController(
                 if (player === active() && phase == Phase.IDLE) player.volume = level
             }
         }
-    }
-
-    /** See [onBlendHeadroom]. */
-    private fun headroomFor(incomingGain: Float, outgoingGain: Float): Float {
-        val sum = incomingGain + outgoingGain
-        return if (sum <= 1f) 1f else 1f / kotlin.math.sqrt(sum)
     }
 
     // There is deliberately no second, equal-gain pair here any more. It existed

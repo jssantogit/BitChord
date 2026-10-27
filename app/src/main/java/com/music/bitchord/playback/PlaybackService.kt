@@ -1916,39 +1916,15 @@ class PlaybackService : MediaLibraryService() {
             // mid-blend handoff it is on — so these read the role fields fresh
             // on every call rather than closing over an instance that will
             // have changed hands.
-            filters = object : TransitionFilters {
-                override fun incoming(lowPassHz: Float, highPassHz: Float) =
-                    activeFilter.setCutoffs(lowPassHz, highPassHz)
-
-                override fun outgoing(lowPassHz: Float, highPassHz: Float) =
-                    spareFilter.setCutoffs(lowPassHz, highPassHz)
-
-                override fun incomingLeadMs(): Long = activeFilter.leadUs / 1000
-
-                override fun outgoingLeadMs(): Long = spareFilter.leadUs / 1000
-
-                override fun incomingEcho(delaySeconds: Float, send: Float, dry: Float) =
-                    activeFilter.setEcho(delaySeconds, send, dry)
-
-                override fun outgoingEcho(delaySeconds: Float, send: Float, dry: Float) =
-                    spareFilter.setEcho(delaySeconds, send, dry)
-
-                override fun parkEchoes() {
-                    transitionFilterA.parkEcho()
-                    transitionFilterB.parkEcho()
-                }
-            },
+            // Automix still chooses musical cue points, but does not
+            // filter the audible PCM or synthesize DJ echoes.
+            filters = TransitionFilters.None,
             analysisRunningFor = { item -> trackAnalyzer.isAnalysing(item.mediaId) },
             // The standby is still the spare when this runs — it only becomes
             // the session player at the handoff — so the incoming track is
             // levelled on its own sink before it renders a frame, and the
             // outgoing track keeps its own gain for the rest of the blend.
             onArmIncoming = { item, nextId -> spareLoudness().track(item.mediaId, nextId) },
-            // Both sinks, not a role: the trim is about what the pair sums to.
-            onBlendHeadroom = { trim ->
-                loudnessA.setBlendTrim(trim)
-                loudnessB.setBlendTrim(trim)
-            },
             onSettled = {
                 if (boundedEditState.hasPendingEdits) {
                     scope.launch {
