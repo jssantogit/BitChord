@@ -70,4 +70,34 @@ class A0ManualCandidatePolicyTest {
         assertEquals(listOf(0),A0ManualCandidatePolicy.primaryIndices(all,listOf(0)))
     }
 
+
+    @Test fun compositeReleaseFolderIsVisibleOnlyAsInconclusiveManualChoice() {
+        val handoff=A0ObservedCandidateHandoff(
+            Socket(),"local",177,true,
+            searchPhrase="ILLIT - More",requestedAlbum="BREAK EVEN",
+            expectedDurationSeconds=183,collectReleaseShadow=true,
+            qualityProfile=A0CanonicalAcquisitionIntent.QualityProfileSnapshot(
+                preset=A0CanonicalAcquisitionIntent.QualityPreset.LOSSLESS,strict=true)
+        )
+        val file=A0SoulseekSearchFile(
+            "Music\\ILLIT - BREAK EVEN [FLAC]\\ILLIT - More.flac",
+            24_000_000L,"flac",mapOf(1 to 183,4 to 44_100,5 to 16))
+        val wrong=A0SoulseekSearchFile(
+            "Music\\Greatest Hits\\ILLIT - More.flac",
+            24_000_000L,"flac",mapOf(1 to 183,4 to 44_100,5 to 16))
+        handoff.offerParsed(result("composite",file),"composite")
+        handoff.offerParsed(result("wrong",wrong),"wrong")
+        val choices=handoff.choices()
+        val indices=A0ManualCandidatePolicy.primaryIndices(choices,choices.indices.toList())
+        assertEquals(2,choices.size)
+        assertEquals(1,indices.size)
+        val visible=choices[indices.single()]
+        assertEquals("composite",visible.peerUsername)
+        assertEquals(A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL,
+            visible.albumEvidence.status)
+        assertFalse(visible.identityEvidence.authorizesTransfer)
+        assertEquals(A0CanonicalAcquisitionIntent.QualityPreset.LOSSLESS,
+            A0CanonicalAcquisitionIntent.QualityPreset.LOSSLESS)
+        assertEquals(2,handoff.releaseShadowChoices().size)
+    }
 }
