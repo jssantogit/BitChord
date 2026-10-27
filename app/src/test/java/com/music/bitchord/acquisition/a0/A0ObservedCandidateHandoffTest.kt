@@ -155,4 +155,23 @@ class A0ObservedCandidateHandoffTest {
         handoff.cancel()
         assertFalse(handoff.offerParsed(valid,"claimed"))
     }
+
+    @Test fun cheapProgressCountersTrackOffersWithoutClaimClustering() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",81,true,
+            searchPhrase="ILLIT - More")
+        assertEquals(A0ObservedCandidateHandoff.Progress(0,0,0),handoff.progress())
+        val valid=A0SoulseekSearchResponse("source",81,listOf(
+            A0SoulseekSearchFile("Music\\ILLIT - More.mp3",
+                6_400_000L,"mp3",mapOf(0 to 320,1 to 180)),
+            A0SoulseekSearchFile("Music\\other.mp3",
+                6_400_000L,"mp3",emptyMap())),
+            emptyList(),true,80_000,0)
+        assertTrue(handoff.offerParsed(valid,"source"))
+        assertEquals(A0ObservedCandidateHandoff.Progress(1,2,2),handoff.progress())
+        assertTrue(handoff.offerParsed(valid,"source"))
+        assertEquals(A0ObservedCandidateHandoff.Progress(2,4,2),handoff.progress())
+        assertEquals(2,handoff.screening().accepted)
+        handoff.cancel()
+        assertEquals(A0ObservedCandidateHandoff.Progress(2,4,0),handoff.progress())
+    }
 }
