@@ -1,6 +1,7 @@
 package com.music.bitchord.data.listening
 
 import android.app.Application
+import android.content.Context
 import androidx.room.Room
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -88,4 +89,59 @@ class SmartPlaylistV2DefinitionStoreTest {
             db.close()
         }
     }
+    @Test fun onDiskRoomMigrationKeepsExistingV1PlaylistAndCreatesV2Table() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val name = "smart-playlist-v2-migration-test.db"
+        context.deleteDatabase(name)
+        val oldSqlite = context.openOrCreateDatabase(name, Context.MODE_PRIVATE, null)
+        try {
+            oldSqlite.execSQL("""
+                CREATE TABLE IF NOT EXISTS `smart_playlist_definition` (
+                    `id` TEXT NOT NULL PRIMARY KEY,
+                    `name` TEXT NOT NULL,
+                    `schemaVersion` INTEGER NOT NULL,
+                    `minimumExplicitRating` REAL,
+                    `minimumCompletions` INTEGER,
+                    `minimumDaysSinceAudible` INTEGER,
+                    `maximumDaysSinceAudible` INTEGER,
+                    `minimumDurationMs` INTEGER,
+                    `limit` INTEGER NOT NULL
+                )
+            """.trimIndent())
+            oldSqlite.execSQL(
+                "INSERT INTO smart_playlist_definition " +
+                    "(id, name, schemaVersion, minimumExplicitRating, limit) " +
+                    "VALUES ('legacy', 'Saved before migration', 1, 5.0, 50)",
+            )
+            oldSqlite.version = 1
+        } finally {
+            oldSqlite.close()
+        }
+
+        val reopened = Room.databaseBuilder(
+            context, SmartPlaylistDefinitionDatabase::class.java, name,
+        ).addMigrations(SmartPlaylistDefinitionDatabase.MIGRATION_1_2)
+            .allowMainThreadQueries().build()
+        try {
+            val old = SmartPlaylistDefinitionRepository(reopened.definitionDao()).list()
+            assertEquals("Saved before migration", old.single().name)
+            assertEquals(5.0, old.single().query.minimumExplicitRating)
+            val v2 = SmartPlaylistV2DefinitionRepository(reopened.v2DefinitionDao())
+            v2.save(SavedSmartPlaylistV2Definition(
+                id = "new", name = "Nested",
+                query = SmartPlaylistV2Query(rules = SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.EXPLICIT_RATING,
+                    SmartPlaylistRuleOperator.IS_PRESENT,
+                )),
+            ))
+            assertEquals("new", v2.list().single().id)
+            assertEquals("legacy", SmartPlaylistDefinitionRepository(
+                reopened.definitionDao(),
+            ).list().single().id)
+        } finally {
+            reopened.close()
+            context.deleteDatabase(name)
+        }
+    }
+
 }
