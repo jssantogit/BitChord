@@ -91,6 +91,8 @@ internal data class MusicBrainzRecordingHit(
     // live-only evidence fields. Missing != positively verified Official.
     val hasOfficialAudioRelease: Boolean? = null,
     val isVideo: Boolean? = null,
+    /** Direct MusicBrainz Recording -> Official Release -> audio ReleaseGroup. */
+    val coverGroupMbid: String? = null,
 )
 
 /**
@@ -259,14 +261,16 @@ internal class MusicBrainzCatalogSearch(
                         release.releaseGroup?.primaryType?.trim()?.lowercase(Locale.ROOT) in
                             setOf("album", "ep", "single")
                     }
-                    val releaseForArt = if (recording.video == true) null else
+                    val selectedAudioRelease = if (recording.video == true) null else
                         audioReleases.sortedWith(compareBy<SearchRecordingRelease> {
                             it.date.orEmpty().ifBlank { "9999-12-31" }
-                        }.thenBy { it.id.orEmpty() }).firstOrNull()?.id
+                        }.thenBy { it.id.orEmpty() }).firstOrNull()
                     MusicBrainzRecordingHit(
                         mbid, title, recording.artistCredit.displayArtistCredit(),
                         recording.length?.takeIf { it >= 0 },
-                        coverReleaseMbid = releaseForArt,
+                        coverReleaseMbid = selectedAudioRelease?.id,
+                        coverGroupMbid = selectedAudioRelease?.releaseGroup?.id
+                            .validSearchMbidOrNull(),
                         // A clean recording title on an Official video/Other
                         // edition is still not positive evidence of official
                         // audio. Match the *same* supported Album/EP/Single
