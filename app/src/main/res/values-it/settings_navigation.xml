@@ -27,4 +27,6 @@
     <string name="settings_nav_desc_wear">Integrazione con smartwatch</string>
     <string name="settings_nav_desc_about">Versione e informazioni sul progetto</string>
     <string name="settings_nav_desc_sources">Fornitori ed estensioni musicali</string>
+    <string name="settings_nav_diagnostics_title">Diagnostica</string>
+    <string name="settings_nav_diagnostics_subtitle">Acquisisci, esamina e condividi rapporti diagnostici</string>
 </resources>
