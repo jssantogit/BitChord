@@ -642,10 +642,12 @@ class A0ManualLoginActivity : Activity() {
                                                     peerOfferBackpressure.incrementAndGet()
                                                 }
                                             }
-                                            if (!framedServer.finishPendingFrame()) {
-                                                // Finish only the already-started TCP frame.
-                                                // We can hand the socket to P/F only at an
-                                                // aligned boundary; never erase partial bytes.
+                                            if (!framedServer.finishPendingFrame() &&
+                                                A0ServerReaderShutdownPolicy.shouldReportPendingFrameFailure(
+                                                    stopping)) {
+                                                // A live, incomplete server frame is still
+                                                // fail-closed before P/F reuses this socket.
+                                                // Explicit cancellation already closed it.
                                                 failedServerReader.set(true)
                                                 trace.note(
                                                     A0SmokeTrace.Stage.SERVER_READ_FAILURE,
@@ -654,18 +656,21 @@ class A0ManualLoginActivity : Activity() {
                                                 )
                                             }
                                         } catch (_: SocketTimeoutException) {
-                                            trace.note(
-                                                A0SmokeTrace.Stage.SERVER_READ_TIMEOUT,
-                                                TraceOutcome.DEGRADED,
-                                                A0SmokeTrace.Reason.READ_TIMEOUT
-                                            )
+                                            if(A0ServerReaderShutdownPolicy.shouldReportReadFailure(stopping))
+                                                trace.note(
+                                                    A0SmokeTrace.Stage.SERVER_READ_TIMEOUT,
+                                                    TraceOutcome.DEGRADED,
+                                                    A0SmokeTrace.Reason.READ_TIMEOUT
+                                                )
                                         } catch (_: IOException) {
-                                            trace.note(
-                                                A0SmokeTrace.Stage.SERVER_READ_FAILURE,
-                                                TraceOutcome.DEGRADED,
-                                                A0SmokeTrace.Reason.SERVER_IO_FAILURE
-                                            )
-                                            failedServerReader.set(true)
+                                            if(A0ServerReaderShutdownPolicy.shouldReportReadFailure(stopping)) {
+                                                trace.note(
+                                                    A0SmokeTrace.Stage.SERVER_READ_FAILURE,
+                                                    TraceOutcome.DEGRADED,
+                                                    A0SmokeTrace.Reason.SERVER_IO_FAILURE
+                                                )
+                                                failedServerReader.set(true)
+                                            }
                                         }
                                     }
                                     val peerStatus = if (transferObserved) {
@@ -798,7 +803,11 @@ class A0ManualLoginActivity : Activity() {
                                         trace.peerSearchBackpressure(
                                             dropped=peerOfferBackpressure.get()+directOfferBackpressure.get()+
                                                 offerGate.capacityDropped+offerGate.perPeerDropped,
-                                            perPeerDropped=offerGate.perPeerDropped)
+                                            perPeerDropped=offerGate.perPeerDropped,
+                                            workerQueueDropped=peerOfferBackpressure.get(),
+                                            directCollectorDropped=directOfferBackpressure.get(),
+                                            globalCapacityDropped=offerGate.capacityDropped,
+                                            duplicateTickets=offerGate.duplicateCount)
                                     } else {
                                         listener.close()
                                         directCollector.cancel()
