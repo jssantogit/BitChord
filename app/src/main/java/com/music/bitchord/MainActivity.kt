@@ -3900,20 +3900,15 @@ private fun BitChordApp(
                                     }
                                 }
                             }
-                            // Left of the account photo, on an artist page: iOS's
-                            // share glyph, sending the artist's channel link — the
-                            // one YouTube Music itself shares for an artist.
-                            if (detail != null && !isLocalDetail && detail.type == BrowseType.ARTIST &&
-                                detailActiveShelf == null && detail.browseId.startsWith("UC")
+                            // Share the artist's name without inventing a provider-specific link.
+                            if (detail != null && detail.type == BrowseType.ARTIST &&
+                                detailActiveShelf == null
                             ) {
                                 IconButton(
                                     onClick = {
                                         val sendIntent = Intent(Intent.ACTION_SEND).apply {
                                             type = "text/plain"
-                                            putExtra(
-                                                Intent.EXTRA_TEXT,
-                                                "https://music.youtube.com/channel/${detail.browseId}",
-                                            )
+                                            putExtra(Intent.EXTRA_TEXT, detail.title)
                                         }
                                         context.startActivity(Intent.createChooser(sendIntent, detail.title))
                                     },
@@ -4589,29 +4584,17 @@ private fun BitChordApp(
                             },
                     )
                 }.takeIf { remote },
-                // The same link a share off YouTube Music's own overflow
-                // gives — built from the browse id rather than fetched,
-                // since nothing about it depends on the tracks or the
-                // account. Left off an artist card (Share there is a
-                // channel link, not a release, and nobody asked for it)
-                // and off anything with no real browse id behind it.
-                onShare = target.browseId
-                    ?.takeIf { remote && (target.type == BrowseType.ALBUM || target.type == BrowseType.PLAYLIST) }
-                    ?.let { id ->
-                        {
-                            val url = if (target.type == BrowseType.PLAYLIST) {
-                                "https://music.youtube.com/playlist?list=${id.removePrefix("VL")}"
-                            } else {
-                                "https://music.youtube.com/browse/$id"
-                            }
-                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, url)
-                            }
-                            context.startActivity(Intent.createChooser(sendIntent, target.title))
-                            browseActions = null
+                // Share music metadata until canonical, provider-neutral links exist.
+                onShare = if (target.type == BrowseType.ALBUM || target.type == BrowseType.PLAYLIST) {
+                    {
+                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, musicOnlyShareText(target.title, target.subtitle))
                         }
-                    },
+                        context.startActivity(Intent.createChooser(sendIntent, target.title))
+                        browseActions = null
+                    }
+                } else null,
                 isPinned = pinnableId != null && pinnableId in pinnedPlaylists,
                 onTogglePin = pinnableId?.let { id ->
                     {
