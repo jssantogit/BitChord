@@ -305,4 +305,32 @@ class CanonicalNativeNavigationTest {
             ).map { it.musicBrainzId })
     }
 
+
+    @Test fun artistArtworkUpdatesOnlyAffectedCardsWithoutRebuildingShelves() {
+        val first = group.copy(musicBrainzId = "early", title = "Get Up",
+            releaseDate = "2023-07-21", artworkUri = null)
+        val second = group.copy(musicBrainzId = "cached", title = "Supernatural",
+            releaseDate = "2024-06-21", artworkUri = "https://archive.org/cached.jpg")
+        val sections = canonicalNativeSections(
+            CanonicalSearchKind.ARTIST, listOf(first, second), "Lançamentos",
+        )
+        val before = sections.single().items.first { it.browseId == canonicalNativeBrowseId(second) }
+        val painted = com.music.bitchord.ui.canonicalArtistShelvesWithCoverUpdates(
+            sections, mapOf("early" to (
+                "https://archive.org/verified.jpg" to "NewJeans 2nd EP 'Get Up'"
+            )),
+        )
+        val changed = painted.single().items.first { it.browseId == canonicalNativeBrowseId(first) }
+        val retained = painted.single().items.first { it.browseId == canonicalNativeBrowseId(second) }
+        assertEquals("https://archive.org/verified.jpg", changed.thumbnailUrl)
+        assertEquals("NewJeans 2nd EP 'Get Up'", changed.title)
+        assertTrue("Already-loaded cards retain object identity", retained === before)
+        assertEquals(sections.single().items.map { it.browseId },
+            painted.single().items.map { it.browseId })
+        assertTrue("No work when there is no matching group",
+            com.music.bitchord.ui.canonicalArtistShelvesWithCoverUpdates(
+                sections, mapOf("missing" to ("not-real" to "Fake"))
+            ) === sections)
+    }
+
 }
