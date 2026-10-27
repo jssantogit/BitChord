@@ -28,7 +28,7 @@ class CanonicalRecordingFeedbackControlsTest {
             )
         }
         compose.onNodeWithText("Edit rating").performClick()
-        compose.onNodeWithContentDescription("5 stars").performClick()
+        compose.onNodeWithContentDescription("Rating: 5.0").performClick()
         compose.runOnIdle { assertEquals(emptyList<Double>(), values) }
         compose.onNodeWithText("Save").performClick()
         compose.runOnIdle {
@@ -47,7 +47,7 @@ class CanonicalRecordingFeedbackControlsTest {
         }
         compose.onNodeWithText("Clear rating").assertDoesNotExist()
         compose.onNodeWithText("Edit rating").performClick()
-        compose.onNodeWithContentDescription("4.5 stars").performClick()
+        compose.onNodeWithContentDescription("Rating: 4.5").performClick()
         compose.onNodeWithText("Save").performClick()
         compose.runOnIdle {
             assertEquals(listOf(4.5), values)
