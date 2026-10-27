@@ -56,6 +56,10 @@ internal enum class CoverArtSize { THUMBNAIL, HERO }
 internal interface MusicBrainzCoverArtStore {
     suspend fun read(type: String, mbid: String): MusicBrainzCoverArtCacheEntry?
     suspend fun write(value: MusicBrainzCoverArtCacheEntry)
+
+    /** Production Room implementation reads all official group fronts in one SQL query. */
+    suspend fun readVerifiedGroupFronts(mbids: List<String>): List<MusicBrainzCoverArtCacheEntry> =
+        mbids.mapNotNull { read("verified-artist-group", it) }
 }
 
 /**
@@ -84,6 +88,16 @@ internal class RoomMusicBrainzCoverArtStore(
                 type, it.mbid, it.artworkUri, it.fetchedAtEpochMs, it.thumbnailUri,
             )
         }
+
+    override suspend fun readVerifiedGroupFronts(
+        mbids: List<String>,
+    ): List<MusicBrainzCoverArtCacheEntry> = if (mbids.isEmpty()) emptyList()
+    else dao.verifiedGroupFronts(mbids).map {
+        MusicBrainzCoverArtCacheEntry(
+            "verified-artist-group", it.mbid, it.artworkUri,
+            it.fetchedAtEpochMs, it.thumbnailUri,
+        )
+    }
 
     override suspend fun write(value: MusicBrainzCoverArtCacheEntry) {
         dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
@@ -175,6 +189,45 @@ internal class CoverArtArchive(
         if (url == null || !safeImageUrl(url)) return null
         telemetry.recordCacheHit()
         return url
+    }
+
+    /**
+     * Restore already verified album shelves without waiting for another
+     * artist-edition HTTP browse. One indexed Room query, distinct MBIDs,
+     * identical positive TTL and URL allowlist to the single cover resolver.
+     * Offline/malformed/expired cache entries are not published as artwork.
+     */
+    suspend fun cachedVerifiedGroupCovers(
+        groupMbids: List<String>,
+        size: CoverArtSize = CoverArtSize.THUMBNAIL,
+    ): Map<String, String> {
+        val ids = groupMbids.asSequence()
+            .map { it.lowercase(Locale.ROOT) }
+            .filter(::validMbid).distinct().toList()
+        if (ids.isEmpty()) return emptyMap()
+        val records = try {
+            store.readVerifiedGroupFronts(ids)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            return emptyMap()
+        }
+        val eligible = ids.toSet()
+        val now = nowEpochMs()
+        return buildMap {
+            for (record in records) {
+                val id = record.mbid.lowercase(Locale.ROOT)
+                if (id !in eligible || id in this) continue
+                if (record.entityType != "verified-artist-group") continue
+                val age = now - record.fetchedAtEpochMs
+                if (age < 0 || age >= POSITIVE_TTL_MS) continue
+                val url = if (size == CoverArtSize.THUMBNAIL)
+                    record.thumbnailUri ?: record.artworkUri else record.artworkUri
+                if (url.isNullOrBlank() || !safeImageUrl(url)) continue
+                put(id, url)
+                telemetry.recordCacheHit()
+            }
+        }
     }
 
     private fun CoverLookup.Found.urlFor(size: CoverArtSize): String =
