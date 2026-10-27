@@ -215,7 +215,7 @@ internal class CoverArtArchive(
         }
         val eligible = ids.toSet()
         val now = nowEpochMs()
-        return buildMap {
+        val verified = buildMap<String, String> {
             for (record in records) {
                 val id = record.mbid.lowercase(Locale.ROOT)
                 if (id !in eligible || id in this) continue
@@ -229,6 +229,8 @@ internal class CoverArtArchive(
                 telemetry.recordCacheHit()
             }
         }
+        telemetry.recordArtistCachedGroupBatch(verified.size)
+        return verified
     }
 
     private fun CoverLookup.Found.urlFor(size: CoverArtSize): String =
@@ -248,6 +250,7 @@ internal class CoverArtArchive(
                     // the next screen is waiting. Retry only when our own
                     // navigation scope is alive; never poison unrelated cards.
                     kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    telemetry.recordRecoveredCoalescedOwnerCancellation()
                     inFlight.remove(key, existing)
                     continue
                 }
