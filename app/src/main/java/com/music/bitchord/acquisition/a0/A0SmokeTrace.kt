@@ -318,8 +318,17 @@ internal class A0SmokeTrace private constructor(
         )
     }
 
-    /** No peer/path/query data. Measures offers dropped by the bounded P pool. */
-    fun peerSearchBackpressure(dropped:Int,perPeerDropped:Int=0) {
+    /** Only bounded counts: never log peer identity, offer tickets or paths.
+     * The total excludes duplicate tickets, which were not enqueued.
+     */
+    fun peerSearchBackpressure(
+        dropped:Int,
+        perPeerDropped:Int=0,
+        workerQueueDropped:Int=0,
+        directCollectorDropped:Int=0,
+        globalCapacityDropped:Int=0,
+        duplicateTickets:Int=0,
+    ) {
         if(complete.get())return
         continuationTrace().event(
             stage="peer_search_backpressure",
@@ -327,6 +336,10 @@ internal class A0SmokeTrace private constructor(
             attributes=mapOf(
                 "droppedOffers" to dropped.coerceIn(0,100000).toString(),
                 "perPeerDropped" to perPeerDropped.coerceIn(0,100000).toString(),
+                "workerQueueDropped" to workerQueueDropped.coerceIn(0,100000).toString(),
+                "directCollectorDropped" to directCollectorDropped.coerceIn(0,100000).toString(),
+                "globalCapacityDropped" to globalCapacityDropped.coerceIn(0,100000).toString(),
+                "duplicateTickets" to duplicateTickets.coerceIn(0,100000).toString(),
             )
         )
     }
