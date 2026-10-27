@@ -515,4 +515,50 @@ class CoverArtArchiveFallbackTest {
         assertNull(cover.cachedVerifiedGroupCover(group))
     }
 
+
+    @Test fun batchCachedOfficialGroupFrontsUseOneReadAndExcludeExpiredOrUnsafeArtwork() = runBlocking {
+        val now = 35L * 24 * 60 * 60 * 1_000
+        val safe = group
+        val expired = "11111111-1111-4111-8111-111111111111"
+        val unsafe = "22222222-2222-4222-8222-222222222222"
+        var batchReads = 0
+        var individualReads = 0
+        val entries = mapOf(
+            safe to MusicBrainzCoverArtCacheEntry(
+                "verified-artist-group", safe,
+                "https://archive.org/hero.jpg", now - 1_000L,
+                "https://archive.org/thumb-500.jpg",
+            ),
+            expired to MusicBrainzCoverArtCacheEntry(
+                "verified-artist-group", expired,
+                "https://archive.org/stale.jpg", now - 31L * 24 * 60 * 60 * 1_000,
+            ),
+            unsafe to MusicBrainzCoverArtCacheEntry(
+                "verified-artist-group", unsafe,
+                "https://untrusted.example/unsafe.jpg", now - 1_000L,
+            ),
+        )
+        val store = object : MusicBrainzCoverArtStore {
+            override suspend fun read(type: String, mbid: String): MusicBrainzCoverArtCacheEntry? {
+                individualReads++
+                return entries[mbid]
+            }
+            override suspend fun readVerifiedGroupFronts(
+                mbids: List<String>,
+            ): List<MusicBrainzCoverArtCacheEntry> {
+                batchReads++
+                assertEquals(listOf(safe, expired, unsafe), mbids)
+                return mbids.mapNotNull(entries::get)
+            }
+            override suspend fun write(value: MusicBrainzCoverArtCacheEntry) = Unit
+        }
+        val archive = CoverArtArchive(store = store, nowEpochMs = { now })
+        val visible = listOf(safe, expired, unsafe, "invalid mbid", safe)
+        assertEquals(
+            mapOf(safe to "https://archive.org/thumb-500.jpg"),
+            archive.cachedVerifiedGroupCovers(visible, CoverArtSize.THUMBNAIL),
+        )
+        assertEquals(1, batchReads)
+        assertEquals(0, individualReads)
+    }
 }
