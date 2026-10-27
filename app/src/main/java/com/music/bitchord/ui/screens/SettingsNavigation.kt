@@ -54,6 +54,7 @@ import com.music.bitchord.R
  */
 internal enum class SettingsSection(@StringRes val titleRes: Int, val icon: ImageVector, @StringRes val subtitleRes: Int) {
     ACCOUNT(R.string.account_integrations, Icons.Rounded.Person, R.string.settings_nav_desc_account),
+    SOURCES(R.string.sources, Icons.Rounded.Extension, R.string.settings_nav_desc_sources),
     AUDIO_QUALITY(R.string.audio_quality, Icons.Rounded.GraphicEq, R.string.settings_nav_desc_audio),
     PLAYBACK(R.string.playback, Icons.Rounded.PlaylistPlay, R.string.settings_nav_desc_playback),
     LOCAL_MUSIC(R.string.local_music, Icons.Rounded.LibraryMusic, R.string.settings_nav_desc_local),
@@ -82,6 +83,7 @@ internal object SettingsNavigation {
         SettingsSectionGroup(
             R.string.settings_nav_group_music,
             listOf(
+                SettingsSection.SOURCES,
                 SettingsSection.AUDIO_QUALITY,
                 SettingsSection.PLAYBACK,
                 SettingsSection.LOCAL_MUSIC,
