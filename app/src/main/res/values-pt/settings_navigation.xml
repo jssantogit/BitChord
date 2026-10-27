@@ -9,4 +9,21 @@
     <string name="settings_nav_about">Sobre</string>
     <string name="settings_nav_filtered">Resultados para: %1$s</string>
     <string name="settings_nav_show_all">Ver tudo</string>
+    <string name="settings_nav_controls">Controles e comportamento</string>
+    <string name="settings_nav_advanced">Avançado</string>
+    <string name="settings_nav_desc_account">Contas e integrações musicais</string>
+    <string name="settings_nav_desc_audio">Fontes, Wi-Fi e dados móveis</string>
+    <string name="settings_nav_desc_playback">Saída, transições e fila</string>
+    <string name="settings_nav_desc_local">Pastas e filtros de áudio local</string>
+    <string name="settings_nav_desc_appearance">Tema, capas e efeitos visuais</string>
+    <string name="settings_nav_desc_lyrics">Sincronia, fontes e tradução</string>
+    <string name="settings_nav_desc_downloads">Soulseek, qualidade e destino</string>
+    <string name="settings_nav_desc_storage">Cache de áudio e armazenamento</string>
+    <string name="settings_nav_desc_data">Replay, backups e importações</string>
+    <string name="settings_nav_desc_performance">Taxa de atualização e bateria</string>
+    <string name="settings_nav_desc_misc">Gestos e comportamento de reprodução</string>
+    <string name="settings_nav_desc_language">Idioma da interface</string>
+    <string name="settings_nav_desc_advanced">Diagnósticos e controles técnicos</string>
+    <string name="settings_nav_desc_wear">Integração com relógio</string>
+    <string name="settings_nav_desc_about">Versão e informações do projeto</string>
 </resources>
