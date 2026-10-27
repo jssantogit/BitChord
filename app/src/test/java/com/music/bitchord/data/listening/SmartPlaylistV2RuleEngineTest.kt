@@ -136,4 +136,20 @@ class SmartPlaylistV2RuleEngineTest {
                 SmartPlaylistRuleField.EXPLICIT_RATING, SmartPlaylistRuleOperator.IS_PRESENT,
             ))).isEmpty())
     }
+    @Test fun ambiguousRatingsCannotMasqueradeAsMissingOrPassNegation() {
+        val unknown = candidate("conflict", rating = null).copy(ratingEvidenceUnknown = true)
+        val definitelyMissing = candidate("missing", rating = null)
+        val isMissing = SmartPlaylistV2Query(
+            rules = check(SmartPlaylistRuleField.EXPLICIT_RATING, SmartPlaylistRuleOperator.IS_MISSING),
+        )
+        assertEquals(listOf("missing"), planner.preview(listOf(unknown, definitelyMissing), isMissing)
+            .map { it.recordingId })
+        val notOneStar = SmartPlaylistV2Query(
+            rules = SmartPlaylistRule.Not(check(
+                SmartPlaylistRuleField.EXPLICIT_RATING, SmartPlaylistRuleOperator.EQUAL, 1.0,
+            )),
+        )
+        assertTrue(planner.preview(listOf(unknown), notOneStar).isEmpty())
+    }
+
 }

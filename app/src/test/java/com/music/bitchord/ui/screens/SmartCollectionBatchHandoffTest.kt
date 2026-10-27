@@ -5,6 +5,10 @@ import com.music.bitchord.data.catalog.CanonicalBrowseMediaAsset
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.listening.AdaptiveCollectionKind
 import com.music.bitchord.data.listening.RuleBasedSmartPlaylistQuery
+import com.music.bitchord.data.listening.SmartPlaylistV2Query
+import com.music.bitchord.data.listening.SmartPlaylistRule
+import com.music.bitchord.data.listening.SmartPlaylistRuleField
+import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.playback.CanonicalCollectionIntentPlan
@@ -295,4 +299,32 @@ class SmartCollectionBatchHandoffTest {
         )
         assertEquals(1, calls)
     }
+    @Test fun v2PreviewAndSavedSourceKeepQueueIntentAfterFreshRevalidation() = runBlocking {
+        val previewQuery = SmartPlaylistV2Query(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
+                SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+                1.0,
+            ),
+        )
+        val submitted = mutableListOf<CanonicalCollectionIntentPlan>()
+        var currentIds = listOf("rec:old")
+        val handoff = SmartCollectionBatchHandoff(
+            refreshIds = { currentIds },
+            browse = { CanonicalBrowseLibrary(listOf(track("rec:old"), track("rec:new"))) },
+            planner = CanonicalCollectionIntentPlanner(Resolver()),
+            submit = { submitted += it; true },
+        )
+        currentIds = listOf("rec:new")
+        assertEquals(SmartCollectionBatchResult.Submitted,
+            handoff.execute(SmartCollectionActionSource.PreviewV2Query(previewQuery),
+                CanonicalCollectionIntent.ADD_TO_QUEUE))
+        assertEquals("rec:new", submitted.single().selections.single().recordingId)
+        assertEquals(CanonicalCollectionIntent.ADD_TO_QUEUE, submitted.single().intent)
+        assertEquals(SmartCollectionBatchResult.Submitted,
+            handoff.execute(SmartCollectionActionSource.SavedV2Definition("v2"),
+                CanonicalCollectionIntent.PLAY_NOW))
+        assertEquals(CanonicalCollectionIntent.PLAY_NOW, submitted.last().intent)
+    }
+
 }
