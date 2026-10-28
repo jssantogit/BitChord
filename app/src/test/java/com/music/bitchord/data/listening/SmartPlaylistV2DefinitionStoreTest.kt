@@ -230,4 +230,45 @@ class SmartPlaylistV2DefinitionStoreTest {
         }
     }
 
+
+    @Test fun referencesPersistAndRejectCyclesMissingTargetsAndLiveDeletion() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val db = Room.inMemoryDatabaseBuilder(context, SmartPlaylistDefinitionDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val repo = SmartPlaylistV2DefinitionRepository(db.v2DefinitionDao())
+            fun q(rule: SmartPlaylistRule) = SmartPlaylistV2Query(
+                rule, sort = SmartPlaylistV2Sort.RECORDING_ID_ASC, limit = 20,
+            )
+            val comparison = SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.DURATION_MS,
+                SmartPlaylistRuleOperator.IS_PRESENT,
+            )
+            repo.save(SavedSmartPlaylistV2Definition("base", "Base", q(comparison)))
+            val dependent = SavedSmartPlaylistV2Definition(
+                "dependent", "Depends", q(SmartPlaylistRule.Reference("base")),
+            )
+            repo.save(dependent)
+            assertEquals(dependent.query, repo.list().first { it.id == "dependent" }.query)
+            val deleteFailed = runCatching { repo.remove("base") }.exceptionOrNull()
+            assertTrue("Deletion of a live referenced playlist must fail",
+                deleteFailed is IllegalArgumentException)
+            val wouldCycle = SavedSmartPlaylistV2Definition(
+                "base", "Base", q(SmartPlaylistRule.Reference("dependent")),
+            )
+            assertTrue(runCatching { repo.save(wouldCycle) }.exceptionOrNull()
+                is IllegalArgumentException)
+            assertTrue(runCatching {
+                repo.save(SavedSmartPlaylistV2Definition(
+                    "missing", "Missing", q(SmartPlaylistRule.Reference("gone")),
+                ))
+            }.exceptionOrNull() is IllegalArgumentException)
+            assertEquals(comparison, repo.list().first { it.id == "base" }.query.rules)
+            repo.remove("dependent")
+            repo.remove("base")
+            assertTrue(repo.list().isEmpty())
+        } finally {
+            db.close()
+        }
+    }
 }
