@@ -122,7 +122,8 @@ class MusicBrainzPublicMetadataIndexTest {
                 .single().artworkUri)
             dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
                 "release-group:front-v5", groupId, "https://archive.org/verified-group-front.jpg",
-                2000L, thumbnailUri = "https://archive.org/verified-group-thumb-500.jpg",
+                System.currentTimeMillis() - 1_000L,
+                thumbnailUri = "https://archive.org/verified-group-thumb-500.jpg",
             ))
             dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
                 "release:front-v2", editionId, "https://archive.org/previous-front-video.jpg", 1000L,
@@ -132,8 +133,14 @@ class MusicBrainzPublicMetadataIndexTest {
             dao.upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
                 "release:front-v3", editionId, "https://archive.org/verified-release-front.jpg", 2000L,
             ))
+            // Offline SQL cannot leak raw URLs without TTL/host validation.
+            assertEquals(null, dao.searchKnownMusicBrainzGroups("New Jeans", 10)
+                .single().artworkUri)
+            val archive = com.music.bitchord.data.catalog.metadata.CoverArtArchive(
+                store = com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore(dao),
+            )
             assertEquals("https://archive.org/verified-group-thumb-500.jpg",
-                dao.searchKnownMusicBrainzGroups("New Jeans", 10).single().artworkUri)
+                archive.cachedVerifiedGroupCover(groupId))
             assertEquals("https://archive.org/verified-group-front.jpg",
                 dao.musicBrainzCoverArtCache("release-group:front-v5", groupId)?.artworkUri)
             assertEquals("https://archive.org/verified-release-front.jpg",
@@ -199,13 +206,16 @@ class MusicBrainzPublicMetadataIndexTest {
             assertEquals(null, index.cachedArtistGroups(artistMbid).single().artworkUri)
             db.catalogDao().upsertMusicBrainzCoverArtCache(MusicBrainzCoverArtCacheEntity(
                 "release-group:front-v5", groupMbid,
-                "https://archive.org/verified-album-1200.jpg", 20_000L,
+                "https://archive.org/verified-album-1200.jpg",
+                System.currentTimeMillis() - 1_000L,
                 thumbnailUri = "https://archive.org/verified-album-500.jpg",
             ))
             val joined = db.catalogDao().verifiedArtistDiscographyRows(
                 requireNotNull(artistIds[artistMbid])).single()
             assertEquals(groupMbid, joined.musicBrainzId)
-            assertEquals("https://archive.org/verified-album-500.jpg", joined.artworkUri)
+            // DAO only returns group identity; index must validate the
+            // separately fetched Front-v5 record before publishing artwork.
+            assertEquals(null, joined.artworkUri)
             assertEquals("Remix", joined.secondaryTypes)
             val cached = index.cachedArtistGroups(artistMbid).single()
             assertEquals(groupMbid, cached.musicBrainzId)
