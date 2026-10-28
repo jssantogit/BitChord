@@ -1365,4 +1365,6 @@
     <string name="playback_recovery_retry">לנסות שוב</string>
     <string name="playback_recovery_retrying">מנסה שוב…</string>
     <string name="playback_recovery_dismiss">סגירה</string>
+    <string name="pause_resume_fade">עמעום בהשהיה ובחידוש</string>
+    <string name="pause_resume_fade_subtitle">מנמיך בהדרגה את עוצמת הקול בהשהיה ומגביר אותה בחידוש</string>
 </resources>

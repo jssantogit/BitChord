@@ -1400,4 +1400,6 @@
     <string name="playback_recovery_retry">Spróbuj ponownie</string>
     <string name="playback_recovery_retrying">Ponawianie…</string>
     <string name="playback_recovery_dismiss">Zamknij</string>
+    <string name="pause_resume_fade">Wyciszanie przy pauzie i wznowieniu</string>
+    <string name="pause_resume_fade_subtitle">Płynnie ścisza muzykę podczas pauzy i przywraca głośność po wznowieniu</string>
 </resources>

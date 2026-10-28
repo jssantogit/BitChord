@@ -1360,4 +1360,6 @@
     <string name="playback_recovery_retry">Erneut versuchen</string>
     <string name="playback_recovery_retrying">Wird erneut versucht…</string>
     <string name="playback_recovery_dismiss">Schließen</string>
+    <string name="pause_resume_fade">Ein-/Ausblenden beim Pausieren und Fortsetzen</string>
+    <string name="pause_resume_fade_subtitle">Die Musik wird beim Pausieren sanft leiser und beim Fortsetzen wieder lauter</string>
 </resources>

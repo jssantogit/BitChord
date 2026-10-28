@@ -270,6 +270,21 @@ private fun normalizedTempoRatio(currentBpm: Double, nextBpm: Double): Double {
     return ratio
 }
 
+/**
+ * Beat-aligned mixing without time stretching must only pair tempos that
+ * genuinely coincide. The legacy DJ planner can tolerate 5–8% mismatch by
+ * retiming; neutral Android playback intentionally cannot.
+ *
+ * Fold half/double tempo into the same octave, but never treat missing,
+ * infinite or NaN BPM metadata as evidence of beat alignment.
+ */
+internal fun temposAlignWithoutStretch(currentBpm: Double, nextBpm: Double): Boolean {
+    if (!currentBpm.isFinite() || !nextBpm.isFinite() ||
+        currentBpm <= 0.0 || nextBpm <= 0.0
+    ) return false
+    return abs(1.0 - normalizedTempoRatio(currentBpm, nextBpm)) <= 0.015
+}
+
 private fun splitKey(key: String): Pair<Int?, String?> {
     val parts = key.trim().split(' ')
     return KEY_INDEX[parts.firstOrNull()] to parts.getOrNull(1)
@@ -1365,6 +1380,8 @@ fun planTransition(
     advanced: Boolean = false,
     phraseBars: Int = 0,
     mixWindow: Boolean = false,
+    /** Choose musical cue points without changing either track's playback speed. */
+    neutralPlayback: Boolean = false,
 ): TransitionPlan {
     val plan = planTransitionInner(
         analysis = analysis,
@@ -1379,6 +1396,7 @@ fun planTransition(
         albumSequential = albumSequential,
         advanced = advanced,
         phraseBars = phraseBars,
+        neutralPlayback = neutralPlayback,
     )
     if (!mixWindow) return plan
     return clampToMixWindow(
@@ -1427,6 +1445,7 @@ private fun planTransitionInner(
     albumSequential: Boolean = false,
     advanced: Boolean = false,
     phraseBars: Int = 0,
+    neutralPlayback: Boolean = false,
 ): TransitionPlan {
     val length = max(duration.orZero(), trackDurationSeconds(currentTrack))
     val playbackTime = max(0.0, currentTime.orZero())
@@ -1516,7 +1535,7 @@ private fun planTransitionInner(
     // bar-aligned mix of exactly that many bars takes priority. A null answer
     // means the evidence will not support it, so the adaptive plan below runs
     // unchanged.
-    if (phraseBars == PHRASE_BARS_SHORT || phraseBars == PHRASE_BARS_LONG) {
+    if (!neutralPlayback && (phraseBars == PHRASE_BARS_SHORT || phraseBars == PHRASE_BARS_LONG)) {
         phraseBarPlan(
             analysis = analysis,
             nextAnalysis = nextAnalysis,
@@ -1541,7 +1560,7 @@ private fun planTransitionInner(
         }
     }
 
-    phraseSwitch(analysis, nextAnalysis, length, nextLength, advanced)
+    (if (neutralPlayback) null else phraseSwitch(analysis, nextAnalysis, length, nextLength, advanced))
         ?.takeIf { playbackTime < it.transitionEnd }
         ?.let { plan ->
             val started = playbackTime >= plan.transitionStart
@@ -1560,6 +1579,7 @@ private fun planTransitionInner(
     val filterVariant = if (traits != null) filterVariantFor(currentTrack, nextTrack) else FilterTransitionVariant.SWEEP
     val primary = mixPlan(
         analysis, nextAnalysis, mixAnchor, mixOutAnchor.type, length, nextLength, traits, filterVariant,
+        neutralPlayback,
     )
     // An exit where the outgoing track is still singing over the incoming one
     // is worth trading for another the analysis ranked, if one halves the
@@ -1572,7 +1592,7 @@ private fun planTransitionInner(
         rankedMixOuts.asSequence()
             .filter { abs(it.time - mixAnchor) > 1.0 && it.time <= length }
             .take(MAX_REROUTE_CANDIDATES)
-            .map { mixPlan(analysis, nextAnalysis, it.time, it.type, length, nextLength, traits, filterVariant) }
+            .map { mixPlan(analysis, nextAnalysis, it.time, it.type, length, nextLength, traits, filterVariant, neutralPlayback) }
             .filter { playbackTime < it.transitionStart }
             .minByOrNull { it.vocalOverlap }
             ?.takeIf { it.vocalOverlap <= primary.vocalOverlap * VOCAL_REROUTE_GAIN }
@@ -1606,6 +1626,7 @@ private fun mixPlan(
     nextLength: Double,
     traits: PairTraits?,
     filterVariant: FilterTransitionVariant,
+    neutralPlayback: Boolean,
 ): TransitionPlan {
     val currentBpm = analysis.bpm.orZero()
     val nextBpm = nextAnalysis.bpm.orZero()
@@ -1615,18 +1636,34 @@ private fun mixPlan(
     } else {
         1.0
     }
-    val (overlap, transitionBeats, incomingPlaybackRate) = adaptiveOverlap(
+    val (overlap, transitionBeats, suggestedIncomingRate) = adaptiveOverlap(
         analysis, nextAnalysis, traits, energy, filterVariant,
     )
+    // Cueing and vocal-overlap calculations must use the SAME rate as the
+    // renderer. Forcing 1x only inside CrossfadeController incorrectly left
+    // the planner sizing the incoming timeline for beat-matched playback.
+    val incomingPlaybackRate = if (neutralPlayback) 1.0 else suggestedIncomingRate
     val handoffBpm = if (currentBpm > 0) currentBpm else nextBpm
     // Advanced also blends any pair a speed-up matches on two trusted grids —
     // the 5-10% apart that used to be left to a filter ride.
-    val sameBeatBlend = (traits == null || incomingPlaybackRate >= 1.0) && (
-        currentBpm > 0 && nextBpm > 0 &&
-            abs(1 - normalizedTempoRatio(currentBpm, nextBpm)) <= 0.05 &&
-            (analysis.beatConfidence.orZero() >= 0.2 || nextAnalysis.beatConfidence.orZero() >= 0.2) ||
-            traits?.phaseLockable == true
-        )
+    val sameBeatBlend = if (neutralPlayback) {
+        // With playback rates fixed to 1x, the old phaseLockable branch was
+        // unsafe: a 120/127 BPM pair could be classified as beat-matched even
+        // though no timestretch or phase-lock runs on the Android renderer.
+        temposAlignWithoutStretch(currentBpm, nextBpm) &&
+            (analysis.beatConfidence.orZero() >= 0.2 ||
+                nextAnalysis.beatConfidence.orZero() >= 0.2)
+    } else {
+        // Preserve the historical DJ planner for non-neutral consumers, where
+        // beatmatching actually changes playback speed.
+        (traits == null || incomingPlaybackRate >= 1.0) && (
+            currentBpm > 0 && nextBpm > 0 &&
+                abs(1 - normalizedTempoRatio(currentBpm, nextBpm)) <= 0.05 &&
+                (analysis.beatConfidence.orZero() >= 0.2 ||
+                    nextAnalysis.beatConfidence.orZero() >= 0.2) ||
+                traits?.phaseLockable == true
+            )
+    }
     val outgoingArrangementOverlap =
         if (sameBeatBlend && mixOutType == "content_end") {
             min(ARRANGEMENT_OVERLAP_BEATS * 60 / currentBpm, MAX_DISCARDED_MUSIC_SECONDS)
@@ -1791,21 +1828,21 @@ private fun mixPlan(
         outgoingPlaybackRate = outgoingRateFor(incomingPlaybackRate, traits != null),
         pickupSeconds = pickupSeconds,
         transitionBeats = transitionBeats,
-        bassSwap = sameBeatBlend || hasBassContent,
-        transitionStyle = if (sameBeatBlend) TransitionStyle.DJ_BLEND else TransitionStyle.DJ_FILTER,
+        bassSwap = !neutralPlayback && (sameBeatBlend || hasBassContent),
+        transitionStyle = if (neutralPlayback) TransitionStyle.EQUAL_POWER else if (sameBeatBlend) TransitionStyle.DJ_BLEND else TransitionStyle.DJ_FILTER,
         // The two styles are alternatives, not a scale: a matched pair hands the
         // low end over on a beat and otherwise stays open, while an unmatched
         // pair has no shared grid to hand anything over on and instead pulls the
         // outgoing track behind a closing low-pass. Left at zero on the blend
         // branch so the renderer doesn't do both at once.
-        filterSweep = if (sameBeatBlend) 0.0 else FILTER_SWEEP,
-        filterVariant = if (sameBeatBlend) FilterTransitionVariant.SWEEP else resolvedFilterVariant,
+        filterSweep = if (neutralPlayback || sameBeatBlend) 0.0 else FILTER_SWEEP,
+        filterVariant = if (neutralPlayback || sameBeatBlend) FilterTransitionVariant.SWEEP else resolvedFilterVariant,
         vocalOverlap = vocalOverlap,
         beatSeconds = gridBeatSeconds,
         // Tempo is fixed while audible. Live phase-lock pulses changed
         // AudioTrack playback parameters mid-buffer and cracked on some phones.
         phaseLock = false,
-        echoSeconds = echoSeconds,
+        echoSeconds = if (neutralPlayback) 0.0 else echoSeconds,
         reason = "smart-duration",
     )
 }

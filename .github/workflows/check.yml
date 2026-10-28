@@ -52,6 +52,13 @@ jobs:
       - name: Run Android unit tests
         run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
 
+      # Automix's cueing logic lives in commonMain, and its commonTest
+      # regression is not exercised by :app:testDevDebugUnitTest.
+      # This checks shared timing semantics on the JVM used by Android,
+      # without building or publishing any desktop app artifact.
+      - name: Run shared Automix planner tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :shared:jvmTest --tests "com.music.bitchord.playback.smart.AdvancedAutomixPlannerTest"
+
       - name: Upload Android test reports
         if: failure()
         uses: actions/upload-artifact@v4

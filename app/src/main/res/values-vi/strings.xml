@@ -1277,4 +1277,6 @@
     <string name="playback_recovery_retry">Thử lại</string>
     <string name="playback_recovery_retrying">Đang thử lại…</string>
     <string name="playback_recovery_dismiss">Đóng</string>
+    <string name="pause_resume_fade">Làm mờ âm khi tạm dừng và phát tiếp</string>
+    <string name="pause_resume_fade_subtitle">Giảm dần âm lượng khi tạm dừng và tăng dần khi phát tiếp</string>
 </resources>
