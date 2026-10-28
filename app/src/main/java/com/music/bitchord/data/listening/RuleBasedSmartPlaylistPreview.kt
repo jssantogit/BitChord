@@ -69,6 +69,9 @@ internal data class RuleBasedRecordingCandidate(
     val trackNumberEvidenceUnknown: Boolean = true,
     val trackArtistNames: List<String> = emptyList(),
     val trackArtistEvidenceUnknown: Boolean = true,
+    val localRatingUpdatedAtEpochMs: Long? = null,
+    /** An absent first-party rating is only known after the local store was queried. */
+    val localRatingDateEvidenceKnown: Boolean = false,
 )
 
 internal data class RuleBasedSmartPlaylistQuery(
