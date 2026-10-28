@@ -17,6 +17,7 @@ import com.music.bitchord.download.SoulseekBatchPayload
 import com.music.bitchord.download.SoulseekBatchSession
 import com.music.bitchord.download.SoulseekBatchPlan
 import com.music.bitchord.download.Downloads
+import com.music.bitchord.download.SoulseekManualRecoveryTermination
 import android.widget.Toast
 import android.text.InputType
 import android.text.InputFilter
@@ -1648,11 +1649,6 @@ class A0ManualLoginActivity : Activity() {
     }
 
     override fun onDestroy() {
-        if(intent.getBooleanExtra("bitchord.soulseek.manual.recovery",false)) {
-            intent.getStringExtra("bitchord.soulseek.manual.review_session")?.let {
-                Downloads.closeSoulseekManualReview(it)
-            }
-        }
         activeSelectionQueue?.offer(-1)
         activeTransfer?.cancel()
         activeListener?.close()
@@ -1660,7 +1656,18 @@ class A0ManualLoginActivity : Activity() {
         activePeerWorkers?.cancel()
         activeIndirectPeers.toList().forEach { runCatching { it.close() } }
         activeSocket?.close()
-        worker.shutdownNow()
+        val reviewId=if(intent.getBooleanExtra("bitchord.soulseek.manual.recovery",false))
+            intent.getStringExtra("bitchord.soulseek.manual.review_session")
+        else null
+        if(reviewId!=null) {
+            // onDestroy cancels sockets; it does NOT prove the background A3
+            // writer has stopped. Releasing now would permit double P/F.
+            SoulseekManualRecoveryTermination.releaseAfterStop(worker) {
+                Downloads.closeSoulseekManualReview(reviewId)
+            }
+        }else {
+            worker.shutdownNow()
+        }
         super.onDestroy()
     }
 
