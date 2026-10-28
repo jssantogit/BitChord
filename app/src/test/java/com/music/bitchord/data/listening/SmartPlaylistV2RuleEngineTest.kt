@@ -669,4 +669,34 @@ class SmartPlaylistV2RuleEngineTest {
         }
     }
 
+
+    @Test fun canonicalReleaseArtworkReferenceIsPositiveEvidenceNotMissingProof() {
+        val artwork = candidate("artwork").copy(hasReleaseArtworkReference = true)
+        val unknown = candidate("unknown")
+        val predicate = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
+            SmartPlaylistRuleOperator.IS_PRESENT,
+        )
+        assertEquals(listOf("artwork"), planner.preview(
+            listOf(artwork, unknown), SmartPlaylistV2Query(
+                predicate, sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+            ),
+        ).map { it.recordingId })
+        assertTrue(planner.preview(
+            listOf(unknown), SmartPlaylistV2Query(SmartPlaylistRule.Not(predicate)),
+        ).isEmpty())
+        assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
+                SmartPlaylistRuleOperator.IS_MISSING,
+            ))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
+                SmartPlaylistRuleOperator.EQUAL, 1.0,
+            ))
+        }
+    }
+
 }
