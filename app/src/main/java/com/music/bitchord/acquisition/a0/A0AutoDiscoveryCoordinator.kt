@@ -19,6 +19,7 @@ internal class A0AutoDiscoveryCoordinator(
     interface SearchPort {
         fun search(
             entry:SoulseekBatchPlan.Entry,
+            releaseSlots:List<SoulseekBatchPlan.Entry>,
             isCancelled:()->Boolean,
         ):SearchResult
         fun close()
@@ -78,7 +79,7 @@ internal class A0AutoDiscoveryCoordinator(
                     continue
                 searches++
                 val result=try {
-                    discovery.search(entries[index],::shouldStop)
+                    discovery.search(entries[index],entries,::shouldStop)
                 }catch(_:Exception) {SearchResult.Stop}
                 if(shouldStop())return revoked(count,searches)
                 when(result) {

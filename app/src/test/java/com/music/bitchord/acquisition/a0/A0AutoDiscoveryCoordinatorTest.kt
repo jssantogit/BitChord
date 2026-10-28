@@ -37,6 +37,7 @@ class A0AutoDiscoveryCoordinatorTest {
         var closed=0
         override fun search(
             entry:SoulseekBatchPlan.Entry,
+            releaseSlots:List<SoulseekBatchPlan.Entry>,
             isCancelled:()->Boolean,
         ):A0AutoDiscoveryCoordinator.SearchResult {
             requests.add(entry.trackId)
