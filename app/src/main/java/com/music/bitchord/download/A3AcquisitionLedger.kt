@@ -63,9 +63,20 @@ internal class A3AcquisitionLedger(private val store:Store) {
     fun create(id:String):Entry = synchronized(lock) {
         require(validId(id)) { "A3 acquisition ID must be opaque UUID" }
         check(id !in items) { "A3 acquisition ID already exists" }
-        check(items.size<MAX_JOBS) { "A3 journal capacity exhausted" }
+        // Reclaim ONLY terminal failed/cancelled jobs. Never drop AVAILABLE
+        // content-URI ownership or INTERRUPTED/PUBLISHING reconciliation.
+        val retained=LinkedHashMap(items)
+        if(retained.size>=MAX_JOBS) {
+            val iterator=retained.entries.iterator()
+            while(iterator.hasNext() && retained.size>=MAX_JOBS) {
+                val state=iterator.next().value.phase
+                if(state==Phase.FAILED || state==Phase.CANCELLED)
+                    iterator.remove()
+            }
+        }
+        check(retained.size<MAX_JOBS) { "A3 journal capacity exhausted" }
         val record=Entry(id,Phase.REQUESTED)
-        commit(items + (id to record))
+        commit(retained + (id to record))
         record
     }
 
@@ -166,7 +177,7 @@ internal class A3AcquisitionLedger(private val store:Store) {
 
     private companion object {
         const val VERSION=1
-        const val MAX_JOBS=128
+        const val MAX_JOBS=2048
         val MAX_BYTES=com.music.bitchord.acquisition.a0.A0ObservedTransferLimits.MAX_AUDIO_BYTES
         val OPAQUE_ID=Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
         val ACTIVE=setOf(Phase.REQUESTED,Phase.SEARCHING,Phase.AWAITING_SELECTION,
