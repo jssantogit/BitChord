@@ -107,7 +107,7 @@ class A0ManualLoginActivity : Activity() {
             finish()
             return
         }
-        val completedRecovery=java.util.concurrent.atomic.AtomicBoolean(false)
+        val completedSingle=java.util.concurrent.atomic.AtomicBoolean(false)
         // The song search/candidates view has no visible credentials; allow
         // screenshots for QA. Legacy username/password tools stay protected.
         if (A0ScreenCapturePolicy.requiresSecureWindow(fromSongDownload)) {
@@ -301,7 +301,7 @@ class A0ManualLoginActivity : Activity() {
             val recoveryQuery=batch?.current?.query ?: intent.getStringExtra(
                 "bitchord.soulseek.manual.query").orEmpty()
             if(batch?.isComplete==true || (saveToDevice && batch?.currentSaved==true) ||
-                (manualRecovery && batch==null && completedRecovery.get())) {
+                (batch==null && completedSingle.get())) {
                 status.text="Esta faixa já foi salva. Avance para a próxima do lote."
                 return
             }
@@ -1269,8 +1269,8 @@ class A0ManualLoginActivity : Activity() {
                                                                     recoverySession,index,recoveryQuery)
                                                             }
                                                         }
-                                                        if(batch==null)completedRecovery.set(true)
                                                     }
+                                                    if(batch==null)completedSingle.set(true)
                                                     trace.note(A0SmokeTrace.Stage.LOCAL_SAVE_PUBLISHED)
                                                     result="MÚSICA LOCAL SALVA: ${saved.byteCount} bytes. " +
                                                         "Confira Biblioteca → No dispositivo. " +
@@ -1485,6 +1485,22 @@ class A0ManualLoginActivity : Activity() {
                         runCatching { Diagnostics.endFeatureCapture(owned) }
                     }
                 }
+                if(publishedForCurrent && batch!=null) {
+                    // A3 was already durably committed. Even when onStop
+                    // revoked the old network epoch, mark the slot saved:
+                    // otherwise returning to the Activity could re-download
+                    // the same physical file. This is after worker cleanup.
+                    runOnUiThread {
+                        if(!isDestroyed) {
+                            batch.markSaved()
+                            batchStatus?.text="Lote: faixa ${batch.index+1} de " +
+                                "${batch.entries.size} · ${batch.succeeded} salvas · " +
+                                "${batch.skipped} puladas."
+                            nextTrack?.text="Próxima faixa"
+                            nextTrack?.isEnabled=true
+                        }
+                    }
+                }
                 if (!stopping && lifecycleGate.isCurrent(lifecycleToken) &&
                     !isFinishing && !isDestroyed) {
                     runOnUiThread {
@@ -1557,7 +1573,7 @@ class A0ManualLoginActivity : Activity() {
 
             fun confirmSearch() {
                 if(batch?.isComplete==true || batch?.currentSaved==true ||
-                    (manualRecovery && batch==null && completedRecovery.get()))return
+                    (batch==null && completedSingle.get()))return
                 val saved = accountVault.read()
                 if (saved == null) {
                     status.text = "Configure sua conta em Configurações → Downloads → Soulseek."
