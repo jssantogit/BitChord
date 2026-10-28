@@ -761,9 +761,18 @@ internal fun SmartPlaylistV2WizardUi(
                         ) { Text(if (editingPath != null) "Salvar condição" else "Adicionar condição") }
                     }
                     WizardStep.REVIEW -> {
-                        Button(onClick = onSave, enabled = canReview && !loading,
-                            modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = onSave,
+                            enabled = canReview && !loading &&
+                                currentPreviewQuery != null && preview != null,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
                             Text(if (editingId != null) "Salvar alterações" else "Criar playlist")
+                        }
+                        if (preview == null) {
+                            Text("Calcule a prévia antes de criar a playlist.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         TextButton(onClick = onSaveFilter, enabled = canReview && !loading,
                             modifier = Modifier.fillMaxWidth()) {

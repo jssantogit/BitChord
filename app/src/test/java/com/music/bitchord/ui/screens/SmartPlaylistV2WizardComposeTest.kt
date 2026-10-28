@@ -3,6 +3,7 @@ package com.music.bitchord.ui.screens
 import android.app.Application
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertExists
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -70,6 +71,7 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Revisar e criar").assertExists()
         compose.onNodeWithText("Prévia real").assertExists()
         compose.onNodeWithText("Ainda não calculada para estas regras").assertExists()
+        compose.onNodeWithText("Criar playlist").assertIsNotEnabled()
     }
 
     @Test fun conditionCatalogAddsOnlyTheSelectedFieldAndPreservesExistingGroup() {
