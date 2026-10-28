@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.SavedSmartPlaylistDefinition
@@ -52,6 +53,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
@@ -273,6 +275,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     }
     val catalogDatabase = remember(context) { CanonicalCatalogDatabase.get(context) }
     val listeningDatabase = remember(context) { ListeningEventDatabase.get(context) }
+    val accountPersistence = remember(context) { SharedPrefsOpenSubsonicAccountPersistence(context) }
     val catalog = remember(catalogDatabase) { catalogDatabase.catalogDao() }
     val evaluator = remember(context) { persistentSmartPlaylistPreview(context) }
     val scope = rememberCoroutineScope()
@@ -343,14 +346,17 @@ internal fun SmartPlaylistV2BuilderScreen(
         }
 
     // Only a visible, explicitly requested preview gets a live observer.
-    // Changes to source Room tables refresh the result, with cancellation when
-    // the user edits any rule or leaves the screen. Account preference changes
-    // are handled by the manual "Atualizar" button below.
-    LaunchedEffect(previewQuery, catalogDatabase, listeningDatabase) {
+    // Source/credential-scope changes are observed via the existing local
+    // preferences flow, and elapsed-day rules refresh only while previewing.
+    // The manual button remains useful for explicit current-account rechecks.
+    LaunchedEffect(previewQuery, catalogDatabase, listeningDatabase, accountPersistence) {
         val active = previewQuery ?: return@LaunchedEffect
-        smartPlaylistEvidenceChanges(catalogDatabase, listeningDatabase)
-            .drop(1) // Initial evidence was already evaluated on Preview.
-            .collectLatest {
+        merge(
+            smartPlaylistEvidenceChanges(catalogDatabase, listeningDatabase)
+                .drop(1), // Initial Room state was evaluated on Preview.
+            smartPlaylistAccountChanges(accountPersistence.observe()),
+            smartPlaylistRelativeAgeChanges(active),
+        ).collectLatest {
                 try {
                     val rows = loadPreviewRows(active)
                     if (previewQuery == active) {
@@ -452,7 +458,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     Text("Prévia • " + preview!!.size + " músicas",
                         style = MaterialTheme.typography.titleMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Atualiza com mudanças locais", style = MaterialTheme.typography.bodySmall)
+                        Text("Atualização automática", style = MaterialTheme.typography.bodySmall)
                         TextButton(onClick = {
                             val active = previewQuery ?: return@TextButton
                             if (loading) return@TextButton
