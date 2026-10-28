@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import java.io.File
-import kotlin.math.max
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
