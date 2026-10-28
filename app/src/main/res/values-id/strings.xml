@@ -1337,4 +1337,6 @@
     <string name="playback_recovery_retry">Coba lagi</string>
     <string name="playback_recovery_retrying">Mencoba lagi…</string>
     <string name="playback_recovery_dismiss">Tutup</string>
+    <string name="pause_resume_fade">Fade saat jeda dan lanjut</string>
+    <string name="pause_resume_fade_subtitle">Mengecilkan volume secara halus saat dijeda dan menaikkannya saat dilanjutkan</string>
 </resources>
