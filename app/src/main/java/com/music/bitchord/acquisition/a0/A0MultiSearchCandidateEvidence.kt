@@ -64,6 +64,17 @@ internal class A0MultiSearchCandidateEvidence(
         }
     }
 
+    /**
+     * Each search() closes all peer readers before returning, so a slot can
+     * be consumed immediately without waiting for other album-track searches.
+     * This is a copy, not a capability to mutate future evidence.
+     */
+    @Synchronized
+    fun slotEvidence(index:Int):Pair<List<A0ObservedCandidateHandoff.Choice>,Boolean>? {
+        if(!valid || stopped || index !in entries.indices)return null
+        return buckets[index].values.toList() to clipped[index]
+    }
+
     @Synchronized
     fun stop() { stopped=true }
 
