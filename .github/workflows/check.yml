@@ -2,7 +2,9 @@ name: Android CI
 
 on:
   push:
-    branches: [main]
+    # Temporary isolated #178 validation lane: connector-authored commits do
+    # not emit PR synchronize checks, so test this branch without building APK.
+    branches: [main, fix/178-musicbrainz-canonical-foundation]
   pull_request:
 
 # Per-PR workflows supersede old HEADs; main runs are keyed by commit and
