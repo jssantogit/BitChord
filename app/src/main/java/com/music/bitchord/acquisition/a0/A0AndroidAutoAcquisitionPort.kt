@@ -24,6 +24,7 @@ internal class A0AndroidAutoAcquisitionPort(
     private val expectedGeneration:Long,
     private val transport:AuthenticatedTransport,
     private val jobId:String=UUID.randomUUID().toString(),
+    private val reservedAutomatic:Boolean=false,
 ):A0AutoAcquisitionExecutor.Port {
     interface AuthenticatedTransport {
         fun receive(
@@ -36,7 +37,8 @@ internal class A0AndroidAutoAcquisitionPort(
 
     private val app=context.applicationContext
     private val job by lazy {
-        A0AutoJobJournal(A3AndroidAcquisitionLedger.get(app),jobId)
+        A0AutoJobJournal(A3AndroidAcquisitionLedger.get(app),jobId,
+            reservedAutomatic=reservedAutomatic)
     }
     private val closed=AtomicBoolean(false)
     private val scratchRoot by lazy {
