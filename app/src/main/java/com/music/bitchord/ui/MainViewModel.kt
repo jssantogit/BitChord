@@ -714,7 +714,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // Album groups already hydrated their directly related
                 // recording covers in the previous single Room query.
                 val unresolved = knownTracks.filter {
-                    it.coverGroupMbid !in warmGroups
+                    it.coverGroupMbid?.let(warmGroups::containsKey) != true
                 }
                 if (unresolved.isEmpty()) return@async emptyMap<String, String>()
                 val proven = try {
@@ -786,7 +786,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         !row.title.contains(" & ")
                     ) return@launch
                     if (row.kind == CanonicalSearchKind.RECORDING &&
-                        row.coverGroupMbid in warmGroups
+                        row.coverGroupMbid?.let(warmGroups::containsKey) == true
                     ) return@launch
                     // Let release covers stream immediately. Recording covers
                     // first reuse their actual Official Album sleeve from
