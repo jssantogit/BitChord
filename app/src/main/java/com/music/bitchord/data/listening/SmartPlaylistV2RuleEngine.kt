@@ -51,6 +51,7 @@ internal enum class SmartPlaylistRuleField {
     TRACK_NUMBER,
     TRACK_ARTIST,
     DAYS_SINCE_LOCAL_RATING,
+    RELEASE_ARTWORK_REFERENCE,
 }
 
 internal enum class SmartPlaylistSourceKind { LOCAL, OPENSUBSONIC }
@@ -81,7 +82,9 @@ internal fun SmartPlaylistRuleField.isTextField(): Boolean =
         this == SmartPlaylistRuleField.TRACK_ARTIST
 
 internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOperator> =
-    if (this == SmartPlaylistRuleField.RELEASE_YEAR ||
+    if (this == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) listOf(
+        SmartPlaylistRuleOperator.IS_PRESENT,
+    ) else if (this == SmartPlaylistRuleField.RELEASE_YEAR ||
         this == SmartPlaylistRuleField.TRACK_NUMBER) listOf(
         SmartPlaylistRuleOperator.EQUAL,
         SmartPlaylistRuleOperator.NOT_EQUAL,
@@ -365,6 +368,9 @@ internal class SmartPlaylistV2RuleEngine(
         row: RuleBasedRecordingCandidate,
         now: Long,
     ): RuleTruth {
+        if (rule.field == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) {
+            return if (row.hasReleaseArtworkReference) RuleTruth.TRUE else RuleTruth.UNKNOWN
+        }
         if (rule.field == SmartPlaylistRuleField.RELEASE_YEAR ||
             rule.field == SmartPlaylistRuleField.TRACK_NUMBER) {
             val numbers = if (rule.field == SmartPlaylistRuleField.RELEASE_YEAR)
@@ -520,7 +526,8 @@ internal class SmartPlaylistV2RuleEngine(
             SmartPlaylistRuleField.RELEASE_YEAR,
             SmartPlaylistRuleField.ALBUM_ARTIST,
             SmartPlaylistRuleField.TRACK_NUMBER,
-            SmartPlaylistRuleField.TRACK_ARTIST -> null
+            SmartPlaylistRuleField.TRACK_ARTIST,
+            SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> null
         }
         if (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE &&
             row.audibleCompletions > 0 && row.lastAudibleAtEpochMs == null
