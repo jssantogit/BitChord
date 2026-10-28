@@ -1379,7 +1379,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // that exact URL on the header instead of replacing it with the 1200px
         // variant and making Coil fetch the same sleeve a second time.
         // Detail tracks also inherit this URL in the initial state.
-        if (!canonicalNeedsCoverRefresh(entry.artworkUri)) return
+        // A filled 500px album detail can still show an older edition Front.
+        // Official group verification runs off-main; a Release's full-sized
+        // exact-edition image can keep its existing fast path.
+        if (entry.kind != CanonicalSearchKind.RELEASE_GROUP &&
+            !canonicalNeedsCoverRefresh(entry.artworkUri)) return
         canonicalDetailCoverJob = viewModelScope.launch(Dispatchers.IO) {
             val artwork = try {
                 canonicalArtworkForRow(entry, CoverArtSize.HERO)
@@ -1390,12 +1394,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 canonicalPath.lastOrNull() != entry) return@launch
             val current = (_canonicalDetail.value as? UiState.Success)?.data
                 ?: return@launch
-            if (!canonicalShouldAcceptArtworkUpdate(current.artworkUri, artwork)) return@launch
+            val accepted = if (entry.kind == CanonicalSearchKind.RELEASE_GROUP)
+                canonicalShouldAcceptVerifiedGroupArtwork(current.artworkUri, artwork)
+            else canonicalShouldAcceptArtworkUpdate(current.artworkUri, artwork)
+            if (!accepted) return@launch
             _canonicalDetail.value = UiState.Success(current.copy(
                 artworkUri = artwork,
                 rows = canonicalReleaseTracksWithArtwork(
                     current.rows, artwork,
                     previousInheritedArtwork = current.artworkUri,
+                    inheritedFromGroup = entry.kind == CanonicalSearchKind.RELEASE_GROUP,
                 ),
             ))
             val id = canonicalNativeBrowseId(entry)
@@ -1474,7 +1482,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // then give the identical URL to both header and all tracks.
             // No archive request or fuzzy artist/title fallback.
             val groupArtwork = if (entry.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                entry.artworkUri.isNullOrBlank()
+                canonicalEditorialReleaseType(entry) != null
             ) {
                 try {
                     withContext(Dispatchers.IO) {
@@ -1486,13 +1494,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     throw cancelled
                 } catch (_: Exception) { null }
             } else null
-            val initialArtwork = entry.artworkUri ?: groupArtwork
+            val initialArtwork = canonicalVerifiedGroupDetailArtwork(entry, groupArtwork)
             if (groupArtwork != null && _searchSource.value == SearchSource.CANONICAL &&
                 canonicalPath.lastOrNull() == entry
             ) {
                 val pageId = canonicalNativeBrowseId(entry)
                 _detailStack.update { pages -> pages.map { page ->
-                    if (page.browseId == pageId && page.thumbnailUrl.isNullOrBlank())
+                    if (page.browseId == pageId &&
+                        canonicalShouldAcceptVerifiedGroupArtwork(page.thumbnailUrl, groupArtwork))
                         page.copy(thumbnailUrl = groupArtwork) else page
                 } }
             }
@@ -1713,6 +1722,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                             )
                                         },
                                         initialArtwork,
+                                        inheritedFromGroup = true,
                                     ),
                                 )
                             }
@@ -1838,7 +1848,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                     trackMbid = track.trackMbid,
                                     durationMs = track.durationMs,
                                 )
-                            }, initialArtwork),
+                            }, initialArtwork, inheritedFromGroup = true),
                         ))
                     }
                 }
