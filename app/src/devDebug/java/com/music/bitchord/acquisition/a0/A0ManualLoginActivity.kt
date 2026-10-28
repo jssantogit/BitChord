@@ -538,6 +538,7 @@ class A0ManualLoginActivity : Activity() {
                                     val report=handoff?.progress() ?: return
                                     runOnUiThread {
                                         if (!stopping && !isFinishing && !isDestroyed &&
+                                            lifecycleGate.isCurrent(lifecycleToken) &&
                                             readerGate.isOpen()) {
                                             status.text="Pesquisando Soulseek: " +
                                                 report.responses + " respostas, " +
@@ -658,7 +659,8 @@ class A0ManualLoginActivity : Activity() {
                                                         Socket().use { peer ->
                                                             activeIndirectPeers.add(peer)
                                                             try {
-                                                                if (stopping || !readerGate.isOpen()) return@use
+                                                                if (stopping || !lifecycleGate.isCurrent(lifecycleToken) ||
+                                                                    !readerGate.isOpen()) return@use
                                                                 peer.connect(
                                                                     InetSocketAddress(offer.address,offer.port),1800
                                                                 )
@@ -763,7 +765,8 @@ class A0ManualLoginActivity : Activity() {
                                         val sent=mutableSetOf(checkNotNull(requestedSearch))
                                         fun sendRescue(elapsedMillis:Long) {
                                             if (failedServerReader.get() || !readerGate.isOpen() ||
-                                                stopping || Thread.currentThread().isInterrupted)
+                                                stopping || !lifecycleGate.isCurrent(lifecycleToken) ||
+                                                Thread.currentThread().isInterrupted)
                                                 return
                                             val variant=recovery.next(elapsedMillis,
                                                 handoff?.hasRelevantCandidateForSearchRecovery()==true,
@@ -776,7 +779,8 @@ class A0ManualLoginActivity : Activity() {
                                                 sent.add(variant)
                                                 trace.note(A0SmokeTrace.Stage.SEARCH_VARIANT_SENT)
                                                 runOnUiThread {
-                                                    if(!stopping && readerGate.isOpen())
+                                                    if(!stopping && lifecycleGate.isCurrent(lifecycleToken) &&
+                                                        readerGate.isOpen())
                                                         status.text="Buscando outra variação segura; " +
                                                             "identidade, álbum e qualidade preservados."
                                                 }
@@ -966,7 +970,8 @@ class A0ManualLoginActivity : Activity() {
                                         val choiceQueue=LinkedBlockingQueue<Int>(1)
                                         activeSelectionQueue=choiceQueue
                                         runOnUiThread {
-                                            if (stopping || isFinishing || isDestroyed ||
+                                            if (stopping || !lifecycleGate.isCurrent(lifecycleToken) ||
+                                                isFinishing || isDestroyed ||
                                                 selectableIndices.isEmpty()) {
                                                 if(selectableIndices.isEmpty())status.text=
                                                     "Nenhum candidato de formato suportado nesta busca para salvar."
@@ -1192,13 +1197,15 @@ class A0ManualLoginActivity : Activity() {
                                         val selection=A0SelectionServerDrain.awaitChoice(
                                             connection,choiceQueue,35_000L,
                                             isCancelled={
-                                                stopping || Thread.currentThread().isInterrupted
+                                                stopping || !lifecycleGate.isCurrent(lifecycleToken) ||
+                                                    Thread.currentThread().isInterrupted
                                             }
                                         )
                                         trace.selectionDrain(selection.discardedFrames)
                                         val chosen=selection.index
                                         activeSelectionQueue=null
-                                        if (chosen==null || chosen<0 || stopping) {
+                                        if (chosen==null || chosen<0 || stopping ||
+                                            !lifecycleGate.isCurrent(lifecycleToken)) {
                                             result = "TESTE CANCELADO OU EXPIRADO. Nenhum arquivo recebido."
                                             finalOutcome=TraceOutcome.CANCELLED
                                             trace.note(
@@ -1478,9 +1485,11 @@ class A0ManualLoginActivity : Activity() {
                         runCatching { Diagnostics.endFeatureCapture(owned) }
                     }
                 }
-                if (!stopping && !isFinishing && !isDestroyed) {
+                if (!stopping && lifecycleGate.isCurrent(lifecycleToken) &&
+                    !isFinishing && !isDestroyed) {
                     runOnUiThread {
-                        if (!stopping && !isFinishing && !isDestroyed) {
+                        if (!stopping && lifecycleGate.isCurrent(lifecycleToken) &&
+                            !isFinishing && !isDestroyed) {
                             status.text = result
                             if(batch!=null) {
                                 if(publishedForCurrent) batch.markSaved()
