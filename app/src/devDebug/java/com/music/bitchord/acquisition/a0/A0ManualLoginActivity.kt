@@ -75,7 +75,7 @@ class A0ManualLoginActivity : Activity() {
         // Process death cannot be assumed to preserve the completion of a
         // MediaStore commit. Fail closed instead of silently restarting at
         // track one and risking a duplicate physical download.
-        if(hasBatch && savedInstanceState!=null) {
+        if((hasBatch || manualRecovery) && savedInstanceState!=null) {
             Toast.makeText(this,
                 "Lote interrompido. Faixas já salvas permanecem na biblioteca; " +
                     "abra o lançamento novamente para continuar manualmente.",
@@ -1241,7 +1241,6 @@ class A0ManualLoginActivity : Activity() {
                                                             )
                                                         }
                                                     )
-                                                    trace.note(A0SmokeTrace.Stage.LOCAL_SAVE_PUBLISHED)
                                                     publishedForCurrent=true
                                                     if(manualRecovery) {
                                                         // Reconcile against the original
@@ -1249,11 +1248,14 @@ class A0ManualLoginActivity : Activity() {
                                                         val index=recoveryIndices?.getOrNull(
                                                             recoveryOrdinal)
                                                         if(index!=null && recoverySession!=null) {
-                                                            Downloads.confirmSoulseekManualPublication(
-                                                                recoverySession,index,recoveryQuery)
+                                                            runCatching {
+                                                                Downloads.confirmSoulseekManualPublication(
+                                                                    recoverySession,index,recoveryQuery)
+                                                            }
                                                         }
                                                         if(batch==null)completedRecovery.set(true)
                                                     }
+                                                    trace.note(A0SmokeTrace.Stage.LOCAL_SAVE_PUBLISHED)
                                                     result="MÚSICA LOCAL SALVA: ${saved.byteCount} bytes. " +
                                                         "Confira Biblioteca → No dispositivo. " +
                                                         "SHA-256 observado não comprova autenticidade."
