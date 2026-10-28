@@ -591,4 +591,48 @@ class SmartPlaylistBatchEvidenceRoomTest {
         }
     }
 
+
+
+    @Test fun dateOnlySortFetchesActualRatingTimestampsForEachCandidate() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:old", "Old", "Artist", 120_000L))
+            dao.upsertRecording(RecordingEntity("rec:new", "New", "Artist", 120_000L))
+            dao.upsertRecording(RecordingEntity("rec:none", "None", "Artist", 120_000L))
+            listening.recordingRatingDao().upsertCurrent(
+                RecordingRatingCurrentEntity("rec:old", 4.0, 1_000L),
+            )
+            listening.recordingRatingDao().upsertCurrent(
+                RecordingRatingCurrentEntity("rec:new", 2.0, 2_000L),
+            )
+            val preview = CanonicalRuleBasedSmartPlaylistPreview(
+                availability = CanonicalLibraryAvailabilityReader {
+                    listOf("rec:old", "rec:new", "rec:none")
+                },
+                catalog = dao,
+                ratings = RoomRecordingRatingStore(listening.recordingRatingDao()),
+                listening = RoomListeningEventStore(listening.listeningEventDao()),
+                batchReader = RoomSmartPlaylistBatchEvidenceReader(
+                    dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+                ),
+            )
+            val rule = SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.DURATION_MS, SmartPlaylistRuleOperator.IS_PRESENT,
+            )
+            val sorted = preview.preview(SmartPlaylistV2Query(
+                rule, sort = SmartPlaylistV2Sort.LOCAL_RATING_NEWEST,
+            ))
+            assertEquals(listOf("rec:new", "rec:old", "rec:none"),
+                sorted.map { it.recordingId })
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
 }
