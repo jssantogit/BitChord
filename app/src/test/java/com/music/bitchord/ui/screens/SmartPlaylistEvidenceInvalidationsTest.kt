@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.RecordingEntity
+import com.music.bitchord.data.catalog.ExternalIdentityEntity
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
@@ -56,6 +57,36 @@ class SmartPlaylistEvidenceInvalidationsTest {
             withTimeout(10_000) { ready.await() }
             catalog.catalogDao().upsertRecording(RecordingEntity(
                 "rec:change", "Updated", "Artist", 180_000L,
+            ))
+            assertEquals(2, changes.await().size)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
+    @Test fun updatingReleaseIdentityEvidenceInvalidatesAnAlreadyVisiblePreview() = runBlocking {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val ready = CompletableDeferred<Unit>()
+            val changes = async(Dispatchers.Default) {
+                withTimeout(10_000) {
+                    var emissions = 0
+                    smartPlaylistEvidenceChanges(catalog, listening)
+                        .onEach { if (++emissions == 1) ready.complete(Unit) }
+                        .take(2).toList()
+                }
+            }
+            withTimeout(10_000) { ready.await() }
+            catalog.catalogDao().upsertExternalIdentity(ExternalIdentityEntity(
+                provider = "musicbrainz",
+                entityType = "release",
+                externalId = "00000000-0000-0000-0000-000000000001",
+                entityId = "release:example",
             ))
             assertEquals(2, changes.await().size)
         } finally {

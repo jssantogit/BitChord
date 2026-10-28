@@ -210,7 +210,8 @@ internal fun CanonicalRemoteLibraryScreen(
         catalogDb.invalidationTracker.createFlow(
             "catalog_media_asset", "catalog_release", "catalog_release_track",
             "catalog_recording_artist_credit", "catalog_release_artist_credit",
-            "catalog_artist",
+            "catalog_artist", "musicbrainz_release_enrichment",
+            "catalog_external_identity",
         ).collectLatest {
             value = try {
                 when {
