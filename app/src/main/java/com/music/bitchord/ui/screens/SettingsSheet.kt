@@ -248,6 +248,7 @@ internal fun SettingsScreen(
     val swipeToPlayNext by AppSettings.swipeToPlayNext.collectAsStateWithLifecycle()
     val dontRepeatSuggestions by AppSettings.dontRepeatSuggestions.collectAsStateWithLifecycle()
     val smartVersionAlignment by AppSettings.smartVersionAlignment.collectAsStateWithLifecycle()
+    val upgradeLengthSlackSeconds by AppSettings.upgradeLengthSlackSeconds.collectAsStateWithLifecycle()
     val filterNonMusicAudio by AppSettings.filterNonMusicAudio.collectAsStateWithLifecycle()
     val localMusicFolderUri by AppSettings.localMusicFolderUri.collectAsStateWithLifecycle()
     val highPerformanceMode by AppSettings.highPerformanceMode.collectAsStateWithLifecycle()
@@ -1570,6 +1571,21 @@ internal fun SettingsScreen(
                         onClick = { DiagnosticsUiEntry.open(context) },
                     )
                 }
+            }
+            val sourceMatchingTitle = stringResource(R.string.upgrade_length_slack)
+            row(sourceMatchingTitle, "source", "matching", "duration", "tolerance", "seconds") {
+                SliderRow(
+                    icon = Icons.Rounded.Tune,
+                    title = sourceMatchingTitle,
+                    subtitle = stringResource(R.string.upgrade_length_slack_subtitle),
+                    value = stringResource(R.string.seconds_short, upgradeLengthSlackSeconds),
+                    sliderValue = upgradeLengthSlackSeconds.toFloat(),
+                    onSliderValue = { AppSettings.setUpgradeLengthSlackSeconds(it.roundToInt()) },
+                    valueRange = AppSettings.MIN_UPGRADE_LENGTH_SLACK_SECONDS.toFloat()..
+                        AppSettings.MAX_UPGRADE_LENGTH_SLACK_SECONDS.toFloat(),
+                    steps = AppSettings.MAX_UPGRADE_LENGTH_SLACK_SECONDS -
+                        AppSettings.MIN_UPGRADE_LENGTH_SLACK_SECONDS - 1,
+                )
             }
 
         }
