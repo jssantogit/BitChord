@@ -55,8 +55,11 @@ internal fun OpenSubsonicRemoteLibrarySection() {
     var syncing by remember { mutableStateOf(false) }
     var connectionStatus by remember { mutableStateOf<String?>(null) }
 
+    // Connection belongs to the Library section already introduced by WebDAV;
+    // repeat the service name in the row only, not in another heading.
     SettingsGroup(
-        header = stringResource(R.string.opensubsonic_title),
+        header = null,
+        topSpacing = 12.dp,
         footer = stringResource(R.string.opensubsonic_description),
     ) {
         SettingsRow(
