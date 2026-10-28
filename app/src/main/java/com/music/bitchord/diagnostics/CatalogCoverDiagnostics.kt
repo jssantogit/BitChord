@@ -20,6 +20,8 @@ internal object CatalogCoverDiagnostics {
         // Only counts are exported; no artist, album, URL or MBID is retained.
         add("verified_group_batch_reads=${s.verifiedGroupCachedBatchReads}" +
             " verified_group_rows_reused=${s.verifiedGroupCachedRowsReused}")
+        add("recording_edition_to_group_reconciliations=${s.reconciledRecordingEditionCovers}" +
+            " rejected_group_art_downgrades=${s.rejectedGroupDowngrades}")
         add("recovered_join_owner_cancellations=${s.recoveredCoalescedOwnerCancellations}")
         add("network_requests=${s.networkRequests} success=${s.successfulNetworkRequests}" +
             " not_found=${s.networkNotFound} transient_failures=${s.transientFailures}")
