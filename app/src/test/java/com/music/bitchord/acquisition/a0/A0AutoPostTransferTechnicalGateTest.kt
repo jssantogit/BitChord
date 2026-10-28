@@ -49,6 +49,21 @@ class A0AutoPostTransferTechnicalGateTest {
             verify(DownloadQualityProfile.HI_RES,"flac",noDepth).status)
     }
 
+    @Test fun realHiResLosslessBitrateAboveLossyLimitsMustNotBeRejected() {
+        // 24-bit 96kHz stereo uncompressed PCM is 4608 kbps.
+        val wav=decoded(A0CanonicalAcquisitionIntent.Codec.PCM_WAV,"wav",
+            rate=96_000,depth=24,bitrate=4608)
+        val flac=decoded(A0CanonicalAcquisitionIntent.Codec.FLAC,"flac",
+            rate=96_000,depth=24,bitrate=3200)
+        assertEquals(A0AutoPostTransferTechnicalGate.Status.TECHNICALLY_PLAUSIBLE,
+            verify(DownloadQualityProfile.HI_RES,"wav",wav).status)
+        assertEquals(A0AutoPostTransferTechnicalGate.Status.TECHNICALLY_PLAUSIBLE,
+            verify(DownloadQualityProfile.HI_RES,"flac",flac).status)
+        assertEquals(A0AutoPostTransferTechnicalGate.Status.REJECT,
+            verify(DownloadQualityProfile.HI_RES,"wav",
+                wav.copy(bitrateKbps=150_000)).status)
+    }
+
     @Test fun actualMp3QualityCannotBeUpgradedByAFalseFlacFilename() {
         val mp3=decoded(A0CanonicalAcquisitionIntent.Codec.MP3,"mp3",bitrate=320)
         assertEquals(A0AutoPostTransferTechnicalGate.Status.TECHNICALLY_PLAUSIBLE,
