@@ -686,7 +686,8 @@ internal fun SmartPlaylistV2BuilderScreen(
             items(savedFilters, key = { "v2-filter-" + it.id }) { filter ->
                 Column {
                     Text(filter.name, style = MaterialTheme.typography.bodyMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = {
                             editorEpoch++
                             rule = filter.rules
@@ -706,6 +707,8 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 error = "O conjunto de regras excede o limite permitido."
                             }
                         }, enabled = !loading) { Text("Combinar (E)") }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = {
                             val copy = filter.toPlaylistCopy(
                                 UUID.randomUUID().toString(), filter.name,
@@ -735,6 +738,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 } finally { loading = false }
                             }
                         }, enabled = !loading) { Text("Excluir") }
+                        }
                     }
                 }
             }
