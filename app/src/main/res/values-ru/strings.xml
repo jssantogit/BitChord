@@ -1392,4 +1392,6 @@
     <string name="playback_recovery_retry">Повторить</string>
     <string name="playback_recovery_retrying">Повторная попытка…</string>
     <string name="playback_recovery_dismiss">Закрыть</string>
+    <string name="pause_resume_fade">Плавное затухание при паузе и возобновлении</string>
+    <string name="pause_resume_fade_subtitle">Плавно уменьшает громкость при паузе и увеличивает при возобновлении</string>
 </resources>
