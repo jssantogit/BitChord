@@ -68,6 +68,29 @@ internal class A0MultiSearchCandidateEvidence(
     fun stop() { stopped=true }
 
     /**
+     * Only a FULLY FINISHED discovery session may pass offers to the future
+     * executor. Exact canonical request equality forbids reusing a shared
+     * pool for a different album, duration or track order.
+     */
+    class ExecutionSnapshot(
+        val choicesBySlot:List<List<A0ObservedCandidateHandoff.Choice>>,
+        val truncatedSlots:Set<Int>,
+    ) {
+        override fun toString()="A0ExecutionSnapshot(redacted)"
+    }
+
+    @Synchronized
+    fun executionSnapshot(
+        requested:List<SoulseekBatchPlan.Entry>,
+    ):ExecutionSnapshot? {
+        if(!valid || !stopped || entries!=requested)return null
+        return ExecutionSnapshot(
+            buckets.map { it.values.toList() },
+            entries.indices.filter { clipped[it] }.toSet()
+        )
+    }
+
+    /**
      * A release-wide read-only suggestion for each canonical slot, using
      * ALL retained searches. No single song inherits another song's original
      * preflight confidence. A clipped/contradictory slot is review-only.

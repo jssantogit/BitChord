@@ -30,6 +30,22 @@ internal class A0AutoBatchExecutor(
             "A0AutoBatchReport(published=$published,manual=$manualReview,cancelled=$cancelled)"
     }
 
+    /** Read-only bridge from a closed, canonical-matched release collector. */
+    fun runFromEvidence(
+        entries:List<SoulseekBatchPlan.Entry>,
+        evidence:A0MultiSearchCandidateEvidence,
+        profile:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
+        userRequested:Boolean,
+        optedIn:Boolean,
+        isCancelled:()->Boolean,
+        stillAuthorized:()->Boolean,
+    ):Report {
+        val ready=evidence.executionSnapshot(entries)
+            ?: return Report(List(entries.size){TrackStatus.MANUAL_REVIEW},0)
+        return run(entries,ready.choicesBySlot,ready.truncatedSlots,profile,
+            userRequested,optedIn,isCancelled,stillAuthorized)
+    }
+
     fun run(
         entries:List<SoulseekBatchPlan.Entry>,
         observedBySlot:List<List<A0ObservedCandidateHandoff.Choice>>,

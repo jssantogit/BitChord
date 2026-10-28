@@ -87,6 +87,21 @@ class A0MultiSearchCandidateEvidenceTest {
             state.selectionPreview()[0].status)
     }
 
+    @Test fun liveCollectionCannotBeConsumedUntilStoppedOrWithDifferentRequest() {
+        val evidence=A0MultiSearchCandidateEvidence(entries,quality)
+        evidence.add(choices("p1","Magnetic",161))
+        assertNull(evidence.executionSnapshot(entries))
+        evidence.stop()
+        val snapshot=evidence.executionSnapshot(entries)
+        assertNotNull(snapshot)
+        assertEquals(1,snapshot!!.choicesBySlot[0].size)
+        assertEquals(0,snapshot.choicesBySlot[1].size)
+        assertFalse(snapshot.toString().contains("Magnetic"))
+        assertNull(evidence.executionSnapshot(entries.reversed()))
+        assertNull(evidence.executionSnapshot(
+            entries.map { it.copy(album="DIFFERENT EDITION") }))
+    }
+
     @Test fun cancellationClosesTheAccumulatorAndKeepsCollectedEvidenceReadOnly() {
         val state=A0MultiSearchCandidateEvidence(entries,quality)
         state.add(choices("peer-a","Magnetic",161))
