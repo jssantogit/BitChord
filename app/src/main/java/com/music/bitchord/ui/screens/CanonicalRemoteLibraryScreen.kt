@@ -272,66 +272,208 @@ internal fun CanonicalRemoteLibraryScreen(
     BackHandler(enabled = selectedEntity != null) { selectedEntity = null }
     BackHandler(enabled = selectedEntity == null, onBack = onClose)
 
+    val playTrack: (CanonicalBrowseTrack) -> Unit = { track ->
+        track.availableAssets.firstOrNull { it.providerKey == providerKey }?.let { asset ->
+            controller?.playCanonicalRemote(
+                request = CanonicalRemotePlaybackRequest(
+                    recordingId = track.recordingId,
+                    mediaAssetId = asset.mediaAssetId,
+                    providerKey = providerKey,
+                ),
+                metadata = CanonicalRemotePlaybackMetadata(
+                    title = track.title,
+                    artistDisplay = track.artistDisplay,
+                ),
+            )
+        }
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding(),
+            modifier = Modifier.fillMaxSize()
+                .statusBarsPadding().navigationBarsPadding(),
         ) {
-            RemoteBrowseTopBar(title = title, onBack = onClose)
-            if (compatible.isNotEmpty() || selectedFilterId != null) {
-                RemoteSongSavedFilterMenu(
-                    selectedName = selected?.name,
-                    options = compatible,
-                    selectedFilterId = selectedFilterId,
-                    onSelect = { selectedFilterId = it },
-                )
-            }
-            if (filtersUnavailable && selectedFilterId == null) {
-                Text("Filtros salvos indisponíveis.",
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
-            }
-            when (filteredState) {
-                CanonicalSongFilterState.Loading -> Text("Aplicando filtro…",
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
-                CanonicalSongFilterState.Failed -> Text(
-                    "Este filtro não pôde ser aplicado. Escolha outro ou selecione Todas.",
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                )
-                is CanonicalSongFilterState.Ready -> Unit
-            }
-            RemoteBrowseSummary(songCount = displayedTracks.size)
-            TrackList(
-                tracks = displayedTracks,
-                artworkLoader = artworkLoader,
-                onTrackPlay = { track ->
-                    track.availableAssets.firstOrNull()?.let { asset ->
-                        controller?.playCanonicalRemote(
-                            request = CanonicalRemotePlaybackRequest(
-                                recordingId = track.recordingId,
-                                mediaAssetId = asset.mediaAssetId,
-                                providerKey = asset.providerKey,
-                            ),
-                            metadata = CanonicalRemotePlaybackMetadata(
-                                title = track.title,
-                                artistDisplay = track.artistDisplay,
-                            ),
+            RemoteBrowseTopBar(
+                title = selectedEntity?.name ?: title,
+                onBack = if (selectedEntity != null) { { selectedEntity = null } } else onClose,
+            )
+            if (selectedEntity != null) {
+                TextButton(onClick = { selectedEntity = null }) {
+                    Text("Voltar para " + when (selectedContext) {
+                        CanonicalSmartFilterContext.ALBUMS -> "álbuns"
+                        CanonicalSmartFilterContext.ARTISTS -> "artistas"
+                        CanonicalSmartFilterContext.SONGS -> "músicas"
+                    })
+                }
+                when (detailState) {
+                    CanonicalDetailBrowseState.Loading ->
+                        RemoteBrowseMessage("Carregando músicas vinculadas…")
+                    CanonicalDetailBrowseState.Failed ->
+                        RemoteBrowseMessage("Não foi possível confirmar as músicas deste item.")
+                    is CanonicalDetailBrowseState.Ready -> {
+                        RemoteBrowseSummary(songCount = scopedDetailTracks.size)
+                        TrackList(
+                            tracks = scopedDetailTracks,
+                            artworkLoader = artworkLoader,
+                            onTrackPlay = playTrack,
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
-                },
-                modifier = Modifier.fillMaxSize(),
+                }
+            } else {
+                RemoteBrowseContextTabs(
+                    selected = selectedContext,
+                    onSelect = { selectedContext = it },
+                )
+                if (compatible.isNotEmpty() || selectedFilterId != null) {
+                    RemoteSongSavedFilterMenu(
+                        selectedName = selected?.name,
+                        options = compatible,
+                        selectedFilterId = selectedFilterId,
+                        onSelect = { selectedFilterId = it },
+                    )
+                }
+                if (filtersUnavailable && selectedFilterId == null) {
+                    RemoteBrowseMessage("Filtros salvos indisponíveis.")
+                }
+                when (selectedContext) {
+                    CanonicalSmartFilterContext.SONGS -> {
+                        when (filteredState) {
+                            CanonicalSongFilterState.Loading ->
+                                RemoteBrowseMessage("Aplicando filtro…")
+                            CanonicalSongFilterState.Failed ->
+                                RemoteBrowseMessage(
+                                    "Este filtro não pôde ser aplicado. Selecione Todas.",
+                                )
+                            is CanonicalSongFilterState.Ready -> {
+                                RemoteBrowseSummary(songCount = displayedTracks.size)
+                                TrackList(
+                                    tracks = displayedTracks,
+                                    artworkLoader = artworkLoader,
+                                    onTrackPlay = playTrack,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        }
+                    }
+                    CanonicalSmartFilterContext.ALBUMS -> when (val state = entityState) {
+                        CanonicalEntityBrowseState.Loading ->
+                            RemoteBrowseMessage("Carregando álbuns canônicos…")
+                        CanonicalEntityBrowseState.Failed ->
+                            RemoteBrowseMessage("Não foi possível aplicar o filtro de álbuns.")
+                        is CanonicalEntityBrowseState.Artists -> Unit
+                        is CanonicalEntityBrowseState.Albums -> {
+                            RemoteBrowseMessage("${state.releases.size} álbuns vinculados à fonte")
+                            RemoteCanonicalEntityList(
+                                entries = state.releases.map { entity ->
+                                    CanonicalSelectedEntity(entity.id, entity.title) to
+                                        entity.artistDisplay.orEmpty()
+                                },
+                                onSelect = { selectedEntity = it },
+                                emptyText = "Nenhum álbum canônico disponível nesta fonte.",
+                            )
+                        }
+                    }
+                    CanonicalSmartFilterContext.ARTISTS -> when (val state = entityState) {
+                        CanonicalEntityBrowseState.Loading ->
+                            RemoteBrowseMessage("Carregando artistas canônicos…")
+                        CanonicalEntityBrowseState.Failed ->
+                            RemoteBrowseMessage("Não foi possível aplicar o filtro de artistas.")
+                        is CanonicalEntityBrowseState.Albums -> Unit
+                        is CanonicalEntityBrowseState.Artists -> {
+                            RemoteBrowseMessage("${state.artists.size} artistas vinculados à fonte")
+                            RemoteCanonicalEntityList(
+                                entries = state.artists.map { artist ->
+                                    CanonicalSelectedEntity(artist.id, artist.name) to ""
+                                },
+                                onSelect = { selectedEntity = it },
+                                emptyText = "Nenhum artista canônico disponível nesta fonte.",
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Distinct entity types never share a synthetic RecordingId or metadata alias. */
+@Composable
+private fun RemoteBrowseContextTabs(
+    selected: CanonicalSmartFilterContext,
+    onSelect: (CanonicalSmartFilterContext) -> Unit,
+) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+        for (tab in CanonicalSmartFilterContext.entries) {
+            TextButton(onClick = { onSelect(tab) }, modifier = Modifier.weight(1f)) {
+                Text(
+                    when (tab) {
+                        CanonicalSmartFilterContext.SONGS -> "Músicas"
+                        CanonicalSmartFilterContext.ALBUMS -> "Álbuns"
+                        CanonicalSmartFilterContext.ARTISTS -> "Artistas"
+                    },
+                    color = if (selected == tab) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RemoteBrowseMessage(message: String) {
+    Text(
+        text = message,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+    )
+}
+
+/** Selection is by canonical ID; text is presentation only. */
+@Composable
+private fun RemoteCanonicalEntityList(
+    entries: List<Pair<CanonicalSelectedEntity, String>>,
+    onSelect: (CanonicalSelectedEntity) -> Unit,
+    emptyText: String,
+) {
+    if (entries.isEmpty()) {
+        RemoteBrowseMessage(emptyText)
+        return
+    }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = 4.dp, bottom = 28.dp),
+    ) {
+        items(entries, key = { it.first.id }) { (entity, subtitle) ->
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .clickable { onSelect(entity) }
+                    .heightIn(min = 64.dp)
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
+            ) {
+                Text(entity.name, style = MaterialTheme.typography.bodyLarge)
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 20.dp),
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
             )
         }
     }
 }
 
-/** Only Song-compatible saved filters are offered; every other media type remains untouched. */
+/** Only fields supported by the selected canonical media context are offered. */
 @Composable
 private fun RemoteSongSavedFilterMenu(
     selectedName: String?,
