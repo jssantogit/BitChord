@@ -57,7 +57,7 @@ internal class CanonicalCollectionIntentPlanner(
     private val resolver: CanonicalQueueResolver,
 ) {
     companion object {
-        const val MAX_INPUT_SIZE = 100
+        const val MAX_INPUT_SIZE = CanonicalBatchQueuePolicy.MAX_BATCH_SIZE
         private const val MAX_ID_CHARS = 256
     }
 

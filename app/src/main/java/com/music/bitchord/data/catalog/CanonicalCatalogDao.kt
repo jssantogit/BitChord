@@ -123,6 +123,9 @@ internal interface CanonicalCatalogDao {
     @Query("SELECT * FROM catalog_artist WHERE id = :artistId LIMIT 1")
     suspend fun artistById(artistId: String): ArtistEntity?
 
+    @Query("SELECT * FROM catalog_media_asset WHERE id IN (:mediaAssetIds)")
+    suspend fun mediaAssetsByIds(mediaAssetIds: List<String>): List<MediaAssetEntity>
+
     @Query("SELECT * FROM catalog_media_asset WHERE id = :mediaAssetId LIMIT 1")
     suspend fun mediaAssetById(mediaAssetId: String): MediaAssetEntity?
 

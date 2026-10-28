@@ -363,7 +363,7 @@ class SmartCollectionBatchHandoffTest {
         val submitted = mutableListOf<CanonicalCollectionIntentPlan>()
         val handoff = SmartCollectionBatchHandoff(
             refreshIds = { ids },
-            browse = { CanonicalBrowseLibrary(ids.map(::track)) },
+            browse = { CanonicalBrowseLibrary(ids.map { track(it) }) },
             planner = CanonicalCollectionIntentPlanner(Resolver()),
             submit = { plan -> submitted += plan; true },
         )

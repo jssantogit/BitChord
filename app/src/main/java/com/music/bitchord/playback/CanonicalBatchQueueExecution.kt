@@ -32,7 +32,9 @@ internal sealed interface CanonicalBatchQueueDecision {
  * canonical batch and selects the tier/start semantics of the explicit command.
  */
 internal object CanonicalBatchQueuePolicy {
-    const val MAX_BATCH_SIZE = 100
+    // One atomic Media3 insertion. Large enough for a long smart playlist,
+    // bounded to avoid unlimited queue materialization on Android.
+    const val MAX_BATCH_SIZE = 500
 
     fun decide(
         plan: CanonicalCollectionIntentPlan,

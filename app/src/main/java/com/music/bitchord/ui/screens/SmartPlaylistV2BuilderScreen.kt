@@ -48,6 +48,7 @@ import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
 import com.music.bitchord.data.listening.SmartPlaylistV2Query
 import com.music.bitchord.data.listening.SmartPlaylistV2Sort
 import com.music.bitchord.playback.CanonicalCollectionIntent
+import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.smart_collection_batch_play
 import com.music.bitchord.sharedui.resources.smart_collection_batch_queue
@@ -525,11 +526,11 @@ internal fun SmartPlaylistV2BuilderScreen(
                             }
                         }, enabled = !loading && previewQuery != null) { Text("Atualizar") }
                     }
-                    if (preview!!.size > 100) {
-                        Text("A execução da fila ainda é limitada a 100 músicas; a prévia pode ser maior.",
+                    if (preview!!.size > CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE) {
+                        Text("A execução permite até ${CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE} músicas por ação; a prévia pode ser maior.",
                             style = MaterialTheme.typography.bodySmall)
                     }
-                    if (onPreviewAction != null && preview!!.isNotEmpty() && preview!!.size <= 100) {
+                    if (onPreviewAction != null && preview!!.isNotEmpty() && preview!!.size <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             TextButton(onClick = {
                                 previewQuery?.let { onPreviewAction(it, CanonicalCollectionIntent.PLAY_NOW) }
