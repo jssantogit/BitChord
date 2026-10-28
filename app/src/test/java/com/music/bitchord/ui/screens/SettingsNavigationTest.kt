@@ -52,6 +52,15 @@ class SettingsNavigationTest {
         assertTrue(SettingsSection.MISCELLANEOUS !in system.sections)
     }
 
+    @Test fun catalogDiscoveryPreferenceStaysInSourcesPageAndGlobalSearch() {
+        // Catalog is a SOURCE, not a download quality or playback control.
+        assertTrue(canonicalDiscoverySettingsVisible(SettingsSection.SOURCES, ""))
+        assertTrue(canonicalDiscoverySettingsVisible(null, "catalog"))
+        assertTrue(!canonicalDiscoverySettingsVisible(null, ""))
+        assertTrue(!canonicalDiscoverySettingsVisible(SettingsSection.AUDIO_QUALITY, "catalog"))
+        assertTrue(!canonicalDiscoverySettingsVisible(SettingsSection.DOWNLOADS, ""))
+    }
+
     @Test fun selectingAppearanceNavigatesWithoutChangingAPreference() {
         var opened: SettingsSection? = null
         compose.setContent {
