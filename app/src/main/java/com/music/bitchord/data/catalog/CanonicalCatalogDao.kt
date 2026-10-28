@@ -20,13 +20,13 @@ internal data class ExclusiveExternalIdentityClaimResult(
     val inserted: Boolean,
 )
 
-@Dao
 internal data class CanonicalRecordingReleaseTitleRow(
     val recordingId: String,
     val releaseId: String,
     val releaseTitle: String,
 )
 
+@Dao
 internal interface CanonicalCatalogDao {
 
     /** Never used by the first-party Listening preference store. */
