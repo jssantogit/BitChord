@@ -72,6 +72,25 @@ class PauseResumeVolumeFadeTest {
         assertEquals(1f, deck.volume, 0.00001f)
     }
 
+    @Test fun `decoder failure after first audible frames restores unity instead of hanging`() = runTest {
+        val deck = FakeDeck(playingInitially = false)
+        val fade = PauseResumeVolumeFade(this, { 200 }, { false }, { testScheduler.currentTime })
+        fade.play(deck.player)
+        runCurrent()
+        advanceTimeBy(64)
+        runCurrent()
+        assertTrue(deck.volume < 1f)
+        deck.audible = false
+        deck.playerError = PlaybackException(
+            "stream disconnected",
+            null,
+            PlaybackException.ERROR_CODE_DECODING_FAILED,
+        )
+        advanceTimeBy(32)
+        runCurrent()
+        assertEquals(1f, deck.volume, 0f)
+    }
+
     @Test fun `play during pending pause reverses gain and must never perform stale pause`() = runTest {
         val deck = FakeDeck(playingInitially = true)
         val fade = PauseResumeVolumeFade(this, { 200 }, { false }, { testScheduler.currentTime })
