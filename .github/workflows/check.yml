@@ -2,7 +2,8 @@ name: Android CI
 
 on:
   push:
-    branches: [main]
+    # Temporary #192 branch CI while PR #193 cannot generate a merge ref.
+    branches: [main, 'listening/smart-playlists-v2-192']
   pull_request:
 
 # Per-PR workflows supersede old HEADs; main runs are keyed by commit and
@@ -53,7 +54,7 @@ jobs:
         run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
 
       - name: Publish smart playlist CI benchmark summary
-        if: always() && github.event_name == 'pull_request' && startsWith(github.head_ref, 'listening/smart-playlists')
+        if: always() && ((github.event_name == 'pull_request' && startsWith(github.head_ref, 'listening/smart-playlists')) || (github.event_name == 'push' && github.ref == 'refs/heads/listening/smart-playlists-v2-192'))
         run: |
           if test -f app/build/reports/smart-playlist-benchmark/summary.md; then
             cat app/build/reports/smart-playlist-benchmark/summary.md >> "$GITHUB_STEP_SUMMARY"
@@ -62,7 +63,7 @@ jobs:
           fi
 
       - name: Upload smart playlist CI benchmark metrics
-        if: always() && github.event_name == 'pull_request' && startsWith(github.head_ref, 'listening/smart-playlists')
+        if: always() && ((github.event_name == 'pull_request' && startsWith(github.head_ref, 'listening/smart-playlists')) || (github.event_name == 'push' && github.ref == 'refs/heads/listening/smart-playlists-v2-192'))
         uses: actions/upload-artifact@v4
         with:
           name: smart-playlist-benchmark-${{ github.sha }}
