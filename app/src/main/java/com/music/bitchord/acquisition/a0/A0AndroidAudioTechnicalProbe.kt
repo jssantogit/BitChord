@@ -133,7 +133,7 @@ internal object A0AndroidAudioTechnicalProbe {
                     break
                 }
                 if(amount==0 || extractor.sampleTrackIndex!=audioIndex ||
-                    extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_ENCRYPTED!=0)
+                    (extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_ENCRYPTED)!=0)
                     return null
                 val timestamp=extractor.sampleTime
                 if(timestamp<0 || timestamp<lastUs)return null
