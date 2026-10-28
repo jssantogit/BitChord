@@ -107,6 +107,14 @@ internal fun canonicalNativeSections(
  * original card and shelf instances when no field changes. Identity stays the
  * actual MusicBrainz ReleaseGroup browse key; no title-based join.
  */
+/** Keep a low-resolution CAA Front visible until a verified larger Front
+ * arrives; never flash blank or downgrade a higher-quality sleeve. */
+internal fun canonicalShouldAcceptArtworkUpdate(old: String?, next: String?): Boolean {
+    if (next.isNullOrBlank()) return false
+    if (old.isNullOrBlank()) return true
+    return canonicalNeedsCoverRefresh(old) && !canonicalNeedsCoverRefresh(next)
+}
+
 internal fun canonicalArtistShelvesWithCoverUpdates(
     sections: List<HomeShelf>,
     covers: Map<String, Pair<String, String>>,
@@ -117,11 +125,12 @@ internal fun canonicalArtistShelvesWithCoverUpdates(
         var changedShelf = false
         val cards = shelf.items.map card@{ item ->
             val browseId = item.browseId.orEmpty()
-            if (!browseId.startsWith("catalog:RELEASE_GROUP:") ||
-                !item.thumbnailUrl.isNullOrBlank()
-            ) return@card item
+            if (!browseId.startsWith("catalog:RELEASE_GROUP:")) return@card item
             val groupMbid = browseId.removePrefix("catalog:RELEASE_GROUP:")
             val ready = covers[groupMbid] ?: return@card item
+            if (!canonicalShouldAcceptArtworkUpdate(item.thumbnailUrl, ready.first)) {
+                return@card item
+            }
             changedShelf = true
             item.copy(title = ready.second, thumbnailUrl = ready.first)
         }
