@@ -372,4 +372,45 @@ class SmartPlaylistBatchEvidenceRoomTest {
         }
     }
 
+    @Test fun albumArtistCreditsAreAttachedOnlyThroughCanonicalLinkedReleases() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:linked", "Song", "Singer", 180_000L))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "rel:one", "Album", "Singer", null,
+            ))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "rel:no-credits", "Unknown credits", "Singer", null,
+            ))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "rel:one", "rec:linked", 1,
+            ))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "rel:no-credits", "rec:linked", 1,
+            ))
+            dao.upsertArtist(com.music.bitchord.data.catalog.ArtistEntity(
+                "artist:canonical", "Known Album Artist",
+            ))
+            dao.upsertReleaseArtistCredits(listOf(
+                com.music.bitchord.data.catalog.ReleaseArtistCreditEntity(
+                    "rel:one", 0, "artist:canonical",
+                ),
+            ))
+            val reader = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            )
+            val row = reader.read(listOf("rec:linked")).single()
+            assertEquals(listOf("Known Album Artist"), row.albumArtistNames)
+            assertTrue(row.albumArtistEvidenceUnknown) // Second release lacks credits
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
 }

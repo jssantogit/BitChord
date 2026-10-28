@@ -462,4 +462,54 @@ class SmartPlaylistV2RuleEngineTest {
         }
     }
 
+    @Test fun linkedAlbumArtistsUseAnyForPositiveAndAllForNegative() {
+        val shared = candidate("shared").copy(
+            albumArtistNames = listOf("NewJeans", "Various Artists"),
+            albumArtistEvidenceUnknown = false,
+        )
+        val partial = candidate("partial").copy(
+            albumArtistNames = listOf("NewJeans"),
+            albumArtistEvidenceUnknown = true,
+        )
+        val missing = candidate("missing")
+        fun rule(op: SmartPlaylistRuleOperator) = SmartPlaylistV2Query(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.ALBUM_ARTIST, op,
+                textValue = "newjeans",
+            ),
+            sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+        )
+        assertEquals(listOf("partial", "shared"), planner.preview(
+            listOf(shared, partial, missing), rule(SmartPlaylistRuleOperator.EQUAL),
+        ).map { it.recordingId })
+        assertTrue(planner.preview(
+            listOf(shared, partial, missing), rule(SmartPlaylistRuleOperator.NOT_EQUAL),
+        ).isEmpty())
+        val other = candidate("other").copy(
+            albumArtistNames = listOf("Various Artists"),
+            albumArtistEvidenceUnknown = false,
+        )
+        assertEquals(listOf("other"), planner.preview(
+            listOf(other, shared, partial, missing),
+            rule(SmartPlaylistRuleOperator.NOT_EQUAL),
+        ).map { it.recordingId })
+        assertTrue(planner.preview(
+            listOf(missing), SmartPlaylistV2Query(
+                SmartPlaylistRule.Not(SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.ALBUM_ARTIST,
+                    SmartPlaylistRuleOperator.EQUAL, textValue = "NewJeans",
+                )),
+            ),
+        ).isEmpty())
+    }
+
+    @Test fun unverifiedAlbumArtistMissingCannotPretendThereIsNoArtist() {
+        assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.ALBUM_ARTIST,
+                SmartPlaylistRuleOperator.IS_MISSING,
+            ))
+        }
+    }
+
 }
