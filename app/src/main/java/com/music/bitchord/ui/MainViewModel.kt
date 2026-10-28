@@ -689,6 +689,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // update before allocating CAA network permits.
             val groupIds = visible.filter {
                 it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                    canonicalEditorialReleaseType(it) != null &&
                     canonicalNeedsCoverRefresh(it.artworkUri)
             }.map { it.musicBrainzId }
             val warmGroups = try {
@@ -858,6 +859,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 coverArtArchive.cachedVerifiedGroupCovers(
                     prioritized.filter {
                         it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                            canonicalEditorialReleaseType(it) != null &&
                             canonicalNeedsCoverRefresh(it.artworkUri)
                     }.map { it.musicBrainzId }, CoverArtSize.THUMBNAIL,
                 )
