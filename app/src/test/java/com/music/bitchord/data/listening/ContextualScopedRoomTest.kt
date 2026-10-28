@@ -3,6 +3,7 @@ package com.music.bitchord.data.listening
 import androidx.room.Room
 import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.CanonicalLocalLibrary
 import com.music.bitchord.data.catalog.MediaAssetEntity
 import com.music.bitchord.data.catalog.RecordingArtistCreditEntity
 import com.music.bitchord.data.catalog.RecordingEntity
@@ -128,6 +129,66 @@ class ContextualScopedRoomTest {
             assertTrue(dao.providerScopedArtistRecordingIds(
                 "opensubsonic:unknown", "artist:one",
             ).isEmpty())
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test fun savedSongFilterRunsAcrossLocalAndRemoteWithExactCanonicalSourceIdentity() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val dao = db.catalogDao()
+            val local = CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER
+            val home = "opensubsonic:home"
+            val work = "opensubsonic:work"
+            dao.upsertRecording(RecordingEntity("rec:shared", "Ditto", "NewJeans", 180_000))
+            dao.upsertRecording(RecordingEntity("rec:home", "Get Up", "NewJeans", 60_000))
+            dao.upsertRecording(RecordingEntity("rec:work", "Get Up", "NewJeans", 60_000))
+            dao.upsertMediaAsset(MediaAssetEntity(
+                "asset:shared-local", "rec:shared", local,
+                "mediastore-shared", "content://media/audio/100", null, null, null, null,
+            ))
+            dao.upsertMediaAsset(MediaAssetEntity(
+                "asset:shared-remote", "rec:shared", home,
+                "remote-shared", "opensubsonic://media/100", null, null, null, null,
+            ))
+            dao.upsertMediaAsset(MediaAssetEntity(
+                "asset:home", "rec:home", home,
+                "remote-home", "opensubsonic://media/101", null, null, null, null,
+            ))
+            dao.upsertMediaAsset(MediaAssetEntity(
+                "asset:work", "rec:work", work,
+                "remote-work", "opensubsonic://media/102", null, null, null, null,
+            ))
+            val ditto = SavedSmartPlaylistV2Filter("f:ditto", "Title Ditto",
+                SmartPlaylistRule.Comparison(SmartPlaylistRuleField.TITLE,
+                    SmartPlaylistRuleOperator.EQUAL, textValue = "Ditto"))
+            val getUp = ditto.copy(rules = SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE,
+                SmartPlaylistRuleOperator.EQUAL, textValue = "Get Up"))
+            val service = CanonicalContextualFilterLibrary(dao)
+            assertEquals(listOf("rec:shared"), service.songs(local, ditto).map { it.recordingId })
+            assertEquals(listOf("rec:shared"), service.songs(home, ditto).map { it.recordingId })
+            assertTrue(service.songs(work, ditto).isEmpty())
+            assertEquals(listOf("rec:home"), service.songs(home, getUp).map { it.recordingId })
+            assertEquals(listOf("rec:work"), service.songs(work, getUp).map { it.recordingId })
+            val localAsset = service.songs(local, ditto).single().availableAssets.single()
+            assertEquals(local, localAsset.providerKey)
+            assertEquals("asset:shared-local", localAsset.mediaAssetId)
+            val homeAsset = service.songs(home, ditto).single().availableAssets.single()
+            assertEquals(home, homeAsset.providerKey)
+            assertEquals("asset:shared-remote", homeAsset.mediaAssetId)
+            dao.deleteAllMediaAssets(home)
+            assertTrue(service.songs(home, ditto).isEmpty())
+            assertEquals(listOf("rec:shared"), service.songs(local, ditto).map { it.recordingId })
+            assertEquals(listOf("rec:work"), service.songs(work, getUp).map { it.recordingId })
+            assertTrue(runCatching { service.songs("", ditto) }.exceptionOrNull()
+                is IllegalArgumentException)
+            assertTrue(runCatching { service.songs(home, ditto.copy(rules =
+                SmartPlaylistRule.Comparison(SmartPlaylistRuleField.EXPLICIT_RATING,
+                    SmartPlaylistRuleOperator.IS_MISSING))) }.exceptionOrNull()
+                is IllegalArgumentException)
         } finally {
             db.close()
         }
