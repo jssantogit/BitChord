@@ -103,6 +103,25 @@ class SoulseekAutoReviewPlanTest {
         }
     }
 
+    @Test fun restoredOrTamperedActivityPayloadCannotStealTheOriginalReviewLease() {
+        val all=entries(4)
+        val plan=SoulseekAutoReviewPlan.from(
+            all,listOf(done,review,done,review))!!
+        val selected=plan.manualEntries.map { it.copy(trackId="synthetic") }
+        assertTrue(plan.matchesManualPayload(listOf(1,3),selected))
+        assertFalse(plan.matchesManualPayload(listOf(3,1),selected))
+        assertFalse(plan.matchesManualPayload(listOf(1,2),selected))
+        assertFalse(plan.matchesManualPayload(listOf(1,3),
+            selected.mapIndexed { i,entry ->
+                if(i==1)entry.copy(durationSeconds=1810) else entry
+            }))
+        assertFalse(plan.matchesManualPayload(listOf(1,3),
+            selected.mapIndexed { i,entry ->
+                if(i==0)entry.copy(query="different source") else entry
+            }))
+        assertFalse(plan.matchesManualPayload(listOf(1),selected.take(1)))
+    }
+
     @Test fun largeBatchRetainsEverySlotAndReturnsOnlyUnresolved() {
         val original=entries(64)
         val status=List(64) { index -> if(index%2==0)done else review }
