@@ -211,3 +211,9 @@ Primary official evidence:
 - Added `RELEASE_ARTWORK_REFERENCE` as a **positive-only** `IS_PRESENT` rule. Room reads nonblank `catalog_release.artworkUri` only through `catalog_release_track` links, in <=400-ID chunks and only when the AST references this rule.
 - An existing URI is *not* proof the referenced image is reachable, accurate, cached, a local thumbnail or a canonical album cover. Because Catalog #178 still has artwork-provenance gaps, absent/unknown pointers evaluate UNKNOWN; `IS_MISSING`, negative comparisons and NOT(UNKNOWN) cannot yield an invented negative match.
 - JVM and Room tests cover multiple releases, absent links, operator validation and selective read. Do not count this as full Symfonium 13.6+ `thumbnail`/`local thumbnail` parity before reliable present/missing provenance and physical comparison.
+
+## 28/10/2026 — Sort by first-party rating-update date
+
+- Added `LOCAL_RATING_NEWEST` and `LOCAL_RATING_OLDEST` with nulls/unknown/future timestamps sorted last and RecordingId ties deterministic. The preview requests local timestamp evidence even if the AST itself contains no rating-age filter.
+- Android sort menu now labels the complete V2 sort set in PT-BR rather than exposing enum tokens; Room and pure-engine tests cover date ordering and missing values.
+- These are native fork first-party rating-update sort modes, not a claim of Favorite Date equivalence. Symfonium sort options still require version-locked on-device audit.
