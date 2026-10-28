@@ -116,12 +116,39 @@ internal class A0ObservedCandidateHandoff(
         val hitCounts=IntArray(releaseSlotTokens.size)
         for(sibling in siblings)
             for(slot in releaseSlotHits(sibling))hitCounts[slot]++
-        if(related.none { hitCounts[it]==0 })return null
-        return siblings.firstOrNull { releaseSlotHits(it).isEmpty() }
-            ?: siblings.firstOrNull { choice ->
-                val slots=releaseSlotHits(choice)
-                slots.isNotEmpty() && slots.all { hitCounts[it]>1 }
+        if(related.any { hitCounts[it]==0 }) {
+            return siblings.firstOrNull { releaseSlotHits(it).isEmpty() }
+                ?: siblings.firstOrNull { choice ->
+                    val slots=releaseSlotHits(choice)
+                    slots.isNotEmpty() && slots.all { hitCounts[it]>1 }
+                }
+        }
+        // Even when the title slot is represented, 64 LOW-QUALITY claims
+        // must not indefinitely hide a later codec/album-compatible claim.
+        // Only peer-independent quality/album evidence is used here; the
+        // preflight score refers to the current manual song, not siblings.
+        fun evidenceGrade(choice:Choice):Int {
+            val quality=when(choice.qualityEvidence.status) {
+                A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED,
+                A0DownloadQualityPolicy.Status.NOT_CONSTRAINED -> 4
+                A0DownloadQualityPolicy.Status.INCONCLUSIVE_MANUAL -> 2
+                else -> 0
             }
+            val album=when(choice.albumEvidence.status) {
+                A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED,
+                A0CanonicalAlbumPolicy.Status.UNCONSTRAINED -> 2
+                A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL -> 1
+                else -> 0
+            }
+            return quality+album
+        }
+        val incomingGrade=evidenceGrade(incoming)
+        return siblings.firstOrNull { old ->
+            val oldHits=releaseSlotHits(old)
+            oldHits.isNotEmpty() && oldHits.any { it in related } &&
+                oldHits.all { hitCounts[it]>1 || it in related } &&
+                evidenceGrade(old)<incomingGrade
+        }
     }
     private val canonicalManualTarget by lazy {
         // Badly formatted untrusted/search text must not crash the collector.

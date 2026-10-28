@@ -43,6 +43,26 @@ class A0ReleaseDiscoveryShadowAdapterTest {
         assertFalse(shadow.canTransfer)
     }
 
+    @Test fun lateMatchingQualityReplacesWrongQualityAtFullPeerCap() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase="ILLIT - Magnetic",requestedAlbum="SUPER REAL ME",
+            expectedDurationSeconds=161,qualityProfile=profile,
+            collectReleaseShadow=true,releaseQueries=entries.map { it.query })
+        val bad=(1..64).map { n ->
+            A0SoulseekSearchFile(
+                "Shared\\ILLIT\\SUPER REAL ME\\$n ILLIT - Magnetic.flac",
+                24_000_000L,"flac",mapOf(1 to 161,4 to 44_100,5 to 16))
+        }
+        handoff.offerParsed(reply(*(bad+file("ILLIT - Magnetic",161)).toTypedArray()),"peer")
+        assertEquals(64,handoff.releaseShadowChoices().size)
+        val preview=A0ReleaseDiscoveryShadowAdapter.preview(
+            entries,handoff.releaseShadowChoices(),profile)
+        assertEquals(1,preview.autoReadyTracks)
+        assertEquals(A0ReleaseDiscoveryPlanner.Status.SUGGESTED,
+            preview.trackDecisions[0].status)
+        assertFalse(preview.canTransfer)
+    }
+
     @Test fun onePeerResponseCoveringTwoTracksIsObservedWithoutAutoDownload() {
         val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true,
             searchPhrase="ILLIT - Magnetic",requestedAlbum="SUPER REAL ME",
