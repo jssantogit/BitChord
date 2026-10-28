@@ -56,6 +56,7 @@ internal class A0AutoDiscoveryCoordinator(
         optedIn:Boolean,
         isCancelled:()->Boolean,
         stillAuthorized:()->Boolean,
+        onSlotResolved:(Int,A0AutoBatchExecutor.TrackStatus)->Unit={ _,_ -> },
     ):Report {
         val count=entries.size
         val valid=count in 1..SoulseekBatchPlan.MAX_TRACKS &&
@@ -93,7 +94,8 @@ internal class A0AutoDiscoveryCoordinator(
             return Report(searches,batchExecutor.runFromEvidence(
                 entries,pooled,quality,
                 userRequested=true,optedIn=true,
-                isCancelled=isCancelled,stillAuthorized=stillAuthorized))
+                isCancelled=isCancelled,stillAuthorized=stillAuthorized,
+                onSlotResolved=onSlotResolved))
         }finally{
             // Closing discovery cannot interrupt separate P/F sessions: those
             // are created only after the collector is sealed.
