@@ -28,6 +28,11 @@ internal object CatalogCoverDiagnostics {
         // from disk reads and network downloads, without recording URLs.
         add("coil_sources memory=${s.coilMemoryHits} disk=${s.coilDiskHits}" +
             " network=${s.coilNetworkFetches} other=${s.coilOtherSources}")
+        // A new APK may preserve on-disk bytes even when this capture starts
+        // before the ImageLoader has been created. Never interpret unknown as 0.
+        add("coil_disk_bytes_on_loader_init=${s.coilDiskBytesAtInitialization ?: "unknown"}" +
+            " coil_disk_capacity_bytes=${s.coilDiskCapacityBytes ?: "unknown"}" +
+            " app_update_disk_retained=${s.coilDiskPreservedOnVersionUpgrade}")
         if (s.imageLoadSampleCount > 0 &&
             s.p50ImageLoadMs != null && s.p95ImageLoadMs != null
         ) {
