@@ -706,4 +706,36 @@ class CanonicalCoverProgressiveEnrichmentTest {
         assertEquals(url, corrected[1].artworkUri)
         assertEquals("content://tracks/own.jpg", corrected[2].artworkUri)
     }
+
+    @Test fun verifiedGroupCacheCorrectsWrongSameSizeAlbumCardAndKeepsDowngradeProtection() {
+        val group = "11111111-1111-4111-8111-111111111111"
+        val old = "https://archive.org/old-incorrect-edition-front-500.jpg"
+        val approved = "https://archive.org/new-approved-group-front-500.jpg"
+        val album = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            group, com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP,
+            "Get Up", "NewJeans", releaseKind = "EP", artworkUri = old,
+        )
+        // A fresh verified group cache record is stronger than the existing
+        // (potentially stale) 500px image in a reconstructed album card.
+        val corrected = com.music.bitchord.ui.canonicalRowsWithVerifiedGroupCoverBatch(
+            listOf(album), mapOf(group to approved),
+        ).single()
+        assertEquals(approved, corrected.artworkUri)
+        assertEquals(corrected,
+            com.music.bitchord.ui.canonicalRowsWithVerifiedGroupCoverBatch(
+                listOf(corrected), mapOf(group to approved),
+            ).single())
+        // An old verified 250px thumb cannot replace the selected 500px card.
+        assertEquals(corrected,
+            com.music.bitchord.ui.canonicalRowsWithVerifiedGroupCoverBatch(
+                listOf(corrected),
+                mapOf(group to "https://coverartarchive.org/release/abc/front-250"),
+            ).single())
+        val other = album.copy(kind = com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE,
+            artworkUri = old)
+        assertEquals(other,
+            com.music.bitchord.ui.canonicalRowsWithVerifiedGroupCoverBatch(
+                listOf(other), mapOf(group to approved),
+            ).single())
+    }
 }
