@@ -227,6 +227,59 @@ class PauseResumeVolumeFadeTest {
         )
     }
 
+    @Test fun `turning off fade during pause settles pause instead of resuming music`() = runTest {
+        val deck = FakeDeck(playingInitially = true)
+        val fade = PauseResumeVolumeFade(this, { 200 }, { false }, { testScheduler.currentTime })
+        fade.pause(deck.player)
+        runCurrent()
+        advanceTimeBy(64)
+        runCurrent()
+        fade.settlePendingPause()
+        assertFalse(deck.playWhenReady)
+        assertEquals(1, deck.pauseCalls)
+        assertEquals(1f, deck.volume, 0f)
+        advanceTimeBy(250)
+        runCurrent()
+        assertEquals(1, deck.pauseCalls)
+    }
+
+    @Test fun `route reconfiguration settles pending pause on the new owner as well`() = runTest {
+        val outgoing = FakeDeck(playingInitially = true)
+        val incoming = FakeDeck(playingInitially = true)
+        var currentOwner: Player = outgoing.player
+        val fade = PauseResumeVolumeFade(
+            scope = this,
+            durationMs = { 200 },
+            overlapActive = { false },
+            clockMs = { testScheduler.currentTime },
+            sessionOwner = { currentOwner },
+        )
+        fade.pause(outgoing.player)
+        runCurrent()
+        advanceTimeBy(48)
+        runCurrent()
+        currentOwner = incoming.player
+        fade.settlePendingPause()
+        assertFalse(outgoing.playWhenReady)
+        assertFalse(incoming.playWhenReady)
+        assertEquals(1f, outgoing.volume, 0f)
+    }
+
+    @Test fun `seeking cancels pause without pausing current music`() = runTest {
+        val deck = FakeDeck(playingInitially = true)
+        val fade = PauseResumeVolumeFade(this, { 200 }, { false }, { testScheduler.currentTime })
+        fade.pause(deck.player)
+        runCurrent()
+        advanceTimeBy(64)
+        runCurrent()
+        fade.reset()
+        advanceTimeBy(250)
+        runCurrent()
+        assertEquals(0, deck.pauseCalls)
+        assertTrue(deck.playWhenReady)
+        assertEquals(1f, deck.volume, 0f)
+    }
+
     @Test fun `disabled preference bypasses the entire envelope`() = runTest {
         val deck = FakeDeck(playingInitially = true)
         val fade = PauseResumeVolumeFade(this, { 0 }, { false }, { testScheduler.currentTime })
