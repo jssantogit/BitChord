@@ -227,7 +227,10 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
             candidates(
                 includeRemoteRatings = requiresRemote,
                 includeSourceEvidence = query.rules.needsSourceKinds(),
-                requiredFields = query.rules.referencedFields(),
+                requiredFields = query.rules.referencedFields() +
+                    if (query.sort == SmartPlaylistV2Sort.LOCAL_RATING_NEWEST ||
+                        query.sort == SmartPlaylistV2Sort.LOCAL_RATING_OLDEST
+                    ) setOf(SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING) else emptySet(),
             ),
             query,
         )
