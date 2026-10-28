@@ -18,6 +18,7 @@ import com.music.bitchord.download.SoulseekBatchSession
 import com.music.bitchord.download.SoulseekBatchPlan
 import com.music.bitchord.download.Downloads
 import com.music.bitchord.download.SoulseekManualRecoveryTermination
+import com.music.bitchord.download.SoulseekManualLifecycleGate
 import android.widget.Toast
 import android.text.InputType
 import android.text.InputFilter
@@ -53,6 +54,7 @@ import java.util.UUID
  */
 class A0ManualLoginActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
+    private val lifecycleGate=SoulseekManualLifecycleGate()
     // Memory-only comparison; scoped to this Activity, never persisted.
     private val searchComparison=A0SearchComparison()
     @Volatile private var activeSocket: Socket? = null
@@ -379,6 +381,7 @@ class A0ManualLoginActivity : Activity() {
                 "Verificando uma sessão; nenhum arquivo será transferido."
             }
             val accountGeneration = SoulseekActiveSession.generation()
+            val lifecycleToken=lifecycleGate.token()
             worker.execute {
                 // Existing Diagnostics capture and structured tracing; no raw inputs.
                 val featureCapture = runCatching {
@@ -1234,9 +1237,14 @@ class A0ManualLoginActivity : Activity() {
                                                         receipt.byteCount,receipt.sha256Hex,
                                                         isCancelled={
                                                             stopping || Thread.currentThread().isInterrupted ||
+                                                                !lifecycleGate.isCurrent(lifecycleToken) ||
                                                                 !SoulseekActiveSession.isCurrent(accountGeneration)
                                                         },
                                                         commitGuard={ commit ->
+                                                            check(lifecycleGate.isCurrent(lifecycleToken) &&
+                                                                !stopping) {
+                                                                "Manual publication revoked by Activity stop"
+                                                            }
                                                             SoulseekActiveSession.commitIfCurrent(
                                                                 accountGeneration, commit
                                                             )
@@ -1627,6 +1635,7 @@ class A0ManualLoginActivity : Activity() {
     }
 
     override fun onStop() {
+        lifecycleGate.revoke()
         stopping = true
         activeSelectionQueue?.offer(-1)
         activeTransfer?.cancel()
