@@ -164,6 +164,20 @@ internal class PauseResumeVolumeFade(
      */
     fun reset() = interrupt(keep = null)
 
+    /**
+     * Used when settings or output routing invalidate the envelope but not the
+     * user's PAUSE intention. Seeking/skipping intentionally call [reset] instead.
+     */
+    fun settlePendingPause() {
+        val shouldPause = owner != null && job?.isActive == true && !fadingIn
+        val previous = owner
+        reset()
+        if (shouldPause) {
+            previous?.pause()
+            sessionOwner()?.takeIf { it !== previous }?.pause()
+        }
+    }
+
     private fun interrupt(keep: Player?) {
         if (job?.isActive == true) {
             onEvent(PauseResumeFadeEvent.CANCELED, PauseResumeFadeCurve.normalizeDuration(durationMs()))
