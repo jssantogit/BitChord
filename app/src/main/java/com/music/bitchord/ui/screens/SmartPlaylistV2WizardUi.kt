@@ -42,6 +42,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -344,7 +345,8 @@ internal fun SmartPlaylistV2WizardUi(
                 }
             }
             LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                modifier = Modifier.weight(1f).fillMaxWidth()
+                    .testTag("smart-playlist-wizard-list"),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
                     start = 20.dp, end = 20.dp, bottom = 28.dp,
                 ),

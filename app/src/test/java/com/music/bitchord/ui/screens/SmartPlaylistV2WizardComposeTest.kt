@@ -6,6 +6,8 @@ import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
 import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
@@ -69,6 +71,7 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Grupo 1").assertExists()
         compose.onNodeWithText("Revisar playlist").performClick()
         compose.onNodeWithText("Revisar e criar").assertExists()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
         compose.onNodeWithText("Prévia real").assertExists()
         compose.onNodeWithText("Ainda não calculada para estas regras").assertExists()
         compose.onNodeWithText("Criar playlist").assertIsNotEnabled()
