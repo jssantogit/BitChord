@@ -35,6 +35,10 @@ internal class A0AutoDiscoveryCoordinator(
     class Report(
         val searches:Int,
         val batch:A0AutoBatchExecutor.Report,
+        /** A3 atomically proved that NO sibling began P/F. Explicit retry
+         * of the same identity is safe; never set this from peer claims.
+         */
+        val unusedReservationReleased:Boolean=false,
     ) {
         override fun toString()=
             "A0AutoDiscoveryReport(searches=$searches,published=${batch.published})"
