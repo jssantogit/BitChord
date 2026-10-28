@@ -14,6 +14,7 @@ import com.music.bitchord.download.A3AcquisitionLedger
 internal class A0AutoJobJournal(
     private val ledger:A3AcquisitionLedger,
     private val id:String,
+    private val reservedAutomatic:Boolean=false,
 ) {
     private var created=false
     private var uncertain=false
@@ -24,7 +25,16 @@ internal class A0AutoJobJournal(
     @Synchronized
     fun beginTransfer() {
         if(!created) {
-            ledger.create(id)
+            if(reservedAutomatic) {
+                val existing=ledger.get(id)
+                check(existing?.phase==A3AcquisitionLedger.Phase.REQUESTED &&
+                    existing.autoRecordingDigest!=null &&
+                    existing.autoReleaseDigest!=null) {
+                    "A3 automatic transfer is not bound to a durable reservation"
+                }
+            }else {
+                ledger.create(id)
+            }
             created=true
         }
         // Search/selection may have happened before this worker acquired its
