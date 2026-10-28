@@ -10,6 +10,7 @@ import androidx.core.content.ContextCompat
 import com.music.bitchord.data.innertube.StreamResolver
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.BuildConfig
+import com.music.bitchord.acquisition.a0.A0AutoBatchExecutor
 import com.music.bitchord.acquisition.a0.A0AndroidAutoAcquisitionEngine
 import com.music.bitchord.acquisition.a0.A0AndroidAutoConsent
 import com.music.bitchord.acquisition.a0.A0CanonicalAcquisitionIntent
