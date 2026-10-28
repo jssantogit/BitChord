@@ -62,6 +62,7 @@ internal class A0AutoDiscoveryCoordinator(
         stillAuthorized:()->Boolean,
         onSlotResolved:(Int,A0AutoBatchExecutor.TrackStatus)->Unit={ _,_ -> },
         onSlotSearching:(Int)->Unit={},
+        onCandidateDecision:(Int,A0AutoCandidateSelectionPolicy.Decision)->Unit={ _,_ -> },
     ):Report {
         val count=entries.size
         val valid=count in 1..SoulseekBatchPlan.MAX_TRACKS &&
@@ -128,6 +129,10 @@ internal class A0AutoDiscoveryCoordinator(
                 val unique=choices.filterNot {
                     (it.peerUsername to it.remotePath) in publishedPaths
                 }
+                val decision=A0AutoCandidateSelectionPolicy.preview(
+                    entries[index],unique,quality,sampleTruncated=truncated)
+                // Counts and reason only: never expose peer/user/path to logs.
+                try { onCandidateDecision(index,decision) }catch(_:Exception){}
                 val outcome=batchExecutor.run(
                     entries=listOf(entries[index]),
                     observedBySlot=listOf(unique),
