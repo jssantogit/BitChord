@@ -6725,6 +6725,7 @@ class PlaybackService : MediaLibraryService() {
     private fun requestOutputReconfiguration() {
         outputReconfigureJob?.cancel()
         outputReconfigureJob = scope.launch {
+            transportFade.reset()
             // A physical route/preference change invalidates both old sinks.
             // Let the existing controller settle and retire the non-session
             // player immediately; waiting for the old route's fade can strand
@@ -6852,6 +6853,11 @@ class PlaybackService : MediaLibraryService() {
     private fun observeSettings() {
         scope.launch {
             AppSettings.skipSilence.collect { on -> eachPlayer { it.skipSilenceEnabled = on } }
+        }
+        scope.launch {
+            AppSettings.pauseResumeFadeMs.drop(1).collect { ms ->
+                if (ms == 0) transportFade.reset()
+            }
         }
         scope.launch {
             // Re-evaluate the already queued next track immediately when this
@@ -7678,6 +7684,7 @@ class PlaybackService : MediaLibraryService() {
             // never answers. Outside a party this is an ordinary play().
             if (deferPlayToParty()) return
             if (cast.active) {
+                transportFade.reset()
                 cast.play()
                 return
             }
@@ -7688,6 +7695,7 @@ class PlaybackService : MediaLibraryService() {
             if (lockedTransport(false)) return
             onUserIntent()
             if (cast.active) {
+                transportFade.reset()
                 cast.pause()
                 return
             }
@@ -7709,6 +7717,7 @@ class PlaybackService : MediaLibraryService() {
             onUserIntent()
             if (playWhenReady && deferPlayToParty()) return
             if (cast.active) {
+                transportFade.reset()
                 if (playWhenReady) cast.play() else cast.pause()
                 return
             }
