@@ -119,6 +119,9 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
         compose.onNodeWithText("+ Adicionar condição").performClick()
         compose.onNodeWithText("Adicionar condição").assertExists()
+        // This category used to be offscreen because GROUP's scroll index
+        // was retained in the newly opened CATEGORIES page.
+        compose.onNodeWithText("Músicas e metadados").assertExists()
         compose.onNodeWithText("Músicas e metadados").performClick()
         compose.onNodeWithText("Título da música").performClick()
         compose.onNodeWithText("Adicionar condição").performClick()

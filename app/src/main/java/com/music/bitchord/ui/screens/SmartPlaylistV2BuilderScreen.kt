@@ -4,6 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.FilterChip
+import com.music.bitchord.ui.components.PAGE_GUTTER
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Surface
@@ -82,6 +86,8 @@ private fun newRule(): SmartPlaylistRule = SmartPlaylistRule.Comparison(
     1.0,
 )
 
+private enum class SmartPlaylistManageTab { PLAYLISTS, FILTERS, CLASSIC }
+
 internal data class V2DisplayRow(val id: String, val title: String, val artist: String)
 
 /**
@@ -134,6 +140,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     var legacyFailure by remember { mutableStateOf(false) }
     var editorEpoch by remember { mutableStateOf(0) }
     var showWizard by remember { mutableStateOf(true) }
+    var manageTab by remember { mutableStateOf(SmartPlaylistManageTab.PLAYLISTS) }
     val saved by produceState(initialValue = emptyList<SavedSmartPlaylistV2Definition>(), key1 = repo) {
         try {
             repo.observe().collect { value = it; savedFailure = false }
@@ -379,26 +386,50 @@ internal fun SmartPlaylistV2BuilderScreen(
             ) {
                 Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text("Playlists e filtros", style = MaterialTheme.typography.headlineSmall)
-                        TextButton(onClick = { showWizard = true }) { Text("Rascunho") }
+                        Text("Minhas playlists", style = MaterialTheme.typography.headlineMedium)
+                        TextButton(onClick = onBack) { Text("Fechar") }
                     }
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Button(onClick = { reset(); showWizard = true }) {
                             Text("Nova playlist")
                         }
-                        TextButton(onClick = onClassic) { Text("Editor clássico") }
-                        TextButton(onClick = onBack) { Text("Fechar") }
+                        TextButton(onClick = { showWizard = true }) {
+                            Text("Voltar ao rascunho")
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                            .padding(horizontal = PAGE_GUTTER),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        FilterChip(
+                            selected = manageTab == SmartPlaylistManageTab.PLAYLISTS,
+                            onClick = { manageTab = SmartPlaylistManageTab.PLAYLISTS },
+                            label = { Text("Inteligentes (${saved.size})") },
+                        )
+                        FilterChip(
+                            selected = manageTab == SmartPlaylistManageTab.FILTERS,
+                            onClick = { manageTab = SmartPlaylistManageTab.FILTERS },
+                            label = { Text("Filtros (${savedFilters.size})") },
+                        )
+                        FilterChip(
+                            selected = manageTab == SmartPlaylistManageTab.CLASSIC,
+                            onClick = { manageTab = SmartPlaylistManageTab.CLASSIC },
+                            label = { Text("Clássicas (${legacySaved.size})") },
+                        )
                     }
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = PAGE_GUTTER),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
+            if (manageTab == SmartPlaylistManageTab.FILTERS) {
             item(key = "v2-saved-filter-heading") {
                 Text("Filtros reutilizáveis", style = MaterialTheme.typography.titleMedium)
                 Text("Filtros guardam somente regras. Aplicar copia as regras; não vincula alterações futuras.",
@@ -483,6 +514,8 @@ internal fun SmartPlaylistV2BuilderScreen(
                     }
                 }
             }
+            }
+            if (manageTab == SmartPlaylistManageTab.PLAYLISTS) {
             item(key = "v2-saved-title") {
                 Text("Playlists avançadas salvas", style = MaterialTheme.typography.titleMedium)
                 if (savedFailure) Text("Não foi possível carregar as definições")
@@ -534,7 +567,10 @@ internal fun SmartPlaylistV2BuilderScreen(
                     }
                 }
             }
+            }
+            if (manageTab == SmartPlaylistManageTab.CLASSIC) {
             item(key = "v2-classic-heading") {
+                TextButton(onClick = onClassic) { Text("Abrir editor clássico") }
                 Text("Playlists clássicas", style = MaterialTheme.typography.titleMedium)
                 Text("Você pode converter uma cópia sem alterar a playlist original.",
                     style = MaterialTheme.typography.bodySmall)
@@ -562,6 +598,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                         enabled = !loading,
                     ) { Text("Converter cópia") }
                 }
+            }
             }
 
                     }

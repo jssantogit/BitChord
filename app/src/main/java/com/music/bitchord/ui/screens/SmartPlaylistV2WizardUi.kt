@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -320,6 +321,12 @@ internal fun SmartPlaylistV2WizardUi(
         WizardStep.FIELDS, WizardStep.EDITOR -> "ETAPA 2 DE 3"
         WizardStep.REVIEW -> "ETAPA 3 DE 3"
     }
+    // Every stage has its own scroll origin. Reusing one LazyColumn state
+    // caused the condition catalog to open midway down after editing a
+    // scrolled group; the first category and header were not composed.
+    val pageListState = remember(page, selectedPath, selectedCategory.id) {
+        LazyListState()
+    }
     val canContinue = name.trim().isNotEmpty() && name.length <= 80
     val canReview = canContinue && runCatching {
         SmartPlaylistV2Query(rule, sort, limit.toInt(), seed.toInt())
@@ -347,6 +354,7 @@ internal fun SmartPlaylistV2WizardUi(
                 }
             }
             LazyColumn(
+                state = pageListState,
                 modifier = Modifier.weight(1f).fillMaxWidth()
                     .testTag("smart-playlist-wizard-list"),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
