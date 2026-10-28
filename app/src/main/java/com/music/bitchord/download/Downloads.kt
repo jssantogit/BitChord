@@ -1084,6 +1084,17 @@ object Downloads {
                 val report=A0AndroidAutoAcquisitionEngine.run(
                     context,request.entries,request.quality,
                     userRequested=true,isCancelled={job?.isActive!=true},
+                    onSlotResolved={index,_ ->
+                        if(job?.isActive==true) {
+                            // Fraction means resolved album slots, NOT byte
+                            // progress: discovery may still be searching.
+                            val fraction=(index+1).toFloat()/request.entries.size
+                            _active.update {
+                                it + (id to DownloadState.Running(fraction))
+                            }
+                            DownloadSession.running(id,fraction)
+                        }
+                    },
                 ).batch
                 if(job?.isActive!=true)throw CancellationException()
                 val review=SoulseekAutoReviewPlan.from(request.entries,report.results)
