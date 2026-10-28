@@ -94,6 +94,30 @@ internal suspend fun canonicalCachedRecordingArtForVisibleRows(
 
 
 /**
+ * Release HTTP results are provisional for a recording: they may finish
+ * before or after a different verified Official group sleeve was selected.
+ * They can fill an empty recording, never an explicitly owned/unknown image
+ * or a group-verified sleeve. Track identity is preserved unchanged.
+ */
+internal fun canonicalRecordingWithInheritedReleaseArt(
+    row: com.music.bitchord.ui.screens.CanonicalCatalogSearchRow,
+    artwork: String?,
+): com.music.bitchord.ui.screens.CanonicalCatalogSearchRow {
+    if (row.kind != com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING ||
+        artwork.isNullOrBlank()
+    ) return row
+    val mayUpdate = row.artworkUri.isNullOrBlank() ||
+        (row.artworkProvenance ==
+            com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE &&
+            canonicalNeedsCoverRefresh(row.artworkUri))
+    return if (mayUpdate) row.copy(
+        artworkUri = artwork,
+        artworkProvenance =
+            com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE,
+    ) else row
+}
+
+/**
  * Cache hydration is repeatable across search → artist → album → search.
  * Only a proven Recording MBID may receive a previously verified album sleeve;
  * unrelated release rows and track-owned artwork must never be overwritten.
@@ -107,10 +131,7 @@ internal fun canonicalRowsWithVerifiedRecordingArt(
         // A release lookup is only a provisional inherited sleeve, not an
         // independently owned per-track picture. A later proven group Front
         // supersedes it irrespective of HTTP completion order.
-        val inherited = row.artworkProvenance in setOf(
-            com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE,
-            com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP,
-        )
+        val inherited = row.artworkProvenance != null
         if (row.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING &&
             cover != null && (row.artworkUri.isNullOrBlank() || inherited) &&
             (row.artworkUri != cover ||
