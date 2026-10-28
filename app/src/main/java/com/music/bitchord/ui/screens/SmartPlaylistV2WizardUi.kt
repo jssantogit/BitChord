@@ -43,7 +43,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,6 +56,7 @@ import com.music.bitchord.data.listening.SmartPlaylistV2Sort
 import com.music.bitchord.data.listening.allowedOperators
 import com.music.bitchord.data.listening.isTextField
 import com.music.bitchord.data.listening.moveChild
+import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.sharedui.resources.Res
@@ -64,6 +64,9 @@ import com.music.bitchord.sharedui.resources.smart_collection_batch_play
 import com.music.bitchord.sharedui.resources.smart_collection_batch_queue
 import org.jetbrains.compose.resources.stringResource
 
+// Respect DESIGN.md: SF Pro Display and semantic ColorScheme from BitChordTheme,
+// the shared 16.dp PAGE_GUTTER, and locally rounded neutral cards.
+// Do not invent new global color or shape tokens for this flow.
 private enum class WizardStep { IDENTITY, RULES, GROUP, CATEGORIES, FIELDS, EDITOR, REVIEW }
 
 private fun operatorUiLabel(operator: SmartPlaylistRuleOperator): String = when (operator) {
@@ -133,13 +136,13 @@ private fun WizardCard(
         modifier = Modifier.fillMaxWidth().then(
             if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
         ),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+            containerColor = MaterialTheme.colorScheme.surface,
         ),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(18.dp),
+            modifier = Modifier.fillMaxWidth().padding(PAGE_GUTTER),
             verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -160,8 +163,7 @@ private fun WizardCard(
 @Composable
 private fun WizardHeading(title: String, detail: String) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold)
+        Text(title, style = MaterialTheme.typography.headlineLarge)
         Text(detail, style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -348,7 +350,7 @@ internal fun SmartPlaylistV2WizardUi(
                 modifier = Modifier.weight(1f).fillMaxWidth()
                     .testTag("smart-playlist-wizard-list"),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    start = 20.dp, end = 20.dp, bottom = 28.dp,
+                    start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 28.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(15.dp),
             ) {
@@ -725,7 +727,7 @@ internal fun SmartPlaylistV2WizardUi(
             }
             Column(
                 Modifier.fillMaxWidth().navigationBarsPadding()
-                    .padding(start = 20.dp, end = 20.dp, bottom = 12.dp, top = 8.dp),
+                    .padding(start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 12.dp, top = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 when (page) {
