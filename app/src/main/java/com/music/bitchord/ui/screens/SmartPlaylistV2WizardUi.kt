@@ -257,6 +257,7 @@ internal fun SmartPlaylistV2WizardUi(
     var negated by remember { mutableStateOf(false) }
     var returnAfterEditor by remember { mutableStateOf(WizardStep.GROUP) }
     var picker by remember { mutableStateOf<String?>(null) }
+    var confirmDiscard by remember { mutableStateOf(false) }
     val names = savedDefinitions.associate { it.id to it.name }
 
     fun openField(field: SmartPlaylistRuleField) {
@@ -282,7 +283,14 @@ internal fun SmartPlaylistV2WizardUi(
     }
     fun back() {
         page = when (page) {
-            WizardStep.IDENTITY -> { onBack(); WizardStep.IDENTITY }
+            WizardStep.IDENTITY -> {
+                if (name.isNotBlank() || editingId != null || editingFilterId != null) {
+                    confirmDiscard = true
+                } else {
+                    onBack()
+                }
+                WizardStep.IDENTITY
+            }
             WizardStep.RULES -> WizardStep.IDENTITY
             WizardStep.GROUP -> WizardStep.RULES
             WizardStep.CATEGORIES -> if (addingGroup || targetGroupPath.isEmpty())
@@ -784,6 +792,24 @@ internal fun SmartPlaylistV2WizardUi(
                 }
             }
         }
+    }
+
+    if (confirmDiscard) {
+        AlertDialog(
+            onDismissRequest = { confirmDiscard = false },
+            title = { Text("Descartar alterações?") },
+            text = { Text("O rascunho desta playlist não será salvo.") },
+            confirmButton = {
+                TextButton(onClick = { confirmDiscard = false; onBack() }) {
+                    Text("Descartar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDiscard = false }) {
+                    Text("Continuar editando")
+                }
+            },
+        )
     }
 
     if (picker == "sort") {
