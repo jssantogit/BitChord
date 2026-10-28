@@ -2488,6 +2488,10 @@ internal fun RowDivider() {
     )
 }
 
+/** Locale-independent numeric summary alongside the localized setting title. */
+internal fun lyricsSourcesCountValue(enabledCount: Int): String? =
+    enabledCount.takeIf { it > 0 }?.toString()
+
 /**
  * The standard row: glyph, title, optional subtitle, and on the right either
  * [trailing] (a switch, say) or the current [value] followed by a chevron.
@@ -2498,11 +2502,6 @@ internal fun RowDivider() {
  * is expected; the painter wins where both are given.
  */
 @Composable
-/** Locale-independent numeric summary alongside the already localized title. */
-internal fun lyricsSourcesCountValue(enabledCount: Int): String? =
-    enabledCount.takeIf { it > 0 }?.toString()
-
-
 internal fun SettingsRow(
     icon: ImageVector? = null,
     title: String,
