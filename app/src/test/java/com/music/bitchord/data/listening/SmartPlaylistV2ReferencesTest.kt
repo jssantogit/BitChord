@@ -92,4 +92,22 @@ class SmartPlaylistV2ReferencesTest {
             resolveSmartPlaylistReferences(query(SmartPlaylistRule.Reference("n1")), chain)
         }
     }
+
+    @Test fun negatedReferenceMustNeverIncludeUnknownChildEvidence() {
+        val rated = saved("rated", SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.EXPLICIT_RATING,
+            SmartPlaylistRuleOperator.GREATER_OR_EQUAL, 4.0,
+        ))
+        val all = listOf(
+            RuleBasedRecordingCandidate("high", 5.0, 0, null, 100_000L, true),
+            RuleBasedRecordingCandidate("low", 2.0, 0, null, 100_000L, true),
+            RuleBasedRecordingCandidate("unknown", null, 0, null, 100_000L, true,
+                ratingEvidenceUnknown = true),
+        )
+        val root = query(SmartPlaylistRule.Not(SmartPlaylistRule.Reference("rated")))
+        val graph = resolveSmartPlaylistReferences(root, listOf(rated))
+        assertEquals(listOf("low"), previewSmartPlaylistReferences(
+            all, root, graph, SmartPlaylistV2RuleEngine { 900_000L },
+        ).map { it.recordingId })
+    }
 }
