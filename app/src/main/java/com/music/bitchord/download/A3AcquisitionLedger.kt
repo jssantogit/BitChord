@@ -151,7 +151,7 @@ internal class A3AcquisitionLedger(private val store:Store) {
             for(value in values) {
                 val normalized=value.trim().lowercase(Locale.ROOT)
                     .replace(Regex("\\s+")," ")
-                append('\\u0000')
+                append(0.toChar())
                 append(normalized.length)
                 append(':')
                 append(normalized)
