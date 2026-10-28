@@ -86,8 +86,6 @@ internal class RoomCanonicalQueueResolver(context: Context) : CanonicalQueueReso
         val localRows = selectedLocalAssetIds.chunked(400).flatMap { selected ->
             dao.localRowsByAssetIds(
                 localProvider = LOCAL_PROVIDER,
-                youtubeProvider = YOUTUBE_PROVIDER,
-                recordingEntityType = RECORDING_ENTITY_TYPE,
                 mediaAssetIds = selected,
             )
         }

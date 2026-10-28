@@ -106,14 +106,13 @@ class CanonicalAvailabilityProjectionRoomTest {
             asset("asset:remote", "rec:selected", "opensubsonic:other")
             val result = dao.localRowsByAssetIds(
                 localProvider = CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER,
-                youtubeProvider = "youtube",
-                recordingEntityType = "recording",
                 mediaAssetIds = listOf("asset:one", "asset:remote", "asset:missing"),
             )
             assertEquals(listOf("asset:one"), result.map { it.mediaAssetId })
             assertEquals("rec:selected", result.single().recordingId)
             assertEquals("content://test/asset:one", result.single().uri)
             assertEquals("content://art/asset:one", result.single().artworkUri)
+            assertEquals(null, result.single().youtubeVideoId)
         } finally {
             db.close()
         }

@@ -629,14 +629,7 @@ internal interface CanonicalCatalogDao {
             asset.dateAddedSeconds AS dateAddedSeconds,
             asset.dateModifiedSeconds AS dateModifiedSeconds,
             releaseTrack.trackNumber AS trackNumber,
-            (
-                SELECT identity.externalId
-                FROM catalog_external_identity AS identity
-                WHERE identity.entityId = recording.id
-                  AND identity.provider = :youtubeProvider
-                  AND identity.entityType = :recordingEntityType
-                LIMIT 1
-            ) AS youtubeVideoId
+            NULL AS youtubeVideoId
         FROM catalog_media_asset AS asset
         INNER JOIN catalog_recording AS recording
             ON recording.id = asset.recordingId
@@ -651,8 +644,6 @@ internal interface CanonicalCatalogDao {
     )
     suspend fun localRowsByAssetIds(
         localProvider: String,
-        youtubeProvider: String,
-        recordingEntityType: String,
         mediaAssetIds: List<String>,
     ): List<CanonicalLocalRow>
 }
