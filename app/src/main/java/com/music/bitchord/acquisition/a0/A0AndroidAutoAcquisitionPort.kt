@@ -28,6 +28,8 @@ internal class A0AndroidAutoAcquisitionPort(
     private val jobId:String=UUID.randomUUID().toString(),
     private val reservedAutomatic:Boolean=false,
     private val sourceSong:Song?=null,
+    /** UI observation only; A3 state advances before this callback. */
+    private val onTransferStarting:()->Unit={},
 ):A0AutoAcquisitionExecutor.Port {
     interface AuthenticatedTransport {
         fun receive(
@@ -75,6 +77,7 @@ internal class A0AndroidAutoAcquisitionPort(
         requireWorker()
         if(revoked(isCancelled))throw IOException("Soulseek auto session revoked")
         job.beginTransfer()
+        try { onTransferStarting() }catch(_:Exception) {}
         val result=transport.receive(candidate,scratchRoot) { revoked(isCancelled) }
         if(result is A0AutoAcquisitionExecutor.FetchResult.Received) {
             val receipt=result.receipt
