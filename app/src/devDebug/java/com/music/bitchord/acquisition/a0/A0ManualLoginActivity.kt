@@ -55,6 +55,8 @@ import java.util.UUID
 class A0ManualLoginActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     private val lifecycleGate=SoulseekManualLifecycleGate()
+    /** Only the original, validated Activity may release the review lease. */
+    private var ownsManualReviewLease=false
     // Memory-only comparison; scoped to this Activity, never persisted.
     private val searchComparison=A0SearchComparison()
     @Volatile private var activeSocket: Socket? = null
@@ -106,6 +108,28 @@ class A0ManualLoginActivity : Activity() {
                 Toast.LENGTH_LONG).show()
             finish()
             return
+        }
+        if(manualRecovery) {
+            val preview=batchEntries ?: listOf(SoulseekBatchPlan.Entry(
+                trackId="single-manual-recovery",
+                query=intent.getStringExtra("bitchord.soulseek.manual.query").orEmpty(),
+                album=intent.getStringExtra("bitchord.soulseek.manual.album")
+                    ?.takeIf { it.isNotBlank() },
+                durationSeconds=intent.getIntExtra(
+                    "bitchord.soulseek.manual.duration_seconds",0)
+                    .takeIf { it in 15..7200 },
+            ))
+            if(!Downloads.validSoulseekManualReview(
+                    recoverySession.orEmpty(),
+                    recoveryIndices?.toList().orEmpty(),
+                    preview)) {
+                Toast.makeText(this,
+                    "Revisão expirada: confira a biblioteca antes de continuar.",
+                    Toast.LENGTH_LONG).show()
+                finish()
+                return
+            }
+            ownsManualReviewLease=true
         }
         val completedSingle=java.util.concurrent.atomic.AtomicBoolean(false)
         // The song search/candidates view has no visible credentials; allow
@@ -1690,7 +1714,7 @@ class A0ManualLoginActivity : Activity() {
         activePeerWorkers?.cancel()
         activeIndirectPeers.toList().forEach { runCatching { it.close() } }
         activeSocket?.close()
-        val reviewId=if(intent.getBooleanExtra("bitchord.soulseek.manual.recovery",false))
+        val reviewId=if(ownsManualReviewLease)
             intent.getStringExtra("bitchord.soulseek.manual.review_session")
         else null
         if(reviewId!=null) {
