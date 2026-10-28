@@ -730,4 +730,56 @@ class SmartPlaylistV2RuleEngineTest {
             )).map { it.recordingId })
     }
 
+
+
+    @Test fun localAddedDatePredicateRequiresActiveLocalSourceAndCompleteNegativeEvidence() {
+        val day = 86_400_000L
+        val engine = SmartPlaylistV2RuleEngine(nowEpochMs = { 10L * day })
+        val local = candidate("local").copy(
+            sourceKinds = setOf(SmartPlaylistSourceKind.LOCAL),
+            localAddedEpochMs = listOf(5L * day, 9L * day),
+            localAddedDateEvidenceUnknown = false,
+        )
+        val partial = candidate("partial").copy(
+            sourceKinds = setOf(SmartPlaylistSourceKind.LOCAL),
+            localAddedEpochMs = listOf(5L * day),
+            localAddedDateEvidenceUnknown = true,
+        )
+        val remote = candidate("remote").copy(
+            sourceKinds = setOf(SmartPlaylistSourceKind.OPENSUBSONIC),
+            localAddedEpochMs = listOf(5L * day),
+            localAddedDateEvidenceUnknown = false,
+        )
+        val unknown = candidate("unknown")
+        fun query(op: SmartPlaylistRuleOperator, value: Double? = 5.0) =
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
+                op, value,
+            ), sort = SmartPlaylistV2Sort.RECORDING_ID_ASC)
+        val rows = listOf(local, partial, remote, unknown)
+        assertEquals(listOf("local", "partial"), engine.preview(
+            rows, query(SmartPlaylistRuleOperator.EQUAL),
+        ).map { it.recordingId })
+        assertEquals(listOf("local", "partial"), engine.preview(
+            rows, query(SmartPlaylistRuleOperator.IS_PRESENT, null),
+        ).map { it.recordingId })
+        assertTrue(engine.preview(
+            rows, query(SmartPlaylistRuleOperator.NOT_EQUAL),
+        ).isEmpty())
+        assertTrue(engine.preview(listOf(partial, unknown, remote), SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
+                SmartPlaylistRuleOperator.EQUAL, 3.0,
+            )),
+        )).isEmpty())
+        assertThrows(IllegalArgumentException::class.java) {
+            query(SmartPlaylistRuleOperator.IS_MISSING, null)
+        }
+        for (bad in listOf(-1.0, 1.5, 100_001.0)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                query(SmartPlaylistRuleOperator.EQUAL, bad)
+            }
+        }
+    }
+
 }
