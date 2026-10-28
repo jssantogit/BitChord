@@ -1338,4 +1338,6 @@
     <string name="playback_recovery_retry">再試行</string>
     <string name="playback_recovery_retrying">再試行中…</string>
     <string name="playback_recovery_dismiss">閉じる</string>
+    <string name="pause_resume_fade">一時停止・再開時のフェード</string>
+    <string name="pause_resume_fade_subtitle">一時停止時に音量を徐々に下げ、再開時に徐々に上げます</string>
 </resources>
