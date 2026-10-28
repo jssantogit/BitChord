@@ -32,6 +32,7 @@ internal object A0AutoAuthenticatedServer {
         context:Context,
         accountGeneration:Long,
         isCancelled:()->Boolean,
+        onSocketReady:(Socket)->Unit={},
     ):Session {
         if(BuildConfig.FLAVOR!="dev" || !BuildConfig.DEBUG)
             throw IOException("Soulseek autonomous login not enabled")
@@ -53,6 +54,8 @@ internal object A0AutoAuthenticatedServer {
             credentials.erase()
             if(!SoulseekActiveSession.register(server,accountGeneration))
                 throw IOException("Soulseek session revoked")
+            onSocketReady(server)
+            if(revoked())throw IOException("Soulseek login cancelled")
             server.connect(InetSocketAddress("server.slsknet.org",2416),7000)
             server.soTimeout=12000
             if(revoked())throw IOException("Soulseek login cancelled")
