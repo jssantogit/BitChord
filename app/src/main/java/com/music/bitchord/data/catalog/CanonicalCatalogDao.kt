@@ -496,6 +496,20 @@ internal interface CanonicalCatalogDao {
     suspend fun providerRows(provider: String): List<CanonicalProviderRow>
 
     /**
+     * Availability needs canonical IDs only, not sourceKey, URI, artwork or
+     * raw asset data. DISTINCT collapses multiple versions of one Recording.
+     */
+    @Query(
+        """
+        SELECT DISTINCT recordingId
+        FROM catalog_media_asset
+        WHERE provider = :provider
+        ORDER BY recordingId ASC
+        """,
+    )
+    suspend fun availableRecordingIdsForProvider(provider: String): List<String>
+
+    /**
      * Provider-neutral browse projection. It intentionally omits sourceKey and
      * URI so a provider-native track id cannot leak into UI identity/playback.
      */

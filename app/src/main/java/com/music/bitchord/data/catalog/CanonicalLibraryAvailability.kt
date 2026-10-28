@@ -74,7 +74,7 @@ internal class RoomCanonicalLibraryAvailabilityStore(
 ) : CanonicalLibraryAvailabilityStore {
     override suspend fun recordingIdsForProviders(providerKeys: List<String>): List<String> =
         providerKeys.flatMap { providerKey ->
-            dao.providerRows(providerKey).map { row -> row.recordingId }
+            dao.availableRecordingIdsForProvider(providerKey)
         }
 }
 
