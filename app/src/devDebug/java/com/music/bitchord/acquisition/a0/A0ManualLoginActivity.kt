@@ -256,9 +256,14 @@ class A0ManualLoginActivity : Activity() {
                     ))
                 }
                 if(Downloads.enqueueSoulseekAuto(this,entries)) {
-                    status.text="Pedido entregue à fila de Downloads. " +
-                        "Acompanhe pela notificação; faixas incertas exigem seleção manual."
+                    Toast.makeText(this,
+                        "Download na fila. Acompanhe pela notificação e no gerenciador.",
+                        Toast.LENGTH_LONG).show()
+                    // A second manual download from this screen could race
+                    // with the newly queued automatic publication. Reopen
+                    // the picker deliberately for any uncertain remaining song.
                     autoAction.isEnabled=false
+                    finish()
                 } else {
                     status.text="Automação recusada: confira a conta, a conexão, " +
                         "a qualidade, o destino e a identidade da música."
