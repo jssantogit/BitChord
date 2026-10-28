@@ -221,6 +221,9 @@ object AppSettings {
 
     val crossfadeSeconds = MutableStateFlow(0)
 
+    /** Local transport envelope only; 0 disables the fade, no DSP is involved. */
+    val pauseResumeFadeMs = MutableStateFlow(200)
+
     /**
      * Lets Automix's analyzer decide the transition's timing and length
      * from each track's tempo, energy and structure, replacing the fixed
@@ -767,6 +770,7 @@ object AppSettings {
         wifiOnlyDownloads.value = prefs.getBoolean(KEY_WIFI_ONLY_DOWNLOADS, true)
         exportDownloads.value = prefs.getBoolean(KEY_EXPORT_DOWNLOADS, false)
         crossfadeSeconds.value = prefs.getInt(KEY_CROSSFADE, 0)
+        pauseResumeFadeMs.value = prefs.getInt(KEY_PAUSE_RESUME_FADE, 200).coerceIn(0, 600)
         smartFadeEnabled.value = prefs.getBoolean(KEY_SMART_FADE, false)
         automixPerformanceMode.value = runCatching {
             AutomixPerformanceMode.valueOf(
@@ -1068,6 +1072,12 @@ object AppSettings {
     fun setCrossfadeSeconds(value: Int) {
         crossfadeSeconds.value = value
         prefs.edit().putInt(KEY_CROSSFADE, value).apply()
+    }
+
+    fun setPauseResumeFadeMs(value: Int) {
+        val bounded = value.coerceIn(0, 600)
+        pauseResumeFadeMs.value = bounded
+        prefs.edit().putInt(KEY_PAUSE_RESUME_FADE, bounded).apply()
     }
 
     fun setSmartFadeEnabled(value: Boolean) {
@@ -1954,6 +1964,7 @@ object AppSettings {
     private const val KEY_EXPORT_DOWNLOADS = "export_downloads"
     private const val KEY_LOSSLESS = "lossless_audio"
     private const val KEY_CROSSFADE = "crossfade_seconds"
+    private const val KEY_PAUSE_RESUME_FADE = "pause_resume_fade_ms"
     private const val KEY_SMART_FADE = "smart_fade_enabled"
     private const val KEY_AUTOMIX_PERFORMANCE_MODE = "automix_performance_mode"
     private const val KEY_SKIP_SILENCE = "skip_silence"
