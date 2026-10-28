@@ -9,4 +9,16 @@ package com.music.bitchord.download
 internal object SoulseekAutoCancellationPolicy {
     fun retainWarning(isAutomatic:Boolean,wasClaimedByWorker:Boolean):Boolean =
         isAutomatic && wasClaimedByWorker
+
+    /**
+     * Cancelling an auto job still present in pending[] proves takeNext()
+     * never entered its A3 worker. Under Downloads.lock, this permits
+     * releasing only the process-local admission guard. No persistent A3
+     * reservation exists; cancellation after claim never qualifies.
+     */
+    fun canReleaseQueuedIdentity(
+        isAutomatic:Boolean,
+        wasQueued:Boolean,
+        wasClaimedByWorker:Boolean,
+    ):Boolean=isAutomatic && wasQueued && !wasClaimedByWorker
 }
