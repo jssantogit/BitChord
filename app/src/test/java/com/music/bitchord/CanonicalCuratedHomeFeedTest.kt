@@ -345,4 +345,30 @@ class CanonicalCuratedHomeFeedTest {
         )
         assertEquals(official500, painted.single().items.single().thumbnailUrl)
     }
+
+    @Test fun verifiedArtistNetworkCoverAlsoCorrectsCanonicalRowsAtEqualResolution() {
+        val old500 = "https://archive.org/previous-official-front-500.jpg"
+        val new500 = "https://archive.org/current-official-front-500.jpg"
+        val low250 = "https://coverartarchive.org/release/00000000-0000-0000-0000-000000000001/front-250"
+        val video = release.copy(
+            musicBrainzId = "00000000-0000-0000-0000-000000000023",
+            title = "Unrelated performance", releaseKind = "Other", artworkUri = old500,
+        )
+        val rows = listOf(release.copy(artworkUri = old500), video)
+        val official = mapOf(
+            release.musicBrainzId to (new500 to "SUPER REAL ME"),
+            video.musicBrainzId to ("https://archive.org/performance-500.jpg" to "Performance"),
+        )
+        val corrected = com.music.bitchord.ui.canonicalArtistRowsWithOfficialCoverUpdates(
+            rows, official,
+        )
+        assertEquals(new500, corrected[0].artworkUri)
+        assertEquals(video, corrected[1])
+        assertEquals(corrected, com.music.bitchord.ui.canonicalArtistRowsWithOfficialCoverUpdates(
+            corrected, official,
+        ))
+        assertEquals(corrected, com.music.bitchord.ui.canonicalArtistRowsWithOfficialCoverUpdates(
+            corrected, mapOf(release.musicBrainzId to (low250 to "Old name")),
+        ))
+    }
 }
