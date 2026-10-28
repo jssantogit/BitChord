@@ -42,6 +42,17 @@ class A0LocalAudioHeaderEvidenceTest {
         assertNull(A0LocalAudioHeaderEvidence.inspect(data))
     }
 
+    @Test fun localExtractorCodecMustAgreeWithParsedContainer() {
+        assertTrue(A0LocalAudioHeaderEvidence.acceptsExtractorMime(
+            A0CanonicalAcquisitionIntent.Codec.FLAC,"audio/flac"))
+        assertTrue(A0LocalAudioHeaderEvidence.acceptsExtractorMime(
+            A0CanonicalAcquisitionIntent.Codec.PCM_WAV,"audio/raw"))
+        assertFalse(A0LocalAudioHeaderEvidence.acceptsExtractorMime(
+            A0CanonicalAcquisitionIntent.Codec.FLAC,"audio/mpeg"))
+        assertFalse(A0LocalAudioHeaderEvidence.acceptsExtractorMime(
+            A0CanonicalAcquisitionIntent.Codec.AAC_ADTS,"audio/mp4"))
+    }
+
     @Test fun malformedOrDisguisedAudioNeverInheritsPeerClaimConfidence() {
         assertNull(A0LocalAudioHeaderEvidence.inspect(ByteArray(100)))
         val bogus=ByteArray(42)

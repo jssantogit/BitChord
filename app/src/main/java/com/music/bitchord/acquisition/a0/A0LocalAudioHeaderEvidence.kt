@@ -20,6 +20,20 @@ internal object A0LocalAudioHeaderEvidence {
         u8(b,at).toLong() or (u8(b,at+1).toLong() shl 8) or
             (u8(b,at+2).toLong() shl 16) or (u8(b,at+3).toLong() shl 24)
 
+    /** Android reports codecs as MIME; never let a .m4a masquerade as ADTS. */
+    fun acceptsExtractorMime(
+        codec:A0CanonicalAcquisitionIntent.Codec,mime:String,
+    ):Boolean = when(codec) {
+        A0CanonicalAcquisitionIntent.Codec.MP3 ->
+            mime.equals("audio/mpeg",ignoreCase=true)
+        A0CanonicalAcquisitionIntent.Codec.FLAC ->
+            mime.equals("audio/flac",ignoreCase=true)
+        A0CanonicalAcquisitionIntent.Codec.PCM_WAV ->
+            mime in setOf("audio/raw","audio/wav","audio/x-wav")
+        A0CanonicalAcquisitionIntent.Codec.AAC_ADTS ->
+            mime in setOf("audio/mp4a-latm","audio/aac")
+    }
+
     fun inspect(bytes:ByteArray):Info? {
         if(bytes.size<12)return null
         if(ascii(bytes,0,"fLaC")) {
