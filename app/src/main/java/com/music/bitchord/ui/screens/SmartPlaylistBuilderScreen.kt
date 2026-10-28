@@ -206,7 +206,7 @@ internal fun SmartPlaylistBuilderScreen(
     onSavedAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
     onPreviewAction: ((RuleBasedSmartPlaylistQuery, CanonicalCollectionIntent) -> Unit)? = null,
     onSavedV2Action: ((String, CanonicalCollectionIntent) -> Unit)? = null,
-    onPreviewV2Action: ((SmartPlaylistV2Query, CanonicalCollectionIntent) -> Unit)? = null,
+    onPreviewV2Action: ((SmartPlaylistV2Query, String?, CanonicalCollectionIntent) -> Unit)? = null,
 ) {
     var showAdvanced by remember { mutableStateOf(true) }
     if (showAdvanced) {
