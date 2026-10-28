@@ -41,15 +41,21 @@ internal object A0AndroidAudioTechnicalProbe {
         val size=source.length()
         val modification=source.lastModified()
         val head=ByteArray(minOf(size.toInt(),HEADER_BYTES))
-        val read=source.inputStream().use { input ->
-            var count=0
-            while(count<head.size) {
-                val part=input.read(head,count,head.size-count)
-                if(part<0)break
-                if(part==0)continue
-                count+=part
+        val read=try {
+            source.inputStream().use { input ->
+                var count=0
+                while(count<head.size) {
+                    if(isCancelled() || Thread.currentThread().isInterrupted)
+                        return null
+                    val part=input.read(head,count,head.size-count)
+                    if(part<=0)break
+                    count+=part
+                }
+                count
             }
-            count
+        }catch(_:Exception) {
+            // Do not expose transient private file paths or provider errors.
+            return null
         }
         if(read<12)return null
         val header=A0LocalAudioHeaderEvidence.inspect(head.copyOf(read))
