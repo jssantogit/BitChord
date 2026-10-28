@@ -34,19 +34,34 @@ internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalAlbumBrowse(): Bo
     rules.supportedForContext(setOf(
         SmartPlaylistRuleField.RELEASE_TITLE,
         SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
+        SmartPlaylistRuleField.SOURCE_KIND,
     ))
 
 internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalArtistBrowse(): Boolean =
-    rules.supportedForContext(setOf(SmartPlaylistRuleField.ARTIST_DISPLAY))
+    rules.supportedForContext(setOf(
+        SmartPlaylistRuleField.ARTIST_DISPLAY,
+        SmartPlaylistRuleField.SOURCE_KIND,
+    ))
 
 /** Null = UNKNOWN: NOT of an unverified cover must not include an album. */
 private fun SmartPlaylistRule.textTruth(
     field: SmartPlaylistRuleField,
     text: String?,
     artworkReference: String? = null,
+    sourceKind: SmartPlaylistSourceKind? = null,
 ): Boolean? = when (this) {
     is SmartPlaylistRule.Comparison -> {
-        if (this.field != field &&
+        if (this.field == SmartPlaylistRuleField.SOURCE_KIND) {
+            sourceKind?.let { actual ->
+                val expected = textValue?.trim()?.uppercase(Locale.ROOT)
+                val equal = actual.name == expected
+                when (operator) {
+                    SmartPlaylistRuleOperator.EQUAL -> equal
+                    SmartPlaylistRuleOperator.NOT_EQUAL -> !equal
+                    else -> null
+                }
+            }
+        } else if (this.field != field &&
             this.field != SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) null
         else if (this.field == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) {
             if (operator == SmartPlaylistRuleOperator.IS_PRESENT &&
@@ -74,10 +89,11 @@ private fun SmartPlaylistRule.textTruth(
             }
         }
     }
-    is SmartPlaylistRule.Not -> child.textTruth(field, text, artworkReference)?.not()
+    is SmartPlaylistRule.Not ->
+        child.textTruth(field, text, artworkReference, sourceKind)?.not()
     is SmartPlaylistRule.Reference -> null
     is SmartPlaylistRule.Group -> {
-        val values = children.map { it.textTruth(field, text, artworkReference) }
+        val values = children.map { it.textTruth(field, text, artworkReference, sourceKind) }
         when (join) {
             SmartPlaylistRuleJoin.ALL -> when {
                 false in values -> false
@@ -97,6 +113,7 @@ private fun SmartPlaylistRule.textTruth(
 internal fun filterCanonicalBrowseAlbums(
     releases: List<ReleaseEntity>,
     filter: SavedSmartPlaylistV2Filter,
+    providerKey: String? = null,
 ): List<ReleaseEntity> {
     require(filter.isSupportedForCanonicalAlbumBrowse()) {
         "This saved filter needs unsupported Album evidence"
@@ -111,6 +128,7 @@ internal fun filterCanonicalBrowseAlbums(
             SmartPlaylistRuleField.RELEASE_TITLE,
             release.title,
             release.artworkUri,
+            verifiedContextualSourceKind(providerKey),
         ) == true
     }
 }
@@ -119,6 +137,7 @@ internal fun filterCanonicalBrowseAlbums(
 internal fun filterCanonicalBrowseArtists(
     artists: List<ArtistEntity>,
     filter: SavedSmartPlaylistV2Filter,
+    providerKey: String? = null,
 ): List<ArtistEntity> {
     require(filter.isSupportedForCanonicalArtistBrowse()) {
         "This saved filter needs unsupported Artist evidence"
@@ -129,7 +148,11 @@ internal fun filterCanonicalBrowseArtists(
         "Artist source must contain unique canonical artist IDs"
     }
     return artists.filter { artist ->
-        filter.rules.textTruth(SmartPlaylistRuleField.ARTIST_DISPLAY, artist.name) == true
+        filter.rules.textTruth(
+            SmartPlaylistRuleField.ARTIST_DISPLAY,
+            artist.name,
+            sourceKind = verifiedContextualSourceKind(providerKey),
+        ) == true
     }
 }
 
@@ -168,7 +191,9 @@ internal class CanonicalContextualFilterLibrary(
     ): List<ReleaseEntity> {
         require(providerKey.isNotBlank()) { "A configured account/provider is required" }
         require(filter.isSupportedForCanonicalAlbumBrowse())
-        return filterCanonicalBrowseAlbums(catalog.providerScopedReleases(providerKey), filter)
+        return filterCanonicalBrowseAlbums(
+            catalog.providerScopedReleases(providerKey), filter, providerKey,
+        )
     }
 
     suspend fun artists(
@@ -177,6 +202,8 @@ internal class CanonicalContextualFilterLibrary(
     ): List<ArtistEntity> {
         require(providerKey.isNotBlank()) { "A configured account/provider is required" }
         require(filter.isSupportedForCanonicalArtistBrowse())
-        return filterCanonicalBrowseArtists(catalog.providerScopedArtists(providerKey), filter)
+        return filterCanonicalBrowseArtists(
+            catalog.providerScopedArtists(providerKey), filter, providerKey,
+        )
     }
 }
