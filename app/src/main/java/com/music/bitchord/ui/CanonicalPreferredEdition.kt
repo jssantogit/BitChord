@@ -19,16 +19,46 @@ internal fun canonicalReleaseTracksWithArtwork(
     releaseArtworkUri: String?,
     /** Exact inherited URL only; never treat an arbitrary song sleeve as album art. */
     previousInheritedArtwork: String? = null,
+    /** Group Front-v5 has stronger authority than the fallback from a single edition. */
+    inheritedFromGroup: Boolean = false,
 ): List<CanonicalCatalogSearchRow> {
     if (releaseArtworkUri.isNullOrBlank()) return rows
+    val provenance = if (inheritedFromGroup)
+        com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP
+    else com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE
     val shouldUpgrade = previousInheritedArtwork != null &&
-        canonicalShouldAcceptArtworkUpdate(previousInheritedArtwork, releaseArtworkUri)
+        if (inheritedFromGroup)
+            canonicalShouldAcceptVerifiedGroupArtwork(
+                previousInheritedArtwork, releaseArtworkUri,
+            )
+        else canonicalShouldAcceptArtworkUpdate(
+            previousInheritedArtwork, releaseArtworkUri,
+        )
     return rows.map { row ->
-        if (row.kind == CanonicalSearchKind.RECORDING &&
-            (row.artworkUri.isNullOrBlank() ||
-                (shouldUpgrade && row.artworkUri == previousInheritedArtwork))
-        ) row.copy(artworkUri = releaseArtworkUri) else row
+        if (row.kind != CanonicalSearchKind.RECORDING) return@map row
+        val inheritedExact = shouldUpgrade &&
+            row.artworkUri == previousInheritedArtwork &&
+            row.artworkProvenance != null &&
+            // A Release image is provisional. It must never replace an already
+            // verified group Front. A verified group may supersede either.
+            (inheritedFromGroup || row.artworkProvenance == provenance)
+        if (row.artworkUri.isNullOrBlank() || inheritedExact) {
+            row.copy(artworkUri = releaseArtworkUri, artworkProvenance = provenance)
+        } else row
     }
+}
+
+/** A validated cached Front-v5 may replace a stale filled 500px detail card. */
+internal fun canonicalVerifiedGroupDetailArtwork(
+    entry: CanonicalCatalogSearchRow,
+    verifiedGroupFront: String?,
+): String? {
+    if (entry.kind != CanonicalSearchKind.RELEASE_GROUP ||
+        canonicalEditorialReleaseType(entry) == null
+    ) return entry.artworkUri
+    return if (canonicalShouldAcceptVerifiedGroupArtwork(
+        entry.artworkUri, verifiedGroupFront,
+    )) verifiedGroupFront else entry.artworkUri
 }
 
 /** A persisted edition is usable only for its exact requested MBID and with actual tracks. */
