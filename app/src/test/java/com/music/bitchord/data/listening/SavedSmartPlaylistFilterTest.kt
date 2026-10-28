@@ -42,6 +42,17 @@ class SavedSmartPlaylistFilterTest {
             val saved = SavedSmartPlaylistV2Filter("filter:one", "Artistas escutados", cleanRule)
             filters.save(saved)
             assertEquals(saved, filters.list().single())
+            val editedFilter = saved.copy(name = "Ouvidas +", rules = SmartPlaylistRule.Not(
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.DURATION_MS,
+                    SmartPlaylistRuleOperator.IS_MISSING,
+                ),
+            ))
+            filters.save(editedFilter)
+            assertEquals(1, filters.list().size)
+            assertEquals(editedFilter, filters.list().single())
+            // Restoring the same ID does not duplicate filters or overwrite playlists.
+            filters.save(saved)
             val exported = saved.toPlaylistCopy("playlist:one", "Artistas escutados")
             assertEquals(saved.rules, exported.query.rules)
             assertEquals(SmartPlaylistV2Sort.RATING_DESC, exported.query.sort)
