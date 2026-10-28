@@ -133,8 +133,8 @@ internal fun CanonicalRemoteLibraryScreen(
     val selected = filters.firstOrNull { it.id == selectedFilterId }
     val filteredState by produceState<CanonicalSongFilterState>(
         initialValue = CanonicalSongFilterState.Loading,
-        key1 = library.tracks, key2 = selectedFilterId, key3 = selected,
-        key4 = filtersUnavailable,
+        key1 = library.tracks, key2 = selectedFilterId,
+        key3 = selected to filtersUnavailable,
     ) {
         value = try {
             when {
