@@ -682,18 +682,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     it.artworkProvenance ==
                         com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE)
         }.take(48)
-        if (candidates.isEmpty() && portrait == null && knownTracks.isEmpty()) return
+        val warmGroupIds = canonicalWarmGroupArtworkCandidateMbids(visible, limit = 48)
+        if (candidates.isEmpty() && portrait == null && knownTracks.isEmpty() &&
+            warmGroupIds.isEmpty()
+        ) return
         canonicalSearchCoverJob = viewModelScope.launch(Dispatchers.IO) {
             // Warm group art is already verified Front-v5 in Room: hydrate
             // albums AND their directly related songs in a single query/state
             // update before allocating CAA network permits.
-            val groupIds = visible.filter {
-                it.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                    canonicalEditorialReleaseType(it) != null &&
-                    canonicalNeedsCoverRefresh(it.artworkUri)
-            }.map { it.musicBrainzId }
             val warmGroups = try {
-                coverArtArchive.cachedVerifiedGroupCovers(groupIds, CoverArtSize.THUMBNAIL)
+                coverArtArchive.cachedVerifiedGroupCovers(warmGroupIds, CoverArtSize.THUMBNAIL)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) { emptyMap() }
@@ -850,18 +848,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 .thenBy { it.musicBrainzId },
         )
         val candidates = canonicalCoverLookupCandidates(prioritized, limit = 24)
-        if (candidates.isEmpty()) return
+        val warmGroupIds = canonicalWarmGroupArtworkCandidateMbids(
+            prioritized, limit = 48,
+        )
+        if (candidates.isEmpty() && warmGroupIds.isEmpty()) return
         canonicalHomeCoverJob = viewModelScope.launch(Dispatchers.IO) {
             // Home is revisited much more often than a new album is fetched.
             // One Room batch reuses already-approved CAA sleeves without
             // repeated per-row DB reads or network metadata lookups.
             val warmGroups = try {
                 coverArtArchive.cachedVerifiedGroupCovers(
-                    prioritized.filter {
-                        it.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                            canonicalEditorialReleaseType(it) != null &&
-                            canonicalNeedsCoverRefresh(it.artworkUri)
-                    }.map { it.musicBrainzId }, CoverArtSize.THUMBNAIL,
+                    warmGroupIds, CoverArtSize.THUMBNAIL,
                 )
             } catch (cancelled: CancellationException) { throw cancelled }
               catch (_: Exception) { emptyMap() }
