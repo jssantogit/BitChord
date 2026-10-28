@@ -408,4 +408,22 @@ class CanonicalNativeNavigationTest {
                     tracks = emptyList()) },
             ))
         }
+
+    @Test fun exactEditionPreviewRejectsForeignOrEmptyCachedRelease() {
+        val detail = com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail(
+            "official-edition", "group-id", "Get Up", "NewJeans", "XW", "2023-07-21",
+            tracks = listOf(com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogTrack(
+                "track-1", "rec-1", "ETA", 1, 1, null,
+            )),
+        )
+        assertEquals(detail, com.music.bitchord.ui.canonicalMatchingCachedRelease(
+            "official-edition", detail,
+        ))
+        assertNull(com.music.bitchord.ui.canonicalMatchingCachedRelease(
+            "another-edition", detail,
+        ))
+        assertNull(com.music.bitchord.ui.canonicalMatchingCachedRelease(
+            "official-edition", detail.copy(tracks = emptyList()),
+        ))
+    }
 }
