@@ -55,9 +55,17 @@ import com.music.bitchord.R
 import com.music.bitchord.data.catalog.CanonicalBrowseLibrary
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.ArtistEntity
+import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.catalog.CanonicalLibraryBrowseRepository
 import com.music.bitchord.data.catalog.RoomCanonicalLibraryBrowseStore
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
+import com.music.bitchord.data.listening.CanonicalContextualFilterLibrary
+import com.music.bitchord.data.listening.CanonicalSmartFilterContext
+import com.music.bitchord.data.listening.filterCanonicalBrowseAlbums
+import com.music.bitchord.data.listening.filterCanonicalBrowseArtists
+import com.music.bitchord.data.listening.isSupportedForCanonicalAlbumBrowse
+import com.music.bitchord.data.listening.isSupportedForCanonicalArtistBrowse
 import com.music.bitchord.data.listening.SmartPlaylistV2FilterRepository
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Filter
 import com.music.bitchord.data.listening.filterCanonicalBrowseSongs
@@ -73,6 +81,7 @@ import com.music.bitchord.ui.player.awaitRecoverableCanonicalArtwork
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 
 private sealed interface CanonicalSongFilterState {
@@ -80,6 +89,21 @@ private sealed interface CanonicalSongFilterState {
     data object Failed : CanonicalSongFilterState
     data class Ready(val tracks: List<CanonicalBrowseTrack>) : CanonicalSongFilterState
 }
+
+private sealed interface CanonicalEntityBrowseState {
+    data object Loading : CanonicalEntityBrowseState
+    data object Failed : CanonicalEntityBrowseState
+    data class Albums(val releases: List<ReleaseEntity>) : CanonicalEntityBrowseState
+    data class Artists(val artists: List<ArtistEntity>) : CanonicalEntityBrowseState
+}
+
+private sealed interface CanonicalDetailBrowseState {
+    data object Loading : CanonicalDetailBrowseState
+    data object Failed : CanonicalDetailBrowseState
+    data class Ready(val recordingIds: Set<String>) : CanonicalDetailBrowseState
+}
+
+private data class CanonicalSelectedEntity(val id: String, val name: String)
 
 /**
  * Offline-first browse for a provider's persisted canonical availability.
@@ -97,10 +121,15 @@ internal fun CanonicalRemoteLibraryScreen(
 ) {
     val context = LocalContext.current
     val controller = rememberMediaController()
+    val catalogDb = remember(context.applicationContext) {
+        CanonicalCatalogDatabase.get(context.applicationContext)
+    }
+    val catalogDao = remember(catalogDb) { catalogDb.catalogDao() }
+    val contextualReader = remember(catalogDao) { CanonicalContextualFilterLibrary(catalogDao) }
     val repository = remember(context.applicationContext) {
         CanonicalLibraryBrowseRepository(
             RoomCanonicalLibraryBrowseStore(
-                CanonicalCatalogDatabase.get(context.applicationContext).catalogDao(),
+                catalogDao,
             ),
         )
     }
@@ -126,9 +155,26 @@ internal fun CanonicalRemoteLibraryScreen(
             filtersUnavailable = true
         }
     }
-    var selectedFilterId by remember(providerKey) { mutableStateOf<String?>(null) }
-    val compatible = remember(filters) {
-        filters.filter { it.isSupportedForCanonicalSongBrowse() }
+    var selectedContext by remember(providerKey) {
+        mutableStateOf(CanonicalSmartFilterContext.SONGS)
+    }
+    var selectedEntity by remember(providerKey, selectedContext) {
+        mutableStateOf<CanonicalSelectedEntity?>(null)
+    }
+    var selectedFilterId by remember(providerKey, selectedContext) {
+        mutableStateOf<String?>(null)
+    }
+    val compatible = remember(filters, selectedContext) {
+        filters.filter { filter ->
+            when (selectedContext) {
+                CanonicalSmartFilterContext.SONGS ->
+                    filter.isSupportedForCanonicalSongBrowse()
+                CanonicalSmartFilterContext.ALBUMS ->
+                    filter.isSupportedForCanonicalAlbumBrowse()
+                CanonicalSmartFilterContext.ARTISTS ->
+                    filter.isSupportedForCanonicalArtistBrowse()
+            }
+        }
     }
     val selected = filters.firstOrNull { it.id == selectedFilterId }
     val filteredState by produceState<CanonicalSongFilterState>(
@@ -153,7 +199,78 @@ internal fun CanonicalRemoteLibraryScreen(
     }
     val displayedTracks = (filteredState as? CanonicalSongFilterState.Ready)?.tracks.orEmpty()
 
-    BackHandler(onBack = onClose)
+    val entityState by produceState<CanonicalEntityBrowseState>(
+        initialValue = CanonicalEntityBrowseState.Loading,
+        key1 = providerKey, key2 = selectedContext,
+        key3 = selectedFilterId to selected to filtersUnavailable,
+    ) {
+        if (selectedContext == CanonicalSmartFilterContext.SONGS) return@produceState
+        catalogDb.invalidationTracker.createFlow(
+            "catalog_media_asset", "catalog_release", "catalog_release_track",
+            "catalog_recording_artist_credit", "catalog_release_artist_credit",
+            "catalog_artist",
+        ).collectLatest {
+            value = try {
+                when {
+                    filtersUnavailable && selectedFilterId != null ->
+                        CanonicalEntityBrowseState.Failed
+                    selectedFilterId != null && selected == null ->
+                        CanonicalEntityBrowseState.Failed
+                    selectedContext == CanonicalSmartFilterContext.ALBUMS ->
+                        CanonicalEntityBrowseState.Albums(withContext(Dispatchers.IO) {
+                            if (selected == null) catalogDao.providerScopedReleases(providerKey)
+                            else contextualReader.albums(providerKey, selected)
+                        })
+                    else -> CanonicalEntityBrowseState.Artists(withContext(Dispatchers.IO) {
+                        if (selected == null) catalogDao.providerScopedArtists(providerKey)
+                        else contextualReader.artists(providerKey, selected)
+                    })
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                CanonicalEntityBrowseState.Failed
+            }
+        }
+    }
+    val detailState by produceState<CanonicalDetailBrowseState>(
+        initialValue = CanonicalDetailBrowseState.Loading,
+        key1 = providerKey, key2 = selectedContext, key3 = selectedEntity,
+    ) {
+        val entity = selectedEntity ?: return@produceState
+        catalogDb.invalidationTracker.createFlow(
+            "catalog_media_asset", "catalog_release_track",
+            "catalog_recording_artist_credit", "catalog_release_artist_credit",
+        ).collectLatest {
+            value = try {
+                val ids = withContext(Dispatchers.IO) {
+                    when (selectedContext) {
+                        CanonicalSmartFilterContext.ALBUMS ->
+                            catalogDao.providerScopedReleaseRecordingIds(providerKey, entity.id)
+                        CanonicalSmartFilterContext.ARTISTS ->
+                            catalogDao.providerScopedArtistRecordingIds(providerKey, entity.id)
+                        CanonicalSmartFilterContext.SONGS -> emptyList()
+                    }
+                }
+                CanonicalDetailBrowseState.Ready(ids.toSet())
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                CanonicalDetailBrowseState.Failed
+            }
+        }
+    }
+    val scopedDetailTracks = when (val d = detailState) {
+        is CanonicalDetailBrowseState.Ready -> library.tracks.filter { track ->
+            track.recordingId in d.recordingIds &&
+                track.availableAssets.isNotEmpty() &&
+                track.availableAssets.all { it.providerKey == providerKey }
+        }
+        else -> emptyList()
+    }
+
+    BackHandler(enabled = selectedEntity != null) { selectedEntity = null }
+    BackHandler(enabled = selectedEntity == null, onBack = onClose)
 
     Surface(
         modifier = Modifier.fillMaxSize(),
