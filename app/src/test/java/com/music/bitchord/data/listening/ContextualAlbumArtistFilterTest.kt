@@ -76,4 +76,38 @@ class ContextualAlbumArtistFilterTest {
             SmartPlaylistRuleOperator.IS_PRESENT,
         )).isSupportedForCanonicalAlbumBrowse())
     }
+    @Test fun blankCanonicalNamesAreUnknownNotProvenMissingForNegations() {
+        val blankArtist = ArtistEntity("artist:unresolved", " ")
+        val blankAlbum = ReleaseEntity("release:unresolved", "  ", null, null)
+        val artistPresence = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.ARTIST_DISPLAY, SmartPlaylistRuleOperator.IS_PRESENT,
+        )
+        val artistMissing = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.ARTIST_DISPLAY, SmartPlaylistRuleOperator.IS_MISSING,
+        )
+        val albumPresence = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+        )
+        val albumMissing = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleOperator.IS_MISSING,
+        )
+        // A placeholder name is unverified, not an affirmative IS_MISSING.
+        for (rule in listOf(artistPresence, artistMissing,
+            SmartPlaylistRule.Not(artistPresence), SmartPlaylistRule.Not(artistMissing))) {
+            assertTrue(filterCanonicalBrowseArtists(listOf(blankArtist), filter(rule)).isEmpty())
+        }
+        for (rule in listOf(albumPresence, albumMissing,
+            SmartPlaylistRule.Not(albumPresence), SmartPlaylistRule.Not(albumMissing))) {
+            assertTrue(filterCanonicalBrowseAlbums(listOf(blankAlbum), filter(rule)).isEmpty())
+        }
+        val knownArtist = ArtistEntity("artist:known", "NewJeans")
+        val knownAlbum = ReleaseEntity("release:known", "Get Up", null, null)
+        assertEquals(listOf("artist:known"),
+            filterCanonicalBrowseArtists(listOf(blankArtist, knownArtist),
+                filter(artistPresence)).map { it.id })
+        assertEquals(listOf("release:known"),
+            filterCanonicalBrowseAlbums(listOf(blankAlbum, knownAlbum),
+                filter(albumPresence)).map { it.id })
+    }
+
 }
