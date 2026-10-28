@@ -40,6 +40,27 @@ class SoulseekAutoCancellationPolicyTest {
         assertFalse(guard.reserve(slots))
     }
 
+    @Test fun failedForegroundServiceStartMustNotReleaseClaimedOrSettledAutoJob() {
+        val gate=SoulseekAutoAttemptGuard()
+        val entries=listOf(SoulseekBatchPlan.Entry(
+            "source-recording","Artist - Song","Album",180))
+        assertTrue(gate.reserve(entries))
+        // Another already-running Service could claim this request between
+        // queue admission and startForegroundService throwing.
+        if(SoulseekAutoCancellationPolicy.canRollbackRejectedServiceStart(
+                stillPending=false,alreadyClaimed=true))
+            gate.rollback(entries)
+        assertFalse(gate.reserve(entries))
+        // A request which has already settled is also not owned by the
+        // rejected start attempt, so it must not be rolled back here.
+        assertFalse(SoulseekAutoCancellationPolicy.canRollbackRejectedServiceStart(
+            stillPending=false,alreadyClaimed=false))
+        assertTrue(SoulseekAutoCancellationPolicy.canRollbackRejectedServiceStart(
+            stillPending=true,alreadyClaimed=false))
+        assertFalse(SoulseekAutoCancellationPolicy.canRollbackRejectedServiceStart(
+            stillPending=true,alreadyClaimed=true))
+    }
+
     @Test fun pendingAutoAndLegacyCancelsRemainRemovable() {
         assertFalse(SoulseekAutoCancellationPolicy.retainWarning(
             isAutomatic=true,wasClaimedByWorker=false))
