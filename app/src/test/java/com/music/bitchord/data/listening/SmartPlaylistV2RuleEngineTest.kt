@@ -170,7 +170,8 @@ class SmartPlaylistV2RuleEngineTest {
         assertEquals(first, planner.preview(input.reversed(), q).map { it.recordingId })
         assertEquals(1, first.indexOf("alpha-02") - first.indexOf("alpha-01"))
         assertEquals(4, first.toSet().size)
-        assertEquals(setOf(SmartPlaylistRuleField.RELEASE_TITLE,
+        assertEquals(setOf(SmartPlaylistRuleField.DURATION_MS,
+            SmartPlaylistRuleField.RELEASE_TITLE,
             SmartPlaylistRuleField.TRACK_NUMBER), q.requiredEvidenceFields())
     }
 
