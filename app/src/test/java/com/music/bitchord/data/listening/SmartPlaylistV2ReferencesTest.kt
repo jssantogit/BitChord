@@ -112,20 +112,27 @@ class SmartPlaylistV2ReferencesTest {
     }
 
     @Test fun graphLimitCountsUniqueReferencesNotRepeatedSharedNodes() {
-        val savedDefinitions = (1..64).map { index ->
-            saved("p$index", comparison(1.0))
-        }
-        val root = query(SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY,
-            (1..64).map { SmartPlaylistRule.Reference("p$it") } +
-                SmartPlaylistRule.Reference("p1"),
+        val leaves = (1..62).map { index -> saved("p$index", comparison(1.0)) }
+        val bridge = saved("a-bridge", SmartPlaylistRule.Group(
+            SmartPlaylistRuleJoin.ANY,
+            leaves.map { SmartPlaylistRule.Reference(it.id) },
         ))
+        val shared = saved("z-shared", SmartPlaylistRule.Reference("p1"))
+        val root = query(SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(
+            SmartPlaylistRule.Reference("a-bridge"),
+            SmartPlaylistRule.Reference("z-shared"),
+        )))
+        val savedDefinitions = leaves + bridge + shared
         assertEquals(64, resolveSmartPlaylistReferences(root, savedDefinitions).size)
-        val tooMany = query(SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY,
-            (1..65).map { SmartPlaylistRule.Reference("p$it") },
-        ))
+        // A 65th unique node is forbidden even though two parents reuse p1.
+        val tooMany = query(SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(
+            SmartPlaylistRule.Reference("a-bridge"),
+            SmartPlaylistRule.Reference("z-shared"),
+            SmartPlaylistRule.Reference("zz-extra"),
+        )))
         assertThrows(IllegalArgumentException::class.java) {
             resolveSmartPlaylistReferences(tooMany,
-                savedDefinitions + saved("p65", comparison(1.0)))
+                savedDefinitions + saved("zz-extra", comparison(1.0)))
         }
     }
 }
