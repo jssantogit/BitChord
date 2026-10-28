@@ -627,4 +627,16 @@ class CanonicalCoverProgressiveEnrichmentTest {
         // sleeve has reached the larger variant.
         assertEquals(large, downgraded[1].artworkUri)
     }
+
+    @Test fun verifiedWarmBatchNeverPaintsNonAudioReleaseGroupCard() {
+        val group = "11111111-1111-4111-8111-111111111111"
+        val row = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            group, com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP,
+            "Music video collection", "Artist", releaseKind = "Other",
+        )
+        val updated = com.music.bitchord.ui.canonicalRowsWithVerifiedGroupCoverBatch(
+            listOf(row), mapOf(group to "https://archive.org/album-front-500.jpg"),
+        )
+        assertEquals(null, updated.single().artworkUri)
+    }
 }
