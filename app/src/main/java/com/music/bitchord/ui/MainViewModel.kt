@@ -1058,42 +1058,46 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // SQL batch hydrates the still-blank cards while the online index
             // is obtained independently. This does not invent group identity.
             launch {
-                val waiting = (_canonicalDetail.value as? UiState.Success)?.data?.rows
-                    .orEmpty().filter {
-                        it.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                            canonicalEditorialReleaseType(it) != null &&
-                            canonicalNeedsCoverRefresh(it.artworkUri)
-                    }
-                if (waiting.isNotEmpty()) {
+                // A filled 500px thumbnail can still be an earlier, wrong
+                // edition sleeve. Revalidate all visible Official audio groups,
+                // not only empty/250px cards. Bound the Room IN query and let
+                // the normal progressive worker cover later paginated groups.
+                val visibleRows = (_canonicalDetail.value as? UiState.Success)
+                    ?.data?.rows.orEmpty()
+                val candidateIds = canonicalWarmGroupArtworkCandidateMbids(
+                    visibleRows, limit = 400,
+                )
+                if (candidateIds.isNotEmpty()) {
                     val verified = coverArtArchive.cachedVerifiedGroupCovers(
-                        waiting.map { it.musicBrainzId }, CoverArtSize.THUMBNAIL,
+                        candidateIds, CoverArtSize.THUMBNAIL,
                     )
                     if (verified.isNotEmpty() &&
                         _searchSource.value == SearchSource.CANONICAL &&
                         canonicalPath.lastOrNull() == artist
                     ) {
-                        val titleById = waiting.associate { it.musicBrainzId to it.title }
-                        val updates = verified.mapValues { (id, url) ->
-                            url to (titleById[id] ?: "")
-                        }
-                        _canonicalDetail.update { old ->
-                            if (old !is UiState.Success) old else UiState.Success(
-                                old.data.copy(rows = old.data.rows.map { row ->
-                                    val url = verified[row.musicBrainzId]
-                                    if (row.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                                        canonicalShouldAcceptArtworkUpdate(row.artworkUri, url)
-                                    ) row.copy(artworkUri = url) else row
-                                }),
-                            )
-                        }
-                        val artistId = canonicalNativeBrowseId(artist)
-                        _detailStack.update { pages ->
-                            pages.map { page ->
-                                if (page.browseId != artistId) page else page.copy(
-                                    sections = canonicalArtistShelvesWithCoverUpdates(
-                                        page.sections, updates,
-                                    ),
+                        val latestRows = (_canonicalDetail.value as? UiState.Success)
+                            ?.data?.rows.orEmpty()
+                        val updates = canonicalArtistVerifiedGroupUpdates(
+                            latestRows, verified,
+                        )
+                        if (updates.isNotEmpty()) {
+                            val applicable = updates.mapValues { it.value.first }
+                            _canonicalDetail.update { old ->
+                                if (old !is UiState.Success) old else UiState.Success(
+                                    old.data.copy(rows = canonicalRowsWithVerifiedGroupCoverBatch(
+                                        old.data.rows, applicable,
+                                    )),
                                 )
+                            }
+                            val artistId = canonicalNativeBrowseId(artist)
+                            _detailStack.update { pages ->
+                                pages.map { page ->
+                                    if (page.browseId != artistId) page else page.copy(
+                                        sections = canonicalArtistShelvesWithCoverUpdates(
+                                            page.sections, updates,
+                                        ),
+                                    )
+                                }
                             }
                         }
                     }
