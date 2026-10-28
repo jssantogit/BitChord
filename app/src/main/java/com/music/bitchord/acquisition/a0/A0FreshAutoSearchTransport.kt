@@ -73,13 +73,13 @@ internal class A0FreshAutoSearchTransport(
         try {
             session=A0AutoAuthenticatedServer.open(
                 app,generation,::stopped,onSocketReady={activeServer=it})
-            val connection=session.socket
+            val connection=checkNotNull(session).socket
             listener=ServerSocket(0,128)
             activeListener=listener
             listener.soTimeout=750
             val token=SecureRandom().nextInt(Int.MAX_VALUE-1)+1
             handoff=A0ObservedCandidateHandoff(
-                connection,session.username,token,
+                connection,checkNotNull(session).username,token,
                 searchPhrase=entry.query,saveFormatsOnly=true,
                 expectedDurationSeconds=entry.durationSeconds,
                 requestedAlbum=entry.album,qualityProfile=quality,
@@ -87,9 +87,9 @@ internal class A0FreshAutoSearchTransport(
                 releaseQueries=releaseSlots.map {it.query},
             )
             activeHandoff=handoff
-            val holder=handoff
+            val holder=checkNotNull(handoff)
             connection.getOutputStream().apply {
-                write(A0OneShotPublicSearchWire.setWaitPort(listener.localPort))
+                write(A0OneShotPublicSearchWire.setWaitPort(checkNotNull(listener).localPort))
                 write(A0OneShotPublicSearchWire.fileSearch(token,normalized))
                 flush()
             }
@@ -98,7 +98,7 @@ internal class A0FreshAutoSearchTransport(
             val gate=A0PeerOfferGate(160)
             workers=A0PeerSearchWorkers(queueCapacity=128,parallelism=12)
             activeWorkers=workers
-            val peerWorkers=workers
+            val peerWorkers=checkNotNull(workers)
             direct=A0DirectPeerSearchCollector { peer ->
                 if(!stopped() && readerGate.isOpen()) {
                     try {
@@ -116,11 +116,11 @@ internal class A0FreshAutoSearchTransport(
                 }
             }
             activeDirect=direct
-            val directCollector=direct
+            val directCollector=checkNotNull(direct)
             readers=Executors.newFixedThreadPool(2)
             activeReaders=readers
-            val executor=readers
-            val openListener=listener
+            val executor=checkNotNull(readers)
+            val openListener=checkNotNull(listener)
             executor.execute {
                 while(readerGate.isOpen() && !stopped() &&
                     !openListener.isClosed && System.nanoTime()<deadline) {
