@@ -394,18 +394,19 @@ object Downloads {
                 else album ?: "Lote Soulseek (${captured.size} músicas)",
             artist="Soulseek",thumbnailUrl=null,albumName=album,
         )
+        var displacedReviews=emptyMap<String,SoulseekAutoReviewPlan>()
         synchronized(lock) {
             // Do not overlap a manual recovery P/F with a new automatic batch.
             if(openManualReviews.hasOpen)return false
             // Even after the result is cleared, evicted or cancelled, do not
             // automatically repeat the same canonical audio in this process.
             if(!autoAttemptGuard.reserve(captured))return false
-            // A retry after A3 proved "no P/F ever started" supersedes the
-            // old search-only report. Never leave its manual recovery picker
-            // able to publish the same track as the newly queued request.
-            _autoReviews.value=_autoReviews.value.filterValues { prior ->
-                !prior.overlapsAny(captured)
-            }
+            // Hide stale recovery pickers immediately. If Android refuses to
+            // start the service, restore these exact reports atomically.
+            val change=SoulseekAutoReviewSupersession.suppress(
+                _autoReviews.value,captured)
+            displacedReviews=change.displaced
+            _autoReviews.value=change.current
             autoRequests[id]=AutoRequest(captured,quality)
             pending[id]=song
         }
@@ -419,8 +420,11 @@ object Downloads {
             synchronized(lock) {
                 pending.remove(id)
                 autoRequests.remove(id)
-                // No worker was accepted: this is the sole rollback case.
+                // No worker was accepted; neither the in-memory physical
+                // fence nor the old manual recovery reports should be lost.
                 autoAttemptGuard.rollback(captured)
+                _autoReviews.value=SoulseekAutoReviewSupersession.restore(
+                    _autoReviews.value,displacedReviews)
             }
             fail(id,"Não foi possível iniciar o serviço de downloads.")
             false
