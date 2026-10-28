@@ -767,4 +767,47 @@ class CanonicalCoverProgressiveEnrichmentTest {
             ),
         )
     }
+
+    @Test fun directOfficialRecordingGroupMustNotBorrowCompilationsFromRoomWhenItsFrontIsMissing() =
+        runBlocking {
+            val official = "11111111-1111-4111-8111-111111111111"
+            val compilation = "22222222-2222-4222-8222-222222222222"
+            val strong = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+                "recording-official", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+                "Super Shy", "NewJeans", coverGroupMbid = official,
+                coverReleaseMbid = "33333333-3333-4333-8333-333333333333",
+            )
+            val offline = strong.copy(
+                musicBrainzId = "recording-offline", coverGroupMbid = null,
+            )
+            val requested = mutableListOf<List<String>>()
+            val result = com.music.bitchord.ui.canonicalCachedRecordingArtForVisibleRows(
+                rows = listOf(strong, offline),
+                databaseLinks = { ids ->
+                    requested += ids
+                    listOf(
+                        // A stale Room edge can claim the same recording
+                        // belongs to a verified compilation group.
+                        com.music.bitchord.data.catalog.CanonicalRecordingCoverGroupRow(
+                            strong.musicBrainzId, compilation,
+                        ),
+                        com.music.bitchord.data.catalog.CanonicalRecordingCoverGroupRow(
+                            offline.musicBrainzId, compilation,
+                        ),
+                    )
+                },
+                cachedCover = { error("All group art is batch-only") },
+                cachedCovers = { ids ->
+                    ids.mapNotNull { if (it == compilation)
+                        it to "https://archive.org/compilation-front-500.jpg" else null
+                    }.toMap()
+                },
+            )
+            assertEquals(listOf(listOf(offline.musicBrainzId)), requested)
+            assertEquals(null, result[strong.musicBrainzId])
+            assertEquals("https://archive.org/compilation-front-500.jpg",
+                result[offline.musicBrainzId])
+            assertFalse(com.music.bitchord.ui.canonicalCanUseCachedRecordingGroupEdge(strong))
+            assertTrue(com.music.bitchord.ui.canonicalCanUseCachedRecordingGroupEdge(offline))
+        }
 }
