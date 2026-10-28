@@ -7,6 +7,7 @@ import com.music.bitchord.data.listening.SmartPlaylistRuleField
 import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
 import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
 import com.music.bitchord.data.listening.SmartPlaylistV2Query
+import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.toList
@@ -112,4 +113,21 @@ class SmartPlaylistExternalEvidenceTest {
         assertTrue(query.requiresRelativeAgeRefresh())
     }
 
+
+    @Test fun nestedSavedAgeReferenceRefreshesWithoutRootDatePredicate() {
+        val nested = SavedSmartPlaylistV2Definition(
+            "old-local", "Age filter",
+            SmartPlaylistV2Query(
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
+                    SmartPlaylistRuleOperator.GREATER_OR_EQUAL, value = 7.0,
+                ),
+            ),
+        )
+        val root = SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(SmartPlaylistRule.Reference("old-local")),
+        )
+        assertTrue(root.requiresRelativeAgeRefresh(listOf(nested)))
+        assertFalse(root.requiresRelativeAgeRefresh())
+    }
 }
