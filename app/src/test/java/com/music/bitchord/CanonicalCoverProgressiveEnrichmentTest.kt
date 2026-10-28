@@ -220,7 +220,7 @@ class CanonicalCoverProgressiveEnrichmentTest {
         assertTrue(proven.values.all { it == "https://archive.org/verified-album-500.jpg" })
     }
 
-    @Test fun unavailableLiveGroupUsesOnlyVerifiedOfflineTrackLinksWithoutTitleMatching() =
+    @Test fun missingDirectGroupFrontNeverBorrowsOfflineCompilationButOfflineOnlyTrackCan() =
         runBlocking {
             val r1 = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
                 "recording-1", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
@@ -232,7 +232,7 @@ class CanonicalCoverProgressiveEnrichmentTest {
             val results = com.music.bitchord.ui.canonicalCachedRecordingArtForVisibleRows(
                 listOf(r1, r2, unrelated),
                 databaseLinks = { ids ->
-                    assertEquals(listOf("recording-1", "recording-2"), ids)
+                    assertEquals(listOf("recording-2"), ids)
                     listOf(
                         com.music.bitchord.data.catalog.CanonicalRecordingCoverGroupRow(
                             "recording-1", "group-a",
@@ -246,8 +246,7 @@ class CanonicalCoverProgressiveEnrichmentTest {
                     if (group == "group-no-cover") null else "art:$group"
                 },
             )
-            assertEquals(mapOf("recording-1" to "art:group-a",
-                "recording-2" to "art:group-b"), results)
+            assertEquals(mapOf("recording-2" to "art:group-b"), results)
         }
 
 
@@ -423,8 +422,8 @@ class CanonicalCoverProgressiveEnrichmentTest {
             },
         )
         assertEquals(listOf(listOf("direct", "no-art"), listOf("cached")), lookedUp)
-        assertEquals(listOf(listOf("rec-2", "rec-3")), graphCalls)
-        assertEquals(mapOf("rec-1" to "art:direct", "rec-2" to "art:cached",
+        assertEquals(listOf(listOf("rec-3")), graphCalls)
+        assertEquals(mapOf("rec-1" to "art:direct",
             "rec-3" to "art:cached"), proven)
     }
 
