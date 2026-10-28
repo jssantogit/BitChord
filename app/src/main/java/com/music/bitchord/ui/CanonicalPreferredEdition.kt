@@ -99,6 +99,34 @@ internal fun canonicalArtworkEditionsForGroup(
         .take(2)
 
 /**
+ * Room already holds the selected Official edition's Track → Recording graph
+ * after a previous album visit. Show those tracks without waiting for a new
+ * network browse/lookup; only an exact persisted ReleaseGroup link is enough.
+ * The actual release graph is the authority (a cached group-edition index
+ * row may not repeat the parent's MBID).
+ */
+internal suspend fun canonicalCachedOfficialGroupTracklist(
+    groupMbid: String,
+    groupTitle: String,
+    editions: List<MusicBrainzReleaseHit>,
+    readRelease: suspend (String) ->
+        com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail?,
+): com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail? {
+    for (edition in canonicalPreferredEditions(editions, groupTitle).take(4)) {
+        if (edition.releaseGroupMbid != null &&
+            edition.releaseGroupMbid != groupMbid
+        ) continue
+        val detail = readRelease(edition.musicBrainzId) ?: continue
+        if (detail.musicBrainzId != edition.musicBrainzId ||
+            detail.groupMbid != groupMbid ||
+            detail.tracks.isEmpty()
+        ) continue
+        return detail
+    }
+    return null
+}
+
+/**
  * An edition's public title is distinct from its parent ReleaseGroup title.
  * On composite group labels, use a verified Official edition's shorter
  * leading title as the displayed label; do not mutate the canonical group ID.
