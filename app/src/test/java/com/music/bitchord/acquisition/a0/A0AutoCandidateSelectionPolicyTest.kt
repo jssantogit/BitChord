@@ -63,7 +63,7 @@ class A0AutoCandidateSelectionPolicyTest {
     @Test fun exactAlbumWithinOneGenericAudioSubfolderIsStillEligible() {
         for(folder in listOf("FLAC","CD1","Disc 2","Lossless")) {
             val decision=A0AutoCandidateSelectionPolicy.preview(
-                target,offers("source",album="SUPER REAL ME\\\\$folder"),profile)
+                target,offers("source",album="SUPER REAL ME\\$folder"),profile)
             assertEquals("generic folder $folder beneath exact album",
                 A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,
                 decision.status)
@@ -72,10 +72,10 @@ class A0AutoCandidateSelectionPolicyTest {
 
     @Test fun matchingArtistOrConflictingParentMustNeverProveAlbum() {
         val bad=A0AutoCandidateSelectionPolicy.preview(
-            target,offers("source",album="Other Album\\\\FLAC"),profile)
+            target,offers("source",album="Other Album\\FLAC"),profile)
         assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,bad.status)
         val noAlbum=A0AutoCandidateSelectionPolicy.preview(
-            target,offers("source",album="ILLIT\\\\FLAC"),profile)
+            target,offers("source",album="ILLIT\\FLAC"),profile)
         assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,noAlbum.status)
     }
 
