@@ -21,6 +21,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import com.music.bitchord.ui.player.AndroidPlayerHost
 import com.music.bitchord.ui.player.PlayerPlatform
 import com.music.bitchord.data.canvas.CanvasCache
+import com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry
 import com.music.bitchord.data.smb.SmbCoverFetcher
 import com.music.bitchord.data.webdav.WebDavCoilAuth
 import com.music.bitchord.data.canvas.SpotifyToken
@@ -224,18 +225,17 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         Diagnostics.span(DiagnosticCategory.STARTUP, "spotify_token_init") {
             SpotifyToken.init(this)
         }
-        // A sideloaded update is just a new APK over the old one, so app data —
-        // including whatever the old build left in these caches — survives it
-        // untouched. Wipe both on the first launch of a higher versionCode so a
-        // format or key change between builds can't serve stale or mismatched
-        // bytes from a cache the new code didn't write.
+        // The decoded Coil memory cache is process-local and starts empty
+        // after an APK update. Clearing the *disk* cache on every versionCode
+        // increase was forcing re-downloads of unchanged 500px album sleeves
+        // on the Galaxy A54. Keep the bounded disk LRU across updates:
+        // Front-v5 verification is in versioned Room keys and different
+        // validated CAA URLs remain distinct Coil keys. Only AudioCache still
+        // requires its historical version-sensitive format invalidation.
         if (AppSettings.consumeVersionUpdate(BuildConfig.VERSION_CODE)) {
-            Diagnostics.span(DiagnosticCategory.STARTUP, "version_update_cache_clear") {
+            CatalogCoverTelemetry.process.recordImageDiskCachePreservedOnUpgrade()
+            Diagnostics.span(DiagnosticCategory.STARTUP, "version_update_audio_cache_clear") {
                 AudioCache.clear()
-                SingletonImageLoader.get(this).let { loader ->
-                    loader.memoryCache?.clear()
-                    loader.diskCache?.clear()
-                }
             }
         }
         // Initialize LastFM with saved settings if available
@@ -327,7 +327,18 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
                     .maxSizeBytes(100L * 1024 * 1024)
-                    .build()
+                    .build().also { disk ->
+                        // DiskCache.size can inspect its journal. Never read it
+                        // on the image-loading UI thread. One process baseline,
+                        // no user, URL or image identifiers in diagnostics.
+                        CoroutineScope(Dispatchers.IO).launch {
+                            runCatching {
+                                CatalogCoverTelemetry.process.recordCoilDiskCacheInitialization(
+                                    disk.size, disk.maxSize,
+                                )
+                            }
+                        }
+                    }
             }
             // Covers arriving with a hard cut read as the list flickering as
             // it scrolls; a short fade reads as them developing.
