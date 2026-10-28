@@ -183,7 +183,23 @@ object Downloads {
             val rows=current[sessionId] ?: return@update current
             if(index !in rows.indices)return@update current
             current+(sessionId to rows.mapIndexed { i,row ->
-                if(i==index)row.copy(stage=stage) else row
+                if(i!=index || row.stage==AutoTrackStage.SAVED)row
+                else if(row.stage==AutoTrackStage.VERIFY_STORAGE &&
+                    stage==AutoTrackStage.WAITING)row
+                else row.copy(stage=stage)
+            })
+        }
+    }
+
+    /** Cancellation of a claimed batch is NOT proof of physical rollback. */
+    private fun settleAutoTrackRows(sessionId:String,claimed:Boolean) {
+        _autoTrackRows.update { current ->
+            val rows=current[sessionId] ?: return@update current
+            current+(sessionId to rows.map { row ->
+                if(row.stage==AutoTrackStage.SAVED ||
+                    row.stage==AutoTrackStage.MANUAL_REVIEW)row
+                else row.copy(stage=if(claimed)
+                    AutoTrackStage.VERIFY_STORAGE else AutoTrackStage.CANCELLED)
             })
         }
     }
@@ -504,6 +520,7 @@ object Downloads {
             val claimed=videoId in running
             val queued=videoId in pending
             val auto=autoRequests[videoId]
+            if(auto!=null)settleAutoTrackRows(videoId,claimed)
             // takeNext() and cancellation both hold this same lock. A request
             // still pending cannot have created an A3 automatic reservation.
             // Release only that process-local admission to permit another
@@ -1139,6 +1156,9 @@ object Downloads {
             )
             unclaimed.forEach { id ->
                 autoRequests[id]?.let { autoAttemptGuard.rollback(it.entries) }
+            }
+            autoRequests.keys.forEach { id ->
+                settleAutoTrackRows(id,claimed=id !in unclaimed)
             }
             running.clear()
             val ids=autoRequests.keys.toList()
