@@ -443,6 +443,17 @@ object Downloads {
     fun cancel(videoId: String) {
         val (job,wasClaimed)=synchronized(lock) {
             val claimed=videoId in running
+            val queued=videoId in pending
+            val auto=autoRequests[videoId]
+            // takeNext() and cancellation both hold this same lock. A request
+            // still pending cannot have created an A3 automatic reservation.
+            // Release only that process-local admission to permit another
+            // explicit tap; never release a claimed job or any durable A3 row.
+            if(auto!=null && SoulseekAutoCancellationPolicy.canReleaseQueuedIdentity(
+                    isAutomatic=videoId.startsWith("soulseek-auto:"),
+                    wasQueued=queued,wasClaimedByWorker=claimed)) {
+                autoAttemptGuard.rollback(auto.entries)
+            }
             pending.remove(videoId)
             autoRequests.remove(videoId)
             if(!claimed)_autoReviews.update { it - videoId }
