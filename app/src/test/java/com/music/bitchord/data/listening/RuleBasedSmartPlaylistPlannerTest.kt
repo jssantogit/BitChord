@@ -69,6 +69,22 @@ class RuleBasedSmartPlaylistPlannerTest {
         assertTrue(planner.preview(tracks, highRated).isEmpty())
     }
 
+    @Test fun legacyPlannerHandlesFiftyThousandRecordsAndInterleavedConflicts() {
+        val query = RuleBasedSmartPlaylistQuery(minimumCompletions = 1, limit = 100)
+        val many = (1..50_123).map { row("rec:%05d".format(it), completed = 1) }
+        val conflicting = many[2].copy(explicitRating = 5.0)
+        val results = planner.preview(
+            listOf(many[2], many[0], many[1], conflicting, many[2]) +
+                many + listOf(many.last(), many.last()),
+            query,
+        )
+        assertEquals(100, results.size)
+        assertEquals(100, results.map { it.recordingId }.toSet().size)
+        assertTrue(results.none { it.recordingId == "rec:00003" })
+        assertEquals("rec:00001", results.first().recordingId)
+        assertEquals("rec:00101", results.last().recordingId)
+    }
+
     @Test fun moreThanFiveThousandCanonicalCandidatesNeverMeansEmptyByDefault() {
         val tracks = (1..5_001).map { row("rec:%05d".format(it), completed = 1) }
         val query = RuleBasedSmartPlaylistQuery(minimumCompletions = 1, limit = 50)

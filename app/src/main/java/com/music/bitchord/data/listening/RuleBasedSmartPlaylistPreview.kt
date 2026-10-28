@@ -127,12 +127,25 @@ internal class RuleBasedSmartPlaylistPlanner(
     ): List<RuleBasedSmartPlaylistItem> {
         val now = nowEpochMs()
         if (now < 0L) return emptyList()
-        return input.groupBy { it.recordingId }
-            .toSortedMap()
-            .values
-            .mapNotNull { grouped ->
-                if (grouped.distinct().size != 1) return@mapNotNull null
-                val item = grouped.first()
+        // Legacy V1 definitions still preview large libraries during migration.
+        // Avoid allocating one list per ID; invalidate a Recording forever once
+        // two source snapshots disagree, even if the first repeats afterward.
+        val uniqueById = HashMap<String, RuleBasedRecordingCandidate>()
+        val conflictedIds = HashSet<String>()
+        for (item in input) {
+            val id = item.recordingId
+            if (id in conflictedIds) continue
+            val previous = uniqueById[id]
+            when {
+                previous == null -> uniqueById[id] = item
+                previous != item -> {
+                    uniqueById.remove(id)
+                    conflictedIds.add(id)
+                }
+            }
+        }
+        return uniqueById.values.asSequence()
+            .mapNotNull { item ->
                 if (item.recordingId.isBlank() || !item.available ||
                     item.audibleCompletions < 0 ||
                     item.explicitRating?.isFinite() == false
@@ -178,7 +191,7 @@ internal class RuleBasedSmartPlaylistPlanner(
                 compareByDescending<RuleBasedSmartPlaylistItem> { it.explicitRating ?: Double.NEGATIVE_INFINITY }
                     .thenByDescending { it.confirmedCompletions }
                     .thenBy { it.recordingId },
-            ).take(query.limit)
+            ).take(query.limit).toList()
     }
 }
 
