@@ -360,7 +360,7 @@ internal class SmartPlaylistV2RuleEngine(
             val numbers = if (rule.field == SmartPlaylistRuleField.RELEASE_YEAR)
                 row.releaseYears else row.trackNumbers
             val evidenceUnknown = if (rule.field == SmartPlaylistRuleField.RELEASE_YEAR)
-                evidenceUnknown else row.trackNumberEvidenceUnknown
+                row.releaseYearEvidenceUnknown else row.trackNumberEvidenceUnknown
             if (rule.operator == SmartPlaylistRuleOperator.IS_PRESENT) {
                 return if (numbers.isNotEmpty()) RuleTruth.TRUE else RuleTruth.UNKNOWN
             }
