@@ -2,8 +2,12 @@ package com.music.bitchord.data.listening
 
 import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.CanonicalCatalogDao
+import com.music.bitchord.data.catalog.CanonicalBrowseTrack
+import com.music.bitchord.data.catalog.CanonicalLibraryBrowseRepository
+import com.music.bitchord.data.catalog.RoomCanonicalLibraryBrowseStore
 import com.music.bitchord.data.catalog.ReleaseEntity
 import java.util.Locale
+import kotlinx.coroutines.flow.first
 
 /**
  * Album/Artist context must never be represented by a synthetic RecordingId.
@@ -134,6 +138,27 @@ internal fun filterCanonicalBrowseArtists(
 internal class CanonicalContextualFilterLibrary(
     private val catalog: CanonicalCatalogDao,
 ) {
+    /**
+     * On-demand account-scoped Songs read for non-Compose consumers such as a
+     * future recommendation planner. No hidden global snapshot, MediaStore
+     * scan, native provider IDs or fabricated Playback evidence.
+     */
+    suspend fun songs(
+        providerKey: String,
+        filter: SavedSmartPlaylistV2Filter,
+    ): List<CanonicalBrowseTrack> {
+        require(providerKey.isNotBlank() && providerKey == providerKey.trim()) {
+            "A configured account/provider is required"
+        }
+        require(filter.isSupportedForCanonicalSongBrowse()) {
+            "Saved Song filter requires unavailable evidence"
+        }
+        val snapshot = CanonicalLibraryBrowseRepository(
+            RoomCanonicalLibraryBrowseStore(catalog),
+        ).observe(providerKey).first()
+        return filterCanonicalBrowseSongs(snapshot.tracks, filter, providerKey)
+    }
+
     suspend fun albums(
         providerKey: String,
         filter: SavedSmartPlaylistV2Filter,
