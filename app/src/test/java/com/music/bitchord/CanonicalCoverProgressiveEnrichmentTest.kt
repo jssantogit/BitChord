@@ -562,4 +562,38 @@ class CanonicalCoverProgressiveEnrichmentTest {
                 trackOwnsCover, edition,
             ))
     }
+
+    @Test fun warmVerifiedGroupBatchPaintsAlbumAndSiblingSongsBeforeAnyNetworkRequest() {
+        val group = "11111111-1111-4111-8111-111111111111"
+        val official = "https://archive.org/official-front-500.jpg"
+        val parent = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            group, com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP,
+            "Get Up", "NewJeans", releaseKind = "EP",
+        )
+        val sibling = parent.copy(
+            musicBrainzId = "recording-1",
+            kind = com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+            title = "Super Shy", coverGroupMbid = group,
+            artworkUri = "https://archive.org/edition-other.jpg",
+            artworkProvenance =
+                com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE,
+        )
+        val own = sibling.copy(musicBrainzId = "recording-2",
+            artworkUri = "content://tracks/own.jpg", artworkProvenance = null)
+        val foreign = sibling.copy(musicBrainzId = "recording-other",
+            coverGroupMbid = "other", artworkUri = null, artworkProvenance = null)
+        val results = com.music.bitchord.ui.canonicalRowsWithVerifiedGroupCoverBatch(
+            listOf(parent, sibling, own, foreign), mapOf(group to official),
+        )
+        assertEquals(official, results[0].artworkUri)
+        assertEquals(official, results[1].artworkUri)
+        assertEquals(
+            com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP,
+            results[1].artworkProvenance,
+        )
+        assertEquals("content://tracks/own.jpg", results[2].artworkUri)
+        assertEquals(null, results[3].artworkUri)
+        assertEquals(results, com.music.bitchord.ui.canonicalRowsWithVerifiedGroupCoverBatch(
+            results, mapOf(group to official)))
+    }
 }
