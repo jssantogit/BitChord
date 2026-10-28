@@ -1,0 +1,126 @@
+package com.music.bitchord.data.listening
+
+import com.music.bitchord.data.catalog.ArtistEntity
+import com.music.bitchord.data.catalog.ReleaseEntity
+import java.util.Locale
+
+/**
+ * Album/Artist context must never be represented by a synthetic RecordingId.
+ * These predicates work on their own canonical entity IDs, and only on source-
+ * scoped lists supplied by the caller. No remote provider query is made here.
+ *
+ * More metadata (original date, credited album artist, composer, favorite date)
+ * needs authoritative per-entity evidence first; these fields fail eligibility
+ * rather than guessing from a Recording title or display credit.
+ */
+internal enum class CanonicalSmartFilterContext { SONGS, ALBUMS, ARTISTS }
+
+private fun SmartPlaylistRule.supportedForContext(
+    fields: Set<SmartPlaylistRuleField>,
+): Boolean = when (this) {
+    is SmartPlaylistRule.Comparison -> field in fields
+    is SmartPlaylistRule.Group -> children.isNotEmpty() &&
+        children.all { it.supportedForContext(fields) }
+    is SmartPlaylistRule.Not -> child.supportedForContext(fields)
+    is SmartPlaylistRule.Reference -> false
+}
+
+internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalAlbumBrowse(): Boolean =
+    rules.supportedForContext(setOf(
+        SmartPlaylistRuleField.RELEASE_TITLE,
+        SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
+    ))
+
+internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalArtistBrowse(): Boolean =
+    rules.supportedForContext(setOf(SmartPlaylistRuleField.ARTIST_DISPLAY))
+
+/** Null = UNKNOWN: NOT of an unverified cover must not include an album. */
+private fun SmartPlaylistRule.textTruth(
+    field: SmartPlaylistRuleField,
+    text: String?,
+    artworkReference: String? = null,
+): Boolean? = when (this) {
+    is SmartPlaylistRule.Comparison -> {
+        if (this.field != field &&
+            this.field != SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) null
+        else if (this.field == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) {
+            if (operator == SmartPlaylistRuleOperator.IS_PRESENT &&
+                !artworkReference.isNullOrBlank()) true else null
+        } else {
+            val actual = text?.trim()?.takeIf { it.isNotEmpty() }?.lowercase(Locale.ROOT)
+            val wanted = textValue?.trim()?.takeIf { it.isNotEmpty() }?.lowercase(Locale.ROOT)
+            when (operator) {
+                SmartPlaylistRuleOperator.IS_PRESENT -> actual != null
+                SmartPlaylistRuleOperator.IS_MISSING -> actual == null
+                else -> {
+                    if (actual == null || wanted == null) null else when (operator) {
+                        SmartPlaylistRuleOperator.EQUAL -> actual == wanted
+                        SmartPlaylistRuleOperator.NOT_EQUAL -> actual != wanted
+                        SmartPlaylistRuleOperator.CONTAINS -> wanted in actual
+                        SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> wanted !in actual
+                        SmartPlaylistRuleOperator.STARTS_WITH -> actual.startsWith(wanted)
+                        SmartPlaylistRuleOperator.ENDS_WITH -> actual.endsWith(wanted)
+                        else -> null
+                    }
+                }
+            }
+        }
+    }
+    is SmartPlaylistRule.Not -> child.textTruth(field, text, artworkReference)?.not()
+    is SmartPlaylistRule.Reference -> null
+    is SmartPlaylistRule.Group -> {
+        val values = children.map { it.textTruth(field, text, artworkReference) }
+        when (join) {
+            SmartPlaylistRuleJoin.ALL -> when {
+                false in values -> false
+                null in values -> null
+                else -> true
+            }
+            SmartPlaylistRuleJoin.ANY -> when {
+                true in values -> true
+                null in values -> null
+                else -> false
+            }
+        }
+    }
+}
+
+/** Caller supplies only already-visible canonical releases; no source expansion. */
+internal fun filterCanonicalBrowseAlbums(
+    releases: List<ReleaseEntity>,
+    filter: SavedSmartPlaylistV2Filter,
+): List<ReleaseEntity> {
+    require(filter.isSupportedForCanonicalAlbumBrowse()) {
+        "This saved filter needs unsupported Album evidence"
+    }
+    SmartPlaylistV2Query(filter.rules)
+    require(releases.all { it.id.isNotBlank() } &&
+        releases.map { it.id }.distinct().size == releases.size) {
+        "Album source must contain unique canonical release IDs"
+    }
+    return releases.filter { release ->
+        filter.rules.textTruth(
+            SmartPlaylistRuleField.RELEASE_TITLE,
+            release.title,
+            release.artworkUri,
+        ) == true
+    }
+}
+
+/** Caller supplies only already-visible canonical artists, not display-name groups. */
+internal fun filterCanonicalBrowseArtists(
+    artists: List<ArtistEntity>,
+    filter: SavedSmartPlaylistV2Filter,
+): List<ArtistEntity> {
+    require(filter.isSupportedForCanonicalArtistBrowse()) {
+        "This saved filter needs unsupported Artist evidence"
+    }
+    SmartPlaylistV2Query(filter.rules)
+    require(artists.all { it.id.isNotBlank() } &&
+        artists.map { it.id }.distinct().size == artists.size) {
+        "Artist source must contain unique canonical artist IDs"
+    }
+    return artists.filter { artist ->
+        filter.rules.textTruth(SmartPlaylistRuleField.ARTIST_DISPLAY, artist.name) == true
+    }
+}
