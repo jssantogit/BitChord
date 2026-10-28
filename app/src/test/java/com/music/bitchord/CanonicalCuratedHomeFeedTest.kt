@@ -309,4 +309,40 @@ class CanonicalCuratedHomeFeedTest {
             corrected, mapOf(id to (low to "SUPER REAL ME")),
         ))
     }
+
+    @Test fun artistWarmCacheRevalidatesFullSizeGroupSleevesWithoutPaintingOtherOrForeignGroups() {
+        val stale500 = "https://archive.org/older-edition-front-500.jpg"
+        val official500 = "https://archive.org/verified-official-front-500.jpg"
+        val otherId = "00000000-0000-0000-0000-000000000013"
+        val foreignId = "00000000-0000-0000-0000-000000000014"
+        val rows = listOf(
+            release.copy(artworkUri = stale500),
+            release.copy(musicBrainzId = otherId, title = "Video release",
+                releaseKind = "Other", artworkUri = stale500),
+        )
+        assertEquals(listOf(release.musicBrainzId),
+            com.music.bitchord.ui.canonicalWarmGroupArtworkCandidateMbids(rows, 400))
+        val updates = com.music.bitchord.ui.canonicalArtistVerifiedGroupUpdates(
+            rows,
+            mapOf(release.musicBrainzId to official500,
+                otherId to "https://archive.org/video-front-500.jpg",
+                foreignId to "https://archive.org/foreign-front-500.jpg"),
+        )
+        assertEquals(mapOf(release.musicBrainzId to (official500 to release.title)), updates)
+        val corrected = com.music.bitchord.ui.canonicalRowsWithVerifiedGroupCoverBatch(
+            rows, updates.mapValues { it.value.first },
+        )
+        assertEquals(official500, corrected[0].artworkUri)
+        assertEquals(stale500, corrected[1].artworkUri)
+        assertEquals(corrected, com.music.bitchord.ui.canonicalRowsWithVerifiedGroupCoverBatch(
+            corrected, updates.mapValues { it.value.first },
+        ))
+        val shelves = com.music.bitchord.ui.canonicalNativeSections(
+            CanonicalSearchKind.ARTIST, rows, heading = "EPs",
+        )
+        val painted = com.music.bitchord.ui.canonicalArtistShelvesWithCoverUpdates(
+            shelves, updates,
+        )
+        assertEquals(official500, painted.single().items.single().thumbnailUrl)
+    }
 }
