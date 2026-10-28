@@ -1,5 +1,6 @@
 package com.music.bitchord.ui
 
+import com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
@@ -141,16 +142,30 @@ internal fun canonicalRowsWithVerifiedRecordingArt(
                 canonicalShouldAcceptArtworkUpdate(row.artworkUri, cover)
             null -> row.artworkUri.isNullOrBlank()
         }
-        if (row.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING &&
-            cover != null && mayReplace &&
+        if (row.kind != com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING ||
+            cover == null
+        ) row else if (mayReplace &&
             (row.artworkUri != cover ||
                 row.artworkProvenance !=
                     com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP)
-        ) row.copy(
-            artworkUri = cover,
-            artworkProvenance =
-                com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP,
-        ) else row
+        ) {
+            if (row.artworkProvenance ==
+                com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE &&
+                row.artworkUri != null && row.artworkUri != cover
+            ) CatalogCoverTelemetry.process.recordEditionSleeveReplacedByVerifiedGroup()
+            row.copy(
+                artworkUri = cover,
+                artworkProvenance =
+                    com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP,
+            )
+        } else {
+            if (row.artworkProvenance ==
+                com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP &&
+                !canonicalNeedsCoverRefresh(row.artworkUri) &&
+                canonicalNeedsCoverRefresh(cover)
+            ) CatalogCoverTelemetry.process.recordLowerResolutionGroupCoverRejected()
+            row
+        }
     }
 
 
