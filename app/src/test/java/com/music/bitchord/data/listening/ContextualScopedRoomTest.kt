@@ -80,6 +80,17 @@ class ContextualScopedRoomTest {
             assertEquals(listOf("artist:two"), dao.providerScopedArtists(other).map { it.id })
             assertTrue(dao.providerScopedReleases("opensubsonic:unknown").isEmpty())
             assertTrue(dao.providerScopedArtists("opensubsonic:unknown").isEmpty())
+            // Removing an account's asset revokes Album/Artist browse eligibility.
+            dao.deleteAllMediaAssets(current)
+            assertTrue(dao.providerScopedReleases(current).isEmpty())
+            assertTrue(dao.providerScopedArtists(current).isEmpty())
+            assertTrue(dao.providerScopedReleaseRecordingIds(
+                current, "rel:one",
+            ).isEmpty())
+            assertTrue(dao.providerScopedArtistRecordingIds(
+                current, "artist:one",
+            ).isEmpty())
+            assertEquals(listOf("rel:two"), dao.providerScopedReleases(other).map { it.id })
         } finally {
             db.close()
         }
