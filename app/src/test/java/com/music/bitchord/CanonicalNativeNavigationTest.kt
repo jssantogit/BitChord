@@ -274,6 +274,34 @@ class CanonicalNativeNavigationTest {
         ).isEmpty())
     }
 
+    @Test fun officialRetailPackagingEditionsAreNotCanonicalStreamingAlbumSleeves() {
+        val canonical = MusicBrainzReleaseHit(
+            "main", "Taste of Love", "XW", "2021-06-11", "TWICE",
+            status = "Official", hasFrontCover = true,
+        )
+        val editions = listOf(
+            "Taste of Love (Digipack)" ,
+            "Taste of Love (Nemo ver.)",
+            "Taste of Love (Platform Album)",
+            "Taste of Love (POCA Album)",
+            "Taste of Love (Compact Edition)",
+            "Taste of Love (Member Edition)",
+            "Taste of Love (Store Exclusive)",
+            "Taste of Love (Signed Edition)",
+        ).mapIndexed { index, title ->
+            canonical.copy(musicBrainzId = "variant-$index", title = title)
+        }
+        assertEquals(
+            listOf("main"),
+            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
+                editions + canonical, "Taste of Love",
+            ).map { it.musicBrainzId },
+        )
+        assertTrue(com.music.bitchord.ui.canonicalEditionTitleIsSuitableForGroupArtwork(
+            "Taste of Love", "Taste of Love",
+        ))
+    }
+
     @Test fun verifiedAlbumArtworkBelongsToItsTracksWithoutNewCoverSearch() {
         val cover = "https://archive.org/verified-release-group-cover-500.jpg"
         val tracks = listOf(
