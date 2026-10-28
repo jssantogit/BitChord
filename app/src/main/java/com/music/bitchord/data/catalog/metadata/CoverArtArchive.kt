@@ -229,7 +229,7 @@ internal class CoverArtArchive(
                 telemetry.recordCacheHit()
             }
         }
-        telemetry.recordArtistCachedGroupBatch(verified.size)
+        telemetry.recordVerifiedGroupCachedBatch(verified.size)
         return verified
     }
 
