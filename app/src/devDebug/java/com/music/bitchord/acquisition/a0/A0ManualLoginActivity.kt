@@ -1249,9 +1249,9 @@ class A0ManualLoginActivity : Activity() {
                                                     // appearing in Android local MediaStore.
                                                     // This is a separate, already published URI:
                                                     // never start another P/F if indexing fails.
-                                                    val queryForLibrary=searchInput.text.toString()
+                                                    val queryForLibrary=(enteredSearch ?: recoveryQuery)
                                                         .trim().take(120)
-                                                    val albumForLibrary=albumInput.text.toString()
+                                                    val albumForLibrary=albumConstraint.orEmpty()
                                                         .trim().take(120)
                                                     val item=Song(
                                                         videoId="soulseek-manual:$id",
