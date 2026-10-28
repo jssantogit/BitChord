@@ -416,7 +416,7 @@ class CoverArtArchiveFallbackTest {
         assertNull("Pre-versioned group artwork may contain a TWICE alternate sleeve",
             cover.cachedVerifiedGroupCover(group))
         records["release-group:front-v5"] = MusicBrainzCoverArtCacheEntry(
-            "release-group", group,
+            "verified-artist-group", group,
             "https://archive.org/official-1200.jpg", now,
             "https://archive.org/official-500.jpg",
         )
@@ -426,7 +426,7 @@ class CoverArtArchiveFallbackTest {
             cover.cachedVerifiedGroupCover(group, CoverArtSize.HERO))
         assertEquals(0, network)
         records["release-group:front-v5"] = MusicBrainzCoverArtCacheEntry(
-            "release-group", group, null, now,
+            "verified-artist-group", group, null, now,
             "https://coverartarchive.org/release/$release/front-500",
         )
         assertEquals("https://coverartarchive.org/release/$release/front-500",
