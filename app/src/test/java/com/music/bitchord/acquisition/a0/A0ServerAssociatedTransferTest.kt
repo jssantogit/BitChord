@@ -132,12 +132,12 @@ class A0ServerAssociatedTransferTest {
                     try {
                         A0ServerAssociatedTransfer(allowLoopbackForLocalTest=true)
                             .runObservedOnce(server,"testaccount","owner",
-                                listing(),temp.root) { phase ->
+                                listing(),temp.root,onPhase={ phase ->
                                 if(phase==A0ServerAssociatedTransfer.Phase.PEER_ADDRESS_RESOLVED) {
                                     addressResolved=true
                                     throw IllegalStateException("address resolved; fixture stop")
                                 }
-                            }
+                            })
                         fail("Fixture must stop after address resolution")
                     } catch(e:IllegalStateException) {
                         assertEquals("address resolved; fixture stop",e.message)
