@@ -1343,4 +1343,6 @@
     <string name="playback_recovery_retry">ลองอีกครั้ง</string>
     <string name="playback_recovery_retrying">กำลังลองอีกครั้ง…</string>
     <string name="playback_recovery_dismiss">ปิด</string>
+    <string name="pause_resume_fade">เฟดเมื่อหยุดชั่วคราวและเล่นต่อ</string>
+    <string name="pause_resume_fade_subtitle">ค่อย ๆ ลดเสียงเมื่อหยุดชั่วคราวและเพิ่มเสียงเมื่อเล่นต่อ</string>
 </resources>
