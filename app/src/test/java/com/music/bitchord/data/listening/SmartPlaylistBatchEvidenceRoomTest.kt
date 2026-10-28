@@ -635,4 +635,47 @@ class SmartPlaylistBatchEvidenceRoomTest {
         }
     }
 
+
+
+    @Test fun localAddedDatesReadOnlyMediaStoreAssetsAndPreserveUnknownValues() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:one", "Song", "Artist", 120_000L))
+            dao.upsertRecording(RecordingEntity("rec:two", "Other", "Artist", 120_000L))
+            val provider = com.music.bitchord.data.catalog.CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER
+            dao.upsertMediaAsset(com.music.bitchord.data.catalog.MediaAssetEntity(
+                "asset:one", "rec:one", provider, "local:one",
+                "content://music/one", null, 86_400L, null, null,
+            ))
+            dao.upsertMediaAsset(com.music.bitchord.data.catalog.MediaAssetEntity(
+                "asset:unknown", "rec:one", provider, "local:unknown",
+                "content://music/unknown", null, null, null, null,
+            ))
+            dao.upsertMediaAsset(com.music.bitchord.data.catalog.MediaAssetEntity(
+                "asset:remote", "rec:one", "opensubsonic:test", "remote:one",
+                "https://remote.example/one", null, 864_000L, null, null,
+            ))
+            val reader = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            )
+            val values = reader.read(listOf("rec:one", "rec:two"), setOf(
+                SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
+            )).associateBy { it.recordingId }
+            assertEquals(listOf(86_400_000L), values.getValue("rec:one").localAddedEpochMs)
+            assertTrue(values.getValue("rec:one").localAddedDateEvidenceUnknown)
+            assertTrue(values.getValue("rec:two").localAddedDateEvidenceUnknown)
+            assertTrue(values.getValue("rec:two").localAddedEpochMs.isEmpty())
+            assertTrue(reader.read(listOf("rec:one"), emptySet())
+                .single().localAddedEpochMs.isEmpty())
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
 }
