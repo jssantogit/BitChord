@@ -16,6 +16,7 @@ internal enum class PauseResumeFadeEvent(val wireName: String) {
     FADE_OUT_COMPLETED("out_completed"),
     CANCELED("canceled"),
     ENDED_BEFORE_AUDIBLE("ended_before_audible"),
+    FAILED_BEFORE_AUDIBLE("failed_before_audible"),
     HANDOFF_PAUSED("handoff_paused"),
     PLAY_REJECTED("play_rejected"),
 }
@@ -72,8 +73,14 @@ internal class PauseResumeVolumeFade(
         job = scope.launch {
             // Buffering cannot consume the fade: wait until the decoder is audible.
             while (isActive && target.playWhenReady && !target.isPlaying && !overlapActive()) {
-                // A failed/end-of-queue stream can remain non-audible forever while
-                // playWhenReady stays true. Restore gain rather than pinning mute.
+                // PlayWhenReady may remain true after decoder errors and natural EOS.
+                // No audible input will arrive, so retaining a zero-volume deck
+                // could mute an eventual recovery outside this envelope.
+                if (target.playerError != null) {
+                    target.volume = 1f
+                    onEvent(PauseResumeFadeEvent.FAILED_BEFORE_AUDIBLE, duration)
+                    return@launch
+                }
                 if (target.playbackState == Player.STATE_ENDED) {
                     target.volume = 1f
                     onEvent(PauseResumeFadeEvent.ENDED_BEFORE_AUDIBLE, duration)
