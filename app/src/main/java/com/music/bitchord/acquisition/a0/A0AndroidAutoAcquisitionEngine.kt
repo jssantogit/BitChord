@@ -75,6 +75,18 @@ internal object A0AndroidAutoAcquisitionEngine {
             !SoulseekActiveSession.isCurrent(generation) ||
             Thread.currentThread().isInterrupted
         if(stopped())return refused(entries.size)
+        // Do not permanently reserve a recording just because an account
+        // was never configured. This read opens NO socket and the secret is
+        // wiped immediately; the authenticated transport reads it freshly.
+        val account=runCatching {
+            SoulseekCredentialVault(app).read()
+        }.getOrNull() ?: return refused(entries.size)
+        try {
+            if(account.username.isBlank())return refused(entries.size)
+        }finally {
+            account.erase()
+        }
+        if(stopped())return refused(entries.size)
 
         // Atomic on the A3 journal BEFORE search, login or peer discovery.
         // Reboot does not erase this reservation: a duplicate recording ID
