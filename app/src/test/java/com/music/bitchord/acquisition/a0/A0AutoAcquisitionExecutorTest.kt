@@ -36,6 +36,7 @@ class A0AutoAcquisitionExecutorTest {
         var fetches=0
         var publishes=0
         var cleanups=0
+        var finishes=0
         var inspections=0
         var failCount=0
         var afterFetch:(()->Unit)?=null
@@ -79,6 +80,7 @@ class A0AutoAcquisitionExecutorTest {
             cleanups++
             assertTrue("Each temporary receipt must be discarded",receipt.file.delete())
         }
+        override fun finish() { finishes++ }
     }
 
     @Test fun defaultOffOrMissingUserTapNeverRequestsPeerBytes() {
@@ -104,6 +106,7 @@ class A0AutoAcquisitionExecutorTest {
         assertEquals(1,port.inspections)
         assertEquals(1,port.publishes)
         assertEquals(1,port.cleanups)
+        assertEquals(1,port.finishes)
         assertFalse(result.toString().contains("ILLIT"))
     }
 
@@ -148,6 +151,7 @@ class A0AutoAcquisitionExecutorTest {
         assertEquals(A0AutoAcquisitionExecutor.Status.CANCELLED,result.status)
         assertEquals(0,port.publishes)
         assertEquals(1,port.cleanups)
+        assertEquals(1,port.finishes)
     }
 
     @Test fun ambiguousVersionsAndDisabledSourceReturnToManualWithoutIOMutation() {

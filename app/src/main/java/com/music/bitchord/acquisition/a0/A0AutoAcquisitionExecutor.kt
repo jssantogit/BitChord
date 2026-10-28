@@ -39,6 +39,9 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
 
         /** MUST discard private scratch even on user logout, invalid audio or failure. */
         fun cleanup(receipt:A0VerifiedByteStager.Receipt)
+
+        /** Close authenticated P/F sockets and finalize durable error phase. */
+        fun finish() {}
     }
 
     /** Unknown commit state must NEVER trigger a second automatic transfer. */
@@ -208,6 +211,9 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                 }
             }
         }finally{
+            // Ports are per-track; never leave a socket or TRANSFERRING
+            // journal active after success, failure or user cancellation.
+            try { port.finish() }catch(_:Exception) {}
             running.set(false)
         }
     }
