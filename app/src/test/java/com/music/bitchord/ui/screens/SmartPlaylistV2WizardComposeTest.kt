@@ -13,6 +13,7 @@ import com.music.bitchord.data.listening.SmartPlaylistRuleField
 import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
 import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
 import com.music.bitchord.data.listening.SmartPlaylistV2Sort
+import com.music.bitchord.data.listening.SmartPlaylistV2Query
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -27,6 +28,35 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class SmartPlaylistV2WizardComposeTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun reviewDisplaysOnlyReturnedCanonicalPreviewMetadata() {
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
+                SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ))
+        val query = SmartPlaylistV2Query(rule, SmartPlaylistV2Sort.TITLE_ASC, 100)
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Favoritas",
+                rule = rule, sort = query.sort, limit = "100", seed = "0",
+                preview = listOf(V2DisplayRow("rec:verified", "Hurt", "NewJeans")),
+                loading = false, error = null, editingId = null,
+                editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {},
+                onSortChange = {}, onLimitChange = {}, onSeedChange = {},
+                onPreview = {}, onSave = {}, onSaveFilter = {},
+                onPreviewAction = null, currentPreviewQuery = query,
+                onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithText("Revisar playlist").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(5)
+        compose.onNodeWithText("Hurt").assertExists()
+        compose.onNodeWithText("NewJeans").assertExists()
+    }
 
     @Test fun deletingSavedPlaylistRequiresExplicitConfirmation() {
         var confirmed = 0
