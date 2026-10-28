@@ -93,6 +93,21 @@ class PauseResumeVolumeFadeTest {
         assertEquals(1f, deck.volume, 0.00001f)
     }
 
+    @Test fun `repeated pause keeps original deadline instead of prolonging fade`() = runTest {
+        val deck = FakeDeck(playingInitially = true)
+        val fade = PauseResumeVolumeFade(this, { 200 }, { false }, { testScheduler.currentTime })
+        fade.pause(deck.player)
+        runCurrent()
+        advanceTimeBy(80)
+        runCurrent()
+        fade.pause(deck.player)
+        advanceTimeBy(160)
+        runCurrent()
+        assertEquals(1, deck.pauseCalls)
+        assertFalse(deck.playWhenReady)
+        assertEquals(1f, deck.volume, 0f)
+    }
+
     @Test fun `disabled preference bypasses the entire envelope`() = runTest {
         val deck = FakeDeck(playingInitially = true)
         val fade = PauseResumeVolumeFade(this, { 0 }, { false }, { testScheduler.currentTime })
