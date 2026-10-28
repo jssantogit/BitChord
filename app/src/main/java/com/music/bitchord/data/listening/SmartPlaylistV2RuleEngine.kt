@@ -52,6 +52,7 @@ internal enum class SmartPlaylistRuleField {
     TRACK_ARTIST,
     DAYS_SINCE_LOCAL_RATING,
     RELEASE_ARTWORK_REFERENCE,
+    DAYS_SINCE_LOCAL_FILE_ADDED,
 }
 
 internal enum class SmartPlaylistSourceKind { LOCAL, OPENSUBSONIC }
@@ -86,7 +87,8 @@ internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOp
     if (this == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) listOf(
         SmartPlaylistRuleOperator.IS_PRESENT,
     ) else if (this == SmartPlaylistRuleField.RELEASE_YEAR ||
-        this == SmartPlaylistRuleField.TRACK_NUMBER) listOf(
+        this == SmartPlaylistRuleField.TRACK_NUMBER ||
+        this == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED) listOf(
         SmartPlaylistRuleOperator.EQUAL,
         SmartPlaylistRuleOperator.NOT_EQUAL,
         SmartPlaylistRuleOperator.GREATER_THAN,
@@ -193,7 +195,10 @@ internal data class SmartPlaylistV2Query(
                                 "Release year must be a four-digit calendar year"
                             }
                         }
-                        if (node.field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING && !presence) {
+                        if (node.field in listOf(
+                            SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING,
+                            SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
+                        ) && !presence) {
                             require(node.value!! in 0.0..100_000.0 &&
                                 node.value % 1.0 == 0.0) {
                                 "Days since local rating must be a nonnegative whole number"
@@ -383,6 +388,43 @@ internal class SmartPlaylistV2RuleEngine(
         row: RuleBasedRecordingCandidate,
         now: Long,
     ): RuleTruth {
+        if (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED) {
+            // A Recording may have multiple local MediaStore assets. No remote
+            // asset or unconfigured local source may satisfy this predicate.
+            if (SmartPlaylistSourceKind.LOCAL !in row.sourceKinds.orEmpty()) return RuleTruth.UNKNOWN
+            val valid = row.localAddedEpochMs.filter { it in 0L..now }
+            val incomplete = row.localAddedDateEvidenceUnknown ||
+                valid.size != row.localAddedEpochMs.size
+            if (rule.operator == SmartPlaylistRuleOperator.IS_PRESENT) {
+                return if (valid.isNotEmpty()) RuleTruth.TRUE else RuleTruth.UNKNOWN
+            }
+            if (valid.isEmpty()) return RuleTruth.UNKNOWN
+            val expected = rule.value ?: return RuleTruth.UNKNOWN
+            val anyMatching = valid.any { timestamp ->
+                val age = ((now - timestamp) / 86_400_000L).toDouble()
+                when (rule.operator) {
+                    SmartPlaylistRuleOperator.EQUAL,
+                    SmartPlaylistRuleOperator.NOT_EQUAL -> age == expected
+                    SmartPlaylistRuleOperator.GREATER_THAN -> age > expected
+                    SmartPlaylistRuleOperator.GREATER_OR_EQUAL -> age >= expected
+                    SmartPlaylistRuleOperator.LESS_THAN -> age < expected
+                    SmartPlaylistRuleOperator.LESS_OR_EQUAL -> age <= expected
+                    else -> return RuleTruth.UNKNOWN
+                }
+            }
+            if (rule.operator == SmartPlaylistRuleOperator.NOT_EQUAL) {
+                return when {
+                    anyMatching -> RuleTruth.FALSE
+                    incomplete -> RuleTruth.UNKNOWN
+                    else -> RuleTruth.TRUE
+                }
+            }
+            return when {
+                anyMatching -> RuleTruth.TRUE
+                incomplete -> RuleTruth.UNKNOWN
+                else -> RuleTruth.FALSE
+            }
+        }
         if (rule.field == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) {
             return if (row.hasReleaseArtworkReference) RuleTruth.TRUE else RuleTruth.UNKNOWN
         }
@@ -542,7 +584,8 @@ internal class SmartPlaylistV2RuleEngine(
             SmartPlaylistRuleField.ALBUM_ARTIST,
             SmartPlaylistRuleField.TRACK_NUMBER,
             SmartPlaylistRuleField.TRACK_ARTIST,
-            SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> null
+            SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
+            SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED -> null
         }
         if (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE &&
             row.audibleCompletions > 0 && row.lastAudibleAtEpochMs == null
