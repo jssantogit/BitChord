@@ -75,6 +75,7 @@ class A0ManualLoginActivity : Activity() {
         val fromSongDownload = intent.hasExtra("bitchord.soulseek.manual.query")
         val manualRecovery=intent.getBooleanExtra("bitchord.soulseek.manual.recovery",false)
         val recoverySession=intent.getStringExtra("bitchord.soulseek.manual.review_session")
+        val recoveryToken=intent.getStringExtra("bitchord.soulseek.manual.review_token")
         val recoveryIndices=intent.getIntArrayExtra("bitchord.soulseek.manual.review_indices")
         val hasBatch=intent.hasExtra("bitchord.soulseek.batch.queries")
         // Process death cannot be assumed to preserve the completion of a
@@ -121,6 +122,7 @@ class A0ManualLoginActivity : Activity() {
             ))
             if(!Downloads.validSoulseekManualReview(
                     recoverySession.orEmpty(),
+                    recoveryToken.orEmpty(),
                     recoveryIndices?.toList().orEmpty(),
                     preview)) {
                 Toast.makeText(this,
@@ -1676,11 +1678,14 @@ class A0ManualLoginActivity : Activity() {
         val reviewId=if(ownsManualReviewLease)
             intent.getStringExtra("bitchord.soulseek.manual.review_session")
         else null
-        if(reviewId!=null) {
-            // onDestroy cancels sockets; it does NOT prove the background A3
-            // writer has stopped. Releasing now would permit double P/F.
+        val reviewToken=if(ownsManualReviewLease)
+            intent.getStringExtra("bitchord.soulseek.manual.review_token")
+        else null
+        if(reviewId!=null && reviewToken!=null) {
+            // A stale Activity cannot release another instance's A3 worker;
+            // even the original must await termination before releasing.
             SoulseekManualRecoveryTermination.releaseAfterStop(worker) {
-                Downloads.closeSoulseekManualReview(reviewId)
+                Downloads.closeSoulseekManualReview(reviewId,reviewToken)
             }
         }else {
             worker.shutdownNow()
