@@ -61,6 +61,21 @@ class ContextualScopedRoomTest {
                 is IllegalArgumentException)
             assertTrue(runCatching { service.artists(" ", artistRule) }.exceptionOrNull()
                 is IllegalArgumentException)
+            assertEquals(listOf("rec:one"), dao.providerScopedReleaseRecordingIds(
+                current, "rel:one",
+            ))
+            assertEquals(listOf("rec:one"), dao.providerScopedArtistRecordingIds(
+                current, "artist:one",
+            ))
+            assertTrue(dao.providerScopedReleaseRecordingIds(
+                current, "rel:two",
+            ).isEmpty())
+            assertTrue(dao.providerScopedArtistRecordingIds(
+                current, "artist:two",
+            ).isEmpty())
+            assertTrue(dao.providerScopedReleaseRecordingIds(
+                current, "rel:orphan",
+            ).isEmpty())
             assertEquals(listOf("rel:two"), dao.providerScopedReleases(other).map { it.id })
             assertEquals(listOf("artist:two"), dao.providerScopedArtists(other).map { it.id })
             assertTrue(dao.providerScopedReleases("opensubsonic:unknown").isEmpty())
