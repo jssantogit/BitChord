@@ -519,7 +519,15 @@ internal fun SettingsScreen(
         // does this minute cost"; these answer "what am I keeping, and when may
         // it be fetched" — and those two questions only make sense read
         // together, which is what puts them side by side here.
-        SearchableSettingsGroup(search, header = stringResource(R.string.canonical_discovery_header)) {
+        if (canonicalDiscoverySettingsVisible(selectedSection, searchQuery)) {
+        SearchableSettingsGroup(
+            search,
+            destination = SettingsSection.SOURCES,
+            onSearchNavigate = if (selectedSection == null) {
+                _: String -> onSelectSection(SettingsSection.SOURCES)
+            } else null,
+            header = stringResource(R.string.canonical_discovery_header),
+        ) {
             val title = stringResource(R.string.canonical_discovery_setting_title)
             row(title, "musicbrainz", "catalog", "home", "explore", "offline") {
                 SettingsRow(
@@ -541,6 +549,7 @@ internal fun SettingsScreen(
                     },
                 )
             }
+        }
         }
 
         if (selectedSection == SettingsSection.DOWNLOADS || (selectedSection == null && searchQuery.isNotBlank())) {
