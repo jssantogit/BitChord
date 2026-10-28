@@ -1015,6 +1015,13 @@ object Downloads {
      * forever as already in flight.
      */
     internal fun onStopped() {
+        // onIdle may have drained autoRequests after cancelling its Job but
+        // before Service.onDestroy calls us. DownloadSession is the source
+        // of truth for any unfinished automatic report the user can still see.
+        val openAutoReports=DownloadSession.state.value.items
+            .filter { it.videoId.startsWith("soulseek-auto:") &&
+                !it.progress.settled }
+            .map { it.videoId }
         val abandoned=synchronized(lock) {
             running.clear()
             val ids=autoRequests.keys.toList()
@@ -1022,7 +1029,7 @@ object Downloads {
             autoRequests.clear()
             ids
         }
-        abandoned.forEach { id ->
+        (abandoned+openAutoReports).distinct().forEach { id ->
             // runSoulseekAuto's cancellation handler may already have removed
             // Downloads.active. The UI's unsettled session row, not active,
             // is the authoritative indicator of unfinished work.
