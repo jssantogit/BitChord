@@ -209,6 +209,23 @@ class A0AutoBatchExecutorTest {
         assertEquals(1,published)
     }
 
+    @Test fun eachResolvedSlotEmitsOneOrderedProgressEventWithoutPeerData() {
+        val observed=mutableListOf<Pair<Int,A0AutoBatchExecutor.TrackStatus>>()
+        val finished=mutableListOf<String>()
+        val shared=candidates()
+        val report=A0AutoBatchExecutor(factory(finished)).run(
+            entries,entries.map { shared },setOf(1),profile,
+            userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true},
+            onSlotResolved={index,status -> observed.add(index to status)}
+        )
+        assertEquals(4,report.results.size)
+        assertEquals((0..3).toList(),observed.map { it.first })
+        assertEquals(report.results,observed.map { it.second })
+        assertEquals(3,finished.size)
+        assertFalse(observed.toString().contains("album-peer"))
+    }
+
     @Test fun truncatedSlotIsNotAutomaticallyDownloaded() {
         val done=mutableListOf<String>()
         val report=A0AutoBatchExecutor(factory(done)).run(
