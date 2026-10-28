@@ -1,0 +1,32 @@
+<resources>
+    <string name="settings_nav_group_account">HESAP</string>
+    <string name="settings_nav_group_music">MÜZİK</string>
+    <string name="settings_nav_group_experience">DENEYİM</string>
+    <string name="settings_nav_group_data">VERİLER VE İNDİRMELER</string>
+    <string name="settings_nav_group_system">SİSTEM</string>
+    <string name="settings_nav_group_about">HAKKINDA</string>
+    <string name="settings_nav_lyrics">Şarkı sözleri</string>
+    <string name="settings_nav_about">Hakkında</string>
+    <string name="settings_nav_filtered">Şunun sonuçları: %1$s</string>
+    <string name="settings_nav_show_all">Tümünü göster</string>
+    <string name="settings_nav_controls">Kontroller ve davranış</string>
+    <string name="settings_nav_advanced">Gelişmiş</string>
+    <string name="settings_nav_desc_account">Hesaplar ve müzik entegrasyonları</string>
+    <string name="settings_nav_desc_audio">Kaynaklar, Wi-Fi ve mobil veri</string>
+    <string name="settings_nav_desc_playback">Ses çıkışı, geçişler ve sıra</string>
+    <string name="settings_nav_desc_local">Klasörler ve yerel ses filtreleri</string>
+    <string name="settings_nav_desc_appearance">Tema, kapaklar ve görsel efektler</string>
+    <string name="settings_nav_desc_lyrics">Eşitleme, kaynaklar ve çeviri</string>
+    <string name="settings_nav_desc_downloads">Soulseek, kalite ve hedef</string>
+    <string name="settings_nav_desc_storage">Ses önbelleği ve depolama alanı</string>
+    <string name="settings_nav_desc_data">Replay, yedekler ve içe aktarma</string>
+    <string name="settings_nav_desc_performance">Yenileme hızı ve pil</string>
+    <string name="settings_nav_desc_misc">Hareketler ve oynatma davranışı</string>
+    <string name="settings_nav_desc_language">Arayüz dili</string>
+    <string name="settings_nav_desc_advanced">Tanılama ve teknik kontroller</string>
+    <string name="settings_nav_desc_wear">Saat entegrasyonu</string>
+    <string name="settings_nav_desc_about">Sürüm ve proje bilgileri</string>
+    <string name="settings_nav_desc_sources">Müzik sağlayıcıları ve eklentiler</string>
+    <string name="settings_nav_diagnostics_title">Tanılama</string>
+    <string name="settings_nav_diagnostics_subtitle">Tanılama raporlarını kaydedin, inceleyin ve paylaşın</string>
+</resources>

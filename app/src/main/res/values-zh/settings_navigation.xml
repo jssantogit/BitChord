@@ -1,0 +1,32 @@
+<resources>
+    <string name="settings_nav_group_account">账户</string>
+    <string name="settings_nav_group_music">音乐</string>
+    <string name="settings_nav_group_experience">体验</string>
+    <string name="settings_nav_group_data">数据与下载</string>
+    <string name="settings_nav_group_system">系统</string>
+    <string name="settings_nav_group_about">关于</string>
+    <string name="settings_nav_lyrics">歌词</string>
+    <string name="settings_nav_about">关于</string>
+    <string name="settings_nav_filtered">搜索结果：%1$s</string>
+    <string name="settings_nav_show_all">查看全部</string>
+    <string name="settings_nav_controls">控制与行为</string>
+    <string name="settings_nav_advanced">高级设置</string>
+    <string name="settings_nav_desc_account">账户与音乐服务集成</string>
+    <string name="settings_nav_desc_audio">音源、Wi-Fi 和移动数据</string>
+    <string name="settings_nav_desc_playback">音频输出、过渡和队列</string>
+    <string name="settings_nav_desc_local">本地音频文件夹与筛选</string>
+    <string name="settings_nav_desc_appearance">主题、封面与视觉效果</string>
+    <string name="settings_nav_desc_lyrics">同步、歌词来源与翻译</string>
+    <string name="settings_nav_desc_downloads">Soulseek、音质和保存位置</string>
+    <string name="settings_nav_desc_storage">音频缓存与存储空间</string>
+    <string name="settings_nav_desc_data">Replay、备份与导入</string>
+    <string name="settings_nav_desc_performance">刷新率与电池</string>
+    <string name="settings_nav_desc_misc">手势与播放行为</string>
+    <string name="settings_nav_desc_language">界面语言</string>
+    <string name="settings_nav_desc_advanced">诊断与技术控制</string>
+    <string name="settings_nav_desc_wear">手表集成</string>
+    <string name="settings_nav_desc_about">版本与项目信息</string>
+    <string name="settings_nav_desc_sources">音乐服务提供方与扩展</string>
+    <string name="settings_nav_diagnostics_title">诊断</string>
+    <string name="settings_nav_diagnostics_subtitle">采集、查看和共享诊断报告</string>
+</resources>
