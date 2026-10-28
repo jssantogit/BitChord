@@ -110,4 +110,45 @@ class ContextualAlbumArtistFilterTest {
                 filter(albumPresence)).map { it.id })
     }
 
+    @Test fun sourceCategoryCanFilterAlbumsAndArtistsOnlyWhenProviderIsProven() {
+        val album = ReleaseEntity("r:one", "Get Up", "NewJeans", null)
+        val artist = ArtistEntity("a:one", "NewJeans")
+        val local = com.music.bitchord.data.catalog.CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER
+        val localRule = filter(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.SOURCE_KIND,
+            SmartPlaylistRuleOperator.EQUAL, textValue = "local",
+        ))
+        val remoteRule = filter(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.SOURCE_KIND,
+            SmartPlaylistRuleOperator.EQUAL, textValue = "opensubsonic",
+        ))
+        val negatedRemote = filter(SmartPlaylistRule.Not(remoteRule.rules))
+        assertTrue(localRule.isSupportedForCanonicalAlbumBrowse())
+        assertTrue(localRule.isSupportedForCanonicalArtistBrowse())
+        assertEquals(listOf("r:one"),
+            filterCanonicalBrowseAlbums(listOf(album), localRule, local).map { it.id })
+        assertEquals(listOf("a:one"),
+            filterCanonicalBrowseArtists(listOf(artist), localRule, local).map { it.id })
+        assertEquals(listOf("r:one"),
+            filterCanonicalBrowseAlbums(listOf(album), remoteRule, "opensubsonic:one")
+                .map { it.id })
+        assertEquals(listOf("a:one"),
+            filterCanonicalBrowseArtists(listOf(artist), remoteRule, "opensubsonic:one")
+                .map { it.id })
+        assertEquals(listOf("r:one"),
+            filterCanonicalBrowseAlbums(listOf(album), negatedRemote, local).map { it.id })
+        assertTrue(filterCanonicalBrowseAlbums(listOf(album), remoteRule, local).isEmpty())
+        assertTrue(filterCanonicalBrowseArtists(listOf(artist), localRule,
+            "opensubsonic:one").isEmpty())
+        for (f in listOf(remoteRule, localRule, negatedRemote)) {
+            // No account key, or an unsupported provider, must not satisfy even NOT.
+            assertTrue(filterCanonicalBrowseAlbums(listOf(album), f).isEmpty())
+            assertTrue(filterCanonicalBrowseArtists(listOf(artist), f).isEmpty())
+            assertTrue(filterCanonicalBrowseAlbums(listOf(album), f,
+                "custom:unknown").isEmpty())
+            assertTrue(filterCanonicalBrowseArtists(listOf(artist), f,
+                "custom:unknown").isEmpty())
+        }
+    }
+
 }
