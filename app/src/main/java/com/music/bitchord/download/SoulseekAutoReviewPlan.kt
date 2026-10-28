@@ -43,6 +43,25 @@ internal class SoulseekAutoReviewPlan private constructor(
     val manualEntries:List<SoulseekBatchPlan.Entry> =
         manualIndices.map { rows[it].entry }
 
+    /**
+     * Called only after A3 confirms the manual publication. The caller must
+     * carry the ORIGINAL slot index, not a moving index into manualEntries.
+     * A duplicate acknowledgement or mismatched target is refused.
+     */
+    fun withManualPublication(
+        originalIndex:Int,
+        originalQuery:String,
+    ):SoulseekAutoReviewPlan? {
+        if(!manualAllowed || originalIndex !in manualIndices ||
+            rows[originalIndex].entry.query!=originalQuery)return null
+        val changed=rows.mapIndexed { index,row ->
+            if(index==originalIndex)
+                row.copy(status=A0AutoBatchExecutor.TrackStatus.PUBLISHED)
+            else row
+        }
+        return SoulseekAutoReviewPlan(changed)
+    }
+
     override fun toString():String = "SoulseekAutoReviewPlan(redacted)"
 
     companion object {
