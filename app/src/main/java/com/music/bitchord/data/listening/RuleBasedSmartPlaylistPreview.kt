@@ -78,6 +78,8 @@ internal data class RuleBasedRecordingCandidate(
     val hasReleaseArtworkReference: Boolean = false,
     val localAddedEpochMs: List<Long> = emptyList(),
     val localAddedDateEvidenceUnknown: Boolean = true,
+    /** Real canonical ReleaseTrack IDs, never matched by album title. */
+    val canonicalReleaseIds: List<String> = emptyList(),
 )
 
 internal data class RuleBasedSmartPlaylistQuery(
@@ -231,6 +233,10 @@ internal fun SmartPlaylistV2Query.requiredEvidenceFields(): Set<SmartPlaylistRul
         SmartPlaylistV2Sort.LOCAL_RATING_NEWEST,
         SmartPlaylistV2Sort.LOCAL_RATING_OLDEST ->
             setOf(SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING)
+        SmartPlaylistV2Sort.STABLE_RANDOM_ALBUMS -> setOf(
+            SmartPlaylistRuleField.RELEASE_TITLE,
+            SmartPlaylistRuleField.TRACK_NUMBER,
+        )
         else -> emptySet()
     }
     return rules.referencedFields() + sortFields

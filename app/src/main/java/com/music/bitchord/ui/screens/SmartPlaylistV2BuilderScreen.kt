@@ -106,6 +106,7 @@ private fun sortLabel(value: SmartPlaylistV2Sort): String = when (value) {
     SmartPlaylistV2Sort.LAST_AUDIBLE_ASC -> "Última reprodução: antiga"
     SmartPlaylistV2Sort.RECORDING_ID_ASC -> "Identificador canônico"
     SmartPlaylistV2Sort.STABLE_RANDOM -> "Aleatória estável"
+    SmartPlaylistV2Sort.STABLE_RANDOM_ALBUMS -> "Álbuns aleatórios (vínculos canônicos)"
     SmartPlaylistV2Sort.TITLE_ASC -> "Título: A a Z"
     SmartPlaylistV2Sort.TITLE_DESC -> "Título: Z a A"
     SmartPlaylistV2Sort.ARTIST_ASC -> "Artista: A a Z"
@@ -573,7 +574,8 @@ internal fun SmartPlaylistV2BuilderScreen(
                         label = { Text("Máximo de músicas (1–10.000)") },
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
                     )
-                    if (sort == SmartPlaylistV2Sort.STABLE_RANDOM) OutlinedTextField(
+                    if (sort == SmartPlaylistV2Sort.STABLE_RANDOM ||
+                        sort == SmartPlaylistV2Sort.STABLE_RANDOM_ALBUMS) OutlinedTextField(
                         value = seed, onValueChange = { seed = it; preview = null; previewQuery = null },
                         label = { Text("Semente da ordem aleatória") },
                         modifier = Modifier.fillMaxWidth(), singleLine = true,

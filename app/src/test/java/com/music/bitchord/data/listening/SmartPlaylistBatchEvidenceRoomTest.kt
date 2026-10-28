@@ -166,6 +166,43 @@ class SmartPlaylistBatchEvidenceRoomTest {
             listening.close()
         }
     }
+    @Test fun albumRandomSortReadsCanonicalReleaseIdsEvenWithoutReleaseFilter() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:one", "Song 1", "Artist", 180_000L))
+            dao.upsertRecording(RecordingEntity("rec:two", "Song 2", "Artist", 180_000L))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "release:one", "The album", "Artist", null,
+            ))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "release:one", "rec:one", 1,
+            ))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "release:one", "rec:two", 2,
+            ))
+            val q = SmartPlaylistV2Query(
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.DURATION_MS,
+                    SmartPlaylistRuleOperator.IS_PRESENT,
+                ), sort = SmartPlaylistV2Sort.STABLE_RANDOM_ALBUMS, randomSeed = 11,
+            )
+            val rows = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            ).read(listOf("rec:two", "rec:one"), q.requiredEvidenceFields())
+            assertEquals(listOf("release:one"), rows.first().canonicalReleaseIds)
+            assertEquals(listOf("rec:one", "rec:two"),
+                SmartPlaylistV2RuleEngine().preview(rows, q).map { it.recordingId })
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
     @Test fun catalogBatchReadsActualRecordingTextWithoutInventingForMissingId() = runTest {
         val context = RuntimeEnvironment.getApplication()
         val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)

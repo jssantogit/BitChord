@@ -144,6 +144,36 @@ class SmartPlaylistV2RuleEngineTest {
         )))
     }
 
+    @Test fun seededAlbumShuffleKeepsCanonicalEditionsTogetherAndOrdersTracks() {
+        val alpha = candidate("alpha-02").copy(
+            title = "Alpha second", canonicalReleaseIds = listOf("album-A"),
+            trackNumbers = listOf(2), trackNumberEvidenceUnknown = false,
+        )
+        val alphaFirst = candidate("alpha-01").copy(
+            title = "Alpha first", canonicalReleaseIds = listOf("album-A"),
+            trackNumbers = listOf(1), trackNumberEvidenceUnknown = false,
+        )
+        val beta = candidate("beta").copy(
+            title = "Alpha first", canonicalReleaseIds = listOf("album-B"),
+            trackNumbers = listOf(1), trackNumberEvidenceUnknown = false,
+        )
+        val ambiguous = candidate("multi").copy(
+            title = "Multi edition", canonicalReleaseIds = listOf("album-A", "album-B"),
+            trackNumbers = listOf(1, 3),
+        )
+        val root = check(SmartPlaylistRuleField.DURATION_MS,
+            SmartPlaylistRuleOperator.IS_PRESENT)
+        val input = listOf(alpha, beta, ambiguous, alphaFirst)
+        val q = SmartPlaylistV2Query(root, sort = SmartPlaylistV2Sort.STABLE_RANDOM_ALBUMS,
+            randomSeed = 42)
+        val first = planner.preview(input, q).map { it.recordingId }
+        assertEquals(first, planner.preview(input.reversed(), q).map { it.recordingId })
+        assertEquals(1, first.indexOf("alpha-02") - first.indexOf("alpha-01"))
+        assertEquals(4, first.toSet().size)
+        assertEquals(setOf(SmartPlaylistRuleField.RELEASE_TITLE,
+            SmartPlaylistRuleField.TRACK_NUMBER), q.requiredEvidenceFields())
+    }
+
     @Test fun sortingAndLimitWorkBeyondOldOneHundredLimit() {
         val query = SmartPlaylistV2Query(
             rules = check(SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,

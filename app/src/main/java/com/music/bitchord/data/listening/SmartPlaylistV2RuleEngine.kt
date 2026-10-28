@@ -75,7 +75,7 @@ internal enum class SmartPlaylistV2Sort {
     COMPLETIONS_DESC, COMPLETIONS_ASC,
     DURATION_DESC, DURATION_ASC,
     LAST_AUDIBLE_DESC, LAST_AUDIBLE_ASC,
-    RECORDING_ID_ASC, STABLE_RANDOM,
+    RECORDING_ID_ASC, STABLE_RANDOM, STABLE_RANDOM_ALBUMS,
     TITLE_ASC, TITLE_DESC, ARTIST_ASC, ARTIST_DESC,
     LOCAL_RATING_NEWEST, LOCAL_RATING_OLDEST,
 }
@@ -278,6 +278,43 @@ private fun sortByNormalizedText(
     }.map { it.row }
 }
 
+/**
+ * Group only recordings with exactly one verified canonical Release link.
+ * An unlinked or multi-edition Recording falls back to its own stable group:
+ * guessing a "main album" from titles would join unrelated editions.
+ */
+private fun sortStableRandomAlbums(
+    rows: List<RuleBasedRecordingCandidate>,
+    randomSeed: Int,
+): List<RuleBasedRecordingCandidate> {
+    data class Keyed(
+        val row: RuleBasedRecordingCandidate,
+        val groupId: String,
+        val groupHash: Int,
+        val trackNumber: Int?,
+        val normalizedTitle: String?,
+    )
+    return rows.map { row ->
+        val uniqueRelease = row.canonicalReleaseIds.distinct().singleOrNull()
+        val group = if (uniqueRelease != null) "release:$uniqueRelease"
+            else "recording:${row.recordingId}"
+        Keyed(
+            row = row,
+            groupId = group,
+            groupHash = group.hashCode() xor randomSeed,
+            trackNumber = if (uniqueRelease != null && !row.trackNumberEvidenceUnknown)
+                row.trackNumbers.singleOrNull() else null,
+            normalizedTitle = row.title.normalizedSmartPlaylistText(),
+        )
+    }.sortedWith(
+        compareBy<Keyed> { it.groupHash }
+            .thenBy { it.groupId }
+            .thenBy { it.trackNumber ?: Int.MAX_VALUE }
+            .thenBy { it.normalizedTitle ?: "\uFFFF" }
+            .thenBy { it.row.recordingId },
+    ).map { it.row }
+}
+
 private enum class RuleTruth { TRUE, FALSE, UNKNOWN }
 
 /**
@@ -409,6 +446,8 @@ internal class SmartPlaylistV2RuleEngine(
                 compareBy<RuleBasedRecordingCandidate> { it.recordingId.hashCode() xor query.randomSeed }
                     .thenBy { it.recordingId },
             )
+            SmartPlaylistV2Sort.STABLE_RANDOM_ALBUMS ->
+                sortStableRandomAlbums(candidateRows, query.randomSeed)
         }
         val matches = sorted.asSequence().take(query.limit).map {
             SmartPlaylistV2Match(it.recordingId, it.explicitRating, it.audibleCompletions)

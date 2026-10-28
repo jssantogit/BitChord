@@ -70,12 +70,8 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
         val ratingsById = if (needsRatings) {
             ratings.currentRatingsForIds(recordingIds).associateBy { it.recordingId }
         } else emptyMap()
-        val releaseTitlesById = if (SmartPlaylistRuleField.RELEASE_TITLE in requiredFields) {
-            catalog.recordingReleaseTitlesByIds(recordingIds)
-                .groupBy { it.recordingId }
-                .mapValues { (_, memberships) ->
-                    memberships.map { it.releaseTitle }.distinct().sorted()
-                }
+        val releaseMembershipsById = if (SmartPlaylistRuleField.RELEASE_TITLE in requiredFields) {
+            catalog.recordingReleaseTitlesByIds(recordingIds).groupBy { it.recordingId }
         } else emptyMap()
         val dateRowsById = if (SmartPlaylistRuleField.RELEASE_YEAR in requiredFields) {
             catalog.recordingReleaseDatesByIds(recordingIds).groupBy { it.recordingId }
@@ -126,7 +122,8 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                 artistDisplay = recording.artistDisplay,
                 earlySkips = events?.earlySkips ?: 0L,
                 lateSkips = events?.lateSkips ?: 0L,
-                releaseTitles = releaseTitlesById[id].orEmpty(),
+                releaseTitles = releaseMembershipsById[id].orEmpty()
+                    .map { it.releaseTitle }.distinct().sorted(),
                 releaseYears = parsedYears.filterNotNull().distinct().sorted(),
                 releaseYearEvidenceUnknown = datedReleases.isEmpty() ||
                     parsedYears.any { it == null },
@@ -155,6 +152,8 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                 localAddedEpochMs = addedValues.filterNotNull().distinct().sorted(),
                 localAddedDateEvidenceUnknown = addedRows.isEmpty() ||
                     addedValues.any { it == null },
+                canonicalReleaseIds = releaseMembershipsById[id].orEmpty()
+                    .map { it.releaseId }.distinct().sorted(),
             )
         }
     }
