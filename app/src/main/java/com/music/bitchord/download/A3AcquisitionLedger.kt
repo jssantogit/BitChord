@@ -53,6 +53,8 @@ internal class A3AcquisitionLedger(private val store:Store) {
         /** HMAC only, never user recording ID or query metadata in cleartext. */
         val autoRecordingDigest:String?=null,
         val autoReleaseDigest:String?=null,
+        /** Opaque root ID joins every slot of one explicit album request. */
+        val autoBatchId:String?=null,
     )
 
     /** Input exists only during explicit admission, never in A3 persistence. */
@@ -121,6 +123,7 @@ internal class A3AcquisitionLedger(private val store:Store) {
                 autoRecordingDigest=fingerprint(salt,"recording",slot.recordingId),
                 autoReleaseDigest=fingerprint(
                     salt,"release",slot.query,slot.album.orEmpty()),
+                autoBatchId=requests.first().id,
             )
         }
         val existingRecordings=items.values.mapNotNull { it.autoRecordingDigest }.toSet()
@@ -154,6 +157,33 @@ internal class A3AcquisitionLedger(private val store:Store) {
         // A no-op authorization callback is NOT permission to proceed.
         check(invoked) { "A3 auto reservation was never authorized" }
     }
+
+    /**
+     * Only an *entire* automatic release that never left REQUESTED is safe
+     * to forget. The P/F worker journals TRANSFERRING synchronously before
+     * requesting bytes, so any other phase (including INTERRUPTED after a
+     * process crash) prevents release. No URI or published file is touched.
+     *
+     * With a partial album we keep ALL reservations, even those untouched,
+     * until a human explicitly reviews the remaining tracks.
+     */
+    fun releaseUntransferredAutomaticBatch(jobIds:List<String>):Boolean =
+        synchronized(lock) {
+            if(jobIds.isEmpty() || jobIds.size>64 ||
+                jobIds.distinct().size!=jobIds.size)return@synchronized false
+            val rows=jobIds.map { items[it] ?: return@synchronized false }
+            val batchId=rows.first().autoBatchId ?: return@synchronized false
+            if(rows.any { it.phase!=Phase.REQUESTED ||
+                    it.autoRecordingDigest==null ||
+                    it.autoReleaseDigest==null ||
+                    it.autoBatchId!=batchId } ||
+                items.values.count { it.autoBatchId==batchId }!=rows.size)
+                return@synchronized false
+            val next=LinkedHashMap(items)
+            jobIds.forEach { next.remove(it) }
+            commit(next)
+            true
+        }
 
     private fun fingerprint(salt:String,kind:String,vararg values:String):String {
         val mac=Mac.getInstance("HmacSHA256")
@@ -303,6 +333,8 @@ internal class A3AcquisitionLedger(private val store:Store) {
             }) ||
             decoded.jobs.any { !validId(it.id) ||
                 ((it.autoRecordingDigest==null)!=(it.autoReleaseDigest==null)) ||
+                (it.autoBatchId!=null && (!validId(it.autoBatchId) ||
+                    it.autoRecordingDigest==null)) ||
                 (it.autoRecordingDigest!=null &&
                     !DIGEST.matches(it.autoRecordingDigest)) ||
                 (it.autoReleaseDigest!=null &&
