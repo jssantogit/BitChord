@@ -93,6 +93,31 @@ class PauseResumeVolumeFadeTest {
         assertEquals(1f, deck.volume, 0.00001f)
     }
 
+    @Test fun `handoff during pause fade pauses newly adopted session deck too`() = runTest {
+        val outgoing = FakeDeck(playingInitially = true)
+        val incoming = FakeDeck(playingInitially = true)
+        var overlap = false
+        var currentOwner: Player = outgoing.player
+        val fade = PauseResumeVolumeFade(
+            scope = this,
+            durationMs = { 200 },
+            overlapActive = { overlap },
+            clockMs = { testScheduler.currentTime },
+            sessionOwner = { currentOwner },
+        )
+        fade.pause(outgoing.player)
+        runCurrent()
+        advanceTimeBy(64)
+        runCurrent()
+        currentOwner = incoming.player
+        overlap = true
+        advanceTimeBy(16)
+        runCurrent()
+        assertEquals(1, outgoing.pauseCalls)
+        assertEquals(1, incoming.pauseCalls)
+        assertFalse(incoming.playWhenReady)
+    }
+
     @Test fun `repeated pause keeps original deadline instead of prolonging fade`() = runTest {
         val deck = FakeDeck(playingInitially = true)
         val fade = PauseResumeVolumeFade(this, { 200 }, { false }, { testScheduler.currentTime })
