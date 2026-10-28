@@ -34,6 +34,7 @@ internal class A3AcquisitionLedger(private val store:Store) {
         STAGED,
         PUBLISHING,
         AVAILABLE,
+        RECONCILE,
         INTERRUPTED,
         FAILED,
         CANCELLED
@@ -81,7 +82,8 @@ internal class A3AcquisitionLedger(private val store:Store) {
     }
 
     fun advance(id:String,target:Phase):Entry = synchronized(lock) {
-        check(target !in setOf(Phase.AVAILABLE,Phase.REQUESTED,Phase.INTERRUPTED)) {
+        check(target !in setOf(Phase.AVAILABLE,Phase.RECONCILE,
+            Phase.REQUESTED,Phase.INTERRUPTED)) {
             "A3 destination requires explicit transition method"
         }
         val old=items[id] ?: error("A3 unknown acquisition ID")
@@ -104,13 +106,38 @@ internal class A3AcquisitionLedger(private val store:Store) {
             require(byteCount in 1..MAX_BYTES){"A3 invalid published byte count"}
             val old=items[id] ?: error("A3 unknown acquisition ID")
             check(old.phase==Phase.PUBLISHING){"A3 cannot claim uncompleted transfer"}
-            check(items.values.none { it.id!=id && it.phase==Phase.AVAILABLE &&
+            check(items.values.none { it.id!=id &&
+                it.phase in setOf(Phase.AVAILABLE,Phase.RECONCILE) &&
                 it.contentUri==contentUri
             }){"A3 published URI already owned by another acquisition"}
             val record=old.copy(phase=Phase.AVAILABLE,
                 contentUri=contentUri,byteCount=byteCount)
             commit(items + (id to record))
             record
+        }
+
+    /**
+     * The provider made an audio URI visible, but the AVAILABLE commit and
+     * compensating deletion both failed. Preserve URI across process death
+     * so a later explicit reconciliation can inspect/delete this exact item.
+     * NEVER automatically resume or retry a RECONCILE job.
+     */
+    fun reconcile(id:String,contentUri:String,byteCount:Long):Entry =
+        synchronized(lock) {
+            require(validUri(contentUri)){"A3 reconcile requires a content URI"}
+            require(byteCount in 1..MAX_BYTES){"A3 reconcile byte count invalid"}
+            val old=items[id] ?: error("A3 unknown acquisition ID")
+            check(old.phase==Phase.PUBLISHING) {
+                "A3 may only reconcile a previously publishing artifact"
+            }
+            check(items.values.none { it.id!=id &&
+                it.phase in setOf(Phase.AVAILABLE,Phase.RECONCILE) &&
+                it.contentUri==contentUri
+            }){"A3 reconciliation URI already owned"}
+            val next=old.copy(phase=Phase.RECONCILE,
+                contentUri=contentUri,byteCount=byteCount)
+            commit(items + (id to next))
+            next
         }
 
     /** Cold-start reconciliation is fail-closed: do NOT revive stale sockets. */
@@ -151,9 +178,10 @@ internal class A3AcquisitionLedger(private val store:Store) {
         }
         if(decoded.version!=VERSION || decoded.jobs.size>MAX_JOBS ||
             decoded.jobs.any { !validId(it.id) ||
-                (it.phase==Phase.AVAILABLE && (!validUri(it.contentUri.orEmpty()) ||
+                (it.phase in setOf(Phase.AVAILABLE,Phase.RECONCILE) &&
+                    (!validUri(it.contentUri.orEmpty()) ||
                     it.byteCount==null || it.byteCount !in 1L..MAX_BYTES)) ||
-                (it.phase!=Phase.AVAILABLE &&
+                (it.phase !in setOf(Phase.AVAILABLE,Phase.RECONCILE) &&
                     (it.contentUri!=null || it.byteCount!=null))
             } || decoded.jobs.map{it.id}.toSet().size!=decoded.jobs.size) {
             throw IOException("A3 acquisition journal consistency violation")
@@ -191,6 +219,7 @@ internal class A3AcquisitionLedger(private val store:Store) {
             Phase.STAGED to setOf(Phase.PUBLISHING,Phase.CANCELLED,Phase.FAILED),
             Phase.PUBLISHING to setOf(Phase.CANCELLED,Phase.FAILED),
             Phase.AVAILABLE to emptySet(),
+            Phase.RECONCILE to emptySet(),
             Phase.INTERRUPTED to setOf(Phase.CANCELLED),
             Phase.FAILED to setOf(Phase.CANCELLED),
             Phase.CANCELLED to emptySet()

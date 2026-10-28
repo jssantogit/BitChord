@@ -68,7 +68,9 @@ internal class A0AutoJobJournal(
     fun finish() {
         if(!created)return
         val phase=ledger.get(id)?.phase ?: return
-        if(phase==A3AcquisitionLedger.Phase.AVAILABLE ||
+        if(phase in setOf(
+                A3AcquisitionLedger.Phase.AVAILABLE,
+                A3AcquisitionLedger.Phase.RECONCILE) ||
             phase in setOf(A3AcquisitionLedger.Phase.FAILED,
                 A3AcquisitionLedger.Phase.CANCELLED,
                 A3AcquisitionLedger.Phase.INTERRUPTED))return

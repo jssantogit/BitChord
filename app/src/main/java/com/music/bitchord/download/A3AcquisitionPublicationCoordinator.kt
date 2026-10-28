@@ -52,6 +52,12 @@ internal class A3AcquisitionPublicationCoordinator(
                 deletePublishedUri(published.contentUri)
             }.getOrDefault(false)
             if(!removed) {
+                // Best effort to persist the orphan even when the initial
+                // AVAILABLE commit failed. If the journal itself is
+                // unavailable, the exception still carries the private URI.
+                runCatching {
+                    journal.reconcile(id,published.contentUri,published.byteCount)
+                }
                 throw A3PublicationCommitFailure.ReconciliationRequired(published.contentUri,error)
             }
             throw A3PublicationCommitFailure.RolledBack(error)
