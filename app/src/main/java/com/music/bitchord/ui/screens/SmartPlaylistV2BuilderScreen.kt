@@ -40,7 +40,6 @@ import com.music.bitchord.data.listening.toV2Copy
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
-import com.music.bitchord.data.listening.resolveSmartPlaylistReferences
 import com.music.bitchord.data.listening.referencedPlaylistIds
 import com.music.bitchord.data.listening.allowedOperators
 import com.music.bitchord.data.listening.isTextField
@@ -352,6 +351,7 @@ internal fun SmartPlaylistV2BuilderScreen(
             SmartPlaylistDefinitionDatabase.get(context).v2DefinitionDao(),
         )
     }
+    val definitionDatabase = remember(context) { SmartPlaylistDefinitionDatabase.get(context) }
     val classicRepo = remember(context) {
         SmartPlaylistDefinitionRepository(
             SmartPlaylistDefinitionDatabase.get(context).definitionDao(),
@@ -434,8 +434,25 @@ internal fun SmartPlaylistV2BuilderScreen(
     // Preview observation is active only while the app is STARTED. Compose
     // effects may outlive an Android onStop, so scope both account watching and
     // age ticks to ProcessLifecycleOwner rather than relying on composition.
-    LaunchedEffect(previewQuery, catalogDatabase, listeningDatabase, accountPersistence) {
+    var lastReferenceSnapshot by remember { mutableStateOf<List<SavedSmartPlaylistV2Definition>?>(null) }
+    LaunchedEffect(previewQuery, catalogDatabase, listeningDatabase, accountPersistence, saved) {
         val active = previewQuery ?: return@LaunchedEffect
+        val referencesChanged = lastReferenceSnapshot != null &&
+            lastReferenceSnapshot != saved && active.rules.referencedPlaylistIds().isNotEmpty()
+        lastReferenceSnapshot = saved
+        if (referencesChanged) {
+            try {
+                val refreshed = loadPreviewRows(active)
+                if (previewQuery == active) { preview = refreshed; error = null }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (previewQuery == active) {
+                    preview = null
+                    error = "A playlist referenciada mudou ou ficou indisponível."
+                }
+            }
+        }
         var firstForegroundActivation = true
         ProcessLifecycleOwner.get().lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             // Account changes or a relative-day boundary while the app was
@@ -463,7 +480,8 @@ internal fun SmartPlaylistV2BuilderScreen(
                 smartPlaylistEvidenceChanges(catalogDatabase, listeningDatabase)
                     .drop(1), // Room emits an initial snapshot on each subscription.
                 smartPlaylistAccountChanges(accountPersistence.observe()),
-                smartPlaylistRelativeAgeChanges(active),
+                smartPlaylistReferenceDefinitionChanges(definitionDatabase).drop(1),
+                smartPlaylistRelativeAgeChanges(active, references = saved),
             ).collectLatest {
                 try {
                     val rows = loadPreviewRows(active)
@@ -536,7 +554,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
                                 } catch (_: Exception) {
-                                    error = "Não foi possível salvar as regras"
+                                    error = "Não foi possível salvar: verifique referências ausentes ou circulares."
                                 } finally { loading = false }
                             }
                         }, enabled = !loading) { Text("Salvar") }
@@ -649,7 +667,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                     if (editingId == item.id) reset()
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
-                                } catch (_: Exception) { error = "Não foi possível excluir" }
+                                } catch (_: Exception) { error = "Não foi possível excluir: outra playlist pode depender desta." }
                                 finally { loading = false }
                             }
                         }, enabled = !loading) { Text("Excluir") }
