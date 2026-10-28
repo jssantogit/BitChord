@@ -81,6 +81,28 @@ class SmartPlaylistWizardModelTest {
         assertEquals(wrapped, smartRuleAtPath(root, listOf(0)))
     }
 
+    @Test fun sourceCardDescribesRequestedRulesWithoutClaimingProviderSelection() {
+        val unrelated = smartRuleNewComparison(SmartPlaylistRuleField.TITLE)
+        assertTrue(smartRuleSourceSummary(unrelated).contains("Nenhuma condição"))
+        val disjunction = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.SOURCE_KIND,
+                SmartPlaylistRuleOperator.EQUAL,
+                textValue = "local",
+            ),
+            SmartPlaylistRule.Not(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.SOURCE_KIND,
+                SmartPlaylistRuleOperator.EQUAL,
+                textValue = "opensubsonic",
+            )),
+        ))
+        val summary = smartRuleSourceSummary(disjunction)
+        assertTrue(summary.contains("músicas locais"))
+        assertTrue(summary.contains("OpenSubsonic (conta ativa)"))
+        assertTrue(summary.contains("E/OU/NÃO"))
+        assertTrue(summary.contains("não seleciona fontes"))
+    }
+
     @Test fun invalidPathsAndLastChildDeletionFailClosed() {
         val root = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL,
             listOf(smartRuleNewComparison(SmartPlaylistRuleField.EXPLICIT_RATING)))

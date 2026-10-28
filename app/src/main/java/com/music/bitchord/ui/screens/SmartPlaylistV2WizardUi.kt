@@ -388,8 +388,7 @@ internal fun SmartPlaylistV2WizardUi(
                                 "Biblioteca canônica disponível neste dispositivo e na conta remota ativa.",
                             ) {
                                 Text(
-                                    "As origens são verificadas quando a playlist é avaliada. " +
-                                        "Você pode limitar músicas locais ou OpenSubsonic usando a condição Origem disponível.",
+                                    smartRuleSourceSummary(rule),
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
@@ -681,8 +680,7 @@ internal fun SmartPlaylistV2WizardUi(
                         item {
                             WizardCard("Fontes do catálogo",
                                 "Biblioteca canônica da conta ativa e arquivos locais disponíveis") {
-                                Text("Não foi configurada uma seleção exclusiva de fontes. " +
-                                    "Condições de origem, se existentes, restringem o resultado.",
+                                Text(smartRuleSourceSummary(rule),
                                     style = MaterialTheme.typography.bodySmall)
                             }
                         }

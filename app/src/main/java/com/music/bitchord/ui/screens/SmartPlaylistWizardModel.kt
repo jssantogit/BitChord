@@ -220,6 +220,38 @@ internal fun smartRuleNewComparison(field: SmartPlaylistRuleField): SmartPlaylis
         }
     }
 
+/**
+ * Read-only description of SOURCE_KIND evidence requested by the rule tree.
+ * This is NOT a selection of sourceRefs. In OR/NOT trees even an equality is
+ * not a global constraint. Never infer authorization from this summary.
+ */
+internal fun smartRuleSourceSummary(rule: SmartPlaylistRule): String {
+    val mentioned = linkedSetOf<String>()
+    fun visit(node: SmartPlaylistRule) {
+        when (node) {
+            is SmartPlaylistRule.Group -> node.children.forEach(::visit)
+            is SmartPlaylistRule.Not -> visit(node.child)
+            is SmartPlaylistRule.Reference -> Unit // Resolved by the evaluator.
+            is SmartPlaylistRule.Comparison -> if (node.field ==
+                SmartPlaylistRuleField.SOURCE_KIND
+            ) {
+                mentioned += when (node.textValue?.lowercase(Locale.ROOT)) {
+                    "local" -> "músicas locais"
+                    "opensubsonic" -> "OpenSubsonic (conta ativa)"
+                    else -> "origem não identificada"
+                }
+            }
+        }
+    }
+    visit(rule)
+    return if (mentioned.isEmpty()) {
+        "Nenhuma condição de origem nesta playlist. O motor consulta a biblioteca canônica autorizada."
+    } else {
+        "As condições mencionam ${mentioned.joinToString(" e ")}. " +
+            "A combinação E/OU/NÃO determina o resultado; isso não seleciona fontes separadamente."
+    }
+}
+
 /** Structure-preserving: a quick summary never decides the actual boolean evaluation. */
 internal fun smartRuleLeafCount(rule: SmartPlaylistRule): Int = when (rule) {
     is SmartPlaylistRule.Comparison, is SmartPlaylistRule.Reference -> 1
