@@ -1166,6 +1166,14 @@ object Downloads {
                             DownloadSession.running(id,fraction)
                         }
                     },
+                    onUnusedReservationReleased={
+                        // Called after A3's all-REQUESTED durable commit, even
+                        // if discovery was interrupted by an exception. The
+                        // current process may accept another explicit tap.
+                        synchronized(lock) {
+                            autoAttemptGuard.rollback(request.entries)
+                        }
+                    },
                 )
                 val report=outcome.batch
                 if(job?.isActive!=true)throw CancellationException()
@@ -1194,12 +1202,6 @@ object Downloads {
                     else -> fail(id,
                         "${report.published} de ${request.entries.size} faixas salvas. " +
                             "Revise as demais pelo seletor manual.")
-                }
-                if(outcome.unusedReservationReleased) {
-                    // The A3 disk commit already removed every untouched slot.
-                    // Reopen *only* this specific explicit-retry admission;
-                    // UI dismissal alone never lifts the physical P/F fence.
-                    synchronized(lock) { autoAttemptGuard.rollback(request.entries) }
                 }
             }
         }catch(e:CancellationException) {
