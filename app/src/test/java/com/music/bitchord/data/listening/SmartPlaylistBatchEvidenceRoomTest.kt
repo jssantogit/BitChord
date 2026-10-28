@@ -3,6 +3,8 @@ package com.music.bitchord.data.listening
 import android.app.Application
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.CanonicalLibrarySourceKind
+import com.music.bitchord.data.catalog.CanonicalAvailableRecordingSources
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReader
 import com.music.bitchord.data.catalog.RecordingEntity
 import kotlinx.coroutines.test.runTest
@@ -263,6 +265,53 @@ class SmartPlaylistBatchEvidenceRoomTest {
             )
             preview.preview(combined)
             assertEquals(2, remoteReads)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
+    @Test fun sourceRuleIntegratesWithCanonicalBatchAndNeverFallsBackToNativeIdentity() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            catalog.catalogDao().upsertRecording(RecordingEntity(
+                "rec:local", "Song", "Artist", 150_000L,
+            ))
+            catalog.catalogDao().upsertRecording(RecordingEntity(
+                "rec:remote", "Song", "Artist", 150_000L,
+            ))
+            val available = object : CanonicalLibraryAvailabilityReader {
+                override suspend fun availableRecordingIds() = listOf("rec:local", "rec:remote")
+                override suspend fun availableRecordingSources() = listOf(
+                    CanonicalAvailableRecordingSources(
+                        "rec:local", setOf(CanonicalLibrarySourceKind.LOCAL),
+                    ),
+                    CanonicalAvailableRecordingSources(
+                        "rec:remote", setOf(CanonicalLibrarySourceKind.OPENSUBSONIC),
+                    ),
+                )
+            }
+            val preview = CanonicalRuleBasedSmartPlaylistPreview(
+                availability = available,
+                catalog = catalog.catalogDao(),
+                ratings = RoomRecordingRatingStore(listening.recordingRatingDao()),
+                listening = RoomListeningEventStore(listening.listeningEventDao()),
+                batchReader = RoomSmartPlaylistBatchEvidenceReader(
+                    catalog.catalogDao(), listening.listeningEventDao(), listening.recordingRatingDao(),
+                ),
+            )
+            val result = preview.preview(SmartPlaylistV2Query(
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.SOURCE_KIND,
+                    SmartPlaylistRuleOperator.EQUAL,
+                    textValue = "opensubsonic",
+                ), sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+            ))
+            assertEquals(listOf("rec:remote"), result.map { it.recordingId })
         } finally {
             catalog.close()
             listening.close()

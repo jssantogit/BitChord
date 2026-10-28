@@ -361,4 +361,58 @@ class SmartPlaylistV2RuleEngineTest {
         assertEquals(result, planner.preview(candidates, query).map { it.recordingId })
     }
 
+    @Test fun localRemoteSourceFilterRequiresActualActiveSource() {
+        val local = candidate("local").copy(sourceKinds = setOf(SmartPlaylistSourceKind.LOCAL))
+        val remote = candidate("remote").copy(sourceKinds = setOf(SmartPlaylistSourceKind.OPENSUBSONIC))
+        val both = candidate("both").copy(sourceKinds = setOf(
+            SmartPlaylistSourceKind.LOCAL, SmartPlaylistSourceKind.OPENSUBSONIC,
+        ))
+        val unknown = candidate("unknown") // Not a reliable claim of absence.
+        val localOnly = SmartPlaylistV2Query(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.SOURCE_KIND, SmartPlaylistRuleOperator.EQUAL,
+                textValue = "local",
+            ), sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+        )
+        assertEquals(listOf("both", "local"), planner.preview(
+            listOf(local, remote, both, unknown), localOnly,
+        ).map { it.recordingId })
+
+        val notRemote = SmartPlaylistV2Query(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.SOURCE_KIND, SmartPlaylistRuleOperator.NOT_EQUAL,
+                textValue = "opensubsonic",
+            ),
+        )
+        assertEquals(listOf("local"), planner.preview(
+            listOf(local, remote, both, unknown), notRemote,
+        ).map { it.recordingId })
+        val negated = SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.SOURCE_KIND, SmartPlaylistRuleOperator.EQUAL,
+                textValue = "opensubsonic",
+            )),
+        )
+        assertEquals(listOf("local"), planner.preview(
+            listOf(local, remote, both, unknown), negated,
+        ).map { it.recordingId })
+    }
+
+    @Test fun sourceFilterRejectsInvalidProviderOrTextOperators() {
+        for (text in listOf("", "untrusted:some-account", "youtube")) {
+            org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+                SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.SOURCE_KIND,
+                    SmartPlaylistRuleOperator.EQUAL, textValue = text,
+                ))
+            }
+        }
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.SOURCE_KIND,
+                SmartPlaylistRuleOperator.CONTAINS, textValue = "local",
+            ))
+        }
+    }
+
 }

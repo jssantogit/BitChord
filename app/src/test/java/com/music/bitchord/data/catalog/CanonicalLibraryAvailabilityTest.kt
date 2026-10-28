@@ -215,4 +215,36 @@ class CanonicalLibraryAvailabilityTest {
     private companion object {
         const val ACCOUNT_ID = "home"
     }
+    @Test fun scopedSourceProjectionNeverIncludesForgottenRemoteAccount() = runTest {
+        val fixture = fixture()
+        val remoteProvider = openSubsonicProviderKey(ACCOUNT_ID)
+        fixture.configureOpenSubsonic()
+        fixture.store.addAsset(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, "local")
+        fixture.store.addAsset(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, "both")
+        fixture.store.addAsset(remoteProvider, "remote")
+        fixture.store.addAsset(remoteProvider, "both")
+        val sources = fixture.availability.availableRecordingSources()
+            .associateBy { it.recordingId }
+        assertEquals(setOf(CanonicalLibrarySourceKind.LOCAL), sources["local"]?.kinds)
+        assertEquals(setOf(CanonicalLibrarySourceKind.OPENSUBSONIC), sources["remote"]?.kinds)
+        assertEquals(setOf(
+            CanonicalLibrarySourceKind.LOCAL, CanonicalLibrarySourceKind.OPENSUBSONIC,
+        ), sources["both"]?.kinds)
+
+        fixture.accountRepository.forget()
+        val forgotten = fixture.availability.availableRecordingSources()
+            .associateBy { it.recordingId }
+        assertEquals(setOf("both", "local"), forgotten.keys)
+        assertEquals(setOf(CanonicalLibrarySourceKind.LOCAL), forgotten["both"]?.kinds)
+        assertEquals(listOf("both", "local"), fixture.availability.availableRecordingIds())
+    }
+
+    @Test fun sourceProjectionExcludesRemoteWithoutReadableCredential() = runTest {
+        val fixture = fixture()
+        fixture.configureOpenSubsonic()
+        fixture.store.addAsset(openSubsonicProviderKey(ACCOUNT_ID), "remote")
+        fixture.credentials.clear(ACCOUNT_ID)
+        assertTrue(fixture.availability.availableRecordingSources().isEmpty())
+    }
+
 }
