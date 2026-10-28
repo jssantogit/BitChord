@@ -167,6 +167,29 @@ internal data class SmartPlaylistV2Match(
     val confirmedCompletions: Long,
 )
 
+/**
+ * Normalize each canonical display string once, rather than on each
+ * comparator invocation (O(N log N) repeated allocations at 50k entries).
+ * Missing metadata always sorts last; RecordingId always breaks ties.
+ */
+private fun sortByNormalizedText(
+    rows: List<RuleBasedRecordingCandidate>,
+    select: (RuleBasedRecordingCandidate) -> String?,
+    descending: Boolean,
+): List<RuleBasedRecordingCandidate> {
+    data class WithKey(val row: RuleBasedRecordingCandidate, val key: String?)
+    val keyed = rows.map { WithKey(it, select(it).normalizedSmartPlaylistText()) }
+    return keyed.sortedWith { a, b ->
+        val missing = (a.key == null).compareTo(b.key == null)
+        if (missing != 0) missing
+        else {
+            val text = (a.key ?: "").compareTo(b.key ?: "")
+            val compared = if (descending) -text else text
+            if (compared != 0) compared else a.row.recordingId.compareTo(b.row.recordingId)
+        }
+    }.map { it.row }
+}
+
 private enum class RuleTruth { TRUE, FALSE, UNKNOWN }
 
 /**
@@ -230,22 +253,14 @@ internal class SmartPlaylistV2RuleEngine(
                 compareBy<RuleBasedRecordingCandidate> { it.lastAudibleAtEpochMs ?: Long.MAX_VALUE }
                     .thenBy { it.recordingId },
             )
-            SmartPlaylistV2Sort.TITLE_ASC -> candidateRows.sortedWith(
-                compareBy<RuleBasedRecordingCandidate> { it.title.normalizedSmartPlaylistText() == null }
-                    .thenBy { it.title.normalizedSmartPlaylistText() ?: "" }.thenBy { it.recordingId },
-            )
-            SmartPlaylistV2Sort.TITLE_DESC -> candidateRows.sortedWith(
-                compareBy<RuleBasedRecordingCandidate> { it.title.normalizedSmartPlaylistText() == null }
-                    .thenByDescending { it.title.normalizedSmartPlaylistText() ?: "" }.thenBy { it.recordingId },
-            )
-            SmartPlaylistV2Sort.ARTIST_ASC -> candidateRows.sortedWith(
-                compareBy<RuleBasedRecordingCandidate> { it.artistDisplay.normalizedSmartPlaylistText() == null }
-                    .thenBy { it.artistDisplay.normalizedSmartPlaylistText() ?: "" }.thenBy { it.recordingId },
-            )
-            SmartPlaylistV2Sort.ARTIST_DESC -> candidateRows.sortedWith(
-                compareBy<RuleBasedRecordingCandidate> { it.artistDisplay.normalizedSmartPlaylistText() == null }
-                    .thenByDescending { it.artistDisplay.normalizedSmartPlaylistText() ?: "" }.thenBy { it.recordingId },
-            )
+            SmartPlaylistV2Sort.TITLE_ASC ->
+                sortByNormalizedText(candidateRows, { it.title }, descending = false)
+            SmartPlaylistV2Sort.TITLE_DESC ->
+                sortByNormalizedText(candidateRows, { it.title }, descending = true)
+            SmartPlaylistV2Sort.ARTIST_ASC ->
+                sortByNormalizedText(candidateRows, { it.artistDisplay }, descending = false)
+            SmartPlaylistV2Sort.ARTIST_DESC ->
+                sortByNormalizedText(candidateRows, { it.artistDisplay }, descending = true)
             SmartPlaylistV2Sort.RECORDING_ID_ASC -> candidateRows.sortedBy { it.recordingId }
             SmartPlaylistV2Sort.STABLE_RANDOM -> candidateRows.sortedWith(
                 compareBy<RuleBasedRecordingCandidate> { it.recordingId.hashCode() xor query.randomSeed }
