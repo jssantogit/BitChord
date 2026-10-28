@@ -671,6 +671,7 @@ class PlaybackService : MediaLibraryService() {
         scope = scope,
         durationMs = { AppSettings.pauseResumeFadeMs.value },
         overlapActive = { crossfade?.isTransitioning() == true || swappingMediaId != null },
+        sessionOwner = { player },
     )
 
     /** Canonical context owner for the active local bounded album/playlist. */
