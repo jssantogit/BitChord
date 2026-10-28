@@ -1317,4 +1317,6 @@
     <string name="playback_recovery_retry">Tekrar dene</string>
     <string name="playback_recovery_retrying">Yeniden deneniyor…</string>
     <string name="playback_recovery_dismiss">Kapat</string>
+    <string name="pause_resume_fade">Duraklatma ve devam ettirmede ses geçişi</string>
+    <string name="pause_resume_fade_subtitle">Duraklatırken sesi kademeli azaltır, devam ettirirken artırır</string>
 </resources>
