@@ -73,7 +73,7 @@ internal sealed interface SmartCollectionActionSource {
     data class SavedDefinition(val id: String) : SmartCollectionActionSource
     data class PreviewQuery(val query: RuleBasedSmartPlaylistQuery) : SmartCollectionActionSource
     data class SavedV2Definition(val id: String) : SmartCollectionActionSource
-    data class PreviewV2Query(val query: SmartPlaylistV2Query) : SmartCollectionActionSource
+    data class PreviewV2Query(val query: SmartPlaylistV2Query, val ownerId: String? = null) : SmartCollectionActionSource
 }
 
 internal sealed interface SmartCollectionBatchResult {
@@ -204,10 +204,10 @@ private suspend fun currentSmartCollectionIds(
             SmartPlaylistDefinitionDatabase.get(context).v2DefinitionDao(),
         )
         val definition = repo.list().firstOrNull { it.id == source.id } ?: return null
-        currentSmartPlaylistV2QueryIds(context, definition.query)
+        currentSmartPlaylistV2QueryIds(context, definition.query, definition.id)
     }
     is SmartCollectionActionSource.PreviewV2Query -> {
-        currentSmartPlaylistV2QueryIds(context, source.query)
+        currentSmartPlaylistV2QueryIds(context, source.query, source.ownerId)
     }
     }
 }
@@ -224,8 +224,9 @@ private suspend fun currentSmartPlaylistQueryIds(
 private suspend fun currentSmartPlaylistV2QueryIds(
     context: Context,
     query: SmartPlaylistV2Query,
+    ownerId: String? = null,
 ): List<String> = persistentSmartPlaylistPreview(context)
-    .preview(query).map { it.recordingId }
+    .preview(query, ownerId).map { it.recordingId }
 
 /**
  * Catalog-owned source evidence only: a uniquely rated MediaAsset can break
@@ -241,6 +242,7 @@ private suspend fun currentSmartPlaylistV2QueryIds(
 internal fun SmartPlaylistV2Query.guaranteedMinimumRatingForAssetHints(): Double? {
     fun proof(node: SmartPlaylistRule): Double? = when (node) {
         is SmartPlaylistRule.Not -> null
+        is SmartPlaylistRule.Reference -> null // A nested playlist does not prove a numeric rating threshold.
         is SmartPlaylistRule.Comparison -> {
             if (node.field == SmartPlaylistRuleField.EXPLICIT_RATING &&
                 node.operator in setOf(
