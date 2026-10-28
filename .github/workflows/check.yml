@@ -52,6 +52,24 @@ jobs:
       - name: Run Android unit tests
         run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
 
+      - name: Publish smart playlist CI benchmark summary
+        if: always() && github.event_name == 'pull_request' && startsWith(github.head_ref, 'listening/smart-playlists')
+        run: |
+          if test -f app/build/reports/smart-playlist-benchmark/summary.md; then
+            cat app/build/reports/smart-playlist-benchmark/summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Smart playlist benchmark did not produce a report. Check the Android unit-test result.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload smart playlist CI benchmark metrics
+        if: always() && github.event_name == 'pull_request' && startsWith(github.head_ref, 'listening/smart-playlists')
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-playlist-benchmark-${{ github.sha }}
+          path: app/build/reports/smart-playlist-benchmark/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Upload Android test reports
         if: failure()
         uses: actions/upload-artifact@v4
