@@ -96,6 +96,13 @@ import java.util.Locale
  */
 enum class CanonicalSearchKind { RECORDING, RELEASE_GROUP, RELEASE, ARTIST }
 
+/**
+ * Search artwork provenance: an inherited sleeve may be reconciled when a
+ * verified group Front arrives. Null is deliberately treated as owned/unknown
+ * and MUST NOT be overwritten based on a matching recording title or group.
+ */
+enum class CanonicalArtworkProvenance { INHERITED_RELEASE, INHERITED_GROUP }
+
 data class CanonicalCatalogSearchRow(
     val musicBrainzId: String,
     val kind: CanonicalSearchKind,
@@ -123,6 +130,8 @@ data class CanonicalCatalogSearchRow(
     val durationMs: Long? = null,
     /** Secondary MusicBrainz ReleaseGroup type evidence, never inferred from a title. */
     val secondaryTypes: String? = null,
+    /** Only set on Recording art adopted from a known MusicBrainz edition or group. */
+    val artworkProvenance: CanonicalArtworkProvenance? = null,
 )
 
 /**
