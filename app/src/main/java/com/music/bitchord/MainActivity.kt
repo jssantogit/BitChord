@@ -2068,8 +2068,9 @@ private fun BitChordApp(
                     SoulseekBatchPlan.SourceTrack(
                         // Position is only a transient batch slot fallback; it
                         // is NEVER minted as a recording or release identity.
-                        trackId=track.videoId.takeIf(String::isNotBlank)
-                            ?: "batch-slot-${ordinal+1}",
+                        // Fail closed for slots without stable catalog identity:
+                        // a transient batch ordinal is not a recording ID.
+                        trackId=track.videoId,
                         artist=track.artist,
                         title=track.title,
                         creditedArtists=track.artists.map { it.name },
@@ -2139,7 +2140,9 @@ private fun BitChordApp(
             is SoulseekDownloadRouting.Decision.ManualSearch -> {
                 if(A0AndroidAutoConsent.enabled(context)) {
                     val item=SoulseekBatchPlan.Entry(
-                        trackId="manual-"+java.util.UUID.randomUUID(),
+                        // Preserve the track's source identity across process
+                        // death. Never use a fresh UUID as a recording ID.
+                        trackId=song?.videoId.orEmpty(),
                         query=decision.query,album=albumHint,
                         durationSeconds=SoulseekDownloadRouting.durationSeconds(
                             song?.durationText),
