@@ -707,11 +707,9 @@ internal interface CanonicalCatalogDao {
             ), grp.title) AS title,
                grp.primaryType AS primaryType, grp.firstReleaseDate AS firstReleaseDate,
                grp.artistDisplay AS artistDisplay, grp.secondaryTypes AS secondaryTypes,
-               COALESCE(art.thumbnailUri, art.artworkUri) AS artworkUri
+               NULL AS artworkUri
         FROM catalog_external_identity identity
         JOIN catalog_release_group grp ON grp.id = identity.entityId
-        LEFT JOIN catalog_cover_art_cache art
-            ON art.entityType = 'release-group:front-v5' AND art.mbid = identity.externalId
         WHERE identity.provider = 'musicbrainz' AND identity.entityType = 'release-group'
           AND (instr(lower(grp.title), lower(:query)) > 0
             OR instr(lower(grp.artistDisplay), lower(:query)) > 0)
