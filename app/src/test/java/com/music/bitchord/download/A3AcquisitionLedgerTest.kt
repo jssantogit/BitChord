@@ -118,6 +118,18 @@ class A3AcquisitionLedgerTest {
         assertEquals("{bad json",store.data)
     }
 
+    @Test fun manyAlbumsCannotExhaustJournalAfterOnly128Tracks() {
+        val store=MemoryStore()
+        val ledger=A3AcquisitionLedger(store)
+        repeat(160) { index ->
+            val next=java.util.UUID.nameUUIDFromBytes(
+                "auto-album-track-$index".toByteArray()).toString()
+            ledger.create(next)
+        }
+        assertEquals(160,ledger.all().size)
+        assertEquals(160,A3AcquisitionLedger(store).all().size)
+    }
+
     @Test fun noRawPeerFileOrSearchFieldsAreWritten() {
         val store=MemoryStore()
         val j=A3AcquisitionLedger(store)
