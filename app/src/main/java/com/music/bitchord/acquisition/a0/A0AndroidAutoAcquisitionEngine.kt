@@ -88,6 +88,12 @@ internal object A0AndroidAutoAcquisitionEngine {
             account.erase()
         }
         if(stopped())return refused(entries.size)
+        // There must not be another auto P/F worker inside this private cache:
+        // Downloads.autoMutex serializes the entire run. Clear crash leftovers
+        // BEFORE irreversible A3 reservation so cleanup failure does not
+        // poison the canonical identity of an otherwise unattempted track.
+        A0AutoScratchRecovery.clean(app.cacheDir)
+        if(stopped())return refused(entries.size)
 
         // Atomic on the A3 journal BEFORE search, login or peer discovery.
         // Reboot does not erase this reservation: a duplicate recording ID
