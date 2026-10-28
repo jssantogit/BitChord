@@ -52,12 +52,15 @@ class ContextualScopedRoomTest {
                 SmartPlaylistRuleField.ARTIST_DISPLAY,
                 SmartPlaylistRuleOperator.CONTAINS, textValue = "shared",
             ))
-            assertEquals(listOf("rel:one"), filterCanonicalBrowseAlbums(
-                dao.providerScopedReleases(current), albumRule,
-            ).map { it.id })
-            assertEquals(listOf("artist:one"), filterCanonicalBrowseArtists(
-                dao.providerScopedArtists(current), artistRule,
-            ).map { it.id })
+            val service = CanonicalContextualFilterLibrary(dao)
+            assertEquals(listOf("rel:one"), service.albums(current, albumRule).map { it.id })
+            assertEquals(listOf("artist:one"), service.artists(current, artistRule).map { it.id })
+            assertEquals(listOf("rel:two"), service.albums(other, albumRule).map { it.id })
+            assertEquals(listOf("artist:two"), service.artists(other, artistRule).map { it.id })
+            assertTrue(runCatching { service.albums("", albumRule) }.exceptionOrNull()
+                is IllegalArgumentException)
+            assertTrue(runCatching { service.artists(" ", artistRule) }.exceptionOrNull()
+                is IllegalArgumentException)
             assertEquals(listOf("rel:two"), dao.providerScopedReleases(other).map { it.id })
             assertEquals(listOf("artist:two"), dao.providerScopedArtists(other).map { it.id })
             assertTrue(dao.providerScopedReleases("opensubsonic:unknown").isEmpty())
