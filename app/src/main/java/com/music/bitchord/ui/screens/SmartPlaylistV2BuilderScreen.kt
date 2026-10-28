@@ -88,6 +88,25 @@ private fun fieldLabel(value: SmartPlaylistRuleField): String = when (value) {
     SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "Referência de capa do lançamento"
 }
 
+private fun sortLabel(value: SmartPlaylistV2Sort): String = when (value) {
+    SmartPlaylistV2Sort.RATING_DESC -> "Avaliação: maior primeiro"
+    SmartPlaylistV2Sort.RATING_ASC -> "Avaliação: menor primeiro"
+    SmartPlaylistV2Sort.COMPLETIONS_DESC -> "Reproduções: mais primeiro"
+    SmartPlaylistV2Sort.COMPLETIONS_ASC -> "Reproduções: menos primeiro"
+    SmartPlaylistV2Sort.DURATION_DESC -> "Duração: maior primeiro"
+    SmartPlaylistV2Sort.DURATION_ASC -> "Duração: menor primeiro"
+    SmartPlaylistV2Sort.LAST_AUDIBLE_DESC -> "Última reprodução: recente"
+    SmartPlaylistV2Sort.LAST_AUDIBLE_ASC -> "Última reprodução: antiga"
+    SmartPlaylistV2Sort.RECORDING_ID_ASC -> "Identificador canônico"
+    SmartPlaylistV2Sort.STABLE_RANDOM -> "Aleatória estável"
+    SmartPlaylistV2Sort.TITLE_ASC -> "Título: A a Z"
+    SmartPlaylistV2Sort.TITLE_DESC -> "Título: Z a A"
+    SmartPlaylistV2Sort.ARTIST_ASC -> "Artista: A a Z"
+    SmartPlaylistV2Sort.ARTIST_DESC -> "Artista: Z a A"
+    SmartPlaylistV2Sort.LOCAL_RATING_NEWEST -> "Avaliação local: mais recente"
+    SmartPlaylistV2Sort.LOCAL_RATING_OLDEST -> "Avaliação local: mais antiga"
+}
+
 private fun operatorLabel(value: SmartPlaylistRuleOperator): String = when (value) {
     SmartPlaylistRuleOperator.EQUAL -> "Igual a"
     SmartPlaylistRuleOperator.NOT_EQUAL -> "Diferente de"
@@ -448,7 +467,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     androidx.compose.runtime.key(editingId, editorEpoch) {
                         V2RuleNode(rule, 0, onChange = { rule = it; preview = null; previewQuery = null })
                     }
-                    V2Option("Ordenar por", sort, SmartPlaylistV2Sort.entries, { it.name.replace('_', ' ') }) {
+                    V2Option("Ordenar por", sort, SmartPlaylistV2Sort.entries, ::sortLabel) {
                         sort = it
                         preview = null
                         previewQuery = null
