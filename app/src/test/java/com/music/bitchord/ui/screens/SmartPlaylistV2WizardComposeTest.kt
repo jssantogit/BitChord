@@ -114,17 +114,16 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Grupo 1").performClick()
         compose.onNodeWithText("+ Adicionar condição").performClick()
         compose.onNodeWithText("Adicionar condição").assertExists()
-        compose.onNodeWithText("Biblioteca e origens").performClick()
-        compose.onNodeWithText("Origem disponível").performClick()
+        compose.onNodeWithText("Músicas e metadados").performClick()
+        compose.onNodeWithText("Título da música").performClick()
         compose.onNodeWithText("Adicionar condição").performClick()
         compose.runOnIdle {
             val root = state.value as SmartPlaylistRule.Group
             val group = root.children.single() as SmartPlaylistRule.Group
             assertEquals(original, group.children.first())
             assertEquals(SmartPlaylistRule.Comparison(
-                SmartPlaylistRuleField.SOURCE_KIND,
-                SmartPlaylistRuleOperator.EQUAL,
-                textValue = "local",
+                SmartPlaylistRuleField.TITLE,
+                SmartPlaylistRuleOperator.IS_PRESENT,
             ), group.children.last())
         }
     }
