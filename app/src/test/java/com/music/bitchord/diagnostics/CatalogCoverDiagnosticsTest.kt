@@ -29,12 +29,17 @@ class CatalogCoverDiagnosticsTest {
         meter.recordImageResult(false, 900L)
         meter.recordCoilDiskCacheInitialization(1024L, 100L * 1024 * 1024)
         meter.recordImageDiskCachePreservedOnUpgrade()
+        meter.recordEditionSleeveReplacedByVerifiedGroup()
+        meter.recordLowerResolutionGroupCoverRejected()
         val lines = CatalogCoverDiagnostics.lines(meter.snapshot()).joinToString("\n")
         assertEquals(true, lines.contains("p50_network_ms=120"))
         assertEquals(true, lines.contains("p95_network_ms=300"))
         assertEquals(true, lines.contains("cache_hits=1"))
         assertEquals(true, lines.contains("verified_group_batch_reads=1 verified_group_rows_reused=5"))
         assertEquals(true, lines.contains("recovered_join_owner_cancellations=1"))
+        assertEquals(true, lines.contains(
+            "recording_edition_to_group_reconciliations=1 rejected_group_art_downgrades=1",
+        ))
         assertEquals(true, lines.contains("direct_front_candidates=2"))
         assertEquals(true, lines.contains("coil_load_success=1 coil_load_errors=1"))
         assertEquals(true, lines.contains("coil_sources memory=0 disk=1 network=0 other=0"))
