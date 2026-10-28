@@ -115,6 +115,23 @@ internal fun canonicalShouldAcceptArtworkUpdate(old: String?, next: String?): Bo
     return canonicalNeedsCoverRefresh(old) && !canonicalNeedsCoverRefresh(next)
 }
 
+/**
+ * Used ONLY when a newer, already-validated Front-v5 URL for this exact
+ * ReleaseGroup comes from CoverArtArchive / trusted Room cache. Old 500px
+ * artwork may belong to an earlier chosen edition of the same group; quality
+ * alone cannot establish identity. Prefer the verified new Front at equal or
+ * higher quality, while forbidding a 500→250 downgrade and redundant repaint.
+ *
+ * Do not use for provisional edition artwork or unknown remote cover sources.
+ */
+internal fun canonicalShouldAcceptVerifiedGroupArtwork(
+    old: String?, verified: String?,
+): Boolean {
+    if (verified.isNullOrBlank() || old == verified) return false
+    return canonicalShouldAcceptArtworkUpdate(old, verified) ||
+        !canonicalNeedsCoverRefresh(verified)
+}
+
 internal fun canonicalArtistShelvesWithCoverUpdates(
     sections: List<HomeShelf>,
     covers: Map<String, Pair<String, String>>,
@@ -128,7 +145,7 @@ internal fun canonicalArtistShelvesWithCoverUpdates(
             if (!browseId.startsWith("catalog:RELEASE_GROUP:")) return@card item
             val groupMbid = browseId.removePrefix("catalog:RELEASE_GROUP:")
             val ready = covers[groupMbid] ?: return@card item
-            if (!canonicalShouldAcceptArtworkUpdate(item.thumbnailUrl, ready.first)) {
+            if (!canonicalShouldAcceptVerifiedGroupArtwork(item.thumbnailUrl, ready.first)) {
                 return@card item
             }
             changedShelf = true
