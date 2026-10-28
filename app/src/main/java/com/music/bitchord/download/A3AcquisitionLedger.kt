@@ -303,6 +303,13 @@ internal class A3AcquisitionLedger(private val store:Store) {
     /** Requires a fresh explicit user action; no silent requery/re-download. */
     fun retry(id:String):Entry=synchronized(lock) {
         val old=items[id] ?: error("A3 unknown acquisition ID")
+        // Auto jobs use a separately persisted identity fence. A FAILED or
+        // INTERRUPTED auto slot may have started P/F or published an artifact
+        // that could not be committed. The legacy retry API has no proof of
+        // rollback and must not reanimate the original UUID.
+        check(old.autoRecordingDigest==null && old.autoReleaseDigest==null) {
+            "A3 automatic work requires explicit physical reconciliation"
+        }
         check(old.phase in setOf(Phase.INTERRUPTED,Phase.FAILED)) {
             "A3 only interrupted or failed work may retry"
         }
