@@ -49,7 +49,8 @@ internal fun SmartPlaylistV2Query.requiresRelativeAgeRefresh(): Boolean {
     fun visit(node: SmartPlaylistRule): Boolean = when (node) {
         is SmartPlaylistRule.Comparison ->
             node.field == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE ||
-                node.field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING
+                node.field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING ||
+                node.field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED
         is SmartPlaylistRule.Group -> node.children.any(::visit)
         is SmartPlaylistRule.Not -> visit(node.child)
     }
