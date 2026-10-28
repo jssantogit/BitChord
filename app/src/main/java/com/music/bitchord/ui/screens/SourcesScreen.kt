@@ -298,6 +298,7 @@ fun SourcesScreen(
         // editor is raised to the activity like every other alert.
         RemoteLibrarySection(
             icon = Icons.Rounded.Cloud,
+            groupHeader = stringResource(R.string.library),
             title = stringResource(R.string.webdav),
             description = stringResource(R.string.webdav_description),
             subtitle = if (webdavUrl.isBlank()) {
@@ -370,6 +371,7 @@ fun SourcesScreen(
 @Composable
 private fun RemoteLibrarySection(
     icon: ImageVector,
+    groupHeader: String? = null,
     title: String,
     description: String,
     subtitle: String,
@@ -387,7 +389,11 @@ private fun RemoteLibrarySection(
     var testResult by remember { mutableStateOf<String?>(null) }
     // The first row names this connection already. Do not print
     // WebDAV → WebDAV / SMB → SMB in adjacent headings.
-    SettingsGroup(header = null, footer = description) {
+    SettingsGroup(
+        header = groupHeader,
+        topSpacing = 12.dp,
+        footer = description,
+    ) {
         SettingsRow(icon = icon, title = title, subtitle = subtitle, onClick = onEdit)
         if (configured) {
             RowDivider()
