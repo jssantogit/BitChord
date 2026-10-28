@@ -2094,7 +2094,7 @@ private fun BitChordApp(
                         track.videoId.length<=180 &&
                         !track.videoId.any(Char::isISOControl)
                 }) {
-                if(Downloads.enqueueSoulseekAuto(context,plan)) {
+                if(Downloads.enqueueSoulseekAuto(context,plan,requested)) {
                     Toast.makeText(context,
                         "Lote enviado à fila Soulseek; acompanhe em Downloads.",
                         Toast.LENGTH_LONG).show()
@@ -2153,7 +2153,7 @@ private fun BitChordApp(
                         durationSeconds=SoulseekDownloadRouting.durationSeconds(
                             song?.durationText),
                     )
-                    if(Downloads.enqueueSoulseekAuto(context,listOf(item))) {
+                    if(Downloads.enqueueSoulseekAuto(context,listOf(item),listOfNotNull(song))) {
                         Toast.makeText(context,
                             "Faixa enviada à fila Soulseek; acompanhe em Downloads.",
                             Toast.LENGTH_LONG).show()
