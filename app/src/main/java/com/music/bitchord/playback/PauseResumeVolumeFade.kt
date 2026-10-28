@@ -74,6 +74,10 @@ internal class PauseResumeVolumeFade(
     }
 
     fun pause(target: Player) {
+        // Multiple PAUSE requests during the same envelope cannot postpone the pause.
+        if (owner === target && job?.isActive == true && !fadingIn &&
+            durationMs() > 0 && !overlapActive()
+        ) return
         val duration = PauseResumeFadeCurve.normalizeDuration(durationMs())
         if (duration == 0 || overlapActive() || !target.isPlaying) {
             reset()
