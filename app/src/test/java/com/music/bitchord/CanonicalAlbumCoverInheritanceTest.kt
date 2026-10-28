@@ -91,6 +91,17 @@ class CanonicalAlbumCoverInheritanceTest {
         assertEquals(verified500, result[1].artworkUri)
     }
 
+    @Test fun albumDetailRefreshReusesPreloaded500pxBitmapUrlInsteadOfHeroVariant() {
+        assertEquals(
+            com.music.bitchord.data.catalog.metadata.CoverArtSize.THUMBNAIL,
+            com.music.bitchord.ui.canonicalNativeDetailArtworkSize(CanonicalSearchKind.RELEASE_GROUP),
+        )
+        assertEquals(
+            com.music.bitchord.data.catalog.metadata.CoverArtSize.HERO,
+            com.music.bitchord.ui.canonicalNativeDetailArtworkSize(CanonicalSearchKind.RELEASE),
+        )
+    }
+
     @Test fun exactEditionArtworkIsProvisionalNotOwnedTrackArt() {
         val inherited = canonicalReleaseTracksWithArtwork(listOf(track()), old500)
         assertEquals(CanonicalArtworkProvenance.INHERITED_RELEASE,
