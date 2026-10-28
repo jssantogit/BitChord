@@ -400,6 +400,12 @@ object Downloads {
             // Even after the result is cleared, evicted or cancelled, do not
             // automatically repeat the same canonical audio in this process.
             if(!autoAttemptGuard.reserve(captured))return false
+            // A retry after A3 proved "no P/F ever started" supersedes the
+            // old search-only report. Never leave its manual recovery picker
+            // able to publish the same track as the newly queued request.
+            _autoReviews.value=_autoReviews.value.filterValues { prior ->
+                !prior.overlapsAny(captured)
+            }
             autoRequests[id]=AutoRequest(captured,quality)
             pending[id]=song
         }
@@ -1119,7 +1125,7 @@ object Downloads {
         try {
             autoMutex.withLock {
                 if(job?.isActive!=true)throw CancellationException()
-                val report=A0AndroidAutoAcquisitionEngine.run(
+                val outcome=A0AndroidAutoAcquisitionEngine.run(
                     context,request.entries,request.quality,
                     userRequested=true,isCancelled={job?.isActive!=true},
                     onSlotResolved={index,_ ->
@@ -1133,7 +1139,8 @@ object Downloads {
                             DownloadSession.running(id,fraction)
                         }
                     },
-                ).batch
+                )
+                val report=outcome.batch
                 if(job?.isActive!=true)throw CancellationException()
                 val review=SoulseekAutoReviewPlan.from(request.entries,report.results)
                 if(review==null) {
@@ -1156,6 +1163,12 @@ object Downloads {
                     else -> fail(id,
                         "${report.published} de ${request.entries.size} faixas salvas. " +
                             "Revise as demais pelo seletor manual.")
+                }
+                if(outcome.unusedReservationReleased) {
+                    // The A3 disk commit already removed every untouched slot.
+                    // Reopen *only* this specific explicit-retry admission;
+                    // UI dismissal alone never lifts the physical P/F fence.
+                    synchronized(lock) { autoAttemptGuard.rollback(request.entries) }
                 }
             }
         }catch(e:CancellationException) {
