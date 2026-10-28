@@ -94,6 +94,22 @@ class SmartPlaylistV2RuleEngineTest {
         ), query).map { it.recordingId })
     }
 
+    @Test fun interleavedDuplicatesPreserveUniqueRecordingIdsAndRejectEveryConflictingSnapshot() {
+        val good = candidate("rec:good", rating = 2.0, completed = 1)
+        val first = candidate("rec:conflict", rating = 5.0, completed = 1)
+        val conflicting = first.copy(explicitRating = 4.0)
+        val query = SmartPlaylistV2Query(
+            rules = check(SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
+                SmartPlaylistRuleOperator.GREATER_OR_EQUAL, 1.0),
+            sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+        )
+        val result = planner.preview(
+            listOf(first, good, good, conflicting, first, good),
+            query,
+        )
+        assertEquals(listOf("rec:good"), result.map { it.recordingId })
+    }
+
     @Test fun sortingAndLimitWorkBeyondOldOneHundredLimit() {
         val query = SmartPlaylistV2Query(
             rules = check(SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,

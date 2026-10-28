@@ -312,10 +312,26 @@ internal class SmartPlaylistV2RuleEngine(
         val now = nowEpochMs()
         if (now < 0) return SmartPlaylistV2Evaluation(emptyList(), emptySet())
         val unknown = linkedSetOf<String>()
-        val candidateRows = input.groupBy { it.recordingId }.values.asSequence()
-            .mapNotNull { grouped ->
-                val item = grouped.firstOrNull() ?: return@mapNotNull null
-                if (item.recordingId.isBlank() || grouped.any { it != item } ||
+        // Keep one candidate per RecordingId without allocating a List for each
+        // of 50k+ recordings. Once conflicting evidence appears, reject ALL
+        // versions of that ID, including later repeats of the first candidate.
+        val uniqueById = LinkedHashMap<String, RuleBasedRecordingCandidate>()
+        val conflictingIds = HashSet<String>()
+        for (item in input) {
+            val id = item.recordingId
+            if (id in conflictingIds) continue
+            val previous = uniqueById[id]
+            when {
+                previous == null -> uniqueById[id] = item
+                previous != item -> {
+                    uniqueById.remove(id)
+                    conflictingIds += id
+                }
+            }
+        }
+        val candidateRows = uniqueById.values.asSequence()
+            .mapNotNull { item ->
+                if (item.recordingId.isBlank() ||
                     !item.available || item.audibleCompletions < 0 ||
                     item.earlySkips < 0 || item.lateSkips < 0 ||
                     (item.explicitRating != null &&
