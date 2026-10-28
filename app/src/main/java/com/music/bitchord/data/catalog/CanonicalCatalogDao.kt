@@ -41,6 +41,12 @@ internal data class CanonicalTrustedReleaseDateRow(
     val releaseDate: String?,
 )
 
+internal data class CanonicalReleaseArtistCreditNameRow(
+    val releaseId: String,
+    /** Null/blank = incomplete canonical credit, not a negative match. */
+    val artistName: String?,
+)
+
 internal data class CanonicalRecordingLocalAddedRow(
     val recordingId: String,
     val dateAddedSeconds: Long?,
@@ -196,6 +202,20 @@ internal interface CanonicalCatalogDao {
     suspend fun trustedReleaseDatesByIds(
         releaseIds: List<String>,
     ): List<CanonicalTrustedReleaseDateRow>
+
+    /** Read canonical ReleaseArtist credits, not display strings or MusicBrainz guesses. */
+    @Query(
+        """
+        SELECT credit.releaseId AS releaseId, artist.name AS artistName
+        FROM catalog_release_artist_credit AS credit
+        LEFT JOIN catalog_artist AS artist ON artist.id = credit.artistId
+        WHERE credit.releaseId IN (:releaseIds)
+        ORDER BY credit.releaseId ASC, credit.position ASC
+        """,
+    )
+    suspend fun canonicalReleaseArtistNamesByIds(
+        releaseIds: List<String>,
+    ): List<CanonicalReleaseArtistCreditNameRow>
 
     /** Read artwork pointers only from explicitly linked canonical releases. */
     @Query(
