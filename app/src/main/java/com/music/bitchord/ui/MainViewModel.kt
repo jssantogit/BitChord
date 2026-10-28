@@ -573,17 +573,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     return it
                 }
             }
-            // For revisits/offline rows, use an independently persisted exact
-            // Track -> Recording -> Official Release -> ReleaseGroup edge.
-            // No artist-name or song-title association is permitted.
-            val ownedGroupMbid = try {
-                CanonicalCatalogDatabase.get(getApplication<Application>())
-                    .catalogDao().verifiedRecordingCoverGroupMbid(row.musicBrainzId)
-            } catch (cancelled: CancellationException) { throw cancelled }
-              catch (_: Exception) { null }
-            if (ownedGroupMbid != null && ownedGroupMbid != row.coverGroupMbid) {
-                coverArtArchive.cachedVerifiedGroupCover(ownedGroupMbid, size)?.let {
-                    return it
+            // Only offline recordings lacking live group membership may use
+            // a Room Track -> Official Release -> ReleaseGroup edge. If the
+            // search response already proves an exact group but its Front is
+            // absent, showing a different (often compilation) sleeve is worse
+            // than waiting for the explicitly linked edition below.
+            if (canonicalCanUseCachedRecordingGroupEdge(row)) {
+                val ownedGroupMbid = try {
+                    CanonicalCatalogDatabase.get(getApplication<Application>())
+                        .catalogDao().verifiedRecordingCoverGroupMbid(row.musicBrainzId)
+                } catch (cancelled: CancellationException) { throw cancelled }
+                  catch (_: Exception) { null }
+                if (ownedGroupMbid != null) {
+                    coverArtArchive.cachedVerifiedGroupCover(ownedGroupMbid, size)?.let {
+                        return it
+                    }
                 }
             }
             // Otherwise only an independently verified Official Release ID
