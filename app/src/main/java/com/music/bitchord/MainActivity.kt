@@ -217,6 +217,7 @@ import com.music.bitchord.download.DownloadTarget
 import com.music.bitchord.download.Downloads
 import com.music.bitchord.download.SoulseekDownloadRouting
 import com.music.bitchord.download.SoulseekBatchPlan
+import com.music.bitchord.acquisition.a0.A0AndroidAutoConsent
 import com.music.bitchord.ui.screens.SoulseekAccountSettingsScreen
 import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
@@ -2054,9 +2055,9 @@ private fun BitChordApp(
     // it decomposed into — see [Downloads.rememberCollection]. Null for a single
     // track, which is not a release however many of them are asked for one at a
     // time.
-    // Issue #172: no YT Music acquisition, even for album/playlist actions.
-    // Each supported request opens a manual Soulseek search; the picker alone
-    // can authorize a specific file, and only in devDebug.
+    // Issue #172: no YT Music acquisition. In devDebug, an explicit opt-in
+    // sends eligible one-tap track/release requests to the guarded Soulseek
+    // foreground queue. OFF preserves the existing manual picker unchanged.
     val startDownload: (List<Song>, DownloadTarget?) -> Unit = { requested, from ->
         if (requested.size > 1) {
             // One release tap, a bounded sequential MANUAL selection per track.
@@ -2085,6 +2086,17 @@ private fun BitChordApp(
                 Toast.makeText(context,
                     "Lote Soulseek indisponível: abra um álbum/EP/single com 2 a 64 faixas válidas.",
                     Toast.LENGTH_LONG).show()
+            } else if(A0AndroidAutoConsent.enabled(context)) {
+                if(Downloads.enqueueSoulseekAuto(context,plan)) {
+                    Toast.makeText(context,
+                        "Lote enviado à fila Soulseek; acompanhe em Downloads.",
+                        Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(context,
+                        "Não foi possível iniciar o lote automático. " +
+                            "Desative a automação para escolher arquivos manualmente.",
+                        Toast.LENGTH_LONG).show()
+                }
             } else {
                 val first=plan.first()
                 val batchIntent=Intent().setClassName(
@@ -2125,6 +2137,24 @@ private fun BitChordApp(
         )
         when (decision) {
             is SoulseekDownloadRouting.Decision.ManualSearch -> {
+                if(A0AndroidAutoConsent.enabled(context)) {
+                    val item=SoulseekBatchPlan.Entry(
+                        trackId="manual-"+java.util.UUID.randomUUID(),
+                        query=decision.query,album=albumHint,
+                        durationSeconds=SoulseekDownloadRouting.durationSeconds(
+                            song?.durationText),
+                    )
+                    if(Downloads.enqueueSoulseekAuto(context,listOf(item))) {
+                        Toast.makeText(context,
+                            "Faixa enviada à fila Soulseek; acompanhe em Downloads.",
+                            Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(context,
+                            "Não foi possível iniciar a automação. " +
+                                "Desative-a em Configurações para escolher manualmente.",
+                            Toast.LENGTH_LONG).show()
+                    }
+                } else {
                 val intent = Intent().setClassName(
                     context.packageName,
                     "com.music.bitchord.acquisition.a0.A0ManualLoginActivity",
@@ -2139,6 +2169,7 @@ private fun BitChordApp(
                         context, "Seletor Soulseek indisponível nesta instalação.",
                         Toast.LENGTH_LONG,
                     ).show()
+                }
                 }
             }
             SoulseekDownloadRouting.Decision.BulkNotSupported ->
