@@ -111,7 +111,7 @@ class SmartCollectionBatchHandoffTest {
         available = emptyList()
         assertEquals(SmartCollectionBatchResult.Empty,
             handoff.execute(source, CanonicalCollectionIntent.ADD_TO_QUEUE))
-        available = (0..100).map { "rec-$it" }
+        available = (0..500).map { "rec-$it" }
         assertEquals(SmartCollectionBatchResult.LimitExceeded,
             handoff.execute(source, CanonicalCollectionIntent.PLAY_NOW))
         assertEquals(0, dispatches)
@@ -356,6 +356,42 @@ class SmartCollectionBatchHandoffTest {
         val negation = SmartPlaylistV2Query(SmartPlaylistRule.Not(rated(4.0)))
         assertNull(negation.guaranteedMinimumRatingForAssetHints())
         assertNull(SmartPlaylistV2Query(duration()).guaranteedMinimumRatingForAssetHints())
+    }
+
+    @Test fun largeSavedV2QueueSubmitsOneAtomic500ItemPlanAndNeverAutoplays() = runBlocking {
+        val ids = (1..500).map { "rec-$it" }
+        val submitted = mutableListOf<CanonicalCollectionIntentPlan>()
+        val handoff = SmartCollectionBatchHandoff(
+            refreshIds = { ids },
+            browse = { CanonicalBrowseLibrary(ids.map(::track)) },
+            planner = CanonicalCollectionIntentPlanner(Resolver()),
+            submit = { plan -> submitted += plan; true },
+        )
+        assertEquals(SmartCollectionBatchResult.Submitted,
+            handoff.execute(SmartCollectionActionSource.SavedV2Definition("large"),
+                CanonicalCollectionIntent.ADD_TO_QUEUE))
+        assertEquals(1, submitted.size)
+        assertEquals(500, submitted.single().selections.size)
+        assertEquals(ids, submitted.single().selections.map { it.recordingId })
+        assertEquals(CanonicalCollectionIntent.ADD_TO_QUEUE, submitted.single().intent)
+    }
+
+    @Test fun largeV2PreviewWithOneAmbiguousItemRejectsWholeOperationBeforeSubmit() = runBlocking {
+        val ids = (1..251).map { "rec-$it" }
+        var submissions = 0
+        val handoff = SmartCollectionBatchHandoff(
+            refreshIds = { ids },
+            browse = { CanonicalBrowseLibrary(ids.map {
+                if (it == "rec-251") track(it, 2) else track(it)
+            }) },
+            planner = CanonicalCollectionIntentPlanner(Resolver()),
+            submit = { submissions++; true },
+        )
+        assertTrue(handoff.execute(
+            SmartCollectionActionSource.SavedV2Definition("ambiguous"),
+            CanonicalCollectionIntent.ADD_TO_QUEUE,
+        ) is SmartCollectionBatchResult.Rejected)
+        assertEquals(0, submissions)
     }
 
 }
