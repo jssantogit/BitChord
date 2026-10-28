@@ -55,6 +55,8 @@ internal object A0AndroidAutoAcquisitionEngine {
         userRequested:Boolean,
         isCancelled:()->Boolean,
         onSlotResolved:(Int,A0AutoBatchExecutor.TrackStatus)->Unit={ _,_ -> },
+        /** Only invoked AFTER A3 durably proves zero P/F for the whole album. */
+        onUnusedReservationReleased:()->Unit={},
     ):A0AutoDiscoveryCoordinator.Report {
         val app=context.applicationContext
         // Zero socket, vault and journal calls until the user opts in AND
@@ -124,7 +126,10 @@ internal object A0AndroidAutoAcquisitionEngine {
         // still REQUESTED; no transfer, media URI or receipt can be erased.
         val outcome=A3AutomaticReservationScope(
             A3AndroidAcquisitionLedger.get(app)
-        ).run(jobs.values.toList()) {
+        ).run(
+            jobs.values.toList(),
+            onDurablyReleased=onUnusedReservationReleased,
+        ) {
             if(stopped())refused(entries.size)
             else {
                 val discovery=A0FreshAutoSearchTransport(app,generation,quality)
