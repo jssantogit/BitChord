@@ -77,7 +77,7 @@ internal class A0FreshAuthenticatedAutoTransport(
             transfer=current
             val listing=A0OpenAudioCandidateGate.PublicPeerListing(
                 remoteFilename=candidate.remotePath,
-                byteCount=candidate.sizeBytes,
+                reportedSize=candidate.sizeBytes,
                 locked=false,freeSlot=true,
             )
             val receipt=current.runObservedOnce(
