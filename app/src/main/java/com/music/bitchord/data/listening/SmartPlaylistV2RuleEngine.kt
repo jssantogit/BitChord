@@ -293,13 +293,21 @@ internal class SmartPlaylistV2RuleEngine(
         query: SmartPlaylistV2Query,
         referenceMemberships: Map<String, SmartPlaylistReferencedMembership> = emptyMap(),
     ): List<SmartPlaylistV2Match> =
-        evaluateWithUnknowns(input, query, referenceMemberships).matches
+        evaluateRows(input, query, referenceMemberships, captureUnknowns = false).matches
 
-    /** Evaluate each child once, retaining UNKNOWN separately for parent NOT/ALL/ANY. */
+    /** Child queries record UNKNOWN, whereas ordinary root preview skips that memory. */
     internal fun evaluateWithUnknowns(
         input: List<RuleBasedRecordingCandidate>,
         query: SmartPlaylistV2Query,
         referenceMemberships: Map<String, SmartPlaylistReferencedMembership> = emptyMap(),
+    ): SmartPlaylistV2Evaluation =
+        evaluateRows(input, query, referenceMemberships, captureUnknowns = true)
+
+    private fun evaluateRows(
+        input: List<RuleBasedRecordingCandidate>,
+        query: SmartPlaylistV2Query,
+        referenceMemberships: Map<String, SmartPlaylistReferencedMembership>,
+        captureUnknowns: Boolean,
     ): SmartPlaylistV2Evaluation {
         val now = nowEpochMs()
         if (now < 0) return SmartPlaylistV2Evaluation(emptyList(), emptySet())
@@ -320,7 +328,7 @@ internal class SmartPlaylistV2RuleEngine(
                     RuleTruth.TRUE -> item
                     RuleTruth.FALSE -> null
                     RuleTruth.UNKNOWN -> {
-                        unknown += item.recordingId
+                        if (captureUnknowns) unknown += item.recordingId
                         null
                     }
                 }
