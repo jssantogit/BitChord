@@ -47,6 +47,7 @@ internal enum class SmartPlaylistRuleField {
     RELEASE_TITLE,
     SOURCE_KIND,
     RELEASE_YEAR,
+    ALBUM_ARTIST,
 }
 
 internal enum class SmartPlaylistSourceKind { LOCAL, OPENSUBSONIC }
@@ -72,7 +73,8 @@ internal fun SmartPlaylistRuleField.isTextField(): Boolean =
     this == SmartPlaylistRuleField.TITLE ||
         this == SmartPlaylistRuleField.ARTIST_DISPLAY ||
         this == SmartPlaylistRuleField.RELEASE_TITLE ||
-        this == SmartPlaylistRuleField.SOURCE_KIND
+        this == SmartPlaylistRuleField.SOURCE_KIND ||
+        this == SmartPlaylistRuleField.ALBUM_ARTIST
 
 internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOperator> =
     if (this == SmartPlaylistRuleField.RELEASE_YEAR) listOf(
@@ -82,6 +84,14 @@ internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOp
         SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
         SmartPlaylistRuleOperator.LESS_THAN,
         SmartPlaylistRuleOperator.LESS_OR_EQUAL,
+        SmartPlaylistRuleOperator.IS_PRESENT,
+    ) else if (this == SmartPlaylistRuleField.ALBUM_ARTIST) listOf(
+        SmartPlaylistRuleOperator.EQUAL,
+        SmartPlaylistRuleOperator.NOT_EQUAL,
+        SmartPlaylistRuleOperator.CONTAINS,
+        SmartPlaylistRuleOperator.DOES_NOT_CONTAIN,
+        SmartPlaylistRuleOperator.STARTS_WITH,
+        SmartPlaylistRuleOperator.ENDS_WITH,
         SmartPlaylistRuleOperator.IS_PRESENT,
     ) else if (this == SmartPlaylistRuleField.SOURCE_KIND) listOf(
         SmartPlaylistRuleOperator.EQUAL,
@@ -368,6 +378,41 @@ internal class SmartPlaylistV2RuleEngine(
                 else -> RuleTruth.FALSE
             }
         }
+        if (rule.field == SmartPlaylistRuleField.ALBUM_ARTIST) {
+            val names = row.albumArtistNames.mapNotNull {
+                it.normalizedSmartPlaylistText()
+            }
+            if (rule.operator == SmartPlaylistRuleOperator.IS_PRESENT) {
+                return if (names.isNotEmpty()) RuleTruth.TRUE else RuleTruth.UNKNOWN
+            }
+            val wanted = rule.textValue.normalizedSmartPlaylistText()
+                ?: return RuleTruth.UNKNOWN
+            if (names.isEmpty()) return RuleTruth.UNKNOWN
+            val match = names.any { name ->
+                when (rule.operator) {
+                    SmartPlaylistRuleOperator.EQUAL,
+                    SmartPlaylistRuleOperator.NOT_EQUAL -> name == wanted
+                    SmartPlaylistRuleOperator.CONTAINS,
+                    SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> name.contains(wanted)
+                    SmartPlaylistRuleOperator.STARTS_WITH -> name.startsWith(wanted)
+                    SmartPlaylistRuleOperator.ENDS_WITH -> name.endsWith(wanted)
+                    else -> return RuleTruth.UNKNOWN
+                }
+            }
+            if (rule.operator == SmartPlaylistRuleOperator.NOT_EQUAL ||
+                rule.operator == SmartPlaylistRuleOperator.DOES_NOT_CONTAIN) {
+                return when {
+                    match -> RuleTruth.FALSE
+                    row.albumArtistEvidenceUnknown -> RuleTruth.UNKNOWN
+                    else -> RuleTruth.TRUE
+                }
+            }
+            return when {
+                match -> RuleTruth.TRUE
+                row.albumArtistEvidenceUnknown -> RuleTruth.UNKNOWN
+                else -> RuleTruth.FALSE
+            }
+        }
         if (rule.field == SmartPlaylistRuleField.SOURCE_KIND) {
             val availableKinds = row.sourceKinds ?: return RuleTruth.UNKNOWN
             if (availableKinds.isEmpty()) return RuleTruth.UNKNOWN
@@ -394,6 +439,7 @@ internal class SmartPlaylistV2RuleEngine(
                 SmartPlaylistRuleField.TITLE -> listOfNotNull(row.title)
                 SmartPlaylistRuleField.ARTIST_DISPLAY -> listOfNotNull(row.artistDisplay)
                 SmartPlaylistRuleField.RELEASE_TITLE -> row.releaseTitles
+                SmartPlaylistRuleField.ALBUM_ARTIST -> emptyList()
                 SmartPlaylistRuleField.SOURCE_KIND -> emptyList()
                 else -> emptyList()
             }.mapNotNull { it.normalizedSmartPlaylistText() }.distinct()
@@ -436,7 +482,8 @@ internal class SmartPlaylistV2RuleEngine(
                 } else null
             SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY,
             SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleField.SOURCE_KIND,
-            SmartPlaylistRuleField.RELEASE_YEAR -> null
+            SmartPlaylistRuleField.RELEASE_YEAR,
+            SmartPlaylistRuleField.ALBUM_ARTIST -> null
         }
         if (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE &&
             row.audibleCompletions > 0 && row.lastAudibleAtEpochMs == null

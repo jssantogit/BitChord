@@ -20,6 +20,13 @@ internal data class ExclusiveExternalIdentityClaimResult(
     val inserted: Boolean,
 )
 
+internal data class CanonicalRecordingAlbumArtistRow(
+    val recordingId: String,
+    val releaseId: String,
+    /** Null signals a linked Release whose verified artist credit is absent. */
+    val artistName: String?,
+)
+
 internal data class CanonicalRecordingReleaseDateRow(
     val recordingId: String,
     val releaseId: String,
@@ -110,6 +117,28 @@ internal interface CanonicalCatalogDao {
     suspend fun recordingReleaseDatesByIds(
         recordingIds: List<String>,
     ): List<CanonicalRecordingReleaseDateRow>
+
+    /**
+     * A Recording can belong to multiple releases, each of which can have
+     * several artist credits. LEFT JOIN preserves releases missing credits,
+     * so negative comparisons cannot mistake missing metadata for absence.
+     */
+    @Query(
+        """
+        SELECT rt.recordingId AS recordingId,
+               rt.releaseId AS releaseId,
+               artist.name AS artistName
+        FROM catalog_release_track AS rt
+        LEFT JOIN catalog_release_artist_credit AS credit
+            ON credit.releaseId = rt.releaseId
+        LEFT JOIN catalog_artist AS artist ON artist.id = credit.artistId
+        WHERE rt.recordingId IN (:recordingIds)
+        ORDER BY rt.recordingId, rt.releaseId, credit.position
+        """,
+    )
+    suspend fun recordingAlbumArtistCreditsByIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingAlbumArtistRow>
 
     @Query("SELECT * FROM catalog_recording WHERE id IN (:recordingIds)")
     suspend fun recordingsByIds(recordingIds: List<String>): List<RecordingEntity>

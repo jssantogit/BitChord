@@ -81,6 +81,7 @@ private fun fieldLabel(value: SmartPlaylistRuleField): String = when (value) {
     SmartPlaylistRuleField.RELEASE_TITLE -> "Álbum / lançamento (catálogo)"
     SmartPlaylistRuleField.SOURCE_KIND -> "Origem disponível"
     SmartPlaylistRuleField.RELEASE_YEAR -> "Ano de lançamento (MusicBrainz)"
+    SmartPlaylistRuleField.ALBUM_ARTIST -> "Artista do álbum (créditos canônicos)"
 }
 
 private fun operatorLabel(value: SmartPlaylistRuleOperator): String = when (value) {
