@@ -97,6 +97,8 @@ internal class SmartCollectionBatchHandoff(
     private val submit: suspend (CanonicalCollectionIntentPlan) -> Boolean,
     private val trace: (Map<String, String>) -> Unit = {},
     private val verifiedRemoteAssets: suspend (SmartCollectionActionSource) -> Map<String, CanonicalBrowseMediaAsset> = { emptyMap() },
+    /** Production uses the selected-only Catalog path; legacy tests retain browse(). */
+    private val browseSelected: suspend (List<String>) -> CanonicalBrowseLibrary = { browse() },
 ) {
     suspend fun execute(
         source: SmartCollectionActionSource,
@@ -136,7 +138,7 @@ internal class SmartCollectionBatchHandoff(
                 return SmartCollectionBatchResult.LimitExceeded
             }
             val ids = selected.distinct()
-            val library = browse()
+            val library = browseSelected(ids)
             mark("catalog", mapOf("trackCount" to library.tracks.size.toString()))
             val scopedRemote = verifiedRemoteAssets(source)
             mark("asset_evidence", mapOf("uniqueRatedAssets" to scopedRemote.size.toString()))
@@ -328,16 +330,24 @@ internal fun uniqueVerifiedRatedRemoteAssets(
 internal fun canonicalBrowseProviderKeys(remoteProviders: Collection<String>): List<String> =
     (remoteProviders + RoomCanonicalQueueResolver.LOCAL_PROVIDER).distinct().sorted()
 
-private suspend fun currentCanonicalBrowse(context: Context): CanonicalBrowseLibrary {
+private suspend fun currentCanonicalBrowse(
+    context: Context,
+    selectedIds: List<String>,
+): CanonicalBrowseLibrary {
+    if (selectedIds.isEmpty()) return CanonicalBrowseLibrary.EMPTY
+    require(selectedIds.size <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE)
     val dao = CanonicalCatalogDatabase.get(context).catalogDao()
     val accounts = OpenSubsonicAccountRepository(
         persistence = SharedPrefsOpenSubsonicAccountPersistence(context),
         credentials = AndroidKeystoreOpenSubsonicCredentialStore(context),
     )
     val providers = canonicalBrowseProviderKeys(
-        OpenSubsonicLibraryProviderConfigurationReader(accounts).configuredProviderKeys()
+        OpenSubsonicLibraryProviderConfigurationReader(accounts).configuredProviderKeys(),
     )
-    val rows = dao.observeMultiSourceBrowseAssets(providers).first()
+    // Provider list is current-account scoped. No row from any other account
+    // or outside the click-time RecordingId selection can enter this projection.
+    val rows = selectedIds.distinct().chunked(400)
+        .flatMap { dao.browseAssetsForRecordingIds(providers, it) }
     val tracks = rows.groupBy { it.recordingId }.values.mapNotNull { group ->
         val first = group.firstOrNull() ?: return@mapNotNull null
         CanonicalBrowseTrack(
@@ -437,7 +447,8 @@ internal fun rememberSmartCollectionBatchAction(
     val handoff = remember(context, controller) {
         SmartCollectionBatchHandoff(
             refreshIds = { source -> currentSmartCollectionIds(context, source) },
-            browse = { currentCanonicalBrowse(context) },
+            browse = { CanonicalBrowseLibrary.EMPTY },
+            browseSelected = { selectedIds -> currentCanonicalBrowse(context, selectedIds) },
             planner = CanonicalCollectionIntentPlanner(androidCanonicalQueueResolver(context)),
             submit = { plan -> submitCanonicalBatch(controller, plan) },
             verifiedRemoteAssets = { source -> currentScopedRatedAssetHints(context, source) },

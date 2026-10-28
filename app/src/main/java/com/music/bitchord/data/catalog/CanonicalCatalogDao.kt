@@ -566,6 +566,35 @@ internal interface CanonicalCatalogDao {
     )
     fun observeMultiSourceBrowseAssets(providerKeys: List<String>): Flow<List<CanonicalBrowseAssetRow>>
 
+    /**
+     * B9 requires ONLY the already-revalidated RecordingIds. Do not fetch
+     * the 50k+ whole-library browse for a bounded 500-item smart queue.
+     * Providers must be supplied by the current authenticated Catalog scope.
+     */
+    @Query(
+        """
+        SELECT recording.id AS recordingId,
+               asset.id AS mediaAssetId,
+               asset.provider AS providerKey,
+               recording.title AS title,
+               recording.artistDisplay AS artistDisplay,
+               recording.durationMs AS durationMs,
+               asset.artworkUri AS artworkUri
+        FROM catalog_media_asset AS asset
+        INNER JOIN catalog_recording AS recording ON recording.id = asset.recordingId
+        WHERE asset.provider IN (:providerKeys)
+          AND recording.id IN (:recordingIds)
+        ORDER BY recording.artistDisplay COLLATE NOCASE,
+                 recording.title COLLATE NOCASE, recording.id,
+                 asset.provider, asset.id
+        """,
+    )
+    suspend fun browseAssetsForRecordingIds(
+        providerKeys: List<String>,
+        recordingIds: List<String>,
+    ): List<CanonicalBrowseAssetRow>
+
+
     @Query(
         """
         SELECT
