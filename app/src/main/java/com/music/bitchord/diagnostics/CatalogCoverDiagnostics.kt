@@ -18,8 +18,8 @@ internal object CatalogCoverDiagnostics {
         add("direct_front_candidates=${s.directFrontCandidates} source=legacy_front_presence_counter")
         // Separate the metadata-stage bottleneck from album-cache rehydration.
         // Only counts are exported; no artist, album, URL or MBID is retained.
-        add("artist_cache_batch_reads=${s.artistCachedBatchReads}" +
-            " artist_rows_reused=${s.artistCachedRowsReused}")
+        add("verified_group_batch_reads=${s.verifiedGroupCachedBatchReads}" +
+            " verified_group_rows_reused=${s.verifiedGroupCachedRowsReused}")
         add("recovered_join_owner_cancellations=${s.recoveredCoalescedOwnerCancellations}")
         add("network_requests=${s.networkRequests} success=${s.successfulNetworkRequests}" +
             " not_found=${s.networkNotFound} transient_failures=${s.transientFailures}")
