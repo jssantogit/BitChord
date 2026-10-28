@@ -424,19 +424,30 @@ object Downloads {
      * told to run is no longer wanted, and stops it on arrival.
      */
     fun cancel(videoId: String) {
-        val job = synchronized(lock) {
+        val (job,wasClaimed)=synchronized(lock) {
+            val claimed=videoId in running
             pending.remove(videoId)
             autoRequests.remove(videoId)
-            _autoReviews.update { it - videoId }
-            if (videoId !in running) return@synchronized null
-            running.remove(videoId)
+            if(!claimed)_autoReviews.update { it - videoId }
+            running.remove(videoId) to claimed
         }
         job?.cancel()
-        clear(videoId)
-        // A download the user called off is not something they need reminding to
-        // check on, so it leaves the manager rather than sitting in it as a
-        // permanent "cancelled" row.
-        DownloadSession.forget(videoId)
+        if(SoulseekAutoCancellationPolicy.retainWarning(
+                isAutomatic=videoId.startsWith("soulseek-auto:"),
+                wasClaimedByWorker=wasClaimed)) {
+            // Some siblings may already be A3 AVAILABLE. Cancelling is not
+            // permission to erase evidence of an incomplete album.
+            val reason="Automação cancelada: algumas faixas podem ter sido " +
+                "salvas. Confira a biblioteca antes de iniciar outro lote."
+            if(DownloadSession.interruptIfUnsettled(videoId,reason))
+                _active.update { it + (videoId to DownloadState.Failed(reason)) }
+            else clear(videoId)
+        }else {
+            clear(videoId)
+            // A queued-only or legacy cancellation has no partial A3 batch
+            // to reconcile in this UI and retains the old dismiss behavior.
+            DownloadSession.forget(videoId)
+        }
     }
 
     // ---- The record ---------------------------------------------------------
