@@ -595,7 +595,7 @@ internal class A0ObservedCandidateHandoff(
             authenticatedServer,localUsername,selected.peerUsername,
             A0OpenAudioCandidateGate.PublicPeerListing(
                 selected.remotePath,selected.sizeBytes,locked=false,freeSlot=true
-            ),privateDirectory,onPhase
+            ),privateDirectory,onPhase=onPhase
         )
     }
 
