@@ -200,6 +200,8 @@
     <string name="blocking">Bloqueando</string>
     <string name="crossfade">Fade cruzado</string>
     <string name="crossfade_subtitle">Mescla uma faixa com a próxima</string>
+    <string name="pause_resume_fade">Fade ao pausar e retomar</string>
+    <string name="pause_resume_fade_subtitle">Reduz suavemente o volume ao pausar e aumenta ao retomar</string>
     <string name="automix">Automix [BETA]</string>
     <string name="skip_silence">Pular silêncio</string>
     <string name="skip_silence_subtitle">Corta pausas maiores que um segundo</string>
