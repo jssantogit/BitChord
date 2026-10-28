@@ -54,6 +54,36 @@ internal data class MusicBrainzCoverArtCacheEntry(
 
 internal enum class CoverArtSize { THUMBNAIL, HERO }
 
+/**
+ * Single Front-v5 eligibility rule for both Room-indexed artist shelves and
+ * CAA's cover resolver. A populated URL is not sufficient proof: old cached
+ * sleeves expire, and only trusted HTTPS archive hosts may be displayed.
+ */
+internal fun eligibleVerifiedGroupFrontUrl(
+    record: MusicBrainzCoverArtCacheEntry,
+    nowEpochMs: Long,
+    size: CoverArtSize = CoverArtSize.THUMBNAIL,
+): String? {
+    if (record.entityType != "verified-artist-group") return null
+    val ageMs = nowEpochMs - record.fetchedAtEpochMs
+    if (ageMs < 0 || ageMs >= 30L * 24 * 60 * 60 * 1_000) return null
+    val url = if (size == CoverArtSize.THUMBNAIL)
+        record.thumbnailUri ?: record.artworkUri else record.artworkUri
+    return url?.takeIf(::isTrustedArchiveImageUrl)
+}
+
+/** Do not rely on a host substring or scheme rewrite for cached URLs. */
+internal fun isTrustedArchiveImageUrl(raw: String): Boolean = try {
+    val uri = URI(raw)
+    val host = uri.host?.lowercase(Locale.ROOT)
+    uri.scheme.equals("https", ignoreCase = true) &&
+        (host == "coverartarchive.org" || host == "archive.org" ||
+            host?.endsWith(".archive.org") == true) &&
+        uri.userInfo == null
+} catch (_: Exception) {
+    false
+}
+
 internal interface MusicBrainzCoverArtStore {
     suspend fun read(type: String, mbid: String): MusicBrainzCoverArtCacheEntry?
     suspend fun write(value: MusicBrainzCoverArtCacheEntry)
@@ -182,12 +212,8 @@ internal class CoverArtArchive(
         val cached = try { store.read("verified-artist-group", groupMbid.lowercase(Locale.ROOT)) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { null } ?: return null
-        val age = nowEpochMs() - cached.fetchedAtEpochMs
-        if (age < 0 || age >= POSITIVE_TTL_MS) return null
-        val url = if (size == CoverArtSize.THUMBNAIL) {
-            cached.thumbnailUri ?: cached.artworkUri
-        } else cached.artworkUri
-        if (url == null || !safeImageUrl(url)) return null
+        val url = eligibleVerifiedGroupFrontUrl(cached, nowEpochMs(), size)
+            ?: return null
         telemetry.recordCacheHit()
         return url
     }
@@ -219,12 +245,7 @@ internal class CoverArtArchive(
             for (record in records) {
                 val id = record.mbid.lowercase(Locale.ROOT)
                 if (id !in eligible || id in this) continue
-                if (record.entityType != "verified-artist-group") continue
-                val age = now - record.fetchedAtEpochMs
-                if (age < 0 || age >= POSITIVE_TTL_MS) continue
-                val url = if (size == CoverArtSize.THUMBNAIL)
-                    record.thumbnailUri ?: record.artworkUri else record.artworkUri
-                if (url.isNullOrBlank() || !safeImageUrl(url)) continue
+                val url = eligibleVerifiedGroupFrontUrl(record, now, size) ?: continue
                 put(id, url)
                 telemetry.recordCacheHit()
             }
@@ -407,18 +428,7 @@ internal class CoverArtArchive(
         return secure.takeIf(::safeImageUrl)
     }
 
-    private fun safeImageUrl(raw: String): Boolean {
-        return try {
-            val uri = URI(raw)
-            val host = uri.host?.lowercase(Locale.ROOT)
-            uri.scheme.equals("https", ignoreCase = true) &&
-                (host == "coverartarchive.org" || host == "archive.org" ||
-                    host?.endsWith(".archive.org") == true) &&
-                uri.userInfo == null
-        } catch (_: Exception) {
-            false
-        }
-    }
+    private fun safeImageUrl(raw: String): Boolean = isTrustedArchiveImageUrl(raw)
 
     private fun validMbid(value: String): Boolean = MBID.matches(value.lowercase(Locale.ROOT))
 
