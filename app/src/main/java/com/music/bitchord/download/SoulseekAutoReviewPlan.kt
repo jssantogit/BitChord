@@ -1,6 +1,7 @@
 package com.music.bitchord.download
 
 import com.music.bitchord.acquisition.a0.A0AutoBatchExecutor
+import java.util.Locale
 
 /**
  * An in-memory, read-only view of exactly one completed Soulseek auto attempt.
@@ -76,6 +77,22 @@ internal class SoulseekAutoReviewPlan private constructor(
             else row
         }
         return SoulseekAutoReviewPlan(changed)
+    }
+
+    /**
+     * A search-only auto attempt may release its durable A3 reservation so
+     * a fresh *explicit* user tap can try again. Invalidate an older report
+     * before enqueueing that fresh job; otherwise its manual review action
+     * could publish audio while the new job is running or after it succeeds.
+     */
+    fun overlapsAny(next:List<SoulseekBatchPlan.Entry>):Boolean {
+        fun norm(s:String?):String=s.orEmpty().trim().lowercase(Locale.ROOT)
+            .replace(Regex("\\s+")," ")
+        return rows.any { old -> next.any { candidate ->
+            old.entry.trackId==candidate.trackId ||
+                (norm(old.entry.query)==norm(candidate.query) &&
+                    norm(old.entry.album)==norm(candidate.album))
+        } }
     }
 
     override fun toString():String = "SoulseekAutoReviewPlan(redacted)"
