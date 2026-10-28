@@ -176,13 +176,23 @@ internal class CanonicalContextualFilterLibrary(
         require(providerKey.isNotBlank() && providerKey == providerKey.trim()) {
             "A configured account/provider is required"
         }
-        require(filter.isSupportedForCanonicalSongBrowse()) {
-            "Saved Song filter requires unavailable evidence"
+        require(filter.isSupportedForCanonicalSongBrowse(providerKey)) {
+            "Saved Song filter requires unavailable evidence for this source"
         }
         val snapshot = CanonicalLibraryBrowseRepository(
             RoomCanonicalLibraryBrowseStore(catalog),
         ).observe(providerKey).first()
-        return filterCanonicalBrowseSongs(snapshot.tracks, filter, providerKey)
+        val localAdded = if (SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED in
+            filter.rules.referencedFields()) {
+            // Only a local MediaStore source can reach here. Indexed 400-ID
+            // reads avoid SQLite variable limits and N+1 reads over 50k rows.
+            snapshot.tracks.map { it.recordingId }.chunked(400).flatMap { ids ->
+                catalog.localAddedDatesByRecordingIds(providerKey, ids)
+            }.groupBy({ it.recordingId }, { it.dateAddedSeconds })
+        } else null
+        return filterCanonicalBrowseSongs(
+            snapshot.tracks, filter, providerKey, localAdded,
+        )
     }
 
     suspend fun albums(
