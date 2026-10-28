@@ -19,6 +19,7 @@ internal class PauseResumeVolumeFade(
     private val scope: CoroutineScope,
     private val durationMs: () -> Int,
     private val overlapActive: () -> Boolean,
+    private val sessionOwner: () -> Player? = { null },
     private val clockMs: () -> Long = SystemClock::elapsedRealtime,
 ) {
     private var job: Job? = null
@@ -92,7 +93,10 @@ internal class PauseResumeVolumeFade(
             val start = clockMs()
             while (isActive) {
                 if (overlapActive()) {
+                    // Handoff can change the MediaSession owner during the fade.
+                    // Preserve the PAUSE intent on the new owner as well as the old deck.
                     target.pause()
+                    sessionOwner()?.takeIf { it !== target }?.pause()
                     return@launch
                 }
                 if (!target.playWhenReady) {
