@@ -483,4 +483,40 @@ class SmartPlaylistBatchEvidenceRoomTest {
         }
     }
 
+
+    @Test fun roomBatchCanSkipUnrequestedRelationProjections() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:one", "Song", "Singer", 180_000L))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "rel:one", "Edition", "Singer", null,
+            ))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "rel:one", "rec:one", 2,
+            ))
+            val reader = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            )
+            val sparse = reader.read(listOf("rec:one"), emptySet()).single()
+            assertTrue(sparse.releaseTitles.isEmpty())
+            assertTrue(sparse.trackNumbers.isEmpty())
+            assertTrue(sparse.trackArtistNames.isEmpty())
+            assertEquals(180_000L, sparse.durationMs)
+            val rich = reader.read(listOf("rec:one"), setOf(
+                SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleField.TRACK_NUMBER,
+            )).single()
+            assertEquals(listOf("Edition"), rich.releaseTitles)
+            assertEquals(listOf(2), rich.trackNumbers)
+            assertTrue(rich.trackArtistNames.isEmpty())
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
 }

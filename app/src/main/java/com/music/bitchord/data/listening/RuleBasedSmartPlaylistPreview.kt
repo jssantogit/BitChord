@@ -180,6 +180,13 @@ internal class RuleBasedSmartPlaylistPlanner(
  * them; a provider-supplied guess is not a trusted rule.
  */
 /** Remote numeric evidence is read only when the query can observe it. */
+/** Scan every nested rule exactly once; unrelated metadata must not be fetched. */
+internal fun SmartPlaylistRule.referencedFields(): Set<SmartPlaylistRuleField> = when (this) {
+    is SmartPlaylistRule.Comparison -> setOf(field)
+    is SmartPlaylistRule.Group -> children.flatMap { it.referencedFields() }.toSet()
+    is SmartPlaylistRule.Not -> child.referencedFields()
+}
+
 private fun SmartPlaylistRule.needsSourceKinds(): Boolean = when (this) {
     is SmartPlaylistRule.Comparison -> field == SmartPlaylistRuleField.SOURCE_KIND
     is SmartPlaylistRule.Group -> children.any { it.needsSourceKinds() }
@@ -215,6 +222,7 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
             candidates(
                 includeRemoteRatings = requiresRemote,
                 includeSourceEvidence = query.rules.needsSourceKinds(),
+                requiredFields = query.rules.referencedFields(),
             ),
             query,
         )
@@ -224,6 +232,7 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
     private suspend fun candidates(
         includeRemoteRatings: Boolean = true,
         includeSourceEvidence: Boolean = false,
+        requiredFields: Set<SmartPlaylistRuleField> = emptySet(),
     ): List<RuleBasedRecordingCandidate> {
         val sourceMap = if (includeSourceEvidence) {
             availability.availableRecordingSources().associate { source ->
@@ -252,7 +261,11 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
         // passes a RoomSmartPlaylistBatchEvidenceReader with three indexed
         // queries per batch; there is no per-track DAO loop in that path.
         val rows = if (batchReader != null) {
-            ids.chunked(400).flatMap { chunk -> batchReader.read(chunk) }
+            ids.chunked(400).flatMap { chunk ->
+                if (batchReader is RoomSmartPlaylistBatchEvidenceReader) {
+                    batchReader.read(chunk, requiredFields)
+                } else batchReader.read(chunk)
+            }
         } else {
             ids.mapNotNull { id ->
                 val recording = catalog.recordingById(id) ?: return@mapNotNull null

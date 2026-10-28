@@ -42,7 +42,15 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
     private val listening: ListeningEventDao,
     private val ratings: RecordingRatingDao,
 ) : SmartPlaylistBatchEvidenceReader {
-    override suspend fun read(recordingIds: List<String>): List<RuleBasedRecordingCandidate> {
+    // Existing direct readers and tests keep complete evidence semantics.
+    override suspend fun read(recordingIds: List<String>): List<RuleBasedRecordingCandidate> =
+        read(recordingIds, SmartPlaylistRuleField.entries.toSet())
+
+    /** The production preview requests only the relationships used by the AST. */
+    internal suspend fun read(
+        recordingIds: List<String>,
+        requiredFields: Set<SmartPlaylistRuleField>,
+    ): List<RuleBasedRecordingCandidate> {
         require(recordingIds.size <= 400) { "Smart playlist evidence batch exceeds SQLite-safe bound" }
         if (recordingIds.isEmpty()) return emptyList()
         require(recordingIds.all(String::isNotBlank))
@@ -51,19 +59,25 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
             .associateBy { it.recordingId }
         val ratingsById = ratings.currentRatingsForIds(recordingIds)
             .associateBy { it.recordingId }
-        val releaseTitlesById = catalog.recordingReleaseTitlesByIds(recordingIds)
-            .groupBy { it.recordingId }
-            .mapValues { (_, memberships) ->
-                memberships.map { it.releaseTitle }.distinct().sorted()
-            }
-        val dateRowsById = catalog.recordingReleaseDatesByIds(recordingIds)
-            .groupBy { it.recordingId }
-        val albumArtistRowsById = catalog.recordingAlbumArtistCreditsByIds(recordingIds)
-            .groupBy { it.recordingId }
-        val trackPositionsById = catalog.recordingTrackPositionsByIds(recordingIds)
-            .groupBy { it.recordingId }
-        val trackArtistsById = catalog.recordingTrackArtistCreditsByIds(recordingIds)
-            .groupBy { it.recordingId }
+        val releaseTitlesById = if (SmartPlaylistRuleField.RELEASE_TITLE in requiredFields) {
+            catalog.recordingReleaseTitlesByIds(recordingIds)
+                .groupBy { it.recordingId }
+                .mapValues { (_, memberships) ->
+                    memberships.map { it.releaseTitle }.distinct().sorted()
+                }
+        } else emptyMap()
+        val dateRowsById = if (SmartPlaylistRuleField.RELEASE_YEAR in requiredFields) {
+            catalog.recordingReleaseDatesByIds(recordingIds).groupBy { it.recordingId }
+        } else emptyMap()
+        val albumArtistRowsById = if (SmartPlaylistRuleField.ALBUM_ARTIST in requiredFields) {
+            catalog.recordingAlbumArtistCreditsByIds(recordingIds).groupBy { it.recordingId }
+        } else emptyMap()
+        val trackPositionsById = if (SmartPlaylistRuleField.TRACK_NUMBER in requiredFields) {
+            catalog.recordingTrackPositionsByIds(recordingIds).groupBy { it.recordingId }
+        } else emptyMap()
+        val trackArtistsById = if (SmartPlaylistRuleField.TRACK_ARTIST in requiredFields) {
+            catalog.recordingTrackArtistCreditsByIds(recordingIds).groupBy { it.recordingId }
+        } else emptyMap()
         // Missing canonical metadata means the Recording cannot be promoted
         // from a provider/native id; no fake row is synthesized.
         return recordingIds.distinct().mapNotNull { id ->

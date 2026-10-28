@@ -194,3 +194,8 @@ Primary official evidence:
 - V2 field `TRACK_ARTIST` uses `catalog_recording_artist_credit` and `catalog_artist`, never `artistDisplay` or title matching. This is different from `ALBUM_ARTIST` (release credits).
 - Positive text comparisons use ANY known credited artist; negative comparisons require all known credits to disprove a match. No credits or unresolved names produce UNKNOWN and cannot satisfy a NOT or `IS_MISSING`; valid `IS_PRESENT` uses known credits only.
 - UI exposes **Artista da faixa (créditos canônicos)**. Pure and Room regression tests cover multiple credits and false-positive avoidance from a display artist string. No schema migration and no remote-per-item lookup. Parity status still *not verified* until exact Symfonium 15.1.0 field/operator audit.
+
+## 28/10/2026 — AST-scoped relation reads (50k library safeguard)
+
+- Each preview derives the set of fields referenced by its entire nested ALL/ANY/NOT rule AST. The production Room reader conditionally reads release titles, release years, release album artists, linked track numbers, and credited track artists **only when selected**; duration/rating/count-only rules avoid all five relation queries per 400 RecordingIds.
+- Direct calls to the batch reader preserve the full-evidence contract for existing tests/adapters. Source/account eligibility and remote rating reads retain their separate policies. Added nested AST projection and Room selective-read regressions. This reduces unnecessary SQL reads but **does not** substitute for measured 50k Android latency/memory.

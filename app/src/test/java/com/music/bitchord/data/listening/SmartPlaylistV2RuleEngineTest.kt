@@ -609,4 +609,27 @@ class SmartPlaylistV2RuleEngineTest {
         }
     }
 
+
+    @Test fun nestedRuleProjectionIncludesOnlyFieldsNeededByEvaluation() {
+        val tree = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.DURATION_MS, SmartPlaylistRuleOperator.GREATER_THAN, 120_000.0,
+            ),
+            SmartPlaylistRule.Not(SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.TRACK_NUMBER, SmartPlaylistRuleOperator.EQUAL, 1.0,
+                ),
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.TRACK_ARTIST, SmartPlaylistRuleOperator.CONTAINS,
+                    textValue = "lead",
+                ),
+            ))),
+        ))
+        assertEquals(setOf(
+            SmartPlaylistRuleField.DURATION_MS,
+            SmartPlaylistRuleField.TRACK_NUMBER,
+            SmartPlaylistRuleField.TRACK_ARTIST,
+        ), tree.referencedFields())
+    }
+
 }
