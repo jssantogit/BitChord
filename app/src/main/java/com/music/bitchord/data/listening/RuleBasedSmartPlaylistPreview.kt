@@ -264,8 +264,19 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
     private val v2Planner: SmartPlaylistV2RuleEngine = SmartPlaylistV2RuleEngine(),
     private val savedReferences: suspend () -> List<SavedSmartPlaylistV2Definition> = { emptyList() },
 ) {
-    suspend fun preview(query: RuleBasedSmartPlaylistQuery): List<RuleBasedSmartPlaylistItem> =
-        planner.preview(candidates(), query)
+    suspend fun preview(query: RuleBasedSmartPlaylistQuery): List<RuleBasedSmartPlaylistItem> {
+        // V1 is still readable after the V2 migration. The selective Room
+        // reader must fetch its rating/completion sort keys and every field
+        // needed by the legacy rules, not an empty evidence projection.
+        val fields = buildSet {
+            add(SmartPlaylistRuleField.EXPLICIT_RATING)
+            add(SmartPlaylistRuleField.AUDIBLE_COMPLETIONS)
+            if (query.minimumDaysSinceAudible != null || query.maximumDaysSinceAudible != null) {
+                add(SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE)
+            }
+        }
+        return planner.preview(candidates(requiredFields = fields), query)
+    }
 
     suspend fun preview(
         query: SmartPlaylistV2Query,

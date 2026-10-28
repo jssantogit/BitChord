@@ -65,6 +65,61 @@ class SmartPlaylistBatchEvidenceRoomTest {
         }
     }
 
+    @Test fun v1PreviewWithProductionRoomReaderRetainsRatingsAndCompletionsAfterV2Migration() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:one-star", "One star", "Artist", 180_000L))
+            dao.upsertRecording(RecordingEntity("rec:high", "High", "Artist", 180_000L))
+            val ratings = RoomRecordingRatingStore(listening.recordingRatingDao())
+            ratings.setRecordingRating("rec:one-star", 1.0)
+            ratings.setRecordingRating("rec:high", 5.0)
+            val clock = ListeningClock { 1_000_000L }
+            var nextId = 0
+            val store = RoomListeningEventStore(
+                listening.listeningEventDao(), clock = clock,
+                idGenerator = ListeningIdGenerator { "legacy-event-" + (++nextId) },
+            )
+            store.recordPlaybackStarted(PlaybackStart(recordingId = "rec:one-star"))
+            store.recordPlaybackEnded(PlaybackEnd(
+                recordingId = "rec:one-star", listenedDurationMs = 180_000L,
+                recordingDurationMs = 180_000L, endCause = PlaybackEndCause.ENDED,
+            ))
+            val preview = CanonicalRuleBasedSmartPlaylistPreview(
+                availability = CanonicalLibraryAvailabilityReader {
+                    listOf("rec:one-star", "rec:high")
+                },
+                catalog = dao,
+                ratings = ratings,
+                listening = store,
+                batchReader = RoomSmartPlaylistBatchEvidenceReader(
+                    dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+                ),
+                planner = RuleBasedSmartPlaylistPlanner(nowEpochMs = { 2_000_000L }),
+            )
+            val completed = preview.preview(RuleBasedSmartPlaylistQuery(
+                minimumCompletions = 1, limit = 100,
+            ))
+            assertEquals(listOf("rec:one-star"), completed.map { it.recordingId })
+            assertEquals(1.0, completed.single().explicitRating)
+            val rated = preview.preview(RuleBasedSmartPlaylistQuery(
+                minimumExplicitRating = 4.0, limit = 100,
+            ))
+            assertEquals(listOf("rec:high"), rated.map { it.recordingId })
+            val recent = preview.preview(RuleBasedSmartPlaylistQuery(
+                maximumDaysSinceAudible = 1, limit = 100,
+            ))
+            assertEquals(listOf("rec:one-star"), recent.map { it.recordingId })
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
     @Test fun productionLikeBatchFeedsBothV1AndV2BeyondFiveThousandIds() = runTest {
         val context = RuntimeEnvironment.getApplication()
         val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
