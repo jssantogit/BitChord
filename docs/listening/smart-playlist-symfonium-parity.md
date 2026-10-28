@@ -136,3 +136,48 @@ from the handoff.
 **Not yet validated on a Galaxy A54:** responsiveness, memory, audio transitions
 and persistence of a 500-song Media3 insertion. This extension is CI test
 coverage, not permission to claim physical smoke. Keep PR draft and unmerged.
+
+## 28/10/2026 — Symfonium 15.1.0 parity is a release BLOCKER for #192
+
+**Target:** Android Symfonium 15.1.0 (2026-09-30 is the latest release listed by the official news index at audit). The official smart-filter and smart-playlist manuals explain rules, groups, sorting and limits, but **do not enumerate every field/operator available in the reference 15.1.0 Android build**. This is a grounded *minimum* matrix: capture the actual per-type field and operator menus before closing the issue. Do not claim complete parity from older changelogs alone.
+
+Primary official evidence:
+- https://docs.symfonium.app/wiki/other/smart-filters/
+- https://docs.symfonium.app/wiki/other/smart-playlists/
+- https://symfonium.app/news/version-7-2-0/ (album mood/label, stable random)
+- https://symfonium.app/news/version-1200/ (Favorite Date filter/sort; date presence/absence)
+- https://symfonium.app/news/version-1210/ (display artists/composer, track styles, original release date, random albums)
+- https://symfonium.app/news/version-1320/ (new track fields, grouped choices)
+- https://symfonium.app/news/version-1360/ (thumbnail / local thumbnail presence, most IS_PRESENT/IS_MISSING, provider/library Inherit)
+- https://symfonium.app/news/ (release version chronology)
+
+| Symfonium capability | Fork state on draft PR #193 (subject to HEAD CI) | Evidence dependency / gap |
+|---|---|---|
+| Nested ALL / ANY group rules | Implemented | AST, UI and Room persistence; physical editor semantics pending |
+| Typed numeric and text operators | Partial | Audit actual per-field operator choices in reference app |
+| Dynamic saved smart playlists; sorting; result limits | Partial | V2 persisted/reactive, but sort options and media types incomplete |
+| Title, artist display, duration, ratings, plays/skips | Partial | Current first-party canonical evidence only; provider listening semantics can differ |
+| Album/release title, release year | Implemented with strict scope | Many linked releases; MusicBrainz releaseDate only, no guessing |
+| **Album artist** | **Implemented on branch** | Linked canonical release artist credits, multiple releases/credits; missing data UNKNOWN |
+| Local vs current OpenSubsonic source | Partial | Credential-scoped; not an arbitrary provider list or Inherit UI |
+| **Genre and multi-valued genres** | **MISSING** | No normalized trustworthy genre on canonical Recording/Release yet |
+| **Mood, style, record label, album category** | **MISSING** | Need canonical metadata role/provenance per media type |
+| **Composers; multi-artist display composer** | **MISSING/PARTIAL** | Artist credits exist, but Composer role is not known from those credits |
+| **Favorite Date and favorite-specific sort** | **MISSING** | Rating timestamp is NOT Favorite Date |
+| **Original release date** | **MISSING** | MusicBrainz edition releaseDate is NOT the first/original release date |
+| **Random albums / stable random albums** | **MISSING** | Per-song seed exists; requires canonical release grouping |
+| **Referenced smart playlists inside another filter** | **MISSING** | Requires cycle detection, bounded dependency graph and refresh rules |
+| **Thumbnail and local-thumbnail present/missing** | **MISSING** | Need trustworthy presence and local-art-specific metadata |
+| **IS_PRESENT/IS_MISSING for most fields, including dates** | **PARTIAL** | Must distinguish absent fact from missing metadata |
+| **Album- and Artist-targeted smart filters** | **MISSING** | V2 currently filters canonical Recordings only |
+| **Inherit visible providers/libraries** | **MISSING** | Need per-playlist scope contract and current global visibility |
+| **Copy a dynamic playlist to a static playlist** | **MISSING** | Separate snapshot action; not V1→V2 copy |
+| **500-track Play/Queue** | **Implemented on last green CI** | One bounded Media3 insertion; Galaxy A54 smoke pending |
+| **Selected-only B9 browsing** | **Implemented on branch** | Needs exact-HEAD CI and 50k on-device profiling |
+
+### Mandatory closing gates
+
+1. Capture the full Symfonium 15.1.0 Android Song, Album, Artist smart-filter menus, **all per-field operator choices**, sorting choices and provider-scope settings; update this matrix with evidence. No claims of exhaustive inventory from release notes.
+2. For every entry, implement supported field semantics end to end: typed rule, validation, trusted data source, Compose UI, persistence, engine tests and real Room tests. When catalog metadata is missing, open a concrete Catalog/provider dependency and keep #192 open rather than inventing behavior.
+3. Verify nested E/OU/NOT, multi-valued tags, missing/unknown distinctions, remote account switching, current scope, ratings, release/artist links, random sort, large playlists and physical UI.
+4. Require Android CI GREEN on exact HEAD and final integration base. **Full parity is NOT yet achieved.** Current V2 is a functional subset, not release-ready equivalence.
