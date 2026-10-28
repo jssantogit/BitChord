@@ -60,6 +60,25 @@ class A0AutoCandidateSelectionPolicyTest {
         assertTrue(choice.sequentialAlternatives.isEmpty())
     }
 
+    @Test fun exactAlbumWithinOneGenericAudioSubfolderIsStillEligible() {
+        for(folder in listOf("FLAC","CD1","Disc 2","Lossless")) {
+            val decision=A0AutoCandidateSelectionPolicy.preview(
+                target,offers("source",album="SUPER REAL ME\\\\$folder"),profile)
+            assertEquals("generic folder $folder beneath exact album",
+                A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,
+                decision.status)
+        }
+    }
+
+    @Test fun matchingArtistOrConflictingParentMustNeverProveAlbum() {
+        val bad=A0AutoCandidateSelectionPolicy.preview(
+            target,offers("source",album="Other Album\\\\FLAC"),profile)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,bad.status)
+        val noAlbum=A0AutoCandidateSelectionPolicy.preview(
+            target,offers("source",album="ILLIT\\\\FLAC"),profile)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,noAlbum.status)
+    }
+
     @Test fun albumMismatchLowQualityAndMissingCanonicalDurationAreNotPromoted() {
         val wrongAlbum=A0AutoCandidateSelectionPolicy.preview(
             target,offers("a",album="Other Album"),profile)
