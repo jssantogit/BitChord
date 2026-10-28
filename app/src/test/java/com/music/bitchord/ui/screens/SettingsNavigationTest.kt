@@ -26,6 +26,12 @@ import org.robolectric.annotation.ConscryptMode
 class SettingsNavigationTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun lyricsSummaryCountIsUnambiguousForSingularAndPlural() {
+        assertEquals(null, lyricsSourcesCountValue(0))
+        assertEquals("1", lyricsSourcesCountValue(1))
+        assertEquals("8", lyricsSourcesCountValue(8))
+    }
+
     @Test fun everyExistingGroupHasExactlyOneDestination() {
         val allSections = SettingsNavigation.groups.flatMap { it.sections }
         assertEquals(SettingsSection.entries.size, allSections.size)
