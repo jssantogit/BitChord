@@ -194,4 +194,61 @@ class ContextualScopedRoomTest {
         }
     }
 
+    @Test fun sourceKindFilterIsConsistentForSourceBoundSongsAlbumsAndArtists() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val dao = db.catalogDao()
+            val local = CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER
+            val remote = "opensubsonic:one"
+            dao.upsertRecording(RecordingEntity("recording:one", "Good Song", "Artist", 180_000))
+            dao.upsertRelease(ReleaseEntity("release:one", "Full Album", "Artist", null))
+            dao.upsertReleaseTrack(ReleaseTrackEntity("release:one", "recording:one", 1))
+            dao.upsertArtist(ArtistEntity("artist:one", "Genuine Artist"))
+            dao.upsertReleaseArtistCredits(listOf(
+                ReleaseArtistCreditEntity("release:one", 0, "artist:one"),
+            ))
+            dao.upsertMediaAsset(MediaAssetEntity("asset:l", "recording:one", local,
+                "local:key", "content://media/1", null, null, null, null))
+            dao.upsertMediaAsset(MediaAssetEntity("asset:r", "recording:one", remote,
+                "remote:key", "opensubsonic://media/1", null, null, null, null))
+            val scope = CanonicalContextualFilterLibrary(dao)
+            val localFilter = SavedSmartPlaylistV2Filter(
+                "f:local", "Local", SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.SOURCE_KIND, SmartPlaylistRuleOperator.EQUAL,
+                    textValue = "local",
+                ),
+            )
+            val remoteFilter = localFilter.copy(
+                id = "f:remote", name = "Remote",
+                rules = SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.SOURCE_KIND, SmartPlaylistRuleOperator.EQUAL,
+                    textValue = "opensubsonic",
+                ),
+            )
+            assertEquals(listOf("recording:one"), scope.songs(local, localFilter)
+                .map { it.recordingId })
+            assertEquals(listOf("recording:one"), scope.songs(remote, remoteFilter)
+                .map { it.recordingId })
+            assertEquals(listOf("release:one"), scope.albums(local, localFilter)
+                .map { it.id })
+            assertEquals(listOf("release:one"), scope.albums(remote, remoteFilter)
+                .map { it.id })
+            assertEquals(listOf("artist:one"), scope.artists(local, localFilter)
+                .map { it.id })
+            assertEquals(listOf("artist:one"), scope.artists(remote, remoteFilter)
+                .map { it.id })
+            assertTrue(scope.songs(local, remoteFilter).isEmpty())
+            assertTrue(scope.albums(remote, localFilter).isEmpty())
+            assertTrue(scope.artists(local, remoteFilter).isEmpty())
+            dao.deleteAllMediaAssets(local)
+            assertTrue(scope.albums(local, localFilter).isEmpty())
+            assertTrue(scope.artists(local, localFilter).isEmpty())
+            assertEquals(listOf("release:one"), scope.albums(remote, remoteFilter)
+                .map { it.id })
+            assertEquals(listOf("artist:one"), scope.artists(remote, remoteFilter)
+                .map { it.id })
+        } finally { db.close() }
+    }
+
 }
