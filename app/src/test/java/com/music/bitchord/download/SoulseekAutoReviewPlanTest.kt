@@ -77,6 +77,32 @@ class SoulseekAutoReviewPlanTest {
             listOf(entries(1).first().copy(query="\u0000")),listOf(review)))
     }
 
+    @Test fun confirmedManualPublicationUpdatesOnlyTheExactOriginalSlot() {
+        val original=SoulseekAutoReviewPlan.from(
+            entries(4),listOf(done,review,done,review))!!
+        val afterThird=original.withManualPublication(3,"ILLIT - Track 4")!!
+        assertEquals(listOf(1),afterThird.manualIndices)
+        assertEquals(3,afterThird.published)
+        assertTrue(afterThird.manualAllowed)
+        assertNull(afterThird.withManualPublication(3,"ILLIT - Track 4"))
+        assertNull(afterThird.withManualPublication(1,"wrong search term"))
+        assertNull(afterThird.withManualPublication(0,"ILLIT - Track 1"))
+        val complete=afterThird.withManualPublication(1,"ILLIT - Track 2")!!
+        assertEquals(4,complete.published)
+        assertFalse(complete.manualAllowed)
+        assertTrue(complete.manualEntries.isEmpty())
+        assertEquals(2,original.needsManualReview) // immutable snapshot
+    }
+
+    @Test fun reconciliationOrInterruptionCannotBeAcknowledgedAsManualSuccess() {
+        for(status in listOf(uncertain,cancelled,notStarted)) {
+            val plan=SoulseekAutoReviewPlan.from(
+                entries(2),listOf(review,status))!!
+            assertNull(plan.withManualPublication(0,"ILLIT - Track 1"))
+            assertNull(plan.withManualPublication(1,"ILLIT - Track 2"))
+        }
+    }
+
     @Test fun largeBatchRetainsEverySlotAndReturnsOnlyUnresolved() {
         val original=entries(64)
         val status=List(64) { index -> if(index%2==0)done else review }
