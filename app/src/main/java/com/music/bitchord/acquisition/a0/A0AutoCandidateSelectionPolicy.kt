@@ -102,12 +102,24 @@ internal object A0AutoCandidateSelectionPolicy {
                 claim.sampleRateHz,claim.bitDepth)
             if(preflight.confidence!=A0CandidatePreflight.Confidence.STRONG)
                 return@mapNotNull null
-            val folder=choice.remotePath.replace('\\','/')
-                .substringBeforeLast('/',"").substringAfterLast('/',"")
-            val album=A0CanonicalAlbumPolicy.assess(
-                A0CanonicalAlbumPolicy.Target(target.album,expectedArtist=artist),
-                A0CanonicalAlbumPolicy.Claim(folder,
+            val directory=choice.remotePath.replace('\\','/')
+                .substringBeforeLast('/',"")
+            val folder=directory.substringAfterLast('/',"")
+            val albumTarget=A0CanonicalAlbumPolicy.Target(
+                target.album,expectedArtist=artist)
+            fun assessFolder(name:String)=A0CanonicalAlbumPolicy.assess(
+                albumTarget,A0CanonicalAlbumPolicy.Claim(name,
                     A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
+            val nearest=assessFolder(folder)
+            // Only one level of generic audio-format/disc folders may be
+            // ignored, and ONLY when the immediate parent names the exact
+            // requested release. Never promote an unrelated album, an
+            // artist-only folder or a composite/remastered edition.
+            val album=if(nearest.reason==
+                A0CanonicalAlbumPolicy.Reason.ALBUM_HINT_GENERIC &&
+                '/' in directory) {
+                assessFolder(directory.substringBeforeLast('/').substringAfterLast('/'))
+            }else nearest
             if(album.status !in setOf(
                     A0CanonicalAlbumPolicy.Status.UNCONSTRAINED,
                     A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED))
