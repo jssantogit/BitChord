@@ -11,6 +11,7 @@ import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -111,6 +112,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -1060,6 +1063,12 @@ internal fun SettingsScreen(
                             modifier = Modifier
                                 .width(84.dp)
                                 .clip(RoundedCornerShape(16.dp))
+                                .border(
+                                    width = if (selected) 1.5.dp else 0.dp,
+                                    color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    shape = RoundedCornerShape(16.dp),
+                                )
+                                .semantics { this.selected = selected }
                                 .clickable {
                                     selectedIcon = option
                                     AppIcon.apply(context, option)
