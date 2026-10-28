@@ -163,6 +163,8 @@ object Downloads {
     private val autoMutex=Mutex()
     /** Bounded results only in RAM, not a second download or peer-history store. */
     private val _autoReviews=MutableStateFlow<Map<String,SoulseekAutoReviewPlan>>(emptyMap())
+    /** At most one manual recovery picker per session. Protected by lock. */
+    private val openManualReviews=HashSet<String>()
     internal val soulseekAutoReviews:StateFlow<Map<String,SoulseekAutoReviewPlan>> =
         _autoReviews.asStateFlow()
 
@@ -195,6 +197,9 @@ object Downloads {
             .putExtra("bitchord.soulseek.manual.duration_seconds",
                 first.durationSeconds ?: 0)
             .putExtra("bitchord.soulseek.manual.recovery",true)
+        intent.putExtra("bitchord.soulseek.manual.review_session",sessionId)
+            .putExtra("bitchord.soulseek.manual.review_indices",
+                plan.manualIndices.toIntArray())
         if(entries.size>1) {
             intent.putStringArrayListExtra("bitchord.soulseek.batch.queries",
                 ArrayList(entries.map { it.query }))
@@ -203,10 +208,50 @@ object Downloads {
                 .putExtra("bitchord.soulseek.batch.durations",
                     entries.map { it.durationSeconds ?: 0 }.toIntArray())
         }
+        synchronized(lock) {
+            if(sessionId in openManualReviews ||
+                sessionId in running || sessionId in pending ||
+                _autoReviews.value[sessionId] !== plan)return false
+            openManualReviews.add(sessionId)
+        }
         return runCatching {
             context.startActivity(intent)
             true
-        }.getOrDefault(false)
+        }.getOrElse {
+            closeSoulseekManualReview(sessionId)
+            false
+        }
+    }
+
+    /** Closed by the non-exported review Activity on destruction. */
+    internal fun closeSoulseekManualReview(sessionId:String) {
+        synchronized(lock) { openManualReviews.remove(sessionId) }
+    }
+
+    /**
+     * A3 durable manual SAVE acknowledgement. No result may be created by a
+     * network claim or by simply pressing a button in the candidate picker.
+     */
+    internal fun confirmSoulseekManualPublication(
+        sessionId:String, originalIndex:Int, originalQuery:String,
+    ):Boolean {
+        while(true) {
+            val old=_autoReviews.value
+            val previous=old[sessionId] ?: return false
+            val next=previous.withManualPublication(
+                originalIndex,originalQuery) ?: return false
+            if(_autoReviews.compareAndSet(old,old + (sessionId to next))) {
+                if(next.published==next.rows.size) {
+                    DownloadSession.done(sessionId)
+                    clear(sessionId)
+                }else {
+                    fail(sessionId,
+                        "${next.published} de ${next.rows.size} faixas salvas. " +
+                            "Revisão manual das restantes disponível.")
+                }
+                return true
+            }
+        }
     }
 
     fun init(context: Context) {
