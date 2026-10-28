@@ -697,6 +697,50 @@ internal interface CanonicalCatalogDao {
     )
     suspend fun providerScopedArtists(providerKey: String): List<ArtistEntity>
 
+    /** Navigating a Release rechecks its Recording IDs against the active source. */
+    @Query(
+        """
+        SELECT DISTINCT rt.recordingId
+        FROM catalog_release_track AS rt
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = rt.recordingId
+        WHERE rt.releaseId = :releaseId AND asset.provider = :providerKey
+        ORDER BY rt.recordingId ASC
+        """,
+    )
+    suspend fun providerScopedReleaseRecordingIds(
+        providerKey: String,
+        releaseId: String,
+    ): List<String>
+
+    /**
+     * An Artist's tracks are only those canonically credited either on a
+     * Recording or a Release reached through a current account MediaAsset.
+     * Display names, matching titles and the other provider's assets do not
+     * grant artist membership.
+     */
+    @Query(
+        """
+        SELECT DISTINCT candidate.recordingId
+        FROM (
+            SELECT credit.recordingId AS recordingId
+            FROM catalog_recording_artist_credit AS credit
+            WHERE credit.artistId = :artistId
+            UNION
+            SELECT rt.recordingId AS recordingId
+            FROM catalog_release_artist_credit AS credit
+            INNER JOIN catalog_release_track AS rt ON rt.releaseId = credit.releaseId
+            WHERE credit.artistId = :artistId
+        ) AS candidate
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = candidate.recordingId
+        WHERE asset.provider = :providerKey
+        ORDER BY candidate.recordingId ASC
+        """,
+    )
+    suspend fun providerScopedArtistRecordingIds(
+        providerKey: String,
+        artistId: String,
+    ): List<String>
+
     /**
      * Multi-source canonical browse: asset ID is unique, recording ID is music
      * identity. Never expose sourceKey/URI or group by metadata/name.
