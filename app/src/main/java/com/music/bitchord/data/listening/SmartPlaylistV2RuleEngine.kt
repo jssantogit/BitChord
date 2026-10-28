@@ -29,6 +29,11 @@ internal sealed interface SmartPlaylistRule {
     @Serializable
     @SerialName("not")
     data class Not(val child: SmartPlaylistRule) : SmartPlaylistRule
+
+    /** A saved V2 definition ID, never a title or provider/native playlist key. */
+    @Serializable
+    @SerialName("reference")
+    data class Reference(val playlistId: String) : SmartPlaylistRule
 }
 
 @Serializable
@@ -156,6 +161,12 @@ internal data class SmartPlaylistV2Query(
                     node.children.forEach { validate(it, depth + 1) }
                 }
                 is SmartPlaylistRule.Not -> validate(node.child, depth + 1)
+                is SmartPlaylistRule.Reference -> {
+                    require(node.playlistId.isNotBlank() &&
+                        node.playlistId.length <= 100 && node.playlistId == node.playlistId.trim()) {
+                        "Invalid saved smart playlist reference ID"
+                    }
+                }
                 is SmartPlaylistRule.Comparison -> {
                     val presence = node.operator == SmartPlaylistRuleOperator.IS_PRESENT ||
                         node.operator == SmartPlaylistRuleOperator.IS_MISSING
@@ -269,6 +280,7 @@ internal class SmartPlaylistV2RuleEngine(
     fun preview(
         input: List<RuleBasedRecordingCandidate>,
         query: SmartPlaylistV2Query,
+        referenceMemberships: Map<String, Set<String>> = emptyMap(),
     ): List<SmartPlaylistV2Match> {
         val now = nowEpochMs()
         if (now < 0) return emptyList()
@@ -284,7 +296,7 @@ internal class SmartPlaylistV2RuleEngine(
                     (item.lastAudibleAtEpochMs != null &&
                         (item.lastAudibleAtEpochMs < 0 || item.lastAudibleAtEpochMs > now))
                 ) return@mapNotNull null
-                if (evaluate(query.rules, item, now) == RuleTruth.TRUE) item else null
+                if (evaluate(query.rules, item, now, referenceMemberships) == RuleTruth.TRUE) item else null
             }.toList()
         val sorted = when (query.sort) {
             SmartPlaylistV2Sort.RATING_DESC -> candidateRows.sortedWith(
@@ -356,10 +368,11 @@ internal class SmartPlaylistV2RuleEngine(
         rule: SmartPlaylistRule,
         row: RuleBasedRecordingCandidate,
         now: Long,
+        referenceMemberships: Map<String, Set<String>>,
     ): RuleTruth = when (rule) {
         is SmartPlaylistRule.Group -> when (rule.join) {
             SmartPlaylistRuleJoin.ALL -> {
-                val values = rule.children.map { evaluate(it, row, now) }
+                val values = rule.children.map { evaluate(it, row, now, referenceMemberships) }
                 when {
                     RuleTruth.FALSE in values -> RuleTruth.FALSE
                     RuleTruth.UNKNOWN in values -> RuleTruth.UNKNOWN
@@ -367,7 +380,7 @@ internal class SmartPlaylistV2RuleEngine(
                 }
             }
             SmartPlaylistRuleJoin.ANY -> {
-                val values = rule.children.map { evaluate(it, row, now) }
+                val values = rule.children.map { evaluate(it, row, now, referenceMemberships) }
                 when {
                     RuleTruth.TRUE in values -> RuleTruth.TRUE
                     RuleTruth.UNKNOWN in values -> RuleTruth.UNKNOWN
@@ -375,11 +388,14 @@ internal class SmartPlaylistV2RuleEngine(
                 }
             }
         }
-        is SmartPlaylistRule.Not -> when (evaluate(rule.child, row, now)) {
+        is SmartPlaylistRule.Not -> when (evaluate(rule.child, row, now, referenceMemberships)) {
             RuleTruth.TRUE -> RuleTruth.FALSE
             RuleTruth.FALSE -> RuleTruth.TRUE
             RuleTruth.UNKNOWN -> RuleTruth.UNKNOWN
         }
+        is SmartPlaylistRule.Reference -> referenceMemberships[rule.playlistId]?.let { ids ->
+            if (row.recordingId in ids) RuleTruth.TRUE else RuleTruth.FALSE
+        } ?: RuleTruth.UNKNOWN
         is SmartPlaylistRule.Comparison -> compare(rule, row, now)
     }
 
