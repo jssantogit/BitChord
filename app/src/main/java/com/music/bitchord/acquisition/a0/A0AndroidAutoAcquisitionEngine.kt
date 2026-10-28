@@ -8,6 +8,7 @@ import com.music.bitchord.download.A1AndroidDownloadDestination
 import com.music.bitchord.download.A1DownloadDestinationPolicy
 import com.music.bitchord.download.A3AndroidAcquisitionLedger
 import com.music.bitchord.download.A3AcquisitionLedger
+import com.music.bitchord.download.A3AutomaticReservationScope
 import java.util.UUID
 import java.io.IOException
 import com.music.bitchord.download.SoulseekBatchPlan
@@ -118,27 +119,35 @@ internal object A0AndroidAutoAcquisitionEngine {
                 }
             },
         )
-        if(stopped())return refused(entries.size)
-        val discovery=A0FreshAutoSearchTransport(app,generation,quality)
-        val executor=A0AutoBatchExecutor { entry ->
-            A0AndroidAutoAcquisitionPort(
-                app,generation,A0FreshAuthenticatedAutoTransport(app,generation),
-                jobId=checkNotNull(jobs[entry.trackId]),
-                reservedAutomatic=true,
-            )
+        // Cover cancellation exactly after reservation as well as failure
+        // constructing/closing discovery. A3 only releases if all slots are
+        // still REQUESTED; no transfer, media URI or receipt can be erased.
+        val outcome=A3AutomaticReservationScope(
+            A3AndroidAcquisitionLedger.get(app)
+        ).run(jobs.values.toList()) {
+            if(stopped())refused(entries.size)
+            else {
+                val discovery=A0FreshAutoSearchTransport(app,generation,quality)
+                val executor=A0AutoBatchExecutor { entry ->
+                    A0AndroidAutoAcquisitionPort(
+                        app,generation,
+                        A0FreshAuthenticatedAutoTransport(app,generation),
+                        jobId=checkNotNull(jobs[entry.trackId]),
+                        reservedAutomatic=true,
+                    )
+                }
+                A0AutoDiscoveryCoordinator(discovery,executor).run(
+                    entries,quality,userRequested=true,optedIn=true,
+                    isCancelled=::stopped,
+                    stillAuthorized={
+                        SoulseekActiveSession.isCurrent(generation) &&
+                            A0AndroidAutoConsent.enabled(app)
+                    },
+                    onSlotResolved=onSlotResolved)
+            }
         }
-        val report=A0AutoDiscoveryCoordinator(discovery,executor).run(
-            entries,quality,userRequested=true,optedIn=true,
-            isCancelled=::stopped,
-            stillAuthorized={SoulseekActiveSession.isCurrent(generation) &&
-                A0AndroidAutoConsent.enabled(app)},
-            onSlotResolved=onSlotResolved)
-        // Search can fail temporarily without ever establishing P/F. Only
-        // A3's *durable* REQUESTED-only proof may authorize the next explicit
-        // one-tap request. No release after even one sibling began transfer.
-        val released=A3AndroidAcquisitionLedger.get(app)
-            .releaseUntransferredAutomaticBatch(jobs.values.toList())
         return A0AutoDiscoveryCoordinator.Report(
-            report.searches,report.batch,unusedReservationReleased=released)
+            outcome.value.searches,outcome.value.batch,
+            unusedReservationReleased=outcome.unusedReservationReleased)
     }
 }
