@@ -4,6 +4,8 @@ import android.content.Context
 import android.os.Looper
 import com.music.bitchord.download.A3AndroidAcquisitionLedger
 import com.music.bitchord.download.A3PublicationCommitFailure
+import com.music.bitchord.download.Downloads
+import com.music.bitchord.data.model.Song
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -25,6 +27,7 @@ internal class A0AndroidAutoAcquisitionPort(
     private val transport:AuthenticatedTransport,
     private val jobId:String=UUID.randomUUID().toString(),
     private val reservedAutomatic:Boolean=false,
+    private val sourceSong:Song?=null,
 ):A0AutoAcquisitionExecutor.Port {
     interface AuthenticatedTransport {
         fun receive(
@@ -109,7 +112,7 @@ internal class A0AndroidAutoAcquisitionPort(
         if(revoked(isCancelled) || !privateReceipt(receipt))
             return A0AutoAcquisitionExecutor.PublishResult.ROLLED_BACK
         return try {
-            A3AndroidAcquisitionLedger.publishStaged(
+            val published=A3AndroidAcquisitionLedger.publishStaged(
                 context=app,jobId=jobId,
                 privateFile=receipt.file,safeName=safeName,
                 byteCount=receipt.byteCount,observedDigest=receipt.sha256Hex,
@@ -118,6 +121,17 @@ internal class A0AndroidAutoAcquisitionPort(
                     SoulseekActiveSession.commitIfCurrent(expectedGeneration,commit)
                 }
             )
+            // Index the already-committed A3 MediaStore URI in the same
+            // library used by ordinary downloads. A failed UI-index update
+            // cannot roll back a successful publication or authorize
+            // a second peer transfer.
+            sourceSong?.let { song ->
+                runCatching { Downloads.rememberSoulseekPublished(song,published) }
+                    .onFailure {
+                        android.util.Log.e("BitChord",
+                            "A3 published audio, but Downloads index failed",it)
+                    }
+            }
             A0AutoAcquisitionExecutor.PublishResult.DURABLE
         }catch(_:A3PublicationCommitFailure.RolledBack) {
             job.markRolledBack()
