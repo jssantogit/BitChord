@@ -245,4 +245,46 @@ class CanonicalCuratedHomeFeedTest {
             "https://coverartarchive.org/release/00000000-0000-0000-0000-000000000001/front-1200"))
     }
 
+
+    @Test fun artistAlbumThumb250CanUpgradeWithoutBlankingOrDowngradingVerifiedCover() {
+        val id = release.musicBrainzId
+        val low = "https://coverartarchive.org/release/$id/front-250"
+        val high = "https://coverartarchive.org/release/$id/front-500"
+        val artistShelves = com.music.bitchord.ui.canonicalNativeSections(
+            CanonicalSearchKind.ARTIST,
+            listOf(release.copy(artworkUri = low)),
+            heading = "EPs",
+        )
+        val upgraded = com.music.bitchord.ui.canonicalArtistShelvesWithCoverUpdates(
+            artistShelves, mapOf(id to (high to "SUPER REAL ME")),
+        )
+        assertEquals(high, upgraded.single().items.single().thumbnailUrl)
+        assertEquals(artistShelves.single().items.single().browseId,
+            upgraded.single().items.single().browseId)
+        val discardedDowngrade = com.music.bitchord.ui.canonicalArtistShelvesWithCoverUpdates(
+            upgraded, mapOf(id to (low to "SUPER REAL ME")),
+        )
+        assertTrue("Already displayed 500px art must retain its shelf object",
+            upgraded === discardedDowngrade)
+        val missing = com.music.bitchord.ui.canonicalNativeSections(
+            CanonicalSearchKind.ARTIST,
+            listOf(release.copy(artworkUri = null)),
+            heading = "EPs",
+        )
+        val temporary = com.music.bitchord.ui.canonicalArtistShelvesWithCoverUpdates(
+            missing, mapOf(id to (low to "SUPER REAL ME")),
+        )
+        assertEquals(low, temporary.single().items.single().thumbnailUrl)
+    }
+
+    @Test fun artistArtworkRefreshEligibilityRequiresAnActualImageUpgrade() {
+        val id = release.musicBrainzId
+        val low = "https://coverartarchive.org/release/$id/front-250"
+        val high = "https://coverartarchive.org/release/$id/front-500"
+        assertTrue(com.music.bitchord.ui.canonicalShouldAcceptArtworkUpdate(null, low))
+        assertTrue(com.music.bitchord.ui.canonicalShouldAcceptArtworkUpdate(low, high))
+        assertFalse(com.music.bitchord.ui.canonicalShouldAcceptArtworkUpdate(high, low))
+        assertFalse(com.music.bitchord.ui.canonicalShouldAcceptArtworkUpdate(low, low))
+        assertFalse(com.music.bitchord.ui.canonicalShouldAcceptArtworkUpdate(high, high))
+    }
 }
