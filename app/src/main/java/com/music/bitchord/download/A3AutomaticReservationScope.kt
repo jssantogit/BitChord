@@ -15,18 +15,27 @@ internal class A3AutomaticReservationScope(private val ledger:A3AcquisitionLedge
         val unusedReservationReleased:Boolean,
     )
 
-    fun <T> run(jobIds:List<String>,work:()->T):Outcome<T> {
+    fun <T> run(
+        jobIds:List<String>,
+        /** Also invoked for exceptional exits, but only AFTER A3 commit. */
+        onDurablyReleased:()->Unit={},
+        work:()->T,
+    ):Outcome<T> {
         var completed=false
+        fun releaseAndSignal():Boolean {
+            val released=ledger.releaseUntransferredAutomaticBatch(jobIds)
+            if(released)onDurablyReleased()
+            return released
+        }
         try {
             val value=work()
             completed=true
-            return Outcome(value,
-                ledger.releaseUntransferredAutomaticBatch(jobIds))
+            return Outcome(value,releaseAndSignal())
         }finally {
-            // Exception between the A3 reserve and the first P/F must not
-            // poison an otherwise retryable recording. Never swallow the
-            // original failure unless this durable release itself fails.
-            if(!completed)ledger.releaseUntransferredAutomaticBatch(jobIds)
+            // Exceptions after A3 reservation but before P/F must not poison
+            // process-local admission. The same durable A3 proof is required
+            // whether work returned normally or threw.
+            if(!completed)releaseAndSignal()
         }
     }
 }
