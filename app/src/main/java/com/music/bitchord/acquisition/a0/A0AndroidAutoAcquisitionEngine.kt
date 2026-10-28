@@ -10,8 +10,8 @@ import com.music.bitchord.download.SoulseekBatchPlan
 
 /**
  * App-private opt-in, independent of format/quality preferences. Defaults OFF
- * on first launch and after missing/corrupted settings. No screen currently
- * calls updateFromUserAction: therefore the new engine is INERT in the app.
+ * on first launch and after missing/corrupted settings. The devDebug Settings
+ * control is its only explicit writer; disabling it revokes the active session.
  */
 internal object A0AndroidAutoConsent {
     private const val PREFS="bitchord_soulseek_auto_v1"
@@ -33,10 +33,9 @@ internal object A0AndroidAutoConsent {
  * conservative candidate selection -> fresh authenticated P/F ->
  * Android MediaExtractor technical check -> A3/A2 durable publication.
  *
- * Deliberately NOT invoked by DownloadService or any UI. The UI's opt-in
- * switch and queue entrypoint are separate release gates. When a future
- * DownloadService worker calls this, it must do so on Dispatchers.IO and
- * show the existing download notification for the user-requested work.
+ * Invoked only from the explicitly requested devDebug Downloads foreground
+ * queue, off-main on Dispatchers.IO. No automatic launch at startup, no
+ * unattended background scanning and no production-flavor P/F transport.
  */
 internal object A0AndroidAutoAcquisitionEngine {
     private fun refused(size:Int):A0AutoDiscoveryCoordinator.Report =
