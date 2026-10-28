@@ -58,6 +58,7 @@ internal object A0AndroidAutoAcquisitionEngine {
         onSlotResolved:(Int,A0AutoBatchExecutor.TrackStatus)->Unit={ _,_ -> },
         onSlotSearching:(Int)->Unit={},
         onSlotTransferring:(Int)->Unit={},
+        onCandidateDecision:(Int,A0AutoCandidateSelectionPolicy.Decision)->Unit={ _,_ -> },
         /** Only invoked AFTER A3 durably proves zero P/F for the whole album. */
         onUnusedReservationReleased:()->Unit={},
         sourceSongs:List<Song> = emptyList(),
@@ -164,7 +165,8 @@ internal object A0AndroidAutoAcquisitionEngine {
                             A0AndroidAutoConsent.enabled(app)
                     },
                     onSlotResolved=onSlotResolved,
-                    onSlotSearching=onSlotSearching)
+                    onSlotSearching=onSlotSearching,
+                    onCandidateDecision=onCandidateDecision)
             }
         }
         return A0AutoDiscoveryCoordinator.Report(
