@@ -122,7 +122,10 @@ class SmartPlaylistV2DefinitionStoreTest {
 
         val reopened = Room.databaseBuilder(
             context, SmartPlaylistDefinitionDatabase::class.java, name,
-        ).addMigrations(SmartPlaylistDefinitionDatabase.MIGRATION_1_2)
+        ).addMigrations(
+            SmartPlaylistDefinitionDatabase.MIGRATION_1_2,
+            SmartPlaylistDefinitionDatabase.MIGRATION_2_3,
+        )
             .allowMainThreadQueries().build()
         try {
             val old = SmartPlaylistDefinitionRepository(reopened.definitionDao()).list()
