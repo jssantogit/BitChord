@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -46,6 +47,7 @@ import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
 import com.music.bitchord.data.listening.referencedPlaylistIds
 import com.music.bitchord.data.listening.moveChild
+import com.music.bitchord.data.listening.appendPlaylistReference
 import com.music.bitchord.data.listening.allowedOperators
 import com.music.bitchord.data.listening.isTextField
 import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
@@ -212,6 +214,7 @@ private fun V2RuleNode(
                     }
                 }
                 if (depth < 7 && rule.children.size < 64) {
+                    var addReferenceExpanded by remember { mutableStateOf(false) }
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = {
                             onChange(rule.copy(children = rule.children + newRule()))
@@ -220,15 +223,26 @@ private fun V2RuleNode(
                             onChange(rule.copy(children = rule.children +
                                 SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(newRule()))))
                         }) { Text("+ Grupo") }
-                        TextButton(
-                            onClick = {
-                                savedReferences.firstOrNull()?.let { saved ->
-                                    onChange(rule.copy(children = rule.children +
-                                        SmartPlaylistRule.Reference(saved.id)))
+                        Box {
+                            TextButton(
+                                onClick = { addReferenceExpanded = true },
+                                enabled = savedReferences.isNotEmpty(),
+                            ) { Text("+ Playlist") }
+                            DropdownMenu(
+                                expanded = addReferenceExpanded,
+                                onDismissRequest = { addReferenceExpanded = false },
+                            ) {
+                                savedReferences.forEach { saved ->
+                                    DropdownMenuItem(
+                                        text = { Text(saved.name) },
+                                        onClick = {
+                                            addReferenceExpanded = false
+                                            onChange(rule.appendPlaylistReference(saved.id))
+                                        },
+                                    )
                                 }
-                            },
-                            enabled = savedReferences.isNotEmpty(),
-                        ) { Text("+ Playlist") }
+                            }
+                        }
                     }
                 }
             }

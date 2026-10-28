@@ -34,6 +34,22 @@ class SmartPlaylistRuleTreeEditingTest {
         SmartPlaylistV2Query(moved) // Remains persistable/valid after reorder.
     }
 
+    @Test fun appendReferenceUsesTheSelectedPlaylistIdentityWithoutChangingExistingRules() {
+        val first = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.EXPLICIT_RATING,
+            SmartPlaylistRuleOperator.IS_PRESENT,
+        )
+        val group = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(first))
+        val updated = group.appendPlaylistReference("chosen-definition")
+        assertEquals(listOf(first, SmartPlaylistRule.Reference("chosen-definition")),
+            updated.children)
+        assertEquals(listOf(first), group.children)
+        assertThrows(IllegalArgumentException::class.java) {
+            group.appendPlaylistReference("  ")
+        }
+        SmartPlaylistV2Query(updated)
+    }
+
     @Test fun siblingMoveToFinalPositionAndNoOpAreDeterministic() {
         val first = SmartPlaylistRule.Reference("saved-1")
         val second = SmartPlaylistRule.Reference("saved-2")

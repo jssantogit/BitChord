@@ -17,3 +17,12 @@ internal fun SmartPlaylistRule.Group.moveChild(
     reordered.add(toIndex, moved)
     return copy(children = reordered)
 }
+
+/** The UI must append the selected definition, never the first available one. */
+internal fun SmartPlaylistRule.Group.appendPlaylistReference(
+    playlistId: String,
+): SmartPlaylistRule.Group {
+    require(playlistId.isNotBlank() && playlistId.length <= 100 &&
+        playlistId == playlistId.trim()) { "Invalid saved playlist reference" }
+    return copy(children = children + SmartPlaylistRule.Reference(playlistId))
+}
