@@ -178,7 +178,7 @@ internal class A0ObservedCandidateHandoff(
     private var capDropped=0
     private var perPeerDropped=0
     private var claimBudgetDropped=0
-    private val seen=HashSet<Pair<String,String>>()
+    private val seen=A0BoundedPeerClaimLedger(8192)
     private var replies=0
     private var publicSeen=0
     private var lockedSeen=0
@@ -241,12 +241,10 @@ internal class A0ObservedCandidateHandoff(
                 continue
             }
             val identity=result.peerUsername to path
-            if(!seen.add(identity)) {
+            if(!seen.admit(identity.first,identity.second)) {
                 duplicateCount=(duplicateCount+1).coerceAtMost(100000)
                 continue
             }
-            // Cap untrusted identity storage, never persist it or print it.
-            if(seen.size>8192) seen.clear()
             eligible=(eligible+1).coerceAtMost(100000)
             // Preserve out-of-range claims for the codec conflict gate: dropping
             // an impossible MP3 bitrate would quietly downgrade UNSAFE to
