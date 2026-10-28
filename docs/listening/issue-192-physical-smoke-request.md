@@ -16,3 +16,10 @@ troca de conta, integridade de fontes, responsividade e logs.
 
 A versão foi validada preliminarmente por Android CI #40737254340.
 O APK terá seu próprio build e resultado de CI no SHA do gatilho.
+
+## Correção de execução
+
+O primeiro gatilho encontrou uma restrição de parsing YAML: dentro de
+um scalar sem aspas, ` #192` foi interpretado como comentário.
+A expressão do ambiente foi corrigida para `issue 192` (sem `#`),
+preservando a autorização original e disparando apenas uma nova execução.

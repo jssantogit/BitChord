@@ -32,7 +32,7 @@ jobs:
     steps:
       - name: Validate physical smoke request
         env:
-          SMOKE_PLAN: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke_plan || (github.event_name == 'push' && github.ref == 'refs/heads/listening/smart-playlists-v2-192' && 'Explicit user-approved physical smoke for issue #192') }}
+          SMOKE_PLAN: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke_plan || (github.event_name == 'push' && github.ref == 'refs/heads/listening/smart-playlists-v2-192' && 'Explicit user-approved physical smoke for issue 192') }}
         run: test -n "$SMOKE_PLAN"
 
       - name: Checkout
