@@ -32,12 +32,13 @@ internal fun resolveSmartPlaylistReferences(
     val visited = mutableSetOf<String>()
     val order = mutableListOf<SavedSmartPlaylistV2Definition>()
     fun visit(id: String, depth: Int) {
-        require(depth <= 8 && visited.size + visiting.size < 64) {
-            "Saved playlist reference graph exceeds safety bounds"
-        }
+        require(depth <= 8) { "Saved playlist reference chain is too deep" }
         require(id != rootId) { "A saved playlist cannot reference itself" }
         require(id !in visiting) { "Cyclic saved smart playlist reference" }
         if (id in visited) return
+        require(visited.size + visiting.size < 64) {
+            "Saved playlist reference graph exceeds safety bounds"
+        }
         val target = definitions[id]
             ?: throw IllegalArgumentException("Referenced smart playlist is not available")
         visiting += id
