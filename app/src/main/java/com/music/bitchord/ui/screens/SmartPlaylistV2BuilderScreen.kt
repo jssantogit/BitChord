@@ -719,6 +719,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = {
                             editorEpoch++
+                            editingId = null
                             editingFilterId = filter.id
                             name = filter.name
                             rule = filter.rules
@@ -748,6 +749,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                             scope.launch {
                                 try {
                                     withContext(Dispatchers.IO) { filterRepo.remove(filter.id) }
+                                    if (editingFilterId == filter.id) editingFilterId = null
                                     error = null
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
