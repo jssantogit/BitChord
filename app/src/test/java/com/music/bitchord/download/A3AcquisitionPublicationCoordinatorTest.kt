@@ -83,6 +83,24 @@ class A3AcquisitionPublicationCoordinatorTest {
         assertEquals(A3AcquisitionLedger.Phase.PUBLISHING,journal.get(id)?.phase)
     }
 
+    @Test fun revokedCommitAndFailedRollbackPersistReconciliationUri() {
+        val store=MemoryStore()
+        val ledger=staged(store)
+        val coordinator=A3AcquisitionPublicationCoordinator(ledger) { false }
+        try {
+            coordinator.publish(id,publishAlreadyStaged={result()},commitGuard={
+                throw IOException("Account generation revoked before AVAILABLE")
+            })
+            fail("Reconciliation must be explicit")
+        }catch(error:A3PublicationCommitFailure.ReconciliationRequired) {
+            assertEquals(uri,error.publishedContentUri)
+        }
+        val recovered=A3AcquisitionLedger(store)
+        assertEquals(A3AcquisitionLedger.Phase.RECONCILE,recovered.get(id)?.phase)
+        assertEquals(uri,recovered.get(id)?.contentUri)
+        assertEquals(0,recovered.interruptActiveOnColdStart())
+    }
+
     @Test fun rollbackFailuresExposePrivateUriOnlyThroughTypedRecoveryContract() {
         val store=MemoryStore();val journal=staged(store)
         val port=A3AcquisitionPublicationCoordinator(journal) { false }

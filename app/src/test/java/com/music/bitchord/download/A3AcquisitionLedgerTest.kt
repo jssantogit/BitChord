@@ -100,6 +100,21 @@ class A3AcquisitionLedgerTest {
         assertEquals(A3AcquisitionLedger.Phase.PUBLISHING,ledger.get(id2)?.phase)
     }
 
+    @Test fun orphanedPublishedUriSurvivesRestartAndCannotRetryAutomatically() {
+        val store=MemoryStore()
+        val journal=A3AcquisitionLedger(store)
+        ready(journal,id1)
+        val uri="content://media/external/audio/media/orphan"
+        journal.reconcile(id1,uri,1024)
+        assertEquals(A3AcquisitionLedger.Phase.RECONCILE,journal.get(id1)?.phase)
+        assertEquals(0,A3AcquisitionLedger(store).interruptActiveOnColdStart())
+        val recovered=A3AcquisitionLedger(store).get(id1)!!
+        assertEquals(uri,recovered.contentUri)
+        assertEquals(1024L,recovered.byteCount)
+        try {journal.retry(id1);fail("Must not retry uncertain publication")}
+        catch(_:IllegalStateException) {}
+    }
+
     @Test fun failedDiskCommitLeavesInMemoryAndPersistedStateUnchanged() {
         val store=MemoryStore()
         val j=A3AcquisitionLedger(store)
