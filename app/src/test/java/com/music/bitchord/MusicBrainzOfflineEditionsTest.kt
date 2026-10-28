@@ -139,4 +139,44 @@ class MusicBrainzOfflineEditionsTest {
     private fun database() = Room.inMemoryDatabaseBuilder(
         RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
     ).allowMainThreadQueries().build()
+
+    @Test fun artistDiscographyNeverPublishesExpiredFutureOrUnsafeVerifiedGroupFronts() =
+        runBlocking {
+            val db = database()
+            try {
+                val now = System.currentTimeMillis()
+                val artist = "12121212-1212-4121-8121-121212121212"
+                val fresh = "22222222-2222-4222-8222-222222222222"
+                val expired = "33333333-3333-4333-8333-333333333333"
+                val invalid = "44444444-4444-4444-8444-444444444444"
+                val future = "55555555-5555-4555-8555-555555555555"
+                val index = MusicBrainzCatalogIndex(db)
+                index.persistArtists(listOf(MusicBrainzArtistHit(
+                    artist, "ILLIT", null, "KR",
+                )))
+                index.persistArtistGroups(artist, listOf(fresh, expired, invalid, future).map {
+                    MusicBrainzReleaseGroupHit(it, "SUPER REAL ME", "EP", "2024-03-25", "ILLIT")
+                })
+                val dbDao = db.catalogDao()
+                for ((id, url, stamp) in listOf(
+                    Triple(fresh, "https://archive.org/valid-front-500.jpg", now - 2000L),
+                    Triple(expired, "https://archive.org/outdated-front-500.jpg", 0L),
+                    Triple(invalid, "https://example.org/wrong-front-500.jpg", now - 2000L),
+                    Triple(future, "https://archive.org/future-front-500.jpg", now + 60_000L),
+                )) {
+                    dbDao.upsertMusicBrainzCoverArtCache(
+                        com.music.bitchord.data.catalog.MusicBrainzCoverArtCacheEntity(
+                            "release-group:front-v5", id, url, stamp, url,
+                        ),
+                    )
+                }
+                val albumArt = index.cachedArtistGroups(artist).associate {
+                    it.musicBrainzId to it.artworkUri
+                }
+                assertEquals("https://archive.org/valid-front-500.jpg", albumArt[fresh])
+                assertNull(albumArt[expired])
+                assertNull(albumArt[invalid])
+                assertNull(albumArt[future])
+            } finally { db.close() }
+        }
 }
