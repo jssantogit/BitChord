@@ -36,7 +36,6 @@ import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.PlayCircle
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -82,7 +81,6 @@ import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToInt
 
 /**
  * Where the app is allowed to get audio from.
@@ -127,7 +125,6 @@ fun SourcesScreen(
     val wifiQuality by AppSettings.audioQualityWifi.collectAsStateWithLifecycle()
     val cellularQuality by AppSettings.audioQualityCellular.collectAsStateWithLifecycle()
     val metered by AppSettings.meteredConnection.collectAsStateWithLifecycle()
-    val upgradeLengthSlackSeconds by AppSettings.upgradeLengthSlackSeconds.collectAsStateWithLifecycle()
     val webdavUrl by AppSettings.webdavUrl.collectAsStateWithLifecycle()
     val webdavUsername by AppSettings.webdavUsername.collectAsStateWithLifecycle()
     val webdavPassword by AppSettings.webdavPassword.collectAsStateWithLifecycle()
@@ -356,26 +353,6 @@ fun SourcesScreen(
         // stays outside the ordered playback-source list above until the
         // PlaybackResolver learns how to resolve its logical MediaAssets.
         OpenSubsonicRemoteLibrarySection()
-
-        SettingsGroup(
-            header = stringResource(R.string.source_matching),
-            footer = stringResource(R.string.upgrade_length_slack_footer),
-        ) {
-            SliderRow(
-                icon = Icons.Rounded.Tune,
-                title = stringResource(R.string.upgrade_length_slack),
-                subtitle = stringResource(R.string.upgrade_length_slack_subtitle),
-                value = stringResource(R.string.seconds_short, upgradeLengthSlackSeconds),
-                sliderValue = upgradeLengthSlackSeconds.toFloat(),
-                onSliderValue = {
-                    AppSettings.setUpgradeLengthSlackSeconds(it.roundToInt())
-                },
-                valueRange = AppSettings.MIN_UPGRADE_LENGTH_SLACK_SECONDS.toFloat()..
-                    AppSettings.MAX_UPGRADE_LENGTH_SLACK_SECONDS.toFloat(),
-                steps = AppSettings.MAX_UPGRADE_LENGTH_SLACK_SECONDS -
-                    AppSettings.MIN_UPGRADE_LENGTH_SLACK_SECONDS - 1,
-            )
-        }
 
         Spacer(Modifier.height(32.dp))
     }
