@@ -684,6 +684,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }.take(48)
         if (candidates.isEmpty() && portrait == null && knownTracks.isEmpty()) return
         canonicalSearchCoverJob = viewModelScope.launch(Dispatchers.IO) {
+            // Warm group art is already verified Front-v5 in Room: hydrate
+            // albums AND their directly related songs in a single query/state
+            // update before allocating CAA network permits.
+            val groupIds = visible.filter {
+                it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                    canonicalNeedsCoverRefresh(it.artworkUri)
+            }.map { it.musicBrainzId }
+            val warmGroups = try {
+                coverArtArchive.cachedVerifiedGroupCovers(groupIds, CoverArtSize.THUMBNAIL)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { emptyMap() }
+            if (warmGroups.isNotEmpty() &&
+                _searchSource.value == SearchSource.CANONICAL &&
+                _query.value.trim() == query
+            ) _canonicalResults.update { old ->
+                if (old !is UiState.Success) old
+                else UiState.Success(canonicalRowsWithVerifiedGroupCoverBatch(
+                    old.data, warmGroups,
+                ))
+            }
             // First resolve the album artwork already in Room. One SQL
             // snapshot for the visible recordings replaces up to 24 separate
             // Recording→Track→Release→Group graph traversals.
@@ -751,6 +772,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val permits = Semaphore(3)
             candidates.forEach { row ->
                 launch {
+                    // Do not re-read the same verified Front-v5 one by one
+                    // after publishing the single warm batch. Composite group
+                    // titles may still need edition-backed display naming.
+                    if (row.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                        row.musicBrainzId in warmGroups && !row.title.contains(" & ")
+                    ) return@launch
+                    if (row.kind == CanonicalSearchKind.RECORDING &&
+                        row.coverGroupMbid in warmGroups
+                    ) return@launch
                     // Let release covers stream immediately. Recording covers
                     // first reuse their actual Official Album sleeve from
                     // Room; waiting here (outside the permit) preserves all
@@ -814,9 +844,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val candidates = canonicalCoverLookupCandidates(prioritized, limit = 24)
         if (candidates.isEmpty()) return
         canonicalHomeCoverJob = viewModelScope.launch(Dispatchers.IO) {
+            // Home is revisited much more often than a new album is fetched.
+            // One Room batch reuses already-approved CAA sleeves without
+            // repeated per-row DB reads or network metadata lookups.
+            val warmGroups = try {
+                coverArtArchive.cachedVerifiedGroupCovers(
+                    prioritized.filter {
+                        it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                            canonicalNeedsCoverRefresh(it.artworkUri)
+                    }.map { it.musicBrainzId }, CoverArtSize.THUMBNAIL,
+                )
+            } catch (cancelled: CancellationException) { throw cancelled }
+              catch (_: Exception) { emptyMap() }
+            if (warmGroups.isNotEmpty() &&
+                canonicalDiscoveryCatalogEpoch.isCurrent(generation) &&
+                isCanonicalDiscoverySelected()
+            ) _canonicalDiscoveryCatalog.update { old ->
+                if (old !is UiState.Success) old else UiState.Success(
+                    canonicalRowsWithVerifiedGroupCoverBatch(old.data, warmGroups),
+                )
+            }
             val permits = Semaphore(3)
             candidates.forEach { row ->
                 launch {
+                    if (row.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                        row.musicBrainzId in warmGroups && !row.title.contains(" & ")
+                    ) return@launch
                     permits.withPermit {
                         if (!canonicalDiscoveryCatalogEpoch.isCurrent(generation) ||
                             !isCanonicalDiscoverySelected()) return@withPermit
