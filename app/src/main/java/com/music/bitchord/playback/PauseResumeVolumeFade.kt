@@ -94,16 +94,28 @@ internal class PauseResumeVolumeFade(
                 return@launch
             }
             if (overlapActive()) return@launch // the two-deck controller owns gain now
-            val start = clockMs()
+            // Count audible playback time, not wall-clock time. Network buffering
+            // halfway through a fade must not consume the remaining ramp during
+            // silence and then deliver a full-volume attack when sound resumes.
+            var audibleElapsedMs = 0L
+            var lastAudibleTickMs: Long? = null
             while (isActive) {
                 if (overlapActive()) return@launch
                 if (!target.playWhenReady) {
                     target.volume = 1f
                     return@launch
                 }
-                val elapsed = (clockMs() - start).coerceAtLeast(0L)
-                target.volume = PauseResumeFadeCurve.gain(from, 1f, elapsed, duration)
-                if (elapsed >= duration) break
+                val nowMs = clockMs()
+                if (target.isPlaying) {
+                    lastAudibleTickMs?.let { previous ->
+                        audibleElapsedMs += (nowMs - previous).coerceAtLeast(0L)
+                    }
+                    lastAudibleTickMs = nowMs
+                } else {
+                    lastAudibleTickMs = null
+                }
+                target.volume = PauseResumeFadeCurve.gain(from, 1f, audibleElapsedMs, duration)
+                if (audibleElapsedMs >= duration) break
                 delay(FRAME_MS)
             }
             if (isActive && !overlapActive()) {
