@@ -80,6 +80,14 @@ internal object A0AutoPostTransferTechnicalGate {
                 decoded.bitrateKbps!=null && decoded.bitrateKbps>320))
             return Assessment(Status.REJECT,Reason.INVALID_TECHNICAL_METADATA)
 
+        // FLAC/WAV lossless provenance needs actual local PCM properties,
+        // not just the extension. Missing measurements stay review-only.
+        if(codec in setOf(A0CanonicalAcquisitionIntent.Codec.FLAC,
+                A0CanonicalAcquisitionIntent.Codec.PCM_WAV) &&
+            (decoded.sampleRateHz==null || decoded.sampleRateHz<44_100 ||
+                decoded.bitDepth==null || decoded.bitDepth<16))
+            return Assessment(Status.REVIEW,Reason.QUALITY_MISMATCH)
+
         val checked=A0DownloadQualityPolicy.evaluate(
             profile,
             A0DownloadQualityPolicy.Offer(codec,canonical,

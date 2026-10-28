@@ -38,6 +38,17 @@ class A0AutoPostTransferTechnicalGateTest {
             verify(DownloadQualityProfile.HI_RES,"flac",flac).status)
     }
 
+    @Test fun claimedLosslessWithoutLocallyParsedPcmCharacteristicsStaysReview() {
+        val incomplete=decoded(A0CanonicalAcquisitionIntent.Codec.FLAC,"flac",
+            rate=null,depth=null)
+        assertEquals(A0AutoPostTransferTechnicalGate.Status.REVIEW,
+            verify(DownloadQualityProfile.LOSSLESS,"flac",incomplete).status)
+        val noDepth=decoded(A0CanonicalAcquisitionIntent.Codec.FLAC,"flac",
+            rate=96000,depth=null)
+        assertEquals(A0AutoPostTransferTechnicalGate.Status.REVIEW,
+            verify(DownloadQualityProfile.HI_RES,"flac",noDepth).status)
+    }
+
     @Test fun actualMp3QualityCannotBeUpgradedByAFalseFlacFilename() {
         val mp3=decoded(A0CanonicalAcquisitionIntent.Codec.MP3,"mp3",bitrate=320)
         assertEquals(A0AutoPostTransferTechnicalGate.Status.TECHNICALLY_PLAUSIBLE,
