@@ -178,7 +178,8 @@ object Downloads {
     internal fun openSoulseekManualReview(context:Context,sessionId:String):Boolean {
         if(!BuildConfig.DEBUG || BuildConfig.FLAVOR!="dev")return false
         val plan=synchronized(lock) {
-            if(sessionId in running || sessionId in pending)return false
+            if(sessionId in running || sessionId in pending ||
+                autoRequests.isNotEmpty() || openManualReviews.isNotEmpty())return false
             _autoReviews.value[sessionId]
         } ?: return false
         if(!plan.manualAllowed)return false
@@ -209,7 +210,7 @@ object Downloads {
                     entries.map { it.durationSeconds ?: 0 }.toIntArray())
         }
         synchronized(lock) {
-            if(sessionId in openManualReviews ||
+            if(openManualReviews.isNotEmpty() || autoRequests.isNotEmpty() ||
                 sessionId in running || sessionId in pending ||
                 _autoReviews.value[sessionId] !== plan)return false
             openManualReviews.add(sessionId)
@@ -357,6 +358,8 @@ object Downloads {
             artist="Soulseek",thumbnailUrl=null,albumName=album,
         )
         synchronized(lock) {
+            // Do not overlap a manual recovery P/F with a new automatic batch.
+            if(openManualReviews.isNotEmpty())return false
             // No repeat auto-request of a release already attempted this session.
             if(_autoReviews.value.values.any { prior ->
                     prior.rows.map { it.entry.query to it.entry.album } ==
