@@ -118,6 +118,11 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                 }.distinct().sorted(),
                 trackArtistEvidenceUnknown = trackArtistRows.isEmpty() ||
                     trackArtistRows.any { it.artistName.isNullOrBlank() },
+                localRatingUpdatedAtEpochMs = if (
+                    SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING in requiredFields
+                ) ratingsById[id]?.ratedAtEpochMs else null,
+                localRatingDateEvidenceKnown =
+                    SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING in requiredFields,
             )
         }
     }
