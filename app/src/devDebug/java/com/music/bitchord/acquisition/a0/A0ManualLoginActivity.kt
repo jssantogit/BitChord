@@ -1260,7 +1260,7 @@ class A0ManualLoginActivity : Activity() {
                                                         artist=queryForLibrary.substringBefore(
                                                             " - ","Artista"),
                                                         thumbnailUrl=null,
-                                                        albumName=albumForLibrary.ifBlank { null },
+                                                        albumName=albumForLibrary.takeIf { it.isNotBlank() },
                                                     )
                                                     runCatching {
                                                         Downloads.rememberSoulseekPublished(item,saved)
