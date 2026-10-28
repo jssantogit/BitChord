@@ -333,4 +333,30 @@ class CanonicalNativeNavigationTest {
             ) === sections)
     }
 
+
+    @Test fun albumDetailHeroUpgradeUpdatesOnlyTracksThatInheritedPreviousSmallSleeve() {
+        val tiny = "https://coverartarchive.org/release/linked/front-250"
+        val hero = "https://coverartarchive.org/release/linked/front-1200"
+        val specific = "https://archive.org/song-specific-cover.jpg"
+        val base = CanonicalCatalogSearchRow(
+            "rec-a", CanonicalSearchKind.RECORDING, "Attention", "NewJeans",
+        )
+        val rows = listOf(
+            base.copy(artworkUri = tiny),
+            base.copy(musicBrainzId = "rec-b", artworkUri = specific),
+            base.copy(musicBrainzId = "rec-c"),
+        )
+        val upgraded = com.music.bitchord.ui.canonicalReleaseTracksWithArtwork(
+            rows = rows,
+            releaseArtworkUri = hero,
+            previousInheritedArtwork = tiny,
+        )
+        assertEquals(listOf(hero, specific, hero), upgraded.map { it.artworkUri })
+        val unchanged = com.music.bitchord.ui.canonicalReleaseTracksWithArtwork(
+            rows = upgraded,
+            releaseArtworkUri = tiny,
+            previousInheritedArtwork = hero,
+        )
+        assertEquals(upgraded, unchanged)
+    }
 }
