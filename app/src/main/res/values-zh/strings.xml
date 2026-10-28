@@ -1330,4 +1330,6 @@
     <string name="playback_recovery_retry">重试</string>
     <string name="playback_recovery_retrying">正在重试…</string>
     <string name="playback_recovery_dismiss">关闭</string>
+    <string name="pause_resume_fade">暂停与继续播放时淡入淡出</string>
+    <string name="pause_resume_fade_subtitle">暂停时逐渐降低音量，继续播放时逐渐提高音量</string>
 </resources>
