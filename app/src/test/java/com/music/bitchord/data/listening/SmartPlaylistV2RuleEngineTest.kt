@@ -632,4 +632,41 @@ class SmartPlaylistV2RuleEngineTest {
         ), tree.referencedFields())
     }
 
+
+
+    @Test fun localRatingAgeUsesOnlyKnownLocalTimestampAndNotRemotePreference() {
+        val day = 86_400_000L
+        val engine = SmartPlaylistV2RuleEngine(nowEpochMs = { 10L * day })
+        val local = candidate("local").copy(
+            localRatingUpdatedAtEpochMs = 7L * day, localRatingDateEvidenceKnown = true,
+        )
+        val absent = candidate("absent").copy(localRatingDateEvidenceKnown = true)
+        val unknown = candidate("unknown")
+        val future = candidate("future").copy(
+            localRatingUpdatedAtEpochMs = 11L * day, localRatingDateEvidenceKnown = true,
+        )
+        val rows = listOf(local, absent, unknown, future)
+        fun query(op: SmartPlaylistRuleOperator, value: Double? = 3.0) =
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING, op, value,
+            ), sort = SmartPlaylistV2Sort.RECORDING_ID_ASC)
+        assertEquals(listOf("local"), engine.preview(
+            rows, query(SmartPlaylistRuleOperator.GREATER_OR_EQUAL),
+        ).map { it.recordingId })
+        assertEquals(listOf("absent"), engine.preview(
+            rows, query(SmartPlaylistRuleOperator.IS_MISSING, null),
+        ).map { it.recordingId })
+        assertTrue(engine.preview(listOf(unknown, future), SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING,
+                SmartPlaylistRuleOperator.GREATER_OR_EQUAL, 3.0,
+            )),
+        )).isEmpty())
+        for (bad in listOf(-1.0, 1.5, 100_001.0)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                query(SmartPlaylistRuleOperator.EQUAL, bad)
+            }
+        }
+    }
+
 }
