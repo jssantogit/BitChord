@@ -21,6 +21,8 @@ internal class A0AutoBatchExecutor(
     class Report(
         val results:List<TrackStatus>,
         val attempts:Int,
+        /** Physical peer paths actually published, used only within one album. */
+        val publishedSourceKeys:Set<Pair<String,String>> = emptySet(),
     ) {
         val published:Int get()=results.count { it==TrackStatus.PUBLISHED }
         val manualReview:Int get()=results.count { it==TrackStatus.MANUAL_REVIEW }
@@ -128,6 +130,6 @@ internal class A0AutoBatchExecutor(
                 break
             }
         }
-        return Report(status,attempts)
+        return Report(status,attempts,publishedSources.toSet())
     }
 }
