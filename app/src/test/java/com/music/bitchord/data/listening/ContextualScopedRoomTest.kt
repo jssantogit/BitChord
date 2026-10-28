@@ -310,6 +310,9 @@ class ContextualScopedRoomTest {
             val validMbid = "123e4567-e89b-12d3-a456-426614174000"
             val wrongMbid = "123e4567-e89b-12d3-a456-426614174001"
             val ambiguousMbid = "123e4567-e89b-12d3-a456-426614174002"
+            val mismatchedAliasMbid = "123e4567-e89b-12d3-a456-426614174003"
+            val invalidMbid = "123e4567-e89b-12d3-a456-426614174004"
+            val secondAmbiguousMbid = "123e4567-e89b-12d3-a456-426614174005"
             for (id in listOf("trusted", "wrong", "ambiguous", "invalid", "orphan")) {
                 dao.upsertRecording(RecordingEntity("recording:$id", "Example", "Band", 150_000))
                 dao.upsertRelease(ReleaseEntity("release:$id", "Example EP", "Band", null))
@@ -318,7 +321,12 @@ class ContextualScopedRoomTest {
                     "asset:$id", "recording:$id", if (id == "invalid") other else provider,
                     "source:$id", "opensubsonic://$id", null, null, null, null,
                 ))
-                val mbid = if (id == "wrong") wrongMbid else validMbid
+                val mbid = when (id) {
+                    "wrong" -> wrongMbid
+                    "invalid" -> invalidMbid
+                    "ambiguous" -> ambiguousMbid
+                    else -> validMbid
+                }
                 dao.upsertMusicBrainzReleaseEnrichment(MusicBrainzReleaseEnrichmentEntity(
                     "release:$id", mbid, "Example EP", "Band",
                     if (id == "invalid") "2023-02-30" else "2023-07-21",
@@ -328,13 +336,17 @@ class ContextualScopedRoomTest {
             for (id in listOf("trusted", "wrong", "ambiguous", "invalid")) {
                 dao.upsertExternalIdentity(ExternalIdentityEntity(
                     "musicbrainz", "release",
-                    if (id == "wrong") validMbid else if (id == "ambiguous") ambiguousMbid
-                    else validMbid,
+                    when (id) {
+                        "wrong" -> mismatchedAliasMbid
+                        "ambiguous" -> ambiguousMbid
+                        "invalid" -> invalidMbid
+                        else -> validMbid
+                    },
                     "release:$id",
                 ))
             }
             dao.upsertExternalIdentity(ExternalIdentityEntity(
-                "musicbrainz", "release", wrongMbid, "release:ambiguous",
+                "musicbrainz", "release", secondAmbiguousMbid, "release:ambiguous",
             ))
             val filter = SavedSmartPlaylistV2Filter("year", "2023",
                 SmartPlaylistRule.Comparison(SmartPlaylistRuleField.RELEASE_YEAR,
