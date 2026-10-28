@@ -78,8 +78,8 @@ internal class A0ServerAssociatedTransfer(
         peerUsername: String,
         listing: A0OpenAudioCandidateGate.PublicPeerListing,
         privateDirectory: File,
+        externalCancelled:()->Boolean={false},
         onPhase:(Phase)->Unit={},
-        externalCancelled:()->Boolean={false}
     ): A0VerifiedByteStager.Receipt = runInternal(
         authenticatedServer,localUsername,peerUsername,null,listing,privateDirectory,
         onPhase,externalCancelled)
