@@ -40,6 +40,8 @@ import com.music.bitchord.data.listening.toV2Copy
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
+import com.music.bitchord.data.listening.resolveSmartPlaylistReferences
+import com.music.bitchord.data.listening.referencedPlaylistIds
 import com.music.bitchord.data.listening.allowedOperators
 import com.music.bitchord.data.listening.isTextField
 import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
@@ -156,6 +158,7 @@ private fun V2RuleNode(
     depth: Int,
     onChange: (SmartPlaylistRule) -> Unit,
     onRemove: (() -> Unit)? = null,
+    savedReferences: List<SavedSmartPlaylistV2Definition> = emptyList(),
 ) {
     Column(
         Modifier.fillMaxWidth().padding(start = (depth.coerceAtMost(4) * 8).dp, top = 8.dp),
@@ -183,6 +186,7 @@ private fun V2RuleNode(
                             onRemove = if (rule.children.size > 1) {
                                 { onChange(rule.copy(children = rule.children.filterIndexed { i, _ -> i != index })) }
                             } else null,
+                            savedReferences = savedReferences,
                         )
                     }
                 }
@@ -195,6 +199,15 @@ private fun V2RuleNode(
                             onChange(rule.copy(children = rule.children +
                                 SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(newRule()))))
                         }) { Text("+ Grupo") }
+                        TextButton(
+                            onClick = {
+                                savedReferences.firstOrNull()?.let { saved ->
+                                    onChange(rule.copy(children = rule.children +
+                                        SmartPlaylistRule.Reference(saved.id)))
+                                }
+                            },
+                            enabled = savedReferences.isNotEmpty(),
+                        ) { Text("+ Playlist") }
                     }
                 }
             }
@@ -204,7 +217,27 @@ private fun V2RuleNode(
                     TextButton(onClick = { onChange(rule.child) }) { Text("Desfazer negação") }
                     if (onRemove != null) TextButton(onClick = onRemove) { Text("Remover") }
                 }
-                V2RuleNode(rule.child, depth + 1, onChange = { onChange(SmartPlaylistRule.Not(it)) })
+                V2RuleNode(rule.child, depth + 1,
+                    onChange = { onChange(SmartPlaylistRule.Not(it)) },
+                    savedReferences = savedReferences,
+                )
+            }
+            is SmartPlaylistRule.Reference -> {
+                val choices = (savedReferences.map { it.id } + rule.playlistId).distinct()
+                V2Option(
+                    "Playlist salva", rule.playlistId, choices,
+                    label = { id -> savedReferences.firstOrNull { it.id == id }?.name
+                        ?: "Referência indisponível" },
+                    onSelect = { onChange(rule.copy(playlistId = it)) },
+                )
+                Text("Usa as músicas da playlist referenciada após suas regras, ordenação e limite.",
+                    style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (depth < 7) TextButton(onClick = {
+                        onChange(SmartPlaylistRule.Not(rule))
+                    }) { Text("Negar") }
+                    if (onRemove != null) TextButton(onClick = onRemove) { Text("Remover") }
+                }
             }
             is SmartPlaylistRule.Comparison -> {
                 V2Option(
@@ -311,7 +344,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     onBack: () -> Unit,
     onClassic: () -> Unit,
     onSavedAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
-    onPreviewAction: ((SmartPlaylistV2Query, CanonicalCollectionIntent) -> Unit)? = null,
+    onPreviewAction: ((SmartPlaylistV2Query, String?, CanonicalCollectionIntent) -> Unit)? = null,
 ) {
     val context = LocalContext.current.applicationContext
     val repo = remember(context) {
@@ -384,9 +417,11 @@ internal fun SmartPlaylistV2BuilderScreen(
         randomSeed = seed.toIntOrNull() ?: throw IllegalArgumentException("Semente inválida"),
     )
 
-    suspend fun loadPreviewRows(parsed: SmartPlaylistV2Query): List<V2DisplayRow> =
-        withContext(Dispatchers.IO) {
-            val matched = evaluator.preview(parsed)
+    suspend fun loadPreviewRows(
+        parsed: SmartPlaylistV2Query,
+        ownerId: String? = editingId,
+    ): List<V2DisplayRow> = withContext(Dispatchers.IO) {
+            val matched = evaluator.preview(parsed, ownerId)
             val known = matched.map { it.recordingId }.chunked(400)
                 .flatMap { catalog.recordingsByIds(it) }
                 .associateBy { it.id }
@@ -466,7 +501,10 @@ internal fun SmartPlaylistV2BuilderScreen(
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
                     )
                     androidx.compose.runtime.key(editingId, editorEpoch) {
-                        V2RuleNode(rule, 0, onChange = { rule = it; preview = null; previewQuery = null })
+                        V2RuleNode(rule, 0,
+                            onChange = { rule = it; preview = null; previewQuery = null },
+                            savedReferences = saved.filterNot { it.id == editingId },
+                        )
                     }
                     V2Option("Ordenar por", sort, SmartPlaylistV2Sort.entries, ::sortLabel) {
                         sort = it
@@ -562,12 +600,12 @@ internal fun SmartPlaylistV2BuilderScreen(
                     if (onPreviewAction != null && preview!!.isNotEmpty() && preview!!.size <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             TextButton(onClick = {
-                                previewQuery?.let { onPreviewAction(it, CanonicalCollectionIntent.PLAY_NOW) }
+                                previewQuery?.let { onPreviewAction(it, editingId, CanonicalCollectionIntent.PLAY_NOW) }
                             }, enabled = !loading && previewQuery != null) {
                                 Text(stringResource(Res.string.smart_collection_batch_play))
                             }
                             TextButton(onClick = {
-                                previewQuery?.let { onPreviewAction(it, CanonicalCollectionIntent.ADD_TO_QUEUE) }
+                                previewQuery?.let { onPreviewAction(it, editingId, CanonicalCollectionIntent.ADD_TO_QUEUE) }
                             }, enabled = !loading && previewQuery != null) {
                                 Text(stringResource(Res.string.smart_collection_batch_queue))
                             }
