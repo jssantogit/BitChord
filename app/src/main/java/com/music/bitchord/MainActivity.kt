@@ -2064,10 +2064,10 @@ private fun BitChordApp(
             // Playlists, artist pages and loose multi-selection do not become
             // unconsented bulk transfers. The devDebug pilot is explicit.
             val plan=SoulseekBatchPlan.prepare(
-                requested.mapIndexed { ordinal,track ->
+                requested.map { track ->
                     SoulseekBatchPlan.SourceTrack(
-                        // Position is only a transient batch slot fallback; it
-                        // is NEVER minted as a recording or release identity.
+                        // A missing ID cannot be synthesized from track order;
+                        // A3 must reserve stable source identity or fail closed.
                         // Fail closed for slots without stable catalog identity:
                         // a transient batch ordinal is not a recording ID.
                         trackId=track.videoId,
