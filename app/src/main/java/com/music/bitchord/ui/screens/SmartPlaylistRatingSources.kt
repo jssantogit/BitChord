@@ -18,6 +18,8 @@ import com.music.bitchord.data.listening.RemoteSmartPlaylistRatingSnapshot
 import com.music.bitchord.data.listening.RoomListeningEventStore
 import com.music.bitchord.data.listening.RoomRecordingRatingStore
 import com.music.bitchord.data.listening.RoomSmartPlaylistBatchEvidenceReader
+import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
+import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
 
 /**
  * The ONE production rule evaluator for editor preview and saved playlist actions.
@@ -44,6 +46,11 @@ internal fun persistentSmartPlaylistPreview(
         ),
         remoteRatings = RemoteSmartPlaylistRatingReader {
             mapRemoteRatingSnapshotForSmartPlaylist(remoteReader.read())
+        },
+        savedReferences = {
+            SmartPlaylistV2DefinitionRepository(
+                SmartPlaylistDefinitionDatabase.get(app).v2DefinitionDao(),
+            ).list()
         },
     )
 }
