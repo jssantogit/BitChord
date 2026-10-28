@@ -45,6 +45,7 @@ import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
 import com.music.bitchord.data.listening.referencedPlaylistIds
+import com.music.bitchord.data.listening.moveChild
 import com.music.bitchord.data.listening.allowedOperators
 import com.music.bitchord.data.listening.isTextField
 import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
@@ -161,12 +162,22 @@ private fun V2RuleNode(
     depth: Int,
     onChange: (SmartPlaylistRule) -> Unit,
     onRemove: (() -> Unit)? = null,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null,
     savedReferences: List<SavedSmartPlaylistV2Definition> = emptyList(),
 ) {
     Column(
         Modifier.fillMaxWidth().padding(start = (depth.coerceAtMost(4) * 8).dp, top = 8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        // Move the original AST node, including nested groups/references,
+        // without flattening or recreating persisted rule values.
+        if (onMoveUp != null || onMoveDown != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (onMoveUp != null) TextButton(onClick = onMoveUp) { Text("Subir") }
+                if (onMoveDown != null) TextButton(onClick = onMoveDown) { Text("Descer") }
+            }
+        }
         when (rule) {
             is SmartPlaylistRule.Group -> {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -188,6 +199,12 @@ private fun V2RuleNode(
                             },
                             onRemove = if (rule.children.size > 1) {
                                 { onChange(rule.copy(children = rule.children.filterIndexed { i, _ -> i != index })) }
+                            } else null,
+                            onMoveUp = if (index > 0) {
+                                { onChange(rule.moveChild(index, index - 1)) }
+                            } else null,
+                            onMoveDown = if (index < rule.children.lastIndex) {
+                                { onChange(rule.moveChild(index, index + 1)) }
                             } else null,
                             savedReferences = savedReferences,
                         )
@@ -298,7 +315,7 @@ private fun V2RuleNode(
                             onSelect = { onChange(rule.copy(value = null, textValue = it)) },
                         )
                     } else if (rule.field.isTextField()) {
-                        var entered by remember(rule.field, rule.operator) {
+                        var entered by remember(rule.field, rule.operator, rule.textValue) {
                             mutableStateOf(rule.textValue.orEmpty())
                         }
                         OutlinedTextField(
@@ -311,7 +328,7 @@ private fun V2RuleNode(
                             modifier = Modifier.fillMaxWidth(),
                         )
                     } else {
-                        var entered by remember(rule.field, rule.operator) {
+                        var entered by remember(rule.field, rule.operator, rule.value) {
                             mutableStateOf(rule.value?.toString().orEmpty())
                         }
                         OutlinedTextField(
