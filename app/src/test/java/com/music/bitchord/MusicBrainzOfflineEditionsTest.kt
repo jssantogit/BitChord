@@ -177,6 +177,10 @@ class MusicBrainzOfflineEditionsTest {
                 assertNull(albumArt[expired])
                 assertNull(albumArt[invalid])
                 assertNull(albumArt[future])
+                // The offline search projection is not permitted to publish
+                // raw Front-v5 URLs without the shared eligibility gate.
+                assertTrue(dbDao.searchKnownMusicBrainzGroups("SUPER REAL ME", 25)
+                    .all { it.artworkUri == null })
             } finally { db.close() }
         }
 }
