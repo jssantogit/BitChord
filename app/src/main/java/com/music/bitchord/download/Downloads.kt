@@ -999,9 +999,13 @@ object Downloads {
             ids
         }
         abandoned.forEach { id ->
-            if(_active.value[id] is DownloadState.Queued ||
-                _active.value[id] is DownloadState.Running)
-                fail(id,"Interrompido: verifique a biblioteca antes de tentar novamente.")
+            // runSoulseekAuto's cancellation handler may already have removed
+            // Downloads.active. The UI's unsettled session row, not active,
+            // is the authoritative indicator of unfinished work.
+            val reason="Interrompido: verifique a biblioteca antes de tentar novamente."
+            if(DownloadSession.interruptIfUnsettled(id,reason)) {
+                _active.update { it + (id to DownloadState.Failed(reason)) }
+            }
         }
     }
 
