@@ -391,6 +391,12 @@ private fun DownloadManagerRow(
         // track can be stopped, a failed one can be asked for again, and a
         // finished one needs nothing at all.
         when {
+            // A synthetic Soulseek auto session was published by A3, not by
+            // Downloads.saved. Never send its Retry action into the disabled
+            // YouTube downloader; a partial/uncertain album needs manual
+            // review or reconciliation before any new peer transfer.
+            failed != null && item.videoId.startsWith("soulseek-auto:") ->
+                Spacer(Modifier.width(36.dp))
             failed != null -> RowAction(Icons.Rounded.Refresh, stringResource(R.string.retry), onRetry)
             !progress.settled -> RowAction(Icons.Rounded.Close, stringResource(R.string.cancel), onCancel)
             else -> Spacer(Modifier.width(36.dp))
