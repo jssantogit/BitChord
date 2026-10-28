@@ -160,6 +160,32 @@ object Downloads {
         val sourceSongs:List<Song>,
     )
     private val autoRequests=LinkedHashMap<String,AutoRequest>()
+
+    /** Visible individual tracks, not the synthetic service-worker album ID. */
+    internal enum class AutoTrackStage {
+        WAITING, SEARCHING, DOWNLOADING, SAVED, MANUAL_REVIEW,
+        CANCELLED, VERIFY_STORAGE,
+    }
+    internal data class AutoTrackRow(
+        val song:Song,
+        val stage:AutoTrackStage=AutoTrackStage.WAITING,
+    )
+    private val _autoTrackRows=
+        MutableStateFlow<Map<String,List<AutoTrackRow>>>(emptyMap())
+    internal val soulseekAutoTrackRows:StateFlow<Map<String,List<AutoTrackRow>>> =
+        _autoTrackRows.asStateFlow()
+
+    private fun updateAutoTrack(
+        sessionId:String,index:Int,stage:AutoTrackStage,
+    ) {
+        _autoTrackRows.update { current ->
+            val rows=current[sessionId] ?: return@update current
+            if(index !in rows.indices)return@update current
+            current+(sessionId to rows.mapIndexed { i,row ->
+                if(i==index)row.copy(stage=stage) else row
+            })
+        }
+    }
     /** Never couple duplicate physical P/F admission to a dismissible UI row. */
     private val autoAttemptGuard=SoulseekAutoAttemptGuard()
     /** One automatic release in flight even when four service workers run. */
@@ -181,6 +207,7 @@ object Downloads {
     internal fun clearSoulseekAutoReviews():Boolean = synchronized(lock) {
         if(openManualReviews.hasOpen)return@synchronized false
         _autoReviews.value=emptyMap()
+        _autoTrackRows.value=emptyMap()
         true
     }
 
@@ -416,6 +443,17 @@ object Downloads {
             displacedReviews=change.displaced
             _autoReviews.value=change.current
             autoRequests[id]=AutoRequest(captured,quality,sourceSongs.toList())
+            _autoTrackRows.value=_autoTrackRows.value+(id to captured.map { entry ->
+                val origin=sourceSongs.firstOrNull { it.videoId==entry.trackId }
+                    ?: Song(
+                        videoId=entry.trackId,
+                        title=entry.query.substringAfter(" - ",entry.query),
+                        artist=entry.query.substringBefore(" - ","Artista"),
+                        thumbnailUrl=firstSong?.thumbnailUrl,
+                        albumName=entry.album,
+                    )
+                AutoTrackRow(origin)
+            })
             pending[id]=song
         }
         _active.update { it + (id to DownloadState.Queued) }
@@ -1195,7 +1233,26 @@ object Downloads {
                     context,request.entries,request.quality,
                     userRequested=true,isCancelled={job?.isActive!=true},
                     sourceSongs=request.sourceSongs,
-                    onSlotResolved={index,_ ->
+                    onSlotSearching={index ->
+                        updateAutoTrack(id,index,AutoTrackStage.SEARCHING)
+                    },
+                    onSlotTransferring={index ->
+                        updateAutoTrack(id,index,AutoTrackStage.DOWNLOADING)
+                    },
+                    onSlotResolved={index,status ->
+                        val stage=when(status) {
+                            A0AutoBatchExecutor.TrackStatus.PUBLISHED ->
+                                AutoTrackStage.SAVED
+                            A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW ->
+                                AutoTrackStage.MANUAL_REVIEW
+                            A0AutoBatchExecutor.TrackStatus.CANCELLED ->
+                                AutoTrackStage.CANCELLED
+                            A0AutoBatchExecutor.TrackStatus.RECONCILE ->
+                                AutoTrackStage.VERIFY_STORAGE
+                            A0AutoBatchExecutor.TrackStatus.NOT_STARTED ->
+                                AutoTrackStage.WAITING
+                        }
+                        updateAutoTrack(id,index,stage)
                         if(job?.isActive==true) {
                             // Fraction means resolved album slots, NOT byte
                             // progress: discovery may still be searching.
