@@ -49,7 +49,7 @@ class ContextualAlbumArtistFilterTest {
             filter(SmartPlaylistRule.Not(reference))).map { it.id })
         assertEquals(listOf("release:one", "release:two"),
             filterCanonicalBrowseAlbums(rows, filter(title)).map { it.id })
-        assertFalse(filter(SmartPlaylistRule.Comparison(
+        assertTrue(filter(SmartPlaylistRule.Comparison(
             SmartPlaylistRuleField.ALBUM_ARTIST,
             SmartPlaylistRuleOperator.IS_PRESENT,
         )).isSupportedForCanonicalAlbumBrowse())
@@ -186,6 +186,44 @@ class ContextualAlbumArtistFilterTest {
         assertEquals(listOf("r:valid"), filterCanonicalBrowseAlbums(
             releases, composite, releaseYears = mapOf("r:valid" to 2023),
         ).map { it.id })
+    }
+
+    @Test fun albumArtistCreditRulesKeepUnverifiedOrPartialCreditsUnknown() {
+        val releases = listOf(
+            ReleaseEntity("rel:twice", "EP", "Display Untrusted", null),
+            ReleaseEntity("rel:unknown", "EP", "TWICE", null),
+            ReleaseEntity("rel:partial", "EP", "TWICE", null),
+        )
+        val contains = filter(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.ALBUM_ARTIST,
+            SmartPlaylistRuleOperator.CONTAINS, textValue = "twice",
+        ))
+        val notContains = filter(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.ALBUM_ARTIST,
+            SmartPlaylistRuleOperator.DOES_NOT_CONTAIN, textValue = "twice",
+        ))
+        val credits = mapOf(
+            "rel:twice" to listOf<String?>("TWICE"),
+            "rel:partial" to listOf("NewJeans", null),
+        )
+        assertEquals(listOf("rel:twice"),
+            filterCanonicalBrowseAlbums(releases, contains, albumArtistCredits = credits)
+                .map { it.id })
+        assertTrue(filterCanonicalBrowseAlbums(releases, notContains,
+            albumArtistCredits = credits).isEmpty())
+        assertEquals(listOf("rel:twice"),
+            filterCanonicalBrowseAlbums(releases, filter(SmartPlaylistRule.Not(
+                notContains.rules)), albumArtistCredits = credits).map { it.id })
+        val present = filter(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.ALBUM_ARTIST,
+            SmartPlaylistRuleOperator.IS_PRESENT,
+        ))
+        assertEquals(listOf("rel:twice", "rel:partial"),
+            filterCanonicalBrowseAlbums(releases, present, albumArtistCredits = credits)
+                .map { it.id })
+        assertTrue(filterCanonicalBrowseAlbums(releases,
+            filter(SmartPlaylistRule.Not(present.rules)),
+            albumArtistCredits = credits).isEmpty())
     }
 
 }
