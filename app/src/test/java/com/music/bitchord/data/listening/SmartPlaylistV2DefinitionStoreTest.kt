@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Context
 import androidx.room.Room
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -267,6 +269,41 @@ class SmartPlaylistV2DefinitionStoreTest {
             repo.remove("dependent")
             repo.remove("base")
             assertTrue(repo.list().isEmpty())
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test fun concurrentEditsCannotCreateCycleAcrossRepositoryInstances() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val db = Room.inMemoryDatabaseBuilder(context, SmartPlaylistDefinitionDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val first = SmartPlaylistV2DefinitionRepository(db.v2DefinitionDao())
+            val second = SmartPlaylistV2DefinitionRepository(db.v2DefinitionDao())
+            fun q(rule: SmartPlaylistRule) = SmartPlaylistV2Query(rule,
+                sort = SmartPlaylistV2Sort.RECORDING_ID_ASC)
+            val present = q(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.DURATION_MS, SmartPlaylistRuleOperator.IS_PRESENT,
+            ))
+            first.save(SavedSmartPlaylistV2Definition("a", "A", present))
+            second.save(SavedSmartPlaylistV2Definition("b", "B", present))
+            val aToB = async(Dispatchers.Default) { runCatching {
+                first.save(SavedSmartPlaylistV2Definition(
+                    "a", "A", q(SmartPlaylistRule.Reference("b")),
+                ))
+            } }
+            val bToA = async(Dispatchers.Default) { runCatching {
+                second.save(SavedSmartPlaylistV2Definition(
+                    "b", "B", q(SmartPlaylistRule.Reference("a")),
+                ))
+            } }
+            val results = listOf(aToB.await(), bToA.await())
+            assertEquals(1, results.count { it.exceptionOrNull() is IllegalArgumentException })
+            val saved = first.list()
+            saved.forEach {
+                resolveSmartPlaylistReferences(it.query, saved, it.id)
+            }
         } finally {
             db.close()
         }
