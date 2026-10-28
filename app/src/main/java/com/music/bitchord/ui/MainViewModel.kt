@@ -1537,6 +1537,72 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 CanonicalSearchKind.RELEASE_GROUP -> {
+                    // Revisits should paint an Official cached tracklist before
+                    // paying for a new MB release browse and release detail.
+                    // Only persisted exact ReleaseGroup → Official Release →
+                    // Track relations qualify. The online branch below can
+                    // refresh this preview without blocking the first paint.
+                    val cachedPreview = try {
+                        withContext(Dispatchers.IO) {
+                            val db = CanonicalCatalogDatabase.get(getApplication<Application>())
+                            val index = MusicBrainzCatalogIndex(db)
+                            val editions = index.cachedGroupReleases(entry.musicBrainzId)
+                            val detail = canonicalCachedOfficialGroupTracklist(
+                                entry.musicBrainzId, entry.title, editions,
+                                readRelease = { index.cachedRelease(it) },
+                            )
+                            detail?.let { cached ->
+                                val assets = db.catalogDao().musicBrainzRecordingMbidsWithAssets(
+                                    cached.tracks.map { it.recordingMbid },
+                                ).toSet()
+                                CanonicalCatalogDetailPage(
+                                    title = canonicalOfficialGroupDisplayTitle(
+                                        entry.title, editions,
+                                    ),
+                                    summary = null,
+                                    artworkUri = initialArtwork.takeIf {
+                                        canonicalEditorialReleaseType(entry) != null
+                                    },
+                                    rows = canonicalReleaseTracksWithArtwork(
+                                        cached.tracks.map { track ->
+                                            CanonicalCatalogSearchRow(
+                                                musicBrainzId = track.recordingMbid,
+                                                kind = CanonicalSearchKind.RECORDING,
+                                                title = track.title,
+                                                subtitle = track.artistDisplay ?: cached.artistDisplay,
+                                                hasCatalogedAsset = track.recordingMbid in assets,
+                                                fromOfflineCache = true,
+                                                trackMbid = track.trackMbid,
+                                                durationMs = track.durationMs,
+                                            )
+                                        },
+                                        initialArtwork,
+                                    ),
+                                )
+                            }
+                        }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) { null }
+                    if (cachedPreview != null &&
+                        _searchSource.value == SearchSource.CANONICAL &&
+                        canonicalPath.lastOrNull() == entry
+                    ) {
+                        _canonicalDetail.value = UiState.Success(cachedPreview)
+                        val nativeId = canonicalNativeBrowseId(entry)
+                        _detailStack.update { pages -> pages.map { page ->
+                            if (page.browseId != nativeId) page else page.copy(
+                                title = cachedPreview.title,
+                                thumbnailUrl = cachedPreview.artworkUri ?: page.thumbnailUrl,
+                                songs = UiState.Success(emptyList()),
+                                sections = canonicalNativeSections(
+                                    parentKind = entry.kind,
+                                    rows = cachedPreview.rows,
+                                    heading = getApplication<Application>().getString(R.string.albums),
+                                ),
+                            )
+                        } }
+                    }
                     // Album / Single / EP tiles are *works*, not a demand that
                     // the listener choose among every national/digital edition.
                     // Resolve the best documented Release to its native tracklist
@@ -1596,7 +1662,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                     }
                     if (chosen == null) {
-                        UiState.Error(getApplication<Application>().getString(
+                        if (cachedPreview != null) UiState.Success(cachedPreview)
+                        else UiState.Error(getApplication<Application>().getString(
                             R.string.canonical_discovery_cache_empty,
                         ))
                     } else {
