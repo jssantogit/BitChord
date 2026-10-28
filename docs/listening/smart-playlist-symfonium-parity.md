@@ -205,3 +205,9 @@ Primary official evidence:
 - Added typed `DAYS_SINCE_LOCAL_RATING`, reading only `recording_rating_current.ratedAtEpochMs` and refreshing foreground previews with relative-age rules. The engine uses whole-day comparisons, rejects invalid/future timestamps and keeps unread evidence UNKNOWN under NOT.
 - Missing rating date is only `IS_MISSING` after the local RecordingRating DAO has actually been read. Remote OpenSubsonic ratings and favorite events are **not** timestamps of a local first-party rating. This is **not** a claim of Symfonium Favorite Date parity.
 - Unit, Room and foreground clock visitor regressions added. No Catalog schema change, no provider credentials/identity promotion. CI and device benchmarks remain independent gates.
+
+## 28/10/2026 — Canonical release artwork pointer (NOT verified cover presence)
+
+- Added `RELEASE_ARTWORK_REFERENCE` as a **positive-only** `IS_PRESENT` rule. Room reads nonblank `catalog_release.artworkUri` only through `catalog_release_track` links, in <=400-ID chunks and only when the AST references this rule.
+- An existing URI is *not* proof the referenced image is reachable, accurate, cached, a local thumbnail or a canonical album cover. Because Catalog #178 still has artwork-provenance gaps, absent/unknown pointers evaluate UNKNOWN; `IS_MISSING`, negative comparisons and NOT(UNKNOWN) cannot yield an invented negative match.
+- JVM and Room tests cover multiple releases, absent links, operator validation and selective read. Do not count this as full Symfonium 13.6+ `thumbnail`/`local thumbnail` parity before reliable present/missing provenance and physical comparison.
