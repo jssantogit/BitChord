@@ -88,6 +88,7 @@ private fun newRule(): SmartPlaylistRule = SmartPlaylistRule.Comparison(
 )
 
 private enum class SmartPlaylistManageTab { PLAYLISTS, FILTERS, CLASSIC }
+private data class PendingSmartDeletion(val id: String, val name: String, val isFilter: Boolean)
 
 internal data class V2DisplayRow(val id: String, val title: String, val artist: String)
 
@@ -142,6 +143,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     var editorEpoch by remember { mutableStateOf(0) }
     var showWizard by remember { mutableStateOf(true) }
     var manageTab by remember { mutableStateOf(SmartPlaylistManageTab.PLAYLISTS) }
+    var pendingDeletion by remember { mutableStateOf<PendingSmartDeletion?>(null) }
     // Selecting a different library section starts at its own heading,
     // instead of inheriting the prior tab's last LazyColumn scroll index.
     val manageListState = remember(manageTab) { LazyListState() }
@@ -429,6 +431,11 @@ internal fun SmartPlaylistV2BuilderScreen(
                             label = { Text("Clássicas (${legacySaved.size})") },
                         )
                     }
+                    if (error != null) {
+                        Text(error.orEmpty(),
+                            modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+                            color = MaterialTheme.colorScheme.error)
+                    }
                     LazyColumn(
                         state = manageListState,
                         modifier = Modifier.fillMaxSize().padding(horizontal = PAGE_GUTTER),
@@ -501,19 +508,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                             error = null
                         }, enabled = !loading) { Text("Criar playlist") }
                         TextButton(onClick = {
-                            if (loading) return@TextButton
-                            loading = true
-                            scope.launch {
-                                try {
-                                    withContext(Dispatchers.IO) { filterRepo.remove(filter.id) }
-                                    if (editingFilterId == filter.id) editingFilterId = null
-                                    error = null
-                                } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (_: Exception) {
-                                    error = "Não foi possível excluir o filtro."
-                                } finally { loading = false }
-                            }
+                            pendingDeletion = PendingSmartDeletion(filter.id, filter.name, true)
                         }, enabled = !loading) { Text("Excluir") }
                         }
                     }
@@ -545,17 +540,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                             error = null
                         }, enabled = !loading) { Text("Editar") }
                         TextButton(onClick = {
-                            if (loading) return@TextButton
-                            loading = true
-                            scope.launch {
-                                try {
-                                    withContext(Dispatchers.IO) { repo.remove(item.id) }
-                                    if (editingId == item.id) reset()
-                                } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (_: Exception) { error = "Não foi possível excluir: outra playlist pode depender desta." }
-                                finally { loading = false }
-                            }
+                            pendingDeletion = PendingSmartDeletion(item.id, item.name, false)
                         }, enabled = !loading) { Text("Excluir") }
                     }
                     if (onSavedAction != null) Row {
@@ -609,6 +594,37 @@ internal fun SmartPlaylistV2BuilderScreen(
                     }
                 }
             }
+        }
+        pendingDeletion?.let { pending ->
+            SmartPlaylistDeletionConfirmation(
+                name = pending.name,
+                isFilter = pending.isFilter,
+                onCancel = { pendingDeletion = null },
+                onConfirm = {
+                    pendingDeletion = null
+                    if (!loading) {
+                        loading = true
+                        scope.launch {
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    if (pending.isFilter) filterRepo.remove(pending.id)
+                                    else repo.remove(pending.id)
+                                }
+                                if (pending.isFilter && editingFilterId == pending.id)
+                                    editingFilterId = null
+                                if (!pending.isFilter && editingId == pending.id) reset()
+                                error = null
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) {
+                                error = if (pending.isFilter)
+                                    "Não foi possível excluir o filtro."
+                                else "Não foi possível excluir: outra playlist pode depender desta."
+                            } finally { loading = false }
+                        }
+                    }
+                },
+            )
         }
     }
 }

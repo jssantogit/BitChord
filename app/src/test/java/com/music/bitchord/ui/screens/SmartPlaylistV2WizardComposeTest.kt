@@ -28,6 +28,23 @@ import org.robolectric.annotation.ConscryptMode
 class SmartPlaylistV2WizardComposeTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun deletingSavedPlaylistRequiresExplicitConfirmation() {
+        var confirmed = 0
+        var cancelled = 0
+        compose.setContent {
+            SmartPlaylistDeletionConfirmation(
+                name = "Favoritas", isFilter = false,
+                onCancel = { cancelled++ }, onConfirm = { confirmed++ },
+            )
+        }
+        compose.onNodeWithText("Excluir playlist?").assertExists()
+        compose.runOnIdle { assertEquals(0, confirmed) }
+        compose.onNodeWithText("Cancelar").performClick()
+        compose.runOnIdle { assertEquals(0, confirmed); assertEquals(1, cancelled) }
+        compose.onNodeWithText("Excluir definitivamente").performClick()
+        compose.runOnIdle { assertEquals(1, confirmed) }
+    }
+
     @Test fun editorStartsWithIdentityAndKeepsRuleEngineOutOfTheMainForm() {
         val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
             SmartPlaylistRule.Comparison(
