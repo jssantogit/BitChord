@@ -35,22 +35,26 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
             receipt:A0VerifiedByteStager.Receipt,
             safeName:String,
             isCancelled:()->Boolean,
-        ):Boolean
+        ):PublishResult
 
         /** MUST discard private scratch even on user logout, invalid audio or failure. */
         fun cleanup(receipt:A0VerifiedByteStager.Receipt)
     }
+
+    /** Unknown commit state must NEVER trigger a second automatic transfer. */
+    enum class PublishResult { DURABLE, ROLLED_BACK, UNCERTAIN }
 
     sealed interface FetchResult {
         data object RetryableConnectionFailure:FetchResult
         class Received(val receipt:A0VerifiedByteStager.Receipt):FetchResult
     }
 
-    enum class Status { PUBLISHED, MANUAL_REVIEW, CANCELLED }
+    enum class Status { PUBLISHED, MANUAL_REVIEW, CANCELLED, RECONCILE }
     enum class Reason {
         NO_EXPLICIT_CONSENT, NO_STRONG_CANDIDATE, EXHAUSTED_PEERS,
         TRANSPORT_FAILURE, TECHNICAL_REJECTION,
-        INVALID_DESTINATION, PUBLICATION_FAILURE, CLEANUP_FAILURE,
+        INVALID_DESTINATION, PUBLICATION_FAILURE, PUBLICATION_UNCERTAIN,
+        CLEANUP_FAILURE,
         REVOKED_OR_CANCELLED, SINGLE_FLIGHT
     }
     class Result(
@@ -117,7 +121,8 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                         continue
                     }
                     is FetchResult.Received -> {
-                        var result:Result
+                        var result:Result=manual(Reason.TECHNICAL_REJECTION,
+                            sequence.attemptsStarted)
                         val receipt=download.receipt
                         try {
                             if(revoked()) {
@@ -152,16 +157,28 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                                             sequence.attemptsStarted)
                                     } else {
                                         val published=try {
-                                            // The real Port MUST check account generation
+                                            // The Port MUST check account generation
                                             // synchronously within A3's AVAILABLE commit.
                                             port.publish(receipt,name,::revoked)
-                                        }catch(_:Exception) { false }
-                                        sequence.complete(attempt,published)
-                                        result=if(published)
-                                            Result(Status.PUBLISHED,null,sequence.attemptsStarted,candidate)
-                                        else if(revoked())cancelled(sequence.attemptsStarted)
-                                        else manual(Reason.PUBLICATION_FAILURE,
-                                            sequence.attemptsStarted)
+                                        }catch(_:Exception) {
+                                            // Any unclassified exception may have occurred
+                                            // AFTER the provider made the file visible.
+                                            PublishResult.UNCERTAIN
+                                        }
+                                        sequence.complete(attempt,
+                                            published==PublishResult.DURABLE)
+                                        result=when(published) {
+                                            PublishResult.DURABLE -> Result(
+                                                Status.PUBLISHED,null,
+                                                sequence.attemptsStarted,candidate)
+                                            PublishResult.UNCERTAIN -> Result(
+                                                Status.RECONCILE,Reason.PUBLICATION_UNCERTAIN,
+                                                sequence.attemptsStarted)
+                                            PublishResult.ROLLED_BACK ->
+                                                if(revoked())cancelled(sequence.attemptsStarted)
+                                                else manual(Reason.PUBLICATION_FAILURE,
+                                                    sequence.attemptsStarted)
+                                        }
                                     }
                                 }
                             }
@@ -180,8 +197,8 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                                 // request the same track again automatically.
                                 sequence.cancel()
                                 return Result(
-                                    if(result.status==Status.PUBLISHED)Status.PUBLISHED
-                                    else Status.MANUAL_REVIEW,
+                                    if(result.status in setOf(Status.PUBLISHED,Status.RECONCILE))
+                                        result.status else Status.MANUAL_REVIEW,
                                     Reason.CLEANUP_FAILURE,sequence.attemptsStarted,
                                     if(result.status==Status.PUBLISHED)candidate else null)
                             }

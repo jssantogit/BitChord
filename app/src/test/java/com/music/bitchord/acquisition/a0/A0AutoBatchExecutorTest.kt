@@ -57,9 +57,9 @@ class A0AutoBatchExecutorTest {
                     receipt:A0VerifiedByteStager.Receipt,
                     safeName:String,
                     isCancelled:()->Boolean,
-                ):Boolean {
+                ):A0AutoAcquisitionExecutor.PublishResult {
                     done.add(entry.trackId)
-                    return true
+                    return A0AutoAcquisitionExecutor.PublishResult.DURABLE
                 }
                 override fun cleanup(receipt:A0VerifiedByteStager.Receipt) {
                     assertTrue(receipt.file.delete())

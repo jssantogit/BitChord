@@ -41,6 +41,7 @@ class A0AutoAcquisitionExecutorTest {
         var afterFetch:(()->Unit)?=null
         var decoded:A0AutoPostTransferTechnicalGate.Decoded?=null
         var publicationSucceeds=true
+        var publicationUncertain=false
         override fun fetch(
             candidate:A0ObservedCandidateHandoff.Choice,
             isCancelled:()->Boolean,
@@ -66,9 +67,13 @@ class A0AutoAcquisitionExecutorTest {
             receipt:A0VerifiedByteStager.Receipt,
             safeName:String,
             isCancelled:()->Boolean,
-        ):Boolean {
+        ):A0AutoAcquisitionExecutor.PublishResult {
             publishes++
-            return publicationSucceeds
+            return when {
+                publicationUncertain -> A0AutoAcquisitionExecutor.PublishResult.UNCERTAIN
+                publicationSucceeds -> A0AutoAcquisitionExecutor.PublishResult.DURABLE
+                else -> A0AutoAcquisitionExecutor.PublishResult.ROLLED_BACK
+            }
         }
         override fun cleanup(receipt:A0VerifiedByteStager.Receipt) {
             cleanups++
@@ -153,6 +158,22 @@ class A0AutoAcquisitionExecutorTest {
             target,ambiguous,quality,userRequested=true,optedIn=false,stillAuthorized={true})
         assertEquals(A0AutoAcquisitionExecutor.Status.MANUAL_REVIEW,result.status)
         assertEquals(0,port.fetches)
+    }
+
+    @Test fun uncertainDurableCommitIsReconciledNotRetried() {
+        val port=FakePort().apply {
+            decoded=this@A0AutoAcquisitionExecutorTest.decoded
+            publicationUncertain=true
+        }
+        val result=A0AutoAcquisitionExecutor(port).run(
+            target,choices("p1")+choices("p2"),quality,
+            userRequested=true,optedIn=true,stillAuthorized={true})
+        assertEquals(A0AutoAcquisitionExecutor.Status.RECONCILE,result.status)
+        assertEquals(A0AutoAcquisitionExecutor.Reason.PUBLICATION_UNCERTAIN,result.reason)
+        assertEquals(1,result.attempts)
+        assertEquals(1,port.fetches)
+        assertEquals(1,port.cleanups)
+        assertEquals(1,port.publishes)
     }
 
     @Test fun cancelledBeforeStartNeverTouchesPeerAndInvalidPublicationNeverRetries() {
