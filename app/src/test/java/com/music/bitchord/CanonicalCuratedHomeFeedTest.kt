@@ -287,4 +287,26 @@ class CanonicalCuratedHomeFeedTest {
         assertFalse(com.music.bitchord.ui.canonicalShouldAcceptArtworkUpdate(low, low))
         assertFalse(com.music.bitchord.ui.canonicalShouldAcceptArtworkUpdate(high, high))
     }
+
+    @Test fun laterValidatedOfficialFrontCanCorrectStaleEqualResolutionArtistSleeve() {
+        val id = release.musicBrainzId
+        val stale = "https://archive.org/earlier-incorrect-front-500.jpg"
+        val verified = "https://archive.org/current-official-front-500.jpg"
+        val shelves = com.music.bitchord.ui.canonicalNativeSections(
+            CanonicalSearchKind.ARTIST,
+            listOf(release.copy(artworkUri = stale)),
+            heading = "EPs",
+        )
+        val corrected = com.music.bitchord.ui.canonicalArtistShelvesWithCoverUpdates(
+            shelves, mapOf(id to (verified to "SUPER REAL ME")),
+        )
+        assertEquals(verified, corrected.single().items.single().thumbnailUrl)
+        assertTrue(corrected === com.music.bitchord.ui.canonicalArtistShelvesWithCoverUpdates(
+            corrected, mapOf(id to (verified to "SUPER REAL ME")),
+        ))
+        val low = "https://coverartarchive.org/release/$id/front-250"
+        assertTrue(corrected === com.music.bitchord.ui.canonicalArtistShelvesWithCoverUpdates(
+            corrected, mapOf(id to (low to "SUPER REAL ME")),
+        ))
+    }
 }
