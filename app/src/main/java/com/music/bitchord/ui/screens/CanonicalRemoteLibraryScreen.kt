@@ -24,7 +24,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -32,8 +35,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,6 +57,11 @@ import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLibraryBrowseRepository
 import com.music.bitchord.data.catalog.RoomCanonicalLibraryBrowseStore
+import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
+import com.music.bitchord.data.listening.SmartPlaylistV2FilterRepository
+import com.music.bitchord.data.listening.SavedSmartPlaylistV2Filter
+import com.music.bitchord.data.listening.filterCanonicalBrowseSongs
+import com.music.bitchord.data.listening.isSupportedForCanonicalSongBrowse
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoadResult
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoader
 import com.music.bitchord.data.catalog.provider.opensubsonic.androidOpenSubsonicArtworkLoader
@@ -60,8 +70,16 @@ import com.music.bitchord.playback.CanonicalRemotePlaybackRequest
 import com.music.bitchord.playback.playCanonicalRemote
 import com.music.bitchord.playback.rememberMediaController
 import com.music.bitchord.ui.player.awaitRecoverableCanonicalArtwork
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
+
+private sealed interface CanonicalSongFilterState {
+    data object Loading : CanonicalSongFilterState
+    data object Failed : CanonicalSongFilterState
+    data class Ready(val tracks: List<CanonicalBrowseTrack>) : CanonicalSongFilterState
+}
 
 /**
  * Offline-first browse for a provider's persisted canonical availability.
@@ -91,6 +109,49 @@ internal fun CanonicalRemoteLibraryScreen(
     }
     val libraryFlow = remember(repository, providerKey) { repository.observe(providerKey) }
     val library by libraryFlow.collectAsStateWithLifecycle(initialValue = CanonicalBrowseLibrary.EMPTY)
+    val filterRepo = remember(context.applicationContext) {
+        SmartPlaylistV2FilterRepository(
+            SmartPlaylistDefinitionDatabase.get(context.applicationContext).v2FilterDao(),
+        )
+    }
+    var filtersUnavailable by remember(providerKey) { mutableStateOf(false) }
+    val filters by produceState<List<SavedSmartPlaylistV2Filter>>(
+        initialValue = emptyList(), key1 = filterRepo, key2 = providerKey,
+    ) {
+        try {
+            filterRepo.observe().collect { value = it; filtersUnavailable = false }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            filtersUnavailable = true
+        }
+    }
+    var selectedFilterId by remember(providerKey) { mutableStateOf<String?>(null) }
+    val compatible = remember(filters) {
+        filters.filter { it.isSupportedForCanonicalSongBrowse() }
+    }
+    val selected = filters.firstOrNull { it.id == selectedFilterId }
+    val filteredState by produceState<CanonicalSongFilterState>(
+        initialValue = CanonicalSongFilterState.Loading,
+        key1 = library.tracks, key2 = selectedFilterId, key3 = selected,
+        key4 = filtersUnavailable,
+    ) {
+        value = try {
+            when {
+                filtersUnavailable && selectedFilterId != null -> CanonicalSongFilterState.Failed
+                selectedFilterId == null -> CanonicalSongFilterState.Ready(library.tracks)
+                selected == null -> CanonicalSongFilterState.Failed
+                else -> CanonicalSongFilterState.Ready(withContext(Dispatchers.Default) {
+                    filterCanonicalBrowseSongs(library.tracks, selected)
+                })
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            CanonicalSongFilterState.Failed
+        }
+    }
+    val displayedTracks = (filteredState as? CanonicalSongFilterState.Ready)?.tracks.orEmpty()
 
     BackHandler(onBack = onClose)
 
@@ -105,9 +166,32 @@ internal fun CanonicalRemoteLibraryScreen(
                 .navigationBarsPadding(),
         ) {
             RemoteBrowseTopBar(title = title, onBack = onClose)
-            RemoteBrowseSummary(songCount = library.tracks.size)
+            if (compatible.isNotEmpty() || selectedFilterId != null) {
+                RemoteSongSavedFilterMenu(
+                    selectedName = selected?.name,
+                    options = compatible,
+                    selectedFilterId = selectedFilterId,
+                    onSelect = { selectedFilterId = it },
+                )
+            }
+            if (filtersUnavailable && selectedFilterId == null) {
+                Text("Filtros salvos indisponíveis.",
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+            }
+            when (filteredState) {
+                CanonicalSongFilterState.Loading -> Text("Aplicando filtro…",
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
+                CanonicalSongFilterState.Failed -> Text(
+                    "Este filtro não pôde ser aplicado. Escolha outro ou selecione Todas.",
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                )
+                is CanonicalSongFilterState.Ready -> Unit
+            }
+            RemoteBrowseSummary(songCount = displayedTracks.size)
             TrackList(
-                tracks = library.tracks,
+                tracks = displayedTracks,
                 artworkLoader = artworkLoader,
                 onTrackPlay = { track ->
                     track.availableAssets.firstOrNull()?.let { asset ->
@@ -126,6 +210,34 @@ internal fun CanonicalRemoteLibraryScreen(
                 },
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+    }
+}
+
+/** Only Song-compatible saved filters are offered; every other media type remains untouched. */
+@Composable
+private fun RemoteSongSavedFilterMenu(
+    selectedName: String?,
+    options: List<SavedSmartPlaylistV2Filter>,
+    selectedFilterId: String?,
+    onSelect: (String?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) {
+        TextButton(onClick = { expanded = true }) {
+            Text("Filtro: " + (selectedName ?: if (selectedFilterId == null) "Todas" else "Indisponível"))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Todas as músicas") },
+                onClick = { expanded = false; onSelect(null) },
+            )
+            options.forEach { filter ->
+                DropdownMenuItem(
+                    text = { Text(filter.name) },
+                    onClick = { expanded = false; onSelect(filter.id) },
+                )
+            }
         }
     }
 }
