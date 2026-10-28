@@ -33,6 +33,11 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         val verifiedGroupCachedBatchReads: Int,
         val verifiedGroupCachedRowsReused: Int,
         val recoveredCoalescedOwnerCancellations: Int,
+        /** Aggregate disk bytes before any bitmap request on this process. */
+        val coilDiskBytesAtInitialization: Long?,
+        val coilDiskCapacityBytes: Long?,
+        /** Set only when a higher versionCode was observed at app startup. */
+        val coilDiskPreservedOnVersionUpgrade: Boolean,
     )
 
     private var cached = 0
@@ -54,6 +59,11 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
     private var groupCacheBatchReads = 0
     private var groupCacheRows = 0
     private var recoveredSharedOwners = 0
+    // This process-wide baseline intentionally survives startCapture(). Unlike
+    // each session's hit counters it was observed once when ImageLoader opened.
+    private var diskBytesAtInit: Long? = null
+    private var diskCapacity: Long? = null
+    private var preservedDiskOnAppUpdate = false
 
     /** Start a clean anonymous metric window for each explicit capture. */
     @Synchronized fun reset() {
@@ -76,6 +86,16 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         groupCacheBatchReads = 0
         groupCacheRows = 0
         recoveredSharedOwners = 0
+    }
+
+    /** No paths, image keys or URL are captured in disk baseline metrics. */
+    @Synchronized fun recordCoilDiskCacheInitialization(sizeBytes: Long, maxBytes: Long) {
+        diskBytesAtInit = sizeBytes.coerceAtLeast(0)
+        diskCapacity = maxBytes.coerceAtLeast(0)
+    }
+
+    @Synchronized fun recordImageDiskCachePreservedOnUpgrade() {
+        preservedDiskOnAppUpdate = true
     }
 
     /** No MBID/album is captured: only counts of successfully verified fronts. */
@@ -142,7 +162,8 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
             loadedImages, failedImages, imagesSorted.size,
             quantile(imagesSorted, 50), quantile(imagesSorted, 95),
             imageMemory, imageDisk, imageNetwork, imageOther,
-            groupCacheBatchReads, groupCacheRows, recoveredSharedOwners)
+            groupCacheBatchReads, groupCacheRows, recoveredSharedOwners,
+            diskBytesAtInit, diskCapacity, preservedDiskOnAppUpdate)
     }
 
     companion object {
