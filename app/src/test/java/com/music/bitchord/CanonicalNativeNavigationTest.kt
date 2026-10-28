@@ -362,9 +362,11 @@ class CanonicalNativeNavigationTest {
 
     @Test fun cachedOfficialGroupTracklistCanAppearBeforeLiveBrowse() = kotlinx.coroutines.runBlocking {
         val groupId = "group-1"
+        // Room's cachedGroupReleases intentionally stores the proven
+        // edition relation in a separate table, not in this DTO's group field.
         val official = MusicBrainzReleaseHit(
             "official", "Get Up", "XW", "2023-07-21", "NewJeans",
-            status = "Official", releaseGroupMbid = groupId,
+            status = "Official", releaseGroupMbid = null,
         )
         val wrongGroup = official.copy(musicBrainzId = "wrong", releaseGroupMbid = "other")
         val bootleg = official.copy(musicBrainzId = "bootleg", status = "Bootleg")
