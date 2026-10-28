@@ -190,6 +190,7 @@ internal class RuleBasedSmartPlaylistPlanner(
 /** Scan every nested rule exactly once; unrelated metadata must not be fetched. */
 internal fun SmartPlaylistRule.referencedFields(): Set<SmartPlaylistRuleField> = when (this) {
     is SmartPlaylistRule.Comparison -> setOf(field)
+    is SmartPlaylistRule.Reference -> emptySet()
     is SmartPlaylistRule.Group -> children.flatMap { it.referencedFields() }.toSet()
     is SmartPlaylistRule.Not -> child.referencedFields()
 }
@@ -197,12 +198,14 @@ internal fun SmartPlaylistRule.referencedFields(): Set<SmartPlaylistRuleField> =
 private fun SmartPlaylistRule.needsSourceKinds(): Boolean = when (this) {
     is SmartPlaylistRule.Comparison -> field == SmartPlaylistRuleField.SOURCE_KIND ||
         field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED
+    is SmartPlaylistRule.Reference -> false
     is SmartPlaylistRule.Group -> children.any { it.needsSourceKinds() }
     is SmartPlaylistRule.Not -> child.needsSourceKinds()
 }
 
 private fun SmartPlaylistRule.needsExplicitRating(): Boolean = when (this) {
     is SmartPlaylistRule.Comparison -> field == SmartPlaylistRuleField.EXPLICIT_RATING
+    is SmartPlaylistRule.Reference -> false
     is SmartPlaylistRule.Group -> children.any { it.needsExplicitRating() }
     is SmartPlaylistRule.Not -> child.needsExplicitRating()
 }
@@ -218,25 +221,38 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
     },
     private val batchReader: SmartPlaylistBatchEvidenceReader? = null,
     private val v2Planner: SmartPlaylistV2RuleEngine = SmartPlaylistV2RuleEngine(),
+    private val savedReferences: suspend () -> List<SavedSmartPlaylistV2Definition> = { emptyList() },
 ) {
     suspend fun preview(query: RuleBasedSmartPlaylistQuery): List<RuleBasedSmartPlaylistItem> =
         planner.preview(candidates(), query)
 
-    suspend fun preview(query: SmartPlaylistV2Query): List<SmartPlaylistV2Match> {
-        val requiresRemote = query.rules.needsExplicitRating() ||
-            query.sort == SmartPlaylistV2Sort.RATING_ASC ||
-            query.sort == SmartPlaylistV2Sort.RATING_DESC
-        return v2Planner.preview(
-            candidates(
-                includeRemoteRatings = requiresRemote,
-                includeSourceEvidence = query.rules.needsSourceKinds(),
-                requiredFields = query.rules.referencedFields() +
-                    if (query.sort == SmartPlaylistV2Sort.LOCAL_RATING_NEWEST ||
-                        query.sort == SmartPlaylistV2Sort.LOCAL_RATING_OLDEST
-                    ) setOf(SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING) else emptySet(),
-            ),
-            query,
+    suspend fun preview(
+        query: SmartPlaylistV2Query,
+        ownerId: String? = null,
+    ): List<SmartPlaylistV2Match> {
+        // Resolve a single bounded DAG first; missing/cyclic definitions fail the
+        // entire preview, including under NOT/ANY, instead of returning false.
+        val graph = if (query.rules.referencedPlaylistIds().isEmpty()) emptyList()
+            else resolveSmartPlaylistReferences(query, savedReferences(), ownerId)
+        val queries = graph.map { it.query } + query
+        val needsRemote = queries.any { q ->
+            q.rules.needsExplicitRating() || q.sort == SmartPlaylistV2Sort.RATING_ASC ||
+                q.sort == SmartPlaylistV2Sort.RATING_DESC
+        }
+        val fields = queries.flatMap { q ->
+            q.rules.referencedFields() + if (
+                q.sort == SmartPlaylistV2Sort.LOCAL_RATING_NEWEST ||
+                q.sort == SmartPlaylistV2Sort.LOCAL_RATING_OLDEST
+            ) setOf(SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING) else emptySet()
+        }.toSet()
+        val rows = candidates(
+            includeRemoteRatings = needsRemote,
+            includeSourceEvidence = queries.any { it.rules.needsSourceKinds() },
+            requiredFields = fields,
         )
+        // A referenced playlist's ordering and limit are applied to the SAME
+        // account-scoped candidate snapshot; Playback re-runs this on tap.
+        return previewSmartPlaylistReferences(rows, query, graph, v2Planner)
     }
 
     /** One account-scoped snapshot, then 400-id chunks with bounded read pressure. */
