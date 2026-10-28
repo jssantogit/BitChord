@@ -16,6 +16,7 @@ import com.music.bitchord.download.A3AndroidAcquisitionLedger
 import com.music.bitchord.download.SoulseekBatchPayload
 import com.music.bitchord.download.SoulseekBatchSession
 import com.music.bitchord.download.SoulseekBatchPlan
+import com.music.bitchord.download.Downloads
 import android.widget.Toast
 import android.text.InputType
 import android.text.InputFilter
@@ -189,7 +190,8 @@ class A0ManualLoginActivity : Activity() {
         }
         page.addView(transferAction)
         val saveConsent=CheckBox(this).apply {
-            text="Confirmo que posso armazenar o arquivo escolhido. " +
+            text="Confirmo que tenho autorização para salvar o arquivo escolhido " +
+                "manualmente ou os candidatos elegíveis selecionados automaticamente. " +
                 "O áudio ficará em Music/BitChord ou na pasta selecionada."
         }
         page.addView(saveConsent)
@@ -197,6 +199,11 @@ class A0ManualLoginActivity : Activity() {
             text="Baixar 1 arquivo autorizado como música local (piloto devDebug)"
         }
         page.addView(saveAction)
+        val autoAction=Button(this).apply {
+            text=if(batch!=null) "Baixar lote automaticamente (experimental)"
+                else "Baixar automaticamente (experimental)"
+        }
+        if(fromSongDownload)page.addView(autoAction)
         val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
         page.addView(exportAction)
         if (!fromSongDownload) text("Captura temporária se não existir uma captura manual ativa. " +
@@ -224,6 +231,39 @@ class A0ManualLoginActivity : Activity() {
             transferAction.isEnabled=false
             saveAction.isEnabled=false
             status.text="Falha ao limpar arquivos temporários do teste. Transferência bloqueada."
+        }
+        // This only queues a session. DownloadService owns transport, A3
+        // publication, foreground notification and cancellation.
+        autoAction.setOnClickListener {
+            if(!fromSongDownload || stopping) {
+                status.text="Automação só está disponível após tocar em Baixar."
+            }else if(!A0AndroidAutoConsent.enabled(this)) {
+                status.text="Ative a seleção automática em Configurações → Downloads → Soulseek."
+            }else if(!acknowledge.isChecked || !saveConsent.isChecked) {
+                status.text="Confirme o aviso TCP e a autorização para salvar antes de iniciar."
+            }else if(batch!=null && (batch.index!=0 || batch.succeeded>0)) {
+                status.text="Lote manual já iniciado. Continue manualmente para evitar duplicatas."
+            }else {
+                val entries=if(batch!=null)batch.entries else {
+                    val query=searchInput.text.toString().trim()
+                    val album=albumInput.text.toString().trim().takeIf { it.isNotEmpty() }
+                    val duration=intent.getIntExtra(
+                        "bitchord.soulseek.manual.duration_seconds",0)
+                    listOf(SoulseekBatchPlan.Entry(
+                        trackId="manual-"+java.util.UUID.randomUUID(),
+                        query=query,album=album,
+                        durationSeconds=duration.takeIf { it in 15..7200 },
+                    ))
+                }
+                if(Downloads.enqueueSoulseekAuto(this,entries)) {
+                    status.text="Pedido entregue à fila de Downloads. " +
+                        "Acompanhe pela notificação; faixas incertas exigem seleção manual."
+                    autoAction.isEnabled=false
+                } else {
+                    status.text="Automação recusada: confira a conta, a conexão, " +
+                        "a qualidade, o destino e a identidade da música."
+                }
+            }
         }
 
         fun start(
