@@ -34,6 +34,13 @@ internal data class CanonicalRecordingReleaseDateRow(
     val releaseDate: String?,
 )
 
+/** Verified MusicBrainz release evidence, keyed by the actual canonical ReleaseId. */
+internal data class CanonicalTrustedReleaseDateRow(
+    val releaseId: String,
+    val mbid: String?,
+    val releaseDate: String?,
+)
+
 internal data class CanonicalRecordingLocalAddedRow(
     val recordingId: String,
     val dateAddedSeconds: Long?,
@@ -141,6 +148,41 @@ internal interface CanonicalCatalogDao {
     suspend fun recordingReleaseDatesByIds(
         recordingIds: List<String>,
     ): List<CanonicalRecordingReleaseDateRow>
+
+    /**
+     * Only MusicBrainz release dates backed by exactly ONE current trusted
+     * external identity are eligible. Corrupt/mismatched and multi-alias rows
+     * must project NULL; the filter planner will preserve UNKNOWN through NOT.
+     * Caller passes only already-provider-scoped Release IDs, <=400 per query.
+     */
+    @Query(
+        """
+        SELECT rel.id AS releaseId,
+               verified.mbid AS mbid,
+               verified.releaseDate AS releaseDate
+        FROM catalog_release AS rel
+        LEFT JOIN musicbrainz_release_enrichment AS verified
+            ON verified.releaseId = rel.id
+           AND EXISTS (
+                SELECT 1 FROM catalog_external_identity AS identity
+                WHERE identity.provider = 'musicbrainz'
+                  AND identity.entityType = 'release'
+                  AND identity.entityId = rel.id
+                  AND identity.externalId = verified.mbid
+           )
+           AND (
+                SELECT COUNT(*) FROM catalog_external_identity AS identity
+                WHERE identity.provider = 'musicbrainz'
+                  AND identity.entityType = 'release'
+                  AND identity.entityId = rel.id
+           ) = 1
+        WHERE rel.id IN (:releaseIds)
+        ORDER BY rel.id ASC
+        """,
+    )
+    suspend fun trustedReleaseDatesByIds(
+        releaseIds: List<String>,
+    ): List<CanonicalTrustedReleaseDateRow>
 
     /** Read artwork pointers only from explicitly linked canonical releases. */
     @Query(
