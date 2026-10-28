@@ -140,13 +140,11 @@ internal interface CanonicalCatalogDao {
             ), grp.title) AS title,
                grp.primaryType AS primaryType, grp.firstReleaseDate AS firstReleaseDate,
                grp.artistDisplay AS artistDisplay, grp.secondaryTypes AS secondaryTypes,
-               COALESCE(art.thumbnailUri, art.artworkUri) AS artworkUri
+               NULL AS artworkUri
         FROM catalog_musicbrainz_artist_group AS membership
         JOIN catalog_release_group AS grp ON grp.id = membership.releaseGroupId
         JOIN catalog_external_identity AS ident ON ident.entityId = grp.id
             AND ident.provider = 'musicbrainz' AND ident.entityType = 'release-group'
-        LEFT JOIN catalog_cover_art_cache AS art
-            ON art.entityType = 'release-group:front-v5' AND art.mbid = ident.externalId
         WHERE membership.artistId = :artistId
           AND membership.publicationEvidence = 'website-default-v1'
         ORDER BY grp.firstReleaseDate DESC, grp.title COLLATE NOCASE, ident.externalId
