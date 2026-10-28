@@ -201,6 +201,7 @@ fun SettingsScreen(
     val cellularQuality by AppSettings.audioQualityCellular.collectAsStateWithLifecycle()
     val metered by AppSettings.meteredConnection.collectAsStateWithLifecycle()
     val crossfade by AppSettings.crossfadeSeconds.collectAsStateWithLifecycle()
+    val pauseResumeFade by AppSettings.pauseResumeFadeMs.collectAsStateWithLifecycle()
     val smartFade by AppSettings.smartFadeEnabled.collectAsStateWithLifecycle()
     val automixPerformance by AppSettings.automixPerformanceMode.collectAsStateWithLifecycle()
     val skipSilence by AppSettings.skipSilence.collectAsStateWithLifecycle()
@@ -592,6 +593,19 @@ fun SettingsScreen(
                         steps = 11,
                     )
                 }
+            }
+            val pauseFadeTitle = stringResource(R.string.pause_resume_fade)
+            row(pauseFadeTitle, "fade", "pause", "resume", "pausar", "retomar") {
+                SliderRow(
+                    icon = Icons.Rounded.Waves,
+                    title = pauseFadeTitle,
+                    subtitle = stringResource(R.string.pause_resume_fade_subtitle),
+                    value = if (pauseResumeFade == 0) stringResource(R.string.off) else "${pauseResumeFade} ms",
+                    sliderValue = pauseResumeFade.toFloat(),
+                    onSliderValue = { AppSettings.setPauseResumeFadeMs(it.roundToInt()) },
+                    valueRange = 0f..600f,
+                    steps = 5,
+                )
             }
             val automixTitle = stringResource(R.string.automix)
             row(automixTitle, "crossfade", "smart fade", "mix") {
