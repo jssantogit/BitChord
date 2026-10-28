@@ -506,8 +506,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (row.kind == CanonicalSearchKind.RELEASE_GROUP) {
             // Fast path on revisit: group art must come from a vetted
             // Official edition linked by MBID, not matching group title.
-            coverArtArchive.cachedVerifiedGroupCover(row.musicBrainzId, size)?.let {
-                return it
+            val cachedSmallSleeve = coverArtArchive.cachedVerifiedGroupCover(
+                row.musicBrainzId, size,
+            )
+            // A saved 250px sleeve stays visible in the UI while better CAA
+            // artwork is sought. It must not permanently block an eventual
+            // 500px Front upgrade merely because the old URI was non-null.
+            if (cachedSmallSleeve != null && !canonicalNeedsCoverRefresh(cachedSmallSleeve)) {
+                return cachedSmallSleeve
             }
             val index = MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
                 getApplication<Application>(),
@@ -555,7 +561,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 catch (_: Exception) { /* Valid art still renders if cache is unavailable. */ }
                 return if (size == CoverArtSize.THUMBNAIL) thumb else hero
             }
-            return null
+            return cachedSmallSleeve
         }
         val target = canonicalCoverLookupTarget(row)
         if (row.kind == CanonicalSearchKind.RECORDING) {
@@ -979,7 +985,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     .orEmpty().filter {
                         it.kind == CanonicalSearchKind.RELEASE_GROUP &&
                             canonicalEditorialReleaseType(it) != null &&
-                            it.artworkUri.isNullOrBlank()
+                            canonicalNeedsCoverRefresh(it.artworkUri)
                     }
                 if (waiting.isNotEmpty()) {
                     val verified = coverArtArchive.cachedVerifiedGroupCovers(
@@ -998,7 +1004,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 old.data.copy(rows = old.data.rows.map { row ->
                                     val url = verified[row.musicBrainzId]
                                     if (row.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                                        row.artworkUri.isNullOrBlank() && url != null
+                                        canonicalShouldAcceptArtworkUpdate(row.artworkUri, url)
                                     ) row.copy(artworkUri = url) else row
                                 }),
                             )
@@ -1105,7 +1111,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     .orEmpty().filter {
                         it.kind == CanonicalSearchKind.RELEASE_GROUP &&
                             canonicalEditorialReleaseType(it) != null &&
-                            it.artworkUri.isNullOrBlank() &&
+                            canonicalNeedsCoverRefresh(it.artworkUri) &&
                             it.musicBrainzId !in attempted
                     }.let { pending ->
                         // Paint the first eight without holding them behind
@@ -1178,7 +1184,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 old.data.copy(rows = old.data.rows.map {
                                     val cover = results[it.musicBrainzId]
                                     if (it.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                                        it.artworkUri.isNullOrBlank() && cover != null
+                                        cover != null &&
+                                        canonicalShouldAcceptArtworkUpdate(it.artworkUri, cover.first)
                                     ) it.copy(artworkUri = cover.first, title = cover.second)
                                     else it
                                 }),
