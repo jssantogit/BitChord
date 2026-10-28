@@ -251,4 +251,51 @@ class ContextualScopedRoomTest {
         } finally { db.close() }
     }
 
+    @Test fun localAddedDateRuleUsesOnlyPersistedMediaStoreEvidenceForCurrentSource() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val dao = db.catalogDao()
+            val local = CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER
+            val remote = "opensubsonic:private"
+            val nowSeconds = System.currentTimeMillis() / 1_000
+            dao.upsertRecording(RecordingEntity("rec:old", "Old Local", "A", 100_000))
+            dao.upsertRecording(RecordingEntity("rec:unknown", "Undated", "B", 100_000))
+            dao.upsertRecording(RecordingEntity("rec:future", "Future", "C", 100_000))
+            dao.upsertMediaAsset(MediaAssetEntity("asset:old", "rec:old", local,
+                "key:old", "content://media/1", null,
+                nowSeconds - 15L * 86_400L, null, null))
+            dao.upsertMediaAsset(MediaAssetEntity("asset:undated", "rec:unknown", local,
+                "key:unknown", "content://media/2", null, null, null, null))
+            dao.upsertMediaAsset(MediaAssetEntity("asset:future", "rec:future", local,
+                "key:future", "content://media/3", null, nowSeconds + 86_400L, null, null))
+            dao.upsertMediaAsset(MediaAssetEntity("asset:remote", "rec:old", remote,
+                "key:remote", "opensubsonic://media/1", null, null, null, null))
+            val ageRule = SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
+                SmartPlaylistRuleOperator.GREATER_OR_EQUAL, value = 10.0,
+            )
+            val presentRule = SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
+                SmartPlaylistRuleOperator.IS_PRESENT,
+            )
+            val reader = CanonicalContextualFilterLibrary(dao)
+            val old = SavedSmartPlaylistV2Filter("old", "Old", ageRule)
+            assertEquals(listOf("rec:old"), reader.songs(local, old).map { it.recordingId })
+            assertEquals(listOf("rec:old"), reader.songs(local, old.copy(
+                rules = presentRule,
+            )).map { it.recordingId })
+            assertEquals(emptyList<String>(), reader.songs(local, old.copy(
+                rules = SmartPlaylistRule.Not(presentRule),
+            )).map { it.recordingId })
+            assertTrue(runCatching { reader.songs(remote, old) }.exceptionOrNull()
+                is IllegalArgumentException)
+            dao.deleteAllMediaAssets(local)
+            assertTrue(reader.songs(local, old).isEmpty())
+            // The remote copy cannot acquire the date from an unrelated local asset.
+            assertTrue(runCatching { reader.songs(remote, old) }.exceptionOrNull()
+                is IllegalArgumentException)
+        } finally { db.close() }
+    }
+
 }
