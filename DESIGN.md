@@ -266,6 +266,10 @@ A partir da issue #196, a linha **Fontes de letras** das Configurações exibe u
 
 O rodapé **Sobre** aponta para o repositório deste fork e mantém um crédito separado para o projeto BitChord original; links de suporte do upstream e o slogan sobre o YouTube Music não são divulgados como se fossem interfaces do fork. Em **Aparência**, o seletor de ícones usa uma grade responsiva com contorno no item selecionado e estado de seleção semântico para acessibilidade.
 
+### Precedência da base de UI Android (integração #197)
+
+A primeira base de interface do fork reúne as issues **#187, #190, #194 e #196** numa única PR #197 contra `main` (Configurações, Now Playing/fila, visualização por estrelas e Home). Essa base deve ser estabilizada independentemente das PRs ainda em desenvolvimento de **catálogo #183, DSP #188 e avaliações canônicas #182**; as integrações posteriores devem adaptar seus pontos de contato à base Android sem reintroduzir redundâncias removidas. A precedência é de integração, não substitui os testes próprios dessas outras frentes nem declara o YouTube removido do backend. Animações de artwork permanecem suportadas.
+
 ### Letras e gestos de leitura
 
 O painel trata letras sincronizadas, destaque de linha/palavra, linhas auxiliares, tradução/romanização, auto-follow e browsing manual. A linha ativa fica nítida; linhas fora do foco podem escurecer e desfocar. Rolagem manual suspende o seguimento/desfoque de foco no caminho de browsing. Glow depende de `!reduceAnimation`, `!reduceDynamicBlur` e `lyricsBlur`, além das condições de apresentação; não é um brilho sempre ativo ([PlayerLyrics.kt][lyrics], [SyncedLyricsPanel.kt](sharedUi/src/jvmSharedMain/kotlin/com/music/bitchord/ui/player/SyncedLyricsPanel.kt)).
