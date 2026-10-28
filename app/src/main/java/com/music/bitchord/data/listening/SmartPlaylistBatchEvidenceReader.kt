@@ -78,6 +78,9 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
         val trackArtistsById = if (SmartPlaylistRuleField.TRACK_ARTIST in requiredFields) {
             catalog.recordingTrackArtistCreditsByIds(recordingIds).groupBy { it.recordingId }
         } else emptyMap()
+        val artworkById = if (SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE in requiredFields) {
+            catalog.recordingReleaseArtworkByIds(recordingIds).groupBy { it.recordingId }
+        } else emptyMap()
         // Missing canonical metadata means the Recording cannot be promoted
         // from a provider/native id; no fake row is synthesized.
         return recordingIds.distinct().mapNotNull { id ->
@@ -123,6 +126,8 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                 ) ratingsById[id]?.ratedAtEpochMs else null,
                 localRatingDateEvidenceKnown =
                     SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING in requiredFields,
+                hasReleaseArtworkReference = artworkById[id].orEmpty()
+                    .any { !it.artworkUri.isNullOrBlank() },
             )
         }
     }
