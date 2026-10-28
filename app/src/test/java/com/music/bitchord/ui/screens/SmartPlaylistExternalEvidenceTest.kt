@@ -92,4 +92,15 @@ class SmartPlaylistExternalEvidenceTest {
         assertTrue(unchanged.isEmpty())
         plainJob.cancel()
     }
+
+    @Test fun nestedLocalRatingAgeTriggersForegroundOnlyRefresh() {
+        val age = SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(compare(SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING)),
+        )
+        assertTrue(age.requiresRelativeAgeRefresh())
+        assertFalse(SmartPlaylistV2Query(compare(
+            SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
+        )).requiresRelativeAgeRefresh())
+    }
+
 }
