@@ -699,4 +699,35 @@ class SmartPlaylistV2RuleEngineTest {
         }
     }
 
+
+
+    @Test fun localRatingSortIsDeterministicAndMissingTimestampsStayLast() {
+        val newest = candidate("newest").copy(
+            localRatingUpdatedAtEpochMs = now - 1000L, localRatingDateEvidenceKnown = true,
+        )
+        val oldA = candidate("old-a").copy(
+            localRatingUpdatedAtEpochMs = now - 2000L, localRatingDateEvidenceKnown = true,
+        )
+        val oldB = candidate("old-b").copy(
+            localRatingUpdatedAtEpochMs = now - 2000L, localRatingDateEvidenceKnown = true,
+        )
+        val missing = candidate("missing").copy(localRatingDateEvidenceKnown = true)
+        val future = candidate("future").copy(
+            localRatingUpdatedAtEpochMs = now + 1L, localRatingDateEvidenceKnown = true,
+        )
+        val unknown = candidate("unknown")
+        val rows = listOf(future, missing, oldB, newest, unknown, oldA)
+        val rule = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.DURATION_MS, SmartPlaylistRuleOperator.IS_PRESENT,
+        )
+        assertEquals(listOf("newest", "old-a", "old-b", "future", "missing", "unknown"),
+            planner.preview(rows, SmartPlaylistV2Query(
+                rule, sort = SmartPlaylistV2Sort.LOCAL_RATING_NEWEST,
+            )).map { it.recordingId })
+        assertEquals(listOf("old-a", "old-b", "newest", "future", "missing", "unknown"),
+            planner.preview(rows, SmartPlaylistV2Query(
+                rule, sort = SmartPlaylistV2Sort.LOCAL_RATING_OLDEST,
+            )).map { it.recordingId })
+    }
+
 }
