@@ -195,10 +195,28 @@ internal class MusicBrainzCatalogIndex(
             val dao = database.catalogDao()
             val artistId = dao.entityIdForExternalIdentity("musicbrainz", "artist", normalized)
                 ?: return@withTransaction emptyList()
-            // Single snapshot query replaces 1 + N identity lookups plus
-            // cache batching, preventing a cold 300-group artist browse from
-            // spending hundreds of Room round trips before showing any art.
-            dao.verifiedArtistDiscographyRows(artistId)
+            // Group identity and shelf titles remain one Room snapshot.
+            // Do not publish art from the raw SQL JOIN: it does not apply the
+            // positive TTL or the CAA HTTPS allowlist. Read Front-v5 rows in
+            // one additional indexed query and apply the exact same validator
+            // used by CoverArtArchive before any artwork reaches Compose.
+            val rows = dao.verifiedArtistDiscographyRows(artistId)
+            if (rows.isEmpty()) return@withTransaction rows
+            val now = System.currentTimeMillis()
+            val eligibleIds = rows.map { it.musicBrainzId }.toSet()
+            val verified = dao.verifiedGroupFronts(eligibleIds.toList())
+                .mapNotNull { record ->
+                    if (record.mbid !in eligibleIds) return@mapNotNull null
+                    val url = eligibleVerifiedGroupFrontUrl(
+                        MusicBrainzCoverArtCacheEntry(
+                            "verified-artist-group", record.mbid, record.artworkUri,
+                            record.fetchedAtEpochMs, record.thumbnailUri,
+                        ),
+                        now,
+                    ) ?: return@mapNotNull null
+                    record.mbid to url
+                }.toMap()
+            rows.map { it.copy(artworkUri = verified[it.musicBrainzId]) }
         }
 
     /** Edition search evidence uses the existing source-specific v3 cache. */
