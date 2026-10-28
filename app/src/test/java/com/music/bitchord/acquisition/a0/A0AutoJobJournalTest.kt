@@ -27,6 +27,35 @@ class A0AutoJobJournalTest {
         job.finish()
         assertEquals(A3AcquisitionLedger.Phase.FAILED,ledger.get(id)?.phase)
     }
+    @Test fun reservedAutomaticSlotUsesSameA3JobWithoutSecondCreate() {
+        val store=InMemory()
+        val ledger=A3AcquisitionLedger(store)
+        ledger.reserveAutomaticBatch(listOf(A3AcquisitionLedger.AutomaticSlot(
+            id,"recording-1","ILLIT - Magnetic","SUPER REAL ME")))
+        val job=A0AutoJobJournal(ledger,id,reservedAutomatic=true)
+        job.beginTransfer()
+        assertEquals(1,ledger.all().size)
+        assertEquals(A3AcquisitionLedger.Phase.TRANSFERRING,
+            ledger.get(id)?.phase)
+        assertNotNull(ledger.get(id)?.autoRecordingDigest)
+        job.finish()
+        assertEquals(A3AcquisitionLedger.Phase.FAILED,
+            ledger.get(id)?.phase)
+    }
+
+    @Test fun reservedJobRefusesUnboundOrCompletedLedgerRecord() {
+        val empty=A3AcquisitionLedger(InMemory())
+        try {
+            A0AutoJobJournal(empty,id,reservedAutomatic=true).beginTransfer()
+            fail("must have durable preflight")
+        }catch(_:IllegalStateException){}
+        empty.create(id)
+        try {
+            A0AutoJobJournal(empty,id,reservedAutomatic=true).beginTransfer()
+            fail("legacy job not reserved")
+        }catch(_:IllegalStateException){}
+    }
+
     @Test fun noAttemptMeansNoJournalEntry() {
         val (ledger,job)=new()
         job.finish()
