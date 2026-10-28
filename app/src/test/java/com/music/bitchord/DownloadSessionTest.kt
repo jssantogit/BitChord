@@ -167,6 +167,31 @@ class DownloadSessionTest {
         assertEquals(1,DownloadSession.state.value.items.size)
     }
 
+    @Test
+    fun `service stop settles orphaned auto session even when request map already drained`() {
+        val id="soulseek-auto:orphan-after-onIdle"
+        DownloadSession.queued(song(id))
+        DownloadSession.running(id,0.5f)
+        Downloads.onStopped()
+        val result=DownloadSession.state.value.items.single()
+        assertEquals(id,result.videoId)
+        assertTrue(result.progress is DownloadProgress.Failed)
+        assertFalse(DownloadSession.state.value.busy)
+    }
+
+    @Test
+    fun `service stop never changes completed auto reports or legacy sessions`() {
+        DownloadSession.queued(song("soulseek-auto:published"))
+        DownloadSession.done("soulseek-auto:published")
+        DownloadSession.queued(song("legacy-running"))
+        DownloadSession.running("legacy-running",0.5f)
+        Downloads.onStopped()
+        assertEquals(DownloadProgress.Done,
+            DownloadSession.state.value.items.first().progress)
+        assertTrue(DownloadSession.state.value.items.last().progress is
+            DownloadProgress.Running)
+    }
+
     // ---- How far through it is ---------------------------------------------
 
     @Test
