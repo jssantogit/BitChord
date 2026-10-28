@@ -56,6 +56,8 @@ internal object A0AndroidAutoAcquisitionEngine {
         userRequested:Boolean,
         isCancelled:()->Boolean,
         onSlotResolved:(Int,A0AutoBatchExecutor.TrackStatus)->Unit={ _,_ -> },
+        onSlotSearching:(Int)->Unit={},
+        onSlotTransferring:(Int)->Unit={},
         /** Only invoked AFTER A3 durably proves zero P/F for the whole album. */
         onUnusedReservationReleased:()->Unit={},
         sourceSongs:List<Song> = emptyList(),
@@ -141,6 +143,10 @@ internal object A0AndroidAutoAcquisitionEngine {
                         A0FreshAuthenticatedAutoTransport(app,generation),
                         jobId=checkNotNull(jobs[entry.trackId]),
                         reservedAutomatic=true,
+                        onTransferStarting={
+                            try {onSlotTransferring(entries.indexOf(entry))}
+                            catch(_:Exception){}
+                        },
                         sourceSong=sourceSongs.firstOrNull { it.videoId==entry.trackId }
                             ?: Song(
                                 videoId=entry.trackId,
@@ -157,7 +163,8 @@ internal object A0AndroidAutoAcquisitionEngine {
                         SoulseekActiveSession.isCurrent(generation) &&
                             A0AndroidAutoConsent.enabled(app)
                     },
-                    onSlotResolved=onSlotResolved)
+                    onSlotResolved=onSlotResolved,
+                    onSlotSearching=onSlotSearching)
             }
         }
         return A0AutoDiscoveryCoordinator.Report(
