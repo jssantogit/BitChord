@@ -168,4 +168,37 @@ class ContextualSmartFilterTest {
         assertEquals(expected.map { it.availableAssets }, matches.map { it.availableAssets })
     }
 
+    @Test fun mixedKnownAndUnknownLocalAssetDatesDoNotProveNegativeComparisons() {
+        val local = com.music.bitchord.data.catalog.CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER
+        val song = track("shared").copy(availableAssets = listOf(
+            CanonicalBrowseMediaAsset("local:one", local),
+            CanonicalBrowseMediaAsset("local:two", local),
+        ))
+        val nowSeconds = System.currentTimeMillis() / 1_000
+        val partialDates = mapOf("shared" to listOf(nowSeconds - 20L * 86_400L, null))
+        val present = filter(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
+            SmartPlaylistRuleOperator.IS_PRESENT,
+        ))
+        val old = filter(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
+            SmartPlaylistRuleOperator.GREATER_THAN, value = 10.0,
+        ))
+        val unequal = filter(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
+            SmartPlaylistRuleOperator.NOT_EQUAL, value = 5.0,
+        ))
+        assertEquals(listOf("shared"),
+            filterCanonicalBrowseSongs(listOf(song), present, local, partialDates)
+                .map { it.recordingId })
+        assertEquals(listOf("shared"),
+            filterCanonicalBrowseSongs(listOf(song), old, local, partialDates)
+                .map { it.recordingId })
+        assertTrue(filterCanonicalBrowseSongs(listOf(song), unequal, local,
+            partialDates).isEmpty())
+        assertThrows(IllegalArgumentException::class.java) {
+            filterCanonicalBrowseSongs(listOf(song), present, local)
+        }
+    }
+
 }
