@@ -807,4 +807,73 @@ class SmartPlaylistBatchEvidenceRoomTest {
             listening.close()
         }
     }
+
+    @Test fun v2SortProjectionRequestsOnlyNecessaryRatingAndListeningColumns() {
+        fun query(sort: SmartPlaylistV2Sort) = SmartPlaylistV2Query(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE,
+                SmartPlaylistRuleOperator.CONTAINS, textValue = "test",
+            ), sort = sort,
+        )
+        assertEquals(setOf(SmartPlaylistRuleField.TITLE),
+            query(SmartPlaylistV2Sort.TITLE_ASC).requiredEvidenceFields())
+        assertEquals(setOf(SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.EXPLICIT_RATING,
+            SmartPlaylistRuleField.AUDIBLE_COMPLETIONS),
+            query(SmartPlaylistV2Sort.RATING_DESC).requiredEvidenceFields())
+        assertEquals(setOf(SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.EXPLICIT_RATING),
+            query(SmartPlaylistV2Sort.RATING_ASC).requiredEvidenceFields())
+        assertEquals(setOf(SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.AUDIBLE_COMPLETIONS),
+            query(SmartPlaylistV2Sort.COMPLETIONS_DESC).requiredEvidenceFields())
+        assertEquals(setOf(SmartPlaylistRuleField.TITLE,
+            SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE),
+            query(SmartPlaylistV2Sort.LAST_AUDIBLE_ASC).requiredEvidenceFields())
+        assertEquals(setOf(SmartPlaylistRuleField.TITLE,
+            SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING),
+            query(SmartPlaylistV2Sort.LOCAL_RATING_NEWEST).requiredEvidenceFields())
+    }
+
+    @Test fun sparseTextOnlyRoomBatchSkipsLocalRatingAndListeningProjection() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            catalog.catalogDao().upsertRecording(RecordingEntity(
+                "rec:one", "Test", "Artist", 100_000L,
+            ))
+            listening.recordingRatingDao().upsertCurrent(
+                RecordingRatingCurrentEntity("rec:one", 5.0, 5_000L),
+            )
+            val store = RoomListeningEventStore(
+                listening.listeningEventDao(),
+                clock = ListeningClock { 10_000L },
+                idGenerator = ListeningIdGenerator { "event:one" },
+            )
+            store.recordPlaybackStarted(PlaybackStart(recordingId = "rec:one"))
+            store.recordPlaybackEnded(PlaybackEnd(
+                recordingId = "rec:one", listenedDurationMs = 100_000L,
+                recordingDurationMs = 100_000L, endCause = PlaybackEndCause.ENDED,
+            ))
+            val reader = RoomSmartPlaylistBatchEvidenceReader(
+                catalog.catalogDao(), listening.listeningEventDao(), listening.recordingRatingDao(),
+            )
+            val sparse = reader.read(listOf("rec:one"),
+                setOf(SmartPlaylistRuleField.TITLE)).single()
+            assertEquals("Test", sparse.title)
+            assertEquals(null, sparse.explicitRating)
+            assertEquals(0L, sparse.audibleCompletions)
+            assertEquals(null, sparse.lastAudibleAtEpochMs)
+            assertTrue(!sparse.localRatingDateEvidenceKnown)
+            val full = reader.read(listOf("rec:one"), setOf(
+                SmartPlaylistRuleField.EXPLICIT_RATING,
+                SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
+            )).single()
+            assertEquals(5.0, full.explicitRating)
+            assertEquals(1L, full.audibleCompletions)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
 }
