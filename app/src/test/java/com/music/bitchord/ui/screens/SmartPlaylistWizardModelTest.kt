@@ -52,6 +52,32 @@ class SmartPlaylistWizardModelTest {
         assertEquals(negative, smartRuleAtPath(root, listOf(0)))
     }
 
+    @Test fun nestedNotGroupKeepsItsBooleanMeaningThroughEditMoveAndDelete() {
+        val ref = SmartPlaylistRule.Reference("linked-playlist")
+        val first = smartRuleNewComparison(SmartPlaylistRuleField.TITLE)
+        val extra = smartRuleNewComparison(SmartPlaylistRuleField.SOURCE_KIND)
+        val wrapped = SmartPlaylistRule.Not(
+            SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(ref, first)),
+        )
+        val root = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(wrapped, extra))
+        assertEquals(ref, smartRuleAtPath(root, listOf(0, 0)))
+        val appended = smartRuleAddConditionAt(root, listOf(0), extra)
+        assertEquals(listOf(ref, first, extra),
+            ((smartRuleAtPath(appended, listOf(0)) as SmartPlaylistRule.Not)
+                .child as SmartPlaylistRule.Group).children)
+        val changed = smartRuleUpdateGroup(appended, listOf(0)) {
+            it.copy(join = SmartPlaylistRuleJoin.ALL,
+                children = it.children.reversed())
+        }
+        val deleted = smartRuleRemoveAt(changed, listOf(0, 0))
+        val current = smartRuleAtPath(deleted, listOf(0)) as SmartPlaylistRule.Not
+        assertEquals(SmartPlaylistRuleJoin.ALL,
+            (current.child as SmartPlaylistRule.Group).join)
+        assertEquals(listOf(first, ref),
+            (current.child as SmartPlaylistRule.Group).children)
+        assertEquals(wrapped, smartRuleAtPath(root, listOf(0)))
+    }
+
     @Test fun invalidPathsAndLastChildDeletionFailClosed() {
         val root = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL,
             listOf(smartRuleNewComparison(SmartPlaylistRuleField.EXPLICIT_RATING)))

@@ -469,14 +469,17 @@ internal fun SmartPlaylistV2WizardUi(
                     }
                     WizardStep.GROUP -> {
                         val selected = runCatching { smartRuleAtPath(rule, selectedPath) }.getOrNull()
-                        val group = selected as? SmartPlaylistRule.Group
+                        val core = if (selected is SmartPlaylistRule.Not) selected.child else selected
+                        val group = core as? SmartPlaylistRule.Group
                         if (group != null) {
                             item {
                                 WizardCard("Combinar condições",
                                     "Escolha a lógica somente deste grupo") {
                                     WizardJoinPicker(group.join) {
-                                        onRuleChange(smartRuleReplaceAt(rule, selectedPath,
-                                            group.copy(join = it)))
+                                        val nextJoin = it
+                                        onRuleChange(smartRuleUpdateGroup(rule, selectedPath) { current ->
+                                            current.copy(join = nextJoin)
+                                        })
                                     }
                                 }
                             }
@@ -487,12 +490,14 @@ internal fun SmartPlaylistV2WizardUi(
                                     Row(Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween) {
                                         TextButton(onClick = {
-                                            onRuleChange(smartRuleReplaceAt(rule, selectedPath,
-                                                group.moveChild(i, (i - 1).coerceAtLeast(0))))
+                                            onRuleChange(smartRuleUpdateGroup(rule, selectedPath) {
+                                                it.moveChild(i, (i - 1).coerceAtLeast(0))
+                                            })
                                         }, enabled = i > 0) { Text("Subir") }
                                         TextButton(onClick = {
-                                            onRuleChange(smartRuleReplaceAt(rule, selectedPath,
-                                                group.moveChild(i, (i + 1).coerceAtMost(group.children.lastIndex))))
+                                            onRuleChange(smartRuleUpdateGroup(rule, selectedPath) {
+                                                it.moveChild(i, (i + 1).coerceAtMost(group.children.lastIndex))
+                                            })
                                         }, enabled = i < group.children.lastIndex) { Text("Descer") }
                                         TextButton(onClick = {
                                             if (group.children.size > 1)
@@ -515,7 +520,7 @@ internal fun SmartPlaylistV2WizardUi(
                             }
                             item {
                                 OutlinedButton(onClick = {
-                                    onRuleChange(smartRuleAppendAt(rule, selectedPath,
+                                    onRuleChange(smartRuleAddConditionAt(rule, selectedPath,
                                         SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL,
                                             listOf(smartRuleNewComparison(SmartPlaylistRuleField.AUDIBLE_COMPLETIONS)))))
                                 }, enabled = group.children.size < 64,
@@ -525,6 +530,11 @@ internal fun SmartPlaylistV2WizardUi(
                                 TextButton(onClick = { picker = "reference" }) {
                                     Text("+ Usar playlist salva como condição")
                                 }
+                            }
+                            if (selected is SmartPlaylistRule.Not) item {
+                                TextButton(onClick = {
+                                    onRuleChange(smartRuleReplaceAt(rule, selectedPath, selected.child))
+                                }) { Text("Retirar NÃO deste grupo") }
                             }
                         } else if (selected != null) {
                             item {
@@ -547,7 +557,7 @@ internal fun SmartPlaylistV2WizardUi(
                                     onRuleChange(smartRuleReplaceAt(rule, selectedPath, selected.child))
                                 }) { Text("Remover negação") }
                             }
-                            if (selected is SmartPlaylistRule.Reference) item {
+                            if (core is SmartPlaylistRule.Reference) item {
                                 TextButton(onClick = { picker = "replaceReference" }) {
                                     Text("Trocar playlist referenciada")
                                 }

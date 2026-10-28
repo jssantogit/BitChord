@@ -107,11 +107,14 @@ internal fun smartConditionSearch(
     }
 }
 
-/** AST paths index Group children only; Not is edited as one atomic node. */
+/** Rule paths index Group children; traverse a NOT-wrapped Group transparently. */
 internal fun smartRuleAtPath(root: SmartPlaylistRule, path: List<Int>): SmartPlaylistRule =
     path.fold(root) { current, index ->
-        val group = current as? SmartPlaylistRule.Group
-            ?: throw IllegalArgumentException("Not a rule group")
+        val group = when (current) {
+            is SmartPlaylistRule.Group -> current
+            is SmartPlaylistRule.Not -> current.child as? SmartPlaylistRule.Group
+            else -> null
+        } ?: throw IllegalArgumentException("Not a rule group")
         require(index in group.children.indices) { "Invalid condition index" }
         group.children[index]
     }
@@ -122,6 +125,9 @@ internal fun smartRuleReplaceAt(
     replacement: SmartPlaylistRule,
 ): SmartPlaylistRule {
     if (path.isEmpty()) return replacement
+    if (root is SmartPlaylistRule.Not) {
+        return root.copy(child = smartRuleReplaceAt(root.child, path, replacement))
+    }
     val group = root as? SmartPlaylistRule.Group
         ?: throw IllegalArgumentException("Not a rule group")
     val index = path.first()
@@ -136,10 +142,29 @@ internal fun smartRuleAppendAt(
     path: List<Int>,
     added: SmartPlaylistRule,
 ): SmartPlaylistRule {
-    val group = smartRuleAtPath(root, path) as? SmartPlaylistRule.Group
-        ?: throw IllegalArgumentException("Target must be a group")
-    require(group.children.size < 64) { "Maximum group size reached" }
-    return smartRuleReplaceAt(root, path, group.copy(children = group.children + added))
+    return smartRuleUpdateGroup(root, path) { group ->
+        require(group.children.size < 64) { "Maximum group size reached" }
+        group.copy(children = group.children + added)
+    }
+}
+
+/**
+ * Edits the selected group without unwrapping its NOT operator.
+ */
+internal fun smartRuleUpdateGroup(
+    root: SmartPlaylistRule,
+    path: List<Int>,
+    update: (SmartPlaylistRule.Group) -> SmartPlaylistRule.Group,
+): SmartPlaylistRule {
+    val node = smartRuleAtPath(root, path)
+    val group = when (node) {
+        is SmartPlaylistRule.Group -> node
+        is SmartPlaylistRule.Not -> node.child as? SmartPlaylistRule.Group
+        else -> null
+    } ?: throw IllegalArgumentException("Target must be a group")
+    val changed = update(group)
+    return smartRuleReplaceAt(root, path,
+        if (node is SmartPlaylistRule.Not) node.copy(child = changed) else changed)
 }
 
 /**
@@ -153,7 +178,9 @@ internal fun smartRuleAddConditionAt(
     added: SmartPlaylistRule,
 ): SmartPlaylistRule {
     val node = smartRuleAtPath(root, path)
-    return if (node is SmartPlaylistRule.Group) {
+    return if (node is SmartPlaylistRule.Group ||
+        (node is SmartPlaylistRule.Not && node.child is SmartPlaylistRule.Group)
+    ) {
         smartRuleAppendAt(root, path, added)
     } else {
         smartRuleReplaceAt(root, path, SmartPlaylistRule.Group(
@@ -165,13 +192,12 @@ internal fun smartRuleAddConditionAt(
 internal fun smartRuleRemoveAt(root: SmartPlaylistRule, path: List<Int>): SmartPlaylistRule {
     require(path.isNotEmpty()) { "Cannot remove the root condition" }
     val parentPath = path.dropLast(1)
-    val group = smartRuleAtPath(root, parentPath) as? SmartPlaylistRule.Group
-        ?: throw IllegalArgumentException("Parent must be a group")
-    require(group.children.size > 1) { "A group requires at least one condition" }
-    val index = path.last()
-    require(index in group.children.indices) { "Invalid rule index" }
-    return smartRuleReplaceAt(root, parentPath,
-        group.copy(children = group.children.filterIndexed { i, _ -> i != index }))
+    return smartRuleUpdateGroup(root, parentPath) { group ->
+        require(group.children.size > 1) { "A group requires at least one condition" }
+        val index = path.last()
+        require(index in group.children.indices) { "Invalid rule index" }
+        group.copy(children = group.children.filterIndexed { i, _ -> i != index })
+    }
 }
 
 internal fun smartRuleNewComparison(field: SmartPlaylistRuleField): SmartPlaylistRule.Comparison =
