@@ -195,6 +195,32 @@ internal fun SmartPlaylistRule.referencedFields(): Set<SmartPlaylistRuleField> =
     is SmartPlaylistRule.Not -> child.referencedFields()
 }
 
+/**
+ * Sort dependencies must be fetched as well as AST fields: RATING_DESC uses
+ * completions for tie-breaking, while text-sort-only queries need neither the
+ * rating table nor the listening event aggregate.
+ */
+internal fun SmartPlaylistV2Query.requiredEvidenceFields(): Set<SmartPlaylistRuleField> {
+    val sortFields = when (sort) {
+        SmartPlaylistV2Sort.RATING_DESC -> setOf(
+            SmartPlaylistRuleField.EXPLICIT_RATING,
+            SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
+        )
+        SmartPlaylistV2Sort.RATING_ASC -> setOf(SmartPlaylistRuleField.EXPLICIT_RATING)
+        SmartPlaylistV2Sort.COMPLETIONS_ASC,
+        SmartPlaylistV2Sort.COMPLETIONS_DESC ->
+            setOf(SmartPlaylistRuleField.AUDIBLE_COMPLETIONS)
+        SmartPlaylistV2Sort.LAST_AUDIBLE_ASC,
+        SmartPlaylistV2Sort.LAST_AUDIBLE_DESC ->
+            setOf(SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE)
+        SmartPlaylistV2Sort.LOCAL_RATING_NEWEST,
+        SmartPlaylistV2Sort.LOCAL_RATING_OLDEST ->
+            setOf(SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING)
+        else -> emptySet()
+    }
+    return rules.referencedFields() + sortFields
+}
+
 private fun SmartPlaylistRule.needsSourceKinds(): Boolean = when (this) {
     is SmartPlaylistRule.Comparison -> field == SmartPlaylistRuleField.SOURCE_KIND ||
         field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED
@@ -239,12 +265,7 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
             q.rules.needsExplicitRating() || q.sort == SmartPlaylistV2Sort.RATING_ASC ||
                 q.sort == SmartPlaylistV2Sort.RATING_DESC
         }
-        val fields = queries.flatMap { q ->
-            q.rules.referencedFields() + if (
-                q.sort == SmartPlaylistV2Sort.LOCAL_RATING_NEWEST ||
-                q.sort == SmartPlaylistV2Sort.LOCAL_RATING_OLDEST
-            ) setOf(SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING) else emptySet()
-        }.toSet()
+        val fields = queries.flatMap { it.requiredEvidenceFields() }.toSet()
         val rows = candidates(
             includeRemoteRatings = needsRemote,
             includeSourceEvidence = queries.any { it.rules.needsSourceKinds() },
