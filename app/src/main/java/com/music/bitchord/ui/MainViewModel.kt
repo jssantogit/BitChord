@@ -632,6 +632,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     cachedCover = { group ->
                         coverArtArchive.cachedVerifiedGroupCover(group, CoverArtSize.THUMBNAIL)
                     },
+                    cachedCovers = { groups ->
+                        coverArtArchive.cachedVerifiedGroupCovers(
+                            groups, CoverArtSize.THUMBNAIL,
+                        )
+                    },
                 )
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -688,6 +693,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         cachedCover = { group ->
                             coverArtArchive.cachedVerifiedGroupCover(
                                 group, CoverArtSize.THUMBNAIL,
+                            )
+                        },
+                        cachedCovers = { groups ->
+                            coverArtArchive.cachedVerifiedGroupCovers(
+                                groups, CoverArtSize.THUMBNAIL,
                             )
                         },
                     )
