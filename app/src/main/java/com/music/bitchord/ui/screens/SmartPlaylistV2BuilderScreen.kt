@@ -17,6 +17,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -28,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
+import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.SavedSmartPlaylistDefinition
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionRepository
 import com.music.bitchord.data.listening.toV2Copy
@@ -48,6 +50,8 @@ import com.music.bitchord.sharedui.resources.smart_collection_batch_queue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
@@ -267,7 +271,9 @@ internal fun SmartPlaylistV2BuilderScreen(
             SmartPlaylistDefinitionDatabase.get(context).definitionDao(),
         )
     }
-    val catalog = remember(context) { CanonicalCatalogDatabase.get(context).catalogDao() }
+    val catalogDatabase = remember(context) { CanonicalCatalogDatabase.get(context) }
+    val listeningDatabase = remember(context) { ListeningEventDatabase.get(context) }
+    val catalog = remember(catalogDatabase) { catalogDatabase.catalogDao() }
     val evaluator = remember(context) { persistentSmartPlaylistPreview(context) }
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
@@ -323,6 +329,44 @@ internal fun SmartPlaylistV2BuilderScreen(
         limit = limit.toIntOrNull() ?: throw IllegalArgumentException("Limite inválido"),
         randomSeed = seed.toIntOrNull() ?: throw IllegalArgumentException("Semente inválida"),
     )
+
+    suspend fun loadPreviewRows(parsed: SmartPlaylistV2Query): List<V2DisplayRow> =
+        withContext(Dispatchers.IO) {
+            val matched = evaluator.preview(parsed)
+            val known = matched.map { it.recordingId }.chunked(400)
+                .flatMap { catalog.recordingsByIds(it) }
+                .associateBy { it.id }
+            matched.mapNotNull { item ->
+                val info = known[item.recordingId] ?: return@mapNotNull null
+                V2DisplayRow(info.id, info.title, info.artistDisplay)
+            }
+        }
+
+    // Only a visible, explicitly requested preview gets a live observer.
+    // Changes to source Room tables refresh the result, with cancellation when
+    // the user edits any rule or leaves the screen. Account preference changes
+    // are handled by the manual "Atualizar" button below.
+    LaunchedEffect(previewQuery, catalogDatabase, listeningDatabase) {
+        val active = previewQuery ?: return@LaunchedEffect
+        smartPlaylistEvidenceChanges(catalogDatabase, listeningDatabase)
+            .drop(1) // Initial evidence was already evaluated on Preview.
+            .collectLatest {
+                try {
+                    val rows = loadPreviewRows(active)
+                    if (previewQuery == active) {
+                        preview = rows
+                        error = null
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    if (previewQuery == active) {
+                        preview = null
+                        error = "A biblioteca mudou. Não foi possível atualizar a prévia."
+                    }
+                }
+            }
+    }
 
     ListeningLibraryPage {
         LazyColumn(
@@ -384,16 +428,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                             scope.launch {
                                 try {
                                     val parsed = query()
-                                    val rows = withContext(Dispatchers.IO) {
-                                        val matched = evaluator.preview(parsed)
-                                        val known = matched.map { it.recordingId }.chunked(400)
-                                            .flatMap { catalog.recordingsByIds(it) }
-                                            .associateBy { it.id }
-                                        matched.mapNotNull { item ->
-                                            val info = known[item.recordingId] ?: return@mapNotNull null
-                                            V2DisplayRow(info.id, info.title, info.artistDisplay)
-                                        }
-                                    }
+                                    val rows = loadPreviewRows(parsed)
                                     preview = rows
                                     previewQuery = parsed
                                     error = null
@@ -416,6 +451,30 @@ internal fun SmartPlaylistV2BuilderScreen(
                 item(key = "v2-preview-header") {
                     Text("Prévia • " + preview!!.size + " músicas",
                         style = MaterialTheme.typography.titleMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Atualiza com mudanças locais", style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = {
+                            val active = previewQuery ?: return@TextButton
+                            if (loading) return@TextButton
+                            loading = true
+                            scope.launch {
+                                try {
+                                    val refreshed = loadPreviewRows(active)
+                                    if (previewQuery == active) {
+                                        preview = refreshed
+                                        error = null
+                                    }
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    if (previewQuery == active) {
+                                        preview = null
+                                        error = "Não foi possível atualizar a prévia"
+                                    }
+                                } finally { loading = false }
+                            }
+                        }, enabled = !loading && previewQuery != null) { Text("Atualizar") }
+                    }
                     if (preview!!.size > 100) {
                         Text("A execução da fila ainda é limitada a 100 músicas; a prévia pode ser maior.",
                             style = MaterialTheme.typography.bodySmall)
