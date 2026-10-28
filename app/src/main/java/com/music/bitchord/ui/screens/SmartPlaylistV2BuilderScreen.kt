@@ -372,6 +372,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var editingId by remember { mutableStateOf<String?>(null) }
+    var editingFilterId by remember { mutableStateOf<String?>(null) }
     var rule by remember { mutableStateOf<SmartPlaylistRule>(
         SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(newRule())),
     ) }
@@ -421,6 +422,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     fun reset() {
         editorEpoch++
         editingId = null
+        editingFilterId = null
         name = ""
         rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(newRule()))
         sort = SmartPlaylistV2Sort.RATING_DESC
@@ -586,9 +588,11 @@ internal fun SmartPlaylistV2BuilderScreen(
                                     val parsed = query()
                                     withContext(Dispatchers.IO) {
                                         filterRepo.save(SavedSmartPlaylistV2Filter(
-                                            UUID.randomUUID().toString(), name, parsed.rules,
+                                            editingFilterId ?: UUID.randomUUID().toString(),
+                                            name, parsed.rules,
                                         ))
                                     }
+                                    editingFilterId = null
                                     error = null
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
@@ -596,7 +600,9 @@ internal fun SmartPlaylistV2BuilderScreen(
                                     error = "Não foi possível salvar o filtro reutilizável."
                                 } finally { loading = false }
                             }
-                        }, enabled = !loading) { Text("Salvar filtro") }
+                        }, enabled = !loading) {
+                            Text(if (editingFilterId == null) "Salvar filtro" else "Atualizar filtro")
+                        }
                         TextButton(onClick = {
                             if (loading) return@TextButton
                             loading = true
@@ -690,6 +696,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = {
                             editorEpoch++
+                            editingFilterId = null
                             rule = filter.rules
                             preview = null
                             previewQuery = null
@@ -699,6 +706,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                             try {
                                 val combined = rule.andSavedFilter(filter)
                                 editorEpoch++
+                                editingFilterId = null
                                 rule = combined
                                 preview = null
                                 previewQuery = null
@@ -710,11 +718,21 @@ internal fun SmartPlaylistV2BuilderScreen(
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = {
+                            editorEpoch++
+                            editingFilterId = filter.id
+                            name = filter.name
+                            rule = filter.rules
+                            preview = null
+                            previewQuery = null
+                            error = null
+                        }, enabled = !loading) { Text("Editar filtro") }
+                        TextButton(onClick = {
                             val copy = filter.toPlaylistCopy(
                                 UUID.randomUUID().toString(), filter.name,
                             )
                             editorEpoch++
                             editingId = copy.id
+                            editingFilterId = null
                             name = copy.name
                             rule = copy.query.rules
                             sort = copy.query.sort
@@ -754,6 +772,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                         TextButton(onClick = {
                             editorEpoch++
                             editingId = item.id
+                            editingFilterId = null
                             name = item.name
                             rule = item.query.rules
                             sort = item.query.sort
@@ -805,6 +824,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                             val copy = original.toV2Copy(UUID.randomUUID().toString())
                             editorEpoch++
                             editingId = copy.id
+                            editingFilterId = null
                             name = copy.name
                             rule = copy.query.rules
                             sort = copy.query.sort
