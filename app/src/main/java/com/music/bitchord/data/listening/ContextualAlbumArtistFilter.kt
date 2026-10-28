@@ -1,6 +1,7 @@
 package com.music.bitchord.data.listening
 
 import com.music.bitchord.data.catalog.ArtistEntity
+import com.music.bitchord.data.catalog.CanonicalCatalogDao
 import com.music.bitchord.data.catalog.ReleaseEntity
 import java.util.Locale
 
@@ -122,5 +123,32 @@ internal fun filterCanonicalBrowseArtists(
     }
     return artists.filter { artist ->
         filter.rules.textTruth(SmartPlaylistRuleField.ARTIST_DISPLAY, artist.name) == true
+    }
+}
+
+/**
+ * Provider-scoped read-only seam for future Albums/Artists library surfaces and
+ * recommendation constraints. Exact account keys stay in the query parameters,
+ * not in saved filter JSON or external metadata identities.
+ */
+internal class CanonicalContextualFilterLibrary(
+    private val catalog: CanonicalCatalogDao,
+) {
+    suspend fun albums(
+        providerKey: String,
+        filter: SavedSmartPlaylistV2Filter,
+    ): List<ReleaseEntity> {
+        require(providerKey.isNotBlank()) { "A configured account/provider is required" }
+        require(filter.isSupportedForCanonicalAlbumBrowse())
+        return filterCanonicalBrowseAlbums(catalog.providerScopedReleases(providerKey), filter)
+    }
+
+    suspend fun artists(
+        providerKey: String,
+        filter: SavedSmartPlaylistV2Filter,
+    ): List<ArtistEntity> {
+        require(providerKey.isNotBlank()) { "A configured account/provider is required" }
+        require(filter.isSupportedForCanonicalArtistBrowse())
+        return filterCanonicalBrowseArtists(catalog.providerScopedArtists(providerKey), filter)
     }
 }
