@@ -7,6 +7,8 @@ import androidx.room.Query
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -48,13 +50,19 @@ internal interface SmartPlaylistV2DefinitionDao {
 internal class SmartPlaylistV2DefinitionRepository(
     private val dao: SmartPlaylistV2DefinitionDao,
 ) {
+    // Process-wide serialization: independently created editor/handoff repositories
+    // must not each validate against the same stale graph and save a cycle.
+    private companion object {
+        val mutationGuard = Mutex()
+    }
+
     private val json = Json {
         encodeDefaults = true
         ignoreUnknownKeys = false
         classDiscriminator = "kind"
     }
 
-    suspend fun save(definition: SavedSmartPlaylistV2Definition) {
+    suspend fun save(definition: SavedSmartPlaylistV2Definition) = mutationGuard.withLock {
         require(definition.schemaVersion == 2) { "Unsupported V2 definition schema" }
         require(definition.id.isNotBlank() && definition.id.length <= 100)
         val name = definition.name.trim()
@@ -77,7 +85,7 @@ internal class SmartPlaylistV2DefinitionRepository(
     fun observe(): Flow<List<SavedSmartPlaylistV2Definition>> =
         dao.observe().map { rows -> rows.map { it.toDomain() } }
 
-    suspend fun remove(id: String) {
+    suspend fun remove(id: String) = mutationGuard.withLock {
         require(id.isNotBlank())
         validateSmartPlaylistReferenceDeletion(id, list())
         dao.remove(id)
