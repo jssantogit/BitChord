@@ -417,17 +417,29 @@ object Downloads {
                 app,Intent(app,DownloadService::class.java))
             true
         }.getOrElse {
-            synchronized(lock) {
-                pending.remove(id)
-                autoRequests.remove(id)
-                // No worker was accepted; neither the in-memory physical
-                // fence nor the old manual recovery reports should be lost.
-                autoAttemptGuard.rollback(captured)
-                _autoReviews.value=SoulseekAutoReviewSupersession.restore(
-                    _autoReviews.value,displacedReviews)
+            val (rolledBack,alreadyRunning)=synchronized(lock) {
+                val claimed=id in running
+                val stillPending=id in pending
+                if(SoulseekAutoCancellationPolicy.canRollbackRejectedServiceStart(
+                        stillPending=stillPending,alreadyClaimed=claimed)) {
+                    pending.remove(id)
+                    autoRequests.remove(id)
+                    autoAttemptGuard.rollback(captured)
+                    _autoReviews.value=SoulseekAutoReviewSupersession.restore(
+                        _autoReviews.value,displacedReviews)
+                    true to false
+                }else {
+                    // A service may already have dequeued this job even when
+                    // a second startForegroundService call was rejected.
+                    // Never clear its A3 fence or overwrite its live UI.
+                    false to claimed
+                }
             }
-            fail(id,"Não foi possível iniciar o serviço de downloads.")
-            false
+            if(rolledBack)
+                fail(id,"Não foi possível iniciar o serviço de downloads.")
+            // If another Service claimed the job, the download was accepted.
+            // If it already settled, do not overwrite its authoritative row.
+            alreadyRunning
         }
     }
 
