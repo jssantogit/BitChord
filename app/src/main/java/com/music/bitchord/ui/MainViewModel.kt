@@ -1262,14 +1262,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         val results = ready.values.toMap()
                         _canonicalDetail.update { old ->
                             if (old !is UiState.Success) old else UiState.Success(
-                                old.data.copy(rows = old.data.rows.map {
-                                    val cover = results[it.musicBrainzId]
-                                    if (it.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                                        cover != null &&
-                                        canonicalShouldAcceptArtworkUpdate(it.artworkUri, cover.first)
-                                    ) it.copy(artworkUri = cover.first, title = cover.second)
-                                    else it
-                                }),
+                                old.data.copy(rows = canonicalArtistRowsWithOfficialCoverUpdates(
+                                    old.data.rows, results,
+                                )),
                             )
                         }
                         val artistId = canonicalNativeBrowseId(artist)
