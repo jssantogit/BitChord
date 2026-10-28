@@ -783,22 +783,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 UiState.Success(withAlbumArt.map {
                                     if (it.kind != row.kind || it.musicBrainzId != row.musicBrainzId) it
                                     else {
-                                        val inheritRelease = artwork != null &&
-                                            it.kind == CanonicalSearchKind.RECORDING &&
-                                            (it.artworkUri.isNullOrBlank() ||
-                                                (it.artworkProvenance ==
-                                                    com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE &&
-                                                    canonicalNeedsCoverRefresh(it.artworkUri)))
-                                        it.copy(
+                                        val resolved = canonicalRecordingWithInheritedReleaseArt(
+                                            it, artwork,
+                                        )
+                                        resolved.copy(
                                             title = officialTitle,
-                                            artworkUri = if (inheritRelease ||
-                                                (it.kind != CanonicalSearchKind.RECORDING &&
-                                                    artwork != null &&
-                                                    canonicalNeedsCoverRefresh(it.artworkUri))
-                                            ) artwork else it.artworkUri,
-                                            artworkProvenance = if (inheritRelease)
-                                                com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE
-                                            else it.artworkProvenance,
+                                            artworkUri = if (
+                                                it.kind != CanonicalSearchKind.RECORDING &&
+                                                artwork != null &&
+                                                canonicalNeedsCoverRefresh(it.artworkUri)
+                                            ) artwork else resolved.artworkUri,
                                         )
                                     }
                                 })
