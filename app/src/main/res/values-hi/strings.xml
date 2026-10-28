@@ -1386,4 +1386,6 @@
     <string name="search_origin_general">सामान्य</string>
     <string name="search_origin_server">सर्वर</string>
     <string name="search_origin_local">स्थानीय</string>
+    <string name="pause_resume_fade">पॉज़ और फिर चलाने पर फ़ेड</string>
+    <string name="pause_resume_fade_subtitle">रोकने पर आवाज़ धीरे-धीरे कम करता है और फिर चलाने पर बढ़ाता है</string>
 </resources>

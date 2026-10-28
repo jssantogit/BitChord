@@ -1386,4 +1386,6 @@
     <string name="search_origin_general">Allgemein</string>
     <string name="search_origin_server">Server</string>
     <string name="search_origin_local">Lokal</string>
+    <string name="pause_resume_fade">Ein-/Ausblenden beim Pausieren und Fortsetzen</string>
+    <string name="pause_resume_fade_subtitle">Die Musik wird beim Pausieren sanft leiser und beim Fortsetzen wieder lauter</string>
 </resources>

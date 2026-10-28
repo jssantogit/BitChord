@@ -1,0 +1,32 @@
+<resources>
+    <string name="settings_nav_group_account">บัญชี</string>
+    <string name="settings_nav_group_music">เพลง</string>
+    <string name="settings_nav_group_experience">ประสบการณ์</string>
+    <string name="settings_nav_group_data">ข้อมูลและดาวน์โหลด</string>
+    <string name="settings_nav_group_system">ระบบ</string>
+    <string name="settings_nav_group_about">เกี่ยวกับ</string>
+    <string name="settings_nav_lyrics">เนื้อเพลง</string>
+    <string name="settings_nav_about">เกี่ยวกับ</string>
+    <string name="settings_nav_filtered">ผลลัพธ์สำหรับ: %1$s</string>
+    <string name="settings_nav_show_all">ดูทั้งหมด</string>
+    <string name="settings_nav_controls">การควบคุมและพฤติกรรม</string>
+    <string name="settings_nav_advanced">ขั้นสูง</string>
+    <string name="settings_nav_desc_account">บัญชีและการเชื่อมต่อเพลง</string>
+    <string name="settings_nav_desc_audio">แหล่งเพลง Wi-Fi และข้อมูลมือถือ</string>
+    <string name="settings_nav_desc_playback">เอาต์พุตเสียง การเปลี่ยนเพลง และคิว</string>
+    <string name="settings_nav_desc_local">โฟลเดอร์และตัวกรองเสียงในเครื่อง</string>
+    <string name="settings_nav_desc_appearance">ธีม ปกอัลบั้ม และเอฟเฟกต์ภาพ</string>
+    <string name="settings_nav_desc_lyrics">การซิงค์ แหล่งเนื้อเพลง และคำแปล</string>
+    <string name="settings_nav_desc_downloads">Soulseek คุณภาพ และตำแหน่งบันทึก</string>
+    <string name="settings_nav_desc_storage">แคชเสียงและพื้นที่เก็บข้อมูล</string>
+    <string name="settings_nav_desc_data">Replay สำรองข้อมูล และนำเข้า</string>
+    <string name="settings_nav_desc_performance">อัตรารีเฟรชและแบตเตอรี่</string>
+    <string name="settings_nav_desc_misc">ท่าทางและการเล่นเพลง</string>
+    <string name="settings_nav_desc_language">ภาษาของอินเทอร์เฟซ</string>
+    <string name="settings_nav_desc_advanced">การวินิจฉัยและการควบคุมขั้นสูง</string>
+    <string name="settings_nav_desc_wear">การเชื่อมต่อนาฬิกา</string>
+    <string name="settings_nav_desc_about">เวอร์ชันและข้อมูลโครงการ</string>
+    <string name="settings_nav_desc_sources">ผู้ให้บริการเพลงและส่วนขยาย</string>
+    <string name="settings_nav_diagnostics_title">การวินิจฉัย</string>
+    <string name="settings_nav_diagnostics_subtitle">บันทึก ตรวจสอบ และแชร์รายงานการวินิจฉัย</string>
+</resources>

@@ -61,8 +61,14 @@ import java.nio.ByteOrder
 @androidx.annotation.OptIn(UnstableApi::class)
 class PrecisionAudioSink(
     private val delegate: AudioSink,
-    val dspChain: DspChain,
+    val dspChain: DspChain? = null,
     private val enableFloatOutput: Boolean,
+    /**
+     * The Android fork's normal playback path: deliver matching PCM directly
+     * to Media3 and perform only required format conversions. Custom sound
+     * effects remain available to legacy sink tests but never run here.
+     */
+    private val neutralPlayback: Boolean = false,
     val directAudioOutput: DirectAudioOutput? = null,
     private val preferredOutputEncodingProvider: ((Format) -> PcmEncoding?)? = null,
     /**
@@ -78,7 +84,15 @@ class PrecisionAudioSink(
     private val isAudible: () -> Boolean = { true },
 ) : ForwardingAudioSink(delegate) {
 
-    /** Whether the precision Float32 DSP path is currently active for the configured format. */
+    init {
+        // Legacy precision tests may supply a processing chain, but the
+        // production Android neutral path must never allocate one.
+        require(neutralPlayback || dspChain != null) {
+            "A non-neutral PrecisionAudioSink requires a DSP chain"
+        }
+    }
+
+    /** Whether PCM boundary handling is active for the configured format. */
     var isPrecisionActive: Boolean = false
         private set
 
@@ -105,6 +119,20 @@ class PrecisionAudioSink(
     )
 
     private var outputByteBuffer: ByteBuffer = ByteBuffer.allocateDirect(0).order(ByteOrder.nativeOrder())
+
+    /**
+     * The exact input buffer held by Media3 while a native-format passthrough
+     * is waiting for backpressure. Always resend this instance, even if a
+     * delegate consumes a non-frame-aligned number of bytes.
+     */
+    private var directInputBuffer: ByteBuffer? = null
+
+    /**
+     * The decoder buffer backing a pending format-converted output block.
+     * Keep its identity until the delegate has accepted that block; otherwise
+     * a second decoder packet could overtake it while the sink is blocked.
+     */
+    private var convertedInputBuffer: ByteBuffer? = null
 
     private var pendingPresentationTimeUs: Long = C.TIME_UNSET
     private var pendingAccessUnitCount: Int = 0
@@ -140,6 +168,8 @@ class PrecisionAudioSink(
     override fun configure(audioSinkConfig: AudioSink.AudioSinkConfig) {
         val format = audioSinkConfig.format
         activeFormat = format
+        directInputBuffer = null
+        convertedInputBuffer = null
 
         if (shouldActivatePrecision(format)) {
             val encoding = mapToPcmEncoding(format.pcmEncoding)
@@ -147,8 +177,8 @@ class PrecisionAudioSink(
                 val sampleRate = format.sampleRate
                 val channelCount = format.channelCount
 
-                // 1. Configure the Float32 DSP chain
-                dspChain.configure(sampleRate, channelCount)
+                // Neutral playback never configures or runs effect processors.
+                if (!neutralPlayback) dspChain?.configure(sampleRate, channelCount)
 
                 // 2. Ensure internal buffers are sized for max frames and channel count
                 ensureBuffers(channelCount)
@@ -282,6 +312,34 @@ class PrecisionAudioSink(
             encodedAccessUnitCount,
         )
 
+
+        // A partially consumed buffer belongs to DefaultAudioSink until it
+        // reports completion. Its handleBuffer contract forbids replacing
+        // that instance with the next decoder packet while still pending.
+        if (neutralPlayback &&
+            ((directInputBuffer != null && directInputBuffer !== inputBuffer) ||
+                (convertedInputBuffer != null && convertedInputBuffer !== inputBuffer))
+        ) {
+            return false
+        }
+
+        // For native PCM the decoder's ByteBuffer IS the AudioTrack input:
+        // no Float32 intermediate, no extra quantization, no effects.
+        // The delegate owns partial consumption, which is why the same buffer
+        // instance must be presented again until fully drained.
+        if (neutralPlayback && inEncoding == outEncoding &&
+            convertedInputBuffer == null && !outputByteBuffer.hasRemaining() &&
+            (directInputBuffer === inputBuffer ||
+                (directInputBuffer == null && inputBuffer.remaining() %
+                    inEncoding.bytesPerFrame(audioBlock.channelCount) == 0))
+        ) {
+            streaming = true
+            directInputBuffer = inputBuffer
+            val done = delegate.handleBuffer(inputBuffer, presentationTimeUs, encodedAccessUnitCount)
+            if (done && !inputBuffer.hasRemaining()) directInputBuffer = null
+            return done && !inputBuffer.hasRemaining()
+        }
+
         val channelCount = audioBlock.channelCount
         val bytesPerFrame = inEncoding.bytesPerFrame(channelCount)
         if (bytesPerFrame <= 0) return true
@@ -341,8 +399,10 @@ class PrecisionAudioSink(
                 }
             }
 
-            // Process normalized Float32 samples through custom DSP chain
-            dspChain.process(audioBlock)
+            // Neutral mode only uses the PCM boundary for necessary format
+            // conversions (e.g. packed 24-bit → Float32 on a float route).
+            // It must not apply any custom effect to the samples.
+            if (!neutralPlayback) dspChain?.process(audioBlock)
 
             // Encode processed samples to target PCM output buffer (Float32 or PCM16)
             outputByteBuffer.clear()
@@ -363,6 +423,7 @@ class PrecisionAudioSink(
             pendingPresentationTimeUs = blockTimeUs
             pendingAccessUnitCount = blockAccessUnits
             framesEmittedForInput += decodedFrames
+            if (neutralPlayback) convertedInputBuffer = inputBuffer
 
             val consumed = delegate.handleBuffer(
                 outputByteBuffer,
@@ -381,6 +442,9 @@ class PrecisionAudioSink(
             inputBuffer.position(inputBuffer.limit())
         }
 
+        if (neutralPlayback && !inputBuffer.hasRemaining() && !outputByteBuffer.hasRemaining()) {
+            convertedInputBuffer = null
+        }
         return !inputBuffer.hasRemaining() && !outputByteBuffer.hasRemaining()
     }
 
@@ -400,7 +464,7 @@ class PrecisionAudioSink(
      * first, is not.
      */
     override fun setOutputStreamOffsetUs(outputStreamOffsetUs: Long) {
-        if (streaming) dspChain.onStreamBoundary()
+        if (streaming && !neutralPlayback) dspChain?.onStreamBoundary()
         super.setOutputStreamOffsetUs(outputStreamOffsetUs)
     }
 
@@ -415,15 +479,17 @@ class PrecisionAudioSink(
         val position = super.getCurrentPositionUs(sourceEnded)
         val processed = processedEndUs
         if (position != AudioSink.CURRENT_POSITION_NOT_SET && processed != C.TIME_UNSET) {
-            dspChain.transition.leadUs = (processed - position).coerceAtLeast(0L)
+            if (!neutralPlayback) dspChain?.transition?.let { it.leadUs = (processed - position).coerceAtLeast(0L) }
         }
         return position
     }
 
     override fun flush() {
         processedEndUs = C.TIME_UNSET
-        dspChain.transition.leadUs = 0L
+        if (!neutralPlayback) dspChain?.transition?.let { it.leadUs = 0L }
         streaming = false
+        directInputBuffer = null
+        convertedInputBuffer = null
         outputByteBuffer.clear()
         outputByteBuffer.flip()
         audioBlock.clear()
@@ -431,16 +497,18 @@ class PrecisionAudioSink(
         pendingAccessUnitCount = 0
         timestampedInputTimeUs = C.TIME_UNSET
         framesEmittedForInput = 0L
-        if (isPrecisionActive) {
-            dspChain.flush()
+        if (isPrecisionActive && !neutralPlayback) {
+            dspChain?.flush()
         }
         delegate.flush()
     }
 
     override fun reset() {
         processedEndUs = C.TIME_UNSET
-        dspChain.transition.leadUs = 0L
+        if (!neutralPlayback) dspChain?.transition?.let { it.leadUs = 0L }
         streaming = false
+        directInputBuffer = null
+        convertedInputBuffer = null
         processCounter = 0L
         outputByteBuffer.clear()
         outputByteBuffer.flip()
@@ -449,8 +517,8 @@ class PrecisionAudioSink(
         pendingAccessUnitCount = 0
         timestampedInputTimeUs = C.TIME_UNSET
         framesEmittedForInput = 0L
-        if (isPrecisionActive) {
-            dspChain.reset()
+        if (isPrecisionActive && !neutralPlayback) {
+            dspChain?.reset()
         }
         isPrecisionActive = false
         inputPcmEncoding = null
@@ -461,8 +529,8 @@ class PrecisionAudioSink(
             AudioOutputStatus.publishOutputExactness(exact = false, detail = null)
             AudioOutputStatus.publishDsp(
                 decoderOutputEncoding = null,
-                dspFormat = "Float32",
-                dspAvailable = true,
+                dspFormat = if (neutralPlayback) "Bypassed" else "Float32",
+                dspAvailable = !neutralPlayback,
             )
         }
         delegate.reset()
@@ -473,21 +541,36 @@ class PrecisionAudioSink(
     }
 
     override fun playToEndOfStream() {
+        // Never mark a stream ended while the AudioTrack still owns an input
+        // buffer, or while a converted block is pending under backpressure.
+        // The renderer will resend the exact pending input on its next tick.
+        if (directInputBuffer != null) return
         if (isPrecisionActive && outputByteBuffer.hasRemaining()) {
-            delegate.handleBuffer(outputByteBuffer, pendingPresentationTimeUs, pendingAccessUnitCount)
+            val drained = delegate.handleBuffer(
+                outputByteBuffer,
+                pendingPresentationTimeUs,
+                pendingAccessUnitCount,
+            )
+            if (!drained || outputByteBuffer.hasRemaining()) return
         }
+        if (convertedInputBuffer?.hasRemaining() == true) return
+        convertedInputBuffer = null
         delegate.playToEndOfStream()
     }
 
     override fun isEnded(): Boolean {
-        if (isPrecisionActive && outputByteBuffer.hasRemaining()) {
+        if (directInputBuffer != null || convertedInputBuffer != null ||
+            (isPrecisionActive && outputByteBuffer.hasRemaining())
+        ) {
             return false
         }
         return delegate.isEnded()
     }
 
     override fun hasPendingData(): Boolean {
-        if (isPrecisionActive && outputByteBuffer.hasRemaining()) {
+        if (directInputBuffer != null || convertedInputBuffer != null ||
+            (isPrecisionActive && outputByteBuffer.hasRemaining())
+        ) {
             return true
         }
         return delegate.hasPendingData()
@@ -615,7 +698,7 @@ class PrecisionAudioSink(
      *
      * The combinations that are genuinely lossless:
      *
-     * - 16-bit source to a 16-bit track. [PcmBoundary] scales by 32768, a power
+     * - 16-bit source to a 16-bit or float track. [PcmBoundary] scales by 32768, a power
      *   of two, so the float round trip recovers every original integer.
      * - 24-bit source to a float track. Scaled by 8388608, likewise exact, and
      *   float32 has the 24 bits of significand to hold the result.
@@ -630,7 +713,7 @@ class PrecisionAudioSink(
      */
     private fun publishOutputExactness(source: PcmEncoding, target: PcmEncoding) {
         val exact = when (source) {
-            PcmEncoding.PCM_16BIT -> target == PcmEncoding.PCM_16BIT
+            PcmEncoding.PCM_16BIT -> target == PcmEncoding.PCM_16BIT || target == PcmEncoding.PCM_FLOAT
             PcmEncoding.PCM_24BIT_PACKED -> target == PcmEncoding.PCM_FLOAT
             PcmEncoding.PCM_FLOAT -> target == PcmEncoding.PCM_FLOAT
             // 24 bits of significand cannot hold 32.
@@ -651,8 +734,8 @@ class PrecisionAudioSink(
         publishOutputExactness(inEncoding, outEncoding)
         AudioOutputStatus.publishDsp(
             decoderOutputEncoding = encodingLabel(mapFromPcmEncoding(inEncoding)),
-            dspFormat = "Float32",
-            dspAvailable = true,
+            dspFormat = if (neutralPlayback) "Bypassed" else "Float32",
+            dspAvailable = !neutralPlayback,
         )
     }
 

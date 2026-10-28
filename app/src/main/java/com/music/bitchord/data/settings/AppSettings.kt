@@ -221,6 +221,9 @@ object AppSettings {
 
     val crossfadeSeconds = MutableStateFlow(0)
 
+    /** Local transport envelope only; 0 disables the fade, no DSP is involved. */
+    val pauseResumeFadeMs = MutableStateFlow(200)
+
     /**
      * Lets Automix's analyzer decide the transition's timing and length
      * from each track's tempo, energy and structure, replacing the fixed
@@ -243,72 +246,22 @@ object AppSettings {
     /** Prefer an attached USB audio output over the system's normal route. */
     val preferUsbDac = MutableStateFlow(false)
 
-    /**
-     * Level every track to the same loudness, using YouTube's own
-     * normalization figure for it — see
-     * [com.music.bitchord.playback.PlaybackService.setupLoudnessEnhancer].
-     *
-     * On by default, which is the one genuinely contentious thing about it.
-     * The case for it: a queue drawn from several sources is a queue of
-     * several mastering eras, and the gap between a 1980s CD transfer and a
-     * modern master is routinely fifteen decibels — loud enough that the
-     * listener's own volume control is the wrong tool, because the setting
-     * that suits one track hurts at the next. Every streaming service
-     * normalizes by default for the same reason.
-     *
-     * The case against it is that a constant gain is still a multiplication,
-     * so this is the first thing in BitChord that is *on* out of the box and
-     * alters samples. Rather than hide that, the Audio Pipeline readout names
-     * it: its Bit-exact row reports the first stage in the chain that is
-     * altering samples, and switching this off is the first thing a listener
-     * chasing an untouched signal would do.
-     */
-    val loudnessNormalization = MutableStateFlow(true)
+    /** Retired normalization switch; retained as a false migration-compatible flow. */
+    val loudnessNormalization = MutableStateFlow(false)
 
     /** Skip loudness normalization while the active output is the phone's own speaker. */
     val loudnessOffOnSpeaker = MutableStateFlow(true)
 
     /**
-     * Whether a source offering a Dolby Atmos rendition is allowed to serve it.
-     *
-     * On by default: where the device can decode it, Atmos is the premium
-     * rendition the catalogue holds and the one most people are paying a
-     * subscription for.
-     *
-     * Off is a real preference and not just a safety valve. Atmos is E-AC-3,
-     * which is *lossy* — a track with an Atmos master is frequently also held
-     * as a FLAC, and someone listening on wired headphones may well prefer the
-     * bit-exact stereo copy to a spatial mix their output can't render. Turning
-     * this off is how they say so; see
-     * [ModuleSource.unplayable][com.music.bitchord.data.sources.ModuleSource],
-     * which is where the refusal is applied.
-     *
-     * Independent of whether the device *can* decode it — that question is
-     * [DeviceCodecs.playsDolbyAtmos][com.music.bitchord.data.sources.DeviceCodecs],
-     * and the two are deliberately not folded together: this one is the
-     * listener's answer, is persisted, and must survive being read on a phone
-     * that cannot honour it (a restored backup, a swapped device) without
-     * quietly rewriting itself.
+     * Retired Atmos-source preference. False avoids requesting alternate
+     * renditions on a neutral stereo route; codec support itself is unchanged.
      */
-    val dolbyAtmos = MutableStateFlow(true)
+    val dolbyAtmos = MutableStateFlow(false)
 
-    /**
-     * Widens stereo output via [com.music.bitchord.playback.SpatialAudioProcessor],
-     * a stereo widening + cross-feed effect running inside ExoPlayer's own
-     * pipeline. Not true object-based spatial audio — YouTube only ever hands
-     * us a stereo stream, so there's no Atmos-style source to render.
-     */
+    /** Retired stereo-widening switch, preserved for old UI/binary call sites. */
     val spatialAudio = MutableStateFlow(false)
 
-    /**
-     * The app's own equaliser, master switch.
-     *
-     * Separate from the system equaliser row beside it, which is still there and
-     * still opens the device's panel. The two stack rather than compete — this
-     * one runs inside ExoPlayer before the sink, that one hangs off the audio
-     * session after it — so someone who prefers their OEM's can leave this off
-     * and lose nothing.
-     */
+    /** Retired authorial EQ switch. The Android playback chain has no EQ. */
     val equalizerEnabled = MutableStateFlow(false)
 
     /** Which tab is driving it. */
@@ -820,6 +773,7 @@ object AppSettings {
         wifiOnlyDownloads.value = prefs.getBoolean(KEY_WIFI_ONLY_DOWNLOADS, true)
         exportDownloads.value = prefs.getBoolean(KEY_EXPORT_DOWNLOADS, false)
         crossfadeSeconds.value = prefs.getInt(KEY_CROSSFADE, 0)
+        pauseResumeFadeMs.value = prefs.getInt(KEY_PAUSE_RESUME_FADE, 200).coerceIn(0, 600)
         smartFadeEnabled.value = prefs.getBoolean(KEY_SMART_FADE, false)
         automixPerformanceMode.value = runCatching {
             AutomixPerformanceMode.valueOf(
@@ -834,11 +788,20 @@ object AppSettings {
             )
         }.getOrDefault(OutputPcmMode.PCM_16)
         preferUsbDac.value = prefs.getBoolean(KEY_PREFER_USB_DAC, false)
-        loudnessNormalization.value = prefs.getBoolean(KEY_LOUDNESS_NORMALIZATION, true)
-        loudnessOffOnSpeaker.value = prefs.getBoolean(KEY_LOUDNESS_OFF_ON_SPEAKER, true)
-        dolbyAtmos.value = prefs.getBoolean(KEY_DOLBY_ATMOS, true)
-        spatialAudio.value = prefs.getBoolean(KEY_SPATIAL_AUDIO, false)
-        equalizerEnabled.value = prefs.getBoolean(KEY_EQ_ENABLED, false)
+        // Issue #185: retire legacy sound enhancements, including saved ON
+        // states from older installs and restored backups. They must never
+        // silently reactivate behind the neutral-audio settings UI.
+        prefs.edit()
+            .remove(KEY_LOUDNESS_NORMALIZATION)
+            .remove(KEY_DOLBY_ATMOS)
+            .remove(KEY_SPATIAL_AUDIO)
+            .remove(KEY_EQ_ENABLED)
+            .apply()
+        loudnessNormalization.value = false
+        loudnessOffOnSpeaker.value = true
+        dolbyAtmos.value = false
+        spatialAudio.value = false
+        equalizerEnabled.value = false
         equalizerMode.value = runCatching {
             EqualizerMode.valueOf(prefs.getString(KEY_EQ_MODE, null) ?: EqualizerMode.DYNAMIC.name)
         }.getOrDefault(EqualizerMode.DYNAMIC)
@@ -1115,6 +1078,12 @@ object AppSettings {
         prefs.edit().putInt(KEY_CROSSFADE, value).apply()
     }
 
+    fun setPauseResumeFadeMs(value: Int) {
+        val bounded = value.coerceIn(0, 600)
+        pauseResumeFadeMs.value = bounded
+        prefs.edit().putInt(KEY_PAUSE_RESUME_FADE, bounded).apply()
+    }
+
     fun setSmartFadeEnabled(value: Boolean) {
         smartFadeEnabled.value = value
         prefs.edit().putBoolean(KEY_SMART_FADE, value).apply()
@@ -1130,19 +1099,21 @@ object AppSettings {
         prefs.edit().putBoolean(KEY_SKIP_SILENCE, value).apply()
     }
 
-    fun setDolbyAtmos(value: Boolean) {
-        dolbyAtmos.value = value
-        prefs.edit().putBoolean(KEY_DOLBY_ATMOS, value).apply()
+    fun setDolbyAtmos(@Suppress("UNUSED_PARAMETER") value: Boolean) {
+        // Retired by issue #185. Call sites from older screens must not
+        // silently resurrect a source preference that Android no longer offers.
+        dolbyAtmos.value = false
+        prefs.edit().remove(KEY_DOLBY_ATMOS).apply()
     }
 
-    fun setSpatialAudio(value: Boolean) {
-        spatialAudio.value = value
-        prefs.edit().putBoolean(KEY_SPATIAL_AUDIO, value).apply()
+    fun setSpatialAudio(@Suppress("UNUSED_PARAMETER") value: Boolean) {
+        spatialAudio.value = false
+        prefs.edit().remove(KEY_SPATIAL_AUDIO).apply()
     }
 
-    fun setEqualizerEnabled(value: Boolean) {
-        equalizerEnabled.value = value
-        prefs.edit().putBoolean(KEY_EQ_ENABLED, value).apply()
+    fun setEqualizerEnabled(@Suppress("UNUSED_PARAMETER") value: Boolean) {
+        equalizerEnabled.value = false
+        prefs.edit().remove(KEY_EQ_ENABLED).apply()
     }
 
     fun setEqualizerMode(value: EqualizerMode) {
@@ -1564,9 +1535,9 @@ object AppSettings {
         prefs.edit().putBoolean(KEY_LOUDNESS_OFF_ON_SPEAKER, value).apply()
     }
 
-    fun setLoudnessNormalization(value: Boolean) {
-        loudnessNormalization.value = value
-        prefs.edit().putBoolean(KEY_LOUDNESS_NORMALIZATION, value).apply()
+    fun setLoudnessNormalization(@Suppress("UNUSED_PARAMETER") value: Boolean) {
+        loudnessNormalization.value = false
+        prefs.edit().remove(KEY_LOUDNESS_NORMALIZATION).apply()
     }
 
     fun setExportDownloads(value: Boolean) {
@@ -2002,6 +1973,7 @@ object AppSettings {
     private const val KEY_EXPORT_DOWNLOADS = "export_downloads"
     private const val KEY_LOSSLESS = "lossless_audio"
     private const val KEY_CROSSFADE = "crossfade_seconds"
+    private const val KEY_PAUSE_RESUME_FADE = "pause_resume_fade_ms"
     private const val KEY_SMART_FADE = "smart_fade_enabled"
     private const val KEY_AUTOMIX_PERFORMANCE_MODE = "automix_performance_mode"
     private const val KEY_SKIP_SILENCE = "skip_silence"

@@ -1363,4 +1363,6 @@
     <string name="search_origin_general">Umum</string>
     <string name="search_origin_server">Server</string>
     <string name="search_origin_local">Lokal</string>
+    <string name="pause_resume_fade">Fade saat jeda dan lanjut</string>
+    <string name="pause_resume_fade_subtitle">Mengecilkan volume secara halus saat dijeda dan menaikkannya saat dilanjutkan</string>
 </resources>

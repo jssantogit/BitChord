@@ -1426,4 +1426,6 @@
     <string name="search_origin_general">Ogólne</string>
     <string name="search_origin_server">Serwer</string>
     <string name="search_origin_local">Lokalne</string>
+    <string name="pause_resume_fade">Wyciszanie przy pauzie i wznowieniu</string>
+    <string name="pause_resume_fade_subtitle">Płynnie ścisza muzykę podczas pauzy i przywraca głośność po wznowieniu</string>
 </resources>

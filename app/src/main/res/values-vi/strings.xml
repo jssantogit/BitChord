@@ -1303,4 +1303,6 @@
     <string name="search_origin_general">Chung</string>
     <string name="search_origin_server">Máy chủ</string>
     <string name="search_origin_local">Cục bộ</string>
+    <string name="pause_resume_fade">Làm mờ âm khi tạm dừng và phát tiếp</string>
+    <string name="pause_resume_fade_subtitle">Giảm dần âm lượng khi tạm dừng và tăng dần khi phát tiếp</string>
 </resources>

@@ -1418,4 +1418,6 @@
     <string name="search_origin_general">Общее</string>
     <string name="search_origin_server">Сервер</string>
     <string name="search_origin_local">Локально</string>
+    <string name="pause_resume_fade">Плавное затухание при паузе и возобновлении</string>
+    <string name="pause_resume_fade_subtitle">Плавно уменьшает громкость при паузе и увеличивает при возобновлении</string>
 </resources>

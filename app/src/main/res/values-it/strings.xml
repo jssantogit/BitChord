@@ -1325,4 +1325,6 @@
     <string name="search_origin_general">Generale</string>
     <string name="search_origin_server">Server</string>
     <string name="search_origin_local">Locale</string>
+    <string name="pause_resume_fade">Dissolvenza in pausa e ripresa</string>
+    <string name="pause_resume_fade_subtitle">Riduce gradualmente il volume in pausa e lo aumenta alla ripresa</string>
 </resources>

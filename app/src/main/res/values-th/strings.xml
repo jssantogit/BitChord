@@ -1369,4 +1369,6 @@
     <string name="search_origin_general">ทั่วไป</string>
     <string name="search_origin_server">เซิร์ฟเวอร์</string>
     <string name="search_origin_local">ในเครื่อง</string>
+    <string name="pause_resume_fade">เฟดเมื่อหยุดชั่วคราวและเล่นต่อ</string>
+    <string name="pause_resume_fade_subtitle">ค่อย ๆ ลดเสียงเมื่อหยุดชั่วคราวและเพิ่มเสียงเมื่อเล่นต่อ</string>
 </resources>

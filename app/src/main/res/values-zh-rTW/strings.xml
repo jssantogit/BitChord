@@ -1356,4 +1356,6 @@
     <string name="search_origin_general">一般</string>
     <string name="search_origin_server">伺服器</string>
     <string name="search_origin_local">本機</string>
+    <string name="pause_resume_fade">暫停與繼續播放時淡入淡出</string>
+    <string name="pause_resume_fade_subtitle">暫停時逐漸降低音量，繼續播放時逐漸提高音量</string>
 </resources>

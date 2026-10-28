@@ -1387,4 +1387,6 @@
     <string name="search_origin_general">Général</string>
     <string name="search_origin_server">Serveur</string>
     <string name="search_origin_local">Local</string>
+    <string name="pause_resume_fade">Fondu à la pause et à la reprise</string>
+    <string name="pause_resume_fade_subtitle">Diminue progressivement le volume à la pause et le rétablit à la reprise</string>
 </resources>

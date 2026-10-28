@@ -1358,4 +1358,6 @@
     <string name="search_origin_general">General</string>
     <string name="search_origin_server">Servidor</string>
     <string name="search_origin_local">Local</string>
+    <string name="pause_resume_fade">Fundido al pausar y reanudar</string>
+    <string name="pause_resume_fade_subtitle">Reduce suavemente el volumen al pausar y lo aumenta al reanudar</string>
 </resources>
