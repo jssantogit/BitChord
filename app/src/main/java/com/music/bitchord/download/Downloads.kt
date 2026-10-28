@@ -167,11 +167,21 @@ object Downloads {
     private val _autoReviews=MutableStateFlow<Map<String,SoulseekAutoReviewPlan>>(emptyMap())
     /** At most one manual recovery picker per session. Protected by lock. */
     private val openManualReviews=HashSet<String>()
+    private val _manualReviewBusy=MutableStateFlow(false)
+    internal val soulseekManualReviewBusy:StateFlow<Boolean> =
+        _manualReviewBusy.asStateFlow()
     internal val soulseekAutoReviews:StateFlow<Map<String,SoulseekAutoReviewPlan>> =
         _autoReviews.asStateFlow()
 
-    /** Clearing presentation does not clear the physical auto-attempt fence. */
-    internal fun clearSoulseekAutoReviews() { _autoReviews.value=emptyMap() }
+    /**
+     * Clear only the visual record, never the physical attempt fence.
+     * Do not erase a recovery report during its own A3 publication.
+     */
+    internal fun clearSoulseekAutoReviews():Boolean = synchronized(lock) {
+        if(openManualReviews.isNotEmpty())return@synchronized false
+        _autoReviews.value=emptyMap()
+        true
+    }
 
     /**
      * Opens the existing MANUAL picker for only ambiguous/missing album slots.
@@ -217,6 +227,7 @@ object Downloads {
                 sessionId in running || sessionId in pending ||
                 _autoReviews.value[sessionId] !== plan)return false
             openManualReviews.add(sessionId)
+            _manualReviewBusy.value=true
         }
         return runCatching {
             context.startActivity(intent)
@@ -229,7 +240,10 @@ object Downloads {
 
     /** Closed by the non-exported review Activity on destruction. */
     internal fun closeSoulseekManualReview(sessionId:String) {
-        synchronized(lock) { openManualReviews.remove(sessionId) }
+        synchronized(lock) {
+            openManualReviews.remove(sessionId)
+            _manualReviewBusy.value=openManualReviews.isNotEmpty()
+        }
     }
 
     /**
