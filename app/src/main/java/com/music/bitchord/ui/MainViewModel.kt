@@ -1386,7 +1386,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             !canonicalNeedsCoverRefresh(entry.artworkUri)) return
         canonicalDetailCoverJob = viewModelScope.launch(Dispatchers.IO) {
             val artwork = try {
-                canonicalArtworkForRow(entry, CoverArtSize.HERO)
+                canonicalArtworkForRow(entry, canonicalNativeDetailArtworkSize(entry.kind))
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) { null } ?: return@launch
