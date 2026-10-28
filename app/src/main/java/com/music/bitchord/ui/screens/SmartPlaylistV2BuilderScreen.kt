@@ -68,6 +68,7 @@ private fun fieldLabel(value: SmartPlaylistRuleField): String = when (value) {
     SmartPlaylistRuleField.ARTIST_DISPLAY -> "Artista (catálogo)"
     SmartPlaylistRuleField.EARLY_SKIPS -> "Pulos antecipados"
     SmartPlaylistRuleField.LATE_SKIPS -> "Pulos tardios"
+    SmartPlaylistRuleField.RELEASE_TITLE -> "Álbum / lançamento (catálogo)"
 }
 
 private fun operatorLabel(value: SmartPlaylistRuleOperator): String = when (value) {

@@ -58,6 +58,7 @@ internal data class RuleBasedRecordingCandidate(
     val artistDisplay: String? = null,
     val earlySkips: Long = 0,
     val lateSkips: Long = 0,
+    val releaseTitles: List<String> = emptyList(),
 )
 
 internal data class RuleBasedSmartPlaylistQuery(
@@ -220,6 +221,8 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
                     artistDisplay = recording.artistDisplay,
                     earlySkips = summary.earlySkips,
                     lateSkips = summary.lateSkips,
+                    releaseTitles = catalog.recordingReleaseTitlesByIds(listOf(id))
+                        .map { it.releaseTitle }.distinct().sorted(),
                 )
             }
         }

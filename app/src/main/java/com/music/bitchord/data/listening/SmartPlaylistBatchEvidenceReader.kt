@@ -25,6 +25,11 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
             .associateBy { it.recordingId }
         val ratingsById = ratings.currentRatingsForIds(recordingIds)
             .associateBy { it.recordingId }
+        val releaseTitlesById = catalog.recordingReleaseTitlesByIds(recordingIds)
+            .groupBy { it.recordingId }
+            .mapValues { (_, memberships) ->
+                memberships.map { it.releaseTitle }.distinct().sorted()
+            }
         // Missing canonical metadata means the Recording cannot be promoted
         // from a provider/native id; no fake row is synthesized.
         return recordingIds.distinct().mapNotNull { id ->
@@ -41,6 +46,7 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                 artistDisplay = recording.artistDisplay,
                 earlySkips = events?.earlySkips ?: 0L,
                 lateSkips = events?.lateSkips ?: 0L,
+                releaseTitles = releaseTitlesById[id].orEmpty(),
             )
         }
     }

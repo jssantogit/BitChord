@@ -44,6 +44,7 @@ internal enum class SmartPlaylistRuleField {
     ARTIST_DISPLAY,
     EARLY_SKIPS,
     LATE_SKIPS,
+    RELEASE_TITLE,
 }
 
 @Serializable
@@ -64,7 +65,9 @@ internal enum class SmartPlaylistV2Sort {
 }
 
 internal fun SmartPlaylistRuleField.isTextField(): Boolean =
-    this == SmartPlaylistRuleField.TITLE || this == SmartPlaylistRuleField.ARTIST_DISPLAY
+    this == SmartPlaylistRuleField.TITLE ||
+        this == SmartPlaylistRuleField.ARTIST_DISPLAY ||
+        this == SmartPlaylistRuleField.RELEASE_TITLE
 
 internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOperator> =
     if (isTextField()) listOf(
@@ -291,25 +294,35 @@ internal class SmartPlaylistV2RuleEngine(
         now: Long,
     ): RuleTruth {
         if (rule.field.isTextField()) {
-            val actual = when (rule.field) {
-                SmartPlaylistRuleField.TITLE -> row.title
-                SmartPlaylistRuleField.ARTIST_DISPLAY -> row.artistDisplay
-                else -> null
-            }.normalizedSmartPlaylistText()
+            // One Recording may belong to several canonically linked Releases.
+            // Positive predicates match ANY recorded association; negative
+            // predicates must be true for ALL associations. Never pick a
+            // release based on title similarity or a provider native ID.
+            val values = when (rule.field) {
+                SmartPlaylistRuleField.TITLE -> listOfNotNull(row.title)
+                SmartPlaylistRuleField.ARTIST_DISPLAY -> listOfNotNull(row.artistDisplay)
+                SmartPlaylistRuleField.RELEASE_TITLE -> row.releaseTitles
+                else -> emptyList()
+            }.mapNotNull { it.normalizedSmartPlaylistText() }.distinct()
             val expected = rule.textValue.normalizedSmartPlaylistText()
             val matches = when (rule.operator) {
-                SmartPlaylistRuleOperator.IS_PRESENT -> actual != null
-                SmartPlaylistRuleOperator.IS_MISSING -> actual == null
+                SmartPlaylistRuleOperator.IS_PRESENT -> values.isNotEmpty()
+                SmartPlaylistRuleOperator.IS_MISSING -> values.isEmpty()
                 else -> {
-                    if (actual == null || expected == null) return RuleTruth.UNKNOWN
-                    when (rule.operator) {
-                        SmartPlaylistRuleOperator.EQUAL -> actual == expected
-                        SmartPlaylistRuleOperator.NOT_EQUAL -> actual != expected
-                        SmartPlaylistRuleOperator.CONTAINS -> actual.contains(expected)
-                        SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> !actual.contains(expected)
-                        SmartPlaylistRuleOperator.STARTS_WITH -> actual.startsWith(expected)
-                        SmartPlaylistRuleOperator.ENDS_WITH -> actual.endsWith(expected)
+                    if (values.isEmpty() || expected == null) return RuleTruth.UNKNOWN
+                    val predicate: (String) -> Boolean = when (rule.operator) {
+                        SmartPlaylistRuleOperator.EQUAL,
+                        SmartPlaylistRuleOperator.NOT_EQUAL -> { actual -> actual == expected }
+                        SmartPlaylistRuleOperator.CONTAINS,
+                        SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> { actual -> actual.contains(expected) }
+                        SmartPlaylistRuleOperator.STARTS_WITH -> { actual -> actual.startsWith(expected) }
+                        SmartPlaylistRuleOperator.ENDS_WITH -> { actual -> actual.endsWith(expected) }
                         else -> return RuleTruth.UNKNOWN
+                    }
+                    when (rule.operator) {
+                        SmartPlaylistRuleOperator.NOT_EQUAL,
+                        SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> values.none(predicate)
+                        else -> values.any(predicate)
                     }
                 }
             }
@@ -328,7 +341,8 @@ internal class SmartPlaylistV2RuleEngine(
                 if (row.audibleCompletions > 0) {
                     row.lastAudibleAtEpochMs?.let { ((now - it) / 86_400_000L).toDouble() }
                 } else null
-            SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY -> null
+            SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY,
+            SmartPlaylistRuleField.RELEASE_TITLE -> null
         }
         if (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE &&
             row.audibleCompletions > 0 && row.lastAudibleAtEpochMs == null

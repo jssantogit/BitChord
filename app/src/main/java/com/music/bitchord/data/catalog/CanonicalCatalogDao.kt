@@ -21,6 +21,12 @@ internal data class ExclusiveExternalIdentityClaimResult(
 )
 
 @Dao
+internal data class CanonicalRecordingReleaseTitleRow(
+    val recordingId: String,
+    val releaseId: String,
+    val releaseTitle: String,
+)
+
 internal interface CanonicalCatalogDao {
 
     /** Never used by the first-party Listening preference store. */
@@ -58,6 +64,25 @@ internal interface CanonicalCatalogDao {
         """,
     )
     suspend fun reconciledRemoteRatings(providerKey: String, scopeId: String): List<RemoteRatingEvidenceEntity>
+
+    /**
+     * Only first-party Recording ↔ Release track links; never guesses an
+     * album by title, artist, provider key or a loosely matched string.
+     */
+    @Query(
+        """
+        SELECT rt.recordingId AS recordingId,
+               release.id AS releaseId,
+               release.title AS releaseTitle
+        FROM catalog_release_track AS rt
+        INNER JOIN catalog_release AS release ON release.id = rt.releaseId
+        WHERE rt.recordingId IN (:recordingIds)
+        ORDER BY rt.recordingId ASC, release.title COLLATE NOCASE ASC, release.id ASC
+        """,
+    )
+    suspend fun recordingReleaseTitlesByIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingReleaseTitleRow>
 
     @Query("SELECT * FROM catalog_recording WHERE id IN (:recordingIds)")
     suspend fun recordingsByIds(recordingIds: List<String>): List<RecordingEntity>
