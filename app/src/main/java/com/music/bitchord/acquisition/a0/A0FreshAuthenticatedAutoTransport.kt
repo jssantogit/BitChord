@@ -1,10 +1,8 @@
 package com.music.bitchord.acquisition.a0
 
 import android.content.Context
-import com.music.bitchord.BuildConfig
 import java.io.File
 import java.io.IOException
-import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
@@ -34,43 +32,23 @@ internal class A0FreshAuthenticatedAutoTransport(
         scratchDirectory:File,
         isCancelled:()->Boolean,
     ):A0AutoAcquisitionExecutor.FetchResult {
-        if(BuildConfig.FLAVOR!="dev" || !BuildConfig.DEBUG)
+        if(com.music.bitchord.BuildConfig.FLAVOR!="dev" || !com.music.bitchord.BuildConfig.DEBUG)
             throw IOException("Soulseek unattended transport is disabled")
         if(!A0AutoTransportAdmission.accepts(candidate) ||
             cancelled.get() || isCancelled() ||
             !SoulseekActiveSession.isCurrent(expectedGeneration))
             throw IOException("Soulseek auto transport preflight rejected")
 
-        val credentials=SoulseekCredentialVault(app).read()
-            ?:throw IOException("Soulseek account unavailable")
-        var packet:ByteArray?=null
-        val connection=Socket()
+        var session:A0AutoAuthenticatedServer.Session?=null
         var current:A0ServerAssociatedTransfer?=null
-        val username=credentials.username
         try {
-            // Serialize only after the caller has authorized this single job.
-            packet=A0ExperimentalLoginCodec.encode(username,credentials.password)
-            credentials.erase()
-            if(!SoulseekActiveSession.register(connection,expectedGeneration))
-                throw IOException("Soulseek account was revoked before login")
-            socket=connection
-            connection.connect(InetSocketAddress(SERVER_HOST,SERVER_PORT),7000)
-            connection.soTimeout=12000
-            if(cancelled.get() || isCancelled() ||
-                !SoulseekActiveSession.isCurrent(expectedGeneration))
-                throw IOException("Soulseek account revoked during login")
-            connection.getOutputStream().apply {
-                write(checkNotNull(packet))
-                flush()
-            }
-            checkNotNull(packet).fill(0)
-            packet=null
-            if(!A0ExperimentalLoginCodec.readResponse(connection.getInputStream()))
-                throw IOException("Soulseek login rejected")
-            if(cancelled.get() || isCancelled() ||
-                !SoulseekActiveSession.isCurrent(expectedGeneration))
-                throw IOException("Soulseek account revoked after login")
-
+            session=A0AutoAuthenticatedServer.open(
+                app,expectedGeneration,
+                isCancelled={ cancelled.get() || isCancelled() },
+                onSocketReady={socket=it},
+            )
+            val connection=session.socket
+            val username=session.username
             current=A0ServerAssociatedTransfer()
             if(!SoulseekActiveSession.registerAutoTransfer(current,expectedGeneration))
                 throw IOException("Soulseek account revoked before P/F")
@@ -104,15 +82,12 @@ internal class A0FreshAuthenticatedAutoTransport(
                 return A0AutoAcquisitionExecutor.FetchResult.RetryableConnectionFailure
             throw IOException("Soulseek auto peer lookup failed",error)
         }finally {
-            packet?.fill(0)
-            credentials.erase()
             current?.let {
                 SoulseekActiveSession.detachAutoTransfer(it)
                 runCatching {it.cancel()}
             }
             transfer=null
-            SoulseekActiveSession.detach(connection)
-            runCatching {connection.close()}
+            session?.close()
             socket=null
         }
     }
@@ -123,10 +98,6 @@ internal class A0FreshAuthenticatedAutoTransport(
         runCatching {socket?.close()}
     }
 
-    private companion object {
-        const val SERVER_HOST="server.slsknet.org"
-        const val SERVER_PORT=2416
-    }
 }
 
 /**
