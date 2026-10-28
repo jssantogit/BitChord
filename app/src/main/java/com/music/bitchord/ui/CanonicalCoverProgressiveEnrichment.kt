@@ -206,7 +206,8 @@ internal fun canonicalRowsWithVerifiedGroupCoverBatch(
     val recordingRows = canonicalRowsWithVerifiedRecordingArt(rows, directRecordingProof)
     return recordingRows.map { row ->
         val cover = if (row.kind ==
-            com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP
+            com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP &&
+            canonicalEditorialReleaseType(row) != null
         ) verifiedGroups[row.musicBrainzId] else null
         if (cover != null && canonicalShouldAcceptArtworkUpdate(row.artworkUri, cover))
             row.copy(artworkUri = cover)
