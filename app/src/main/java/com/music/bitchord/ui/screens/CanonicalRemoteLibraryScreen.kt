@@ -180,10 +180,12 @@ internal fun CanonicalRemoteLibraryScreen(
     val filteredState by produceState<CanonicalSongFilterState>(
         initialValue = CanonicalSongFilterState.Loading,
         key1 = library.tracks, key2 = selectedFilterId,
-        key3 = selected to filtersUnavailable,
+        key3 = Triple(selectedContext, selected, filtersUnavailable),
     ) {
         value = try {
             when {
+                selectedContext != CanonicalSmartFilterContext.SONGS ->
+                    CanonicalSongFilterState.Ready(emptyList())
                 filtersUnavailable && selectedFilterId != null -> CanonicalSongFilterState.Failed
                 selectedFilterId == null -> CanonicalSongFilterState.Ready(library.tracks)
                 selected == null -> CanonicalSongFilterState.Failed
