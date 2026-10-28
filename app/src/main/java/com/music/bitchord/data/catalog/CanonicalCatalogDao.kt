@@ -34,6 +34,13 @@ internal data class CanonicalRecordingReleaseDateRow(
     val releaseDate: String?,
 )
 
+internal data class CanonicalRecordingReleaseArtworkRow(
+    val recordingId: String,
+    val releaseId: String,
+    /** A stored URL only; not proof that the cover is verified or reachable. */
+    val artworkUri: String?,
+)
+
 internal data class CanonicalRecordingTrackArtistRow(
     val recordingId: String,
     val artistName: String?,
@@ -129,6 +136,22 @@ internal interface CanonicalCatalogDao {
     suspend fun recordingReleaseDatesByIds(
         recordingIds: List<String>,
     ): List<CanonicalRecordingReleaseDateRow>
+
+    /** Read artwork pointers only from explicitly linked canonical releases. */
+    @Query(
+        """
+        SELECT rt.recordingId AS recordingId,
+               rt.releaseId AS releaseId,
+               rel.artworkUri AS artworkUri
+        FROM catalog_release_track AS rt
+        INNER JOIN catalog_release AS rel ON rel.id = rt.releaseId
+        WHERE rt.recordingId IN (:recordingIds)
+        ORDER BY rt.recordingId ASC, rt.releaseId ASC
+        """,
+    )
+    suspend fun recordingReleaseArtworkByIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingReleaseArtworkRow>
 
     /** All canonical ReleaseTrack memberships, including missing track numbers. */
     @Query(
