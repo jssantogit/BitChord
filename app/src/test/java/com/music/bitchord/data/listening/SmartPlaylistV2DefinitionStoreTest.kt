@@ -209,4 +209,25 @@ class SmartPlaylistV2DefinitionStoreTest {
         }
     }
 
+    @Test fun canonicalReleaseTitleRulesSurviveJsonPersistence() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val db = Room.inMemoryDatabaseBuilder(context, SmartPlaylistDefinitionDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val query = SmartPlaylistV2Query(
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.RELEASE_TITLE,
+                    SmartPlaylistRuleOperator.CONTAINS,
+                    textValue = "Get Up",
+                ),
+                sort = SmartPlaylistV2Sort.TITLE_ASC,
+            )
+            val repository = SmartPlaylistV2DefinitionRepository(db.v2DefinitionDao())
+            repository.save(SavedSmartPlaylistV2Definition("v2:release", "Get Up", query))
+            assertEquals(query, repository.list().single().query)
+        } finally {
+            db.close()
+        }
+    }
+
 }

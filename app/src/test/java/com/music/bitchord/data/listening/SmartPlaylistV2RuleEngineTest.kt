@@ -313,4 +313,52 @@ class SmartPlaylistV2RuleEngineTest {
         }
     }
 
+    @Test fun releaseTitleUsesCanonicalManyToManyMembershipWithoutChoosingAnArbitraryAlbum() {
+        val candidates = listOf(
+            candidate("newjeans").copy(releaseTitles = listOf("Get Up", "Super Shy")),
+            candidate("other").copy(releaseTitles = listOf("OMG")),
+            candidate("unlinked"),
+        )
+        val contains = SmartPlaylistV2Query(
+            SmartPlaylistRule.Comparison(SmartPlaylistRuleField.RELEASE_TITLE,
+                SmartPlaylistRuleOperator.CONTAINS, textValue = "get up"),
+            sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+        )
+        assertEquals(listOf("newjeans"), planner.preview(candidates, contains).map { it.recordingId })
+        val excludes = SmartPlaylistV2Query(
+            SmartPlaylistRule.Comparison(SmartPlaylistRuleField.RELEASE_TITLE,
+                SmartPlaylistRuleOperator.DOES_NOT_CONTAIN, textValue = "shy"),
+            sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+        )
+        assertEquals(listOf("other"), planner.preview(candidates, excludes).map { it.recordingId })
+        val missing = SmartPlaylistV2Query(
+            SmartPlaylistRule.Comparison(SmartPlaylistRuleField.RELEASE_TITLE,
+                SmartPlaylistRuleOperator.IS_MISSING),
+        )
+        assertEquals(listOf("unlinked"), planner.preview(candidates, missing).map { it.recordingId })
+        val negated = SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(SmartPlaylistRule.Comparison(SmartPlaylistRuleField.RELEASE_TITLE,
+                SmartPlaylistRuleOperator.CONTAINS, textValue = "get")),
+        )
+        assertEquals(listOf("other"), planner.preview(candidates, negated).map { it.recordingId })
+    }
+
+    @Test fun fiftyThousandRecordingsRemainDeterministicAndDoNotSilentlyDisappear() {
+        val candidates = (0 until 50_000).map { i ->
+            candidate("rec:%05d".format(i), completed = 1)
+                .copy(title = "Track %05d".format(i))
+        }
+        val query = SmartPlaylistV2Query(
+            SmartPlaylistRule.Comparison(SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
+                SmartPlaylistRuleOperator.GREATER_OR_EQUAL, 1.0),
+            sort = SmartPlaylistV2Sort.TITLE_DESC,
+            limit = 100,
+        )
+        val result = planner.preview(candidates, query).map { it.recordingId }
+        assertEquals(100, result.size)
+        assertEquals("rec:49999", result.first())
+        assertEquals("rec:49900", result.last())
+        assertEquals(result, planner.preview(candidates, query).map { it.recordingId })
+    }
+
 }

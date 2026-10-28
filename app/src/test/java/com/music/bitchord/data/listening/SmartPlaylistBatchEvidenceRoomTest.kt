@@ -182,4 +182,39 @@ class SmartPlaylistBatchEvidenceRoomTest {
         }
     }
 
+    @Test fun releaseTrackJoinIsBatchedAndKeepsMultipleReleasesWithoutTitleGuessing() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:linked", "A", "Artist", 180_000L))
+            dao.upsertRecording(RecordingEntity("rec:orphan", "B", "Artist", 120_000L))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "rel:get-up", "Get Up", "NewJeans", null,
+            ))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "rel:super-shy", "Super Shy", "NewJeans", null,
+            ))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "rel:get-up", "rec:linked", 1,
+            ))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "rel:super-shy", "rec:linked", 2,
+            ))
+            val evidence = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            ).read(listOf("rec:orphan", "rec:linked"))
+            assertEquals(2, evidence.size)
+            assertEquals(listOf("Get Up", "Super Shy"),
+                evidence.single { it.recordingId == "rec:linked" }.releaseTitles)
+            assertTrue(evidence.single { it.recordingId == "rec:orphan" }.releaseTitles.isEmpty())
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
 }
