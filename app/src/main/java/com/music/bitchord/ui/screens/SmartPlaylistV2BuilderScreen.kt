@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -20,6 +21,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -450,66 +453,98 @@ internal fun SmartPlaylistV2BuilderScreen(
                 else if (savedFilters.isEmpty()) Text("Nenhum filtro reutilizável salvo.")
             }
             items(savedFilters, key = { "v2-filter-" + it.id }) { filter ->
-                Column {
-                    Text(filter.name, style = MaterialTheme.typography.bodyMedium)
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(onClick = {
-                            showWizard = true
-                            editorEpoch++
-                            editingFilterId = null
-                            rule = filter.rules
-                            preview = null
-                            previewQuery = null
-                            error = null
-                        }, enabled = !loading) { Text("Copiar regras") }
-                        TextButton(onClick = {
-                            try {
-                                val combined = rule.andSavedFilter(filter)
+                var more by remember(filter.id) { mutableStateOf(false) }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(PAGE_GUTTER),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(filter.name, style = MaterialTheme.typography.titleMedium)
+                        Text("${smartRuleLeafCount(filter.rules)} condições · Filtro reutilizável",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            TextButton(onClick = {
                                 showWizard = true
-                            editorEpoch++
-                                editingFilterId = null
-                                rule = combined
+                                editorEpoch++
+                                editingId = null
+                                editingFilterId = filter.id
+                                name = filter.name
+                                rule = filter.rules
                                 preview = null
                                 previewQuery = null
                                 error = null
-                            } catch (_: IllegalArgumentException) {
-                                error = "O conjunto de regras excede o limite permitido."
+                            }, enabled = !loading) { Text("Editar") }
+                            TextButton(onClick = {
+                                val copy = filter.toPlaylistCopy(
+                                    UUID.randomUUID().toString(), filter.name,
+                                )
+                                showWizard = true
+                                editorEpoch++
+                                editingId = copy.id
+                                editingFilterId = null
+                                name = copy.name
+                                rule = copy.query.rules
+                                sort = copy.query.sort
+                                limit = copy.query.limit.toString()
+                                seed = copy.query.randomSeed.toString()
+                                preview = null
+                                previewQuery = null
+                                error = null
+                            }, enabled = !loading) { Text("Criar playlist") }
+                            Box {
+                                TextButton(onClick = { more = true },
+                                    enabled = !loading) { Text("Mais") }
+                                DropdownMenu(
+                                    expanded = more,
+                                    onDismissRequest = { more = false },
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Copiar regras para novo rascunho") },
+                                        onClick = {
+                                            more = false
+                                            showWizard = true
+                                            editorEpoch++
+                                            editingId = null
+                                            editingFilterId = null
+                                            rule = filter.rules
+                                            preview = null
+                                            previewQuery = null
+                                            error = null
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Combinar com o rascunho (E)") },
+                                        onClick = {
+                                            more = false
+                                            try {
+                                                val combined = rule.andSavedFilter(filter)
+                                                showWizard = true
+                                                editorEpoch++
+                                                editingFilterId = null
+                                                rule = combined
+                                                preview = null
+                                                previewQuery = null
+                                                error = null
+                                            } catch (_: IllegalArgumentException) {
+                                                error = "O conjunto de regras excede o limite permitido."
+                                            }
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Excluir filtro") },
+                                        onClick = {
+                                            more = false
+                                            pendingDeletion = PendingSmartDeletion(
+                                                filter.id, filter.name, true)
+                                        },
+                                    )
+                                }
                             }
-                        }, enabled = !loading) { Text("Combinar (E)") }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(onClick = {
-                            showWizard = true
-                            editorEpoch++
-                            editingId = null
-                            editingFilterId = filter.id
-                            name = filter.name
-                            rule = filter.rules
-                            preview = null
-                            previewQuery = null
-                            error = null
-                        }, enabled = !loading) { Text("Editar filtro") }
-                        TextButton(onClick = {
-                            val copy = filter.toPlaylistCopy(
-                                UUID.randomUUID().toString(), filter.name,
-                            )
-                            showWizard = true
-                            editorEpoch++
-                            editingId = copy.id
-                            editingFilterId = null
-                            name = copy.name
-                            rule = copy.query.rules
-                            sort = copy.query.sort
-                            limit = copy.query.limit.toString()
-                            seed = copy.query.randomSeed.toString()
-                            preview = null
-                            previewQuery = null
-                            error = null
-                        }, enabled = !loading) { Text("Criar playlist") }
-                        TextButton(onClick = {
-                            pendingDeletion = PendingSmartDeletion(filter.id, filter.name, true)
-                        }, enabled = !loading) { Text("Excluir") }
                         }
                     }
                 }
@@ -522,37 +557,68 @@ internal fun SmartPlaylistV2BuilderScreen(
                 else if (saved.isEmpty()) Text("Nenhuma playlist avançada salva")
             }
             items(saved, key = { "v2-saved-" + it.id }) { item ->
-                Column {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(item.name, modifier = Modifier.weight(1f))
-                        TextButton(onClick = {
-                            showWizard = true
-                            editorEpoch++
-                            editingId = item.id
-                            editingFilterId = null
-                            name = item.name
-                            rule = item.query.rules
-                            sort = item.query.sort
-                            limit = item.query.limit.toString()
-                            seed = item.query.randomSeed.toString()
-                            preview = null
-                            previewQuery = null
-                            error = null
-                        }, enabled = !loading) { Text("Editar") }
-                        TextButton(onClick = {
-                            pendingDeletion = PendingSmartDeletion(item.id, item.name, false)
-                        }, enabled = !loading) { Text("Excluir") }
-                    }
-                    if (onSavedAction != null) Row {
-                        TextButton(onClick = {
-                            onSavedAction(item.id, CanonicalCollectionIntent.PLAY_NOW)
-                        }, enabled = !loading) {
-                            Text(stringResource(Res.string.smart_collection_batch_play))
+                var more by remember(item.id) { mutableStateOf(false) }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(PAGE_GUTTER),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(item.name, style = MaterialTheme.typography.titleMedium)
+                        Text("${smartRuleLeafCount(item.query.rules)} condições · Inteligente",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            TextButton(onClick = {
+                                showWizard = true
+                                editorEpoch++
+                                editingId = item.id
+                                editingFilterId = null
+                                name = item.name
+                                rule = item.query.rules
+                                sort = item.query.sort
+                                limit = item.query.limit.toString()
+                                seed = item.query.randomSeed.toString()
+                                preview = null
+                                previewQuery = null
+                                error = null
+                            }, enabled = !loading) { Text("Editar") }
+                            Box {
+                                TextButton(onClick = { more = true },
+                                    enabled = !loading) { Text("Mais") }
+                                DropdownMenu(
+                                    expanded = more,
+                                    onDismissRequest = { more = false },
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Excluir playlist") },
+                                        onClick = {
+                                            more = false
+                                            pendingDeletion = PendingSmartDeletion(
+                                                item.id, item.name, false)
+                                        },
+                                    )
+                                }
+                            }
                         }
-                        TextButton(onClick = {
-                            onSavedAction(item.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
-                        }, enabled = !loading) {
-                            Text(stringResource(Res.string.smart_collection_batch_queue))
+                        if (onSavedAction != null) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = {
+                                    onSavedAction(item.id, CanonicalCollectionIntent.PLAY_NOW)
+                                }, enabled = !loading) {
+                                    Text(stringResource(Res.string.smart_collection_batch_play))
+                                }
+                                TextButton(onClick = {
+                                    onSavedAction(item.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
+                                }, enabled = !loading) {
+                                    Text(stringResource(Res.string.smart_collection_batch_queue))
+                                }
+                            }
                         }
                     }
                 }
