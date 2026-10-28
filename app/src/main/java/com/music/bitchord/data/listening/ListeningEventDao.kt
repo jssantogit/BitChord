@@ -5,6 +5,12 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 
+/** Explicit last-30-days starts, not an inferred world-wide popularity chart. */
+internal data class RecentPopularRecordingRow(
+    val recordingId: String,
+    val starts: Long,
+)
+
 @Dao
 internal interface ListeningEventDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -28,6 +34,22 @@ internal interface ListeningEventDao {
         """,
     )
     suspend fun endSession(sessionId: String, endedAtEpochMs: Long): Int
+
+    @Query(
+        """
+        SELECT recordingId, COUNT(*) AS starts
+        FROM listening_event
+        WHERE occurredAtEpochMs >= :sinceEpochMs AND type = 'PLAYBACK_STARTED'
+        GROUP BY recordingId
+        HAVING COUNT(*) >= 2
+        ORDER BY starts DESC, recordingId
+        LIMIT :limit
+        """,
+    )
+    suspend fun recentPopularRecordings(
+        sinceEpochMs: Long,
+        limit: Int,
+    ): List<RecentPopularRecordingRow>
 
     @Query("SELECT * FROM listening_session WHERE id = :sessionId")
     suspend fun session(sessionId: String): ListeningSessionEntity?

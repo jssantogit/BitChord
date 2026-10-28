@@ -245,18 +245,14 @@ fun SourcesScreen(
                         // delete. JioSaavn and YouTube have no address to
                         // change, so a tap on them would open an empty editor.
                         onClick = if (config.kind.needsServer) ({ onEditSource(config) }) else null,
-                        // YouTube gets no switch at all — see
-                        // [SourceRegistry.setEnabled] for why one would be a lie.
-                        onToggle = if (config.kind == SourceKind.YOUTUBE) {
-                            null
-                        } else {
-                            ({ enabled ->
-                                if (config.kind == SourceKind.JIOSAAVN && enabled && !config.enabled) {
-                                    onConfirmJioSaavn()
-                                } else {
-                                    SourceRegistry.setEnabled(config.id, enabled)
-                                }
-                            })
+                        // Every source, including YouTube, honors its switch.
+                        // JioSaavn alone retains its explicit enable confirmation.
+                        onToggle = { enabled ->
+                            if (config.kind == SourceKind.JIOSAAVN && enabled && !config.enabled) {
+                                onConfirmJioSaavn()
+                            } else {
+                                SourceRegistry.setEnabled(config.id, enabled)
+                            }
                         },
                         handle = handle,
                     )

@@ -6,6 +6,7 @@ import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.catalog.ReleaseTrackEntity
 import com.music.bitchord.data.catalog.provider.CanonicalCatalogSyncStore
+import com.music.bitchord.data.catalog.provider.CanonicalReleaseTrackEdge
 import com.music.bitchord.data.catalog.provider.CanonicalRemoteCatalogSync
 import com.music.bitchord.data.catalog.provider.ProviderAlbum
 import com.music.bitchord.data.catalog.provider.ProviderCapabilities
@@ -93,12 +94,26 @@ class OpenSubsonicCatalogUpdateTest {
         assertEquals(383_000L, store.recordings["recording-1"]?.durationMs)
         assertEquals("release-1", store.releaseTracks.single().releaseId)
         assertEquals("recording-1", store.releaseTracks.single().recordingId)
+        assertEquals(
+            setOf(CanonicalReleaseTrackEdge("release-1", "recording-1")),
+            store.ownedReleaseTrackEdges,
+        )
         val updatedAsset = store.assets[assetKey("opensubsonic:home", "song-9")]
         requireNotNull(updatedAsset)
         assertEquals("asset-1", updatedAsset.id)
         assertEquals("recording-1", updatedAsset.recordingId)
         assertEquals("opensubsonic://asset/new", updatedAsset.uri)
         assertEquals(2L, updatedAsset.dateAddedSeconds)
+
+        // An authoritative complete empty snapshot expires only this
+        // provider's active edge ownership; canonical identities remain.
+        CanonicalRemoteCatalogSync.applySnapshot(
+            providerKey = "opensubsonic:home",
+            snapshot = ProviderLibrarySnapshot(emptyList(), complete = true),
+            store = store,
+        )
+        assertEquals(emptySet<CanonicalReleaseTrackEdge>(), store.ownedReleaseTrackEdges)
+        assertEquals("recording-1", store.identities[key("opensubsonic:home", "recording", "song-9")])
     }
 
     private class SnapshotProvider(
@@ -120,6 +135,7 @@ class OpenSubsonicCatalogUpdateTest {
         val recordings = linkedMapOf<String, RecordingEntity>()
         val releases = linkedMapOf<String, ReleaseEntity>()
         val releaseTracks = linkedSetOf<ReleaseTrackEntity>()
+        val ownedReleaseTrackEdges = linkedSetOf<CanonicalReleaseTrackEdge>()
         val assets = linkedMapOf<String, MediaAssetEntity>()
         val identities = linkedMapOf<String, String>()
 
@@ -162,6 +178,14 @@ class OpenSubsonicCatalogUpdateTest {
                     current.recordingId == releaseTrack.recordingId
             }
             releaseTracks += releaseTrack
+        }
+
+        override suspend fun reconcileReleaseTrackSources(
+            providerKey: String, edges: List<CanonicalReleaseTrackEdge>,
+        ) {
+            require(providerKey == "opensubsonic:home")
+            ownedReleaseTrackEdges.clear()
+            ownedReleaseTrackEdges.addAll(edges)
         }
 
         override suspend fun upsertMediaAsset(mediaAsset: MediaAssetEntity) {

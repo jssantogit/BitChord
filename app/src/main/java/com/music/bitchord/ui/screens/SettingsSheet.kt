@@ -274,6 +274,7 @@ internal fun SettingsScreen(
     val listenBrainzToken by AppSettings.listenBrainzToken.collectAsStateWithLifecycle()
 
     val replayGenres by AppSettings.replayGenres.collectAsStateWithLifecycle()
+    val canonicalDiscoveryEnabled by AppSettings.canonicalDiscoveryEnabled.collectAsStateWithLifecycle()
 
     // Read here so the row can say "In a party · ABC123" rather than making
     // somebody open the screen to find out whether they are still in one.
@@ -518,6 +519,39 @@ internal fun SettingsScreen(
         // does this minute cost"; these answer "what am I keeping, and when may
         // it be fetched" — and those two questions only make sense read
         // together, which is what puts them side by side here.
+        if (canonicalDiscoverySettingsVisible(selectedSection, searchQuery)) {
+        SearchableSettingsGroup(
+            search,
+            destination = SettingsSection.SOURCES,
+            onSearchNavigate = if (selectedSection == null) {
+                _: String -> onSelectSection(SettingsSection.SOURCES)
+            } else null,
+            header = stringResource(R.string.canonical_discovery_header),
+        ) {
+            val title = stringResource(R.string.canonical_discovery_setting_title)
+            row(title, "musicbrainz", "catalog", "home", "explore", "offline") {
+                SettingsRow(
+                    icon = Icons.Rounded.LibraryMusic,
+                    title = title,
+                    subtitle = stringResource(R.string.canonical_discovery_setting_subtitle),
+                    trailing = {
+                        Switch(
+                            checked = canonicalDiscoveryEnabled,
+                            onCheckedChange = AppSettings::setCanonicalDiscoveryEnabled,
+                            colors = SwitchDefaults.colors(
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                checkedBorderColor = MaterialTheme.colorScheme.primary,
+                            ),
+                        )
+                    },
+                    onClick = {
+                        AppSettings.setCanonicalDiscoveryEnabled(!canonicalDiscoveryEnabled)
+                    },
+                )
+            }
+        }
+        }
+
         if (selectedSection == SettingsSection.DOWNLOADS || (selectedSection == null && searchQuery.isNotBlank())) {
         SearchableSettingsGroup(search, destination = SettingsSection.DOWNLOADS, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.DOWNLOADS) } else null, header = stringResource(R.string.downloads)) {
             row("Soulseek", "conta", "pesquisa", "baixar") {

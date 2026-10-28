@@ -279,4 +279,26 @@
     <string name="smart_collection_batch_played">Starting playback</string>
     <string name="smart_collection_batch_empty">No eligible recordings</string>
     <string name="smart_collection_batch_failed">Collection unavailable or queue action rejected</string>
+    <string name="canonical_filter_all">All</string>
+    <string name="canonical_filter_songs">Songs</string>
+    <string name="canonical_filter_videos">Videos</string>
+    <string name="canonical_search_hint">Search the music catalog. Metadata alone does not provide audio.</string>
+    <string name="canonical_back">Back</string>
+    <string name="canonical_cover_art">Album cover</string>
+    <string name="canonical_empty_search">No catalog entries found.</string>
+    <string name="canonical_recording_kind">Recording</string>
+    <string name="canonical_artist_kind">Artist · discography</string>
+    <string name="canonical_group_kind">Album or single</string>
+    <string name="canonical_release_kind">Release edition · tracks</string>
+    <string name="canonical_known_asset">Audio file registered · availability checked when playing</string>
+    <string name="canonical_offline_metadata">Metadata saved offline · no known playable file</string>
+    <string name="canonical_metadata_only">Metadata only · a local or authorized remote file is required</string>
+    <string name="canonical_more_editions">More editions</string>
+    <string name="canonical_more_results">More results</string>
+    <string name="canonical_loading_more">Loading…</string>
+    <string name="canonical_server_heading">From your servers</string>
+    <string name="canonical_server_track_hint">Available through a configured server · tap to play</string>
+    <string name="search_server_hint">Search connected servers and enabled addons</string>
+    <string name="search_server_empty">Search songs indexed from connected servers or available addons.</string>
+    <string name="search_server_no_results">No server or addon matches “%1$s”.</string>
 </resources>

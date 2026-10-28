@@ -137,9 +137,9 @@ object SourceRegistry {
         stored: List<SourceConfig>,
         forceJioSaavnOff: Boolean,
     ): List<SourceConfig> {
-        // Seeded rather than persisted-on-first-write, so a build adding a new
-        // built-in kind picks it up for existing installs too. SourceConfig's
-        // default is the policy: JioSaavn off, YouTube on.
+        // Newly seeded installs keep the existing defaults (JioSaavn off,
+        // YouTube on), but persisted user opt-outs must remain authoritative.
+        // In particular, discovery must never silently re-enable YouTube.
         val seeded = stored + BUILT_IN_KINDS
             .filter { kind -> stored.none { it.kind == kind } }
             .map { SourceConfig(kind = it) }
@@ -150,7 +150,6 @@ object SourceRegistry {
             .filterNot { it.kind == SourceKind.MODULE }
             .map { config ->
                 when {
-                    config.kind == SourceKind.YOUTUBE && !config.enabled -> config.copy(enabled = true)
                     config.kind == SourceKind.JIOSAAVN && forceJioSaavnOff -> config.copy(enabled = false)
                     else -> config
                 }
@@ -293,20 +292,22 @@ object SourceRegistry {
     }
 
     /**
-     * Turns one source on or off.
-     *
-     * YouTube is not switchable and silently ignores a request to disable it.
-     * It is the only source that can supply a home feed, radio or related
-     * tracks, and nothing else holds the full catalogue — switching it off
-     * doesn't even stop it being played, because a YouTube-queued track whose
-     * substitutes all miss still falls back to it. A switch that cannot honour
-     * its own off position is worse than no switch, so it isn't offered one:
-     * see [SourcesScreen][com.music.bitchord.ui.screens.SourcesScreen].
+     * Explicit source opt-out is authoritative, including the built-in
+     * YouTube source. Legacy videoIds are not playable without this provider;
+     * PlaybackService refuses their network resolution when it is disabled.
+     * This leaves local/authorized remote MediaAssets unaffected.
      */
     fun setEnabled(configId: String, enabled: Boolean) {
-        if (!enabled && config(configId)?.kind == SourceKind.YOUTUBE) return
         publish(configs.value.map { if (it.id == configId) it.copy(enabled = enabled) else it })
     }
+
+    /**
+     * Empty configs retain the historical fresh-install default. A persisted
+     * explicit YouTube opt-out must block even direct videoId resolution in
+     * the Media3 loader, not only Search/Home or SourceResolver selection.
+     */
+    internal fun mayResolveLegacyYoutubeStream(configs: List<SourceConfig>): Boolean =
+        configs.none { it.kind == SourceKind.YOUTUBE && !it.enabled }
 
     /**
      * Puts the addons in [orderedIds], which is the order they will be asked in.

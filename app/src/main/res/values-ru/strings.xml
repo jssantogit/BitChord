@@ -70,6 +70,7 @@
     </plurals>
     <string name="songs">Песни</string>
     <string name="artists">Исполнители</string>
+    <string name="canonical_singles_eps">Синглы и EP</string>
     <string name="albums">Альбомы</string>
     <string name="no_album_metadata">Ни один из этих треков не указывает свой альбом.</string>
     <string name="search_empty">Ищите миллионы песен на YouTube Music.</string>
@@ -1392,6 +1393,31 @@
     <string name="playback_recovery_retry">Повторить</string>
     <string name="playback_recovery_retrying">Повторная попытка…</string>
     <string name="playback_recovery_dismiss">Закрыть</string>
+    <string name="canonical_discovery_header">Обзор каталога</string>
+    <string name="canonical_discovery_setting_title">Главная и Обзор на основе каталога</string>
+    <string name="canonical_discovery_setting_subtitle">Используйте сохранённую музыку и MusicBrainz на Главной и в Обзоре. Режим также включается при отключении YouTube Music.</string>
+    <string name="canonical_discovery_home_title">Ваша музыка</string>
+    <string name="canonical_discovery_explore_title">Изучить каталог</string>
+    <string name="canonical_discovery_description">Просматривайте коллекции на устройстве или ищите в MusicBrainz. Метаданные не гарантируют доступности аудио.</string>
+    <string name="canonical_discovery_search">Поиск в MusicBrainz</string>
+    <string name="canonical_discovery_open_library">Открыть медиатеку</string>
+    <string name="canonical_discovery_downloaded_collections">Загруженные коллекции</string>
+    <string name="canonical_discovery_local_playlists">Плейлисты на устройстве</string>
+    <string name="canonical_discovery_empty_collections">На этом устройстве ещё нет сохранённых коллекций.</string>
+    <string name="canonical_discovery_catalog_cache">Каталог на устройстве</string>
+    <string name="canonical_discovery_cache_loading">Загрузка сохранённого каталога…</string>
+    <string name="canonical_discovery_cache_error">Не удалось прочитать сохранённый каталог MusicBrainz.</string>
+    <string name="canonical_discovery_cache_empty">Записей MusicBrainz пока нет. Найдите общедоступные метаданные в каталоге.</string>
+    <string name="canonical_discovery_metadata_only">Только метаданные · аудио не найдено</string>
+    <string name="canonical_discovery_asset_available">Аудио в каталоге · доступ проверяется при воспроизведении</string>
+    <string name="canonical_discovery_cached_offline">Сохранено офлайн</string>
+    <string name="canonical_discovery_retry">Повторить</string>
+    <string name="canonical_discovery_refresh">Обновить каталог</string>
+    <string name="legacy_library_youtube_disabled">Включите YouTube Music в настройках, чтобы загрузить эту онлайн-медиатеку. Локальные плейлисты и коллекции останутся доступны.</string>
+    <string name="spotify_import_youtube_required">Для импорта плейлистов Spotify пока требуется поиск совпадений в YouTube Music. Включите YouTube Music и отключите поиск на основе каталога.</string>
+    <string name="search_origin_general">Общее</string>
+    <string name="search_origin_server">Сервер</string>
+    <string name="search_origin_local">Локально</string>
     <string name="pause_resume_fade">Плавное затухание при паузе и возобновлении</string>
     <string name="pause_resume_fade_subtitle">Плавно уменьшает громкость при паузе и увеличивает при возобновлении</string>
 </resources>

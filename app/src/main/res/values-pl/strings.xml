@@ -65,6 +65,7 @@
     </plurals>
     <string name="songs">Piosenki</string>
     <string name="artists">Artyści</string>
+    <string name="canonical_singles_eps">Single i EP</string>
     <string name="albums">Albumy</string>
     <string name="no_album_metadata">Żaden z tych utworów nie informuje z jakiego albumu pochodzi.</string>
     <string name="search_empty">Szukaj milionów utworów na YouTube Music.</string>
@@ -1400,6 +1401,31 @@
     <string name="playback_recovery_retry">Spróbuj ponownie</string>
     <string name="playback_recovery_retrying">Ponawianie…</string>
     <string name="playback_recovery_dismiss">Zamknij</string>
+    <string name="canonical_discovery_header">Odkrywanie katalogu</string>
+    <string name="canonical_discovery_setting_title">Ekran główny i Odkrywaj z katalogiem</string>
+    <string name="canonical_discovery_setting_subtitle">Używaj zapisanej muzyki i MusicBrainz na ekranie głównym i w Odkrywaj. Ten tryb działa też po wyłączeniu YouTube Music.</string>
+    <string name="canonical_discovery_home_title">Twoja muzyka</string>
+    <string name="canonical_discovery_explore_title">Odkrywaj katalog</string>
+    <string name="canonical_discovery_description">Przeglądaj kolekcje zapisane na urządzeniu lub wyszukuj w MusicBrainz. Metadane nie gwarantują dźwięku do odtworzenia.</string>
+    <string name="canonical_discovery_search">Szukaj w MusicBrainz</string>
+    <string name="canonical_discovery_open_library">Otwórz bibliotekę</string>
+    <string name="canonical_discovery_downloaded_collections">Pobrane kolekcje</string>
+    <string name="canonical_discovery_local_playlists">Playlisty zapisane na urządzeniu</string>
+    <string name="canonical_discovery_empty_collections">Na urządzeniu nie zapisano jeszcze kolekcji.</string>
+    <string name="canonical_discovery_catalog_cache">Katalog zapisany na urządzeniu</string>
+    <string name="canonical_discovery_cache_loading">Wczytywanie zapisanego katalogu…</string>
+    <string name="canonical_discovery_cache_error">Nie udało się odczytać zapisanego katalogu MusicBrainz.</string>
+    <string name="canonical_discovery_cache_empty">Nie zapisano jeszcze pozycji MusicBrainz. Wyszukaj publiczne metadane w katalogu.</string>
+    <string name="canonical_discovery_metadata_only">Tylko metadane · brak skatalogowanego dźwięku</string>
+    <string name="canonical_discovery_asset_available">Dźwięk skatalogowany · dostęp zostanie sprawdzony podczas odtwarzania</string>
+    <string name="canonical_discovery_cached_offline">Zapisano offline</string>
+    <string name="canonical_discovery_retry">Spróbuj ponownie</string>
+    <string name="canonical_discovery_refresh">Odśwież zapisany katalog</string>
+    <string name="legacy_library_youtube_disabled">Włącz YouTube Music w ustawieniach, aby wczytać bibliotekę online. Lokalne playlisty i kolekcje pozostaną dostępne.</string>
+    <string name="spotify_import_youtube_required">Import playlist Spotify nadal wymaga dopasowania w YouTube Music. Włącz YouTube Music i wyłącz odkrywanie oparte na katalogu.</string>
+    <string name="search_origin_general">Ogólne</string>
+    <string name="search_origin_server">Serwer</string>
+    <string name="search_origin_local">Lokalne</string>
     <string name="pause_resume_fade">Wyciszanie przy pauzie i wznowieniu</string>
     <string name="pause_resume_fade_subtitle">Płynnie ścisza muzykę podczas pauzy i przywraca głośność po wznowieniu</string>
 </resources>

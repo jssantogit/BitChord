@@ -64,6 +64,7 @@
     </plurals>
     <string name="songs">Bài hát</string>
     <string name="artists">Nghệ sĩ</string>
+    <string name="canonical_singles_eps">Đĩa đơn và EP</string>
     <string name="albums">Album</string>
     <string name="no_album_metadata">Không có thông tin album cho các bản nhạc này.</string>
     <string name="search_empty">Tìm kiếm hàng triệu bài hát trên YouTube Music.</string>
@@ -1277,6 +1278,31 @@
     <string name="playback_recovery_retry">Thử lại</string>
     <string name="playback_recovery_retrying">Đang thử lại…</string>
     <string name="playback_recovery_dismiss">Đóng</string>
+    <string name="canonical_discovery_header">Khám phá danh mục</string>
+    <string name="canonical_discovery_setting_title">Trang chủ và Khám phá từ danh mục</string>
+    <string name="canonical_discovery_setting_subtitle">Dùng nhạc đã lưu và MusicBrainz ở Trang chủ và Khám phá. Chế độ này cũng bật khi YouTube Music bị tắt.</string>
+    <string name="canonical_discovery_home_title">Nhạc của bạn</string>
+    <string name="canonical_discovery_explore_title">Khám phá danh mục</string>
+    <string name="canonical_discovery_description">Duyệt bộ sưu tập đã lưu trên thiết bị hoặc tìm kiếm MusicBrainz. Siêu dữ liệu không đảm bảo có âm thanh phát được.</string>
+    <string name="canonical_discovery_search">Tìm trên MusicBrainz</string>
+    <string name="canonical_discovery_open_library">Mở thư viện</string>
+    <string name="canonical_discovery_downloaded_collections">Bộ sưu tập đã tải xuống</string>
+    <string name="canonical_discovery_local_playlists">Danh sách phát lưu trên thiết bị</string>
+    <string name="canonical_discovery_empty_collections">Chưa có bộ sưu tập nào được lưu trên thiết bị này.</string>
+    <string name="canonical_discovery_catalog_cache">Danh mục lưu trên thiết bị</string>
+    <string name="canonical_discovery_cache_loading">Đang tải danh mục đã lưu…</string>
+    <string name="canonical_discovery_cache_error">Không thể đọc danh mục MusicBrainz đã lưu.</string>
+    <string name="canonical_discovery_cache_empty">Chưa có mục MusicBrainz nào được lưu. Hãy tìm kiếm để duyệt siêu dữ liệu công khai.</string>
+    <string name="canonical_discovery_metadata_only">Chỉ có siêu dữ liệu · chưa có âm thanh</string>
+    <string name="canonical_discovery_asset_available">Đã lập danh mục âm thanh · sẽ xác minh quyền truy cập khi phát</string>
+    <string name="canonical_discovery_cached_offline">Đã lưu ngoại tuyến</string>
+    <string name="canonical_discovery_retry">Thử lại</string>
+    <string name="canonical_discovery_refresh">Làm mới danh mục đã lưu</string>
+    <string name="legacy_library_youtube_disabled">Bật YouTube Music trong Cài đặt để tải thư viện trực tuyến này. Danh sách phát và bộ sưu tập trên thiết bị vẫn khả dụng.</string>
+    <string name="spotify_import_youtube_required">Việc nhập danh sách phát Spotify hiện vẫn cần đối chiếu qua YouTube Music. Hãy bật YouTube Music và tắt khám phá ưu tiên danh mục.</string>
+    <string name="search_origin_general">Chung</string>
+    <string name="search_origin_server">Máy chủ</string>
+    <string name="search_origin_local">Cục bộ</string>
     <string name="pause_resume_fade">Làm mờ âm khi tạm dừng và phát tiếp</string>
     <string name="pause_resume_fade_subtitle">Giảm dần âm lượng khi tạm dừng và tăng dần khi phát tiếp</string>
 </resources>

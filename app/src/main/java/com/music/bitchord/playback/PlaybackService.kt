@@ -119,6 +119,7 @@ import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.data.model.QueueTier
 import com.music.bitchord.data.sources.SourceRegistry
+import com.music.bitchord.data.catalog.allowedCanonicalLyricsSources
 import com.music.bitchord.download.Downloads
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArraySet
@@ -1378,6 +1379,18 @@ class PlaybackService : MediaLibraryService() {
             }
         }
 
+        // The Media3 loader blocks future legacy YT resolution when disabled.
+        // Read-ahead has a separate scope: cancel *already scheduled* warm-up
+        // requests immediately on opt-out, not only on the next queue change.
+        scope.launch {
+            SourceRegistry.configs
+                .map(SourceRegistry::mayResolveLegacyYoutubeStream)
+                .distinctUntilChanged()
+                .collect { youtubeAllowed ->
+                    if (!youtubeAllowed) AudioCache.cancel()
+                }
+        }
+
         val streamResolver = ResolvingDataSource.Resolver { dataSpec ->
             // Which track everything below is for, said once, because none of
             // it would otherwise know: this runs on ExoPlayer's loader thread
@@ -1436,6 +1449,16 @@ class PlaybackService : MediaLibraryService() {
             }
             val videoId = dataSpec.uri.getQueryParameter("v")
                 ?: return@Resolver dataSpec
+            // SourceRegistry opt-out also governs the last mile of playback.
+            // Without this guard, a legacy playlist's opaque videoId could
+            // still call InnerTube directly even after Search/Home stopped.
+            // Source-backed and local/authorized remote MediaAssets are handled
+            // above or by DefaultDataSource, and are not blocked here.
+            if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
+                throw java.io.IOException(
+                    "YouTube source disabled: legacy video ID requires an authorized audio asset",
+                )
+            }
             // An explicit rollback is not a preference for a different
             // candidate: it means this exact YouTube rendition, immediately.
             // Answer it before StreamChoice, the module race and a pending
@@ -7379,7 +7402,11 @@ class PlaybackService : MediaLibraryService() {
                     artist = currentSong.artist,
                     durationMs = trackDurationMs,
                     album = currentSong.albumName,
-                    sources = AppSettings.lyricsSources.value,
+                    sources = allowedCanonicalLyricsSources(
+                        requested = AppSettings.lyricsSources.value,
+                        canonicalDiscovery = AppSettings.canonicalDiscoveryEnabled.value,
+                        configs = SourceRegistry.configs.value,
+                    ),
                     order = AppSettings.lyricsSourceOrder.value,
                     prioritizeSyllableSync = AppSettings.prioritizeSyllableSync.value,
                 )

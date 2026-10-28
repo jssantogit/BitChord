@@ -117,6 +117,13 @@ internal object SettingsNavigation {
     )
 }
 
+/** The canonical MusicBrainz catalog is a source; global search may surface it. */
+internal fun canonicalDiscoverySettingsVisible(
+    section: SettingsSection?,
+    searchQuery: String,
+): Boolean = section == SettingsSection.SOURCES ||
+    (section == null && searchQuery.isNotBlank())
+
 @Composable
 internal fun SettingsHome(
     onSelect: (SettingsSection) -> Unit,
