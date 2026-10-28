@@ -6,6 +6,9 @@ import com.music.bitchord.BuildConfig
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.download.A1AndroidDownloadDestination
 import com.music.bitchord.download.A1DownloadDestinationPolicy
+import com.music.bitchord.download.A3AndroidAcquisitionLedger
+import com.music.bitchord.download.A3AcquisitionLedger
+import java.util.UUID
 import com.music.bitchord.download.SoulseekBatchPlan
 
 /**
@@ -72,10 +75,28 @@ internal object A0AndroidAutoAcquisitionEngine {
             !SoulseekActiveSession.isCurrent(generation) ||
             Thread.currentThread().isInterrupted
         if(stopped())return refused(entries.size)
+
+        // Atomic on the A3 journal BEFORE search, login or peer discovery.
+        // Reboot does not erase this reservation: a duplicate recording ID
+        // or same artist/title+release fingerprint fails closed.
+        val jobs=entries.associate { it.trackId to UUID.randomUUID().toString() }
+        A3AndroidAcquisitionLedger.get(app).reserveAutomaticBatch(
+            entries.map { entry ->
+                A3AcquisitionLedger.AutomaticSlot(
+                    id=checkNotNull(jobs[entry.trackId]),
+                    recordingId=entry.trackId,
+                    query=entry.query,
+                    album=entry.album,
+                )
+            }
+        )
+        if(stopped())return refused(entries.size)
         val discovery=A0FreshAutoSearchTransport(app,generation,quality)
-        val executor=A0AutoBatchExecutor {
+        val executor=A0AutoBatchExecutor { entry ->
             A0AndroidAutoAcquisitionPort(
-                app,generation,A0FreshAuthenticatedAutoTransport(app,generation)
+                app,generation,A0FreshAuthenticatedAutoTransport(app,generation),
+                jobId=checkNotNull(jobs[entry.trackId]),
+                reservedAutomatic=true,
             )
         }
         return A0AutoDiscoveryCoordinator(discovery,executor).run(
