@@ -359,4 +359,72 @@ class CanonicalCoverProgressiveEnrichmentTest {
         })
         assertEquals(20, queue.map { it.musicBrainzId }.distinct().size)
     }
+
+    @Test fun twentyDistinctOfficialAlbumsNeedOneCachedCoverBatchNotTwentyRoomReads() = runBlocking {
+        val rows = (1..20).map { index ->
+            com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+                "rec-$index", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+                "Song $index", "Artist", coverGroupMbid = "group-$index",
+            )
+        }
+        var bulkCalls = 0
+        val proven = com.music.bitchord.ui.canonicalCachedRecordingArtForVisibleRows(
+            rows = rows,
+            databaseLinks = { error("Direct official group proofs do not need Room graph") },
+            cachedCover = { error("One-by-one artwork lookup is redundant") },
+            cachedCovers = { groups ->
+                bulkCalls++
+                assertEquals((1..20).map { "group-$it" }, groups)
+                groups.associateWith { "art:$it" }
+            },
+        )
+        assertEquals(1, bulkCalls)
+        assertEquals(20, proven.size)
+        assertEquals("art:group-20", proven["rec-20"])
+    }
+
+    @Test fun batchFallbackOnlyQueriesUnresolvedAndNeverAssignsUnrelatedGroupCover() = runBlocking {
+        val rows = listOf(
+            com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+                "rec-1", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+                "One", "Artist", coverGroupMbid = "direct",
+            ),
+            com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+                "rec-2", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+                "Two", "Artist", coverGroupMbid = "no-art",
+            ),
+            com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+                "rec-3", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+                "Three", "Artist",
+            ),
+        )
+        val lookedUp = mutableListOf<List<String>>()
+        val graphCalls = mutableListOf<List<String>>()
+        val proven = com.music.bitchord.ui.canonicalCachedRecordingArtForVisibleRows(
+            rows = rows,
+            databaseLinks = { missing ->
+                graphCalls += missing
+                listOf(
+                    com.music.bitchord.data.catalog.CanonicalRecordingCoverGroupRow("rec-2", "cached"),
+                    com.music.bitchord.data.catalog.CanonicalRecordingCoverGroupRow("rec-3", "cached"),
+                    com.music.bitchord.data.catalog.CanonicalRecordingCoverGroupRow("unrelated", "cached"),
+                )
+            },
+            cachedCover = { error("Never query each group separately") },
+            cachedCovers = { groupIds ->
+                lookedUp += groupIds
+                groupIds.mapNotNull {
+                    when (it) {
+                        "direct" -> it to "art:direct"
+                        "cached" -> it to "art:cached"
+                        else -> null
+                    }
+                }.toMap()
+            },
+        )
+        assertEquals(listOf(listOf("direct", "no-art"), listOf("cached")), lookedUp)
+        assertEquals(listOf(listOf("rec-2", "rec-3")), graphCalls)
+        assertEquals(mapOf("rec-1" to "art:direct", "rec-2" to "art:cached",
+            "rec-3" to "art:cached"), proven)
+    }
 }
