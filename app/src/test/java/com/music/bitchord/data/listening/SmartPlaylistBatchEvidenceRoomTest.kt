@@ -552,4 +552,43 @@ class SmartPlaylistBatchEvidenceRoomTest {
         }
     }
 
+
+    @Test fun releaseArtworkReferenceRequiresExplicitCanonicalReleaseLink() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:linked", "Song", "Singer", 120_000L))
+            dao.upsertRecording(RecordingEntity("rec:orphan", "Other", "Singer", 120_000L))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "rel:art", "With art", "Singer", "https://example.org/front.jpg",
+            ))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "rel:unknown", "Without art", "Singer", null,
+            ))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "rel:art", "rec:linked", 1,
+            ))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "rel:unknown", "rec:linked", 1,
+            ))
+            val reader = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            )
+            val rows = reader.read(listOf("rec:linked", "rec:orphan"), setOf(
+                SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
+            )).associateBy { it.recordingId }
+            assertTrue(rows.getValue("rec:linked").hasReleaseArtworkReference)
+            assertTrue(!rows.getValue("rec:orphan").hasReleaseArtworkReference)
+            val sparse = reader.read(listOf("rec:linked"), emptySet()).single()
+            assertTrue(!sparse.hasReleaseArtworkReference)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
 }
