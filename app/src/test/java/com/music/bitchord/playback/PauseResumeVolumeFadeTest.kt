@@ -1,6 +1,7 @@
 package com.music.bitchord.playback
 
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
 import java.lang.reflect.Proxy
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
@@ -145,6 +146,22 @@ class PauseResumeVolumeFadeTest {
         assertEquals(1f, deck.volume, 0f)
     }
 
+    @Test fun `decoder error during startup cannot leave session volume muted`() = runTest {
+        val deck = FakeDeck(playingInitially = false)
+        deck.audibleOnPlay = false
+        val fade = PauseResumeVolumeFade(this, { 200 }, { false }, { testScheduler.currentTime })
+        fade.play(deck.player)
+        runCurrent()
+        deck.playerError = PlaybackException(
+            "simulated decoder error",
+            null,
+            PlaybackException.ERROR_CODE_DECODING_FAILED,
+        )
+        advanceTimeBy(32)
+        runCurrent()
+        assertEquals(1f, deck.volume, 0f)
+    }
+
     @Test fun `a second play command recovers after an external pause during startup`() = runTest {
         val deck = FakeDeck(playingInitially = false)
         deck.audibleOnPlay = false
@@ -226,6 +243,7 @@ class PauseResumeVolumeFadeTest {
         var pauseCalls = 0
         var playCalls = 0
         var playbackState = Player.STATE_READY
+        var playerError: PlaybackException? = null
         var throwOnPlay = false
 
         val player: Player = Proxy.newProxyInstance(
@@ -245,6 +263,7 @@ class PauseResumeVolumeFadeTest {
                 "setVolume" -> { volume = args!![0] as Float; null }
                 "getPlayWhenReady" -> playWhenReady
                 "getPlaybackState" -> playbackState
+                "getPlayerError" -> playerError
                 "isPlaying" -> audible
                 "equals" -> proxy === args?.get(0)
                 "hashCode" -> System.identityHashCode(proxy)
