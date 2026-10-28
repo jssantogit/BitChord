@@ -41,6 +41,45 @@ class A3AutomaticReservationScopeTest {
         assertNull(journal.get(id))
     }
 
+    @Test fun confirmedReleaseNotifiesMemoryGuardExactlyOnceOnNormalReturn() {
+        val journal=ledger()
+        var notificationCount=0
+        val report=A3AutomaticReservationScope(journal).run(
+            listOf(id),onDurablyReleased={notificationCount++}
+        ) { "no transfer" }
+        assertTrue(report.unusedReservationReleased)
+        assertEquals(1,notificationCount)
+    }
+
+    @Test fun confirmedReleaseNotifiesMemoryGuardOnExceptionalExit() {
+        val journal=ledger()
+        var notificationCount=0
+        try {
+            A3AutomaticReservationScope(journal).run(
+                listOf(id),onDurablyReleased={notificationCount++}
+            ) { throw IOException("discovery socket error") }
+            fail("original failure must propagate")
+        }catch(_:IOException){}
+        assertNull(journal.get(id))
+        assertEquals(1,notificationCount)
+    }
+
+    @Test fun begunTransferNeverNotifiesMemoryRollbackOnException() {
+        val journal=ledger()
+        var notificationCount=0
+        try {
+            A3AutomaticReservationScope(journal).run(
+                listOf(id),onDurablyReleased={notificationCount++}
+            ) {
+                journal.advance(id,A3AcquisitionLedger.Phase.SEARCHING)
+                throw IOException("after started")
+            }
+            fail("must propagate")
+        }catch(_:IOException){}
+        assertEquals(0,notificationCount)
+        assertNotNull(journal.get(id))
+    }
+
     @Test fun begunTransferRetainsReservationOnNormalOrExceptionalExit() {
         for(crash in listOf(false,true)) {
             val journal=ledger()
