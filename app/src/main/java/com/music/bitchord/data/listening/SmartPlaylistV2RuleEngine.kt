@@ -244,6 +244,17 @@ internal data class SmartPlaylistV2Match(
     val confirmedCompletions: Long,
 )
 
+/** A non-match due to missing evidence is NOT proven exclusion from a child playlist. */
+internal data class SmartPlaylistReferencedMembership(
+    val included: Set<String>,
+    val unknown: Set<String>,
+)
+
+internal data class SmartPlaylistV2Evaluation(
+    val matches: List<SmartPlaylistV2Match>,
+    val unknownRecordingIds: Set<String>,
+)
+
 /**
  * Normalize each canonical display string once, rather than on each
  * comparator invocation (O(N log N) repeated allocations at 50k entries).
@@ -280,10 +291,19 @@ internal class SmartPlaylistV2RuleEngine(
     fun preview(
         input: List<RuleBasedRecordingCandidate>,
         query: SmartPlaylistV2Query,
-        referenceMemberships: Map<String, Set<String>> = emptyMap(),
-    ): List<SmartPlaylistV2Match> {
+        referenceMemberships: Map<String, SmartPlaylistReferencedMembership> = emptyMap(),
+    ): List<SmartPlaylistV2Match> =
+        evaluateWithUnknowns(input, query, referenceMemberships).matches
+
+    /** Evaluate each child once, retaining UNKNOWN separately for parent NOT/ALL/ANY. */
+    internal fun evaluateWithUnknowns(
+        input: List<RuleBasedRecordingCandidate>,
+        query: SmartPlaylistV2Query,
+        referenceMemberships: Map<String, SmartPlaylistReferencedMembership> = emptyMap(),
+    ): SmartPlaylistV2Evaluation {
         val now = nowEpochMs()
-        if (now < 0) return emptyList()
+        if (now < 0) return SmartPlaylistV2Evaluation(emptyList(), emptySet())
+        val unknown = linkedSetOf<String>()
         val candidateRows = input.groupBy { it.recordingId }.values.asSequence()
             .mapNotNull { grouped ->
                 val item = grouped.firstOrNull() ?: return@mapNotNull null
@@ -296,7 +316,14 @@ internal class SmartPlaylistV2RuleEngine(
                     (item.lastAudibleAtEpochMs != null &&
                         (item.lastAudibleAtEpochMs < 0 || item.lastAudibleAtEpochMs > now))
                 ) return@mapNotNull null
-                if (evaluate(query.rules, item, now, referenceMemberships) == RuleTruth.TRUE) item else null
+                when (evaluate(query.rules, item, now, referenceMemberships)) {
+                    RuleTruth.TRUE -> item
+                    RuleTruth.FALSE -> null
+                    RuleTruth.UNKNOWN -> {
+                        unknown += item.recordingId
+                        null
+                    }
+                }
             }.toList()
         val sorted = when (query.sort) {
             SmartPlaylistV2Sort.RATING_DESC -> candidateRows.sortedWith(
@@ -359,16 +386,18 @@ internal class SmartPlaylistV2RuleEngine(
                     .thenBy { it.recordingId },
             )
         }
-        return sorted.asSequence().take(query.limit).map {
+        val matches = sorted.asSequence().take(query.limit).map {
             SmartPlaylistV2Match(it.recordingId, it.explicitRating, it.audibleCompletions)
         }.toList()
+        return SmartPlaylistV2Evaluation(matches, unknown)
+
     }
 
     private fun evaluate(
         rule: SmartPlaylistRule,
         row: RuleBasedRecordingCandidate,
         now: Long,
-        referenceMemberships: Map<String, Set<String>>,
+        referenceMemberships: Map<String, SmartPlaylistReferencedMembership>,
     ): RuleTruth = when (rule) {
         is SmartPlaylistRule.Group -> when (rule.join) {
             SmartPlaylistRuleJoin.ALL -> {
@@ -393,8 +422,12 @@ internal class SmartPlaylistV2RuleEngine(
             RuleTruth.FALSE -> RuleTruth.TRUE
             RuleTruth.UNKNOWN -> RuleTruth.UNKNOWN
         }
-        is SmartPlaylistRule.Reference -> referenceMemberships[rule.playlistId]?.let { ids ->
-            if (row.recordingId in ids) RuleTruth.TRUE else RuleTruth.FALSE
+        is SmartPlaylistRule.Reference -> referenceMemberships[rule.playlistId]?.let { membership ->
+            when (row.recordingId) {
+                in membership.included -> RuleTruth.TRUE
+                in membership.unknown -> RuleTruth.UNKNOWN
+                else -> RuleTruth.FALSE
+            }
         } ?: RuleTruth.UNKNOWN
         is SmartPlaylistRule.Comparison -> compare(rule, row, now)
     }
