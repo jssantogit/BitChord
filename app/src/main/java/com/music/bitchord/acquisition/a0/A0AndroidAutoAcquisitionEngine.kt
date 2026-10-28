@@ -22,9 +22,10 @@ internal object A0AndroidAutoConsent {
     }.getOrDefault(false) // Corrupted/incorrect preference type remains OFF.
 
     /** To be called ONLY by the future explicit settings control. */
-    fun updateFromUserAction(context:Context,enabled:Boolean):Boolean =
+    fun updateFromUserAction(context:Context,enabled:Boolean):Boolean = runCatching {
         context.applicationContext.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
             .edit().putBoolean(ENABLED,enabled).commit()
+    }.getOrDefault(false)
 }
 
 /**
