@@ -122,6 +122,18 @@ class SoulseekAutoReviewPlanTest {
         assertFalse(plan.matchesManualPayload(listOf(1),selected.take(1)))
     }
 
+    @Test fun newExplicitRetryInvalidatesStaleManualReviewsForEquivalentSlot() {
+        val old=SoulseekAutoReviewPlan.from(entries(2),
+            listOf(review,review))!!
+        assertTrue(old.overlapsAny(listOf(entries(2)[0])))
+        assertTrue(old.overlapsAny(listOf(
+            entries(2)[0].copy(trackId="different-provider-id",
+                query="  illit  - track 1 ",album=" SUPER REAL ME "))))
+        assertFalse(old.overlapsAny(listOf(
+            SoulseekBatchPlan.Entry("unrelated","Artist - Another Song",
+                "Other Release",180))))
+    }
+
     @Test fun largeBatchRetainsEverySlotAndReturnsOnlyUnresolved() {
         val original=entries(64)
         val status=List(64) { index -> if(index%2==0)done else review }
