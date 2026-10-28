@@ -61,6 +61,43 @@ class SoulseekAutoCancellationPolicyTest {
             stillPending=true,alreadyClaimed=true))
     }
 
+    @Test fun onStoppedReleasesOnlyAutoRequestsStillPendingBeforeClearingRunning() {
+        val guard=SoulseekAutoAttemptGuard()
+        fun item(id:String)=listOf(SoulseekBatchPlan.Entry(
+            id,"Artist - $id","Album",180))
+        val unclaimed=item("queued-identity")
+        val claimed=item("claimed-identity")
+        val completed=item("finished-identity")
+        assertTrue(guard.reserve(unclaimed))
+        assertTrue(guard.reserve(claimed))
+        assertTrue(guard.reserve(completed))
+        val unclaimedIds=SoulseekAutoCancellationPolicy.unclaimedOnServiceStop(
+            autoRequestIds=setOf("auto-queued","auto-running","auto-finished"),
+            pendingIds=setOf("auto-queued","manual-queued"),
+            runningIds=setOf("auto-running","manual-running"))
+        assertEquals(setOf("auto-queued"),unclaimedIds)
+        if("auto-queued" in unclaimedIds)guard.rollback(unclaimed)
+        assertTrue("never-claimed request must become retryable",
+            guard.reserve(unclaimed))
+        assertFalse("claimed P/F remains guarded",guard.reserve(claimed))
+        assertFalse("completed job remains guarded",guard.reserve(completed))
+    }
+
+    @Test fun onStoppedWithNoClaimedRequestsMayReleaseWholePendingAlbumOnly() {
+        assertEquals(setOf("album-queued"),
+            SoulseekAutoCancellationPolicy.unclaimedOnServiceStop(
+                autoRequestIds=setOf("album-queued"),
+                pendingIds=setOf("album-queued"),
+                runningIds=emptySet()))
+        assertTrue(SoulseekAutoCancellationPolicy.unclaimedOnServiceStop(
+            autoRequestIds=setOf("already-idle"),
+            pendingIds=emptySet(),runningIds=emptySet()).isEmpty())
+        assertTrue(SoulseekAutoCancellationPolicy.unclaimedOnServiceStop(
+            autoRequestIds=setOf("both"),
+            pendingIds=setOf("both"),
+            runningIds=setOf("both")).isEmpty())
+    }
+
     @Test fun pendingAutoAndLegacyCancelsRemainRemovable() {
         assertFalse(SoulseekAutoCancellationPolicy.retainWarning(
             isAutomatic=true,wasClaimedByWorker=false))
