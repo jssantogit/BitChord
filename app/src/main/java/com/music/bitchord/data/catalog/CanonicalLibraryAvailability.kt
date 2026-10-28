@@ -13,8 +13,26 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.openSubsonicProvide
  * details remain Catalog implementation details used solely to decide current
  * availability.
  */
+internal enum class CanonicalLibrarySourceKind { LOCAL, OPENSUBSONIC }
+
+/**
+ * Provider-scoped, canonical-only source projection. Never exposes provider ID,
+ * secret, URI, native sourceKey or media asset ID to Listening or the UI.
+ */
+internal data class CanonicalAvailableRecordingSources(
+    val recordingId: String,
+    val kinds: Set<CanonicalLibrarySourceKind>,
+)
+
 internal fun interface CanonicalLibraryAvailabilityReader {
     suspend fun availableRecordingIds(): List<String>
+
+    /**
+     * Old injected readers do not have reliable source provenance. The default
+     * is UNKNOWN rather than fabricating a local/remote claim.
+     */
+    suspend fun availableRecordingSources(): List<CanonicalAvailableRecordingSources> =
+        emptyList()
 }
 
 /** Catalog-internal read projection used by the availability repository. */
@@ -67,6 +85,30 @@ internal class CanonicalLibraryAvailabilityRepository(
     private val store: CanonicalLibraryAvailabilityStore,
     private val providerConfiguration: CanonicalLibraryProviderConfigurationReader,
 ) : CanonicalLibraryAvailabilityReader {
+    override suspend fun availableRecordingSources(): List<CanonicalAvailableRecordingSources> {
+        // Read configured provider identity at the request boundary. Only the
+        // current account's verified provider key is eligible for remote claims.
+        val configured = providerConfiguration.configuredProviderKeys().toList().sorted()
+        require(configured.all { it.isNotBlank() })
+        val evidence = sortedMapOf<String, MutableSet<CanonicalLibrarySourceKind>>()
+        for (provider in configured) {
+            val kind = if (provider == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER) {
+                CanonicalLibrarySourceKind.LOCAL
+            } else {
+                // The configuration reader only grants a provider key after
+                // account metadata AND the credential have been verified.
+                CanonicalLibrarySourceKind.OPENSUBSONIC
+            }
+            store.recordingIdsForProviders(listOf(provider)).forEach { id ->
+                require(id.isNotBlank()) { "Canonical recordingId must not be blank" }
+                evidence.getOrPut(id) { linkedSetOf() }.add(kind)
+            }
+        }
+        return evidence.map { (id, kinds) ->
+            CanonicalAvailableRecordingSources(id, kinds.toSet())
+        }
+    }
+
     override suspend fun availableRecordingIds(): List<String> {
         val providerKeys = providerConfiguration.configuredProviderKeys()
             .asSequence()

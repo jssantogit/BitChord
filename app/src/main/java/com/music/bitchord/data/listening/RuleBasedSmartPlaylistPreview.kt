@@ -59,6 +59,8 @@ internal data class RuleBasedRecordingCandidate(
     val earlySkips: Long = 0,
     val lateSkips: Long = 0,
     val releaseTitles: List<String> = emptyList(),
+    /** Null = unavailable provenance; never treat it as a negative match. */
+    val sourceKinds: Set<SmartPlaylistSourceKind>? = null,
 )
 
 internal data class RuleBasedSmartPlaylistQuery(
@@ -170,6 +172,12 @@ internal class RuleBasedSmartPlaylistPlanner(
  * them; a provider-supplied guess is not a trusted rule.
  */
 /** Remote numeric evidence is read only when the query can observe it. */
+private fun SmartPlaylistRule.needsSourceKinds(): Boolean = when (this) {
+    is SmartPlaylistRule.Comparison -> field == SmartPlaylistRuleField.SOURCE_KIND
+    is SmartPlaylistRule.Group -> children.any { it.needsSourceKinds() }
+    is SmartPlaylistRule.Not -> child.needsSourceKinds()
+}
+
 private fun SmartPlaylistRule.needsExplicitRating(): Boolean = when (this) {
     is SmartPlaylistRule.Comparison -> field == SmartPlaylistRuleField.EXPLICIT_RATING
     is SmartPlaylistRule.Group -> children.any { it.needsExplicitRating() }
@@ -195,14 +203,36 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
         val requiresRemote = query.rules.needsExplicitRating() ||
             query.sort == SmartPlaylistV2Sort.RATING_ASC ||
             query.sort == SmartPlaylistV2Sort.RATING_DESC
-        return v2Planner.preview(candidates(includeRemoteRatings = requiresRemote), query)
+        return v2Planner.preview(
+            candidates(
+                includeRemoteRatings = requiresRemote,
+                includeSourceEvidence = query.rules.needsSourceKinds(),
+            ),
+            query,
+        )
     }
 
     /** One account-scoped snapshot, then 400-id chunks with bounded read pressure. */
     private suspend fun candidates(
         includeRemoteRatings: Boolean = true,
+        includeSourceEvidence: Boolean = false,
     ): List<RuleBasedRecordingCandidate> {
-        val ids = availability.availableRecordingIds().distinct().sorted()
+        val sourceMap = if (includeSourceEvidence) {
+            availability.availableRecordingSources().associate { source ->
+                source.recordingId to source.kinds.map { kind ->
+                    when (kind) {
+                        com.music.bitchord.data.catalog.CanonicalLibrarySourceKind.LOCAL ->
+                            SmartPlaylistSourceKind.LOCAL
+                        com.music.bitchord.data.catalog.CanonicalLibrarySourceKind.OPENSUBSONIC ->
+                            SmartPlaylistSourceKind.OPENSUBSONIC
+                    }
+                }.toSet()
+            }
+        } else emptyMap()
+        // Source-aware queries use ONE scoped availability snapshot, never
+        // cross-reference IDs from a different configured account.
+        val ids = if (includeSourceEvidence) sourceMap.keys.sorted()
+            else availability.availableRecordingIds().distinct().sorted()
         if (ids.any(String::isBlank)) return emptyList()
         val remoteSnapshot = if (includeRemoteRatings) remoteRatings.read() else null
         val remoteByRecording = if (remoteSnapshot?.complete == true) {
@@ -239,8 +269,11 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
                 )
             }
         }
-        if (!includeRemoteRatings) return rows
-        return rows.map { row ->
+        val sourceBound = if (includeSourceEvidence) rows.map { row ->
+            row.copy(sourceKinds = sourceMap[row.recordingId])
+        } else rows
+        if (!includeRemoteRatings) return sourceBound
+        return sourceBound.map { row ->
             val remote = remoteByRecording[row.recordingId].orEmpty()
             val resolved = effectiveSmartPlaylistRating(row.explicitRating, remote)
             // A missing value can be queried explicitly; conflicting,

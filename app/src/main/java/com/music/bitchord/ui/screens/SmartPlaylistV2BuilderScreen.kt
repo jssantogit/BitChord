@@ -78,6 +78,7 @@ private fun fieldLabel(value: SmartPlaylistRuleField): String = when (value) {
     SmartPlaylistRuleField.EARLY_SKIPS -> "Pulos antecipados"
     SmartPlaylistRuleField.LATE_SKIPS -> "Pulos tardios"
     SmartPlaylistRuleField.RELEASE_TITLE -> "Álbum / lançamento (catálogo)"
+    SmartPlaylistRuleField.SOURCE_KIND -> "Origem disponível"
 }
 
 private fun operatorLabel(value: SmartPlaylistRuleOperator): String = when (value) {
@@ -184,7 +185,9 @@ private fun V2RuleNode(
                     ::fieldLabel,
                 ) { newField ->
                     val op = rule.operator.takeIf { it in newField.allowedOperators() }
-                        ?: if (newField.isTextField()) SmartPlaylistRuleOperator.CONTAINS
+                        ?: if (newField == SmartPlaylistRuleField.SOURCE_KIND)
+                            SmartPlaylistRuleOperator.EQUAL
+                        else if (newField.isTextField()) SmartPlaylistRuleOperator.CONTAINS
                         else SmartPlaylistRuleOperator.GREATER_OR_EQUAL
                     val presence = op == SmartPlaylistRuleOperator.IS_PRESENT ||
                         op == SmartPlaylistRuleOperator.IS_MISSING
@@ -192,8 +195,9 @@ private fun V2RuleNode(
                         field = newField,
                         operator = op,
                         value = if (!newField.isTextField() && !presence) rule.value ?: 1.0 else null,
-                        textValue = if (newField.isTextField() && !presence)
-                            rule.textValue ?: "" else null,
+                        textValue = if (newField == SmartPlaylistRuleField.SOURCE_KIND) "local"
+                            else if (newField.isTextField() && !presence)
+                                rule.textValue ?: "" else null,
                     ))
                 }
                 V2Option(
@@ -213,7 +217,17 @@ private fun V2RuleNode(
                 if (rule.operator != SmartPlaylistRuleOperator.IS_PRESENT &&
                     rule.operator != SmartPlaylistRuleOperator.IS_MISSING
                 ) {
-                    if (rule.field.isTextField()) {
+                    if (rule.field == SmartPlaylistRuleField.SOURCE_KIND) {
+                        V2Option(
+                            "Origem", rule.textValue ?: "local",
+                            listOf("local", "opensubsonic"),
+                            label = {
+                                if (it == "local") "Músicas locais"
+                                else "OpenSubsonic (Navidrome)"
+                            },
+                            onSelect = { onChange(rule.copy(value = null, textValue = it)) },
+                        )
+                    } else if (rule.field.isTextField()) {
                         var entered by remember(rule.field, rule.operator) {
                             mutableStateOf(rule.textValue.orEmpty())
                         }

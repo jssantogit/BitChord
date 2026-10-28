@@ -45,7 +45,10 @@ internal enum class SmartPlaylistRuleField {
     EARLY_SKIPS,
     LATE_SKIPS,
     RELEASE_TITLE,
+    SOURCE_KIND,
 }
+
+internal enum class SmartPlaylistSourceKind { LOCAL, OPENSUBSONIC }
 
 @Serializable
 internal enum class SmartPlaylistRuleOperator {
@@ -67,10 +70,14 @@ internal enum class SmartPlaylistV2Sort {
 internal fun SmartPlaylistRuleField.isTextField(): Boolean =
     this == SmartPlaylistRuleField.TITLE ||
         this == SmartPlaylistRuleField.ARTIST_DISPLAY ||
-        this == SmartPlaylistRuleField.RELEASE_TITLE
+        this == SmartPlaylistRuleField.RELEASE_TITLE ||
+        this == SmartPlaylistRuleField.SOURCE_KIND
 
 internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOperator> =
-    if (isTextField()) listOf(
+    if (this == SmartPlaylistRuleField.SOURCE_KIND) listOf(
+        SmartPlaylistRuleOperator.EQUAL,
+        SmartPlaylistRuleOperator.NOT_EQUAL,
+    ) else if (isTextField()) listOf(
         SmartPlaylistRuleOperator.CONTAINS,
         SmartPlaylistRuleOperator.DOES_NOT_CONTAIN,
         SmartPlaylistRuleOperator.EQUAL,
@@ -133,6 +140,12 @@ internal data class SmartPlaylistV2Query(
                                 node.textValue.isNotBlank() &&
                                 node.textValue.trim().length <= 160) {
                                 "Text comparison requires a nonblank, bounded value"
+                            }
+                            if (node.field == SmartPlaylistRuleField.SOURCE_KIND) {
+                                require(node.textValue.trim().lowercase(Locale.ROOT) in
+                                    setOf("local", "opensubsonic")) {
+                                    "Source selection must use an allowed, scoped source category"
+                                }
                             }
                         }
                     } else {
@@ -308,6 +321,23 @@ internal class SmartPlaylistV2RuleEngine(
         row: RuleBasedRecordingCandidate,
         now: Long,
     ): RuleTruth {
+        if (rule.field == SmartPlaylistRuleField.SOURCE_KIND) {
+            val availableKinds = row.sourceKinds ?: return RuleTruth.UNKNOWN
+            if (availableKinds.isEmpty()) return RuleTruth.UNKNOWN
+            val requested = when (rule.textValue?.trim()?.lowercase(Locale.ROOT)) {
+                "local" -> SmartPlaylistSourceKind.LOCAL
+                "opensubsonic" -> SmartPlaylistSourceKind.OPENSUBSONIC
+                else -> return RuleTruth.UNKNOWN
+            }
+            val matching = requested in availableKinds
+            return when (rule.operator) {
+                SmartPlaylistRuleOperator.EQUAL ->
+                    if (matching) RuleTruth.TRUE else RuleTruth.FALSE
+                SmartPlaylistRuleOperator.NOT_EQUAL ->
+                    if (matching) RuleTruth.FALSE else RuleTruth.TRUE
+                else -> RuleTruth.UNKNOWN
+            }
+        }
         if (rule.field.isTextField()) {
             // One Recording may belong to several canonically linked Releases.
             // Positive predicates match ANY recorded association; negative
@@ -317,6 +347,7 @@ internal class SmartPlaylistV2RuleEngine(
                 SmartPlaylistRuleField.TITLE -> listOfNotNull(row.title)
                 SmartPlaylistRuleField.ARTIST_DISPLAY -> listOfNotNull(row.artistDisplay)
                 SmartPlaylistRuleField.RELEASE_TITLE -> row.releaseTitles
+                SmartPlaylistRuleField.SOURCE_KIND -> emptyList()
                 else -> emptyList()
             }.mapNotNull { it.normalizedSmartPlaylistText() }.distinct()
             val expected = rule.textValue.normalizedSmartPlaylistText()
@@ -357,7 +388,7 @@ internal class SmartPlaylistV2RuleEngine(
                     row.lastAudibleAtEpochMs?.let { ((now - it) / 86_400_000L).toDouble() }
                 } else null
             SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY,
-            SmartPlaylistRuleField.RELEASE_TITLE -> null
+            SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleField.SOURCE_KIND -> null
         }
         if (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE &&
             row.audibleCompletions > 0 && row.lastAudibleAtEpochMs == null
