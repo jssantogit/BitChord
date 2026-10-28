@@ -227,6 +227,53 @@ class SmartPlaylistV2RuleEngineTest {
         assertEquals(listOf("blank", "unknown"), planner.preview(input, missing).map { it.recordingId })
     }
 
+    @Test fun unresolvedCanonicalTitleOrArtistDoesNotProveMetadataMissing() {
+        val inputs = listOf(
+            candidate("unknown").copy(title = null, artistDisplay = null),
+            candidate("blank").copy(title = " ", artistDisplay = " "),
+            candidate("known").copy(title = "Ditto", artistDisplay = "NewJeans"),
+        )
+        for (field in listOf(SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY)) {
+            val present = SmartPlaylistRule.Comparison(field, SmartPlaylistRuleOperator.IS_PRESENT)
+            val missing = SmartPlaylistRule.Comparison(field, SmartPlaylistRuleOperator.IS_MISSING)
+            for (rule in listOf(missing, SmartPlaylistRule.Not(present))) {
+                assertTrue(planner.preview(inputs, SmartPlaylistV2Query(
+                    rule, sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+                )).isEmpty())
+            }
+            assertEquals(listOf("known"), planner.preview(inputs, SmartPlaylistV2Query(
+                present, sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+            )).map { it.recordingId })
+        }
+    }
+
+    @Test fun incompleteReleaseTitleCannotSatisfyNegativeOrNegatedFilter() {
+        val partial = candidate("partial").copy(releaseTitles = listOf("Studio EP", " "))
+        val complete = candidate("complete").copy(releaseTitles = listOf("Studio EP"))
+        val positive = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.RELEASE_TITLE,
+            SmartPlaylistRuleOperator.CONTAINS, textValue = "live",
+        )
+        val negative = positive.copy(operator = SmartPlaylistRuleOperator.DOES_NOT_CONTAIN)
+        val missing = positive.copy(operator = SmartPlaylistRuleOperator.IS_MISSING,
+            textValue = null)
+        val inputs = listOf(partial, complete)
+        for (rule in listOf(negative, SmartPlaylistRule.Not(positive))) {
+            assertEquals(listOf("complete"), planner.preview(inputs, SmartPlaylistV2Query(
+                rule, sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+            )).map { it.recordingId })
+        }
+        assertTrue(planner.preview(listOf(partial), SmartPlaylistV2Query(missing)).isEmpty())
+        assertEquals(listOf("partial"), planner.preview(listOf(partial), SmartPlaylistV2Query(
+            positive.copy(textValue = "studio"),
+        )).map { it.recordingId })
+        assertEquals(listOf("partial"), planner.preview(listOf(partial), SmartPlaylistV2Query(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        )).map { it.recordingId })
+    }
+
     @Test fun metadataSortHasDeterministicTieBreakAndMissingValuesLast() {
         val rows = listOf(
             candidate("z").copy(title = "Alpha", artistDisplay = "Beta"),
