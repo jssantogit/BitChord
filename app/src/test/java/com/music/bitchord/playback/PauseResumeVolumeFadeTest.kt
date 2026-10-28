@@ -47,6 +47,31 @@ class PauseResumeVolumeFadeTest {
         assertEquals(1f, deck.volume, 0.00001f)
     }
 
+    @Test fun `fade in freezes through buffering and resumes gradually afterwards`() = runTest {
+        val deck = FakeDeck(playingInitially = false)
+        val fade = PauseResumeVolumeFade(this, { 200 }, { false }, { testScheduler.currentTime })
+        fade.play(deck.player)
+        runCurrent()
+        advanceTimeBy(80)
+        runCurrent()
+        val beforeBuffering = deck.volume
+        assertTrue(beforeBuffering in 0f..0.8f)
+
+        deck.audible = false
+        advanceTimeBy(500)
+        runCurrent()
+        assertEquals(beforeBuffering, deck.volume, 0.02f)
+
+        deck.audible = true
+        advanceTimeBy(80)
+        runCurrent()
+        assertTrue(deck.volume > beforeBuffering)
+        assertTrue(deck.volume < 1f)
+        advanceTimeBy(250)
+        runCurrent()
+        assertEquals(1f, deck.volume, 0.00001f)
+    }
+
     @Test fun `play during pending pause reverses gain and must never perform stale pause`() = runTest {
         val deck = FakeDeck(playingInitially = true)
         val fade = PauseResumeVolumeFade(this, { 200 }, { false }, { testScheduler.currentTime })
