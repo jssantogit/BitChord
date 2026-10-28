@@ -4,6 +4,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.Surface
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -77,298 +82,7 @@ private fun newRule(): SmartPlaylistRule = SmartPlaylistRule.Comparison(
     1.0,
 )
 
-private fun fieldLabel(value: SmartPlaylistRuleField): String = when (value) {
-    SmartPlaylistRuleField.EXPLICIT_RATING -> "Avaliação (estrelas)"
-    SmartPlaylistRuleField.AUDIBLE_COMPLETIONS -> "Reproduções concluídas"
-    SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE -> "Dias desde última reprodução concluída"
-    SmartPlaylistRuleField.DURATION_MS -> "Duração (milissegundos)"
-    SmartPlaylistRuleField.TITLE -> "Título da faixa"
-    SmartPlaylistRuleField.ARTIST_DISPLAY -> "Artista (catálogo)"
-    SmartPlaylistRuleField.EARLY_SKIPS -> "Pulos antecipados"
-    SmartPlaylistRuleField.LATE_SKIPS -> "Pulos tardios"
-    SmartPlaylistRuleField.RELEASE_TITLE -> "Álbum / lançamento (catálogo)"
-    SmartPlaylistRuleField.SOURCE_KIND -> "Origem disponível"
-    SmartPlaylistRuleField.RELEASE_YEAR -> "Ano de lançamento (MusicBrainz)"
-    SmartPlaylistRuleField.ALBUM_ARTIST -> "Artista do álbum (créditos canônicos)"
-    SmartPlaylistRuleField.TRACK_NUMBER -> "Número da faixa no lançamento"
-    SmartPlaylistRuleField.TRACK_ARTIST -> "Artista da faixa (créditos canônicos)"
-    SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING -> "Dias desde alteração da nota local"
-    SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "Referência de capa do lançamento"
-    SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED -> "Dias desde adição do arquivo local"
-}
-
-private fun sortLabel(value: SmartPlaylistV2Sort): String = when (value) {
-    SmartPlaylistV2Sort.RATING_DESC -> "Avaliação: maior primeiro"
-    SmartPlaylistV2Sort.RATING_ASC -> "Avaliação: menor primeiro"
-    SmartPlaylistV2Sort.COMPLETIONS_DESC -> "Reproduções: mais primeiro"
-    SmartPlaylistV2Sort.COMPLETIONS_ASC -> "Reproduções: menos primeiro"
-    SmartPlaylistV2Sort.DURATION_DESC -> "Duração: maior primeiro"
-    SmartPlaylistV2Sort.DURATION_ASC -> "Duração: menor primeiro"
-    SmartPlaylistV2Sort.LAST_AUDIBLE_DESC -> "Última reprodução: recente"
-    SmartPlaylistV2Sort.LAST_AUDIBLE_ASC -> "Última reprodução: antiga"
-    SmartPlaylistV2Sort.RECORDING_ID_ASC -> "Identificador canônico"
-    SmartPlaylistV2Sort.STABLE_RANDOM -> "Aleatória estável"
-    SmartPlaylistV2Sort.STABLE_RANDOM_ALBUMS -> "Álbuns aleatórios (vínculos canônicos)"
-    SmartPlaylistV2Sort.TITLE_ASC -> "Título: A a Z"
-    SmartPlaylistV2Sort.TITLE_DESC -> "Título: Z a A"
-    SmartPlaylistV2Sort.ARTIST_ASC -> "Artista: A a Z"
-    SmartPlaylistV2Sort.ARTIST_DESC -> "Artista: Z a A"
-    SmartPlaylistV2Sort.LOCAL_RATING_NEWEST -> "Avaliação local: mais recente"
-    SmartPlaylistV2Sort.LOCAL_RATING_OLDEST -> "Avaliação local: mais antiga"
-}
-
-private fun operatorLabel(value: SmartPlaylistRuleOperator): String = when (value) {
-    SmartPlaylistRuleOperator.EQUAL -> "Igual a"
-    SmartPlaylistRuleOperator.NOT_EQUAL -> "Diferente de"
-    SmartPlaylistRuleOperator.GREATER_THAN -> "Maior que"
-    SmartPlaylistRuleOperator.GREATER_OR_EQUAL -> "Pelo menos"
-    SmartPlaylistRuleOperator.LESS_THAN -> "Menor que"
-    SmartPlaylistRuleOperator.LESS_OR_EQUAL -> "No máximo"
-    SmartPlaylistRuleOperator.IS_PRESENT -> "Possui valor"
-    SmartPlaylistRuleOperator.IS_MISSING -> "Sem valor"
-    SmartPlaylistRuleOperator.CONTAINS -> "Contém"
-    SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> "Não contém"
-    SmartPlaylistRuleOperator.STARTS_WITH -> "Começa com"
-    SmartPlaylistRuleOperator.ENDS_WITH -> "Termina com"
-}
-
-@Composable
-private fun <T> V2Option(
-    name: String,
-    value: T,
-    options: List<T>,
-    label: (T) -> String,
-    onSelect: (T) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Column {
-        Text(name, style = MaterialTheme.typography.labelMedium)
-        OutlinedButton(onClick = { expanded = true }) { Text(label(value)) }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(label(option)) },
-                    onClick = { expanded = false; onSelect(option) },
-                )
-            }
-        }
-    }
-}
-
-/**
- * Immutable recursive editor: a child update rebuilds only the traversed branch
- * of the expression tree. No hidden text-to-identity heuristics or rule flattening.
- */
-@Composable
-private fun V2RuleNode(
-    rule: SmartPlaylistRule,
-    depth: Int,
-    onChange: (SmartPlaylistRule) -> Unit,
-    onRemove: (() -> Unit)? = null,
-    onMoveUp: (() -> Unit)? = null,
-    onMoveDown: (() -> Unit)? = null,
-    savedReferences: List<SavedSmartPlaylistV2Definition> = emptyList(),
-) {
-    Column(
-        Modifier.fillMaxWidth().padding(start = (depth.coerceAtMost(4) * 8).dp, top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        // Move the original AST node, including nested groups/references,
-        // without flattening or recreating persisted rule values.
-        if (onMoveUp != null || onMoveDown != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (onMoveUp != null) TextButton(onClick = onMoveUp) { Text("Subir") }
-                if (onMoveDown != null) TextButton(onClick = onMoveDown) { Text("Descer") }
-            }
-        }
-        when (rule) {
-            is SmartPlaylistRule.Group -> {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    V2Option(
-                        "Grupo", rule.join, SmartPlaylistRuleJoin.entries,
-                        label = { if (it == SmartPlaylistRuleJoin.ALL) "Todas (E)" else "Qualquer (OU)" },
-                        onSelect = { onChange(rule.copy(join = it)) },
-                    )
-                    if (onRemove != null) TextButton(onClick = onRemove) { Text("Remover grupo") }
-                }
-                rule.children.forEachIndexed { index, child ->
-                    androidx.compose.runtime.key(index) {
-                        V2RuleNode(
-                            child, depth + 1,
-                            onChange = { updated ->
-                                onChange(rule.copy(children = rule.children.toMutableList().apply {
-                                    this[index] = updated
-                                }))
-                            },
-                            onRemove = if (rule.children.size > 1) {
-                                { onChange(rule.copy(children = rule.children.filterIndexed { i, _ -> i != index })) }
-                            } else null,
-                            onMoveUp = if (index > 0) {
-                                { onChange(rule.moveChild(index, index - 1)) }
-                            } else null,
-                            onMoveDown = if (index < rule.children.lastIndex) {
-                                { onChange(rule.moveChild(index, index + 1)) }
-                            } else null,
-                            savedReferences = savedReferences,
-                        )
-                    }
-                }
-                if (depth < 7 && rule.children.size < 64) {
-                    var addReferenceExpanded by remember { mutableStateOf(false) }
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(onClick = {
-                            onChange(rule.copy(children = rule.children + newRule()))
-                        }) { Text("+ Regra") }
-                        TextButton(onClick = {
-                            onChange(rule.copy(children = rule.children +
-                                SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(newRule()))))
-                        }) { Text("+ Grupo") }
-                        Box {
-                            TextButton(
-                                onClick = { addReferenceExpanded = true },
-                                enabled = savedReferences.isNotEmpty(),
-                            ) { Text("+ Playlist") }
-                            DropdownMenu(
-                                expanded = addReferenceExpanded,
-                                onDismissRequest = { addReferenceExpanded = false },
-                            ) {
-                                savedReferences.forEach { saved ->
-                                    DropdownMenuItem(
-                                        text = { Text(saved.name) },
-                                        onClick = {
-                                            addReferenceExpanded = false
-                                            onChange(rule.appendPlaylistReference(saved.id))
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            is SmartPlaylistRule.Not -> {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("NÃO", style = MaterialTheme.typography.titleSmall)
-                    TextButton(onClick = { onChange(rule.child) }) { Text("Desfazer negação") }
-                    if (onRemove != null) TextButton(onClick = onRemove) { Text("Remover") }
-                }
-                V2RuleNode(rule.child, depth + 1,
-                    onChange = { onChange(SmartPlaylistRule.Not(it)) },
-                    savedReferences = savedReferences,
-                )
-            }
-            is SmartPlaylistRule.Reference -> {
-                val choices = (savedReferences.map { it.id } + rule.playlistId).distinct()
-                V2Option(
-                    "Playlist salva", rule.playlistId, choices,
-                    label = { id -> savedReferences.firstOrNull { it.id == id }?.name
-                        ?: "Referência indisponível" },
-                    onSelect = { onChange(rule.copy(playlistId = it)) },
-                )
-                Text("Usa as músicas da playlist referenciada após suas regras, ordenação e limite.",
-                    style = MaterialTheme.typography.bodySmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (depth < 7) TextButton(onClick = {
-                        onChange(SmartPlaylistRule.Not(rule))
-                    }) { Text("Negar") }
-                    if (onRemove != null) TextButton(onClick = onRemove) { Text("Remover") }
-                }
-            }
-            is SmartPlaylistRule.Comparison -> {
-                V2Option(
-                    "Campo", rule.field, SmartPlaylistRuleField.entries,
-                    ::fieldLabel,
-                ) { newField ->
-                    val op = rule.operator.takeIf { it in newField.allowedOperators() }
-                        ?: if (newField == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE)
-                             SmartPlaylistRuleOperator.IS_PRESENT
-                         else if (newField == SmartPlaylistRuleField.SOURCE_KIND)
-                            SmartPlaylistRuleOperator.EQUAL
-                        else if (newField.isTextField()) SmartPlaylistRuleOperator.CONTAINS
-                        else SmartPlaylistRuleOperator.GREATER_OR_EQUAL
-                    val presence = op == SmartPlaylistRuleOperator.IS_PRESENT ||
-                        op == SmartPlaylistRuleOperator.IS_MISSING
-                    onChange(SmartPlaylistRule.Comparison(
-                        field = newField,
-                        operator = op,
-                        value = if (newField == SmartPlaylistRuleField.RELEASE_YEAR && !presence)
-                            2026.0
-                            else if (newField == SmartPlaylistRuleField.TRACK_NUMBER && !presence)
-                                1.0
-                            else if (!newField.isTextField() && !presence)
-                                rule.value ?: 1.0 else null,
-                        textValue = if (newField == SmartPlaylistRuleField.SOURCE_KIND) "local"
-                            else if (newField.isTextField() && !presence)
-                                rule.textValue ?: "" else null,
-                    ))
-                }
-                V2Option(
-                    "Condição", rule.operator, rule.field.allowedOperators(),
-                    ::operatorLabel,
-                ) { op ->
-                    val presence = op == SmartPlaylistRuleOperator.IS_PRESENT ||
-                        op == SmartPlaylistRuleOperator.IS_MISSING
-                    onChange(rule.copy(
-                        operator = op,
-                        value = if (presence || rule.field.isTextField()) null
-                            else rule.value ?: 1.0,
-                        textValue = if (presence || !rule.field.isTextField()) null
-                            else rule.textValue ?: "",
-                    ))
-                }
-                if (rule.operator != SmartPlaylistRuleOperator.IS_PRESENT &&
-                    rule.operator != SmartPlaylistRuleOperator.IS_MISSING
-                ) {
-                    if (rule.field == SmartPlaylistRuleField.SOURCE_KIND) {
-                        V2Option(
-                            "Origem", rule.textValue ?: "local",
-                            listOf("local", "opensubsonic"),
-                            label = {
-                                if (it == "local") "Músicas locais"
-                                else "OpenSubsonic (Navidrome)"
-                            },
-                            onSelect = { onChange(rule.copy(value = null, textValue = it)) },
-                        )
-                    } else if (rule.field.isTextField()) {
-                        var entered by remember(rule.field, rule.operator, rule.textValue) {
-                            mutableStateOf(rule.textValue.orEmpty())
-                        }
-                        OutlinedTextField(
-                            value = entered,
-                            onValueChange = { raw ->
-                                entered = raw
-                                onChange(rule.copy(value = null, textValue = raw))
-                            },
-                            label = { Text("Texto a procurar") }, singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    } else {
-                        var entered by remember(rule.field, rule.operator, rule.value) {
-                            mutableStateOf(rule.value?.toString().orEmpty())
-                        }
-                        OutlinedTextField(
-                            value = entered,
-                            onValueChange = { raw ->
-                                entered = raw
-                                onChange(rule.copy(value = raw.toDoubleOrNull(), textValue = null))
-                            },
-                            label = { Text("Valor") }, singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (depth < 7) TextButton(onClick = {
-                        onChange(SmartPlaylistRule.Not(rule))
-                    }) { Text("Negar") }
-                    if (onRemove != null) TextButton(onClick = onRemove) { Text("Remover") }
-                }
-            }
-        }
-    }
-}
-
-private data class V2DisplayRow(val id: String, val title: String, val artist: String)
+internal data class V2DisplayRow(val id: String, val title: String, val artist: String)
 
 /**
  * Initial Android V2 editing surface. Legacy playlists remain available via
@@ -419,6 +133,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     var filtersFailure by remember { mutableStateOf(false) }
     var legacyFailure by remember { mutableStateOf(false) }
     var editorEpoch by remember { mutableStateOf(0) }
+    var showWizard by remember { mutableStateOf(true) }
     val saved by produceState(initialValue = emptyList<SavedSmartPlaylistV2Definition>(), key1 = repo) {
         try {
             repo.observe().collect { value = it; savedFailure = false }
@@ -555,48 +270,63 @@ internal fun SmartPlaylistV2BuilderScreen(
         }
     }
 
-    ListeningLibraryPage {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            item(key = "v2-header") {
-                SmartPlaylistBuilderHeader(onBack)
-                Text("Regras avançadas", style = MaterialTheme.typography.titleMedium)
-                TextButton(onClick = onClassic) { Text("Editor clássico / playlists anteriores") }
+
+    fun loadPreview() {
+        if (loading) return
+        loading = true
+        scope.launch {
+            try {
+                val parsed = query()
+                val rows = loadPreviewRows(parsed)
+                preview = rows
+                previewQuery = parsed
+                error = null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                preview = null
+                previewQuery = null
+                error = "Não foi possível avaliar a playlist; verifique regras e fontes."
+            } finally {
+                loading = false
             }
-            item(key = "v2-editor") {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
-                        value = name, onValueChange = { name = it },
-                        label = { Text("Nome da playlist ou filtro") },
-                        modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    )
-                    androidx.compose.runtime.key(editingId, editorEpoch) {
-                        V2RuleNode(rule, 0,
-                            onChange = { rule = it; preview = null; previewQuery = null },
-                            savedReferences = saved.filterNot { it.id == editingId },
-                        )
-                    }
-                    V2Option("Ordenar por", sort, SmartPlaylistV2Sort.entries, ::sortLabel) {
-                        sort = it
-                        preview = null
-                        previewQuery = null
-                    }
-                    OutlinedTextField(
-                        value = limit, onValueChange = { limit = it; preview = null; previewQuery = null },
-                        label = { Text("Máximo de músicas (1–10.000)") },
-                        modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    )
-                    if (sort == SmartPlaylistV2Sort.STABLE_RANDOM ||
-                        sort == SmartPlaylistV2Sort.STABLE_RANDOM_ALBUMS) OutlinedTextField(
-                        value = seed, onValueChange = { seed = it; preview = null; previewQuery = null },
-                        label = { Text("Semente da ordem aleatória") },
-                        modifier = Modifier.fillMaxWidth(), singleLine = true,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = {
-                            if (loading) return@Button
+        }
+    }
+
+    // Full-viewport dialog prevents the library tab bar and mini player from
+    // overlapping the creation flow. Dismissing it never discards this draft.
+    Dialog(
+        onDismissRequest = onBack,
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        if (showWizard) {
+            androidx.compose.runtime.key(editorEpoch) {
+                SmartPlaylistV2WizardUi(
+                    name = name,
+                    rule = rule,
+                    sort = sort,
+                    limit = limit,
+                    seed = seed,
+                    preview = preview,
+                    currentPreviewQuery = previewQuery,
+                    loading = loading,
+                    error = error,
+                    editingId = editingId,
+                    editingFilterId = editingFilterId,
+                    savedDefinitions = saved.filterNot { it.id == editingId },
+                    onNameChange = { name = it },
+                    onRuleChange = { rule = it; preview = null; previewQuery = null; error = null },
+                    onSortChange = { sort = it; preview = null; previewQuery = null },
+                    onLimitChange = { limit = it; preview = null; previewQuery = null },
+                    onSeedChange = { seed = it; preview = null; previewQuery = null },
+                    onPreview = ::loadPreview,
+                    onSave = {
+                        if (!loading) {
                             loading = true
                             scope.launch {
                                 try {
@@ -606,15 +336,17 @@ internal fun SmartPlaylistV2BuilderScreen(
                                         repo.save(SavedSmartPlaylistV2Definition(id, name, parsed))
                                     }
                                     reset()
+                                    showWizard = false
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
                                 } catch (_: Exception) {
-                                    error = "Não foi possível salvar: verifique referências ausentes ou circulares."
+                                    error = "Não foi possível salvar. Verifique as condições e referências."
                                 } finally { loading = false }
                             }
-                        }, enabled = !loading) { Text("Salvar playlist") }
-                        TextButton(onClick = {
-                            if (loading) return@TextButton
+                        }
+                    },
+                    onSaveFilter = {
+                        if (!loading) {
                             loading = true
                             scope.launch {
                                 try {
@@ -625,96 +357,48 @@ internal fun SmartPlaylistV2BuilderScreen(
                                             name, parsed.rules,
                                         ))
                                     }
-                                    editingFilterId = null
-                                    error = null
+                                    reset()
+                                    showWizard = false
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
                                 } catch (_: Exception) {
                                     error = "Não foi possível salvar o filtro reutilizável."
                                 } finally { loading = false }
                             }
-                        }, enabled = !loading) {
-                            Text(if (editingFilterId == null) "Salvar filtro" else "Atualizar filtro")
                         }
-                        TextButton(onClick = {
-                            if (loading) return@TextButton
-                            loading = true
-                            scope.launch {
-                                try {
-                                    val parsed = query()
-                                    val rows = loadPreviewRows(parsed)
-                                    preview = rows
-                                    previewQuery = parsed
-                                    error = null
-                                } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (_: Exception) {
-                                    error = "Não foi possível avaliar a playlist"
-                                    preview = null
-                                    previewQuery = null
-                                } finally { loading = false }
-                            }
-                        }, enabled = !loading) { Text("Prévia") }
-                        TextButton(onClick = { reset() }, enabled = !loading) { Text("Limpar") }
-                    }
-                    if (loading) Text("Carregando…")
-                    if (error != null) Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
-                }
+                    },
+                    onPreviewAction = onPreviewAction,
+                    onManage = { showWizard = false },
+                    onBack = onBack,
+                )
             }
-            if (preview != null) {
-                item(key = "v2-preview-header") {
-                    Text("Prévia • " + preview!!.size + " músicas",
-                        style = MaterialTheme.typography.titleMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Atualização automática", style = MaterialTheme.typography.bodySmall)
-                        TextButton(onClick = {
-                            val active = previewQuery ?: return@TextButton
-                            if (loading) return@TextButton
-                            loading = true
-                            scope.launch {
-                                try {
-                                    val refreshed = loadPreviewRows(active)
-                                    if (previewQuery == active) {
-                                        preview = refreshed
-                                        error = null
-                                    }
-                                } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (_: Exception) {
-                                    if (previewQuery == active) {
-                                        preview = null
-                                        error = "Não foi possível atualizar a prévia"
-                                    }
-                                } finally { loading = false }
-                            }
-                        }, enabled = !loading && previewQuery != null) { Text("Atualizar") }
+        } else {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background,
+            ) {
+                Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text("Playlists e filtros", style = MaterialTheme.typography.headlineSmall)
+                        TextButton(onClick = { showWizard = true }) { Text("Rascunho") }
                     }
-                    if (preview!!.size > CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE) {
-                        Text("A execução permite até ${CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE} músicas por ação; a prévia pode ser maior.",
-                            style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (onPreviewAction != null && preview!!.isNotEmpty() && preview!!.size <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick = {
-                                previewQuery?.let { onPreviewAction(it, editingId, CanonicalCollectionIntent.PLAY_NOW) }
-                            }, enabled = !loading && previewQuery != null) {
-                                Text(stringResource(Res.string.smart_collection_batch_play))
-                            }
-                            TextButton(onClick = {
-                                previewQuery?.let { onPreviewAction(it, editingId, CanonicalCollectionIntent.ADD_TO_QUEUE) }
-                            }, enabled = !loading && previewQuery != null) {
-                                Text(stringResource(Res.string.smart_collection_batch_queue))
-                            }
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Button(onClick = { reset(); showWizard = true }) {
+                            Text("Nova playlist")
                         }
+                        TextButton(onClick = onClassic) { Text("Editor clássico") }
+                        TextButton(onClick = onBack) { Text("Fechar") }
                     }
-                }
-                items(preview.orEmpty(), key = { "v2-preview-" + it.id }) { item ->
-                    Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-                        Text(item.title, style = MaterialTheme.typography.bodyMedium)
-                        Text(item.artist, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
             item(key = "v2-saved-filter-heading") {
                 Text("Filtros reutilizáveis", style = MaterialTheme.typography.titleMedium)
                 Text("Filtros guardam somente regras. Aplicar copia as regras; não vincula alterações futuras.",
@@ -728,6 +412,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = {
+                            showWizard = true
                             editorEpoch++
                             editingFilterId = null
                             rule = filter.rules
@@ -738,7 +423,8 @@ internal fun SmartPlaylistV2BuilderScreen(
                         TextButton(onClick = {
                             try {
                                 val combined = rule.andSavedFilter(filter)
-                                editorEpoch++
+                                showWizard = true
+                            editorEpoch++
                                 editingFilterId = null
                                 rule = combined
                                 preview = null
@@ -751,6 +437,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = {
+                            showWizard = true
                             editorEpoch++
                             editingId = null
                             editingFilterId = filter.id
@@ -764,6 +451,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                             val copy = filter.toPlaylistCopy(
                                 UUID.randomUUID().toString(), filter.name,
                             )
+                            showWizard = true
                             editorEpoch++
                             editingId = copy.id
                             editingFilterId = null
@@ -805,6 +493,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(item.name, modifier = Modifier.weight(1f))
                         TextButton(onClick = {
+                            showWizard = true
                             editorEpoch++
                             editingId = item.id
                             editingFilterId = null
@@ -857,6 +546,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     TextButton(
                         onClick = {
                             val copy = original.toV2Copy(UUID.randomUUID().toString())
+                            showWizard = true
                             editorEpoch++
                             editingId = copy.id
                             editingFilterId = null
@@ -871,6 +561,10 @@ internal fun SmartPlaylistV2BuilderScreen(
                         },
                         enabled = !loading,
                     ) { Text("Converter cópia") }
+                }
+            }
+
+                    }
                 }
             }
         }
