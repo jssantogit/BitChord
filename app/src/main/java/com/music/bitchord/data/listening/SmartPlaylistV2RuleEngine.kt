@@ -46,6 +46,7 @@ internal enum class SmartPlaylistRuleField {
     LATE_SKIPS,
     RELEASE_TITLE,
     SOURCE_KIND,
+    RELEASE_YEAR,
 }
 
 internal enum class SmartPlaylistSourceKind { LOCAL, OPENSUBSONIC }
@@ -74,7 +75,15 @@ internal fun SmartPlaylistRuleField.isTextField(): Boolean =
         this == SmartPlaylistRuleField.SOURCE_KIND
 
 internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOperator> =
-    if (this == SmartPlaylistRuleField.SOURCE_KIND) listOf(
+    if (this == SmartPlaylistRuleField.RELEASE_YEAR) listOf(
+        SmartPlaylistRuleOperator.EQUAL,
+        SmartPlaylistRuleOperator.NOT_EQUAL,
+        SmartPlaylistRuleOperator.GREATER_THAN,
+        SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+        SmartPlaylistRuleOperator.LESS_THAN,
+        SmartPlaylistRuleOperator.LESS_OR_EQUAL,
+        SmartPlaylistRuleOperator.IS_PRESENT,
+    ) else if (this == SmartPlaylistRuleField.SOURCE_KIND) listOf(
         SmartPlaylistRuleOperator.EQUAL,
         SmartPlaylistRuleOperator.NOT_EQUAL,
     ) else if (isTextField()) listOf(
@@ -155,6 +164,13 @@ internal data class SmartPlaylistV2Query(
                         } else {
                             require(node.value?.isFinite() == true) {
                                 "Comparison requires a finite value"
+                            }
+                        }
+                        if (node.field == SmartPlaylistRuleField.RELEASE_YEAR &&
+                            !presence) {
+                            require(node.value!! in 1000.0..9999.0 &&
+                                node.value % 1.0 == 0.0) {
+                                "Release year must be a four-digit calendar year"
                             }
                         }
                         if (node.field in listOf(
@@ -321,6 +337,37 @@ internal class SmartPlaylistV2RuleEngine(
         row: RuleBasedRecordingCandidate,
         now: Long,
     ): RuleTruth {
+        if (rule.field == SmartPlaylistRuleField.RELEASE_YEAR) {
+            val years = row.releaseYears
+            if (rule.operator == SmartPlaylistRuleOperator.IS_PRESENT) {
+                return if (years.isNotEmpty()) RuleTruth.TRUE else RuleTruth.UNKNOWN
+            }
+            if (years.isEmpty()) return RuleTruth.UNKNOWN
+            val target = rule.value ?: return RuleTruth.UNKNOWN
+            val anyMatching = years.any { year ->
+                val y = year.toDouble()
+                when (rule.operator) {
+                    SmartPlaylistRuleOperator.EQUAL, SmartPlaylistRuleOperator.NOT_EQUAL -> y == target
+                    SmartPlaylistRuleOperator.GREATER_THAN -> y > target
+                    SmartPlaylistRuleOperator.GREATER_OR_EQUAL -> y >= target
+                    SmartPlaylistRuleOperator.LESS_THAN -> y < target
+                    SmartPlaylistRuleOperator.LESS_OR_EQUAL -> y <= target
+                    else -> return RuleTruth.UNKNOWN
+                }
+            }
+            if (rule.operator == SmartPlaylistRuleOperator.NOT_EQUAL) {
+                return when {
+                    anyMatching -> RuleTruth.FALSE
+                    row.releaseYearEvidenceUnknown -> RuleTruth.UNKNOWN
+                    else -> RuleTruth.TRUE
+                }
+            }
+            return when {
+                anyMatching -> RuleTruth.TRUE
+                row.releaseYearEvidenceUnknown -> RuleTruth.UNKNOWN
+                else -> RuleTruth.FALSE
+            }
+        }
         if (rule.field == SmartPlaylistRuleField.SOURCE_KIND) {
             val availableKinds = row.sourceKinds ?: return RuleTruth.UNKNOWN
             if (availableKinds.isEmpty()) return RuleTruth.UNKNOWN
@@ -388,7 +435,8 @@ internal class SmartPlaylistV2RuleEngine(
                     row.lastAudibleAtEpochMs?.let { ((now - it) / 86_400_000L).toDouble() }
                 } else null
             SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY,
-            SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleField.SOURCE_KIND -> null
+            SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleField.SOURCE_KIND,
+            SmartPlaylistRuleField.RELEASE_YEAR -> null
         }
         if (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE &&
             row.audibleCompletions > 0 && row.lastAudibleAtEpochMs == null

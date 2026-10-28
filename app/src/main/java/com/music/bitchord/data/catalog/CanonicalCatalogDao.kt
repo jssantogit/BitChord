@@ -20,6 +20,13 @@ internal data class ExclusiveExternalIdentityClaimResult(
     val inserted: Boolean,
 )
 
+internal data class CanonicalRecordingReleaseDateRow(
+    val recordingId: String,
+    val releaseId: String,
+    /** MusicBrainz partial ISO date only; NULL is unknown, never year zero. */
+    val releaseDate: String?,
+)
+
 internal data class CanonicalRecordingReleaseTitleRow(
     val recordingId: String,
     val releaseId: String,
@@ -83,6 +90,26 @@ internal interface CanonicalCatalogDao {
     suspend fun recordingReleaseTitlesByIds(
         recordingIds: List<String>,
     ): List<CanonicalRecordingReleaseTitleRow>
+
+    /**
+     * Preserve NULL/un-enriched linked releases so a negative year predicate
+     * cannot infer that an unknown release definitely fails to match.
+     */
+    @Query(
+        """
+        SELECT rt.recordingId AS recordingId,
+               rt.releaseId AS releaseId,
+               enrichment.releaseDate AS releaseDate
+        FROM catalog_release_track AS rt
+        LEFT JOIN musicbrainz_release_enrichment AS enrichment
+            ON enrichment.releaseId = rt.releaseId
+        WHERE rt.recordingId IN (:recordingIds)
+        ORDER BY rt.recordingId ASC, rt.releaseId ASC
+        """,
+    )
+    suspend fun recordingReleaseDatesByIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingReleaseDateRow>
 
     @Query("SELECT * FROM catalog_recording WHERE id IN (:recordingIds)")
     suspend fun recordingsByIds(recordingIds: List<String>): List<RecordingEntity>

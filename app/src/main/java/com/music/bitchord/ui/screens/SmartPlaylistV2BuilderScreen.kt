@@ -79,6 +79,7 @@ private fun fieldLabel(value: SmartPlaylistRuleField): String = when (value) {
     SmartPlaylistRuleField.LATE_SKIPS -> "Pulos tardios"
     SmartPlaylistRuleField.RELEASE_TITLE -> "Álbum / lançamento (catálogo)"
     SmartPlaylistRuleField.SOURCE_KIND -> "Origem disponível"
+    SmartPlaylistRuleField.RELEASE_YEAR -> "Ano de lançamento (MusicBrainz)"
 }
 
 private fun operatorLabel(value: SmartPlaylistRuleOperator): String = when (value) {
@@ -194,7 +195,10 @@ private fun V2RuleNode(
                     onChange(SmartPlaylistRule.Comparison(
                         field = newField,
                         operator = op,
-                        value = if (!newField.isTextField() && !presence) rule.value ?: 1.0 else null,
+                        value = if (newField == SmartPlaylistRuleField.RELEASE_YEAR && !presence)
+                            2026.0
+                            else if (!newField.isTextField() && !presence)
+                                rule.value ?: 1.0 else null,
                         textValue = if (newField == SmartPlaylistRuleField.SOURCE_KIND) "local"
                             else if (newField.isTextField() && !presence)
                                 rule.textValue ?: "" else null,

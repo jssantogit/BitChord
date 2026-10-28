@@ -61,6 +61,8 @@ internal data class RuleBasedRecordingCandidate(
     val releaseTitles: List<String> = emptyList(),
     /** Null = unavailable provenance; never treat it as a negative match. */
     val sourceKinds: Set<SmartPlaylistSourceKind>? = null,
+    val releaseYears: List<Int> = emptyList(),
+    val releaseYearEvidenceUnknown: Boolean = true,
 )
 
 internal data class RuleBasedSmartPlaylistQuery(
