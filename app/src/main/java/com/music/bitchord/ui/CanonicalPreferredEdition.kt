@@ -17,11 +17,16 @@ import java.util.Locale
 internal fun canonicalReleaseTracksWithArtwork(
     rows: List<CanonicalCatalogSearchRow>,
     releaseArtworkUri: String?,
+    /** Exact inherited URL only; never treat an arbitrary song sleeve as album art. */
+    previousInheritedArtwork: String? = null,
 ): List<CanonicalCatalogSearchRow> {
     if (releaseArtworkUri.isNullOrBlank()) return rows
+    val shouldUpgrade = previousInheritedArtwork != null &&
+        canonicalShouldAcceptArtworkUpdate(previousInheritedArtwork, releaseArtworkUri)
     return rows.map { row ->
         if (row.kind == CanonicalSearchKind.RECORDING &&
-            row.artworkUri.isNullOrBlank()
+            (row.artworkUri.isNullOrBlank() ||
+                (shouldUpgrade && row.artworkUri == previousInheritedArtwork))
         ) row.copy(artworkUri = releaseArtworkUri) else row
     }
 }
