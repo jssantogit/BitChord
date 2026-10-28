@@ -20,6 +20,10 @@ import kotlinx.coroutines.flow.first
  */
 internal enum class CanonicalSmartFilterContext { SONGS, ALBUMS, ARTISTS }
 
+private val TRUSTED_RELEASE_MBID = Regex(
+    "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+)
+
 private fun SmartPlaylistRule.supportedForContext(
     fields: Set<SmartPlaylistRuleField>,
 ): Boolean = when (this) {
@@ -34,6 +38,7 @@ internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalAlbumBrowse(): Bo
     rules.supportedForContext(setOf(
         SmartPlaylistRuleField.RELEASE_TITLE,
         SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
+        SmartPlaylistRuleField.RELEASE_YEAR,
         SmartPlaylistRuleField.SOURCE_KIND,
     ))
 
@@ -49,6 +54,7 @@ private fun SmartPlaylistRule.textTruth(
     text: String?,
     artworkReference: String? = null,
     sourceKind: SmartPlaylistSourceKind? = null,
+    releaseYear: Int? = null,
 ): Boolean? = when (this) {
     is SmartPlaylistRule.Comparison -> {
         if (this.field == SmartPlaylistRuleField.SOURCE_KIND) {
@@ -58,6 +64,19 @@ private fun SmartPlaylistRule.textTruth(
                 when (operator) {
                     SmartPlaylistRuleOperator.EQUAL -> equal
                     SmartPlaylistRuleOperator.NOT_EQUAL -> !equal
+                    else -> null
+                }
+            }
+        } else if (this.field == SmartPlaylistRuleField.RELEASE_YEAR) {
+            releaseYear?.let { known ->
+                when (operator) {
+                    SmartPlaylistRuleOperator.IS_PRESENT -> true
+                    SmartPlaylistRuleOperator.EQUAL -> known.toDouble() == value
+                    SmartPlaylistRuleOperator.NOT_EQUAL -> known.toDouble() != value
+                    SmartPlaylistRuleOperator.GREATER_THAN -> known.toDouble() > (value ?: return@let null)
+                    SmartPlaylistRuleOperator.GREATER_OR_EQUAL -> known.toDouble() >= (value ?: return@let null)
+                    SmartPlaylistRuleOperator.LESS_THAN -> known.toDouble() < (value ?: return@let null)
+                    SmartPlaylistRuleOperator.LESS_OR_EQUAL -> known.toDouble() <= (value ?: return@let null)
                     else -> null
                 }
             }
@@ -90,10 +109,10 @@ private fun SmartPlaylistRule.textTruth(
         }
     }
     is SmartPlaylistRule.Not ->
-        child.textTruth(field, text, artworkReference, sourceKind)?.not()
+        child.textTruth(field, text, artworkReference, sourceKind, releaseYear)?.not()
     is SmartPlaylistRule.Reference -> null
     is SmartPlaylistRule.Group -> {
-        val values = children.map { it.textTruth(field, text, artworkReference, sourceKind) }
+        val values = children.map { it.textTruth(field, text, artworkReference, sourceKind, releaseYear) }
         when (join) {
             SmartPlaylistRuleJoin.ALL -> when {
                 false in values -> false
@@ -114,6 +133,7 @@ internal fun filterCanonicalBrowseAlbums(
     releases: List<ReleaseEntity>,
     filter: SavedSmartPlaylistV2Filter,
     providerKey: String? = null,
+    releaseYears: Map<String, Int> = emptyMap(),
 ): List<ReleaseEntity> {
     require(filter.isSupportedForCanonicalAlbumBrowse()) {
         "This saved filter needs unsupported Album evidence"
@@ -129,6 +149,7 @@ internal fun filterCanonicalBrowseAlbums(
             release.title,
             release.artworkUri,
             verifiedContextualSourceKind(providerKey),
+            releaseYears[release.id],
         ) == true
     }
 }
@@ -201,9 +222,20 @@ internal class CanonicalContextualFilterLibrary(
     ): List<ReleaseEntity> {
         require(providerKey.isNotBlank()) { "A configured account/provider is required" }
         require(filter.isSupportedForCanonicalAlbumBrowse())
-        return filterCanonicalBrowseAlbums(
-            catalog.providerScopedReleases(providerKey), filter, providerKey,
-        )
+        val releases = catalog.providerScopedReleases(providerKey)
+        val years = if (SmartPlaylistRuleField.RELEASE_YEAR in filter.rules.referencedFields()) {
+            val trusted = releases.map { it.id }.chunked(400).flatMap { ids ->
+                catalog.trustedReleaseDatesByIds(ids)
+            }
+            trusted.mapNotNull { evidence ->
+                val mbid = evidence.mbid?.takeIf { TRUSTED_RELEASE_MBID.matches(it) }
+                    ?: return@mapNotNull null
+                val year = parseTrustedMusicBrainzReleaseYear(evidence.releaseDate)
+                    ?: return@mapNotNull null
+                evidence.releaseId to year
+            }.toMap()
+        } else emptyMap()
+        return filterCanonicalBrowseAlbums(releases, filter, providerKey, years)
     }
 
     suspend fun artists(
