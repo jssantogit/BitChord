@@ -37,6 +37,7 @@ import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
 import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
 import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
+import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
 import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.diagnostics.Diagnostics
 import java.util.UUID
@@ -230,23 +231,60 @@ private suspend fun currentSmartPlaylistV2QueryIds(
  * use a complete current-account snapshot. No rating data is persisted locally.
  * A stale or ambiguous remote preference never picks an asset.
  */
+/**
+ * Prove that every possible match must have a numeric rating >= a threshold.
+ * A disjunction with an unrated branch or a negation cannot authorize a
+ * remote MediaAsset choice. Missing evidence still fails closed downstream.
+ */
+internal fun SmartPlaylistV2Query.guaranteedMinimumRatingForAssetHints(): Double? {
+    fun proof(node: SmartPlaylistRule): Double? = when (node) {
+        is SmartPlaylistRule.Not -> null
+        is SmartPlaylistRule.Comparison -> {
+            if (node.field == SmartPlaylistRuleField.EXPLICIT_RATING &&
+                node.operator in setOf(
+                    SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+                    SmartPlaylistRuleOperator.EQUAL,
+                ) &&
+                node.value != null && node.value in 1.0..5.0
+            ) node.value else null
+        }
+        is SmartPlaylistRule.Group -> {
+            val childProofs = node.children.map(::proof)
+            when (node.join) {
+                SmartPlaylistRuleJoin.ALL -> childProofs.filterNotNull().maxOrNull()
+                SmartPlaylistRuleJoin.ANY ->
+                    if (childProofs.all { it != null }) childProofs.filterNotNull().minOrNull()
+                    else null
+            }
+        }
+    }
+    return proof(rules)
+}
+
+/**
+ * V1 and V2 use the same account-scoped read. Only a rule that guarantees
+ * numeric rating evidence on all satisfying paths may break an asset tie.
+ */
 private suspend fun currentScopedRatedAssetHints(
     context: Context,
     source: SmartCollectionActionSource,
 ): Map<String, CanonicalBrowseMediaAsset> {
-    val query = when (source) {
+    val db = SmartPlaylistDefinitionDatabase.get(context)
+    val minimum = when (source) {
         is SmartCollectionActionSource.Adaptive -> null
-        is SmartCollectionActionSource.PreviewV2Query -> null
-        is SmartCollectionActionSource.SavedV2Definition -> null
-        is SmartCollectionActionSource.PreviewQuery -> source.query
+        is SmartCollectionActionSource.PreviewQuery -> source.query.minimumExplicitRating
+        is SmartCollectionActionSource.PreviewV2Query ->
+            source.query.guaranteedMinimumRatingForAssetHints()
         is SmartCollectionActionSource.SavedDefinition -> {
-            val repo = SmartPlaylistDefinitionRepository(
-                SmartPlaylistDefinitionDatabase.get(context).definitionDao(),
-            )
-            repo.list().firstOrNull { it.id == source.id }?.query
+            SmartPlaylistDefinitionRepository(db.definitionDao())
+                .list().firstOrNull { it.id == source.id }?.query?.minimumExplicitRating
+        }
+        is SmartCollectionActionSource.SavedV2Definition -> {
+            SmartPlaylistV2DefinitionRepository(db.v2DefinitionDao())
+                .list().firstOrNull { it.id == source.id }?.query
+                ?.guaranteedMinimumRatingForAssetHints()
         }
     } ?: return emptyMap()
-    val minimum = query.minimumExplicitRating ?: return emptyMap()
     val account = SharedPrefsOpenSubsonicAccountPersistence(context)
     val reader = OpenSubsonicRemoteRatingReader(CanonicalCatalogDatabase.get(context)) {
         account.read()
