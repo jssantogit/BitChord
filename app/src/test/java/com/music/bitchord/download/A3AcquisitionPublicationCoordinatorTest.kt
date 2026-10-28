@@ -83,6 +83,32 @@ class A3AcquisitionPublicationCoordinatorTest {
         assertEquals(A3AcquisitionLedger.Phase.PUBLISHING,journal.get(id)?.phase)
     }
 
+    @Test fun rollbackFailuresExposePrivateUriOnlyThroughTypedRecoveryContract() {
+        val store=MemoryStore();val journal=staged(store)
+        val port=A3AcquisitionPublicationCoordinator(journal) { false }
+        try {
+            port.publish(id) { store.refuse=true;result() }
+            fail("Expected typed reconciliation")
+        }catch(error:A3PublicationCommitFailure.ReconciliationRequired) {
+            assertEquals(uri,error.publishedContentUri)
+            assertFalse(error.message.orEmpty().contains(uri))
+            assertFalse(error.toString().contains(uri))
+            assertTrue(error.cause is IOException)
+        }
+        assertEquals(A3AcquisitionLedger.Phase.PUBLISHING,
+            journal.get(id)?.phase)
+    }
+
+    @Test fun completedRollbackHasTypedNotPublishedOutcome() {
+        val store=MemoryStore();val journal=staged(store)
+        val port=A3AcquisitionPublicationCoordinator(journal) { true }
+        try {
+            port.publish(id) { store.refuse=true;result() }
+            fail("Expected confirmed rollback")
+        }catch(_:A3PublicationCommitFailure.RolledBack) {}
+        assertNull(journal.get(id)?.contentUri)
+    }
+
     @Test fun accountRevocationAfterBytesWrittenDeletesPublishedUriBeforeAvailable() {
         val store=MemoryStore();val journal=staged(store)
         val deleted=mutableListOf<String>()
