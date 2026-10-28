@@ -34,10 +34,10 @@ internal class PauseResumeVolumeFade(
             return
         }
         // Repeated play while a fade-in is running must not restart the envelope.
-        if (owner === target && job?.isActive == true && fadingIn) return
-        if (target.playWhenReady && job?.isActive != true) return
+        if (owner === target && job?.isActive == true && fadingIn && target.playWhenReady) return
+        if (target.playWhenReady && job?.isActive != true && target.volume >= 0.999f) return
 
-        val from = if (owner === target && job?.isActive == true) {
+        val from = if ((owner === target && job?.isActive == true) || target.isPlaying) {
             target.volume.coerceIn(0f, 1f)
         } else {
             0f
@@ -46,10 +46,23 @@ internal class PauseResumeVolumeFade(
         owner = target
         fadingIn = true
         target.volume = from
-        target.play()
+        try {
+            target.play()
+        } catch (failure: RuntimeException) {
+            // A stale/released player can reject play synchronously. Never strand
+            // its last audio route at zero gain while the owner is being replaced.
+            reset()
+            throw failure
+        }
         job = scope.launch {
             // Buffering cannot consume the fade: wait until the decoder is audible.
             while (isActive && target.playWhenReady && !target.isPlaying && !overlapActive()) {
+                // A failed/end-of-queue stream can remain non-audible forever while
+                // playWhenReady stays true. Restore gain rather than pinning mute.
+                if (target.playbackState == Player.STATE_ENDED) {
+                    target.volume = 1f
+                    return@launch
+                }
                 delay(FRAME_MS)
             }
             if (!isActive) return@launch
