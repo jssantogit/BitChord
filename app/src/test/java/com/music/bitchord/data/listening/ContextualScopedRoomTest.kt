@@ -3,6 +3,8 @@ package com.music.bitchord.data.listening
 import androidx.room.Room
 import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.ExternalIdentityEntity
+import com.music.bitchord.data.catalog.MusicBrainzReleaseEnrichmentEntity
 import com.music.bitchord.data.catalog.CanonicalLocalLibrary
 import com.music.bitchord.data.catalog.MediaAssetEntity
 import com.music.bitchord.data.catalog.RecordingArtistCreditEntity
@@ -295,6 +297,54 @@ class ContextualScopedRoomTest {
             // The remote copy cannot acquire the date from an unrelated local asset.
             assertTrue(runCatching { reader.songs(remote, old) }.exceptionOrNull()
                 is IllegalArgumentException)
+        } finally { db.close() }
+    }
+
+    @Test fun albumYearRequiresUniqueTrustedMusicBrainzAliasAndCurrentAccountMembership() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val dao = db.catalogDao()
+            val provider = "opensubsonic:trusted"
+            val other = "opensubsonic:unrelated"
+            val validMbid = "123e4567-e89b-12d3-a456-426614174000"
+            val wrongMbid = "123e4567-e89b-12d3-a456-426614174001"
+            val ambiguousMbid = "123e4567-e89b-12d3-a456-426614174002"
+            for (id in listOf("trusted", "wrong", "ambiguous", "invalid", "orphan")) {
+                dao.upsertRecording(RecordingEntity("recording:$id", "Example", "Band", 150_000))
+                dao.upsertRelease(ReleaseEntity("release:$id", "Example EP", "Band", null))
+                dao.upsertReleaseTrack(ReleaseTrackEntity("release:$id", "recording:$id", 1))
+                if (id != "orphan") dao.upsertMediaAsset(MediaAssetEntity(
+                    "asset:$id", "recording:$id", if (id == "invalid") other else provider,
+                    "source:$id", "opensubsonic://$id", null, null, null, null,
+                ))
+                val mbid = if (id == "wrong") wrongMbid else validMbid
+                dao.upsertMusicBrainzReleaseEnrichment(MusicBrainzReleaseEnrichmentEntity(
+                    "release:$id", mbid, "Example EP", "Band",
+                    if (id == "invalid") "2023-02-30" else "2023-07-21",
+                    null, null, 1000L,
+                ))
+            }
+            for (id in listOf("trusted", "wrong", "ambiguous", "invalid")) {
+                dao.upsertExternalIdentity(ExternalIdentityEntity(
+                    "musicbrainz", "release",
+                    if (id == "wrong") validMbid else if (id == "ambiguous") ambiguousMbid
+                    else validMbid,
+                    "release:$id",
+                ))
+            }
+            dao.upsertExternalIdentity(ExternalIdentityEntity(
+                "musicbrainz", "release", wrongMbid, "release:ambiguous",
+            ))
+            val filter = SavedSmartPlaylistV2Filter("year", "2023",
+                SmartPlaylistRule.Comparison(SmartPlaylistRuleField.RELEASE_YEAR,
+                    SmartPlaylistRuleOperator.EQUAL, value = 2023.0))
+            val service = CanonicalContextualFilterLibrary(dao)
+            assertEquals(listOf("release:trusted"), service.albums(provider, filter)
+                .map { it.id })
+            assertTrue(service.albums(other, filter).isEmpty())
+            dao.deleteAllMediaAssets(provider)
+            assertTrue(service.albums(provider, filter).isEmpty())
         } finally { db.close() }
     }
 
