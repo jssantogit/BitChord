@@ -217,4 +217,56 @@ class SmartPlaylistBatchEvidenceRoomTest {
         }
     }
 
+    @Test fun titleOnlyV2SkipsRemoteRatingSnapshotButRatingSortAndRuleStillReadIt() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            catalog.catalogDao().upsertRecording(RecordingEntity("rec:shy", "Super Shy", "NewJeans", 120_000L))
+            var remoteReads = 0
+            val preview = CanonicalRuleBasedSmartPlaylistPreview(
+                availability = CanonicalLibraryAvailabilityReader { listOf("rec:shy") },
+                catalog = catalog.catalogDao(),
+                ratings = RoomRecordingRatingStore(listening.recordingRatingDao()),
+                listening = RoomListeningEventStore(listening.listeningEventDao()),
+                batchReader = RoomSmartPlaylistBatchEvidenceReader(
+                    catalog.catalogDao(), listening.listeningEventDao(),
+                    listening.recordingRatingDao(),
+                ),
+                remoteRatings = RemoteSmartPlaylistRatingReader {
+                    remoteReads++
+                    RemoteSmartPlaylistRatingSnapshot(complete = true, evidence = emptyList())
+                },
+            )
+            val title = SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE,
+                SmartPlaylistRuleOperator.CONTAINS,
+                textValue = "shy",
+            )
+            assertEquals(1, preview.preview(SmartPlaylistV2Query(
+                title, sort = SmartPlaylistV2Sort.TITLE_ASC,
+            )).size)
+            assertEquals(0, remoteReads)
+            preview.preview(SmartPlaylistV2Query(title, sort = SmartPlaylistV2Sort.RATING_DESC))
+            assertEquals(1, remoteReads)
+            val combined = SmartPlaylistV2Query(
+                SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+                    title,
+                    SmartPlaylistRule.Comparison(
+                        SmartPlaylistRuleField.EXPLICIT_RATING,
+                        SmartPlaylistRuleOperator.IS_MISSING,
+                    ),
+                )),
+                sort = SmartPlaylistV2Sort.TITLE_ASC,
+            )
+            preview.preview(combined)
+            assertEquals(2, remoteReads)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
 }
