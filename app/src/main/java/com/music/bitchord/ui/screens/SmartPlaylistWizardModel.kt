@@ -26,7 +26,6 @@ internal val smartConditionCategories = listOf(
         SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY,
         SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleField.ALBUM_ARTIST,
         SmartPlaylistRuleField.TRACK_ARTIST, SmartPlaylistRuleField.TRACK_NUMBER,
-        SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
     )),
     SmartConditionCategory("ratings", "Avaliações", "Notas em estrelas e data da nota local", listOf(
         SmartPlaylistRuleField.EXPLICIT_RATING, SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING,
@@ -44,6 +43,11 @@ internal val smartConditionCategories = listOf(
     SmartConditionCategory("audio", "Áudio", "Duração comprovada das faixas", listOf(
         SmartPlaylistRuleField.DURATION_MS,
     )),
+    SmartConditionCategory(
+        "advanced", "Outros · avançado",
+        "Evidência técnica do catálogo, não qualidade visual ou reprodução",
+        listOf(SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE),
+    ),
 )
 
 internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (field) {

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -141,6 +142,9 @@ internal fun SmartPlaylistV2BuilderScreen(
     var editorEpoch by remember { mutableStateOf(0) }
     var showWizard by remember { mutableStateOf(true) }
     var manageTab by remember { mutableStateOf(SmartPlaylistManageTab.PLAYLISTS) }
+    // Selecting a different library section starts at its own heading,
+    // instead of inheriting the prior tab's last LazyColumn scroll index.
+    val manageListState = remember(manageTab) { LazyListState() }
     val saved by produceState(initialValue = emptyList<SavedSmartPlaylistV2Definition>(), key1 = repo) {
         try {
             repo.observe().collect { value = it; savedFailure = false }
@@ -426,6 +430,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                         )
                     }
                     LazyColumn(
+                        state = manageListState,
                         modifier = Modifier.fillMaxSize().padding(horizontal = PAGE_GUTTER),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
