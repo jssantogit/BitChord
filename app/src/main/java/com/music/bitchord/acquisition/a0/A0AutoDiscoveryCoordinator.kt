@@ -61,6 +61,7 @@ internal class A0AutoDiscoveryCoordinator(
         isCancelled:()->Boolean,
         stillAuthorized:()->Boolean,
         onSlotResolved:(Int,A0AutoBatchExecutor.TrackStatus)->Unit={ _,_ -> },
+        onSlotSearching:(Int)->Unit={},
     ):Report {
         val count=entries.size
         val valid=count in 1..SoulseekBatchPlan.MAX_TRACKS &&
@@ -95,6 +96,8 @@ internal class A0AutoDiscoveryCoordinator(
                         append(next,A0AutoBatchExecutor.TrackStatus.NOT_STARTED)
                     break
                 }
+                // Observable per-track state, never network authority.
+                try {onSlotSearching(index)}catch(_:Exception){}
                 val proposals=pooled.selectionPreview()
                 if(proposals.getOrNull(index)?.status!=
                     A0AutoCandidateSelectionPolicy.Status.PROVISIONAL) {
