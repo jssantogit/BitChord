@@ -160,7 +160,12 @@ class A0AutoDiscoveryCoordinatorTest {
             entries,quality,userRequested=true,optedIn=true,
             isCancelled={false},stillAuthorized={true})
         assertEquals(1,result.searches)
-        assertEquals(4,result.batch.manualReview)
+        assertEquals(listOf(
+            A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW,
+            A0AutoBatchExecutor.TrackStatus.NOT_STARTED,
+            A0AutoBatchExecutor.TrackStatus.NOT_STARTED,
+            A0AutoBatchExecutor.TrackStatus.NOT_STARTED,
+        ),result.batch.results)
         assertTrue(done.isEmpty())
         assertEquals(1,search.closed)
     }
