@@ -135,6 +135,24 @@ class A3AutomaticIdentityReservationTest {
         assertEquals(1,store.writes)
     }
 
+    @Test fun generationGateNeverRunsUnderA3Monitor() {
+        val store=Store()
+        val journal=A3AcquisitionLedger(store)
+        val second=java.util.concurrent.Executors.newSingleThreadExecutor()
+        try {
+            journal.reserveAutomaticBatch(listOf(slot(first)),commitGuard={ commit ->
+                // Publication already takes the account-generation monitor
+                // first, then enters A3. The opposite order deadlocks.
+                // This second thread models a concurrent A3 reader while the
+                // generation gate is being entered.
+                second.submit { journal.all().size }.get(
+                    2,java.util.concurrent.TimeUnit.SECONDS)
+                commit()
+            })
+            assertEquals(1,store.writes)
+        }finally { second.shutdownNow() }
+    }
+
     @Test fun allowedCommitGateInvokedOnceForWholeAlbum() {
         val store=Store()
         val journal=A3AcquisitionLedger(store)
