@@ -139,6 +139,76 @@ class A0AutoBatchExecutorTest {
         assertEquals(listOf(first.trackId),published)
     }
 
+    @Test fun closedMultiSearchEvidenceRunsDirectlyThroughSameBatchEngine() {
+        val observed=candidates()
+        val pool=A0MultiSearchCandidateEvidence(entries,profile)
+        pool.add(observed)
+        var opened=0
+        val blocked=A0AutoBatchExecutor { entry ->
+            opened++
+            factory(mutableListOf())(entry)
+        }
+        val before=blocked.runFromEvidence(entries,pool,profile,
+            userRequested=true,optedIn=true,isCancelled={false},
+            stillAuthorized={true})
+        assertEquals(4,before.manualReview)
+        assertEquals(0,opened)
+        pool.stop()
+        val done=mutableListOf<String>()
+        val report=A0AutoBatchExecutor(factory(done)).runFromEvidence(
+            entries,pool,profile,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(4,report.published)
+        assertEquals(4,report.attempts)
+        assertEquals(entries.map {it.trackId},done)
+        val other=entries.map{it.copy(album="UNRELATED RELEASE")}
+        assertEquals(4,A0AutoBatchExecutor(factory(done)).runFromEvidence(
+            other,pool,profile,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true}).manualReview)
+        assertEquals(4,done.size)
+    }
+
+    @Test fun uncertainCommitStopsAlbumWithoutInitiatingRemainingTracks() {
+        var published=0
+        val fakeFactory:(SoulseekBatchPlan.Entry)->A0AutoAcquisitionExecutor.Port={
+            entry ->
+            object:A0AutoAcquisitionExecutor.Port {
+                override fun fetch(candidate:A0ObservedCandidateHandoff.Choice,
+                    isCancelled:()->Boolean):A0AutoAcquisitionExecutor.FetchResult {
+                    val scratch=File.createTempFile("a0-uncertain-", ".observed")
+                    RandomAccessFile(scratch,"rw").use { it.setLength(
+                        entry.durationSeconds!!.toLong()*40_000L) }
+                    return A0AutoAcquisitionExecutor.FetchResult.Received(
+                        A0VerifiedByteStager.Receipt(scratch,scratch.length(),
+                            "a".repeat(64),"ID3_HEADER_ONLY"))
+                }
+                override fun inspect(receipt:A0VerifiedByteStager.Receipt,
+                    expectedExtension:String,isCancelled:()->Boolean)=
+                    A0AutoPostTransferTechnicalGate.Decoded(
+                        A0CanonicalAcquisitionIntent.Codec.MP3,"mp3",
+                        entry.durationSeconds!!.toLong()*1000L,320,44100,null,true)
+                override fun publish(receipt:A0VerifiedByteStager.Receipt,
+                    safeName:String,isCancelled:()->Boolean)
+                    :A0AutoAcquisitionExecutor.PublishResult {
+                    published++
+                    return A0AutoAcquisitionExecutor.PublishResult.UNCERTAIN
+                }
+                override fun cleanup(receipt:A0VerifiedByteStager.Receipt) {
+                    assertTrue(receipt.file.delete())
+                }
+            }
+        }
+        val shared=candidates()
+        val report=A0AutoBatchExecutor(fakeFactory).run(
+            entries,entries.map{shared},emptySet(),profile,
+            userRequested=true,optedIn=true,isCancelled={false},
+            stillAuthorized={true})
+        assertEquals(1,report.needsReconciliation)
+        assertEquals(3,report.notStarted)
+        assertEquals(0,report.published)
+        assertEquals(1,published)
+    }
+
     @Test fun truncatedSlotIsNotAutomaticallyDownloaded() {
         val done=mutableListOf<String>()
         val report=A0AutoBatchExecutor(factory(done)).run(
