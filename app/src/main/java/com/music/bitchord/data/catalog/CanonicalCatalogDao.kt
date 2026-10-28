@@ -654,6 +654,50 @@ internal interface CanonicalCatalogDao {
     fun observeProviderBrowseAssets(providerKey: String): Flow<List<CanonicalBrowseAssetRow>>
 
     /**
+     * Scoped Release membership is proven through Recording→ReleaseTrack and
+     * a currently persisted asset of this EXACT provider/account.
+     * Identical titles on another Release or account never create membership.
+     */
+    @Query(
+        """
+        SELECT DISTINCT rel.*
+        FROM catalog_release AS rel
+        INNER JOIN catalog_release_track AS rt ON rt.releaseId = rel.id
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = rt.recordingId
+        WHERE asset.provider = :providerKey
+        ORDER BY rel.title COLLATE NOCASE ASC, rel.id ASC
+        """,
+    )
+    suspend fun providerScopedReleases(providerKey: String): List<ReleaseEntity>
+
+    /**
+     * Scoped Artists are proven by canonical recording or release credits
+     * connected to a current provider asset. Never group artists by display
+     * name or infer a Recording's own canonical artist from provider title text.
+     */
+    @Query(
+        """
+        SELECT artist.*
+        FROM catalog_artist AS artist
+        WHERE EXISTS (
+            SELECT 1
+            FROM catalog_recording_artist_credit AS credit
+            INNER JOIN catalog_media_asset AS asset
+                ON asset.recordingId = credit.recordingId
+            WHERE credit.artistId = artist.id AND asset.provider = :providerKey
+        ) OR EXISTS (
+            SELECT 1
+            FROM catalog_release_artist_credit AS credit
+            INNER JOIN catalog_release_track AS rt ON rt.releaseId = credit.releaseId
+            INNER JOIN catalog_media_asset AS asset ON asset.recordingId = rt.recordingId
+            WHERE credit.artistId = artist.id AND asset.provider = :providerKey
+        )
+        ORDER BY artist.name COLLATE NOCASE ASC, artist.id ASC
+        """,
+    )
+    suspend fun providerScopedArtists(providerKey: String): List<ArtistEntity>
+
+    /**
      * Multi-source canonical browse: asset ID is unique, recording ID is music
      * identity. Never expose sourceKey/URI or group by metadata/name.
      */
