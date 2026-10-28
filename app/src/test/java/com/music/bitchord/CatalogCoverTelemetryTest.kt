@@ -100,4 +100,18 @@ class CatalogCoverTelemetryTest {
         assertEquals(0, telemetry.snapshot().verifiedGroupCachedRowsReused)
         assertEquals(0, telemetry.snapshot().recoveredCoalescedOwnerCancellations)
     }
+
+    @Test fun diskCacheBaselineSurvivesCaptureResetAndExplainsUpgradeEvictionRisk() {
+        val meter = CatalogCoverTelemetry()
+        assertNull(meter.snapshot().coilDiskBytesAtInitialization)
+        meter.recordCoilDiskCacheInitialization(16L * 1024 * 1024, 100L * 1024 * 1024)
+        meter.recordImageDiskCachePreservedOnUpgrade()
+        meter.recordImageResult(true, 100L, "DISK")
+        meter.reset()
+        val afterCaptureRestart = meter.snapshot()
+        assertEquals(16L * 1024 * 1024, afterCaptureRestart.coilDiskBytesAtInitialization)
+        assertEquals(100L * 1024 * 1024, afterCaptureRestart.coilDiskCapacityBytes)
+        assertEquals(true, afterCaptureRestart.coilDiskPreservedOnVersionUpgrade)
+        assertEquals(0, afterCaptureRestart.coilDiskHits)
+    }
 }
