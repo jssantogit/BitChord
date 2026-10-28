@@ -88,16 +88,16 @@ class CatalogCoverTelemetryTest {
 
     @Test fun cacheFirstBatchAndOwnerCancellationRetriesAreMeasuredWithoutIds() {
         val telemetry = CatalogCoverTelemetry()
-        telemetry.recordArtistCachedGroupBatch(12)
-        telemetry.recordArtistCachedGroupBatch(0)
+        telemetry.recordVerifiedGroupCachedBatch(12)
+        telemetry.recordVerifiedGroupCachedBatch(0)
         telemetry.recordRecoveredCoalescedOwnerCancellation()
         val stats = telemetry.snapshot()
-        assertEquals(2, stats.artistCachedBatchReads)
-        assertEquals(12, stats.artistCachedRowsReused)
+        assertEquals(2, stats.verifiedGroupCachedBatchReads)
+        assertEquals(12, stats.verifiedGroupCachedRowsReused)
         assertEquals(1, stats.recoveredCoalescedOwnerCancellations)
         telemetry.reset()
-        assertEquals(0, telemetry.snapshot().artistCachedBatchReads)
-        assertEquals(0, telemetry.snapshot().artistCachedRowsReused)
+        assertEquals(0, telemetry.snapshot().verifiedGroupCachedBatchReads)
+        assertEquals(0, telemetry.snapshot().verifiedGroupCachedRowsReused)
         assertEquals(0, telemetry.snapshot().recoveredCoalescedOwnerCancellations)
     }
 }
