@@ -59,20 +59,25 @@ class HomeHeaderTest {
         compose.onNodeWithText("Downloads").performClick()
         compose.runOnIdle { assertEquals(listOf("settings", "downloads"), activated) }
     }
-    @Test fun compactHomeTitleAppearsOnlyAfterScrolling() {
+    @Test fun compactTitleWaitsUntilLargeHomeHeadingIsOffscreen() {
         val scrolled = mutableStateOf(false)
+        val largeHeadingOffscreen = mutableStateOf(false)
         compose.setContent {
             MaterialTheme {
                 FrostedTopBar(
                     title = "Início",
                     scrolled = scrolled.value,
-                    showScrolledTitle = true,
+                    showScrolledTitle = largeHeadingOffscreen.value,
                     showActions = false,
                 )
             }
         }
         compose.onNodeWithTag("home-compact-title").assertDoesNotExist()
+        // Crossing the generic 24px bar threshold is not enough: the big
+        // Home title is still visible, so two titles would be redundant.
         compose.runOnIdle { scrolled.value = true }
+        compose.onNodeWithTag("home-compact-title").assertDoesNotExist()
+        compose.runOnIdle { largeHeadingOffscreen.value = true }
         compose.onNodeWithTag("home-compact-title").assertExists()
     }
 
