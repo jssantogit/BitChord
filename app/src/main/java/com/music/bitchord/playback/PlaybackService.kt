@@ -22,6 +22,7 @@ import android.os.Bundle
 import android.os.Handler
 import com.music.bitchord.BuildConfig
 import com.music.bitchord.diagnostics.Diagnostics
+import com.music.bitchord.diagnostics.DiagnosticCategory
 import android.os.SystemClock
 import com.music.bitchord.data.TelemetryProvenance
 import kotlinx.coroutines.sync.Mutex
@@ -672,6 +673,16 @@ class PlaybackService : MediaLibraryService() {
         durationMs = { AppSettings.pauseResumeFadeMs.value },
         overlapActive = { crossfade?.isTransitioning() == true || swappingMediaId != null },
         sessionOwner = { player },
+        onEvent = { event, duration ->
+            Diagnostics.event(
+                category = DiagnosticCategory.PLAYER,
+                name = "transport_fade",
+                metadata = mapOf(
+                    "phase" to event.wireName,
+                    "durationMs" to duration.toString(),
+                ),
+            )
+        },
     )
 
     /** Canonical context owner for the active local bounded album/playlist. */
