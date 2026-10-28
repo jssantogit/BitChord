@@ -427,4 +427,43 @@ class CanonicalCoverProgressiveEnrichmentTest {
         assertEquals(mapOf("rec-1" to "art:direct", "rec-2" to "art:cached",
             "rec-3" to "art:cached"), proven)
     }
+
+    @Test fun missingBatchCacheFallsBackToSingleReadAndNeverDiscardsValidSiblingArt() =
+        runBlocking {
+            val row = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+                "rec-a", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+                "A", "Artist", coverGroupMbid = "group-a",
+            )
+            var batchAttempts = 0
+            val perGroupAttempts = mutableListOf<String>()
+            val result = com.music.bitchord.ui.canonicalCachedRecordingArtForVisibleRows(
+                rows = listOf(row, row.copy(musicBrainzId = "rec-b", coverGroupMbid = "group-b")),
+                databaseLinks = { error("Every direct group returned a valid sleeve") },
+                cachedCovers = {
+                    batchAttempts++
+                    throw IllegalStateException("Temporary Room batch failure")
+                },
+                cachedCover = { group ->
+                    perGroupAttempts += group
+                    if (group == "group-a") "art:group-a" else "art:group-b"
+                },
+            )
+            assertEquals(1, batchAttempts)
+            assertEquals(listOf("group-a", "group-b"), perGroupAttempts)
+            assertEquals(mapOf("rec-a" to "art:group-a", "rec-b" to "art:group-b"), result)
+        }
+
+    @Test fun batchReturningForeignGroupDoesNotPaintUnrelatedRecording() = runBlocking {
+        val row = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            "rec-a", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+            "A", "Artist", coverGroupMbid = "known-group",
+        )
+        val result = com.music.bitchord.ui.canonicalCachedRecordingArtForVisibleRows(
+            rows = listOf(row),
+            databaseLinks = { emptyList() },
+            cachedCover = { error("Unneeded single lookup") },
+            cachedCovers = { mapOf("unrelated-group" to "art:unrelated") },
+        )
+        assertTrue(result.isEmpty())
+    }
 }
