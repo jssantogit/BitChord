@@ -666,6 +666,13 @@ class PlaybackService : MediaLibraryService() {
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
+    /** One transport-only envelope, distinct from the two-deck music transition faders. */
+    private val transportFade = PauseResumeVolumeFade(
+        scope = scope,
+        durationMs = { AppSettings.pauseResumeFadeMs.value },
+        overlapActive = { crossfade?.isTransitioning() == true || swappingMediaId != null },
+    )
+
     /** Canonical context owner for the active local bounded album/playlist. */
     private val boundedContextRegistry = ContextRegistry { snapshot ->
         scope.launch {
@@ -1801,6 +1808,7 @@ class PlaybackService : MediaLibraryService() {
     private fun newSessionPlayer(player: Player, crossfade: CrossfadeController) = SessionPlayer(
         player,
         crossfade,
+        transportFade,
         onUserIntent = {
             failureCascade.onExplicitUserIntent()
             partySync?.onLocalIntent()
@@ -6740,6 +6748,7 @@ class PlaybackService : MediaLibraryService() {
      * MediaSession points at the new one.
      */
     private fun rebuildPlayersForOutput(enableFloat: Boolean) {
+        transportFade.reset()
         val oldActive = player ?: return
         val oldSpare = spare ?: return
         val items = List(oldActive.mediaItemCount) { oldActive.getMediaItemAt(it) }
@@ -7227,6 +7236,7 @@ class PlaybackService : MediaLibraryService() {
 
 
     override fun onDestroy() {
+        transportFade.reset()
         WearBridge.attachStreams(null)
         WearBridge.releaseSpeaker()
         // Let go of the receiver's player but leave its session alone: a
@@ -7447,6 +7457,7 @@ class PlaybackService : MediaLibraryService() {
     private class SessionPlayer(
         player: Player,
         private val crossfade: CrossfadeController,
+        private val transportFade: PauseResumeVolumeFade,
         /**
          * Reports that what just came through here was the *user's* doing.
          *
@@ -7670,7 +7681,7 @@ class PlaybackService : MediaLibraryService() {
                 cast.play()
                 return
             }
-            super.play()
+            transportFade.play(wrappedPlayer)
         }
 
         override fun pause() {
@@ -7680,13 +7691,14 @@ class PlaybackService : MediaLibraryService() {
                 cast.pause()
                 return
             }
-            super.pause()
+            transportFade.pause(wrappedPlayer)
         }
 
         // Not blocked when locked: stopping is this device going quiet, which
         // is the listener's own business, and the lifecycle paths that call it
         // are not asking to move the party.
         override fun stop() {
+            transportFade.reset()
             if (locked()) { super.stop(); return }
             onUserIntent()
             super.stop()
@@ -7700,7 +7712,8 @@ class PlaybackService : MediaLibraryService() {
                 if (playWhenReady) cast.play() else cast.pause()
                 return
             }
-            super.setPlayWhenReady(playWhenReady)
+            if (playWhenReady) transportFade.play(wrappedPlayer)
+            else transportFade.pause(wrappedPlayer)
         }
 
         // The playhead belongs to the party while locked: it goes where the
@@ -7708,6 +7721,7 @@ class PlaybackService : MediaLibraryService() {
         // reconcile anyway.
         override fun seekTo(positionMs: Long) {
             if (locked()) return
+            transportFade.reset()
             onUserIntent()
             if (cast.active) {
                 cast.seekTo(positionMs)
@@ -7718,6 +7732,7 @@ class PlaybackService : MediaLibraryService() {
 
         override fun seekBack() {
             if (locked()) return
+            transportFade.reset()
             onUserIntent()
             if (cast.active) {
                 cast.seekTo(cast.positionMs - seekBackIncrement)
@@ -7728,6 +7743,7 @@ class PlaybackService : MediaLibraryService() {
 
         override fun seekForward() {
             if (locked()) return
+            transportFade.reset()
             onUserIntent()
             if (cast.active) {
                 cast.seekTo(cast.positionMs + seekForwardIncrement)
@@ -7738,6 +7754,7 @@ class PlaybackService : MediaLibraryService() {
 
         override fun seekToPrevious() {
             if (locked()) return
+            transportFade.reset()
             onUserIntent()
             if (cast.active) {
                 castPrevious()
@@ -7748,6 +7765,7 @@ class PlaybackService : MediaLibraryService() {
 
         override fun seekToDefaultPosition() {
             if (locked()) return
+            transportFade.reset()
             onUserIntent()
             if (cast.active) {
                 cast.seekTo(0L)
@@ -7758,12 +7776,14 @@ class PlaybackService : MediaLibraryService() {
 
         override fun seekToDefaultPosition(mediaItemIndex: Int) {
             if (locked()) return
+            transportFade.reset()
             onUserIntent()
             super.seekToDefaultPosition(mediaItemIndex)
         }
 
         override fun setMediaItems(mediaItems: List<MediaItem>, resetPosition: Boolean) {
             if (locked()) return
+            transportFade.reset()
             onUserIntent()
             super.setMediaItems(mediaItems, resetPosition)
         }
@@ -7774,6 +7794,7 @@ class PlaybackService : MediaLibraryService() {
             startPositionMs: Long,
         ) {
             if (locked()) return
+            transportFade.reset()
             onUserIntent()
             super.setMediaItems(mediaItems, startIndex, startPositionMs)
         }
@@ -7833,6 +7854,7 @@ class PlaybackService : MediaLibraryService() {
 
         override fun clearMediaItems() {
             if (locked()) return
+            transportFade.reset()
             onUserIntent()
             super.clearMediaItems()
         }
@@ -7850,6 +7872,7 @@ class PlaybackService : MediaLibraryService() {
         override fun seekTo(mediaItemIndex: Int, positionMs: Long) {
             if (locked()) return
             onUserIntent()
+            transportFade.reset()
             crossfade.onSkipRequested()
             if (mediaItemIndex !in 0 until wrappedPlayer.mediaItemCount) return
             // The track already on the receiver: a position in it is the
@@ -7881,6 +7904,7 @@ class PlaybackService : MediaLibraryService() {
         override fun seekToPreviousMediaItem() {
             if (locked()) return
             onUserIntent()
+            transportFade.reset()
             crossfade.onSkipRequested()
             if (cast.active) {
                 castPrevious()
@@ -7892,6 +7916,7 @@ class PlaybackService : MediaLibraryService() {
         override fun seekToNextMediaItem() {
             if (locked()) return
             onUserIntent()
+            transportFade.reset()
             crossfade.onSkipRequested()
             wrappedPlayer.seekToNextMediaItem()
         }
@@ -7899,6 +7924,7 @@ class PlaybackService : MediaLibraryService() {
         override fun seekToNext() {
             if (locked()) return
             onUserIntent()
+            transportFade.reset()
             crossfade.onSkipRequested()
             wrappedPlayer.seekToNext()
         }
