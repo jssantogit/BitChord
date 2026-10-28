@@ -38,6 +38,8 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         val coilDiskCapacityBytes: Long?,
         /** Set only when a higher versionCode was observed at app startup. */
         val coilDiskPreservedOnVersionUpgrade: Boolean,
+        val reconciledRecordingEditionCovers: Int,
+        val rejectedGroupDowngrades: Int,
     )
 
     private var cached = 0
@@ -64,6 +66,8 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
     private var diskBytesAtInit: Long? = null
     private var diskCapacity: Long? = null
     private var preservedDiskOnAppUpdate = false
+    private var reconciledEditionCovers = 0
+    private var groupDowngradesRejected = 0
 
     /** Start a clean anonymous metric window for each explicit capture. */
     @Synchronized fun reset() {
@@ -86,6 +90,8 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         groupCacheBatchReads = 0
         groupCacheRows = 0
         recoveredSharedOwners = 0
+        reconciledEditionCovers = 0
+        groupDowngradesRejected = 0
     }
 
     /** No paths, image keys or URL are captured in disk baseline metrics. */
@@ -96,6 +102,14 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
 
     @Synchronized fun recordImageDiskCachePreservedOnUpgrade() {
         preservedDiskOnAppUpdate = true
+    }
+
+    @Synchronized fun recordEditionSleeveReplacedByVerifiedGroup() {
+        reconciledEditionCovers++
+    }
+
+    @Synchronized fun recordLowerResolutionGroupCoverRejected() {
+        groupDowngradesRejected++
     }
 
     /** No MBID/album is captured: only counts of successfully verified fronts. */
@@ -163,7 +177,8 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
             quantile(imagesSorted, 50), quantile(imagesSorted, 95),
             imageMemory, imageDisk, imageNetwork, imageOther,
             groupCacheBatchReads, groupCacheRows, recoveredSharedOwners,
-            diskBytesAtInit, diskCapacity, preservedDiskOnAppUpdate)
+            diskBytesAtInit, diskCapacity, preservedDiskOnAppUpdate,
+            reconciledEditionCovers, groupDowngradesRejected)
     }
 
     companion object {
