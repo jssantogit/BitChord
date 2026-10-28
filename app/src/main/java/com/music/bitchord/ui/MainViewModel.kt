@@ -1691,7 +1691,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         throw cancelled
                     } catch (_: Exception) { emptyList() }
 
-                    val ranked = canonicalPreferredEditions(versions, entry.title)
+                    // A failed group browse plus a valid local tracklist
+                    // must not trigger up to four additional sequential
+                    // lookupRelease network requests just to re-read Room.
+                    val ranked = if (cachedPreview != null &&
+                        live is MusicBrainzCatalogGraphResult.Failure
+                    ) emptyList() else canonicalPreferredEditions(versions, entry.title)
                     val editorialTitle = canonicalOfficialGroupDisplayTitle(entry.title, versions)
                     var chosen: MusicBrainzCatalogReleaseDetail? = null
                     // Bounded retry: an MB edition can have no usable tracks,
