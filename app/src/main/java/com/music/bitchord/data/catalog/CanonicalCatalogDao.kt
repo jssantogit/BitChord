@@ -141,6 +141,19 @@ internal interface CanonicalCatalogDao {
         FROM catalog_release_track AS rt
         LEFT JOIN musicbrainz_release_enrichment AS enrichment
             ON enrichment.releaseId = rt.releaseId
+           AND EXISTS (
+                SELECT 1 FROM catalog_external_identity AS identity
+                WHERE identity.provider = 'musicbrainz'
+                  AND identity.entityType = 'release'
+                  AND identity.entityId = rt.releaseId
+                  AND identity.externalId = enrichment.mbid
+           )
+           AND (
+                SELECT COUNT(*) FROM catalog_external_identity AS identity
+                WHERE identity.provider = 'musicbrainz'
+                  AND identity.entityType = 'release'
+                  AND identity.entityId = rt.releaseId
+           ) = 1
         WHERE rt.recordingId IN (:recordingIds)
         ORDER BY rt.recordingId ASC, rt.releaseId ASC
         """,
