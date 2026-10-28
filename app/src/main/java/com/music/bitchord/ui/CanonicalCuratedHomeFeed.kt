@@ -153,6 +153,32 @@ internal fun canonicalArtistVerifiedGroupUpdates(
     }
     .toMap()
 
+/**
+ * Artist's asynchronous Official-edition fetch paints both native shelf
+ * thumbnails and the canonical detail rows. Use the same Front-v5 authority
+ * rule on both surfaces: a newly verified 500px Front can supersede an older
+ * 500px edition image, but cannot downgrade to a 250px URL.
+ */
+internal fun canonicalArtistRowsWithOfficialCoverUpdates(
+    rows: List<CanonicalCatalogSearchRow>,
+    covers: Map<String, Pair<String, String>>,
+): List<CanonicalCatalogSearchRow> {
+    if (covers.isEmpty()) return rows
+    var changed = false
+    val updated = rows.map { row ->
+        val next = if (row.kind == CanonicalSearchKind.RELEASE_GROUP &&
+            canonicalEditorialReleaseType(row) != null
+        ) covers[row.musicBrainzId] else null
+        if (next != null &&
+            canonicalShouldAcceptVerifiedGroupArtwork(row.artworkUri, next.first)
+        ) {
+            changed = true
+            row.copy(artworkUri = next.first, title = next.second)
+        } else row
+    }
+    return if (changed) updated else rows
+}
+
 internal fun canonicalArtistShelvesWithCoverUpdates(
     sections: List<HomeShelf>,
     covers: Map<String, Pair<String, String>>,
