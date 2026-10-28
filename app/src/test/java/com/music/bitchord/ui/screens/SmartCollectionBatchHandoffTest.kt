@@ -394,4 +394,52 @@ class SmartCollectionBatchHandoffTest {
         assertEquals(0, submissions)
     }
 
+    @Test fun plannedBrowseReceivesOnlyRevalidatedRecordingIdsAndNeverScansWholeCatalog() = runBlocking {
+        val ids = listOf("rec:two", "rec:one")
+        val seen = mutableListOf<List<String>>()
+        val sent = mutableListOf<CanonicalCollectionIntentPlan>()
+        val handoff = SmartCollectionBatchHandoff(
+            refreshIds = { ids },
+            browse = { error("Full-catalog browse is prohibited for canonical smart actions") },
+            browseSelected = { selected ->
+                seen += selected
+                CanonicalBrowseLibrary(selected.map { track(it) })
+            },
+            planner = CanonicalCollectionIntentPlanner(Resolver()),
+            submit = { sent += it; true },
+        )
+        assertEquals(SmartCollectionBatchResult.Submitted,
+            handoff.execute(
+                SmartCollectionActionSource.SavedV2Definition("revalidate"),
+                CanonicalCollectionIntent.ADD_TO_QUEUE,
+            ))
+        assertEquals(listOf(ids), seen)
+        assertEquals(ids, sent.single().selections.map { it.recordingId })
+    }
+
+    @Test fun unknownRecordingInBoundedBrowseRejectsWholeSelection() = runBlocking {
+        val ids = listOf("rec:found", "rec:missing")
+        var dispatches = 0
+        val handoff = SmartCollectionBatchHandoff(
+            refreshIds = { ids },
+            browse = { error("No full browse fallback") },
+            browseSelected = { only ->
+                assertEquals(ids, only)
+                CanonicalBrowseLibrary(listOf(track("rec:found")))
+            },
+            planner = CanonicalCollectionIntentPlanner(Resolver()),
+            submit = { dispatches++; true },
+        )
+        assertTrue(handoff.execute(
+            SmartCollectionActionSource.PreviewV2Query(
+                SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
+                    SmartPlaylistRuleOperator.GREATER_OR_EQUAL, 1.0,
+                )),
+            ),
+            CanonicalCollectionIntent.PLAY_NOW,
+        ) is SmartCollectionBatchResult.Rejected)
+        assertEquals(0, dispatches)
+    }
+
 }

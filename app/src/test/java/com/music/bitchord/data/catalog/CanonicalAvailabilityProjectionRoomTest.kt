@@ -118,4 +118,36 @@ class CanonicalAvailabilityProjectionRoomTest {
         }
     }
 
+    @Test fun selectedBrowseProjectionNeverExposesOtherRecordingsOrWrongProvider() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val db = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = db.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:chosen", "Chosen", "Artist", 150_000L))
+            dao.upsertRecording(RecordingEntity("rec:other", "Other", "Artist", 160_000L))
+            suspend fun asset(id: String, recording: String, provider: String) {
+                dao.upsertMediaAsset(MediaAssetEntity(
+                    id, recording, provider, id, "content://test/$id",
+                    null, null, null, "content://art/$id",
+                ))
+            }
+            asset("local:selected", "rec:chosen", CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
+            asset("remote:selected", "rec:chosen", "opensubsonic:active")
+            asset("local:other", "rec:other", CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
+            val rows = dao.browseAssetsForRecordingIds(
+                listOf(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, "opensubsonic:active"),
+                listOf("rec:chosen"),
+            )
+            assertEquals(listOf("local:selected", "remote:selected"), rows.map { it.mediaAssetId }.sorted())
+            assertEquals(setOf("rec:chosen"), rows.map { it.recordingId }.toSet())
+            assertEquals(setOf("Chosen"), rows.map { it.title }.toSet())
+            assertEquals(emptyList<CanonicalBrowseAssetRow>(), dao.browseAssetsForRecordingIds(
+                listOf("opensubsonic:old-account"), listOf("rec:chosen"),
+            ))
+        } finally {
+            db.close()
+        }
+    }
+
 }
