@@ -230,7 +230,8 @@ internal fun canonicalRowsWithVerifiedGroupCoverBatch(
             com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP &&
             canonicalEditorialReleaseType(row) != null
         ) verifiedGroups[row.musicBrainzId] else null
-        if (cover != null && canonicalShouldAcceptArtworkUpdate(row.artworkUri, cover))
+        if (cover != null &&
+            canonicalShouldAcceptVerifiedGroupArtwork(row.artworkUri, cover))
             row.copy(artworkUri = cover)
         else row
     }
