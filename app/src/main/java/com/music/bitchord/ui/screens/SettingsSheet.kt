@@ -1167,14 +1167,12 @@ internal fun SettingsScreen(
                     SettingsRow(
                         icon = Icons.Rounded.Language,
                         title = lyricsSourcesTitle,
+                        // The title identifies what the number counts; a
+                        // numeric value avoids 1 fontes / 1 sources in any locale.
                         subtitle = if (lyricsSources.isEmpty()) {
                             stringResource(R.string.no_lyrics_sources_enabled)
-                        } else {
-                            // The provider names and priority already have a
-                            // dedicated manager; do not print their entire list.
-                            "${lyricsSources.size} ${stringResource(R.string.source).lowercase()}"
-                        },
-                        trailing = { Chevron() },
+                        } else null,
+                        value = lyricsSourcesCountValue(lyricsSources.size),
                         onClick = onLyricsSources,
                     )
                 }
@@ -2500,6 +2498,11 @@ internal fun RowDivider() {
  * is expected; the painter wins where both are given.
  */
 @Composable
+/** Locale-independent numeric summary alongside the already localized title. */
+internal fun lyricsSourcesCountValue(enabledCount: Int): String? =
+    enabledCount.takeIf { it > 0 }?.toString()
+
+
 internal fun SettingsRow(
     icon: ImageVector? = null,
     title: String,
