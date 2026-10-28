@@ -69,3 +69,36 @@ The PR now contains a Compose V2 builder, Room 1→2 migration with unchanged V1
 **Still not Symfonium parity:** the filter field matrix is not exhaustive; genre, year, release type, composers, trustworthy album-artist credits, provider-scope rules, reference-playlist nesting, automatic reactive preview refresh, batch playback larger than 100, measured 50k Android latency/memory, physical Galaxy A54 smoke and UI review remain open. A new CI execution must finish at the exact PR HEAD to validate this checkpoint. No APK requested. Keep PR draft, no merge.
 
 The official Symfonium v15.1.0 release notes are dated 2026-09-30 but do not provide a complete, version-locked reference field matrix; full feature parity **must not** be claimed from this document.
+
+## 28/10/2026 — Trusted source / release-year filters (draft PR #193)
+
+The Android V2 engine now offers two additional fields. Both are defined from
+current **canonical evidence**; their semantics are deliberately narrower than
+an unverified one-to-one claim of Symfonium parity:
+
+- **SOURCE_KIND** (`local` / `opensubsonic`): the scope-aware Catalog availability
+  reader checks only configured and credential-eligible providers. A Recording
+  with both sources may match both positive conditions. `NOT_EQUAL` means
+  the selected source is definitely absent from the **known current active
+  source set**, not that the song never existed on that server. Unknown
+  availability is UNKNOWN, not a match. Native `sourceKey`, `MediaAssetId`,
+  credentials and provider account IDs do not enter the serialized AST.
+  UI presents a bounded source dropdown, not a free-text provider identifier.
+- **RELEASE_YEAR** (1000–9999): only MusicBrainz `releaseDate` values on
+  first-party Recording→Release links count; validates `YYYY`, `YYYY-MM`
+  and `YYYY-MM-DD` including Gregorian leap years. A Recording may be
+  linked to several Releases: positive year comparisons accept a match from
+  any known release; `NOT_EQUAL` requires every linked release to have
+  trustworthy year data and no equality. Absent, malformed or unenriched
+  release dates remain UNKNOWN. `IS_MISSING` is deliberately not offered
+  because a missing MusicBrainz cache is not proof that a release has no date.
+  Local file dates and media-added timestamps are **not** release years.
+- All new checks are Android-only and use bounded batch projections and
+  scoped source availability; no new storage migration, network fetch or
+  YouTube dependency. The benchmark test with 50k candidate Recordings
+  remains a correctness fixture, not an on-device latency measurement.
+
+Before READY: verify the Android CI on the exact new HEAD, then audit the
+remaining Symfonium 15.1.0 operator/field inventory; check account switches
+and absent MusicBrainz enrichment on Galaxy A54; measure 50k actual on-device
+latency/energy; evaluate >100 queue operations without implicit autoplay.
