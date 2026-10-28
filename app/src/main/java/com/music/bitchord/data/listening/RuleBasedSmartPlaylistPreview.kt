@@ -72,6 +72,8 @@ internal data class RuleBasedRecordingCandidate(
     val localRatingUpdatedAtEpochMs: Long? = null,
     /** An absent first-party rating is only known after the local store was queried. */
     val localRatingDateEvidenceKnown: Boolean = false,
+    /** A canonical release has an artwork URI; not evidence of a loaded correct image. */
+    val hasReleaseArtworkReference: Boolean = false,
 )
 
 internal data class RuleBasedSmartPlaylistQuery(
