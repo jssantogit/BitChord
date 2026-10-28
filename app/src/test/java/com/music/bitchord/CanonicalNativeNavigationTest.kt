@@ -359,4 +359,53 @@ class CanonicalNativeNavigationTest {
         )
         assertEquals(upgraded, unchanged)
     }
+
+    @Test fun cachedOfficialGroupTracklistCanAppearBeforeLiveBrowse() = kotlinx.coroutines.runBlocking {
+        val groupId = "group-1"
+        val official = MusicBrainzReleaseHit(
+            "official", "Get Up", "XW", "2023-07-21", "NewJeans",
+            status = "Official", releaseGroupMbid = groupId,
+        )
+        val wrongGroup = official.copy(musicBrainzId = "wrong", releaseGroupMbid = "other")
+        val bootleg = official.copy(musicBrainzId = "bootleg", status = "Bootleg")
+        val release = com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail(
+            "official", groupId, "Get Up", "NewJeans", "XW", "2023-07-21",
+            tracks = listOf(com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogTrack(
+                "track-1", "recording-1", "Super Shy", 1, 1, 155_000L,
+            )),
+        )
+        val lookups = mutableListOf<String>()
+        val selected = com.music.bitchord.ui.canonicalCachedOfficialGroupTracklist(
+            groupMbid = groupId, groupTitle = "Get Up",
+            editions = listOf(bootleg, wrongGroup, official),
+            readRelease = { id ->
+                lookups += id
+                if (id == "official") release else null
+            },
+        )
+        assertEquals("official", selected?.musicBrainzId)
+        assertEquals(listOf("official"), lookups)
+    }
+
+    @Test fun cachedTracklistRefusesMismatchedReleaseGroupOrEmptyTracklist() =
+        kotlinx.coroutines.runBlocking {
+            val groupId = "group-1"
+            val edition = MusicBrainzReleaseHit(
+                "official", "Get Up", "XW", "2023-07-21", "NewJeans",
+                status = "Official", releaseGroupMbid = groupId,
+            )
+            val wrong = com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail(
+                "official", "other-group", "Get Up", "NewJeans", null, null,
+                tracks = listOf(com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogTrack(
+                    "track", "recording", "ETA", 1, 1, null,
+                )),
+            )
+            assertNull(com.music.bitchord.ui.canonicalCachedOfficialGroupTracklist(
+                groupId, "Get Up", listOf(edition), { wrong },
+            ))
+            assertNull(com.music.bitchord.ui.canonicalCachedOfficialGroupTracklist(
+                groupId, "Get Up", listOf(edition), { wrong.copy(groupMbid = groupId,
+                    tracks = emptyList()) },
+            ))
+        }
 }
