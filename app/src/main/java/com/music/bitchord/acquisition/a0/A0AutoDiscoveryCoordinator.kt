@@ -3,9 +3,9 @@ package com.music.bitchord.acquisition.a0
 import com.music.bitchord.download.SoulseekBatchPlan
 
 /**
- * Future opt-in coordinator: one bounded DISCOVERY round per needed slot,
- * then one serial TRANSFER pass through A0AutoBatchExecutor. Results from
- * searching one album track can cover siblings; never resubmit their query.
+ * One bounded DISCOVERY round per needed slot followed immediately by its
+ * serial TRANSFER. The next slot can reuse sibling peer evidence already
+ * collected, avoiding redundant searches and album-wide discovery stalls.
  *
  * SearchPort is an exclusive login/search transport that MUST close all
  * readers and P sockets before returning. The transfer port owns a different
@@ -73,37 +73,84 @@ internal class A0AutoDiscoveryCoordinator(
         var searches=0
         if(shouldStop())return revoked(count,searches)
         val pooled=A0MultiSearchCandidateEvidence(entries,quality)
+        val statuses=ArrayList<A0AutoBatchExecutor.TrackStatus>(count)
+        val publishedPaths=HashSet<Pair<String,String>>()
+        var attempts=0
+        fun append(index:Int,status:A0AutoBatchExecutor.TrackStatus) {
+            statuses.add(status)
+            try {onSlotResolved(index,status)}catch(_:Exception){}
+        }
+        fun finish():Report=Report(searches,
+            A0AutoBatchExecutor.Report(statuses.toList(),attempts,
+                publishedPaths.toSet()))
         try {
-            // Bounded by 64 canonical slots; one query per still-uncovered
-            // track and zero duplicate searches even if peers send noise.
+            // Each search() shuts down its readers and sockets before
+            // returning. Publish this slot NOW, rather than searching an
+            // entire album first. Peer evidence already includes sibling
+            // tracks and can eliminate the next redundant search.
             for(index in entries.indices) {
-                if(shouldStop())return revoked(count,searches)
+                if(shouldStop()) {
+                    append(index,A0AutoBatchExecutor.TrackStatus.CANCELLED)
+                    for(next in index+1 until count)
+                        append(next,A0AutoBatchExecutor.TrackStatus.NOT_STARTED)
+                    break
+                }
                 val proposals=pooled.selectionPreview()
-                if(proposals.getOrNull(index)?.status==
-                    A0AutoCandidateSelectionPolicy.Status.PROVISIONAL)
-                    continue
-                searches++
-                val result=try {
-                    discovery.search(entries[index],entries,::shouldStop)
-                }catch(_:Exception) {SearchResult.Stop}
-                if(shouldStop())return revoked(count,searches)
-                when(result) {
-                    is SearchResult.Found -> pooled.add(result.choices)
-                    SearchResult.NoReply -> Unit
-                    SearchResult.Stop -> return refused(count,searches)
+                if(proposals.getOrNull(index)?.status!=
+                    A0AutoCandidateSelectionPolicy.Status.PROVISIONAL) {
+                    searches++
+                    val result=try {
+                        discovery.search(entries[index],entries,::shouldStop)
+                    }catch(_:Exception) { SearchResult.Stop }
+                    if(shouldStop()) {
+                        append(index,A0AutoBatchExecutor.TrackStatus.CANCELLED)
+                        for(next in index+1 until count)
+                            append(next,A0AutoBatchExecutor.TrackStatus.NOT_STARTED)
+                        break
+                    }
+                    when(result) {
+                        is SearchResult.Found -> pooled.add(result.choices)
+                        SearchResult.NoReply -> Unit
+                        SearchResult.Stop -> {
+                            append(index,A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW)
+                            for(next in index+1 until count)
+                                append(next,A0AutoBatchExecutor.TrackStatus.NOT_STARTED)
+                            break
+                        }
+                    }
+                }
+                val (choices,truncated)=checkNotNull(pooled.slotEvidence(index))
+                // Do not reuse a physical peer file that has already been
+                // published for another canonical sibling in this album.
+                val unique=choices.filterNot {
+                    (it.peerUsername to it.remotePath) in publishedPaths
+                }
+                val outcome=batchExecutor.run(
+                    entries=listOf(entries[index]),
+                    observedBySlot=listOf(unique),
+                    truncatedSlots=if(truncated)setOf(0) else emptySet(),
+                    profile=quality,userRequested=true,optedIn=true,
+                    isCancelled=isCancelled,stillAuthorized=stillAuthorized,
+                    onSlotResolved={_,status -> onSlotResolved(index,status)},
+                )
+                attempts+=outcome.attempts
+                publishedPaths.addAll(outcome.publishedSourceKeys)
+                val status=outcome.results.singleOrNull()
+                    ?: A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW
+                // The executor already delivered this slot's progress.
+                statuses.add(status)
+                if(status in setOf(
+                    A0AutoBatchExecutor.TrackStatus.CANCELLED,
+                    A0AutoBatchExecutor.TrackStatus.RECONCILE)) {
+                    for(next in index+1 until count)
+                        append(next,A0AutoBatchExecutor.TrackStatus.NOT_STARTED)
+                    break
                 }
             }
-            if(shouldStop())return revoked(count,searches)
+            return finish()
+        }finally {
             pooled.stop()
-            return Report(searches,batchExecutor.runFromEvidence(
-                entries,pooled,quality,
-                userRequested=true,optedIn=true,
-                isCancelled=isCancelled,stillAuthorized=stillAuthorized,
-                onSlotResolved=onSlotResolved))
-        }finally{
-            // Closing discovery cannot interrupt separate P/F sessions: those
-            // are created only after the collector is sealed.
-            try {discovery.close()}catch(_:Exception) {}
+            try {discovery.close()}catch(_:Exception){}
         }
     }
 }
