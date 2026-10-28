@@ -47,12 +47,12 @@ class ContextualSmartFilterTest {
                 SmartPlaylistRuleOperator.GREATER_THAN, value = 100_000.0),
         ))
         assertEquals(listOf("first"),
-            filterCanonicalBrowseSongs(rows, filter(rule)).map { it.recordingId })
+            filterCanonicalBrowseSongs(rows, filter(rule), "opensubsonic:current").map { it.recordingId })
         assertEquals(listOf("first", "third"),
             filterCanonicalBrowseSongs(rows, filter(SmartPlaylistRule.Comparison(
                 SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.CONTAINS,
                 textValue = "get up",
-            ))).map { it.recordingId })
+            )), "opensubsonic:current").map { it.recordingId })
     }
 
     @Test fun noImplicitPlaylistLimitOrFallbackToUnfilteredResults() {
@@ -61,19 +61,42 @@ class ContextualSmartFilterTest {
             SmartPlaylistRuleField.DURATION_MS,
             SmartPlaylistRuleOperator.IS_PRESENT,
         )
-        assertEquals(10_101, filterCanonicalBrowseSongs(rows, filter(rule)).size)
+        assertEquals(10_101, filterCanonicalBrowseSongs(rows, filter(rule), "opensubsonic:current").size)
         val forbidden = filter(SmartPlaylistRule.Comparison(
             SmartPlaylistRuleField.EXPLICIT_RATING,
             SmartPlaylistRuleOperator.IS_MISSING,
         ))
         assertThrows(IllegalArgumentException::class.java) {
-            filterCanonicalBrowseSongs(rows, forbidden)
+            filterCanonicalBrowseSongs(rows, forbidden, "opensubsonic:current")
         }
         val unknownDuration = listOf(track("missing", durationMs = null))
         assertEquals(0, filterCanonicalBrowseSongs(unknownDuration,
             filter(SmartPlaylistRule.Comparison(
                 SmartPlaylistRuleField.DURATION_MS,
                 SmartPlaylistRuleOperator.GREATER_THAN, value = 20_000.0,
-            ))).size)
+            )), "opensubsonic:current").size)
     }
+    @Test fun contextualSongFilteringRejectsMixedOrCrossAccountPlaybackAssets() {
+        val rule = filter(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+        ))
+        val valid = track("valid")
+        val fromAnotherAccount = valid.copy(
+            recordingId = "other",
+            availableAssets = listOf(CanonicalBrowseMediaAsset(
+                "asset:other", "opensubsonic:different",
+            )),
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            filterCanonicalBrowseSongs(listOf(valid, fromAnotherAccount), rule,
+                "opensubsonic:current")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            filterCanonicalBrowseSongs(listOf(valid), rule, "opensubsonic:different")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            filterCanonicalBrowseSongs(listOf(valid), rule, "")
+        }
+    }
+
 }
