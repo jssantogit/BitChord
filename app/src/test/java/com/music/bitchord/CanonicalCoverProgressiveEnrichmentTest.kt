@@ -639,4 +639,71 @@ class CanonicalCoverProgressiveEnrichmentTest {
         )
         assertEquals(null, updated.single().artworkUri)
     }
+
+    @Test fun directOfficialGroupFrontReplacesEquivalentSizeFallbackFromOtherCachedGroup() {
+        val intended = "11111111-1111-4111-8111-111111111111"
+        val previous = "https://archive.org/compilation-front-500.jpg"
+        val official = "https://archive.org/official-get-up-front-500.jpg"
+        val base = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            "recording-1", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+            "Super Shy", "NewJeans", coverGroupMbid = intended,
+        )
+        // An older Room Track edge found an unrelated compilation group
+        // while the current Recording->Official Group cover was still missing.
+        val inheritedWrongGroup = com.music.bitchord.ui.canonicalRowsWithVerifiedRecordingArt(
+            listOf(base), mapOf(base.musicBrainzId to previous),
+        ).single()
+        assertEquals(
+            com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP,
+            inheritedWrongGroup.artworkProvenance,
+        )
+        // Same-resolution images must not be treated as interchangeable:
+        // direct MusicBrainz group proof wins when its verified Front arrives.
+        val corrected = com.music.bitchord.ui.canonicalRowsWithNewVerifiedGroupArt(
+            listOf(inheritedWrongGroup), intended, official,
+        ).single()
+        assertEquals(official, corrected.artworkUri)
+        assertEquals(corrected,
+            com.music.bitchord.ui.canonicalRowsWithNewVerifiedGroupArt(
+                listOf(corrected), intended, official,
+            ).single())
+
+        // An unrelated group must never touch the recording. The same direct
+        // group may not downgrade the selected 500px sleeve to front-250.
+        assertEquals(corrected,
+            com.music.bitchord.ui.canonicalRowsWithNewVerifiedGroupArt(
+                listOf(corrected), "22222222-2222-4222-8222-222222222222",
+                "https://archive.org/foreign-front-500.jpg",
+            ).single())
+        assertEquals(corrected,
+            com.music.bitchord.ui.canonicalRowsWithNewVerifiedGroupArt(
+                listOf(corrected), intended,
+                "https://coverartarchive.org/release/abc/front-250",
+            ).single())
+    }
+
+    @Test fun warmExactGroupFrontConvergesEqualResolutionRecordingWithoutChangingTrackOwnedArt() {
+        val group = "11111111-1111-4111-8111-111111111111"
+        val album = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            group, com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP,
+            "Get Up", "NewJeans", releaseKind = "EP",
+        )
+        val song = album.copy(
+            musicBrainzId = "recording-1",
+            kind = com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+            coverGroupMbid = group,
+            artworkUri = "https://archive.org/another-group-front-500.jpg",
+            artworkProvenance =
+                com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP,
+        )
+        val owned = song.copy(musicBrainzId = "recording-own",
+            artworkUri = "content://tracks/own.jpg", artworkProvenance = null)
+        val url = "https://archive.org/verified-official-front-500.jpg"
+        val corrected = com.music.bitchord.ui.canonicalRowsWithVerifiedGroupCoverBatch(
+            listOf(album, song, owned), mapOf(group to url),
+        )
+        assertEquals(url, corrected[0].artworkUri)
+        assertEquals(url, corrected[1].artworkUri)
+        assertEquals("content://tracks/own.jpg", corrected[2].artworkUri)
+    }
 }
