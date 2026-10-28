@@ -845,10 +845,11 @@ class SmartPlaylistBatchEvidenceRoomTest {
             listening.recordingRatingDao().upsertCurrent(
                 RecordingRatingCurrentEntity("rec:one", 5.0, 5_000L),
             )
+            var eventNumber = 0
             val store = RoomListeningEventStore(
                 listening.listeningEventDao(),
                 clock = ListeningClock { 10_000L },
-                idGenerator = ListeningIdGenerator { "event:one" },
+                idGenerator = ListeningIdGenerator { "event:" + (++eventNumber) },
             )
             store.recordPlaybackStarted(PlaybackStart(recordingId = "rec:one"))
             store.recordPlaybackEnded(PlaybackEnd(
