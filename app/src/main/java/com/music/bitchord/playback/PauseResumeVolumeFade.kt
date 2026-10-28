@@ -19,8 +19,8 @@ internal class PauseResumeVolumeFade(
     private val scope: CoroutineScope,
     private val durationMs: () -> Int,
     private val overlapActive: () -> Boolean,
-    private val sessionOwner: () -> Player? = { null },
     private val clockMs: () -> Long = SystemClock::elapsedRealtime,
+    private val sessionOwner: () -> Player? = { null },
 ) {
     private var job: Job? = null
     private var owner: Player? = null
