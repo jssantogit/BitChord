@@ -81,9 +81,9 @@ class A0AutoAcquisitionExecutorTest {
         val engine=A0AutoAcquisitionExecutor(port)
         val candidates=choices("p1")
         val disabled=engine.run(target,candidates,quality,
-            userRequested=true,optedIn=false)
+            userRequested=true,optedIn=false,stillAuthorized={true})
         val untapped=engine.run(target,candidates,quality,
-            userRequested=false,optedIn=true)
+            userRequested=false,optedIn=true,stillAuthorized={true})
         assertEquals(A0AutoAcquisitionExecutor.Status.MANUAL_REVIEW,disabled.status)
         assertEquals(A0AutoAcquisitionExecutor.Status.MANUAL_REVIEW,untapped.status)
         assertEquals(0,port.fetches)
@@ -93,7 +93,7 @@ class A0AutoAcquisitionExecutorTest {
     @Test fun goodSingleCandidateFlowsThroughDecodedGateThenPublicationAndCleanup() {
         val port=FakePort().apply {decoded=this@A0AutoAcquisitionExecutorTest.decoded}
         val result=A0AutoAcquisitionExecutor(port).run(
-            target,choices("p1"),quality,userRequested=true,optedIn=true)
+            target,choices("p1"),quality,userRequested=true,optedIn=true,stillAuthorized={true})
         assertEquals(A0AutoAcquisitionExecutor.Status.PUBLISHED,result.status)
         assertEquals(1,result.attempts)
         assertEquals(1,port.inspections)
@@ -109,7 +109,7 @@ class A0AutoAcquisitionExecutorTest {
         }
         val observed=(1..3).flatMap { choices("p$it") }
         val result=A0AutoAcquisitionExecutor(port).run(
-            target,observed,quality,userRequested=true,optedIn=true)
+            target,observed,quality,userRequested=true,optedIn=true,stillAuthorized={true})
         assertEquals(A0AutoAcquisitionExecutor.Status.PUBLISHED,result.status)
         assertEquals(3,result.attempts)
         assertEquals(3,port.fetches)
@@ -123,7 +123,7 @@ class A0AutoAcquisitionExecutorTest {
         }
         val result=A0AutoAcquisitionExecutor(port).run(
             target,choices("p1")+choices("p2"),quality,
-            userRequested=true,optedIn=true)
+            userRequested=true,optedIn=true,stillAuthorized={true})
         assertEquals(A0AutoAcquisitionExecutor.Status.MANUAL_REVIEW,result.status)
         assertEquals(A0AutoAcquisitionExecutor.Reason.TECHNICAL_REJECTION,result.reason)
         assertEquals(1,port.fetches)
@@ -150,7 +150,7 @@ class A0AutoAcquisitionExecutorTest {
         val ambiguous=choices("p1")+choices("p2")
         // Different declared filesize but otherwise strongly matching title.
         val result=A0AutoAcquisitionExecutor(port).run(
-            target,ambiguous,quality,userRequested=true,optedIn=false)
+            target,ambiguous,quality,userRequested=true,optedIn=false,stillAuthorized={true})
         assertEquals(A0AutoAcquisitionExecutor.Status.MANUAL_REVIEW,result.status)
         assertEquals(0,port.fetches)
     }
@@ -162,11 +162,11 @@ class A0AutoAcquisitionExecutorTest {
         }
         val executor=A0AutoAcquisitionExecutor(port)
         val cancelled=executor.run(target,choices("p1"),quality,
-            userRequested=true,optedIn=true,isCancelled={true})
+            userRequested=true,optedIn=true,stillAuthorized={true},isCancelled={true})
         assertEquals(A0AutoAcquisitionExecutor.Status.CANCELLED,cancelled.status)
         assertEquals(0,port.fetches)
         val failure=executor.run(target,choices("p1"),quality,
-            userRequested=true,optedIn=true)
+            userRequested=true,optedIn=true,stillAuthorized={true})
         assertEquals(A0AutoAcquisitionExecutor.Status.MANUAL_REVIEW,failure.status)
         assertEquals(A0AutoAcquisitionExecutor.Reason.PUBLICATION_FAILURE,failure.reason)
         assertEquals(1,port.fetches)

@@ -79,7 +79,7 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
         userRequested:Boolean,
         optedIn:Boolean,
         isCancelled:()->Boolean={false},
-        stillAuthorized:()->Boolean={true},
+        stillAuthorized:()->Boolean,
     ):Result {
         if(!userRequested || !optedIn)return manual(Reason.NO_EXPLICIT_CONSENT)
         if(!running.compareAndSet(false,true))return manual(Reason.SINGLE_FLIGHT)
@@ -177,8 +177,10 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                                 // AFTER a durable AVAILABLE commit. Never
                                 // request the same track again automatically.
                                 sequence.cancel()
-                                return Result(Status.MANUAL_REVIEW,Reason.CLEANUP_FAILURE,
-                                    sequence.attemptsStarted)
+                                return Result(
+                                    if(result.status==Status.PUBLISHED)Status.PUBLISHED
+                                    else Status.MANUAL_REVIEW,
+                                    Reason.CLEANUP_FAILURE,sequence.attemptsStarted)
                             }
                         }
                         return result
