@@ -151,4 +151,21 @@ class ContextualSmartFilterTest {
         }
     }
 
+    @Test fun fiftyThousandSongSourceFilterPreservesAllMatchesAndOriginalOrder() {
+        val rows = (1..50_123).map { index ->
+            track("rec:%05d".format(index), if (index % 7 == 0) "Selected" else "Other")
+        }
+        val rule = filter(SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(SmartPlaylistRuleField.TITLE,
+                SmartPlaylistRuleOperator.EQUAL, textValue = "selected"),
+            SmartPlaylistRule.Comparison(SmartPlaylistRuleField.SOURCE_KIND,
+                SmartPlaylistRuleOperator.EQUAL, textValue = "opensubsonic"),
+        )))
+        val matches = filterCanonicalBrowseSongs(rows, rule, "opensubsonic:current")
+        val expected = rows.filter { it.title == "Selected" }
+        assertEquals(expected.size, matches.size)
+        assertEquals(expected.map { it.recordingId }, matches.map { it.recordingId })
+        assertEquals(expected.map { it.availableAssets }, matches.map { it.availableAssets })
+    }
+
 }
