@@ -16,24 +16,26 @@ Issue: [#192](https://github.com/jssantogit/BitChord/issues/192) · Baseline: 20
 
 ## Verified feature-level gap matrix
 
-| Capability | Symfonium evidence | BitChord main before #192 | #192 PR #193 draft (27 Oct 2026) |
+The historical baseline column is frozen at 27 October; the PR column below is updated as functionality lands. Implementation of a similarly named field is **not** proof of exact Symfonium field/operator semantics.
+
+| Capability | Symfonium evidence | BitChord main before #192 | #192 PR #193 draft (28 Oct 2026) |
 | --- | --- | --- | --- |
-| Smart playlist saved as filter definition, dynamically reevaluated | Official smart playlist docs | V1 Room definition + on-demand preview | V2 Room definitions saved, edited, deleted and re-evaluated on explicit Preview/Play/Queue; continuous/reactive UI refresh pending |
+| Smart playlist saved as filter definition, dynamically reevaluated | Official smart playlist docs | V1 Room definition + on-demand preview | V2 Room definitions saved, edited, deleted and re-evaluated on explicit Preview/Play/Queue; Room invalidation, account changes and foreground-only relative-time refresh implemented while preview is open |
 | Rule groups | Official smart-filter docs | No | Recursive Compose E/OU/NOT editor plus typed AST |
 | Nested All / Any | Official smart-filter docs | Only flat AND | Implemented in engine, Compose editor, serialized Room V2 definitions and tests |
 | Operator depends on field type | Official smart-filter docs | Hardcoded minimum numeric fields | Numeric and text operators gated by type; wider reference field inventory still pending |
 | Presence / missing tests | Official v13.6 | No | V2 engine with 3-valued unknown semantics |
-| Sort column, ascending/descending | Official smart-playlist docs | Rating/completions/id fixed | Ratings, plays, duration, last audible, title, artist, IDs and seeded random; text-sort keys cached once per candidate |
+| Sort column, ascending/descending | Official smart-playlist docs | Rating/completions/id fixed | Ratings, plays, duration, last audible, title, artist, IDs, seeded random and local rating update date; deterministic ties, PT-BR labels |
 | Maximum count | Official smart-playlist docs | 1..100 | V2 engine supports up to 10,000; policy still to validate |
 | Saved reusable smart filters | Official smart-filter docs | Saved playlists only | Pending UI/storage |
-| Album artist / Artist / Duration | Official smart-filter docs | No / No / minimum duration | Canonical display-artist text + numeric duration available; separate verified album-artist credit criteria still pending |
-| Additional track fields | Official v13.2 | No | Title and artist string comparisons; early/late user-navigation skips from first-party Listening; full inventory pending |
+| Album artist / Artist / Duration | Official smart-filter docs | No / No / minimum duration | Display artist, typed duration and album artist from canonical release artist credits implemented; exact Symfonium semantics remain unverified |
+| Additional track fields | Official v13.2 | No | Title, recording-artist credits, track number across linked releases, skips from first-party Listening, local rating/asset-added age; full reference inventory still pending |
 | Release / album title membership | Official smart filter docs; field-level comparison needs physical verification | Catalog V1 ReleaseTrack linkage exists but no playlist filter | New V2 RELEASE_TITLE filter checks all existing first-party Recording↔Release links in 400-ID batches; no guessed release; missing means no *known canonical linkage* |
-| Display artist(s), composer | Official v12.1 | No | Identity/credits provenance audit pending |
+| Display artist(s), composer | Official v12.1 | No | Display artist and canonical track/album artist credits implemented; composer blocked until source-provenanced metadata exists |
 | Original release date | Official v12.1 | No | MusicBrainz official release graph audit pending |
 | Played percentage | Official v9.1 | No | Event semantics / denominator audit pending |
 | Smart playlists referencing smart playlists | Official v9.1 | No | Pending cycle-safe definition graph |
-| Thumbnail and local thumbnail availability | Official v13.6 | No | Distinguish verified canonical artwork vs provider placeholder |
+| Thumbnail and local thumbnail availability | Official v13.6 | No | Positive-only linked-release artwork URI reference implemented; **not** a verified/loaded thumbnail or missing-artwork equivalent |
 | Inherit visible providers/libraries | Official v13.6 | No | Pending source scope policy |
 | Copy smart playlist to normal playlist | Official v13.2 | No | Pending explicit user action, never auto-persist |
 | Stable random / random albums modes | Official v12.1 | No | Deterministic seed implemented, album-group random modes pending |
@@ -46,7 +48,7 @@ Issue: [#192](https://github.com/jssantogit/BitChord/issues/192) · Baseline: 20
 - An input size of 5,001 must not silently masquerade as an empty playlist; large-catalog reads need batching and measured latency.
 - No provider cross-account data leakage, silent provider switching, YouTube fallback, or Media3 autoplay when adding to queue.
 - A release-title filter may match multiple distinct canonical Releases associated with one Recording. Positive conditions use ANY known title, negative conditions require NONE matching; the absence filter refers only to the *current catalog links*, not real-world album absence.
-- Avoid claiming equivalence for unsupported genre/year/composer/provider/codec or verified artist credits without canonical metadata and confirmed semantics.
+- Do not claim full genre/composer/codec/original-release-date/thumbnail parity without canonical metadata and field/operator evidence; release year, source category and artist credits have narrower implemented semantics.
 
 ## Reproducible reference fixtures for further comparison
 
@@ -66,7 +68,7 @@ Issue: [#192](https://github.com/jssantogit/BitChord/issues/192) · Baseline: 20
 
 The PR now contains a Compose V2 builder, Room 1→2 migration with unchanged V1 definitions, explicit copy-to-V2 workflow, persisted typed nested rules, the V2 preview/Play/Queue revalidation path, canonical recording/release-title batch reads, first-party Listening counters and rating-safe remote asset hints.
 
-**Still not Symfonium parity:** the filter field matrix is not exhaustive; genre, year, release type, composers, trustworthy album-artist credits, provider-scope rules, reference-playlist nesting, automatic reactive preview refresh, batch playback larger than 100, measured 50k Android latency/memory, physical Galaxy A54 smoke and UI review remain open. A new CI execution must finish at the exact PR HEAD to validate this checkpoint. No APK requested. Keep PR draft, no merge.
+**Still not Symfonium parity:** complete field/operator inventory, genre, composer, original release date, release type, cover absence/thumbnail provenance, global provider-scope Inherit, reference-playlist nesting, reusable saved smart filters, album/artist media scopes, measured Android latency/memory at 50k and physical Galaxy A54 smoke remain open. Up to 500 selections have automated B9/B10 validation, but long-queue restoration is bounded and physical playback is unverified. Latest HEAD CI must pass separately. Keep PR draft, no APK or merge.
 
 The official Symfonium v15.1.0 release notes are dated 2026-09-30 but do not provide a complete, version-locked reference field matrix; full feature parity **must not** be claimed from this document.
 
@@ -217,3 +219,9 @@ Primary official evidence:
 - Added `LOCAL_RATING_NEWEST` and `LOCAL_RATING_OLDEST` with nulls/unknown/future timestamps sorted last and RecordingId ties deterministic. The preview requests local timestamp evidence even if the AST itself contains no rating-age filter.
 - Android sort menu now labels the complete V2 sort set in PT-BR rather than exposing enum tokens; Room and pure-engine tests cover date ordering and missing values.
 - These are native fork first-party rating-update sort modes, not a claim of Favorite Date equivalence. Symfonium sort options still require version-locked on-device audit.
+
+## 28/10/2026 — Source-scoped local file-added age (not generic server-added date)
+
+- Added `DAYS_SINCE_LOCAL_FILE_ADDED`, using `catalog_media_asset.dateAddedSeconds` **only** for `CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER` under canonical Recording IDs. The existing configured-source snapshot must explicitly prove LOCAL eligibility; a remote-only or unknown-source Recording never matches even if stale local rows exist. No foreign-account source identifiers, URLs or native IDs enter rule JSON.
+- A Recording may have several local files. Positive numeric predicates use any known file date, negative equality requires none matching **and** no missing/invalid dates. Missing data, future timestamps or no scoped local availability are UNKNOWN; `IS_MISSING` is intentionally unavailable. Dates are validated as positive Unix seconds with overflow checking and converted to milliseconds. Time-relative rules refresh in the visible foreground preview only.
+- Added JVM tests for multiple assets, negative/NOT semantics and source availability; Room tests prove a remote OpenSubsonic timestamp is not used and NULL local dates remain UNKNOWN; foreground refresh test added. This is local MediaStore file-added time, not Symfonium provider-wide Added Date parity or original music release date.
