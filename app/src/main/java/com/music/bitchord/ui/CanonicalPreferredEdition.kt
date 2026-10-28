@@ -31,6 +31,13 @@ internal fun canonicalReleaseTracksWithArtwork(
     }
 }
 
+/** A persisted edition is usable only for its exact requested MBID and with actual tracks. */
+internal fun canonicalMatchingCachedRelease(
+    editionMbid: String,
+    cached: com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail?,
+): com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail? =
+    cached?.takeIf { it.musicBrainzId == editionMbid && it.tracks.isNotEmpty() }
+
 /**
  * Release Groups are user-facing albums/EPs/singles; Releases are editions.
  * Pick a defensible default to show the native tracklist immediately, while
