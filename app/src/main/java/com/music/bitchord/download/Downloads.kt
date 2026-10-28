@@ -1156,6 +1156,10 @@ object Downloads {
                         .associate { it.key to it.value }
                 }
                 when {
+                    outcome.unusedReservationReleased ->
+                        fail(id,"Nenhuma transferência foi iniciada. " +
+                            "Você pode tocar em Baixar novamente para repetir a busca " +
+                            "ou escolher as faixas pelo seletor manual.")
                     report.published==request.entries.size -> {
                         DownloadSession.done(id)
                         clear(id)
