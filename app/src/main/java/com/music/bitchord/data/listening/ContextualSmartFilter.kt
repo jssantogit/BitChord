@@ -1,0 +1,71 @@
+package com.music.bitchord.data.listening
+
+import com.music.bitchord.data.catalog.CanonicalBrowseTrack
+
+/**
+ * First contextual (SONGS) filter surface for a provider-scoped canonical browse.
+ * A full smart playlist preview is intentionally NOT used: it has a different
+ * global-account availability scope, a saved query limit, and more evidence.
+ *
+ * Only persisted canonical title/artist/duration are complete for this projection.
+ * Unknown ratings, last plays, credits or static playlist references must never
+ * become IS_MISSING or pass NOT. A later scoped evidence adapter can expand this
+ * whitelist without changing the saved filter schema or recording identity.
+ */
+internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalSongBrowse(): Boolean {
+    fun supported(rule: SmartPlaylistRule): Boolean = when (rule) {
+        is SmartPlaylistRule.Comparison ->
+            rule.field == SmartPlaylistRuleField.TITLE ||
+                rule.field == SmartPlaylistRuleField.ARTIST_DISPLAY ||
+                rule.field == SmartPlaylistRuleField.DURATION_MS
+        is SmartPlaylistRule.Group -> rule.children.isNotEmpty() &&
+            rule.children.all(::supported)
+        is SmartPlaylistRule.Not -> supported(rule.child)
+        is SmartPlaylistRule.Reference -> false
+    }
+    return supported(rules)
+}
+
+/**
+ * Pure, ID-preserving filter for a *pre-scoped* list of canonical recordings.
+ *
+ * Filtering runs in bounded 400-row blocks because a stored filter has no
+ * implicit 100/10,000-song cap. The result retains the provider browse order,
+ * canonical Recordings and playback assets from its input unchanged.
+ */
+internal fun filterCanonicalBrowseSongs(
+    tracks: List<CanonicalBrowseTrack>,
+    filter: SavedSmartPlaylistV2Filter,
+): List<CanonicalBrowseTrack> {
+    require(filter.isSupportedForCanonicalSongBrowse()) {
+        "This saved filter needs evidence unavailable in canonical Songs browse"
+    }
+    require(tracks.all { it.recordingId.isNotBlank() && it.availableAssets.isNotEmpty() }) {
+        "An unscoped or unidentified recording cannot enter a saved filter"
+    }
+    require(tracks.distinctBy { it.recordingId }.size == tracks.size) {
+        "Canonical browse must have one row per RecordingId"
+    }
+    val query = SmartPlaylistV2Query(
+        rules = filter.rules,
+        sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+        limit = 400,
+    )
+    val engine = SmartPlaylistV2RuleEngine()
+    return tracks.chunked(400).flatMap { chunk ->
+        val candidates = chunk.map { song ->
+            RuleBasedRecordingCandidate(
+                recordingId = song.recordingId,
+                explicitRating = null,
+                audibleCompletions = 0,
+                lastAudibleAtEpochMs = null,
+                durationMs = song.durationMs,
+                available = true,
+                title = song.title,
+                artistDisplay = song.artistDisplay,
+            )
+        }
+        val matches = engine.preview(candidates, query).mapTo(hashSetOf()) { it.recordingId }
+        chunk.filter { it.recordingId in matches }
+    }
+}
