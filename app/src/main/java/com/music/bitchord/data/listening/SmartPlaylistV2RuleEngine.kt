@@ -425,18 +425,37 @@ internal class SmartPlaylistV2RuleEngine(
     ): RuleTruth = when (rule) {
         is SmartPlaylistRule.Group -> when (rule.join) {
             SmartPlaylistRuleJoin.ALL -> {
-                val values = rule.children.map { evaluate(it, row, now, referenceMemberships) }
+                // Avoid one temporary child-truth List per Recording for large
+                // libraries; FALSE dominates UNKNOWN and ends evaluation.
+                var foundFalse = false
+                var foundUnknown = false
+                for (child in rule.children) {
+                    when (evaluate(child, row, now, referenceMemberships)) {
+                        RuleTruth.FALSE -> { foundFalse = true; break }
+                        RuleTruth.UNKNOWN -> foundUnknown = true
+                        RuleTruth.TRUE -> Unit
+                    }
+                }
                 when {
-                    RuleTruth.FALSE in values -> RuleTruth.FALSE
-                    RuleTruth.UNKNOWN in values -> RuleTruth.UNKNOWN
+                    foundFalse -> RuleTruth.FALSE
+                    foundUnknown -> RuleTruth.UNKNOWN
                     else -> RuleTruth.TRUE
                 }
             }
             SmartPlaylistRuleJoin.ANY -> {
-                val values = rule.children.map { evaluate(it, row, now, referenceMemberships) }
+                // TRUE dominates UNKNOWN; preserve unknown when nothing matches.
+                var foundTrue = false
+                var foundUnknown = false
+                for (child in rule.children) {
+                    when (evaluate(child, row, now, referenceMemberships)) {
+                        RuleTruth.TRUE -> { foundTrue = true; break }
+                        RuleTruth.UNKNOWN -> foundUnknown = true
+                        RuleTruth.FALSE -> Unit
+                    }
+                }
                 when {
-                    RuleTruth.TRUE in values -> RuleTruth.TRUE
-                    RuleTruth.UNKNOWN in values -> RuleTruth.UNKNOWN
+                    foundTrue -> RuleTruth.TRUE
+                    foundUnknown -> RuleTruth.UNKNOWN
                     else -> RuleTruth.FALSE
                 }
             }
@@ -594,42 +613,65 @@ internal class SmartPlaylistV2RuleEngine(
             }
         }
         if (rule.field.isTextField()) {
-            // One Recording may belong to several canonically linked Releases.
-            // Positive predicates match ANY recorded association; negative
-            // predicates must be true for ALL associations. Never pick a
-            // release based on title similarity or a provider native ID.
-            val values = when (rule.field) {
+            // Only a verified positive title/artist field is known. A null or
+            // blank canonical label does not prove that metadata is missing.
+            // Linked Release names can be partially unknown; negative
+            // predicates require ALL linked names to be checked.
+            val rawValues = when (rule.field) {
                 SmartPlaylistRuleField.TITLE -> listOfNotNull(row.title)
                 SmartPlaylistRuleField.ARTIST_DISPLAY -> listOfNotNull(row.artistDisplay)
                 SmartPlaylistRuleField.RELEASE_TITLE -> row.releaseTitles
-                SmartPlaylistRuleField.ALBUM_ARTIST -> emptyList()
-                SmartPlaylistRuleField.TRACK_ARTIST -> emptyList()
+                SmartPlaylistRuleField.ALBUM_ARTIST,
+                SmartPlaylistRuleField.TRACK_ARTIST,
                 SmartPlaylistRuleField.SOURCE_KIND -> emptyList()
                 else -> emptyList()
-            }.mapNotNull { it.normalizedSmartPlaylistText() }.distinct()
+            }
+            val values = rawValues.mapNotNull {
+                it.normalizedSmartPlaylistText()
+            }.distinct()
+            val incomplete = rawValues.size != rawValues.count {
+                it.normalizedSmartPlaylistText() != null
+            }
+            if ((rule.field == SmartPlaylistRuleField.TITLE ||
+                    rule.field == SmartPlaylistRuleField.ARTIST_DISPLAY) &&
+                values.isEmpty()
+            ) return RuleTruth.UNKNOWN
+
+            when (rule.operator) {
+                SmartPlaylistRuleOperator.IS_PRESENT -> return when {
+                    values.isNotEmpty() -> RuleTruth.TRUE
+                    incomplete -> RuleTruth.UNKNOWN
+                    else -> RuleTruth.FALSE
+                }
+                SmartPlaylistRuleOperator.IS_MISSING -> return when {
+                    values.isNotEmpty() -> RuleTruth.FALSE
+                    incomplete -> RuleTruth.UNKNOWN
+                    else -> RuleTruth.TRUE
+                }
+                else -> Unit
+            }
             val expected = rule.textValue.normalizedSmartPlaylistText()
-            val matches = when (rule.operator) {
-                SmartPlaylistRuleOperator.IS_PRESENT -> values.isNotEmpty()
-                SmartPlaylistRuleOperator.IS_MISSING -> values.isEmpty()
-                else -> {
-                    if (values.isEmpty() || expected == null) return RuleTruth.UNKNOWN
-                    val predicate: (String) -> Boolean = when (rule.operator) {
-                        SmartPlaylistRuleOperator.EQUAL,
-                        SmartPlaylistRuleOperator.NOT_EQUAL -> { actual -> actual == expected }
-                        SmartPlaylistRuleOperator.CONTAINS,
-                        SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> { actual -> actual.contains(expected) }
-                        SmartPlaylistRuleOperator.STARTS_WITH -> { actual -> actual.startsWith(expected) }
-                        SmartPlaylistRuleOperator.ENDS_WITH -> { actual -> actual.endsWith(expected) }
-                        else -> return RuleTruth.UNKNOWN
-                    }
-                    when (rule.operator) {
-                        SmartPlaylistRuleOperator.NOT_EQUAL,
-                        SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> values.none(predicate)
-                        else -> values.any(predicate)
-                    }
+                ?: return RuleTruth.UNKNOWN
+            if (values.isEmpty()) return RuleTruth.UNKNOWN
+            val matched = values.any { actual ->
+                when (rule.operator) {
+                    SmartPlaylistRuleOperator.EQUAL,
+                    SmartPlaylistRuleOperator.NOT_EQUAL -> actual == expected
+                    SmartPlaylistRuleOperator.CONTAINS,
+                    SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> actual.contains(expected)
+                    SmartPlaylistRuleOperator.STARTS_WITH -> actual.startsWith(expected)
+                    SmartPlaylistRuleOperator.ENDS_WITH -> actual.endsWith(expected)
+                    else -> return RuleTruth.UNKNOWN
                 }
             }
-            return if (matches) RuleTruth.TRUE else RuleTruth.FALSE
+            val negative = rule.operator == SmartPlaylistRuleOperator.NOT_EQUAL ||
+                rule.operator == SmartPlaylistRuleOperator.DOES_NOT_CONTAIN
+            return when {
+                matched -> if (negative) RuleTruth.FALSE else RuleTruth.TRUE
+                incomplete -> RuleTruth.UNKNOWN
+                negative -> RuleTruth.TRUE
+                else -> RuleTruth.FALSE
+            }
         }
         if (rule.field == SmartPlaylistRuleField.EXPLICIT_RATING &&
             row.ratingEvidenceUnknown

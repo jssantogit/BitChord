@@ -224,7 +224,7 @@ class SmartPlaylistV2RuleEngineTest {
             ),
             sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
         )
-        assertEquals(listOf("blank", "unknown"), planner.preview(input, missing).map { it.recordingId })
+        assertTrue(planner.preview(input, missing).isEmpty())
     }
 
     @Test fun unresolvedCanonicalTitleOrArtistDoesNotProveMetadataMissing() {
