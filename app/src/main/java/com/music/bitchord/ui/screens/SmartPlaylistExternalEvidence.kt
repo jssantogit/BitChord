@@ -4,6 +4,9 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccount
 import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
 import com.music.bitchord.data.listening.SmartPlaylistV2Query
+import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
+import com.music.bitchord.data.listening.referencedPlaylistIds
+import com.music.bitchord.data.listening.resolveSmartPlaylistReferences
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -45,7 +48,9 @@ internal fun smartPlaylistAccountChanges(
     .map { Unit }
 
 /** This AST visitor inspects nested ALL/ANY/NOT without depending on provider data. */
-internal fun SmartPlaylistV2Query.requiresRelativeAgeRefresh(): Boolean {
+internal fun SmartPlaylistV2Query.requiresRelativeAgeRefresh(
+    references: List<SavedSmartPlaylistV2Definition> = emptyList(),
+): Boolean {
     fun visit(node: SmartPlaylistRule): Boolean = when (node) {
         is SmartPlaylistRule.Comparison ->
             node.field == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE ||
@@ -53,8 +58,13 @@ internal fun SmartPlaylistV2Query.requiresRelativeAgeRefresh(): Boolean {
                 node.field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED
         is SmartPlaylistRule.Group -> node.children.any(::visit)
         is SmartPlaylistRule.Not -> visit(node.child)
+        is SmartPlaylistRule.Reference -> false
     }
-    return visit(rules)
+    if (visit(rules)) return true
+    if (rules.referencedPlaylistIds().isEmpty()) return false
+    return runCatching {
+        resolveSmartPlaylistReferences(this, references).any { visit(it.query.rules) }
+    }.getOrDefault(false) // A broken DAG is rejected by the actual evaluator.
 }
 
 /**
@@ -66,9 +76,10 @@ internal fun SmartPlaylistV2Query.requiresRelativeAgeRefresh(): Boolean {
 internal fun smartPlaylistRelativeAgeChanges(
     query: SmartPlaylistV2Query,
     intervalMs: Long = 15L * 60_000L,
+    references: List<SavedSmartPlaylistV2Definition> = emptyList(),
 ): Flow<Unit> {
     require(intervalMs > 0L)
-    if (!query.requiresRelativeAgeRefresh()) return emptyFlow()
+    if (!query.requiresRelativeAgeRefresh(references)) return emptyFlow()
     return flow {
         while (true) {
             delay(intervalMs)
