@@ -596,4 +596,35 @@ class CanonicalCoverProgressiveEnrichmentTest {
         assertEquals(results, com.music.bitchord.ui.canonicalRowsWithVerifiedGroupCoverBatch(
             results, mapOf(group to official)))
     }
+
+    @Test fun verified250pxWarmCacheMayStillUpgradeGroupAndItsInheritedRecordingTo500px() {
+        val group = "11111111-1111-4111-8111-111111111111"
+        val small = "https://coverartarchive.org/release/abc/front-250"
+        val large = "https://coverartarchive.org/release/abc/front-500"
+        val album = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            group, com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP,
+            "Get Up", "NewJeans", releaseKind = "EP",
+        )
+        val recording = album.copy(musicBrainzId = "recording",
+            kind = com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+            coverGroupMbid = group)
+        val warm = com.music.bitchord.ui.canonicalRowsWithVerifiedGroupCoverBatch(
+            listOf(album, recording), mapOf(group to small),
+        )
+        assertEquals(small, warm[0].artworkUri)
+        assertEquals(small, warm[1].artworkUri)
+        assertTrue(com.music.bitchord.ui.canonicalNeedsCoverRefresh(warm[0].artworkUri))
+        val upgraded = com.music.bitchord.ui.canonicalRowsWithVerifiedGroupCoverBatch(
+            warm, mapOf(group to large),
+        )
+        assertEquals(large, upgraded[0].artworkUri)
+        assertEquals(large, upgraded[1].artworkUri)
+        val downgraded = com.music.bitchord.ui.canonicalRowsWithVerifiedGroupCoverBatch(
+            upgraded, mapOf(group to small),
+        )
+        assertEquals(large, downgraded[0].artworkUri)
+        // Inherited recordings must not downgrade after their verified group
+        // sleeve has reached the larger variant.
+        assertEquals(large, downgraded[1].artworkUri)
+    }
 }
