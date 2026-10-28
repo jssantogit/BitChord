@@ -166,7 +166,7 @@ object Downloads {
     /** Bounded results only in RAM, not a second download or peer-history store. */
     private val _autoReviews=MutableStateFlow<Map<String,SoulseekAutoReviewPlan>>(emptyMap())
     /** At most one manual recovery picker per session. Protected by lock. */
-    private val openManualReviews=HashSet<String>()
+    private val openManualReviews=SoulseekManualReviewLeaseGate()
     private val _manualReviewBusy=MutableStateFlow(false)
     internal val soulseekManualReviewBusy:StateFlow<Boolean> =
         _manualReviewBusy.asStateFlow()
@@ -178,7 +178,7 @@ object Downloads {
      * Do not erase a recovery report during its own A3 publication.
      */
     internal fun clearSoulseekAutoReviews():Boolean = synchronized(lock) {
-        if(openManualReviews.isNotEmpty())return@synchronized false
+        if(openManualReviews.hasOpen)return@synchronized false
         _autoReviews.value=emptyMap()
         true
     }
@@ -192,7 +192,7 @@ object Downloads {
         if(!BuildConfig.DEBUG || BuildConfig.FLAVOR!="dev")return false
         val plan=synchronized(lock) {
             if(sessionId in running || sessionId in pending ||
-                autoRequests.isNotEmpty() || openManualReviews.isNotEmpty())return false
+                autoRequests.isNotEmpty() || openManualReviews.hasOpen)return false
             _autoReviews.value[sessionId]
         } ?: return false
         if(!plan.manualAllowed)return false
@@ -222,18 +222,21 @@ object Downloads {
                 .putExtra("bitchord.soulseek.batch.durations",
                     entries.map { it.durationSeconds ?: 0 }.toIntArray())
         }
-        synchronized(lock) {
-            if(openManualReviews.isNotEmpty() || autoRequests.isNotEmpty() ||
+        val leaseToken=synchronized(lock) {
+            if(openManualReviews.hasOpen || autoRequests.isNotEmpty() ||
                 sessionId in running || sessionId in pending ||
                 _autoReviews.value[sessionId] !== plan)return false
-            openManualReviews.add(sessionId)
+            val token=openManualReviews.reserve(sessionId) ?: return false
             _manualReviewBusy.value=true
+            token
         }
+        // Only the first Activity instance may consume this one-time token.
+        intent.putExtra("bitchord.soulseek.manual.review_token",leaseToken)
         return runCatching {
             context.startActivity(intent)
             true
         }.getOrElse {
-            closeSoulseekManualReview(sessionId)
+            closeSoulseekManualReview(sessionId,leaseToken)
             false
         }
     }
@@ -243,19 +246,23 @@ object Downloads {
      */
     internal fun validSoulseekManualReview(
         sessionId:String,
+        token:String,
         originalIndices:List<Int>,
         entries:List<SoulseekBatchPlan.Entry>,
     ):Boolean = synchronized(lock) {
-        sessionId in openManualReviews &&
-            _autoReviews.value[sessionId]?.matchesManualPayload(
-                originalIndices,entries)==true
+        if(_autoReviews.value[sessionId]?.matchesManualPayload(
+                originalIndices,entries)!=true)return@synchronized false
+        // A valid payload is necessary but never sufficient: consume exactly
+        // one use of the lease before the Activity can start a worker.
+        openManualReviews.claim(sessionId,token)
     }
 
-    /** Closed by the non-exported review Activity after its worker terminates. */
-    internal fun closeSoulseekManualReview(sessionId:String) {
+    /** Only the originating Activity may release its lease after A3 exits. */
+    internal fun closeSoulseekManualReview(sessionId:String,token:String) {
         synchronized(lock) {
-            openManualReviews.remove(sessionId)
-            _manualReviewBusy.value=openManualReviews.isNotEmpty()
+            if(openManualReviews.close(sessionId,token)) {
+                _manualReviewBusy.value=openManualReviews.hasOpen
+            }
         }
     }
 
@@ -389,7 +396,7 @@ object Downloads {
         )
         synchronized(lock) {
             // Do not overlap a manual recovery P/F with a new automatic batch.
-            if(openManualReviews.isNotEmpty())return false
+            if(openManualReviews.hasOpen)return false
             // Even after the result is cleared, evicted or cancelled, do not
             // automatically repeat the same canonical audio in this process.
             if(!autoAttemptGuard.reserve(captured))return false
