@@ -240,6 +240,46 @@ class A3AutomaticIdentityReservationTest {
         assertTrue(ledger.releaseUntransferredAutomaticBatch(listOf(first)))
     }
 
+    @Test fun legacyRetryApiMustNeverReopenFailedAutomaticPFSnapshot() {
+        val store=Store()
+        val firstProcess=A3AcquisitionLedger(store)
+        firstProcess.reserveAutomaticBatch(listOf(slot(first)))
+        firstProcess.advance(first,A3AcquisitionLedger.Phase.SEARCHING)
+        firstProcess.advance(first,A3AcquisitionLedger.Phase.AWAITING_SELECTION)
+        firstProcess.advance(first,A3AcquisitionLedger.Phase.SELECTED)
+        firstProcess.advance(first,A3AcquisitionLedger.Phase.TRANSFERRING)
+        firstProcess.advance(first,A3AcquisitionLedger.Phase.FAILED)
+        val reopened=A3AcquisitionLedger(store)
+        try {
+            reopened.retry(first)
+            fail("FAILED automatic transfer may already have published media")
+        }catch(_:IllegalStateException) {}
+        assertEquals(A3AcquisitionLedger.Phase.FAILED,reopened.get(first)?.phase)
+    }
+
+    @Test fun legacyRetryApiMustNeverReopenColdStartAutomaticReservation() {
+        val store=Store()
+        val original=A3AcquisitionLedger(store)
+        original.reserveAutomaticBatch(listOf(slot(first)))
+        val cold=A3AcquisitionLedger(store)
+        cold.interruptActiveOnColdStart()
+        try {
+            cold.retry(first)
+            fail("INTERRUPTED automatic A3 identity must not rerun")
+        }catch(_:IllegalStateException) {}
+        assertEquals(A3AcquisitionLedger.Phase.INTERRUPTED,cold.get(first)?.phase)
+    }
+
+    @Test fun legacyManualRetryRemainsAvailableAfterInterruption() {
+        val store=Store()
+        val manual=A3AcquisitionLedger(store)
+        manual.create(first)
+        val cold=A3AcquisitionLedger(store)
+        cold.interruptActiveOnColdStart()
+        cold.retry(first)
+        assertEquals(A3AcquisitionLedger.Phase.SEARCHING,cold.get(first)?.phase)
+    }
+
     @Test fun multipleUniqueSlotsReserveInOneDurableCommit() {
         val store=Store();val ledger=A3AcquisitionLedger(store)
         ledger.reserveAutomaticBatch(listOf(
