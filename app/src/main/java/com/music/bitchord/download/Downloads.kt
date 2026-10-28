@@ -1063,6 +1063,18 @@ object Downloads {
                 !it.progress.settled }
             .map { it.videoId }
         val abandoned=synchronized(lock) {
+            // IMPORTANT: inspect running BEFORE clearing it. A work item
+            // still in pending cannot have reserved an A3 job; do not poison
+            // its in-memory identity fence when this Service disappears.
+            // Claimed/idle items may have started P/F or published content.
+            val unclaimed=SoulseekAutoCancellationPolicy.unclaimedOnServiceStop(
+                autoRequestIds=autoRequests.keys.toSet(),
+                pendingIds=pending.keys.toSet(),
+                runningIds=running.keys.toSet(),
+            )
+            unclaimed.forEach { id ->
+                autoRequests[id]?.let { autoAttemptGuard.rollback(it.entries) }
+            }
             running.clear()
             val ids=autoRequests.keys.toList()
             ids.forEach { pending.remove(it) }
