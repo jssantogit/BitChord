@@ -790,6 +790,24 @@ object Downloads {
      * still know it is already on the device. A stale id costs nothing: the
      * verification in [savedUri] prunes whichever one stops resolving.
      */
+    /**
+     * A2/A3 already committed this MediaStore URI. Index it in the same
+     * persistent Downloads table used by Biblioteca → Downloads, rather than
+     * leaving a playable local file invisible to that section.
+     *
+     * Calling twice with the same ID and URI is idempotent; no new bytes,
+     * publication or P/F connection are initiated by this method.
+     */
+    internal fun rememberSoulseekPublished(
+        song:Song,
+        published:A2LocalAudioPublisher.Published,
+    ) {
+        require(published.contentUri.startsWith("content://") &&
+            published.byteCount>0L) { "Expected confirmed A3 local publication" }
+        val uri=Uri.parse(published.contentUri)
+        remember(song,song,uri,downloadFormat=published.mimeType)
+    }
+
     private fun remember(
         asked: Song,
         fetched: Song,
