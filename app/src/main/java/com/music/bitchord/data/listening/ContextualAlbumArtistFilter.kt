@@ -54,11 +54,14 @@ private fun SmartPlaylistRule.textTruth(
         } else {
             val actual = text?.trim()?.takeIf { it.isNotEmpty() }?.lowercase(Locale.ROOT)
             val wanted = textValue?.trim()?.takeIf { it.isNotEmpty() }?.lowercase(Locale.ROOT)
-            when (operator) {
-                SmartPlaylistRuleOperator.IS_PRESENT -> actual != null
-                SmartPlaylistRuleOperator.IS_MISSING -> actual == null
+            // A blank title/name in the canonical projection has no negative
+            // provenance. Neither IS_MISSING nor NOT(IS_PRESENT) can promote it
+            // to a known absence. This is separate from a verified missing field.
+            if (actual == null) null else when (operator) {
+                SmartPlaylistRuleOperator.IS_PRESENT -> true
+                SmartPlaylistRuleOperator.IS_MISSING -> false
                 else -> {
-                    if (actual == null || wanted == null) null else when (operator) {
+                    if (wanted == null) null else when (operator) {
                         SmartPlaylistRuleOperator.EQUAL -> actual == wanted
                         SmartPlaylistRuleOperator.NOT_EQUAL -> actual != wanted
                         SmartPlaylistRuleOperator.CONTAINS -> wanted in actual
