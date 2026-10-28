@@ -126,6 +126,8 @@ internal fun canonicalRecordingWithInheritedReleaseArt(
 internal fun canonicalRowsWithVerifiedRecordingArt(
     rows: List<com.music.bitchord.ui.screens.CanonicalCatalogSearchRow>,
     proven: Map<String, String>,
+    /** Stronger live Recording→ReleaseGroup proof for these exact MBIDs. */
+    directGroups: Map<String, String> = emptyMap(),
 ): List<com.music.bitchord.ui.screens.CanonicalCatalogSearchRow> =
     rows.map { row ->
         val cover = proven[row.musicBrainzId]
@@ -139,7 +141,16 @@ internal fun canonicalRowsWithVerifiedRecordingArt(
             // A verified Front must never be downgraded from 500 to 250 by
             // a late, lower-res cache batch or stale search response.
             com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP ->
-                canonicalShouldAcceptArtworkUpdate(row.artworkUri, cover)
+                canonicalShouldAcceptArtworkUpdate(row.artworkUri, cover) ||
+                    // A Room fallback can point to an older compilation
+                    // while the *direct* MusicBrainz group Front was still
+                    // unavailable. Equal 500px resolution does not make the
+                    // two groups equivalent. Only exact proof for the row's
+                    // official group may reconcile the inherited sleeve.
+                    (directGroups[row.musicBrainzId] == row.coverGroupMbid &&
+                        row.coverGroupMbid != null &&
+                        !canonicalNeedsCoverRefresh(cover) &&
+                        row.artworkUri != cover)
             null -> row.artworkUri.isNullOrBlank()
         }
         if (row.kind != com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING ||
@@ -185,7 +196,9 @@ internal fun canonicalRowsWithNewVerifiedGroupArt(
         it.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING &&
             it.coverGroupMbid == groupMbid
     }.associate { it.musicBrainzId to artwork }
-    return canonicalRowsWithVerifiedRecordingArt(rows, direct)
+    return canonicalRowsWithVerifiedRecordingArt(
+        rows, direct, directGroups = direct.keys.associateWith { groupMbid },
+    )
 }
 
 /**
@@ -199,11 +212,19 @@ internal fun canonicalRowsWithVerifiedGroupCoverBatch(
     verifiedGroups: Map<String, String>,
 ): List<com.music.bitchord.ui.screens.CanonicalCatalogSearchRow> {
     if (verifiedGroups.isEmpty()) return rows
-    val directRecordingProof = rows.asSequence().filter {
+    val directRecordingRows = rows.asSequence().filter {
         it.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING &&
             it.coverGroupMbid?.let(verifiedGroups::containsKey) == true
-    }.associate { it.musicBrainzId to verifiedGroups.getValue(it.coverGroupMbid!!) }
-    val recordingRows = canonicalRowsWithVerifiedRecordingArt(rows, directRecordingProof)
+    }.toList()
+    val directRecordingProof = directRecordingRows.associate {
+        it.musicBrainzId to verifiedGroups.getValue(it.coverGroupMbid!!)
+    }
+    val directGroups = directRecordingRows.associate {
+        it.musicBrainzId to it.coverGroupMbid!!
+    }
+    val recordingRows = canonicalRowsWithVerifiedRecordingArt(
+        rows, directRecordingProof, directGroups,
+    )
     return recordingRows.map { row ->
         val cover = if (row.kind ==
             com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP &&
