@@ -142,7 +142,7 @@ internal fun CanonicalRemoteLibraryScreen(
                 selectedFilterId == null -> CanonicalSongFilterState.Ready(library.tracks)
                 selected == null -> CanonicalSongFilterState.Failed
                 else -> CanonicalSongFilterState.Ready(withContext(Dispatchers.Default) {
-                    filterCanonicalBrowseSongs(library.tracks, selected)
+                    filterCanonicalBrowseSongs(library.tracks, selected, providerKey)
                 })
             }
         } catch (cancelled: CancellationException) {
