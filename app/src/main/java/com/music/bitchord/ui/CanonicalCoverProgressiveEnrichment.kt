@@ -24,6 +24,8 @@ internal suspend fun canonicalCachedRecordingArtForVisibleRows(
     databaseLinks: suspend (List<String>) ->
         List<com.music.bitchord.data.catalog.CanonicalRecordingCoverGroupRow>,
     cachedCover: suspend (String) -> String?,
+    /** Optional Room batch: one SQL read for many verified Front-v5 groups. */
+    cachedCovers: (suspend (List<String>) -> Map<String, String>)? = null,
 ): Map<String, String> {
     val recordings = rows.filter {
         it.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING
@@ -31,37 +33,61 @@ internal suspend fun canonicalCachedRecordingArtForVisibleRows(
     if (recordings.isEmpty()) return emptyMap()
     val proven = linkedMapOf<String, String>()
     val groupCache = mutableMapOf<String, String?>()
-    suspend fun adopt(recordingMbid: String, groupMbid: String) {
-        if (recordingMbid in proven) return
-        val thumbnail = if (groupCache.containsKey(groupMbid)) {
-            groupCache[groupMbid]
+
+    suspend fun loadGroups(groups: List<String>) {
+        val pending = groups.filter(String::isNotBlank).distinct()
+            .filterNot(groupCache::containsKey)
+        if (pending.isEmpty()) return
+        // The set of requested MBIDs is the identity boundary. A corrupt or
+        // stale batch must never associate an unexpected group with a song.
+        val fetched = if (cachedCovers != null) try {
+            cachedCovers(pending)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Batch storage can be temporarily unavailable. Fall back to
+            // individual verified cache reads without losing prior covers.
+            null
+        } else null
+        if (fetched != null) {
+            pending.forEach { groupCache[it] = fetched[it] }
         } else {
-            cachedCover(groupMbid).also { groupCache[groupMbid] = it }
+            for (id in pending) {
+                groupCache[id] = try {
+                    cachedCover(id)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    null
+                }
+            }
         }
-        if (thumbnail != null) proven[recordingMbid] = thumbnail
     }
-    // Prioritize the direct upstream Official edge: otherwise Room may pick
-    // an unrelated compilation/edition where this recording also appears.
+    fun adopt(recordingMbid: String, groupMbid: String) {
+        if (recordingMbid in proven) return
+        groupCache[groupMbid]?.let { proven[recordingMbid] = it }
+    }
+    // Direct Official Recording -> ReleaseGroup proof wins over a compilation
+    // found later via cached Room track links.
+    loadGroups(recordings.mapNotNull { it.coverGroupMbid })
     recordings.forEach { row ->
         row.coverGroupMbid?.let { adopt(row.musicBrainzId, it) }
     }
     val missing = recordings.map { it.musicBrainzId }.filterNot(proven::containsKey)
     if (missing.isNotEmpty()) {
         val eligible = missing.toSet()
-        // An unavailable Room graph is optional evidence, not a reason to
-        // discard sleeves already proven by the direct MusicBrainz edge.
-        // Cancellation still aborts navigation immediately.
         val edges = try {
-            databaseLinks(missing)
+            databaseLinks(missing).filter { it.recordingMbid in eligible }
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (_: Exception) {
+            // The optional offline graph never destroys proven direct art.
             emptyList()
         }
-        for (edge in edges) {
-            if (edge.recordingMbid in eligible)
-                adopt(edge.recordingMbid, edge.groupMbid)
-        }
+        // A second batched lookup handles only the groups that the direct
+        // upstream evidence couldn't resolve. Many tracks share one URL.
+        loadGroups(edges.map { it.groupMbid })
+        edges.forEach { adopt(it.recordingMbid, it.groupMbid) }
     }
     return proven
 }
