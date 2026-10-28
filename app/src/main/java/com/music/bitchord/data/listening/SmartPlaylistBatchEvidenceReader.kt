@@ -1,6 +1,7 @@
 package com.music.bitchord.data.listening
 
 import com.music.bitchord.data.catalog.CanonicalCatalogDao
+import com.music.bitchord.data.catalog.CanonicalLocalLibrary
 
 /**
  * Read-only evidence from existing canonical/Listening Room tables.
@@ -81,6 +82,13 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
         val artworkById = if (SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE in requiredFields) {
             catalog.recordingReleaseArtworkByIds(recordingIds).groupBy { it.recordingId }
         } else emptyMap()
+        val localAddedById = if (
+            SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED in requiredFields
+        ) {
+            catalog.localAddedDatesByRecordingIds(
+                CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, recordingIds,
+            ).groupBy { it.recordingId }
+        } else emptyMap()
         // Missing canonical metadata means the Recording cannot be promoted
         // from a provider/native id; no fake row is synthesized.
         return recordingIds.distinct().mapNotNull { id ->
@@ -91,6 +99,12 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
             val albumArtistRows = albumArtistRowsById[id].orEmpty()
             val trackPositionRows = trackPositionsById[id].orEmpty()
             val trackArtistRows = trackArtistsById[id].orEmpty()
+            val addedRows = localAddedById[id].orEmpty()
+            val addedValues = addedRows.map { row ->
+                row.dateAddedSeconds?.takeIf { second ->
+                    second > 0L && second <= Long.MAX_VALUE / 1000L
+                }?.times(1000L)
+            }
             RuleBasedRecordingCandidate(
                 recordingId = recording.id,
                 explicitRating = ratingsById[id]?.ratingValue,
@@ -128,6 +142,9 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                     SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING in requiredFields,
                 hasReleaseArtworkReference = artworkById[id].orEmpty()
                     .any { !it.artworkUri.isNullOrBlank() },
+                localAddedEpochMs = addedValues.filterNotNull().distinct().sorted(),
+                localAddedDateEvidenceUnknown = addedRows.isEmpty() ||
+                    addedValues.any { it == null },
             )
         }
     }
