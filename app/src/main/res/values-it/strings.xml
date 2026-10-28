@@ -1299,4 +1299,6 @@
     <string name="playback_recovery_retry">Riprova</string>
     <string name="playback_recovery_retrying">Nuovo tentativo…</string>
     <string name="playback_recovery_dismiss">Chiudi</string>
+    <string name="pause_resume_fade">Dissolvenza in pausa e ripresa</string>
+    <string name="pause_resume_fade_subtitle">Riduce gradualmente il volume in pausa e lo aumenta alla ripresa</string>
 </resources>
