@@ -89,7 +89,7 @@ internal fun filterCanonicalBrowseSongs(
         val candidates = chunk.map { song ->
             val timestamps = localAddedDatesByRecording?.get(song.recordingId)
             val validTimestamps = timestamps.orEmpty().mapNotNull { seconds ->
-                seconds?.takeIf { it in 0L..(Long.MAX_VALUE / 1_000L) }
+                seconds?.takeIf { it in 1L..(Long.MAX_VALUE / 1_000L) }
                     ?.times(1_000L)
             }
             val timestampsUnknown = timestamps == null ||
