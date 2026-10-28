@@ -3629,7 +3629,11 @@ private fun BitChordApp(
                     transparentBackdrop = true,
                     artworkPageChrome = true,
                     showActions = !homeRootVisible,
-                    showScrolledTitle = homeRootVisible,
+                    // The generic top bar scroll flag flips after 24px,
+                    // while the large Home heading is still fully legible.
+                    // Only show its compact replacement when item 0 has left
+                    // the LazyColumn viewport.
+                    showScrolledTitle = homeRootVisible && homeListState.firstVisibleItemIndex > 0,
                     backButtonHazeState = hazeState,
                     trailingTitle = if (detail != null && detailActiveShelf != null) detail.title else null,
                     // Search has no large in-list header to hand the title back to —
