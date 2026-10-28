@@ -104,9 +104,23 @@ internal fun canonicalRowsWithVerifiedRecordingArt(
 ): List<com.music.bitchord.ui.screens.CanonicalCatalogSearchRow> =
     rows.map { row ->
         val cover = proven[row.musicBrainzId]
+        // A release lookup is only a provisional inherited sleeve, not an
+        // independently owned per-track picture. A later proven group Front
+        // supersedes it irrespective of HTTP completion order.
+        val inherited = row.artworkProvenance in setOf(
+            com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE,
+            com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP,
+        )
         if (row.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING &&
-            row.artworkUri.isNullOrBlank() && cover != null
-        ) row.copy(artworkUri = cover) else row
+            cover != null && (row.artworkUri.isNullOrBlank() || inherited) &&
+            (row.artworkUri != cover ||
+                row.artworkProvenance !=
+                    com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP)
+        ) row.copy(
+            artworkUri = cover,
+            artworkProvenance =
+                com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP,
+        ) else row
     }
 
 
