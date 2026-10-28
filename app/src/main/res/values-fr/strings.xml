@@ -1361,4 +1361,6 @@
     <string name="playback_recovery_retry">Réessayer</string>
     <string name="playback_recovery_retrying">Nouvelle tentative…</string>
     <string name="playback_recovery_dismiss">Fermer</string>
+    <string name="pause_resume_fade">Fondu à la pause et à la reprise</string>
+    <string name="pause_resume_fade_subtitle">Diminue progressivement le volume à la pause et le rétablit à la reprise</string>
 </resources>
