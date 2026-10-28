@@ -41,6 +41,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,6 +64,8 @@ import com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel
 import com.music.bitchord.download.DownloadProgress
 import com.music.bitchord.download.DownloadSession
 import com.music.bitchord.download.Downloads
+import com.music.bitchord.download.SoulseekAutoReviewPlan
+import com.music.bitchord.acquisition.a0.A0AutoBatchExecutor
 import com.music.bitchord.ui.haptics.Haptic
 import com.music.bitchord.ui.haptics.rememberHaptics
 
@@ -194,6 +200,7 @@ fun TopBarDownloadButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val session by DownloadSession.state.collectAsStateWithLifecycle()
+    val autoReviews by Downloads.soulseekAutoReviews.collectAsStateWithLifecycle()
     // Newest ask last, the order the queue will actually reach them in.
     val items = remember(session.items) { session.items.sortedBy { it.sequence } }
 
@@ -235,6 +242,7 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
             } else {
                 TextButton(
                     onClick = {
+                        Downloads.clearSoulseekAutoReviews()
                         DownloadSession.clear()
                         onDismiss()
                     },
@@ -272,8 +280,16 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
             items(items, key = { it.videoId }) { item ->
                 DownloadManagerRow(
                     item = item,
+                    review = autoReviews[item.videoId],
                     onCancel = { Downloads.cancel(item.videoId) },
                     onRetry = { Downloads.enqueue(context, item.song, item.from) },
+                    onManualReview = {
+                        if (!Downloads.openSoulseekManualReview(context,item.videoId)) {
+                            Toast.makeText(context,
+                                "Revisão indisponível. Verifique os arquivos e a conta Soulseek.",
+                                Toast.LENGTH_LONG).show()
+                        }
+                    },
                 )
             }
         }
@@ -285,11 +301,14 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
 @Composable
 private fun DownloadManagerRow(
     item: DownloadSession.Item,
+    review: SoulseekAutoReviewPlan?,
     onCancel: () -> Unit,
     onRetry: () -> Unit,
+    onManualReview: () -> Unit,
 ) {
     val progress = item.progress
     val failed = progress as? DownloadProgress.Failed
+    var showSlots by remember(item.videoId) { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
@@ -384,6 +403,48 @@ private fun DownloadManagerRow(
                 is DownloadProgress.Done -> RowStatus(stringResource(R.string.saved_to_bitchord_folder))
                 is DownloadProgress.Failed ->
                     RowStatus(progress.reason, MaterialTheme.colorScheme.error)
+            }
+            if(review != null && progress.settled) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "${review.published} salvas · ${review.needsManualReview} para revisão" +
+                        (if(review.needsReconciliation>0)
+                            " · ${review.needsReconciliation} incerta(s)" else "") +
+                        (if(review.cancelled+review.notStarted>0)
+                            " · ${review.cancelled+review.notStarted} interrompida(s)" else ""),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = { showSlots = !showSlots }) {
+                    Text(if(showSlots) "Ocultar faixas" else "Ver resultado por faixa")
+                }
+                if(showSlots) {
+                    review.rows.forEachIndexed { index,row ->
+                        val state=when(row.status) {
+                            A0AutoBatchExecutor.TrackStatus.PUBLISHED -> "Salva"
+                            A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW -> "Revisão manual"
+                            A0AutoBatchExecutor.TrackStatus.RECONCILE -> "Verificar armazenamento"
+                            A0AutoBatchExecutor.TrackStatus.CANCELLED -> "Cancelada"
+                            A0AutoBatchExecutor.TrackStatus.NOT_STARTED -> "Não iniciada"
+                        }
+                        Text(
+                            "${index+1}. ${row.entry.query} · ${state}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                if(review.manualAllowed && failed!=null) {
+                    TextButton(onClick = onManualReview) {
+                        Text("Revisar ${review.manualEntries.size} faixa(s) manualmente")
+                    }
+                } else if(review.needsReconciliation>0) {
+                    Text("Confira a biblioteca e os arquivos antes de repetir qualquer transferência.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error)
+                }
             }
         }
         Spacer(Modifier.width(8.dp))
