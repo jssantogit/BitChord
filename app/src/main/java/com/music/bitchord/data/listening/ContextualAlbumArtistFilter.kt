@@ -39,6 +39,7 @@ internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalAlbumBrowse(): Bo
         SmartPlaylistRuleField.RELEASE_TITLE,
         SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
         SmartPlaylistRuleField.RELEASE_YEAR,
+        SmartPlaylistRuleField.ALBUM_ARTIST,
         SmartPlaylistRuleField.SOURCE_KIND,
     ))
 
@@ -55,6 +56,7 @@ private fun SmartPlaylistRule.textTruth(
     artworkReference: String? = null,
     sourceKind: SmartPlaylistSourceKind? = null,
     releaseYear: Int? = null,
+    albumArtistNames: List<String?>? = null,
 ): Boolean? = when (this) {
     is SmartPlaylistRule.Comparison -> {
         if (this.field == SmartPlaylistRuleField.SOURCE_KIND) {
@@ -65,6 +67,43 @@ private fun SmartPlaylistRule.textTruth(
                     SmartPlaylistRuleOperator.EQUAL -> equal
                     SmartPlaylistRuleOperator.NOT_EQUAL -> !equal
                     else -> null
+                }
+            }
+        } else if (this.field == SmartPlaylistRuleField.ALBUM_ARTIST) {
+            val valid = albumArtistNames.orEmpty().mapNotNull {
+                it?.trim()?.takeIf(String::isNotEmpty)?.lowercase(Locale.ROOT)
+            }
+            val incomplete = albumArtistNames.isNullOrEmpty() ||
+                valid.size != albumArtistNames.size
+            if (operator == SmartPlaylistRuleOperator.IS_PRESENT) {
+                if (valid.isNotEmpty()) true else null
+            } else {
+                val wanted = textValue?.trim()?.lowercase(Locale.ROOT)
+                if (valid.isEmpty() || wanted.isNullOrEmpty()) null else {
+                    val found = valid.any { name ->
+                        when (operator) {
+                            SmartPlaylistRuleOperator.EQUAL,
+                            SmartPlaylistRuleOperator.NOT_EQUAL -> name == wanted
+                            SmartPlaylistRuleOperator.CONTAINS,
+                            SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> wanted in name
+                            SmartPlaylistRuleOperator.STARTS_WITH -> name.startsWith(wanted)
+                            SmartPlaylistRuleOperator.ENDS_WITH -> name.endsWith(wanted)
+                            else -> false
+                        }
+                    }
+                    when (operator) {
+                        SmartPlaylistRuleOperator.NOT_EQUAL,
+                        SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> when {
+                            found -> false
+                            incomplete -> null
+                            else -> true
+                        }
+                        else -> when {
+                            found -> true
+                            incomplete -> null
+                            else -> false
+                        }
+                    }
                 }
             }
         } else if (this.field == SmartPlaylistRuleField.RELEASE_YEAR) {
@@ -109,10 +148,10 @@ private fun SmartPlaylistRule.textTruth(
         }
     }
     is SmartPlaylistRule.Not ->
-        child.textTruth(field, text, artworkReference, sourceKind, releaseYear)?.not()
+        child.textTruth(field, text, artworkReference, sourceKind, releaseYear, albumArtistNames)?.not()
     is SmartPlaylistRule.Reference -> null
     is SmartPlaylistRule.Group -> {
-        val values = children.map { it.textTruth(field, text, artworkReference, sourceKind, releaseYear) }
+        val values = children.map { it.textTruth(field, text, artworkReference, sourceKind, releaseYear, albumArtistNames) }
         when (join) {
             SmartPlaylistRuleJoin.ALL -> when {
                 false in values -> false
@@ -134,6 +173,7 @@ internal fun filterCanonicalBrowseAlbums(
     filter: SavedSmartPlaylistV2Filter,
     providerKey: String? = null,
     releaseYears: Map<String, Int> = emptyMap(),
+    albumArtistCredits: Map<String, List<String?>> = emptyMap(),
 ): List<ReleaseEntity> {
     require(filter.isSupportedForCanonicalAlbumBrowse()) {
         "This saved filter needs unsupported Album evidence"
@@ -150,6 +190,7 @@ internal fun filterCanonicalBrowseAlbums(
             release.artworkUri,
             verifiedContextualSourceKind(providerKey),
             releaseYears[release.id],
+            albumArtistCredits[release.id],
         ) == true
     }
 }
@@ -235,7 +276,15 @@ internal class CanonicalContextualFilterLibrary(
                 evidence.releaseId to year
             }.toMap()
         } else emptyMap()
-        return filterCanonicalBrowseAlbums(releases, filter, providerKey, years)
+        val albumArtistCredits = if (SmartPlaylistRuleField.ALBUM_ARTIST in
+            filter.rules.referencedFields()) {
+            releases.map { it.id }.chunked(400).flatMap { ids ->
+                catalog.canonicalReleaseArtistNamesByIds(ids)
+            }.groupBy({ it.releaseId }, { it.artistName })
+        } else emptyMap()
+        return filterCanonicalBrowseAlbums(
+            releases, filter, providerKey, years, albumArtistCredits,
+        )
     }
 
     suspend fun artists(
