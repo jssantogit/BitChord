@@ -165,6 +165,32 @@ internal fun canonicalRowsWithNewVerifiedGroupArt(
 }
 
 /**
+ * Offline-first warm paint: one indexed Front-v5 cache read can satisfy album
+ * cards and sibling recordings in one immutable state update, with no CAA
+ * metadata network request. Only the exact group MBID can be inherited;
+ * an individually owned recording image is never overwritten.
+ */
+internal fun canonicalRowsWithVerifiedGroupCoverBatch(
+    rows: List<com.music.bitchord.ui.screens.CanonicalCatalogSearchRow>,
+    verifiedGroups: Map<String, String>,
+): List<com.music.bitchord.ui.screens.CanonicalCatalogSearchRow> {
+    if (verifiedGroups.isEmpty()) return rows
+    val directRecordingProof = rows.asSequence().filter {
+        it.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING &&
+            it.coverGroupMbid in verifiedGroups
+    }.associate { it.musicBrainzId to verifiedGroups.getValue(it.coverGroupMbid!!) }
+    val recordingRows = canonicalRowsWithVerifiedRecordingArt(rows, directRecordingProof)
+    return recordingRows.map { row ->
+        val cover = if (row.kind ==
+            com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP
+        ) verifiedGroups[row.musicBrainzId] else null
+        if (cover != null && canonicalShouldAcceptArtworkUpdate(row.artworkUri, cover))
+            row.copy(artworkUri = cover)
+        else row
+    }
+}
+
+/**
  * Deliver verified covers as soon as each independent lookup finishes.
  *
  * Waiting for the entire CAA wave previously made a quick 500px cover wait
