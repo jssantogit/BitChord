@@ -93,7 +93,14 @@ internal class A3AcquisitionLedger(private val store:Store) {
         requests:List<AutomaticSlot>,
         /** Serialized by SoulseekActiveSession generation on Android. */
         commitGuard:((()->Unit)->Unit)={ action -> action() },
-    ):Unit=synchronized(lock) {
+    ):Unit {
+        // Lock order must match A3 AVAILABLE: Soulseek generation -> A3.
+        // Never acquire the generation gate while holding the A3 monitor.
+        var invoked=false
+        commitGuard {
+            check(!invoked) { "A3 auto reservation guard invoked twice" }
+            invoked=true
+            synchronized(lock) {
         require(requests.size in 1..64) { "A3 auto album size invalid" }
         require(requests.map { it.id }.distinct().size==requests.size)
         require(requests.all { slot ->
@@ -141,7 +148,11 @@ internal class A3AcquisitionLedger(private val store:Store) {
         rows.forEach { retained[it.id]=it }
         // Any failed commit leaves both the old in-memory map AND the salt
         // unchanged; never mint a new key over old durable reservations.
-        commitGuard { commit(retained,salt) }
+        commit(retained,salt)
+            }
+        }
+        // A no-op authorization callback is NOT permission to proceed.
+        check(invoked) { "A3 auto reservation was never authorized" }
     }
 
     private fun fingerprint(salt:String,kind:String,vararg values:String):String {
