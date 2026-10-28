@@ -110,4 +110,22 @@ class SmartPlaylistV2ReferencesTest {
             all, root, graph, SmartPlaylistV2RuleEngine { 900_000L },
         ).map { it.recordingId })
     }
+
+    @Test fun graphLimitCountsUniqueReferencesNotRepeatedSharedNodes() {
+        val savedDefinitions = (1..64).map { index ->
+            saved("p$index", comparison(1.0))
+        }
+        val root = query(SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY,
+            (1..64).map { SmartPlaylistRule.Reference("p$it") } +
+                SmartPlaylistRule.Reference("p1"),
+        ))
+        assertEquals(64, resolveSmartPlaylistReferences(root, savedDefinitions).size)
+        val tooMany = query(SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY,
+            (1..65).map { SmartPlaylistRule.Reference("p$it") },
+        ))
+        assertThrows(IllegalArgumentException::class.java) {
+            resolveSmartPlaylistReferences(tooMany,
+                savedDefinitions + saved("p65", comparison(1.0)))
+        }
+    }
 }
