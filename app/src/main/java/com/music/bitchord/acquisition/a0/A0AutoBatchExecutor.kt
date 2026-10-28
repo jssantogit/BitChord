@@ -8,11 +8,11 @@ import com.music.bitchord.download.SoulseekBatchPlan
  * Reuses A0AutoAcquisitionExecutor for a single track or 2..64 tracks;
  * already-discovered sibling offers are passed per canonical slot. Missing
  * or ambiguous slots are left for manual review without blocking successfully
- * published siblings. A future Service adapter MUST supply a fresh, exclusive
+ * published siblings. The guarded devDebug service adapter supplies a fresh, exclusive
  * authenticated transport through the Port factory per slot.
  *
- * No discovery or network is started by this class. It is not registered with
- * the running Android service yet, so AUTO remains OFF in production.
+ * No discovery or network is started by this class directly. It is
+ * composed by the opt-in devDebug foreground queue, never production.
  */
 internal class A0AutoBatchExecutor(
     private val portForTrack:(SoulseekBatchPlan.Entry)->A0AutoAcquisitionExecutor.Port,
