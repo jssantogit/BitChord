@@ -8,6 +8,18 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+/** Single lifecycle markers: no per-frame telemetry and no track identity. */
+internal enum class PauseResumeFadeEvent(val wireName: String) {
+    FADE_IN_STARTED("in_started"),
+    FADE_IN_COMPLETED("in_completed"),
+    FADE_OUT_STARTED("out_started"),
+    FADE_OUT_COMPLETED("out_completed"),
+    CANCELED("canceled"),
+    ENDED_BEFORE_AUDIBLE("ended_before_audible"),
+    HANDOFF_PAUSED("handoff_paused"),
+    PLAY_REJECTED("play_rejected"),
+}
+
 /**
  * A transport-only volume envelope. It never changes sample data, AudioTrack format or
  * playback speed. The current session deck is its sole owner; a real two-deck overlap
@@ -21,6 +33,7 @@ internal class PauseResumeVolumeFade(
     private val overlapActive: () -> Boolean,
     private val clockMs: () -> Long = SystemClock::elapsedRealtime,
     private val sessionOwner: () -> Player? = { null },
+    private val onEvent: (PauseResumeFadeEvent, Int) -> Unit = { _, _ -> },
 ) {
     private var job: Job? = null
     private var owner: Player? = null
@@ -49,11 +62,13 @@ internal class PauseResumeVolumeFade(
         try {
             target.play()
         } catch (failure: RuntimeException) {
+            onEvent(PauseResumeFadeEvent.PLAY_REJECTED, duration)
             // A stale/released player can reject play synchronously. Never strand
             // its last audio route at zero gain while the owner is being replaced.
             reset()
             throw failure
         }
+        onEvent(PauseResumeFadeEvent.FADE_IN_STARTED, duration)
         job = scope.launch {
             // Buffering cannot consume the fade: wait until the decoder is audible.
             while (isActive && target.playWhenReady && !target.isPlaying && !overlapActive()) {
@@ -61,6 +76,7 @@ internal class PauseResumeVolumeFade(
                 // playWhenReady stays true. Restore gain rather than pinning mute.
                 if (target.playbackState == Player.STATE_ENDED) {
                     target.volume = 1f
+                    onEvent(PauseResumeFadeEvent.ENDED_BEFORE_AUDIBLE, duration)
                     return@launch
                 }
                 delay(FRAME_MS)
@@ -83,7 +99,10 @@ internal class PauseResumeVolumeFade(
                 if (elapsed >= duration) break
                 delay(FRAME_MS)
             }
-            if (isActive && !overlapActive()) target.volume = 1f
+            if (isActive && !overlapActive()) {
+                target.volume = 1f
+                onEvent(PauseResumeFadeEvent.FADE_IN_COMPLETED, duration)
+            }
         }
     }
 
@@ -102,6 +121,7 @@ internal class PauseResumeVolumeFade(
         interrupt(keep = target)
         owner = target
         fadingIn = false
+        onEvent(PauseResumeFadeEvent.FADE_OUT_STARTED, duration)
         job = scope.launch {
             val start = clockMs()
             while (isActive) {
@@ -110,6 +130,7 @@ internal class PauseResumeVolumeFade(
                     // Preserve the PAUSE intent on the new owner as well as the old deck.
                     target.pause()
                     sessionOwner()?.takeIf { it !== target }?.pause()
+                    onEvent(PauseResumeFadeEvent.HANDOFF_PAUSED, duration)
                     return@launch
                 }
                 if (!target.playWhenReady) {
@@ -125,6 +146,7 @@ internal class PauseResumeVolumeFade(
                 // Only the player's own playhead is paused; resume starts from here.
                 target.pause()
                 target.volume = 1f
+                onEvent(PauseResumeFadeEvent.FADE_OUT_COMPLETED, duration)
             }
         }
     }
@@ -136,6 +158,9 @@ internal class PauseResumeVolumeFade(
     fun reset() = interrupt(keep = null)
 
     private fun interrupt(keep: Player?) {
+        if (job?.isActive == true) {
+            onEvent(PauseResumeFadeEvent.CANCELED, PauseResumeFadeCurve.normalizeDuration(durationMs()))
+        }
         job?.cancel()
         job = null
         val previous = owner
