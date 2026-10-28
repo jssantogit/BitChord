@@ -1147,6 +1147,7 @@ object Downloads {
         context:Context,id:String,request:AutoRequest,
     ) {
         val job=currentCoroutineContext()[Job]
+        var unusedReservationConfirmed=false
         _active.update { it + (id to DownloadState.Running(0f)) }
         DownloadSession.running(id,0f)
         try {
@@ -1173,6 +1174,7 @@ object Downloads {
                         synchronized(lock) {
                             autoAttemptGuard.rollback(request.entries)
                         }
+                        unusedReservationConfirmed=true
                     },
                 )
                 val report=outcome.batch
@@ -1212,7 +1214,11 @@ object Downloads {
                 "Confira a biblioteca antes de baixar novamente; " +
                 "para revisão explícita, desative a automação.")
         }catch(_:Exception) {
-            fail(id,"Aquisição automática interrompida; confira a biblioteca e use o modo manual.")
+            fail(id,if(unusedReservationConfirmed)
+                "Busca interrompida antes de iniciar a transferência. " +
+                    "Você pode tocar em Baixar novamente para pesquisar."
+            else
+                "Aquisição automática interrompida; confira a biblioteca e use o modo manual.")
         }
     }
 
