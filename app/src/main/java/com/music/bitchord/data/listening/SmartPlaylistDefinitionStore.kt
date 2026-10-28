@@ -58,13 +58,18 @@ internal interface SmartPlaylistDefinitionDao {
  * its migrations, playback state, or provider-owned playlist storage.
  */
 @Database(
-    entities = [SmartPlaylistDefinitionEntity::class, SmartPlaylistV2DefinitionEntity::class],
-    version = 2,
+    entities = [
+        SmartPlaylistDefinitionEntity::class,
+        SmartPlaylistV2DefinitionEntity::class,
+        SmartPlaylistV2FilterEntity::class,
+    ],
+    version = 3,
     exportSchema = false,
 )
 internal abstract class SmartPlaylistDefinitionDatabase : RoomDatabase() {
     abstract fun definitionDao(): SmartPlaylistDefinitionDao
     abstract fun v2DefinitionDao(): SmartPlaylistV2DefinitionDao
+    abstract fun v2FilterDao(): SmartPlaylistV2FilterDao
 
     internal companion object {
         private const val DATABASE_NAME = "smart-playlist-definitions.db"
@@ -84,6 +89,20 @@ internal abstract class SmartPlaylistDefinitionDatabase : RoomDatabase() {
                 """.trimIndent())
             }
         }
+        /** Filters are separate from playlist definitions and never rewrite V1/V2 rows. */
+        internal val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `smart_playlist_v2_filter` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `schemaVersion` INTEGER NOT NULL,
+                        `rulesJson` TEXT NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                """.trimIndent())
+            }
+        }
         @Volatile private var instance: SmartPlaylistDefinitionDatabase? = null
 
         fun get(context: Context): SmartPlaylistDefinitionDatabase =
@@ -92,7 +111,7 @@ internal abstract class SmartPlaylistDefinitionDatabase : RoomDatabase() {
                     context.applicationContext,
                     SmartPlaylistDefinitionDatabase::class.java,
                     DATABASE_NAME,
-                ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
             }
     }
 }
