@@ -116,6 +116,7 @@ class SmartPlaylistV2WizardComposeTest {
         }
         compose.onNodeWithText("Continuar").performClick()
         compose.onNodeWithText("Grupo 1").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
         compose.onNodeWithText("+ Adicionar condição").performClick()
         compose.onNodeWithText("Adicionar condição").assertExists()
         compose.onNodeWithText("Músicas e metadados").performClick()
