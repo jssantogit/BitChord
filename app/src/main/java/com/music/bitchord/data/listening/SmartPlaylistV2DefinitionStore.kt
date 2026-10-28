@@ -59,6 +59,9 @@ internal class SmartPlaylistV2DefinitionRepository(
         require(definition.id.isNotBlank() && definition.id.length <= 100)
         val name = definition.name.trim()
         require(name.isNotEmpty() && name.length <= 80)
+        // Reject dangling or cyclic references before the Room write. This also
+        // prevents an edit from creating a cycle through existing definitions.
+        validateSmartPlaylistReferencesOnSave(definition, list())
         val payload = json.encodeToString(definition.query)
         require(payload.length <= 32_768) { "Playlist rule graph is too large" }
         dao.upsert(SmartPlaylistV2DefinitionEntity(
@@ -76,6 +79,7 @@ internal class SmartPlaylistV2DefinitionRepository(
 
     suspend fun remove(id: String) {
         require(id.isNotBlank())
+        validateSmartPlaylistReferenceDeletion(id, list())
         dao.remove(id)
     }
 
