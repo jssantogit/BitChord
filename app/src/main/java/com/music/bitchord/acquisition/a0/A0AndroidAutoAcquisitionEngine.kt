@@ -12,6 +12,7 @@ import com.music.bitchord.download.A3AutomaticReservationScope
 import java.util.UUID
 import java.io.IOException
 import com.music.bitchord.download.SoulseekBatchPlan
+import com.music.bitchord.data.model.Song
 
 /**
  * App-private opt-in, independent of format/quality preferences. Defaults OFF
@@ -57,6 +58,7 @@ internal object A0AndroidAutoAcquisitionEngine {
         onSlotResolved:(Int,A0AutoBatchExecutor.TrackStatus)->Unit={ _,_ -> },
         /** Only invoked AFTER A3 durably proves zero P/F for the whole album. */
         onUnusedReservationReleased:()->Unit={},
+        sourceSongs:List<Song> = emptyList(),
     ):A0AutoDiscoveryCoordinator.Report {
         val app=context.applicationContext
         // Zero socket, vault and journal calls until the user opts in AND
@@ -139,6 +141,13 @@ internal object A0AndroidAutoAcquisitionEngine {
                         A0FreshAuthenticatedAutoTransport(app,generation),
                         jobId=checkNotNull(jobs[entry.trackId]),
                         reservedAutomatic=true,
+                        sourceSong=sourceSongs.firstOrNull { it.videoId==entry.trackId }
+                            ?: Song(
+                                videoId=entry.trackId,
+                                title=entry.query.substringAfter(" - ",entry.query),
+                                artist=entry.query.substringBefore(" - ","Artista"),
+                                thumbnailUrl=null,albumName=entry.album,
+                            ),
                     )
                 }
                 A0AutoDiscoveryCoordinator(discovery,executor).run(
