@@ -30,6 +30,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.BuildConfig
+import com.music.bitchord.acquisition.a0.A0AndroidAutoConsent
+import com.music.bitchord.acquisition.a0.SoulseekActiveSession
 import com.music.bitchord.acquisition.a0.SoulseekAccountProbe
 import com.music.bitchord.acquisition.a0.SoulseekCredentialVault
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +67,7 @@ internal fun SoulseekAccountSettingsScreen(contentPadding: PaddingValues) {
         )
     }
     val pilot = BuildConfig.FLAVOR == "dev" && BuildConfig.DEBUG
+    var automatic by remember { mutableStateOf(pilot && A0AndroidAutoConsent.enabled(context)) }
 
     // Prevent screenshots and Android recents thumbnails while a password can be typed.
     val activity = context as? Activity
@@ -195,6 +198,37 @@ internal fun SoulseekAccountSettingsScreen(contentPadding: PaddingValues) {
                 enabled = !busy,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Conectar e salvar conta") }
+            Text(
+                "Seleção automática de candidatos (experimental). Desligada por padrão. " +
+                    "Ao tocar em Baixar, só candidatos de alta confiança podem ser " +
+                    "transferidos; faixas incertas continuam manuais. " +
+                    "O protocolo Soulseek utiliza TCP sem TLS.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            androidx.compose.foundation.layout.Row {
+                Checkbox(
+                    checked = automatic,
+                    enabled = !busy,
+                    onCheckedChange = { requested ->
+                        if (requested && (savedUsername == null || !acknowledged)) {
+                            status = "Configure a conta dedicada e confirme o aviso TCP antes de ativar."
+                        } else {
+                            if (!requested) SoulseekActiveSession.revoke()
+                            val committed = A0AndroidAutoConsent.updateFromUserAction(context, requested)
+                            automatic = A0AndroidAutoConsent.enabled(context)
+                            status = if (!committed || automatic != requested) {
+                                "Não foi possível confirmar a alteração. Confira o estado exibido."
+                            } else if (requested) {
+                                "Automação habilitada apenas no piloto devDebug; nenhuma busca iniciada."
+                            } else "Automação desligada; seleções manuais preservadas."
+                        }
+                    },
+                )
+                Text(
+                    if (automatic) "Seleção automática: ligada" else "Seleção automática: desligada",
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
             if (savedUsername != null) {
                 OutlinedButton(
                     onClick = { confirmForget = true },
@@ -213,6 +247,8 @@ internal fun SoulseekAccountSettingsScreen(contentPadding: PaddingValues) {
             confirmButton = {
                 TextButton(onClick = {
                     vault.forget()
+                    A0AndroidAutoConsent.updateFromUserAction(context, false)
+                    automatic = false
                     savedUsername = null
                     username = ""
                     password = ""
