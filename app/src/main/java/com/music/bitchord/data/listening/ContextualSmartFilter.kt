@@ -25,13 +25,17 @@ internal fun verifiedContextualSourceKind(providerKey: String?): SmartPlaylistSo
         else -> null
     }
 
-internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalSongBrowse(): Boolean {
+internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalSongBrowse(
+    providerKey: String? = null,
+): Boolean {
     fun supported(rule: SmartPlaylistRule): Boolean = when (rule) {
         is SmartPlaylistRule.Comparison ->
             rule.field == SmartPlaylistRuleField.TITLE ||
                 rule.field == SmartPlaylistRuleField.ARTIST_DISPLAY ||
                 rule.field == SmartPlaylistRuleField.DURATION_MS ||
-                rule.field == SmartPlaylistRuleField.SOURCE_KIND
+                rule.field == SmartPlaylistRuleField.SOURCE_KIND ||
+                (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED &&
+                    providerKey == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
         is SmartPlaylistRule.Group -> rule.children.isNotEmpty() &&
             rule.children.all(::supported)
         is SmartPlaylistRule.Not -> supported(rule.child)
@@ -51,9 +55,10 @@ internal fun filterCanonicalBrowseSongs(
     tracks: List<CanonicalBrowseTrack>,
     filter: SavedSmartPlaylistV2Filter,
     providerKey: String,
+    localAddedDatesByRecording: Map<String, List<Long?>>? = null,
 ): List<CanonicalBrowseTrack> {
     require(providerKey.isNotBlank()) { "A configured provider identity is required" }
-    require(filter.isSupportedForCanonicalSongBrowse()) {
+    require(filter.isSupportedForCanonicalSongBrowse(providerKey)) {
         "This saved filter needs evidence unavailable in canonical Songs browse"
     }
     require(tracks.all { track ->
@@ -65,6 +70,14 @@ internal fun filterCanonicalBrowseSongs(
     require(tracks.distinctBy { it.recordingId }.size == tracks.size) {
         "Canonical browse must have one row per RecordingId"
     }
+    val needsLocalAdded = SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED in
+        filter.rules.referencedFields()
+    if (needsLocalAdded) {
+        require(localAddedDatesByRecording != null) {
+            "Local-file-added date requires persisted MediaStore evidence"
+        }
+    }
+    val nowMs = System.currentTimeMillis()
     val sourceKind = verifiedContextualSourceKind(providerKey)
     val query = SmartPlaylistV2Query(
         rules = filter.rules,
@@ -74,6 +87,14 @@ internal fun filterCanonicalBrowseSongs(
     val engine = SmartPlaylistV2RuleEngine()
     return tracks.chunked(400).flatMap { chunk ->
         val candidates = chunk.map { song ->
+            val timestamps = localAddedDatesByRecording?.get(song.recordingId)
+            val validTimestamps = timestamps.orEmpty().mapNotNull { seconds ->
+                seconds?.takeIf { it in 0L..(Long.MAX_VALUE / 1_000L) }
+                    ?.times(1_000L)
+            }
+            val timestampsUnknown = timestamps == null ||
+                timestamps.size != validTimestamps.size ||
+                validTimestamps.any { it > nowMs }
             RuleBasedRecordingCandidate(
                 recordingId = song.recordingId,
                 explicitRating = null,
@@ -84,6 +105,8 @@ internal fun filterCanonicalBrowseSongs(
                 title = song.title,
                 artistDisplay = song.artistDisplay,
                 sourceKinds = sourceKind?.let(::setOf),
+                localAddedEpochMs = validTimestamps,
+                localAddedDateEvidenceUnknown = timestampsUnknown,
             )
         }
         val matches = engine.preview(candidates, query).mapTo(hashSetOf()) { it.recordingId }
