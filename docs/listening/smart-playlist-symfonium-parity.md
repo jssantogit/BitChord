@@ -199,3 +199,9 @@ Primary official evidence:
 
 - Each preview derives the set of fields referenced by its entire nested ALL/ANY/NOT rule AST. The production Room reader conditionally reads release titles, release years, release album artists, linked track numbers, and credited track artists **only when selected**; duration/rating/count-only rules avoid all five relation queries per 400 RecordingIds.
 - Direct calls to the batch reader preserve the full-evidence contract for existing tests/adapters. Source/account eligibility and remote rating reads retain their separate policies. Added nested AST projection and Room selective-read regressions. This reduces unnecessary SQL reads but **does not** substitute for measured 50k Android latency/memory.
+
+## 28/10/2026 — First-party local rating recency
+
+- Added typed `DAYS_SINCE_LOCAL_RATING`, reading only `recording_rating_current.ratedAtEpochMs` and refreshing foreground previews with relative-age rules. The engine uses whole-day comparisons, rejects invalid/future timestamps and keeps unread evidence UNKNOWN under NOT.
+- Missing rating date is only `IS_MISSING` after the local RecordingRating DAO has actually been read. Remote OpenSubsonic ratings and favorite events are **not** timestamps of a local first-party rating. This is **not** a claim of Symfonium Favorite Date parity.
+- Unit, Room and foreground clock visitor regressions added. No Catalog schema change, no provider credentials/identity promotion. CI and device benchmarks remain independent gates.
