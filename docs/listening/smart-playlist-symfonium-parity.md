@@ -102,3 +102,37 @@ Before READY: verify the Android CI on the exact new HEAD, then audit the
 remaining Symfonium 15.1.0 operator/field inventory; check account switches
 and absent MusicBrainz enrichment on Galaxy A54; measure 50k actual on-device
 latency/energy; evaluate >100 queue operations without implicit autoplay.
+
+
+## 28/10/2026 — Atomic smart playlist Play/Queue window (draft #193)
+
+The Android **canonical collection** route now accepts **up to 500 RecordingIds
+in one MediaSession batch**, instead of 100. This is a bounded increase, not
+unlimited playback. The original V1 rule definition limit is still 100; V2
+definitions may preview 10,000 but a single action currently accepts at most
+500. The V2 preview UI distinguishes these limits and disables dispatch above
+500. Saved V2 definitions above 500 currently receive a safe limit rejection
+from the handoff.
+
+- One explicit action produces one process-local one-shot token and **one**
+  B10 MediaSession command. Never send five sequential 100-song edits: if a
+  later batch fails that would leave a partially queued playlist.
+- B9 validates the complete requested list, deduplicates canonical Recordings,
+  resolves each exact current rendition, and rejects ambiguous or unavailable
+  tracks **before** submitting anything.
+- B10 checks the hard 500 limit again before database access, reads media
+  assets and canonical Recording metadata by ID in chunks of at most 400,
+  checks provider/account scope and URI identity, then checks the current
+  session/timeline generation before a **single** Media3 \`addMediaItems\`.
+  A changed/unresolvable item prevents the entire insertion.
+- \`ADD_TO_QUEUE\` and \`ADD_NEXT\` never call \`play()\`; \`PLAY_NOW\` alone
+  explicitly starts the selected first song. Existing history, context and
+  pending queue tiers are preserved as before.
+- JVM tests cover 500 accepted items in order; 501 rejected; incomplete 251
+  song playlist rejected atomically; a single paused 500-song policy decision,
+  and one-shot queue request behavior. Room tests cover 500 exact assets
+  resolved in SQLite-safe chunks without provider cross-contamination.
+
+**Not yet validated on a Galaxy A54:** responsiveness, memory, audio transitions
+and persistence of a 500-song Media3 insertion. This extension is CI test
+coverage, not permission to claim physical smoke. Keep PR draft and unmerged.

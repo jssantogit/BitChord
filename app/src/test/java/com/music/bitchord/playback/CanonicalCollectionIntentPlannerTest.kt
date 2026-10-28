@@ -75,12 +75,12 @@ class CanonicalCollectionIntentPlannerTest {
 
     @Test fun `limit applies before any lookup or resolver work`() = runBlocking {
         val resolver = Resolver()
-        val ids = (1..102).map { "rec-$it" }
+        val ids = (1..502).map { "rec-$it" }
         val plan = CanonicalCollectionIntentPlanner(resolver).preview(
             ids, CanonicalCollectionIntent.ADD_TO_QUEUE, CanonicalBrowseLibrary.EMPTY,
         )
-        assertEquals(CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE, 100)
-        assertEquals(CollectionIntentRejection.LIMIT_EXCEEDED, plan.rejected[100].reason)
+        assertEquals(500, CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE)
+        assertEquals(CollectionIntentRejection.LIMIT_EXCEEDED, plan.rejected[500].reason)
         assertEquals(0, resolver.resolveCalls)
     }
 

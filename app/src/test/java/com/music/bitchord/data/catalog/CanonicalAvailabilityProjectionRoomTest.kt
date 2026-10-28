@@ -49,4 +49,40 @@ class CanonicalAvailabilityProjectionRoomTest {
             db.close()
         }
     }
+    @Test fun playbackRevalidationCanRead500CanonicalAssetsInSqliteSafeChunks() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val db = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = db.catalogDao()
+            val ids = (1..500).map { "rec:" + it.toString().padStart(3, '0') }
+            ids.forEach { id ->
+                dao.upsertRecording(RecordingEntity(id, "Track", "Artist", 90_000L))
+                dao.upsertMediaAsset(MediaAssetEntity(
+                    id = "asset:$id", recordingId = id,
+                    provider = CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER,
+                    sourceKey = "native:$id", uri = "content://fixture/$id",
+                    path = null, dateAddedSeconds = null,
+                    dateModifiedSeconds = null, artworkUri = null,
+                ))
+            }
+            val recordings = ids.chunked(400).flatMap { dao.recordingsByIds(it) }
+                .associateBy { it.id }
+            val assets = ids.map { "asset:$it" }.chunked(400)
+                .flatMap { dao.mediaAssetsByIds(it) }.associateBy { it.id }
+            assertEquals(500, recordings.size)
+            assertEquals(500, assets.size)
+            for (id in ids) {
+                assertEquals(id, assets["asset:$id"]?.recordingId)
+                assertEquals(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, assets["asset:$id"]?.provider)
+                assertEquals("Track", recordings[id]?.title)
+            }
+            assertEquals(emptyList<MediaAssetEntity>(), dao.mediaAssetsByIds(
+                listOf("asset:missing"),
+            ))
+        } finally {
+            db.close()
+        }
+    }
+
 }
