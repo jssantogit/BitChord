@@ -519,4 +519,37 @@ class SmartPlaylistBatchEvidenceRoomTest {
         }
     }
 
+
+
+    @Test fun localRatingDateRequiresFirstPartyRoomReadAndCannotBeInvented() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:rated", "Song", "Artist", 100_000L))
+            dao.upsertRecording(RecordingEntity("rec:unrated", "Other", "Artist", 100_000L))
+            listening.recordingRatingDao().upsertCurrent(
+                RecordingRatingCurrentEntity("rec:rated", 4.0, 86_400_000L),
+            )
+            val reader = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            )
+            val rows = reader.read(listOf("rec:rated", "rec:unrated"), setOf(
+                SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING,
+            )).associateBy { it.recordingId }
+            assertEquals(86_400_000L, rows.getValue("rec:rated").localRatingUpdatedAtEpochMs)
+            assertEquals(null, rows.getValue("rec:unrated").localRatingUpdatedAtEpochMs)
+            assertTrue(rows.getValue("rec:unrated").localRatingDateEvidenceKnown)
+            val sparse = reader.read(listOf("rec:rated"), emptySet()).single()
+            assertTrue(!sparse.localRatingDateEvidenceKnown)
+            assertEquals(null, sparse.localRatingUpdatedAtEpochMs)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
 }
