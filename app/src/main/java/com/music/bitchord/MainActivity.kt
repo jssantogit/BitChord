@@ -2064,13 +2064,14 @@ private fun BitChordApp(
             // Playlists, artist pages and loose multi-selection do not become
             // unconsented bulk transfers. The devDebug pilot is explicit.
             val plan=SoulseekBatchPlan.prepare(
-                requested.map { track ->
+                requested.mapIndexed { ordinal,track ->
                     SoulseekBatchPlan.SourceTrack(
-                        // A missing ID cannot be synthesized from track order;
-                        // A3 must reserve stable source identity or fail closed.
-                        // Fail closed for slots without stable catalog identity:
-                        // a transient batch ordinal is not a recording ID.
-                        trackId=track.videoId,
+                        // Synthetic ordinal is permitted ONLY for manual picker;
+                        // never pass it into the automatic A3 reservation.
+                        trackId=track.videoId.takeIf {
+                            it.isNotBlank() && it.length<=180 &&
+                                !it.any(Char::isISOControl)
+                        } ?: "manual-batch-slot-${ordinal+1}",
                         artist=track.artist,
                         title=track.title,
                         creditedArtists=track.artists.map { it.name },
@@ -2087,7 +2088,12 @@ private fun BitChordApp(
                 Toast.makeText(context,
                     "Lote Soulseek indisponível: abra um álbum/EP/single com 2 a 64 faixas válidas.",
                     Toast.LENGTH_LONG).show()
-            } else if(A0AndroidAutoConsent.enabled(context)) {
+            } else if(A0AndroidAutoConsent.enabled(context) &&
+                requested.all { track ->
+                    track.videoId.isNotBlank() &&
+                        track.videoId.length<=180 &&
+                        !track.videoId.any(Char::isISOControl)
+                }) {
                 if(Downloads.enqueueSoulseekAuto(context,plan)) {
                     Toast.makeText(context,
                         "Lote enviado à fila Soulseek; acompanhe em Downloads.",
