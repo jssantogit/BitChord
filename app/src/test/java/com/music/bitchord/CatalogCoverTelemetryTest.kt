@@ -114,4 +114,17 @@ class CatalogCoverTelemetryTest {
         assertEquals(true, afterCaptureRestart.coilDiskPreservedOnVersionUpgrade)
         assertEquals(0, afterCaptureRestart.coilDiskHits)
     }
+
+    @Test fun recordingArtworkReconciliationCountersNeverRetainIdentityAndResetPerCapture() {
+        val meter = CatalogCoverTelemetry()
+        meter.recordEditionSleeveReplacedByVerifiedGroup()
+        meter.recordEditionSleeveReplacedByVerifiedGroup()
+        meter.recordLowerResolutionGroupCoverRejected()
+        val snapshot = meter.snapshot()
+        assertEquals(2, snapshot.reconciledRecordingEditionCovers)
+        assertEquals(1, snapshot.rejectedGroupDowngrades)
+        meter.reset()
+        assertEquals(0, meter.snapshot().reconciledRecordingEditionCovers)
+        assertEquals(0, meter.snapshot().rejectedGroupDowngrades)
+    }
 }
