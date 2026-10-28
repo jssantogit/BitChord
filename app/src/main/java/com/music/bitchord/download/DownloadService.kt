@@ -221,7 +221,8 @@ class DownloadService : Service() {
             .setContentTitle(title)
             .setContentText(text)
             // Indeterminate until something has a length to measure against.
-            .setProgress(100, percent, runningStates.isEmpty())
+            .setProgress(100, percent,
+                runningStates.isEmpty() || runningStates.all { it.fraction <= 0f })
             .setOngoing(true)
             .setSilent(true)
             .setOnlyAlertOnce(true)
