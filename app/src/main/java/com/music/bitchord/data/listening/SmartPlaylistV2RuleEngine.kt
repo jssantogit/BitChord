@@ -604,11 +604,20 @@ internal class SmartPlaylistV2RuleEngine(
                 else -> return RuleTruth.UNKNOWN
             }
             val matching = requested in availableKinds
+            // Verified presence is independent of completeness; absence is not.
+            // NOT(EQUAL) and NOT_EQUAL must never infer an absent remote source
+            // when another eligible copy has unclassified provenance.
             return when (rule.operator) {
-                SmartPlaylistRuleOperator.EQUAL ->
-                    if (matching) RuleTruth.TRUE else RuleTruth.FALSE
-                SmartPlaylistRuleOperator.NOT_EQUAL ->
-                    if (matching) RuleTruth.FALSE else RuleTruth.TRUE
+                SmartPlaylistRuleOperator.EQUAL -> when {
+                    matching -> RuleTruth.TRUE
+                    !row.sourceKindsComplete -> RuleTruth.UNKNOWN
+                    else -> RuleTruth.FALSE
+                }
+                SmartPlaylistRuleOperator.NOT_EQUAL -> when {
+                    matching -> RuleTruth.FALSE
+                    !row.sourceKindsComplete -> RuleTruth.UNKNOWN
+                    else -> RuleTruth.TRUE
+                }
                 else -> RuleTruth.UNKNOWN
             }
         }

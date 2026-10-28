@@ -22,6 +22,8 @@ internal enum class CanonicalLibrarySourceKind { LOCAL, OPENSUBSONIC }
 internal data class CanonicalAvailableRecordingSources(
     val recordingId: String,
     val kinds: Set<CanonicalLibrarySourceKind>,
+    /** False when any currently eligible copy uses an unclassified provider. */
+    val kindsComplete: Boolean = true,
 )
 
 internal fun interface CanonicalLibraryAvailabilityReader {
@@ -108,11 +110,10 @@ internal class CanonicalLibraryAvailabilityRepository(
             }
         }
         return evidence.map { (id, kinds) ->
-            // A future/unknown configured provider cannot be mistaken for
-            // OpenSubsonic, nor can a known local copy prove NOT remote when
-            // another available copy has unclassified provenance.
+            // Preserve verified positive copies even if a future provider is
+            // unclassified; incomplete coverage cannot prove a negative.
             CanonicalAvailableRecordingSources(
-                id, if (id in unclassifiedRecordings) emptySet() else kinds.toSet(),
+                id, kinds.toSet(), kindsComplete = id !in unclassifiedRecordings,
             )
         }
     }

@@ -61,6 +61,8 @@ internal data class RuleBasedRecordingCandidate(
     val releaseTitles: List<String> = emptyList(),
     /** Null = unavailable provenance; never treat it as a negative match. */
     val sourceKinds: Set<SmartPlaylistSourceKind>? = null,
+    /** A positive kind remains provable even if other provider copies are unknown. */
+    val sourceKindsComplete: Boolean = true,
     val releaseYears: List<Int> = emptyList(),
     val releaseYearEvidenceUnknown: Boolean = true,
     val albumArtistNames: List<String> = emptyList(),
@@ -283,16 +285,7 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
         requiredFields: Set<SmartPlaylistRuleField> = emptySet(),
     ): List<RuleBasedRecordingCandidate> {
         val sourceMap = if (includeSourceEvidence) {
-            availability.availableRecordingSources().associate { source ->
-                source.recordingId to source.kinds.map { kind ->
-                    when (kind) {
-                        com.music.bitchord.data.catalog.CanonicalLibrarySourceKind.LOCAL ->
-                            SmartPlaylistSourceKind.LOCAL
-                        com.music.bitchord.data.catalog.CanonicalLibrarySourceKind.OPENSUBSONIC ->
-                            SmartPlaylistSourceKind.OPENSUBSONIC
-                    }
-                }.toSet()
-            }
+            availability.availableRecordingSources().associateBy { it.recordingId }
         } else emptyMap()
         // Source-aware queries use ONE scoped availability snapshot, never
         // cross-reference IDs from a different configured account.
@@ -339,7 +332,18 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
             }
         }
         val sourceBound = if (includeSourceEvidence) rows.map { row ->
-            row.copy(sourceKinds = sourceMap[row.recordingId])
+            val source = sourceMap[row.recordingId]
+            row.copy(
+                sourceKinds = source?.kinds?.map { kind ->
+                    when (kind) {
+                        com.music.bitchord.data.catalog.CanonicalLibrarySourceKind.LOCAL ->
+                            SmartPlaylistSourceKind.LOCAL
+                        com.music.bitchord.data.catalog.CanonicalLibrarySourceKind.OPENSUBSONIC ->
+                            SmartPlaylistSourceKind.OPENSUBSONIC
+                    }
+                }?.toSet(),
+                sourceKindsComplete = source?.kindsComplete == true,
+            )
         } else rows
         if (!includeRemoteRatings) return sourceBound
         return sourceBound.map { row ->

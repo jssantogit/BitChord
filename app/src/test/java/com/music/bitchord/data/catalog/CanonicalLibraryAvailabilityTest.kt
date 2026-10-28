@@ -147,8 +147,11 @@ class CanonicalLibraryAvailabilityTest {
         )
         val rows = availability.availableRecordingSources().associateBy { it.recordingId }
         assertEquals(setOf(CanonicalLibrarySourceKind.LOCAL), rows["known"]?.kinds)
-        assertEquals(emptySet<CanonicalLibrarySourceKind>(), rows["mixed"]?.kinds)
+        assertEquals(setOf(CanonicalLibrarySourceKind.LOCAL), rows["mixed"]?.kinds)
+        assertEquals(false, rows["mixed"]?.kindsComplete)
         assertEquals(emptySet<CanonicalLibrarySourceKind>(), rows["unclassified"]?.kinds)
+        assertEquals(false, rows["unclassified"]?.kindsComplete)
+        assertEquals(true, rows["known"]?.kindsComplete)
         // Generic availability retains playable identities even when a Source
         // Kind predicate has no proof to evaluate for the future provider.
         assertEquals(listOf("known", "mixed", "unclassified"),

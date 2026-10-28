@@ -110,6 +110,40 @@ class SmartPlaylistV2RuleEngineTest {
         assertEquals(listOf("rec:good"), result.map { it.recordingId })
     }
 
+
+    @Test fun verifiedLocalSourceRemainsPositiveWhenOtherProviderEvidenceIsIncomplete() {
+        val mixed = candidate("mixed").copy(
+            sourceKinds = setOf(SmartPlaylistSourceKind.LOCAL),
+            sourceKindsComplete = false,
+        )
+        val complete = candidate("complete").copy(
+            sourceKinds = setOf(SmartPlaylistSourceKind.LOCAL),
+            sourceKindsComplete = true,
+        )
+        val unknownOnly = candidate("unknown").copy(
+            sourceKinds = emptySet(),
+            sourceKindsComplete = false,
+        )
+        fun source(kind: String, operator: SmartPlaylistRuleOperator) =
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.SOURCE_KIND, operator, textValue = kind,
+            )
+        val rows = listOf(mixed, complete, unknownOnly)
+        fun matching(rule: SmartPlaylistRule) = planner.preview(
+            rows, SmartPlaylistV2Query(rule, sort = SmartPlaylistV2Sort.RECORDING_ID_ASC),
+        ).map { it.recordingId }
+
+        assertEquals(listOf("complete", "mixed"),
+            matching(source("local", SmartPlaylistRuleOperator.EQUAL)))
+        assertTrue(matching(source("local", SmartPlaylistRuleOperator.NOT_EQUAL)).isEmpty())
+        assertTrue(matching(source("opensubsonic", SmartPlaylistRuleOperator.EQUAL)).isEmpty())
+        assertEquals(listOf("complete"),
+            matching(source("opensubsonic", SmartPlaylistRuleOperator.NOT_EQUAL)))
+        assertEquals(listOf("complete"), matching(SmartPlaylistRule.Not(
+            source("opensubsonic", SmartPlaylistRuleOperator.EQUAL),
+        )))
+    }
+
     @Test fun sortingAndLimitWorkBeyondOldOneHundredLimit() {
         val query = SmartPlaylistV2Query(
             rules = check(SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
