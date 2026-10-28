@@ -103,6 +103,42 @@ class A0AutoDiscoveryCoordinatorTest {
         assertEquals(4,result.batch.published)
     }
 
+    @Test fun albumTransfersFirstStrongTrackBeforeSearchingSecondTrack() {
+        val events=mutableListOf<String>()
+        val search=FakeSearch { target ->
+            events.add("search:${target.trackId}")
+            A0AutoDiscoveryCoordinator.SearchResult.Found(
+                claims(entries.filter { it.trackId==target.trackId }))
+        }
+        val originalBatch=batch(events)
+        val report=A0AutoDiscoveryCoordinator(search,originalBatch).run(
+            entries,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(4,report.batch.published)
+        assertEquals(listOf(
+            "search:one","one","search:two","two",
+            "search:three","three","search:four","four"),events)
+    }
+
+    @Test fun failedLaterDiscoveryKeepsEarlierPublishedTrackVisible() {
+        val events=mutableListOf<String>()
+        val search=FakeSearch { target ->
+            events.add("search:${target.trackId}")
+            if(target.trackId=="two")A0AutoDiscoveryCoordinator.SearchResult.Stop
+            else A0AutoDiscoveryCoordinator.SearchResult.Found(
+                claims(entries.filter { it.trackId==target.trackId }))
+        }
+        val report=A0AutoDiscoveryCoordinator(search,batch(events)).run(
+            entries,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(listOf(
+            A0AutoBatchExecutor.TrackStatus.PUBLISHED,
+            A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW,
+            A0AutoBatchExecutor.TrackStatus.NOT_STARTED,
+            A0AutoBatchExecutor.TrackStatus.NOT_STARTED),report.batch.results)
+        assertEquals(listOf("search:one","one","search:two"),events)
+    }
+
     @Test fun noExplicitOptInNeverOpensSearchOrTransfer() {
         val search=FakeSearch {
             throw AssertionError("Network must remain OFF")
