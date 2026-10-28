@@ -5,6 +5,7 @@ import com.music.bitchord.data.catalog.CanonicalBrowseMediaAsset
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.listening.AdaptiveCollectionKind
 import com.music.bitchord.data.listening.RuleBasedSmartPlaylistQuery
+import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
 import com.music.bitchord.data.listening.SmartPlaylistV2Query
 import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
@@ -325,6 +326,36 @@ class SmartCollectionBatchHandoffTest {
             handoff.execute(SmartCollectionActionSource.SavedV2Definition("v2"),
                 CanonicalCollectionIntent.PLAY_NOW))
         assertEquals(CanonicalCollectionIntent.PLAY_NOW, submitted.last().intent)
+    }
+
+    @Test fun v2VerifiedRatingHintRequiresAProvableGlobalMinimum() {
+        fun rated(min: Double) = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.EXPLICIT_RATING,
+            SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+            value = min,
+        )
+        fun duration() = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.DURATION_MS,
+            SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+            value = 180_000.0,
+        )
+        val direct = SmartPlaylistV2Query(rated(4.0))
+        assertEquals(4.0, direct.guaranteedMinimumRatingForAssetHints())
+        val and = SmartPlaylistV2Query(SmartPlaylistRule.Group(
+            SmartPlaylistRuleJoin.ALL, listOf(duration(), rated(3.0), rated(5.0)),
+        ))
+        assertEquals(5.0, and.guaranteedMinimumRatingForAssetHints())
+        val validOr = SmartPlaylistV2Query(SmartPlaylistRule.Group(
+            SmartPlaylistRuleJoin.ANY, listOf(rated(4.0), rated(5.0)),
+        ))
+        assertEquals(4.0, validOr.guaranteedMinimumRatingForAssetHints())
+        val unsafeOr = SmartPlaylistV2Query(SmartPlaylistRule.Group(
+            SmartPlaylistRuleJoin.ANY, listOf(duration(), rated(5.0)),
+        ))
+        assertNull(unsafeOr.guaranteedMinimumRatingForAssetHints())
+        val negation = SmartPlaylistV2Query(SmartPlaylistRule.Not(rated(4.0)))
+        assertNull(negation.guaranteedMinimumRatingForAssetHints())
+        assertNull(SmartPlaylistV2Query(duration()).guaranteedMinimumRatingForAssetHints())
     }
 
 }
