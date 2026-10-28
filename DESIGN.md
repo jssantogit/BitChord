@@ -262,7 +262,9 @@ A apresentação Android não oferece reações de provedores (Like/Dislike), a�
 
 **Limite de migração:** a retirada **real** do YouTube como catálogo/fonte de áudio depende da conclusão da issue #178 / [PR #183](https://github.com/jssantogit/BitChord/pull/183) e testes de busca, reprodução, Home, Explorar, biblioteca, fila e downloads sem fallback do YouTube. Até lá, classes/IDs legados do motor continuam por compatibilidade e **não devem ser descritos como removidos**. Também persistem componentes de autenticação e Fontes atualmente associados ao backend legado até essa troca; ocultá-los antes da substituição daria uma indicação enganosa das fontes em uso.
 
-A partir da issue #196, a linha **Fontes de letras** das Configurações exibe apenas a quantidade de fontes habilitadas, sem concatenar todos os provedores; a lista completa e a ordem permanecem no gerenciador dedicado. Na tela **Fontes**, os cards WebDAV/SMB não repetem seu nome no título da seção e na linha de conexão. Nenhuma preferência ou fonte de áudio foi eliminada por essas duas alterações visuais.
+A partir da issue #196, a linha **Fontes de letras** das Configurações exibe apenas a quantidade de fontes habilitadas, sem concatenar todos os provedores; a lista completa e a ordem permanecem no gerenciador dedicado. Na tela **Fontes**, os cards WebDAV/SMB/OpenSubsonic aparecem sob um único cabeçalho **Biblioteca**, sem repetir os nomes no título da seção e da linha de conexão. O controle técnico de **tolerância de duração** foi realocado de Fontes para **Avançado** e permanece pesquisável, com intervalo de ajuste e armazenamento preservados. Nenhuma preferência ou fonte de áudio foi eliminada por essas alterações visuais.
+
+O rodapé **Sobre** aponta para o repositório deste fork e mantém um crédito separado para o projeto BitChord original; links de suporte do upstream e o slogan sobre o YouTube Music não são divulgados como se fossem interfaces do fork.
 
 ### Letras e gestos de leitura
 
