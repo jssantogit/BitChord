@@ -201,6 +201,7 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val session by DownloadSession.state.collectAsStateWithLifecycle()
     val autoReviews by Downloads.soulseekAutoReviews.collectAsStateWithLifecycle()
+    val manualReviewBusy by Downloads.soulseekManualReviewBusy.collectAsStateWithLifecycle()
     // Newest ask last, the order the queue will actually reach them in.
     val items = remember(session.items) { session.items.sortedBy { it.sequence } }
 
@@ -239,12 +240,23 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                 ) {
                     Text(stringResource(R.string.cancel_all))
                 }
+            } else if(manualReviewBusy) {
+                Text(
+                    "Revisão manual em andamento",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             } else {
                 TextButton(
                     onClick = {
-                        Downloads.clearSoulseekAutoReviews()
-                        DownloadSession.clear()
-                        onDismiss()
+                        if(Downloads.clearSoulseekAutoReviews()) {
+                            DownloadSession.clear()
+                            onDismiss()
+                        }else {
+                            Toast.makeText(context,
+                                "Uma revisão manual ainda está concluindo. Não limpe o relatório.",
+                                Toast.LENGTH_LONG).show()
+                        }
                     },
                 ) {
                     Text(stringResource(R.string.clear))
