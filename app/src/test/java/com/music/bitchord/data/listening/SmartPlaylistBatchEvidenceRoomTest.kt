@@ -678,4 +678,76 @@ class SmartPlaylistBatchEvidenceRoomTest {
         }
     }
 
+
+    @Test fun savedReferencesReevaluateUsingOneCanonicalSnapshotAndFailClosedOnDeletion() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val definitions = Room.inMemoryDatabaseBuilder(context, SmartPlaylistDefinitionDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val repo = SmartPlaylistV2DefinitionRepository(definitions.v2DefinitionDao())
+            val ids = listOf("rec:a", "rec:b", "rec:c")
+            var availabilityReads = 0
+            var evidenceReads = 0
+            val availability = CanonicalLibraryAvailabilityReader {
+                availabilityReads++
+                ids
+            }
+            val batch = SmartPlaylistBatchEvidenceReader { incoming ->
+                evidenceReads++
+                incoming.map { id ->
+                    val duration = when (id) {
+                        "rec:a" -> 100_000L
+                        "rec:b" -> 200_000L
+                        else -> 300_000L
+                    }
+                    RuleBasedRecordingCandidate(id, null, 0L, null, duration, true)
+                }
+            }
+            val preview = CanonicalRuleBasedSmartPlaylistPreview(
+                availability = availability,
+                catalog = catalog.catalogDao(),
+                ratings = RoomRecordingRatingStore(listening.recordingRatingDao()),
+                listening = RoomListeningEventStore(listening.listeningEventDao()),
+                batchReader = batch,
+                v2Planner = SmartPlaylistV2RuleEngine(nowEpochMs = { 900_000L }),
+                savedReferences = { repo.list() },
+            )
+            fun base(above: Double) = SavedSmartPlaylistV2Definition(
+                "base", "Base",
+                SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.DURATION_MS,
+                    SmartPlaylistRuleOperator.GREATER_THAN, above,
+                ), sort = SmartPlaylistV2Sort.RECORDING_ID_ASC, limit = 1),
+            )
+            val dependent = SavedSmartPlaylistV2Definition(
+                "dependent", "Dependent", SmartPlaylistV2Query(
+                    SmartPlaylistRule.Reference("base"),
+                ),
+            )
+            repo.save(base(150_000.0))
+            repo.save(dependent)
+            val root = SmartPlaylistV2Query(SmartPlaylistRule.Reference("dependent"))
+            assertEquals(listOf("rec:b"), preview.preview(root).map { it.recordingId })
+            assertEquals(1, availabilityReads)
+            assertEquals(1, evidenceReads)
+            repo.save(base(250_000.0))
+            assertEquals(listOf("rec:c"), preview.preview(root).map { it.recordingId })
+            assertEquals(2, availabilityReads)
+            assertEquals(2, evidenceReads)
+            // Simulate a previously damaged/externally replaced DB row.
+            definitions.v2DefinitionDao().remove("base")
+            assertTrue(runCatching { preview.preview(root) }.exceptionOrNull()
+                is IllegalArgumentException)
+            // A missing reference is NOT an empty, successfully evaluated playlist.
+            assertEquals(2, availabilityReads)
+        } finally {
+            definitions.close()
+            catalog.close()
+            listening.close()
+        }
+    }
 }
