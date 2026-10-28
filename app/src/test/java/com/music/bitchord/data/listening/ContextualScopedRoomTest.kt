@@ -84,4 +84,42 @@ class ContextualScopedRoomTest {
             db.close()
         }
     }
+    @Test fun releaseOnlyArtistCreditDrillsDownToProviderBoundRecording() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val dao = db.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:one", "Shared", "Display", 200_000))
+            dao.upsertRecording(RecordingEntity("rec:other", "Shared", "Display", 200_000))
+            dao.upsertRelease(ReleaseEntity("rel:one", "EP", "Display", null))
+            dao.upsertRelease(ReleaseEntity("rel:other", "EP", "Display", null))
+            dao.upsertReleaseTrack(ReleaseTrackEntity("rel:one", "rec:one", 1))
+            dao.upsertReleaseTrack(ReleaseTrackEntity("rel:other", "rec:other", 1))
+            dao.upsertArtist(ArtistEntity("artist:one", "Genuine Credit"))
+            dao.upsertReleaseArtistCredits(listOf(
+                ReleaseArtistCreditEntity("rel:one", 0, "artist:one"),
+                ReleaseArtistCreditEntity("rel:other", 0, "artist:one"),
+            ))
+            dao.upsertMediaAsset(MediaAssetEntity("asset:one", "rec:one",
+                "opensubsonic:current", "native-one", "opensubsonic://one",
+                null, null, null, null))
+            dao.upsertMediaAsset(MediaAssetEntity("asset:other", "rec:other",
+                "opensubsonic:elsewhere", "native-other", "opensubsonic://other",
+                null, null, null, null))
+            assertEquals(listOf("artist:one"),
+                dao.providerScopedArtists("opensubsonic:current").map { it.id })
+            assertEquals(listOf("rec:one"), dao.providerScopedArtistRecordingIds(
+                "opensubsonic:current", "artist:one",
+            ))
+            assertEquals(listOf("rec:other"), dao.providerScopedArtistRecordingIds(
+                "opensubsonic:elsewhere", "artist:one",
+            ))
+            assertTrue(dao.providerScopedArtistRecordingIds(
+                "opensubsonic:unknown", "artist:one",
+            ).isEmpty())
+        } finally {
+            db.close()
+        }
+    }
+
 }
