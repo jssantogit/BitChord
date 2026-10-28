@@ -42,13 +42,7 @@ internal class A0AndroidAutoAcquisitionPort(
     }
     private val closed=AtomicBoolean(false)
     private val scratchRoot by lazy {
-        val cache=app.cacheDir.canonicalFile
-        val dir=File(cache,"soulseek-auto-receipts")
-        if(Files.isSymbolicLink(dir.toPath()) ||
-            (!dir.isDirectory && !dir.mkdirs()) ||
-            dir.canonicalFile.parentFile!=cache)
-            throw IOException("Soulseek private receipt directory unavailable")
-        dir.canonicalFile
+        A0AutoScratchRecovery.privateDirectory(app.cacheDir)
     }
 
     private fun requireWorker() {
