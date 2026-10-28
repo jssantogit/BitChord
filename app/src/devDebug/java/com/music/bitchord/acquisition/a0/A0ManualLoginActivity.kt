@@ -69,6 +69,8 @@ class A0ManualLoginActivity : Activity() {
         // Launched by the in-app song Download action, not the old A0 tool entry.
         val fromSongDownload = intent.hasExtra("bitchord.soulseek.manual.query")
         val manualRecovery=intent.getBooleanExtra("bitchord.soulseek.manual.recovery",false)
+        val recoverySession=intent.getStringExtra("bitchord.soulseek.manual.review_session")
+        val recoveryIndices=intent.getIntArrayExtra("bitchord.soulseek.manual.review_indices")
         val hasBatch=intent.hasExtra("bitchord.soulseek.batch.queries")
         // Process death cannot be assumed to preserve the completion of a
         // MediaStore commit. Fail closed instead of silently restarting at
@@ -93,6 +95,16 @@ class A0ManualLoginActivity : Activity() {
             return
         }
         val batch=batchEntries?.let(::SoulseekBatchSession)
+        if(manualRecovery && (!fromSongDownload ||
+                recoverySession.isNullOrBlank() ||
+                recoveryIndices?.size!=(batchEntries?.size ?: 1) ||
+                recoveryIndices.toList()!=recoveryIndices.distinct())) {
+            Toast.makeText(this,"Revisão indisponível: nenhum download iniciado.",
+                Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        val completedRecovery=java.util.concurrent.atomic.AtomicBoolean(false)
         // The song search/candidates view has no visible credentials; allow
         // screenshots for QA. Legacy username/password tools stay protected.
         if (A0ScreenCapturePolicy.requiresSecureWindow(fromSongDownload)) {
@@ -282,7 +294,11 @@ class A0ManualLoginActivity : Activity() {
         ) {
             require(!transferObserved || performSearch)
             require(!saveToDevice || transferObserved)
-            if(batch?.isComplete==true || (saveToDevice && batch?.currentSaved==true)) {
+            val recoveryOrdinal=batch?.index ?: 0
+            val recoveryQuery=batch?.current?.query ?: intent.getStringExtra(
+                "bitchord.soulseek.manual.query").orEmpty()
+            if(batch?.isComplete==true || (saveToDevice && batch?.currentSaved==true) ||
+                (manualRecovery && batch==null && completedRecovery.get())) {
                 status.text="Esta faixa já foi salva. Avance para a próxima do lote."
                 return
             }
@@ -1227,6 +1243,17 @@ class A0ManualLoginActivity : Activity() {
                                                     )
                                                     trace.note(A0SmokeTrace.Stage.LOCAL_SAVE_PUBLISHED)
                                                     publishedForCurrent=true
+                                                    if(manualRecovery) {
+                                                        // Reconcile against the original
+                                                        // release slot only after A3 durable.
+                                                        val index=recoveryIndices?.getOrNull(
+                                                            recoveryOrdinal)
+                                                        if(index!=null && recoverySession!=null) {
+                                                            Downloads.confirmSoulseekManualPublication(
+                                                                recoverySession,index,recoveryQuery)
+                                                        }
+                                                        if(batch==null)completedRecovery.set(true)
+                                                    }
                                                     result="MÚSICA LOCAL SALVA: ${saved.byteCount} bytes. " +
                                                         "Confira Biblioteca → No dispositivo. " +
                                                         "SHA-256 observado não comprova autenticidade."
@@ -1509,7 +1536,8 @@ class A0ManualLoginActivity : Activity() {
             ).forEach { it.visibility = View.GONE }
 
             fun confirmSearch() {
-                if(batch?.isComplete==true || batch?.currentSaved==true)return
+                if(batch?.isComplete==true || batch?.currentSaved==true ||
+                    (manualRecovery && batch==null && completedRecovery.get()))return
                 val saved = accountVault.read()
                 if (saved == null) {
                     status.text = "Configure sua conta em Configurações → Downloads → Soulseek."
@@ -1618,6 +1646,11 @@ class A0ManualLoginActivity : Activity() {
     }
 
     override fun onDestroy() {
+        if(intent.getBooleanExtra("bitchord.soulseek.manual.recovery",false)) {
+            intent.getStringExtra("bitchord.soulseek.manual.review_session")?.let {
+                Downloads.closeSoulseekManualReview(it)
+            }
+        }
         activeSelectionQueue?.offer(-1)
         activeTransfer?.cancel()
         activeListener?.close()
