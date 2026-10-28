@@ -32,8 +32,6 @@ class A0AutoAcquisitionExecutorTest {
         codec=A0CanonicalAcquisitionIntent.Codec.MP3,
         extension="mp3",durationMillis=161_000L,
         bitrateKbps=320,sampleRateHz=44100,bitDepth=null,completed=true)
-    private fun receipt()=A0VerifiedByteStager.Receipt(
-        File("private-observed"),bytes,"a".repeat(64),"ID3_HEADER_ONLY")
     private class FakePort:A0AutoAcquisitionExecutor.Port {
         var fetches=0
         var publishes=0
@@ -50,8 +48,10 @@ class A0AutoAcquisitionExecutorTest {
             fetches++
             if(fetches<=failCount)return A0AutoAcquisitionExecutor.FetchResult.RetryableConnectionFailure
             afterFetch?.invoke()
+            val scratch=File.createTempFile("a0-auto-test-", ".observed")
+            java.io.RandomAccessFile(scratch,"rw").use { it.setLength(6_440_000L) }
             return A0AutoAcquisitionExecutor.FetchResult.Received(
-                A0VerifiedByteStager.Receipt(File("private-observed"),
+                A0VerifiedByteStager.Receipt(scratch,
                     6_440_000L,"a".repeat(64),"ID3_HEADER_ONLY"))
         }
         override fun inspect(
@@ -72,6 +72,7 @@ class A0AutoAcquisitionExecutorTest {
         }
         override fun cleanup(receipt:A0VerifiedByteStager.Receipt) {
             cleanups++
+            assertTrue("Each temporary receipt must be discarded",receipt.file.delete())
         }
     }
 
