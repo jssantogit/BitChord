@@ -21,4 +21,12 @@ internal object SoulseekAutoCancellationPolicy {
         wasQueued:Boolean,
         wasClaimedByWorker:Boolean,
     ):Boolean=isAutomatic && wasQueued && !wasClaimedByWorker
+
+    /** startForegroundService failure is not evidence that no other already
+     * running Service took the request out of pending[] concurrently.
+     */
+    fun canRollbackRejectedServiceStart(
+        stillPending:Boolean,
+        alreadyClaimed:Boolean,
+    ):Boolean=stillPending && !alreadyClaimed
 }
