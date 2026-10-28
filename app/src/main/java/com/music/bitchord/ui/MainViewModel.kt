@@ -711,10 +711,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // Search's recording CAA requests await this result so an already
             // loaded album cannot trigger a redundant remote lookup.
             val reusedRecordingCovers = async {
-                if (knownTracks.isEmpty()) return@async emptyMap<String, String>()
+                // Album groups already hydrated their directly related
+                // recording covers in the previous single Room query.
+                val unresolved = knownTracks.filter {
+                    it.coverGroupMbid !in warmGroups
+                }
+                if (unresolved.isEmpty()) return@async emptyMap<String, String>()
                 val proven = try {
                     canonicalCachedRecordingArtForVisibleRows(
-                        rows = knownTracks,
+                        rows = unresolved,
                         databaseLinks = { mbids ->
                             // Direct MusicBrainz -> verified Front-v5 cache
                             // often resolves all songs. Don't initialize Room
@@ -776,7 +781,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     // after publishing the single warm batch. Composite group
                     // titles may still need edition-backed display naming.
                     if (row.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                        row.musicBrainzId in warmGroups && !row.title.contains(" & ")
+                        row.musicBrainzId in warmGroups &&
+                        !canonicalNeedsCoverRefresh(warmGroups[row.musicBrainzId]) &&
+                        !row.title.contains(" & ")
                     ) return@launch
                     if (row.kind == CanonicalSearchKind.RECORDING &&
                         row.coverGroupMbid in warmGroups
@@ -868,7 +875,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             candidates.forEach { row ->
                 launch {
                     if (row.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                        row.musicBrainzId in warmGroups && !row.title.contains(" & ")
+                        row.musicBrainzId in warmGroups &&
+                        !canonicalNeedsCoverRefresh(warmGroups[row.musicBrainzId]) &&
+                        !row.title.contains(" & ")
                     ) return@launch
                     permits.withPermit {
                         if (!canonicalDiscoveryCatalogEpoch.isCurrent(generation) ||
