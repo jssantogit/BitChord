@@ -132,6 +132,27 @@ internal fun canonicalShouldAcceptVerifiedGroupArtwork(
         !canonicalNeedsCoverRefresh(verified)
 }
 
+/**
+ * Convert a trusted Front-v5 Room batch to native artist-shelf patches. A full
+ * 500px card is not assumed correct merely because it is already filled.
+ * Neither Other/video groups nor unrelated MBIDs can receive the batch image.
+ * Keep the currently displayed editorial title instead of resurrecting a
+ * stale title captured before the asynchronous cache query finished.
+ */
+internal fun canonicalArtistVerifiedGroupUpdates(
+    rows: List<CanonicalCatalogSearchRow>,
+    verifiedGroups: Map<String, String>,
+): Map<String, Pair<String, String>> = rows.asSequence()
+    .filter {
+        it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+            canonicalEditorialReleaseType(it) != null
+    }
+    .mapNotNull { row ->
+        val url = verifiedGroups[row.musicBrainzId] ?: return@mapNotNull null
+        row.musicBrainzId to (url to row.title)
+    }
+    .toMap()
+
 internal fun canonicalArtistShelvesWithCoverUpdates(
     sections: List<HomeShelf>,
     covers: Map<String, Pair<String, String>>,
