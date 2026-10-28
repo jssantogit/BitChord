@@ -2,6 +2,8 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
+import com.music.bitchord.ui.components.FrostedTopBar
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -57,4 +59,21 @@ class HomeHeaderTest {
         compose.onNodeWithText("Downloads").performClick()
         compose.runOnIdle { assertEquals(listOf("settings", "downloads"), activated) }
     }
+    @Test fun compactHomeTitleAppearsOnlyAfterScrolling() {
+        val scrolled = mutableStateOf(false)
+        compose.setContent {
+            MaterialTheme {
+                FrostedTopBar(
+                    title = "Início",
+                    scrolled = scrolled.value,
+                    showScrolledTitle = true,
+                    showActions = false,
+                )
+            }
+        }
+        compose.onNodeWithTag("home-compact-title").assertDoesNotExist()
+        compose.runOnIdle { scrolled.value = true }
+        compose.onNodeWithTag("home-compact-title").assertExists()
+    }
+
 }
