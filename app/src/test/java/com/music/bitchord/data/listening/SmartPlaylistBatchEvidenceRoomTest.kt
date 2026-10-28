@@ -318,4 +318,58 @@ class SmartPlaylistBatchEvidenceRoomTest {
         }
     }
 
+    @Test fun musicBrainzReleaseYearAcceptsPartialDatesButRejectsInvalidCalendarDates() {
+        assertEquals(2026, parseTrustedMusicBrainzReleaseYear("2026"))
+        assertEquals(2026, parseTrustedMusicBrainzReleaseYear("2026-10"))
+        assertEquals(2024, parseTrustedMusicBrainzReleaseYear("2024-02-29"))
+        assertEquals(null, parseTrustedMusicBrainzReleaseYear("2025-02-29"))
+        assertEquals(null, parseTrustedMusicBrainzReleaseYear("2026-13"))
+        assertEquals(null, parseTrustedMusicBrainzReleaseYear("2026-06-31"))
+        assertEquals(null, parseTrustedMusicBrainzReleaseYear("2026?"))
+        assertEquals(null, parseTrustedMusicBrainzReleaseYear(null))
+    }
+
+    @Test fun releaseYearJoinsOnlyEnrichedCanonicalReleaseTrackLinks() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:linked", "Song", "Artist", 200_000L))
+            dao.upsertRecording(RecordingEntity("rec:orphan", "Other", "Artist", 150_000L))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "rel:2026", "Real EP", "Artist", null,
+            ))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "rel:undated", "Other Edition", "Artist", null,
+            ))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "rel:2026", "rec:linked", 1,
+            ))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "rel:undated", "rec:linked", 1,
+            ))
+            dao.upsertMusicBrainzReleaseEnrichment(
+                com.music.bitchord.data.catalog.MusicBrainzReleaseEnrichmentEntity(
+                    releaseId = "rel:2026", mbid = "mb:valid", title = "Real EP",
+                    artistDisplay = "Artist", releaseDate = "2026-10-20",
+                    country = null, status = null, fetchedAtEpochMs = 1L,
+                ),
+            )
+            val reader = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            )
+            val rows = reader.read(listOf("rec:linked", "rec:orphan")).associateBy { it.recordingId }
+            assertEquals(listOf(2026), rows.getValue("rec:linked").releaseYears)
+            assertTrue(rows.getValue("rec:linked").releaseYearEvidenceUnknown)
+            assertTrue(rows.getValue("rec:orphan").releaseYears.isEmpty())
+            assertTrue(rows.getValue("rec:orphan").releaseYearEvidenceUnknown)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
 }

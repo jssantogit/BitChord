@@ -415,4 +415,51 @@ class SmartPlaylistV2RuleEngineTest {
         }
     }
 
+    @Test fun yearComparisonUsesOnlyKnownLinkedMusicBrainzReleaseYears() {
+        val fullyKnown = candidate("known").copy(
+            releaseYears = listOf(2020, 2026), releaseYearEvidenceUnknown = false,
+        )
+        val partlyUnknown = candidate("partial").copy(
+            releaseYears = listOf(2026), releaseYearEvidenceUnknown = true,
+        )
+        val notEnriched = candidate("unverified")
+        val equal2026 = SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.RELEASE_YEAR, SmartPlaylistRuleOperator.EQUAL, 2026.0,
+        ), sort = SmartPlaylistV2Sort.RECORDING_ID_ASC)
+        assertEquals(listOf("known", "partial"), planner.preview(
+            listOf(fullyKnown, partlyUnknown, notEnriched), equal2026,
+        ).map { it.recordingId })
+        val not2020 = SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.RELEASE_YEAR, SmartPlaylistRuleOperator.NOT_EQUAL, 2020.0,
+        ))
+        // A known matching release invalidates NOT_EQUAL; unknown linked
+        // releases cannot be silently counted as "not released in 2020".
+        assertTrue(planner.preview(listOf(fullyKnown, partlyUnknown, notEnriched), not2020).isEmpty())
+        val only2026 = fullyKnown.copy(recordingId = "only-2026", releaseYears = listOf(2026))
+        assertEquals(listOf("only-2026"), planner.preview(
+            listOf(only2026), not2020,
+        ).map { it.recordingId })
+        val notUnderUnknown = SmartPlaylistV2Query(SmartPlaylistRule.Not(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.RELEASE_YEAR, SmartPlaylistRuleOperator.EQUAL, 2020.0,
+            ),
+        ))
+        assertTrue(planner.preview(listOf(partlyUnknown, notEnriched), notUnderUnknown).isEmpty())
+    }
+
+    @Test fun yearFilterRejectsFractionalOrOutOfRangeYearsAndMissingClaim() {
+        for (bad in listOf(-1.0, 999.0, 2024.5, 10_000.0)) {
+            org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+                SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.RELEASE_YEAR, SmartPlaylistRuleOperator.EQUAL, bad,
+                ))
+            }
+        }
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.RELEASE_YEAR, SmartPlaylistRuleOperator.IS_MISSING,
+            ))
+        }
+    }
+
 }
