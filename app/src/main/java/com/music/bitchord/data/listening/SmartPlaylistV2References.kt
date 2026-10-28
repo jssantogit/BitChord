@@ -61,10 +61,13 @@ internal fun previewSmartPlaylistReferences(
     graph: List<SavedSmartPlaylistV2Definition>,
     engine: SmartPlaylistV2RuleEngine,
 ): List<SmartPlaylistV2Match> {
-    val memberships = mutableMapOf<String, Set<String>>()
+    val memberships = mutableMapOf<String, SmartPlaylistReferencedMembership>()
     graph.forEach { definition ->
-        memberships[definition.id] = engine.preview(candidates, definition.query, memberships)
-            .mapTo(linkedSetOf()) { it.recordingId }
+        val evaluated = engine.evaluateWithUnknowns(candidates, definition.query, memberships)
+        memberships[definition.id] = SmartPlaylistReferencedMembership(
+            included = evaluated.matches.mapTo(linkedSetOf<String>()) { it.recordingId },
+            unknown = evaluated.unknownRecordingIds,
+        )
     }
     return engine.preview(candidates, root, memberships)
 }
