@@ -127,11 +127,18 @@ internal object A0AndroidAutoAcquisitionEngine {
                 reservedAutomatic=true,
             )
         }
-        return A0AutoDiscoveryCoordinator(discovery,executor).run(
+        val report=A0AutoDiscoveryCoordinator(discovery,executor).run(
             entries,quality,userRequested=true,optedIn=true,
             isCancelled=::stopped,
             stillAuthorized={SoulseekActiveSession.isCurrent(generation) &&
                 A0AndroidAutoConsent.enabled(app)},
             onSlotResolved=onSlotResolved)
+        // Search can fail temporarily without ever establishing P/F. Only
+        // A3's *durable* REQUESTED-only proof may authorize the next explicit
+        // one-tap request. No release after even one sibling began transfer.
+        val released=A3AndroidAcquisitionLedger.get(app)
+            .releaseUntransferredAutomaticBatch(jobs.values.toList())
+        return A0AutoDiscoveryCoordinator.Report(
+            report.searches,report.batch,unusedReservationReleased=released)
     }
 }
