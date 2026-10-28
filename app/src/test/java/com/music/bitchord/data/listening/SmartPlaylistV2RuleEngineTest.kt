@@ -512,4 +512,55 @@ class SmartPlaylistV2RuleEngineTest {
         }
     }
 
+
+    @Test fun trackNumberMatchesAnyCanonicalEditionButNegativesRequireCompleteEvidence() {
+        val full = candidate("full").copy(
+            trackNumbers = listOf(1, 5), trackNumberEvidenceUnknown = false,
+        )
+        val partial = candidate("partial").copy(
+            trackNumbers = listOf(5), trackNumberEvidenceUnknown = true,
+        )
+        val other = candidate("other").copy(
+            trackNumbers = listOf(7), trackNumberEvidenceUnknown = false,
+        )
+        val missing = candidate("missing")
+        fun query(op: SmartPlaylistRuleOperator, value: Double? = 1.0) =
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TRACK_NUMBER, op, value,
+            ), sort = SmartPlaylistV2Sort.RECORDING_ID_ASC)
+        val rows = listOf(full, partial, other, missing)
+        assertEquals(listOf("full"), planner.preview(
+            rows, query(SmartPlaylistRuleOperator.EQUAL),
+        ).map { it.recordingId })
+        assertEquals(listOf("other"), planner.preview(
+            rows, query(SmartPlaylistRuleOperator.NOT_EQUAL),
+        ).map { it.recordingId })
+        assertEquals(listOf("full", "partial"), planner.preview(
+            rows, query(SmartPlaylistRuleOperator.EQUAL, 5.0),
+        ).map { it.recordingId })
+        assertEquals(listOf("full", "other", "partial"), planner.preview(
+            rows, query(SmartPlaylistRuleOperator.IS_PRESENT, null),
+        ).map { it.recordingId })
+        assertTrue(planner.preview(listOf(partial, missing), SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TRACK_NUMBER, SmartPlaylistRuleOperator.EQUAL, 1.0,
+            )),
+        )).isEmpty())
+    }
+
+    @Test fun trackNumberRejectsUnknownAsMissingAndNonIntegerTargets() {
+        for (bad in listOf(-1.0, 0.0, 1.5, 100_000.0)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.TRACK_NUMBER, SmartPlaylistRuleOperator.EQUAL, bad,
+                ))
+            }
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TRACK_NUMBER, SmartPlaylistRuleOperator.IS_MISSING,
+            ))
+        }
+    }
+
 }

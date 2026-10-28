@@ -413,4 +413,40 @@ class SmartPlaylistBatchEvidenceRoomTest {
         }
     }
 
+
+    @Test fun trackPositionsComeOnlyFromVerifiedCanonicalReleaseMemberships() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:linked", "Song", "Singer", 180_000L))
+            dao.upsertRecording(RecordingEntity("rec:orphan", "Unknown", "Singer", 180_000L))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "rel:first", "Edition A", "Singer", null,
+            ))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "rel:unknown", "Edition B", "Singer", null,
+            ))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "rel:first", "rec:linked", 2,
+            ))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "rel:unknown", "rec:linked", null,
+            ))
+            val rows = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            ).read(listOf("rec:linked", "rec:orphan")).associateBy { it.recordingId }
+            assertEquals(listOf(2), rows.getValue("rec:linked").trackNumbers)
+            assertTrue(rows.getValue("rec:linked").trackNumberEvidenceUnknown)
+            assertTrue(rows.getValue("rec:orphan").trackNumbers.isEmpty())
+            assertTrue(rows.getValue("rec:orphan").trackNumberEvidenceUnknown)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
 }

@@ -34,6 +34,13 @@ internal data class CanonicalRecordingReleaseDateRow(
     val releaseDate: String?,
 )
 
+internal data class CanonicalRecordingTrackPositionRow(
+    val recordingId: String,
+    val releaseId: String,
+    /** NULL or nonpositive positions are unknown, not track zero. */
+    val trackNumber: Int?,
+)
+
 internal data class CanonicalRecordingReleaseTitleRow(
     val recordingId: String,
     val releaseId: String,
@@ -117,6 +124,21 @@ internal interface CanonicalCatalogDao {
     suspend fun recordingReleaseDatesByIds(
         recordingIds: List<String>,
     ): List<CanonicalRecordingReleaseDateRow>
+
+    /** All canonical ReleaseTrack memberships, including missing track numbers. */
+    @Query(
+        """
+        SELECT rt.recordingId AS recordingId,
+               rt.releaseId AS releaseId,
+               rt.trackNumber AS trackNumber
+        FROM catalog_release_track AS rt
+        WHERE rt.recordingId IN (:recordingIds)
+        ORDER BY rt.recordingId ASC, rt.releaseId ASC
+        """,
+    )
+    suspend fun recordingTrackPositionsByIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingTrackPositionRow>
 
     /**
      * A Recording can belong to multiple releases, each of which can have
