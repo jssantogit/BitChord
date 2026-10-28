@@ -61,6 +61,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -172,6 +173,8 @@ fun FrostedTopBar(
     accessory: (@Composable () -> Unit)? = null,
     /** No empty action capsule on the Home root when its menu lives in the header. */
     showActions: Boolean = true,
+    /** Only Home opts in: other pages retain their own large page headings. */
+    showScrolledTitle: Boolean = false,
     actions: @Composable () -> Unit = {},
 ) {
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
@@ -278,6 +281,25 @@ fun FrostedTopBar(
                 }
             }
              */
+            // The original all-page compact title was deliberately disabled.
+            // Home alone opts into it as its large heading leaves the viewport.
+            // This keeps the Apple Music-style hierarchy without duplicating
+            // titles at the top of the unscrolled screen.
+            if (showScrolledTitle && scrolled) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(horizontal = max(leadingInset(false), ActionsInset))
+                        .graphicsLayer { alpha = titleAlpha }
+                        .testTag("home-compact-title"),
+                )
+            }
             // On a pushed page the back affordance is always visible, since
             // there is no large in-list header to fall back on.
             if (onBack != null) {
