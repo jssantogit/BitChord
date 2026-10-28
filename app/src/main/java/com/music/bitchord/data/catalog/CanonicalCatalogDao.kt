@@ -606,4 +606,53 @@ internal interface CanonicalCatalogDao {
         youtubeProvider: String,
         recordingEntityType: String,
     ): List<CanonicalLocalRow>
+
+    /**
+     * Same canonical/local projection as localRows, but restrict decoding,
+     * release metadata and artwork joins to the exact selected asset IDs.
+     * B9/B10 may resolve hundreds of queue entries without scanning 50k+
+     * unrelated local media rows on each action.
+     */
+    @Query(
+        """
+        SELECT
+            recording.id AS recordingId,
+            asset.id AS mediaAssetId,
+            asset.sourceKey AS sourceKey,
+            recording.title AS title,
+            recording.artistDisplay AS artistDisplay,
+            recording.durationMs AS durationMs,
+            albumRelease.title AS albumTitle,
+            COALESCE(albumRelease.artworkUri, asset.artworkUri) AS artworkUri,
+            asset.uri AS uri,
+            asset.path AS path,
+            asset.dateAddedSeconds AS dateAddedSeconds,
+            asset.dateModifiedSeconds AS dateModifiedSeconds,
+            releaseTrack.trackNumber AS trackNumber,
+            (
+                SELECT identity.externalId
+                FROM catalog_external_identity AS identity
+                WHERE identity.entityId = recording.id
+                  AND identity.provider = :youtubeProvider
+                  AND identity.entityType = :recordingEntityType
+                LIMIT 1
+            ) AS youtubeVideoId
+        FROM catalog_media_asset AS asset
+        INNER JOIN catalog_recording AS recording
+            ON recording.id = asset.recordingId
+        LEFT JOIN catalog_release_track AS releaseTrack
+            ON releaseTrack.recordingId = recording.id
+        LEFT JOIN catalog_release AS albumRelease
+            ON albumRelease.id = releaseTrack.releaseId
+        WHERE asset.provider = :localProvider AND asset.id IN (:mediaAssetIds)
+        ORDER BY recording.artistDisplay COLLATE NOCASE,
+                 recording.title COLLATE NOCASE, asset.id
+        """,
+    )
+    suspend fun localRowsByAssetIds(
+        localProvider: String,
+        youtubeProvider: String,
+        recordingEntityType: String,
+        mediaAssetIds: List<String>,
+    ): List<CanonicalLocalRow>
 }

@@ -75,11 +75,21 @@ internal class RoomCanonicalQueueResolver(context: Context) : CanonicalQueueReso
     override suspend fun resolveAll(
         identities: List<CanonicalQueueIdentity?>,
     ): List<CanonicalPlayableAsset?> {
-        val needsLocal = identities.any { it?.providerKey == LOCAL_PROVIDER }
-        val localRows = if (needsLocal) {
-            dao.localRows(LOCAL_PROVIDER, YOUTUBE_PROVIDER, RECORDING_ENTITY_TYPE)
-        } else {
-            emptyList()
+        val selectedLocalAssetIds = identities.asSequence()
+            .filter { it?.providerKey == LOCAL_PROVIDER }
+            .mapNotNull { it?.mediaAssetId }
+            .distinct()
+            .toList()
+        // Resolve only selected local MediaAssets. The legacy Song identity
+        // discovery path still uses the complete catalog, but smart B9/B10
+        // queues have canonical identities already and need no full scan.
+        val localRows = selectedLocalAssetIds.chunked(400).flatMap { selected ->
+            dao.localRowsByAssetIds(
+                localProvider = LOCAL_PROVIDER,
+                youtubeProvider = YOUTUBE_PROVIDER,
+                recordingEntityType = RECORDING_ENTITY_TYPE,
+                mediaAssetIds = selected,
+            )
         }
         val localByAsset = localRows.associateBy { it.mediaAssetId }
         return identities.map { identity ->
