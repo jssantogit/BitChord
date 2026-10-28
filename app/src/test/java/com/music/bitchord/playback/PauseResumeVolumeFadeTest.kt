@@ -217,6 +217,13 @@ class PauseResumeVolumeFadeTest {
         runCurrent()
         assertEquals(2, deck.playCalls)
         assertTrue(deck.playWhenReady)
+        // The fake deliberately kept buffering. Once audio is available, the
+        // transport envelope must complete instead of leaving a test-owned
+        // coroutine suspended forever at runTest shutdown.
+        deck.audible = true
+        advanceTimeBy(250)
+        runCurrent()
+        assertEquals(1f, deck.volume, 0.00001f)
     }
 
     @Test fun `failed play command restores volume instead of stranding a muted deck`() = runTest {
