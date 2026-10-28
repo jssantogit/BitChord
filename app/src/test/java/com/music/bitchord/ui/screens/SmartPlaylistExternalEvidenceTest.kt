@@ -103,4 +103,13 @@ class SmartPlaylistExternalEvidenceTest {
         )).requiresRelativeAgeRefresh())
     }
 
+
+
+    @Test fun localFileAddedAgeAlsoActivatesForegroundOnlyClockRefresh() {
+        val query = SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(compare(SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED)),
+        )
+        assertTrue(query.requiresRelativeAgeRefresh())
+    }
+
 }
