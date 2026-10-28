@@ -1474,6 +1474,66 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
             }
+            // A specific MusicBrainz Release is an exact edition identity:
+            // its previously persisted Track rows can paint immediately,
+            // while lookupRelease refreshes in the network branch below.
+            if (entry.kind == CanonicalSearchKind.RELEASE) {
+                val cachedReleasePreview = try {
+                    withContext(Dispatchers.IO) {
+                        val db = CanonicalCatalogDatabase.get(getApplication<Application>())
+                        val detail = canonicalMatchingCachedRelease(
+                            entry.musicBrainzId,
+                            MusicBrainzCatalogIndex(db).cachedRelease(entry.musicBrainzId),
+                        )
+                        detail?.let { cached ->
+                            val assets = db.catalogDao().musicBrainzRecordingMbidsWithAssets(
+                                cached.tracks.map { it.recordingMbid },
+                            ).toSet()
+                            CanonicalCatalogDetailPage(
+                                title = cached.title,
+                                summary = "Saved release · refreshing",
+                                artworkUri = entry.artworkUri,
+                                rows = canonicalReleaseTracksWithArtwork(
+                                    cached.tracks.map { track ->
+                                        CanonicalCatalogSearchRow(
+                                            musicBrainzId = track.recordingMbid,
+                                            kind = CanonicalSearchKind.RECORDING,
+                                            title = "${track.mediumNumber}.${track.trackNumber}  ${track.title}",
+                                            subtitle = track.artistDisplay ?: cached.artistDisplay,
+                                            hasCatalogedAsset = track.recordingMbid in assets,
+                                            fromOfflineCache = true,
+                                            trackMbid = track.trackMbid,
+                                            durationMs = track.durationMs,
+                                        )
+                                    },
+                                    entry.artworkUri,
+                                ),
+                            )
+                        }
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { null }
+                if (cachedReleasePreview != null &&
+                    _searchSource.value == SearchSource.CANONICAL &&
+                    canonicalPath.lastOrNull() == entry
+                ) {
+                    _canonicalDetail.value = UiState.Success(cachedReleasePreview)
+                    val pageId = canonicalNativeBrowseId(entry)
+                    _detailStack.update { pages -> pages.map { page ->
+                        if (page.browseId != pageId) page else page.copy(
+                            title = cachedReleasePreview.title,
+                            thumbnailUrl = cachedReleasePreview.artworkUri ?: page.thumbnailUrl,
+                            songs = UiState.Success(emptyList()),
+                            sections = canonicalNativeSections(
+                                parentKind = entry.kind,
+                                rows = cachedReleasePreview.rows,
+                                heading = getApplication<Application>().getString(R.string.albums),
+                            ),
+                        )
+                    } }
+                }
+            }
             var artistFirstPage: MusicBrainzCatalogPage<MusicBrainzReleaseGroupHit>? = null
             val output: UiState<CanonicalCatalogDetailPage> = when (entry.kind) {
                 CanonicalSearchKind.ARTIST -> when (
