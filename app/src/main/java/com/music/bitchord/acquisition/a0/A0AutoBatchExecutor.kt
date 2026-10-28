@@ -40,11 +40,12 @@ internal class A0AutoBatchExecutor(
         optedIn:Boolean,
         isCancelled:()->Boolean,
         stillAuthorized:()->Boolean,
+        onSlotResolved:(Int,TrackStatus)->Unit={ _,_ -> },
     ):Report {
         val ready=evidence.executionSnapshot(entries)
             ?: return Report(List(entries.size){TrackStatus.MANUAL_REVIEW},0)
         return run(entries,ready.choicesBySlot,ready.truncatedSlots,profile,
-            userRequested,optedIn,isCancelled,stillAuthorized)
+            userRequested,optedIn,isCancelled,stillAuthorized,onSlotResolved)
     }
 
     fun run(
@@ -56,6 +57,7 @@ internal class A0AutoBatchExecutor(
         optedIn:Boolean,
         isCancelled:()->Boolean,
         stillAuthorized:()->Boolean,
+        onSlotResolved:(Int,TrackStatus)->Unit={ _,_ -> },
     ):Report {
         val count=entries.size
         val valid=count in 1..SoulseekBatchPlan.MAX_TRACKS &&
@@ -67,6 +69,12 @@ internal class A0AutoBatchExecutor(
         if(!valid || !userRequested || !optedIn)
             return Report(List(count){TrackStatus.MANUAL_REVIEW},0)
         val status=ArrayList<TrackStatus>(count)
+        fun finishSlot(index:Int,value:TrackStatus) {
+            status.add(value)
+            // Progress delivery must never turn an A3 publication into a
+            // failed acquisition; callback is strictly observational.
+            try { onSlotResolved(index,value) }catch(_:Exception) {}
+        }
         var attempts=0
         // One physical peer path must NEVER be automatically published as two
         // different canonical album slots. Reprises need separate evidence.
@@ -74,12 +82,12 @@ internal class A0AutoBatchExecutor(
         for(index in entries.indices) {
             if(isCancelled() || !stillAuthorized() ||
                 Thread.currentThread().isInterrupted) {
-                status.add(TrackStatus.CANCELLED)
+                finishSlot(index,TrackStatus.CANCELLED)
                 repeat(count-index-1){ status.add(TrackStatus.NOT_STARTED) }
                 break
             }
             if(index in truncatedSlots) {
-                status.add(TrackStatus.MANUAL_REVIEW)
+                finishSlot(index,TrackStatus.MANUAL_REVIEW)
                 continue
             }
             // Check eligibility before opening any transport, so an unknown
@@ -90,7 +98,7 @@ internal class A0AutoBatchExecutor(
             val preview=A0AutoCandidateSelectionPolicy.preview(
                 entries[index],unspent,profile)
             if(preview.status!=A0AutoCandidateSelectionPolicy.Status.PROVISIONAL) {
-                status.add(TrackStatus.MANUAL_REVIEW)
+                finishSlot(index,TrackStatus.MANUAL_REVIEW)
                 continue
             }
             val result=try {
@@ -106,7 +114,7 @@ internal class A0AutoBatchExecutor(
                 result.selectedSource?.let {
                     publishedSources.add(it.peerUsername to it.remotePath)
                 }
-            status.add(when(result?.status) {
+            finishSlot(index,when(result?.status) {
                 A0AutoAcquisitionExecutor.Status.PUBLISHED -> TrackStatus.PUBLISHED
                 A0AutoAcquisitionExecutor.Status.CANCELLED -> TrackStatus.CANCELLED
                 A0AutoAcquisitionExecutor.Status.RECONCILE -> TrackStatus.RECONCILE
