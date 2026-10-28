@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -600,11 +599,15 @@ internal fun SmartPlaylistV2WizardUi(
                                             singleLine = true,
                                         )
                                     } else {
-                                        val shown = if (draft.field == SmartPlaylistRuleField.DURATION_MS)
-                                            draft.value?.div(1000.0) else draft.value
+                                        var numericText by remember(draft.field, editingPath) {
+                                            val shown = if (draft.field == SmartPlaylistRuleField.DURATION_MS)
+                                                draft.value?.div(1000.0) else draft.value
+                                            mutableStateOf(shown?.toString()?.removeSuffix(".0").orEmpty())
+                                        }
                                         OutlinedTextField(
-                                            shown?.toString()?.removeSuffix(".0").orEmpty(),
+                                            numericText,
                                             { raw ->
+                                                numericText = raw
                                                 val number = raw.replace(',', '.').toDoubleOrNull()
                                                 draft = draft.copy(value = number?.let {
                                                     if (draft.field == SmartPlaylistRuleField.DURATION_MS)
@@ -774,7 +777,13 @@ internal fun SmartPlaylistV2WizardUi(
                     op == SmartPlaylistRuleOperator.IS_MISSING
                 draft = draft.copy(
                     operator = op,
-                    value = if (presence || draft.field.isTextField()) null else draft.value ?: 1.0,
+                    value = if (presence || draft.field.isTextField()) null else draft.value ?:
+                        when (draft.field) {
+                            SmartPlaylistRuleField.DURATION_MS -> 180_000.0
+                            SmartPlaylistRuleField.RELEASE_YEAR -> 2026.0
+                            SmartPlaylistRuleField.EXPLICIT_RATING -> 3.0
+                            else -> 1.0
+                        },
                     textValue = if (presence || !draft.field.isTextField()) null
                         else draft.textValue ?: "",
                 )
