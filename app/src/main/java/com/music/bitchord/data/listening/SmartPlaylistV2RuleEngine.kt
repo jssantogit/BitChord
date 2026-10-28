@@ -71,6 +71,7 @@ internal enum class SmartPlaylistV2Sort {
     LAST_AUDIBLE_DESC, LAST_AUDIBLE_ASC,
     RECORDING_ID_ASC, STABLE_RANDOM,
     TITLE_ASC, TITLE_DESC, ARTIST_ASC, ARTIST_DESC,
+    LOCAL_RATING_NEWEST, LOCAL_RATING_OLDEST,
 }
 
 internal fun SmartPlaylistRuleField.isTextField(): Boolean =
@@ -321,6 +322,20 @@ internal class SmartPlaylistV2RuleEngine(
                 sortByNormalizedText(candidateRows, { it.artistDisplay }, descending = false)
             SmartPlaylistV2Sort.ARTIST_DESC ->
                 sortByNormalizedText(candidateRows, { it.artistDisplay }, descending = true)
+            SmartPlaylistV2Sort.LOCAL_RATING_NEWEST -> candidateRows.sortedWith(
+                compareByDescending<RuleBasedRecordingCandidate> {
+                    it.localRatingUpdatedAtEpochMs?.takeIf { timestamp ->
+                        it.localRatingDateEvidenceKnown && timestamp in 0L..now
+                    } ?: Long.MIN_VALUE
+                }.thenBy { it.recordingId },
+            )
+            SmartPlaylistV2Sort.LOCAL_RATING_OLDEST -> candidateRows.sortedWith(
+                compareBy<RuleBasedRecordingCandidate> {
+                    it.localRatingUpdatedAtEpochMs?.takeIf { timestamp ->
+                        it.localRatingDateEvidenceKnown && timestamp in 0L..now
+                    } ?: Long.MAX_VALUE
+                }.thenBy { it.recordingId },
+            )
             SmartPlaylistV2Sort.RECORDING_ID_ASC -> candidateRows.sortedBy { it.recordingId }
             SmartPlaylistV2Sort.STABLE_RANDOM -> candidateRows.sortedWith(
                 compareBy<RuleBasedRecordingCandidate> { it.recordingId.hashCode() xor query.randomSeed }
