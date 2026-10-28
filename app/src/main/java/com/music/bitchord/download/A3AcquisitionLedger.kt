@@ -89,7 +89,11 @@ internal class A3AcquisitionLedger(private val store:Store) {
      * Includes failed/interrupted slots: without proving A2 rolled back, a
      * previous attempt is NOT permission for an unattended re-download.
      */
-    fun reserveAutomaticBatch(requests:List<AutomaticSlot>):Unit=synchronized(lock) {
+    fun reserveAutomaticBatch(
+        requests:List<AutomaticSlot>,
+        /** Serialized by SoulseekActiveSession generation on Android. */
+        commitGuard:((()->Unit)->Unit)={ action -> action() },
+    ):Unit=synchronized(lock) {
         require(requests.size in 1..64) { "A3 auto album size invalid" }
         require(requests.map { it.id }.distinct().size==requests.size)
         require(requests.all { slot ->
@@ -137,7 +141,7 @@ internal class A3AcquisitionLedger(private val store:Store) {
         rows.forEach { retained[it.id]=it }
         // Any failed commit leaves both the old in-memory map AND the salt
         // unchanged; never mint a new key over old durable reservations.
-        commit(retained,salt)
+        commitGuard { commit(retained,salt) }
     }
 
     private fun fingerprint(salt:String,kind:String,vararg values:String):String {
