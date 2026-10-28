@@ -17,6 +17,7 @@ import com.music.bitchord.download.SoulseekBatchPayload
 import com.music.bitchord.download.SoulseekBatchSession
 import com.music.bitchord.download.SoulseekBatchPlan
 import com.music.bitchord.download.Downloads
+import com.music.bitchord.data.model.Song
 import com.music.bitchord.download.SoulseekManualRecoveryTermination
 import com.music.bitchord.download.SoulseekManualLifecycleGate
 import android.widget.Toast
@@ -1243,6 +1244,30 @@ class A0ManualLoginActivity : Activity() {
                                                         }
                                                     )
                                                     publishedForCurrent=true
+                                                    // Manual A3 publication must be indexed by
+                                                    // Biblioteca → Downloads as well as
+                                                    // appearing in Android local MediaStore.
+                                                    // This is a separate, already published URI:
+                                                    // never start another P/F if indexing fails.
+                                                    val queryForLibrary=searchInput.text.toString()
+                                                        .trim().take(120)
+                                                    val albumForLibrary=albumInput.text.toString()
+                                                        .trim().take(120)
+                                                    val item=Song(
+                                                        videoId="soulseek-manual:$id",
+                                                        title=queryForLibrary.substringAfter(
+                                                            " - ",queryForLibrary),
+                                                        artist=queryForLibrary.substringBefore(
+                                                            " - ","Artista"),
+                                                        thumbnailUrl=null,
+                                                        albumName=albumForLibrary.ifBlank { null },
+                                                    )
+                                                    runCatching {
+                                                        Downloads.rememberSoulseekPublished(item,saved)
+                                                    }.onFailure {
+                                                        android.util.Log.e("BitChord",
+                                                            "A3 manual published but Downloads index failed",it)
+                                                    }
                                                     if(manualRecovery) {
                                                         // Reconcile against the original
                                                         // release slot only after A3 durable.
