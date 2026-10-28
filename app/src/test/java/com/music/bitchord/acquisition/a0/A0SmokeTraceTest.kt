@@ -9,6 +9,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class A0SmokeTraceTest {
+    @Test fun queueBackpressureTimeBucketsRemainAnonymousAndSumToWorkerDrops() {
+        val points=mutableListOf<StructuredTracePoint>()
+        val trace=A0SmokeTrace.start(StructuredTracer(
+            sink=StructuredTraceSink { points.add(it) }
+        ))
+        val windows=A0PeerQueueRejectionTimeline.Summary(4,3,5)
+        trace.peerSearchBackpressure(12,workerQueueDropped=12,rejectionTimeline=windows)
+        trace.finish(TraceOutcome.SUCCEEDED)
+        val attrs=points.single {it.stage=="peer_search_backpressure"}.attributes
+        assertEquals("4",attrs["workerDroppedBefore6"])
+        assertEquals("3",attrs["workerDropped6To12"])
+        assertEquals("5",attrs["workerDroppedAfter12"])
+        assertEquals("12",attrs["workerQueueDropped"])
+        assertFalse(attrs.keys.any {it.contains("username",ignoreCase=true) ||
+            it.contains("path",ignoreCase=true) || it.contains("token",ignoreCase=true)})
+    }
+
     @Test fun tracesAreCorrelatedWithBoundedTypedStagesAndDuration() {
         val points = mutableListOf<StructuredTracePoint>()
         var now = 1_000_000L

@@ -423,6 +423,7 @@ class A0ManualLoginActivity : Activity() {
                                         qualityProfile=selectedQuality,
                                         peerReliability=peerReliability,
                                         collectReleaseShadow=batch!=null,
+                                        releaseQueries=batch?.entries?.map { it.query }.orEmpty(),
                                     ).also { transfer ->
                                         if (!SoulseekActiveSession.registerTransfer(
                                                 transfer, accountGeneration
@@ -476,7 +477,9 @@ class A0ManualLoginActivity : Activity() {
                                     }
                                 }
                                 // Collect peers over a fixed window; never stop at first match.
-                                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(18)
+                                val searchStartedAt=System.nanoTime()
+                                val deadline=searchStartedAt + TimeUnit.SECONDS.toNanos(18)
+                                val queueRejectionTimeline=A0PeerQueueRejectionTimeline()
                                 // The server reader only parses frames; indirect peer
                                 // handshakes run concurrently on peer-only sockets.
                                 val peerWorkers=A0PeerSearchWorkers(queueCapacity=128,parallelism=12)
@@ -643,6 +646,9 @@ class A0ManualLoginActivity : Activity() {
                                                     offerGate.releaseUnsubmitted(
                                                         offer.username,offer.token)
                                                     peerOfferBackpressure.incrementAndGet()
+                                                    queueRejectionTimeline.rejectedAt(
+                                                        TimeUnit.NANOSECONDS.toMillis(
+                                                            System.nanoTime()-searchStartedAt))
                                                 }
                                             }
                                             if (!framedServer.finishPendingFrame() &&
@@ -822,7 +828,8 @@ class A0ManualLoginActivity : Activity() {
                                             workerQueueDropped=peerOfferBackpressure.get(),
                                             directCollectorDropped=directOfferBackpressure.get(),
                                             globalCapacityDropped=offerGate.capacityDropped,
-                                            duplicateTickets=offerGate.duplicateCount)
+                                            duplicateTickets=offerGate.duplicateCount,
+                                            rejectionTimeline=queueRejectionTimeline.snapshot())
                                         trace.peerSearchWorkerPressure(
                                             peerWorkers.snapshot(),directCollector.workerSnapshot())
                                         handoff?.progress()?.let {
