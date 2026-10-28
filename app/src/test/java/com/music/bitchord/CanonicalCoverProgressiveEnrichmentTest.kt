@@ -521,4 +521,45 @@ class CanonicalCoverProgressiveEnrichmentTest {
         assertEquals("https://archive.org/official-group.jpg", updated[0].artworkUri)
         assertEquals("https://archive.org/track-owned.jpg", updated[1].artworkUri)
     }
+
+    @Test fun lateEditionResponseNeverReplacesAlreadySelectedGroupFront() {
+        val group = "11111111-1111-4111-8111-111111111111"
+        val base = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            "recording", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+            "Attention", "NewJeans", coverGroupMbid = group,
+        )
+        val edition = "https://archive.org/other-edition-front.jpg"
+        val groupFront = "https://archive.org/verified-group-front.jpg"
+
+        // Network completion order A: edition fallback before canonical group art.
+        val firstFallback = com.music.bitchord.ui.canonicalRecordingWithInheritedReleaseArt(
+            base, edition,
+        )
+        assertEquals(
+            com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE,
+            firstFallback.artworkProvenance,
+        )
+        val frontArrives = com.music.bitchord.ui.canonicalRowsWithNewVerifiedGroupArt(
+            listOf(firstFallback), group, groupFront,
+        ).single()
+        assertEquals(groupFront, frontArrives.artworkUri)
+        assertEquals(
+            com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP,
+            frontArrives.artworkProvenance,
+        )
+
+        // Network completion order B: verified group art before stale edition.
+        val groupFirst = com.music.bitchord.ui.canonicalRowsWithNewVerifiedGroupArt(
+            listOf(base), group, groupFront,
+        ).single()
+        val staleEdition = com.music.bitchord.ui.canonicalRecordingWithInheritedReleaseArt(
+            groupFirst, edition,
+        )
+        assertEquals(groupFirst, staleEdition)
+        val trackOwnsCover = base.copy(artworkUri = "content://music/explicit-song-art")
+        assertEquals(trackOwnsCover,
+            com.music.bitchord.ui.canonicalRecordingWithInheritedReleaseArt(
+                trackOwnsCover, edition,
+            ))
+    }
 }
