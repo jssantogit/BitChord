@@ -16,9 +16,10 @@ import com.music.bitchord.download.SoulseekBatchPlan
 internal object A0AndroidAutoConsent {
     private const val PREFS="bitchord_soulseek_auto_v1"
     private const val ENABLED="explicit_unattended_selection"
-    fun enabled(context:Context):Boolean =
+    fun enabled(context:Context):Boolean = runCatching {
         context.applicationContext.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
             .getBoolean(ENABLED,false)
+    }.getOrDefault(false) // Corrupted/incorrect preference type remains OFF.
 
     /** To be called ONLY by the future explicit settings control. */
     fun updateFromUserAction(context:Context,enabled:Boolean):Boolean =
