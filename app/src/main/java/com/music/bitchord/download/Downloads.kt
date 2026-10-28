@@ -238,7 +238,20 @@ object Downloads {
         }
     }
 
-    /** Closed by the non-exported review Activity on destruction. */
+    /** Verify the exactly pending slots before a new Activity may own the
+     * in-process recovery lease. A recreated/stale Intent has no authority.
+     */
+    internal fun validSoulseekManualReview(
+        sessionId:String,
+        originalIndices:List<Int>,
+        entries:List<SoulseekBatchPlan.Entry>,
+    ):Boolean = synchronized(lock) {
+        sessionId in openManualReviews &&
+            _autoReviews.value[sessionId]?.matchesManualPayload(
+                originalIndices,entries)==true
+    }
+
+    /** Closed by the non-exported review Activity after its worker terminates. */
     internal fun closeSoulseekManualReview(sessionId:String) {
         synchronized(lock) {
             openManualReviews.remove(sessionId)
