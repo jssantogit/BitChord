@@ -9,6 +9,7 @@ import com.music.bitchord.download.A1DownloadDestinationPolicy
 import com.music.bitchord.download.A3AndroidAcquisitionLedger
 import com.music.bitchord.download.A3AcquisitionLedger
 import java.util.UUID
+import java.io.IOException
 import com.music.bitchord.download.SoulseekBatchPlan
 
 /**
@@ -100,7 +101,16 @@ internal object A0AndroidAutoAcquisitionEngine {
                     query=entry.query,
                     album=entry.album,
                 )
-            }
+            },
+            commitGuard={ commit ->
+                // Atomic with Soulseek account generation revocation:
+                // a stale worker cannot permanently claim a recording while
+                // another thread is logging out or replacing credentials.
+                SoulseekActiveSession.commitIfCurrent(generation) {
+                    if(stopped())throw IOException("Auto reservation revoked")
+                    commit()
+                }
+            },
         )
         if(stopped())return refused(entries.size)
         val discovery=A0FreshAutoSearchTransport(app,generation,quality)
