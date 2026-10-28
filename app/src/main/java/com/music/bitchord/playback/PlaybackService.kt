@@ -6737,7 +6737,7 @@ class PlaybackService : MediaLibraryService() {
     private fun requestOutputReconfiguration() {
         outputReconfigureJob?.cancel()
         outputReconfigureJob = scope.launch {
-            transportFade.reset()
+            transportFade.settlePendingPause()
             // A physical route/preference change invalidates both old sinks.
             // Let the existing controller settle and retire the non-session
             // player immediately; waiting for the old route's fade can strand
@@ -6868,7 +6868,7 @@ class PlaybackService : MediaLibraryService() {
         }
         scope.launch {
             AppSettings.pauseResumeFadeMs.drop(1).collect { ms ->
-                if (ms == 0) transportFade.reset()
+                if (ms == 0) transportFade.settlePendingPause()
             }
         }
         scope.launch {
