@@ -72,12 +72,22 @@ internal object A0AutoPostTransferTechnicalGate {
         } ?: return Assessment(Status.REVIEW,Reason.DURATION_MISSING)
         if(abs(actualDuration-expectedDuration*1000L)>8_000L)
             return Assessment(Status.REJECT,Reason.DURATION_MISMATCH)
+        // A 24-bit/96kHz stereo WAV naturally runs at 4608 kbps, and
+        // compressed lossless FLAC can exceed 1536 kbps too. The lossy cap
+        // does not apply to PCM/lossless. Reject absurd decoder readings
+        // while preserving the strict MP3 ceiling of 320 kbps.
+        val bitrateValid=decoded.bitrateKbps?.let { rate ->
+            when(codec) {
+                A0CanonicalAcquisitionIntent.Codec.MP3 -> rate in 32..320
+                A0CanonicalAcquisitionIntent.Codec.AAC_ADTS -> rate in 32..1536
+                A0CanonicalAcquisitionIntent.Codec.FLAC,
+                A0CanonicalAcquisitionIntent.Codec.PCM_WAV -> rate in 1..100_000
+            }
+        } ?: true
         if((decoded.sampleRateHz!=null &&
                 decoded.sampleRateHz !in 8000..384000) ||
             (decoded.bitDepth!=null && decoded.bitDepth !in 8..32) ||
-            (decoded.bitrateKbps!=null && decoded.bitrateKbps !in 32..1536) ||
-            (codec==A0CanonicalAcquisitionIntent.Codec.MP3 &&
-                decoded.bitrateKbps!=null && decoded.bitrateKbps>320))
+            !bitrateValid)
             return Assessment(Status.REJECT,Reason.INVALID_TECHNICAL_METADATA)
 
         // FLAC/WAV lossless provenance needs actual local PCM properties,
