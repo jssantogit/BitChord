@@ -74,6 +74,8 @@ internal data class RuleBasedRecordingCandidate(
     val localRatingDateEvidenceKnown: Boolean = false,
     /** A canonical release has an artwork URI; not evidence of a loaded correct image. */
     val hasReleaseArtworkReference: Boolean = false,
+    val localAddedEpochMs: List<Long> = emptyList(),
+    val localAddedDateEvidenceUnknown: Boolean = true,
 )
 
 internal data class RuleBasedSmartPlaylistQuery(
@@ -193,7 +195,8 @@ internal fun SmartPlaylistRule.referencedFields(): Set<SmartPlaylistRuleField> =
 }
 
 private fun SmartPlaylistRule.needsSourceKinds(): Boolean = when (this) {
-    is SmartPlaylistRule.Comparison -> field == SmartPlaylistRuleField.SOURCE_KIND
+    is SmartPlaylistRule.Comparison -> field == SmartPlaylistRuleField.SOURCE_KIND ||
+        field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED
     is SmartPlaylistRule.Group -> children.any { it.needsSourceKinds() }
     is SmartPlaylistRule.Not -> child.needsSourceKinds()
 }
