@@ -67,6 +67,24 @@ internal class A0MultiSearchCandidateEvidence(
     @Synchronized
     fun stop() { stopped=true }
 
+    /**
+     * A release-wide read-only suggestion for each canonical slot, using
+     * ALL retained searches. No single song inherits another song's original
+     * preflight confidence. A clipped/contradictory slot is review-only.
+     */
+    @Synchronized
+    fun selectionPreview(
+        reliability:A0PeerReliabilityEvidence=A0PeerReliabilityEvidence(),
+    ):List<A0AutoCandidateSelectionPolicy.Decision> {
+        if(!valid)return emptyList()
+        return entries.mapIndexed { index,entry ->
+            A0AutoCandidateSelectionPolicy.preview(
+                entry,buckets[index].values.toList(),quality,reliability,
+                sampleTruncated=clipped[index],
+            )
+        }
+    }
+
     @Synchronized
     fun snapshot():Snapshot {
         if(!valid)return Snapshot(null,0,0,entries.size)

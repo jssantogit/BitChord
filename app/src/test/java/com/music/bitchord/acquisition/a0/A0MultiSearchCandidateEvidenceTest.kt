@@ -62,6 +62,31 @@ class A0MultiSearchCandidateEvidenceTest {
         assertEquals(0,result.preview!!.autoReadyTracks)
     }
 
+    @Test fun selectionForSiblingUsesItsOwnIdentityAndAggregatedClaims() {
+        val state=A0MultiSearchCandidateEvidence(entries,quality)
+        state.add(choices("p1","Magnetic",161))
+        state.add(choices("p2","Lucky Girl Syndrome",160))
+        val decisions=state.selectionPreview()
+        assertEquals(2,decisions.size)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,
+            decisions[0].status)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,
+            decisions[1].status)
+        assertFalse(decisions[0].canTransfer)
+        assertFalse(decisions[1].canTransfer)
+        assertFalse(decisions.toString().contains("p1"))
+    }
+
+    @Test fun contradictoryPerPathEvidencePreventsAutomaticSelection() {
+        val state=A0MultiSearchCandidateEvidence(entries,quality)
+        state.add(choices("p1","Magnetic",161,320))
+        state.add(choices("p1","Magnetic",161,256))
+        assertEquals(A0AutoCandidateSelectionPolicy.Reason.INCOMPLETE_SAMPLE,
+            state.selectionPreview()[0].reason)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,
+            state.selectionPreview()[0].status)
+    }
+
     @Test fun cancellationClosesTheAccumulatorAndKeepsCollectedEvidenceReadOnly() {
         val state=A0MultiSearchCandidateEvidence(entries,quality)
         state.add(choices("peer-a","Magnetic",161))
