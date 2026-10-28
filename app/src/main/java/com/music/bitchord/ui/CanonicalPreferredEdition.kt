@@ -95,7 +95,7 @@ internal fun canonicalMatchingCachedRelease(
  * The group's own CAA Front can originate from a video/alternate edition.
  */
 private val alternateArtworkPackaging = Regex(
-    """(?i)\b(?:ver\.?|version|vinyl|photobook|jewel\s*case|photocard|cover\s*ver\.?|limited|collector|reissue|remaster|remix|instrumental|karaoke|deluxe|live|sped\s*up|slowed)\b"""
+    """(?i)\b(?:ver\.?|version|vinyl|photobook|jewel\s*case|photocard|cover\s*ver\.?|limited|collector|reissue|remaster|remix|instrumental|karaoke|deluxe|live|sped\s*up|slowed|digipack|nemo|poca|platform(?:\s+album)?|kit(?:\s+album)?|compact(?:\s+edition)?|member(?:\s+(?:edition|version))?|store\s+exclusive|exclusive|signed\s+(?:edition|copy))\b"""
 )
 
 /**
