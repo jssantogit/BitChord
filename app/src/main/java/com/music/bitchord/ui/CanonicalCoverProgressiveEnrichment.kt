@@ -131,9 +131,18 @@ internal fun canonicalRowsWithVerifiedRecordingArt(
         // A release lookup is only a provisional inherited sleeve, not an
         // independently owned per-track picture. A later proven group Front
         // supersedes it irrespective of HTTP completion order.
-        val inherited = row.artworkProvenance != null
+        val mayReplace = when (row.artworkProvenance) {
+            // A Release-specific fallback is provisional until the intended
+            // group's Official Front has finished resolving.
+            com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE -> true
+            // A verified Front must never be downgraded from 500 to 250 by
+            // a late, lower-res cache batch or stale search response.
+            com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP ->
+                canonicalShouldAcceptArtworkUpdate(row.artworkUri, cover)
+            null -> row.artworkUri.isNullOrBlank()
+        }
         if (row.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING &&
-            cover != null && (row.artworkUri.isNullOrBlank() || inherited) &&
+            cover != null && mayReplace &&
             (row.artworkUri != cover ||
                 row.artworkProvenance !=
                     com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP)
