@@ -167,6 +167,79 @@ class A3AutomaticIdentityReservationTest {
         assertEquals(2,A3AcquisitionLedger(store).all().size)
     }
 
+    @Test fun noPeerTransferMayReleaseWholeUnusedAutoAlbum() {
+        val store=Store()
+        val ledger=A3AcquisitionLedger(store)
+        ledger.reserveAutomaticBatch(listOf(
+            slot(first),slot(second,"recording-2","Artist - Track Two")))
+        val reopened=A3AcquisitionLedger(store)
+        assertTrue(reopened.releaseUntransferredAutomaticBatch(listOf(first,second)))
+        assertTrue(reopened.all().isEmpty())
+        val next=A3AcquisitionLedger(store)
+        next.reserveAutomaticBatch(listOf(slot(third)))
+        assertEquals(1,next.all().size)
+        assertEquals(3,store.writes)
+    }
+
+    @Test fun anyStartedPeerMakesEntireAlbumIneligibleForRelease() {
+        val store=Store()
+        val ledger=A3AcquisitionLedger(store)
+        ledger.reserveAutomaticBatch(listOf(
+            slot(first),slot(second,"recording-2","Artist - Two")))
+        ledger.advance(first,A3AcquisitionLedger.Phase.SEARCHING)
+        ledger.advance(first,A3AcquisitionLedger.Phase.AWAITING_SELECTION)
+        ledger.advance(first,A3AcquisitionLedger.Phase.SELECTED)
+        ledger.advance(first,A3AcquisitionLedger.Phase.TRANSFERRING)
+        val rawBefore=store.raw
+        assertFalse(ledger.releaseUntransferredAutomaticBatch(listOf(first,second)))
+        assertEquals(rawBefore,store.raw)
+        try {
+            ledger.reserveAutomaticBatch(listOf(slot(third)))
+            fail("any started P/F retains the whole album's fence")
+        }catch(_:IllegalStateException) {}
+    }
+
+    @Test fun onlyACompleteExactBatchCanReleaseReservedSlots() {
+        val store=Store()
+        val ledger=A3AcquisitionLedger(store)
+        ledger.reserveAutomaticBatch(listOf(
+            slot(first),slot(second,"recording-2","Artist - Two")))
+        val before=store.raw
+        assertFalse(ledger.releaseUntransferredAutomaticBatch(listOf(first,"wrong")))
+        assertFalse(ledger.releaseUntransferredAutomaticBatch(listOf(first,first)))
+        assertFalse(ledger.releaseUntransferredAutomaticBatch(emptyList()))
+        assertEquals(before,store.raw)
+        assertEquals(2,ledger.all().size)
+        assertTrue(ledger.releaseUntransferredAutomaticBatch(listOf(first,second)))
+    }
+
+    @Test fun interruptedColdStartReservationsAreNeverAutoReleased() {
+        val store=Store()
+        val ledger=A3AcquisitionLedger(store)
+        ledger.reserveAutomaticBatch(listOf(slot(first)))
+        val restarted=A3AcquisitionLedger(store)
+        restarted.interruptActiveOnColdStart()
+        assertFalse(restarted.releaseUntransferredAutomaticBatch(listOf(first)))
+        assertEquals(A3AcquisitionLedger.Phase.INTERRUPTED,
+            restarted.get(first)?.phase)
+    }
+
+    @Test fun releaseDiskFailureRetainsCompleteIdentityHistory() {
+        val store=Store()
+        val ledger=A3AcquisitionLedger(store)
+        ledger.reserveAutomaticBatch(listOf(slot(first)))
+        val before=store.raw
+        store.failWrites=true
+        try {
+            ledger.releaseUntransferredAutomaticBatch(listOf(first))
+            fail("failed commit never releases a durable identity")
+        }catch(_:IOException) {}
+        assertEquals(before,store.raw)
+        assertNotNull(ledger.get(first))
+        store.failWrites=false
+        assertTrue(ledger.releaseUntransferredAutomaticBatch(listOf(first)))
+    }
+
     @Test fun multipleUniqueSlotsReserveInOneDurableCommit() {
         val store=Store();val ledger=A3AcquisitionLedger(store)
         ledger.reserveAutomaticBatch(listOf(
