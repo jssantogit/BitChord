@@ -264,7 +264,7 @@ A apresentação Android não oferece reações de provedores (Like/Dislike), a�
 
 A partir da issue #196, a linha **Fontes de letras** das Configurações exibe apenas a quantidade de fontes habilitadas, sem concatenar todos os provedores; a lista completa e a ordem permanecem no gerenciador dedicado. Na tela **Fontes**, os cards WebDAV/SMB/OpenSubsonic aparecem sob um único cabeçalho **Biblioteca**, sem repetir os nomes no título da seção e da linha de conexão. O controle técnico de **tolerância de duração** foi realocado de Fontes para **Avançado** e permanece pesquisável, com intervalo de ajuste e armazenamento preservados. Nenhuma preferência ou fonte de áudio foi eliminada por essas alterações visuais.
 
-O rodapé **Sobre** aponta para o repositório deste fork e mantém um crédito separado para o projeto BitChord original; links de suporte do upstream e o slogan sobre o YouTube Music não são divulgados como se fossem interfaces do fork.
+O rodapé **Sobre** aponta para o repositório deste fork e mantém um crédito separado para o projeto BitChord original; links de suporte do upstream e o slogan sobre o YouTube Music não são divulgados como se fossem interfaces do fork. Em **Aparência**, o seletor de ícones usa uma grade responsiva com contorno no item selecionado e estado de seleção semântico para acessibilidade.
 
 ### Letras e gestos de leitura
 
