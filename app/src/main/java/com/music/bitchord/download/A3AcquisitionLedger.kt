@@ -167,7 +167,7 @@ internal class A3AcquisitionLedger(private val store:Store) {
     private companion object {
         const val VERSION=1
         const val MAX_JOBS=128
-        const val MAX_BYTES=64L*1024L*1024L
+        val MAX_BYTES=com.music.bitchord.acquisition.a0.A0ObservedTransferLimits.MAX_AUDIO_BYTES
         val OPAQUE_ID=Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
         val ACTIVE=setOf(Phase.REQUESTED,Phase.SEARCHING,Phase.AWAITING_SELECTION,
             Phase.SELECTED,Phase.TRANSFERRING,Phase.STAGED,Phase.PUBLISHING)
