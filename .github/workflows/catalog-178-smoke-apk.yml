@@ -3,7 +3,7 @@ name: Catalog #178 — Android Smoke APK
 # APK candidate from the exact #178 PR HEAD. Pull-request path filters
 # use the cumulative PR diff, so a cheap commit-delta gate prevents repeated
 # 300+ MB builds on unrelated later code pushes.
-# Candidate: 2026-10-28 authorized A54 physical smoke: Room-first Official album/edition tracks and validated Front-v5 batch fanout.
+# Candidate: 2026-10-28 authorized A54 smoke for HEAD d1256e0: inherited group/release sleeves, filled-500px detail correction and official retail-edition rejection.
 # Trigger: explicit user authorization after final CI/code review; no merge, no new cover providers.
 # The APK job runs JVM regressions on the exact checked-out HEAD before packaging.
 on:
@@ -114,8 +114,8 @@ jobs:
       - name: Record APK checksum and exact commit
         run: |
           printf 'commit=%s\n' "$(git rev-parse HEAD)" > catalog-178-build.txt
-          printf 'candidate=178-a54-final-room-first-album-edition-front-v5-batched-cover-smoke\n' >> catalog-178-build.txt
-          printf 'validation_focus=twice-get-up-art-correctness-same-album-recording-cache-coil-memory-disk-vs-CAA-latency-warm-restart\n' >> catalog-178-build.txt
+          printf 'candidate=178-a54-front-v5-album-inheritance-500px-editorial-covers-smoke\n' >> catalog-178-build.txt
+          printf 'validation_focus=get-up-twice-front-v5-exact-edition-artist-album-track-500px-cache-coil-memory-disk-network-restart-caa-p95-stalls\n' >> catalog-178-build.txt
           find app/build/outputs/apk/dev/debug -name '*.apk' -print -exec sha256sum '{}' \; >> catalog-178-build.txt
 
       - name: Upload smoke candidate
