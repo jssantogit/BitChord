@@ -85,6 +85,7 @@ private fun fieldLabel(value: SmartPlaylistRuleField): String = when (value) {
     SmartPlaylistRuleField.TRACK_NUMBER -> "Número da faixa no lançamento"
     SmartPlaylistRuleField.TRACK_ARTIST -> "Artista da faixa (créditos canônicos)"
     SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING -> "Dias desde alteração da nota local"
+    SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "Referência de capa do lançamento"
 }
 
 private fun operatorLabel(value: SmartPlaylistRuleOperator): String = when (value) {
@@ -191,7 +192,9 @@ private fun V2RuleNode(
                     ::fieldLabel,
                 ) { newField ->
                     val op = rule.operator.takeIf { it in newField.allowedOperators() }
-                        ?: if (newField == SmartPlaylistRuleField.SOURCE_KIND)
+                        ?: if (newField == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE)
+                             SmartPlaylistRuleOperator.IS_PRESENT
+                         else if (newField == SmartPlaylistRuleField.SOURCE_KIND)
                             SmartPlaylistRuleOperator.EQUAL
                         else if (newField.isTextField()) SmartPlaylistRuleOperator.CONTAINS
                         else SmartPlaylistRuleOperator.GREATER_OR_EQUAL
