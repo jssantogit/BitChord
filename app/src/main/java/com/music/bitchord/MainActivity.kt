@@ -2717,6 +2717,14 @@ private fun BitChordApp(
                             onPreviewAction = { query, intent ->
                                 executeSmartCollection(SmartCollectionActionSource.PreviewQuery(query), intent)
                             },
+                            onSavedV2Action = { id, intent ->
+                                executeSmartCollection(SmartCollectionActionSource.SavedV2Definition(id), intent)
+                            },
+                            onPreviewV2Action = { query, ownerId, intent ->
+                                executeSmartCollection(
+                                    SmartCollectionActionSource.PreviewV2Query(query, ownerId), intent,
+                                )
+                            },
                         )
                     } else if (key.startsWith("rediscovery:")) {
                         CanonicalRediscoveryRecordingDetailsScreen(

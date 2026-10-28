@@ -5824,6 +5824,20 @@ class PlaybackService : MediaLibraryService() {
                 credentials = AndroidKeystoreOpenSubsonicCredentialStore(applicationContext),
             ),
         ).configuredProviderKeys()
+        if (plan.selections.size > CanonicalBatchQueuePolicy.MAX_BATCH_SIZE) {
+            return@withContext null
+        }
+        // Bounded IN-queries replace the previous two Room lookups per item.
+        // Collect all evidence first, then reject the whole plan if ANY exact
+        // Recording/MediaAsset/provider link has changed. No partial commit.
+        val requestedMediaIds = plan.selections.map { selection ->
+            selection.identity.mediaAssetId ?: return@withContext null
+        }
+        val requestedRecordingIds = plan.selections.map { it.identity.recordingId }
+        val assetsById = requestedMediaIds.distinct().chunked(400)
+            .flatMap { dao.mediaAssetsByIds(it) }.associateBy { it.id }
+        val recordingsById = requestedRecordingIds.distinct().chunked(400)
+            .flatMap { dao.recordingsByIds(it) }.associateBy { it.id }
         val fresh = ArrayList<CanonicalCollectionSelection>(plan.selections.size)
         val rows = ArrayList<MediaAssetEntity>(plan.selections.size)
         for (selection in plan.selections) {
@@ -5831,8 +5845,8 @@ class PlaybackService : MediaLibraryService() {
             val id = identity.mediaAssetId ?: return@withContext null
             val provider = identity.providerKey ?: return@withContext null
             if (!canonicalBatchProviderAllowed(provider, configuredProviders)) return@withContext null
-            val asset = dao.mediaAssetById(id) ?: return@withContext null
-            val recording = dao.recordingById(identity.recordingId) ?: return@withContext null
+            val asset = assetsById[id] ?: return@withContext null
+            val recording = recordingsById[identity.recordingId] ?: return@withContext null
             if (asset.recordingId != identity.recordingId || asset.provider != provider) {
                 return@withContext null
             }
@@ -5875,6 +5889,12 @@ class PlaybackService : MediaLibraryService() {
             // and Activity recreation cannot apply the same operation twice.
             val plan = CanonicalBatchQueueRequests.take(token) ?: return@withLock false
             SmartCollectionPlaybackTrace.stage(plan, "session_received")
+            // Prevent oversized/untrusted commands from even triggering a
+            // database scan; the policy will also enforce the same cap.
+            if (plan.selections.size > CanonicalBatchQueuePolicy.MAX_BATCH_SIZE) {
+                SmartCollectionPlaybackTrace.stage(plan, "session_rejected", "limit_exceeded")
+                return@withLock false
+            }
             val exo = player ?: run {
                 SmartCollectionPlaybackTrace.stage(plan, "session_rejected", "player_null")
                 return@withLock false

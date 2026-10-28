@@ -133,6 +133,31 @@ class CanonicalLibraryAvailabilityTest {
         assertTrue(fixture.availability.availableRecordingIds().isEmpty())
     }
 
+    @Test
+    fun `unclassified configured provider never becomes OpenSubsonic even alongside local copies`() = runTest {
+        val store = FakeAvailabilityStore()
+        val local = CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER
+        val future = "future-provider:account"
+        store.addAsset(local, "known")
+        store.addAsset(local, "mixed")
+        store.addAsset(future, "mixed")
+        store.addAsset(future, "unclassified")
+        val availability = CanonicalLibraryAvailabilityRepository(
+            store, CanonicalLibraryProviderConfigurationReader { setOf(local, future) },
+        )
+        val rows = availability.availableRecordingSources().associateBy { it.recordingId }
+        assertEquals(setOf(CanonicalLibrarySourceKind.LOCAL), rows["known"]?.kinds)
+        assertEquals(setOf(CanonicalLibrarySourceKind.LOCAL), rows["mixed"]?.kinds)
+        assertEquals(false, rows["mixed"]?.kindsComplete)
+        assertEquals(emptySet<CanonicalLibrarySourceKind>(), rows["unclassified"]?.kinds)
+        assertEquals(false, rows["unclassified"]?.kindsComplete)
+        assertEquals(true, rows["known"]?.kindsComplete)
+        // Generic availability retains playable identities even when a Source
+        // Kind predicate has no proof to evaluate for the future provider.
+        assertEquals(listOf("known", "mixed", "unclassified"),
+            availability.availableRecordingIds())
+    }
+
     private fun fixture(): Fixture {
         val persistence = FakeAccountPersistence()
         val credentials = FakeCredentialStore()
@@ -215,4 +240,36 @@ class CanonicalLibraryAvailabilityTest {
     private companion object {
         const val ACCOUNT_ID = "home"
     }
+    @Test fun scopedSourceProjectionNeverIncludesForgottenRemoteAccount() = runTest {
+        val fixture = fixture()
+        val remoteProvider = openSubsonicProviderKey(ACCOUNT_ID)
+        fixture.configureOpenSubsonic()
+        fixture.store.addAsset(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, "local")
+        fixture.store.addAsset(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, "both")
+        fixture.store.addAsset(remoteProvider, "remote")
+        fixture.store.addAsset(remoteProvider, "both")
+        val sources = fixture.availability.availableRecordingSources()
+            .associateBy { it.recordingId }
+        assertEquals(setOf(CanonicalLibrarySourceKind.LOCAL), sources["local"]?.kinds)
+        assertEquals(setOf(CanonicalLibrarySourceKind.OPENSUBSONIC), sources["remote"]?.kinds)
+        assertEquals(setOf(
+            CanonicalLibrarySourceKind.LOCAL, CanonicalLibrarySourceKind.OPENSUBSONIC,
+        ), sources["both"]?.kinds)
+
+        fixture.accountRepository.forget()
+        val forgotten = fixture.availability.availableRecordingSources()
+            .associateBy { it.recordingId }
+        assertEquals(setOf("both", "local"), forgotten.keys)
+        assertEquals(setOf(CanonicalLibrarySourceKind.LOCAL), forgotten["both"]?.kinds)
+        assertEquals(listOf("both", "local"), fixture.availability.availableRecordingIds())
+    }
+
+    @Test fun sourceProjectionExcludesRemoteWithoutReadableCredential() = runTest {
+        val fixture = fixture()
+        fixture.configureOpenSubsonic()
+        fixture.store.addAsset(openSubsonicProviderKey(ACCOUNT_ID), "remote")
+        fixture.credentials.clear(ACCOUNT_ID)
+        assertTrue(fixture.availability.availableRecordingSources().isEmpty())
+    }
+
 }

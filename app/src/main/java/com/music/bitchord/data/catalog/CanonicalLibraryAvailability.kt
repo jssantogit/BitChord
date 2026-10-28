@@ -13,8 +13,28 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.openSubsonicProvide
  * details remain Catalog implementation details used solely to decide current
  * availability.
  */
+internal enum class CanonicalLibrarySourceKind { LOCAL, OPENSUBSONIC }
+
+/**
+ * Provider-scoped, canonical-only source projection. Never exposes provider ID,
+ * secret, URI, native sourceKey or media asset ID to Listening or the UI.
+ */
+internal data class CanonicalAvailableRecordingSources(
+    val recordingId: String,
+    val kinds: Set<CanonicalLibrarySourceKind>,
+    /** False when any currently eligible copy uses an unclassified provider. */
+    val kindsComplete: Boolean = true,
+)
+
 internal fun interface CanonicalLibraryAvailabilityReader {
     suspend fun availableRecordingIds(): List<String>
+
+    /**
+     * Old injected readers do not have reliable source provenance. The default
+     * is UNKNOWN rather than fabricating a local/remote claim.
+     */
+    suspend fun availableRecordingSources(): List<CanonicalAvailableRecordingSources> =
+        emptyList()
 }
 
 /** Catalog-internal read projection used by the availability repository. */
@@ -56,7 +76,7 @@ internal class RoomCanonicalLibraryAvailabilityStore(
 ) : CanonicalLibraryAvailabilityStore {
     override suspend fun recordingIdsForProviders(providerKeys: List<String>): List<String> =
         providerKeys.flatMap { providerKey ->
-            dao.providerRows(providerKey).map { row -> row.recordingId }
+            dao.availableRecordingIdsForProvider(providerKey)
         }
 }
 
@@ -67,6 +87,37 @@ internal class CanonicalLibraryAvailabilityRepository(
     private val store: CanonicalLibraryAvailabilityStore,
     private val providerConfiguration: CanonicalLibraryProviderConfigurationReader,
 ) : CanonicalLibraryAvailabilityReader {
+    override suspend fun availableRecordingSources(): List<CanonicalAvailableRecordingSources> {
+        // Read configured provider identity at the request boundary. Only the
+        // current account's verified provider key is eligible for remote claims.
+        val configured = providerConfiguration.configuredProviderKeys().toList().sorted()
+        require(configured.all { it.isNotBlank() })
+        val evidence = sortedMapOf<String, MutableSet<CanonicalLibrarySourceKind>>()
+        val unclassifiedRecordings = hashSetOf<String>()
+        for (provider in configured) {
+            val kind = when {
+                provider == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER ->
+                    CanonicalLibrarySourceKind.LOCAL
+                provider.startsWith("opensubsonic:") &&
+                    provider.substringAfter(':').isNotBlank() ->
+                    CanonicalLibrarySourceKind.OPENSUBSONIC
+                else -> null
+            }
+            store.recordingIdsForProviders(listOf(provider)).forEach { id ->
+                require(id.isNotBlank()) { "Canonical recordingId must not be blank" }
+                val kinds = evidence.getOrPut(id) { linkedSetOf() }
+                if (kind == null) unclassifiedRecordings += id else kinds.add(kind)
+            }
+        }
+        return evidence.map { (id, kinds) ->
+            // Preserve verified positive copies even if a future provider is
+            // unclassified; incomplete coverage cannot prove a negative.
+            CanonicalAvailableRecordingSources(
+                id, kinds.toSet(), kindsComplete = id !in unclassifiedRecordings,
+            )
+        }
+    }
+
     override suspend fun availableRecordingIds(): List<String> {
         val providerKeys = providerConfiguration.configuredProviderKeys()
             .asSequence()

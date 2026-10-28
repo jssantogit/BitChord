@@ -20,6 +20,63 @@ internal data class ExclusiveExternalIdentityClaimResult(
     val inserted: Boolean,
 )
 
+internal data class CanonicalRecordingAlbumArtistRow(
+    val recordingId: String,
+    val releaseId: String,
+    /** Null signals a linked Release whose verified artist credit is absent. */
+    val artistName: String?,
+)
+
+internal data class CanonicalRecordingReleaseDateRow(
+    val recordingId: String,
+    val releaseId: String,
+    /** MusicBrainz partial ISO date only; NULL is unknown, never year zero. */
+    val releaseDate: String?,
+)
+
+/** Verified MusicBrainz release evidence, keyed by the actual canonical ReleaseId. */
+internal data class CanonicalTrustedReleaseDateRow(
+    val releaseId: String,
+    val mbid: String?,
+    val releaseDate: String?,
+)
+
+internal data class CanonicalReleaseArtistCreditNameRow(
+    val releaseId: String,
+    /** Null/blank = incomplete canonical credit, not a negative match. */
+    val artistName: String?,
+)
+
+internal data class CanonicalRecordingLocalAddedRow(
+    val recordingId: String,
+    val dateAddedSeconds: Long?,
+)
+
+internal data class CanonicalRecordingReleaseArtworkRow(
+    val recordingId: String,
+    val releaseId: String,
+    /** A stored URL only; not proof that the cover is verified or reachable. */
+    val artworkUri: String?,
+)
+
+internal data class CanonicalRecordingTrackArtistRow(
+    val recordingId: String,
+    val artistName: String?,
+)
+
+internal data class CanonicalRecordingTrackPositionRow(
+    val recordingId: String,
+    val releaseId: String,
+    /** NULL or nonpositive positions are unknown, not track zero. */
+    val trackNumber: Int?,
+)
+
+internal data class CanonicalRecordingReleaseTitleRow(
+    val recordingId: String,
+    val releaseId: String,
+    val releaseTitle: String,
+)
+
 @Dao
 internal interface CanonicalCatalogDao {
 
@@ -59,6 +116,193 @@ internal interface CanonicalCatalogDao {
     )
     suspend fun reconciledRemoteRatings(providerKey: String, scopeId: String): List<RemoteRatingEvidenceEntity>
 
+    /**
+     * Only first-party Recording ↔ Release track links; never guesses an
+     * album by title, artist, provider key or a loosely matched string.
+     */
+    @Query(
+        """
+        SELECT rt.recordingId AS recordingId,
+               rel.id AS releaseId,
+               rel.title AS releaseTitle
+        FROM catalog_release_track AS rt
+        INNER JOIN catalog_release AS rel ON rel.id = rt.releaseId
+        WHERE rt.recordingId IN (:recordingIds)
+        ORDER BY rt.recordingId ASC, rel.title COLLATE NOCASE ASC, rel.id ASC
+        """,
+    )
+    suspend fun recordingReleaseTitlesByIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingReleaseTitleRow>
+
+    /**
+     * Preserve NULL/un-enriched linked releases so a negative year predicate
+     * cannot infer that an unknown release definitely fails to match.
+     */
+    @Query(
+        """
+        SELECT rt.recordingId AS recordingId,
+               rt.releaseId AS releaseId,
+               enrichment.releaseDate AS releaseDate
+        FROM catalog_release_track AS rt
+        LEFT JOIN musicbrainz_release_enrichment AS enrichment
+            ON enrichment.releaseId = rt.releaseId
+           AND EXISTS (
+                SELECT 1 FROM catalog_external_identity AS identity
+                WHERE identity.provider = 'musicbrainz'
+                  AND identity.entityType = 'release'
+                  AND identity.entityId = rt.releaseId
+                  AND identity.externalId = enrichment.mbid
+           )
+           AND (
+                SELECT COUNT(*) FROM catalog_external_identity AS identity
+                WHERE identity.provider = 'musicbrainz'
+                  AND identity.entityType = 'release'
+                  AND identity.entityId = rt.releaseId
+           ) = 1
+        WHERE rt.recordingId IN (:recordingIds)
+        ORDER BY rt.recordingId ASC, rt.releaseId ASC
+        """,
+    )
+    suspend fun recordingReleaseDatesByIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingReleaseDateRow>
+
+    /**
+     * Only MusicBrainz release dates backed by exactly ONE current trusted
+     * external identity are eligible. Corrupt/mismatched and multi-alias rows
+     * must project NULL; the filter planner will preserve UNKNOWN through NOT.
+     * Caller passes only already-provider-scoped Release IDs, <=400 per query.
+     */
+    @Query(
+        """
+        SELECT rel.id AS releaseId,
+               verified.mbid AS mbid,
+               verified.releaseDate AS releaseDate
+        FROM catalog_release AS rel
+        LEFT JOIN musicbrainz_release_enrichment AS verified
+            ON verified.releaseId = rel.id
+           AND EXISTS (
+                SELECT 1 FROM catalog_external_identity AS identity
+                WHERE identity.provider = 'musicbrainz'
+                  AND identity.entityType = 'release'
+                  AND identity.entityId = rel.id
+                  AND identity.externalId = verified.mbid
+           )
+           AND (
+                SELECT COUNT(*) FROM catalog_external_identity AS identity
+                WHERE identity.provider = 'musicbrainz'
+                  AND identity.entityType = 'release'
+                  AND identity.entityId = rel.id
+           ) = 1
+        WHERE rel.id IN (:releaseIds)
+        ORDER BY rel.id ASC
+        """,
+    )
+    suspend fun trustedReleaseDatesByIds(
+        releaseIds: List<String>,
+    ): List<CanonicalTrustedReleaseDateRow>
+
+    /** Read canonical ReleaseArtist credits, not display strings or MusicBrainz guesses. */
+    @Query(
+        """
+        SELECT credit.releaseId AS releaseId, artist.name AS artistName
+        FROM catalog_release_artist_credit AS credit
+        LEFT JOIN catalog_artist AS artist ON artist.id = credit.artistId
+        WHERE credit.releaseId IN (:releaseIds)
+        ORDER BY credit.releaseId ASC, credit.position ASC
+        """,
+    )
+    suspend fun canonicalReleaseArtistNamesByIds(
+        releaseIds: List<String>,
+    ): List<CanonicalReleaseArtistCreditNameRow>
+
+    /** Read artwork pointers only from explicitly linked canonical releases. */
+    @Query(
+        """
+        SELECT rt.recordingId AS recordingId,
+               rt.releaseId AS releaseId,
+               rel.artworkUri AS artworkUri
+        FROM catalog_release_track AS rt
+        INNER JOIN catalog_release AS rel ON rel.id = rt.releaseId
+        WHERE rt.recordingId IN (:recordingIds)
+        ORDER BY rt.recordingId ASC, rt.releaseId ASC
+        """,
+    )
+    suspend fun recordingReleaseArtworkByIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingReleaseArtworkRow>
+
+    /** All canonical ReleaseTrack memberships, including missing track numbers. */
+    @Query(
+        """
+        SELECT rt.recordingId AS recordingId,
+               rt.releaseId AS releaseId,
+               rt.trackNumber AS trackNumber
+        FROM catalog_release_track AS rt
+        WHERE rt.recordingId IN (:recordingIds)
+        ORDER BY rt.recordingId ASC, rt.releaseId ASC
+        """,
+    )
+    suspend fun recordingTrackPositionsByIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingTrackPositionRow>
+
+    /**
+     * A Recording can belong to multiple releases, each of which can have
+     * several artist credits. LEFT JOIN preserves releases missing credits,
+     * so negative comparisons cannot mistake missing metadata for absence.
+     */
+    @Query(
+        """
+        SELECT rt.recordingId AS recordingId,
+               rt.releaseId AS releaseId,
+               artist.name AS artistName
+        FROM catalog_release_track AS rt
+        LEFT JOIN catalog_release_artist_credit AS credit
+            ON credit.releaseId = rt.releaseId
+        LEFT JOIN catalog_artist AS artist ON artist.id = credit.artistId
+        WHERE rt.recordingId IN (:recordingIds)
+        ORDER BY rt.recordingId, rt.releaseId, credit.position
+        """,
+    )
+    suspend fun recordingAlbumArtistCreditsByIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingAlbumArtistRow>
+
+    /** Linked track artist credits, not a guessed split of artistDisplay. */
+    @Query(
+        """
+        SELECT credit.recordingId AS recordingId,
+               artist.name AS artistName
+        FROM catalog_recording_artist_credit AS credit
+        LEFT JOIN catalog_artist AS artist ON artist.id = credit.artistId
+        WHERE credit.recordingId IN (:recordingIds)
+        ORDER BY credit.recordingId ASC, credit.position ASC
+        """,
+    )
+    suspend fun recordingTrackArtistCreditsByIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingTrackArtistRow>
+
+    /** Only MediaStore local asset added dates; never mix other provider timestamps. */
+    @Query(
+        """
+        SELECT recordingId AS recordingId,
+               dateAddedSeconds AS dateAddedSeconds
+        FROM catalog_media_asset
+        WHERE provider = :localProvider AND recordingId IN (:recordingIds)
+        ORDER BY recordingId ASC, id ASC
+        """,
+    )
+    suspend fun localAddedDatesByRecordingIds(
+        localProvider: String,
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingLocalAddedRow>
+
+    @Query("SELECT * FROM catalog_recording WHERE id IN (:recordingIds)")
+    suspend fun recordingsByIds(recordingIds: List<String>): List<RecordingEntity>
+
     @Query("SELECT * FROM catalog_recording WHERE id = :recordingId LIMIT 1")
     suspend fun recordingById(recordingId: String): RecordingEntity?
 
@@ -67,6 +311,9 @@ internal interface CanonicalCatalogDao {
 
     @Query("SELECT * FROM catalog_artist WHERE id = :artistId LIMIT 1")
     suspend fun artistById(artistId: String): ArtistEntity?
+
+    @Query("SELECT * FROM catalog_media_asset WHERE id IN (:mediaAssetIds)")
+    suspend fun mediaAssetsByIds(mediaAssetIds: List<String>): List<MediaAssetEntity>
 
     @Query("SELECT * FROM catalog_media_asset WHERE id = :mediaAssetId LIMIT 1")
     suspend fun mediaAssetById(mediaAssetId: String): MediaAssetEntity?
@@ -441,6 +688,20 @@ internal interface CanonicalCatalogDao {
     suspend fun providerRows(provider: String): List<CanonicalProviderRow>
 
     /**
+     * Availability needs canonical IDs only, not sourceKey, URI, artwork or
+     * raw asset data. DISTINCT collapses multiple versions of one Recording.
+     */
+    @Query(
+        """
+        SELECT DISTINCT recordingId
+        FROM catalog_media_asset
+        WHERE provider = :provider
+        ORDER BY recordingId ASC
+        """,
+    )
+    suspend fun availableRecordingIdsForProvider(provider: String): List<String>
+
+    /**
      * Provider-neutral browse projection. It intentionally omits sourceKey and
      * URI so a provider-native track id cannot leak into UI identity/playback.
      */
@@ -468,6 +729,94 @@ internal interface CanonicalCatalogDao {
     fun observeProviderBrowseAssets(providerKey: String): Flow<List<CanonicalBrowseAssetRow>>
 
     /**
+     * Scoped Release membership is proven through Recording→ReleaseTrack and
+     * a currently persisted asset of this EXACT provider/account.
+     * Identical titles on another Release or account never create membership.
+     */
+    @Query(
+        """
+        SELECT DISTINCT rel.*
+        FROM catalog_release AS rel
+        INNER JOIN catalog_release_track AS rt ON rt.releaseId = rel.id
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = rt.recordingId
+        WHERE asset.provider = :providerKey
+        ORDER BY rel.title COLLATE NOCASE ASC, rel.id ASC
+        """,
+    )
+    suspend fun providerScopedReleases(providerKey: String): List<ReleaseEntity>
+
+    /**
+     * Scoped Artists are proven by canonical recording or release credits
+     * connected to a current provider asset. Never group artists by display
+     * name or infer a Recording's own canonical artist from provider title text.
+     */
+    @Query(
+        """
+        SELECT artist.*
+        FROM catalog_artist AS artist
+        WHERE EXISTS (
+            SELECT 1
+            FROM catalog_recording_artist_credit AS credit
+            INNER JOIN catalog_media_asset AS asset
+                ON asset.recordingId = credit.recordingId
+            WHERE credit.artistId = artist.id AND asset.provider = :providerKey
+        ) OR EXISTS (
+            SELECT 1
+            FROM catalog_release_artist_credit AS credit
+            INNER JOIN catalog_release_track AS rt ON rt.releaseId = credit.releaseId
+            INNER JOIN catalog_media_asset AS asset ON asset.recordingId = rt.recordingId
+            WHERE credit.artistId = artist.id AND asset.provider = :providerKey
+        )
+        ORDER BY artist.name COLLATE NOCASE ASC, artist.id ASC
+        """,
+    )
+    suspend fun providerScopedArtists(providerKey: String): List<ArtistEntity>
+
+    /** Navigating a Release rechecks its Recording IDs against the active source. */
+    @Query(
+        """
+        SELECT DISTINCT rt.recordingId
+        FROM catalog_release_track AS rt
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = rt.recordingId
+        WHERE rt.releaseId = :releaseId AND asset.provider = :providerKey
+        ORDER BY rt.recordingId ASC
+        """,
+    )
+    suspend fun providerScopedReleaseRecordingIds(
+        providerKey: String,
+        releaseId: String,
+    ): List<String>
+
+    /**
+     * An Artist's tracks are only those canonically credited either on a
+     * Recording or a Release reached through a current account MediaAsset.
+     * Display names, matching titles and the other provider's assets do not
+     * grant artist membership.
+     */
+    @Query(
+        """
+        SELECT DISTINCT candidate.recordingId
+        FROM (
+            SELECT credit.recordingId AS recordingId
+            FROM catalog_recording_artist_credit AS credit
+            WHERE credit.artistId = :artistId
+            UNION
+            SELECT rt.recordingId AS recordingId
+            FROM catalog_release_artist_credit AS credit
+            INNER JOIN catalog_release_track AS rt ON rt.releaseId = credit.releaseId
+            WHERE credit.artistId = :artistId
+        ) AS candidate
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = candidate.recordingId
+        WHERE asset.provider = :providerKey
+        ORDER BY candidate.recordingId ASC
+        """,
+    )
+    suspend fun providerScopedArtistRecordingIds(
+        providerKey: String,
+        artistId: String,
+    ): List<String>
+
+    /**
      * Multi-source canonical browse: asset ID is unique, recording ID is music
      * identity. Never expose sourceKey/URI or group by metadata/name.
      */
@@ -493,6 +842,35 @@ internal interface CanonicalCatalogDao {
         """,
     )
     fun observeMultiSourceBrowseAssets(providerKeys: List<String>): Flow<List<CanonicalBrowseAssetRow>>
+
+    /**
+     * B9 requires ONLY the already-revalidated RecordingIds. Do not fetch
+     * the 50k+ whole-library browse for a bounded 500-item smart queue.
+     * Providers must be supplied by the current authenticated Catalog scope.
+     */
+    @Query(
+        """
+        SELECT recording.id AS recordingId,
+               asset.id AS mediaAssetId,
+               asset.provider AS providerKey,
+               recording.title AS title,
+               recording.artistDisplay AS artistDisplay,
+               recording.durationMs AS durationMs,
+               asset.artworkUri AS artworkUri
+        FROM catalog_media_asset AS asset
+        INNER JOIN catalog_recording AS recording ON recording.id = asset.recordingId
+        WHERE asset.provider IN (:providerKeys)
+          AND recording.id IN (:recordingIds)
+        ORDER BY recording.artistDisplay COLLATE NOCASE,
+                 recording.title COLLATE NOCASE, recording.id,
+                 asset.provider, asset.id
+        """,
+    )
+    suspend fun browseAssetsForRecordingIds(
+        providerKeys: List<String>,
+        recordingIds: List<String>,
+    ): List<CanonicalBrowseAssetRow>
+
 
     @Query(
         """
@@ -533,5 +911,45 @@ internal interface CanonicalCatalogDao {
         localProvider: String,
         youtubeProvider: String,
         recordingEntityType: String,
+    ): List<CanonicalLocalRow>
+
+    /**
+     * Same canonical/local projection as localRows, but restrict decoding,
+     * release metadata and artwork joins to the exact selected asset IDs.
+     * B9/B10 may resolve hundreds of queue entries without scanning 50k+
+     * unrelated local media rows on each action.
+     */
+    @Query(
+        """
+        SELECT
+            recording.id AS recordingId,
+            asset.id AS mediaAssetId,
+            asset.sourceKey AS sourceKey,
+            recording.title AS title,
+            recording.artistDisplay AS artistDisplay,
+            recording.durationMs AS durationMs,
+            albumRelease.title AS albumTitle,
+            COALESCE(albumRelease.artworkUri, asset.artworkUri) AS artworkUri,
+            asset.uri AS uri,
+            asset.path AS path,
+            asset.dateAddedSeconds AS dateAddedSeconds,
+            asset.dateModifiedSeconds AS dateModifiedSeconds,
+            releaseTrack.trackNumber AS trackNumber,
+            NULL AS youtubeVideoId
+        FROM catalog_media_asset AS asset
+        INNER JOIN catalog_recording AS recording
+            ON recording.id = asset.recordingId
+        LEFT JOIN catalog_release_track AS releaseTrack
+            ON releaseTrack.recordingId = recording.id
+        LEFT JOIN catalog_release AS albumRelease
+            ON albumRelease.id = releaseTrack.releaseId
+        WHERE asset.provider = :localProvider AND asset.id IN (:mediaAssetIds)
+        ORDER BY recording.artistDisplay COLLATE NOCASE,
+                 recording.title COLLATE NOCASE, asset.id
+        """,
+    )
+    suspend fun localRowsByAssetIds(
+        localProvider: String,
+        mediaAssetIds: List<String>,
     ): List<CanonicalLocalRow>
 }

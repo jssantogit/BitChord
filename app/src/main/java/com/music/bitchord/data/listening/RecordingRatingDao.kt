@@ -14,6 +14,9 @@ internal data class RecordingRatingSnapshotRows(
 
 @Dao
 internal interface RecordingRatingDao {
+    @Query("SELECT * FROM recording_rating_current WHERE recordingId IN (:recordingIds)")
+    suspend fun currentRatingsForIds(recordingIds: List<String>): List<RecordingRatingCurrentEntity>
+
     @Query("SELECT * FROM recording_rating_current WHERE recordingId = :recordingId")
     suspend fun current(recordingId: String): RecordingRatingCurrentEntity?
 

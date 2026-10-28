@@ -116,4 +116,44 @@ class CanonicalBatchQueuePolicyTest {
             (CanonicalBatchQueuePolicy.decide(p, s, s, p.selections)
                 as CanonicalBatchQueueDecision.Reject).reason)
     }
+    @Test fun single500ItemQueueDecisionRemainsPausedAndOrdered() {
+        val ids = (1..500).map { "rec-$it" }
+        val selection = CanonicalCollectionIntentPlan(
+            intent = CanonicalCollectionIntent.ADD_TO_QUEUE,
+            selections = ids.map {
+                CanonicalCollectionSelection(
+                    CanonicalQueueIdentity(it, "asset-$it", "opensubsonic:home"),
+                    "Title", "Artist",
+                )
+            },
+            rejected = emptyList(),
+        )
+        val empty = snapshot(-1)
+        assertEquals(500, CanonicalBatchQueuePolicy.MAX_BATCH_SIZE)
+        val decision = CanonicalBatchQueuePolicy.decide(
+            selection, empty, empty, selection.selections,
+        ) as CanonicalBatchQueueDecision.Apply
+        assertEquals(0, decision.insertionIndex)
+        assertEquals(500, decision.tiers.size)
+        assertTrue(decision.tiers.all { it == QueueTier.USER_QUEUE })
+        assertFalse(decision.startPlayback)
+        val play = selection.copy(intent = CanonicalCollectionIntent.PLAY_NOW)
+        val playback = CanonicalBatchQueuePolicy.decide(
+            play, empty, empty, play.selections,
+        ) as CanonicalBatchQueueDecision.Apply
+        assertTrue(playback.startPlayback)
+        assertEquals(QueueTier.CONTEXT, playback.tiers.first())
+        assertTrue(playback.tiers.drop(1).all { it == QueueTier.USER_QUEUE })
+        assertEquals(CanonicalBatchQueueFailure.LIMIT_EXCEEDED,
+            (CanonicalBatchQueuePolicy.decide(
+                selection.copy(selections = selection.selections +
+                    CanonicalCollectionSelection(
+                        CanonicalQueueIdentity("rec-501", "asset-501", "opensubsonic:home"),
+                        "Title", "Artist",
+                    ),
+                ),
+                empty, empty, selection.selections,
+            ) as CanonicalBatchQueueDecision.Reject).reason)
+    }
+
 }

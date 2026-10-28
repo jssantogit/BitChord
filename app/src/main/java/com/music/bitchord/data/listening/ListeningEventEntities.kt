@@ -52,3 +52,13 @@ internal data class RecordingBehaviorSummaryRow(
     val totalListenedMs: Long,
     val lastEventAtEpochMs: Long?,
 )
+
+
+/** Aggregates only terminal audible completion facts; never counts PLAYBACK_STARTED. */
+internal data class SmartPlaylistBehaviorEvidenceRow(
+    val recordingId: String,
+    val completions: Long,
+    val lastAudibleAtEpochMs: Long?,
+    val earlySkips: Long,
+    val lateSkips: Long,
+)
