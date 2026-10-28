@@ -466,4 +466,59 @@ class CanonicalCoverProgressiveEnrichmentTest {
         )
         assertTrue(result.isEmpty())
     }
+
+    @Test fun lateGroupCoverReconcilesEarlyReleaseFallbackWithoutTouchingTrackArtwork() {
+        val group = "11111111-1111-4111-8111-111111111111"
+        val editionB = "https://archive.org/release-b-front-500.jpg"
+        val editionA = "https://archive.org/verified-group-edition-a-front-500.jpg"
+        val base = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            "rec-1", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+            "Song", "Artist", coverGroupMbid = group,
+        )
+        val earlyFallback = base.copy(
+            artworkUri = editionB,
+            artworkProvenance = com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE,
+        )
+        val genuineTrack = base.copy(musicBrainzId = "rec-2",
+            artworkUri = "content://recording-specific-cover")
+        val unrelated = base.copy(musicBrainzId = "rec-3",
+            coverGroupMbid = "different-group", artworkUri = editionB,
+            artworkProvenance = com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE)
+        val groupSelected = com.music.bitchord.ui.canonicalRowsWithNewVerifiedGroupArt(
+            listOf(earlyFallback, genuineTrack, unrelated), group, editionA,
+        )
+        assertEquals(editionA, groupSelected[0].artworkUri)
+        assertEquals(
+            com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_GROUP,
+            groupSelected[0].artworkProvenance,
+        )
+        assertEquals("content://recording-specific-cover", groupSelected[1].artworkUri)
+        assertEquals(editionB, groupSelected[2].artworkUri)
+        assertEquals(groupSelected, com.music.bitchord.ui.canonicalRowsWithVerifiedRecordingArt(
+            groupSelected, mapOf("rec-1" to editionA),
+        ))
+    }
+
+    @Test fun cachedOfficialGroupCoverReplacesInFlightReleaseFallbackButNotExplicitArtwork() {
+        val group = "11111111-1111-4111-8111-111111111111"
+        val base = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            "rec-1", com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+            "Song", "Artist", coverGroupMbid = group,
+        )
+        val rows = listOf(
+            base.copy(
+                artworkUri = "https://archive.org/edition-b.jpg",
+                artworkProvenance =
+                    com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE,
+            ),
+            base.copy(musicBrainzId = "rec-2",
+                artworkUri = "https://archive.org/track-owned.jpg"),
+        )
+        val updated = com.music.bitchord.ui.canonicalRowsWithVerifiedRecordingArt(
+            rows, mapOf("rec-1" to "https://archive.org/official-group.jpg",
+                "rec-2" to "https://archive.org/official-group.jpg"),
+        )
+        assertEquals("https://archive.org/official-group.jpg", updated[0].artworkUri)
+        assertEquals("https://archive.org/track-owned.jpg", updated[1].artworkUri)
+    }
 }
