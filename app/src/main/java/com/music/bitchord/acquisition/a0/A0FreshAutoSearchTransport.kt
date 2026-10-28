@@ -1,6 +1,7 @@
 package com.music.bitchord.acquisition.a0
 
 import android.content.Context
+import com.music.bitchord.data.DebugLog as Log
 import android.os.Looper
 import com.music.bitchord.download.SoulseekBatchPlan
 import java.io.IOException
@@ -221,10 +222,15 @@ internal class A0FreshAutoSearchTransport(
                     },timeoutMillis=5000)
                 directCollector.stop(4500) && peerWorkers.stop(4500)
             }.getOrDefault(false)
-            if(!joined || readerFailed.get() || stopped())
+            if(!joined || readerFailed.get() || stopped()) {
+                Log.d("BitChord","soulseek_auto_search stopped " +
+                    "joined=$joined readerFailed=${readerFailed.get()} " +
+                    "revoked=${stopped()}")
                 return A0AutoDiscoveryCoordinator.SearchResult.Stop
+            }
             holder.markReadersStopped()
             val choices=holder.releaseShadowChoices()
+            Log.d("BitChord","soulseek_auto_search replies=${choices.size}")
             return if(choices.isEmpty())
                 A0AutoDiscoveryCoordinator.SearchResult.NoReply
             else A0AutoDiscoveryCoordinator.SearchResult.Found(choices)
