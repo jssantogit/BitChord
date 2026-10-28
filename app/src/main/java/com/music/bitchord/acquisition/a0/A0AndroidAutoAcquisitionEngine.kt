@@ -49,6 +49,7 @@ internal object A0AndroidAutoAcquisitionEngine {
         quality:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
         userRequested:Boolean,
         isCancelled:()->Boolean,
+        onSlotResolved:(Int,A0AutoBatchExecutor.TrackStatus)->Unit={ _,_ -> },
     ):A0AutoDiscoveryCoordinator.Report {
         val app=context.applicationContext
         // Zero socket, vault and journal calls until the user opts in AND
@@ -81,6 +82,7 @@ internal object A0AndroidAutoAcquisitionEngine {
             entries,quality,userRequested=true,optedIn=true,
             isCancelled=::stopped,
             stillAuthorized={SoulseekActiveSession.isCurrent(generation) &&
-                A0AndroidAutoConsent.enabled(app)})
+                A0AndroidAutoConsent.enabled(app)},
+            onSlotResolved=onSlotResolved)
     }
 }
