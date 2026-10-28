@@ -177,7 +177,7 @@ internal fun canonicalRowsWithVerifiedGroupCoverBatch(
     if (verifiedGroups.isEmpty()) return rows
     val directRecordingProof = rows.asSequence().filter {
         it.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING &&
-            it.coverGroupMbid in verifiedGroups
+            it.coverGroupMbid?.let(verifiedGroups::containsKey) == true
     }.associate { it.musicBrainzId to verifiedGroups.getValue(it.coverGroupMbid!!) }
     val recordingRows = canonicalRowsWithVerifiedRecordingArt(rows, directRecordingProof)
     return recordingRows.map { row ->
