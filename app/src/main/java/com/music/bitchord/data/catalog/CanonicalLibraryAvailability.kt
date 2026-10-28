@@ -91,21 +91,29 @@ internal class CanonicalLibraryAvailabilityRepository(
         val configured = providerConfiguration.configuredProviderKeys().toList().sorted()
         require(configured.all { it.isNotBlank() })
         val evidence = sortedMapOf<String, MutableSet<CanonicalLibrarySourceKind>>()
+        val unclassifiedRecordings = hashSetOf<String>()
         for (provider in configured) {
-            val kind = if (provider == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER) {
-                CanonicalLibrarySourceKind.LOCAL
-            } else {
-                // The configuration reader only grants a provider key after
-                // account metadata AND the credential have been verified.
-                CanonicalLibrarySourceKind.OPENSUBSONIC
+            val kind = when {
+                provider == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER ->
+                    CanonicalLibrarySourceKind.LOCAL
+                provider.startsWith("opensubsonic:") &&
+                    provider.substringAfter(':').isNotBlank() ->
+                    CanonicalLibrarySourceKind.OPENSUBSONIC
+                else -> null
             }
             store.recordingIdsForProviders(listOf(provider)).forEach { id ->
                 require(id.isNotBlank()) { "Canonical recordingId must not be blank" }
-                evidence.getOrPut(id) { linkedSetOf() }.add(kind)
+                val kinds = evidence.getOrPut(id) { linkedSetOf() }
+                if (kind == null) unclassifiedRecordings += id else kinds.add(kind)
             }
         }
         return evidence.map { (id, kinds) ->
-            CanonicalAvailableRecordingSources(id, kinds.toSet())
+            // A future/unknown configured provider cannot be mistaken for
+            // OpenSubsonic, nor can a known local copy prove NOT remote when
+            // another available copy has unclassified provenance.
+            CanonicalAvailableRecordingSources(
+                id, if (id in unclassifiedRecordings) emptySet() else kinds.toSet(),
+            )
         }
     }
 

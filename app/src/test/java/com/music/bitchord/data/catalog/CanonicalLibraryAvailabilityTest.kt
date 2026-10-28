@@ -133,6 +133,28 @@ class CanonicalLibraryAvailabilityTest {
         assertTrue(fixture.availability.availableRecordingIds().isEmpty())
     }
 
+    @Test
+    fun `unclassified configured provider never becomes OpenSubsonic even alongside local copies`() = runTest {
+        val store = FakeAvailabilityStore()
+        val local = CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER
+        val future = "future-provider:account"
+        store.addAsset(local, "known")
+        store.addAsset(local, "mixed")
+        store.addAsset(future, "mixed")
+        store.addAsset(future, "unclassified")
+        val availability = CanonicalLibraryAvailabilityRepository(
+            store, CanonicalLibraryProviderConfigurationReader { setOf(local, future) },
+        )
+        val rows = availability.availableRecordingSources().associateBy { it.recordingId }
+        assertEquals(setOf(CanonicalLibrarySourceKind.LOCAL), rows["known"]?.kinds)
+        assertEquals(emptySet<CanonicalLibrarySourceKind>(), rows["mixed"]?.kinds)
+        assertEquals(emptySet<CanonicalLibrarySourceKind>(), rows["unclassified"]?.kinds)
+        // Generic availability retains playable identities even when a Source
+        // Kind predicate has no proof to evaluate for the future provider.
+        assertEquals(listOf("known", "mixed", "unclassified"),
+            availability.availableRecordingIds())
+    }
+
     private fun fixture(): Fixture {
         val persistence = FakeAccountPersistence()
         val credentials = FakeCredentialStore()
