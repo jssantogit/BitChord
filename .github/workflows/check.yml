@@ -3,7 +3,7 @@ name: Android CI
 on:
   push:
     # Temporary integrated #178 + main merge validation (remove before final PR merge):
-    Temporary isolated #178 validation lane: connector-authored commits do
+    # Temporary isolated #178 validation lane: connector-authored commits do
     # not emit PR synchronize checks, so test this branch without building APK.
     branches: [main, fix/178-musicbrainz-canonical-foundation]
   pull_request:
