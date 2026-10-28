@@ -140,6 +140,33 @@ class DownloadSessionTest {
         assertEquals(0, state.failed)
     }
 
+    @Test
+    fun `service shutdown marks uncompleted automatic sessions as interrupted`() {
+        DownloadSession.queued(song("soulseek-auto:batch"))
+        DownloadSession.running("soulseek-auto:batch",0f)
+        assertTrue(DownloadSession.interruptIfUnsettled(
+            "soulseek-auto:batch","Interrompido: confira a biblioteca"
+        ))
+        val state=DownloadSession.state.value
+        assertFalse(state.busy)
+        assertEquals(1,state.failed)
+        assertTrue(state.visible)
+    }
+
+    @Test
+    fun `shutdown never overwrites an A3 published result or a user-cancelled row`() {
+        DownloadSession.queued(song("soulseek-auto:done"))
+        DownloadSession.done("soulseek-auto:done")
+        assertFalse(DownloadSession.interruptIfUnsettled("soulseek-auto:done","Unknown"))
+        assertEquals(DownloadProgress.Done,
+            DownloadSession.state.value.items.single().progress)
+
+        DownloadSession.queued(song("soulseek-auto:cancelled"))
+        DownloadSession.forget("soulseek-auto:cancelled")
+        assertFalse(DownloadSession.interruptIfUnsettled("soulseek-auto:cancelled","Unknown"))
+        assertEquals(1,DownloadSession.state.value.items.size)
+    }
+
     // ---- How far through it is ---------------------------------------------
 
     @Test
