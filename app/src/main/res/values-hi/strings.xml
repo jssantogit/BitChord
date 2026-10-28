@@ -1360,4 +1360,6 @@
     <string name="playback_recovery_retry">फिर कोशिश करें</string>
     <string name="playback_recovery_retrying">फिर कोशिश हो रही है…</string>
     <string name="playback_recovery_dismiss">बंद करें</string>
+    <string name="pause_resume_fade">पॉज़ और फिर चलाने पर फ़ेड</string>
+    <string name="pause_resume_fade_subtitle">रोकने पर आवाज़ धीरे-धीरे कम करता है और फिर चलाने पर बढ़ाता है</string>
 </resources>
