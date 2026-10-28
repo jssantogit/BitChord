@@ -202,6 +202,26 @@ internal fun canonicalRowsWithNewVerifiedGroupArt(
 }
 
 /**
+ * A 500px album card can still hold an older edition sleeve. Cache revalidation
+ * must not be gated on image size: the verified Front-v5 URL may have changed.
+ * The query is bounded and only allows audio work ReleaseGroups; recordings
+ * may still inherit the resulting group art via their exact group MBID.
+ */
+internal fun canonicalWarmGroupArtworkCandidateMbids(
+    rows: List<com.music.bitchord.ui.screens.CanonicalCatalogSearchRow>,
+    limit: Int,
+): List<String> = rows.asSequence()
+    .filter {
+        it.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP &&
+            canonicalEditorialReleaseType(it) != null
+    }
+    .map { it.musicBrainzId }
+    .filter(String::isNotBlank)
+    .distinct()
+    .take(limit.coerceAtLeast(0))
+    .toList()
+
+/**
  * Offline-first warm paint: one indexed Front-v5 cache read can satisfy album
  * cards and sibling recordings in one immutable state update, with no CAA
  * metadata network request. Only the exact group MBID can be inherited;
