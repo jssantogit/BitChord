@@ -61,6 +61,19 @@ internal fun canonicalVerifiedGroupDetailArtwork(
     )) verifiedGroupFront else entry.artworkUri
 }
 
+/**
+ * Opening an album with a preloaded Front-500 should reuse its exact Coil key.
+ * The verified group Front is still revalidated; the detail never silently
+ * forces a new 1200px bitmap transfer just to show the same physical cover.
+ * Exact Release-edition browsing can retain its independent hero policy.
+ */
+internal fun canonicalNativeDetailArtworkSize(
+    kind: CanonicalSearchKind,
+): com.music.bitchord.data.catalog.metadata.CoverArtSize =
+    if (kind == CanonicalSearchKind.RELEASE_GROUP)
+        com.music.bitchord.data.catalog.metadata.CoverArtSize.THUMBNAIL
+    else com.music.bitchord.data.catalog.metadata.CoverArtSize.HERO
+
 /** A persisted edition is usable only for its exact requested MBID and with actual tracks. */
 internal fun canonicalMatchingCachedRelease(
     editionMbid: String,
