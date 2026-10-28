@@ -17,6 +17,7 @@ internal enum class PauseResumeFadeEvent(val wireName: String) {
     CANCELED("canceled"),
     ENDED_BEFORE_AUDIBLE("ended_before_audible"),
     FAILED_BEFORE_AUDIBLE("failed_before_audible"),
+    INTERRUPTED_DURING_FADE_IN("interrupted_during_fade_in"),
     HANDOFF_PAUSED("handoff_paused"),
     PLAY_REJECTED("play_rejected"),
 }
@@ -103,6 +104,11 @@ internal class PauseResumeVolumeFade(
                 if (overlapActive()) return@launch
                 if (!target.playWhenReady) {
                     target.volume = 1f
+                    return@launch
+                }
+                if (target.playerError != null || target.playbackState == Player.STATE_ENDED) {
+                    target.volume = 1f
+                    onEvent(PauseResumeFadeEvent.INTERRUPTED_DURING_FADE_IN, duration)
                     return@launch
                 }
                 val nowMs = clockMs()
