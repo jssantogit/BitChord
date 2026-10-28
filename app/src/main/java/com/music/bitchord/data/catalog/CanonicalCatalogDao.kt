@@ -34,6 +34,11 @@ internal data class CanonicalRecordingReleaseDateRow(
     val releaseDate: String?,
 )
 
+internal data class CanonicalRecordingLocalAddedRow(
+    val recordingId: String,
+    val dateAddedSeconds: Long?,
+)
+
 internal data class CanonicalRecordingReleaseArtworkRow(
     val recordingId: String,
     val releaseId: String,
@@ -204,6 +209,21 @@ internal interface CanonicalCatalogDao {
     suspend fun recordingTrackArtistCreditsByIds(
         recordingIds: List<String>,
     ): List<CanonicalRecordingTrackArtistRow>
+
+    /** Only MediaStore local asset added dates; never mix other provider timestamps. */
+    @Query(
+        """
+        SELECT recordingId AS recordingId,
+               dateAddedSeconds AS dateAddedSeconds
+        FROM catalog_media_asset
+        WHERE provider = :localProvider AND recordingId IN (:recordingIds)
+        ORDER BY recordingId ASC, id ASC
+        """,
+    )
+    suspend fun localAddedDatesByRecordingIds(
+        localProvider: String,
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingLocalAddedRow>
 
     @Query("SELECT * FROM catalog_recording WHERE id IN (:recordingIds)")
     suspend fun recordingsByIds(recordingIds: List<String>): List<RecordingEntity>
