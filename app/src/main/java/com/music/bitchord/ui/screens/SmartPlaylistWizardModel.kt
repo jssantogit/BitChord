@@ -142,6 +142,26 @@ internal fun smartRuleAppendAt(
     return smartRuleReplaceAt(root, path, group.copy(children = group.children + added))
 }
 
+/**
+ * A legacy V2 root may contain comparisons directly, rather than a nested
+ * group. Promoting one node into an ALL group keeps that node intact and lets
+ * the user add another condition without making a misleading sibling group.
+ */
+internal fun smartRuleAddConditionAt(
+    root: SmartPlaylistRule,
+    path: List<Int>,
+    added: SmartPlaylistRule,
+): SmartPlaylistRule {
+    val node = smartRuleAtPath(root, path)
+    return if (node is SmartPlaylistRule.Group) {
+        smartRuleAppendAt(root, path, added)
+    } else {
+        smartRuleReplaceAt(root, path, SmartPlaylistRule.Group(
+            SmartPlaylistRuleJoin.ALL, listOf(node, added),
+        ))
+    }
+}
+
 internal fun smartRuleRemoveAt(root: SmartPlaylistRule, path: List<Int>): SmartPlaylistRule {
     require(path.isNotEmpty()) { "Cannot remove the root condition" }
     val parentPath = path.dropLast(1)

@@ -511,6 +511,17 @@ internal fun SmartPlaylistV2WizardUi(
                                 WizardCard("Condição deste grupo", ruleUiSummary(selected, names),
                                     onClick = { editAt(selectedPath, WizardStep.GROUP) })
                             }
+                            item {
+                                OutlinedButton(
+                                    onClick = {
+                                        targetGroupPath = selectedPath
+                                        addingGroup = false
+                                        search = ""
+                                        page = WizardStep.CATEGORIES
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text("+ Adicionar condição") }
+                            }
                             if (selected is SmartPlaylistRule.Not) item {
                                 TextButton(onClick = {
                                     onRuleChange(smartRuleReplaceAt(rule, selectedPath, selected.child))
@@ -738,7 +749,7 @@ internal fun SmartPlaylistV2WizardUi(
                                     smartRuleAppendAt(rule, emptyList(),
                                         SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL,
                                             listOf(added)))
-                                } else smartRuleAppendAt(rule, targetGroupPath, added)
+                                } else smartRuleAddConditionAt(rule, targetGroupPath, added)
                                 onRuleChange(updated)
                                 page = if (addingGroup || targetGroupPath.isEmpty())
                                     WizardStep.RULES else WizardStep.GROUP

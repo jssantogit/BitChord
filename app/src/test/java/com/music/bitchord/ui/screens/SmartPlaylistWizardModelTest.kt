@@ -41,6 +41,17 @@ class SmartPlaylistWizardModelTest {
         assertEquals(revised, removed)
     }
 
+    @Test fun addSecondConditionToFlatLegacyNodePreservesOriginalSemanticsAndNot() {
+        val negative = SmartPlaylistRule.Not(smartRuleNewComparison(SmartPlaylistRuleField.TITLE))
+        val root = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(negative))
+        val added = smartRuleNewComparison(SmartPlaylistRuleField.SOURCE_KIND)
+        val revised = smartRuleAddConditionAt(root, listOf(0), added)
+        val group = smartRuleAtPath(revised, listOf(0)) as SmartPlaylistRule.Group
+        assertEquals(SmartPlaylistRuleJoin.ALL, group.join)
+        assertEquals(listOf(negative, added), group.children)
+        assertEquals(negative, smartRuleAtPath(root, listOf(0)))
+    }
+
     @Test fun invalidPathsAndLastChildDeletionFailClosed() {
         val root = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL,
             listOf(smartRuleNewComparison(SmartPlaylistRuleField.EXPLICIT_RATING)))
