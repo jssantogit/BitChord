@@ -11,6 +11,18 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 
 /**
+ * A live Recording -> Official audio ReleaseGroup association is stronger
+ * than an older Room Track edge into a compilation. Never borrow a different
+ * group's cover merely because the direct group has no cached Front yet.
+ * For offline recordings without that explicit group proof, the indexed
+ * Room graph remains an eligible fallback.
+ */
+internal fun canonicalCanUseCachedRecordingGroupEdge(
+    row: com.music.bitchord.ui.screens.CanonicalCatalogSearchRow,
+): Boolean = row.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING &&
+    row.coverGroupMbid.isNullOrBlank()
+
+/**
  * A MusicBrainz Recording search hit already carries a direct Official
  * audio Release -> ReleaseGroup association. Check that group's Front-v5
  * *before* traversing Room or contacting CAA. If it is unavailable, one
@@ -74,7 +86,9 @@ internal suspend fun canonicalCachedRecordingArtForVisibleRows(
     recordings.forEach { row ->
         row.coverGroupMbid?.let { adopt(row.musicBrainzId, it) }
     }
-    val missing = recordings.map { it.musicBrainzId }.filterNot(proven::containsKey)
+    val missing = recordings.filter { row ->
+        row.musicBrainzId !in proven && canonicalCanUseCachedRecordingGroupEdge(row)
+    }.map { it.musicBrainzId }
     if (missing.isNotEmpty()) {
         val eligible = missing.toSet()
         val edges = try {
