@@ -169,6 +169,13 @@ internal class RuleBasedSmartPlaylistPlanner(
  * Genre/date rules are intentionally absent until canonical metadata supports
  * them; a provider-supplied guess is not a trusted rule.
  */
+/** Remote numeric evidence is read only when the query can observe it. */
+private fun SmartPlaylistRule.needsExplicitRating(): Boolean = when (this) {
+    is SmartPlaylistRule.Comparison -> field == SmartPlaylistRuleField.EXPLICIT_RATING
+    is SmartPlaylistRule.Group -> children.any { it.needsExplicitRating() }
+    is SmartPlaylistRule.Not -> child.needsExplicitRating()
+}
+
 internal class CanonicalRuleBasedSmartPlaylistPreview(
     private val availability: CanonicalLibraryAvailabilityReader,
     private val catalog: CanonicalCatalogDao,
@@ -184,15 +191,21 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
     suspend fun preview(query: RuleBasedSmartPlaylistQuery): List<RuleBasedSmartPlaylistItem> =
         planner.preview(candidates(), query)
 
-    suspend fun preview(query: SmartPlaylistV2Query): List<SmartPlaylistV2Match> =
-        v2Planner.preview(candidates(), query)
+    suspend fun preview(query: SmartPlaylistV2Query): List<SmartPlaylistV2Match> {
+        val requiresRemote = query.rules.needsExplicitRating() ||
+            query.sort == SmartPlaylistV2Sort.RATING_ASC ||
+            query.sort == SmartPlaylistV2Sort.RATING_DESC
+        return v2Planner.preview(candidates(includeRemoteRatings = requiresRemote), query)
+    }
 
     /** One account-scoped snapshot, then 400-id chunks with bounded read pressure. */
-    private suspend fun candidates(): List<RuleBasedRecordingCandidate> {
+    private suspend fun candidates(
+        includeRemoteRatings: Boolean = true,
+    ): List<RuleBasedRecordingCandidate> {
         val ids = availability.availableRecordingIds().distinct().sorted()
         if (ids.any(String::isBlank)) return emptyList()
-        val remoteSnapshot = remoteRatings.read()
-        val remoteByRecording = if (remoteSnapshot.complete) {
+        val remoteSnapshot = if (includeRemoteRatings) remoteRatings.read() else null
+        val remoteByRecording = if (remoteSnapshot?.complete == true) {
             remoteSnapshot.evidence.filter { it.recordingId.isNotBlank() }
                 .groupBy { it.recordingId }
         } else emptyMap()
@@ -226,6 +239,7 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
                 )
             }
         }
+        if (!includeRemoteRatings) return rows
         return rows.map { row ->
             val remote = remoteByRecording[row.recordingId].orEmpty()
             val resolved = effectiveSmartPlaylistRating(row.explicitRating, remote)
@@ -240,7 +254,7 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
             row.copy(
                 explicitRating = resolved,
                 ratingEvidenceUnknown = ambiguous ||
-                    (!remoteSnapshot.complete && row.explicitRating == null),
+                    (remoteSnapshot?.complete != true && row.explicitRating == null),
             )
         }
     }
