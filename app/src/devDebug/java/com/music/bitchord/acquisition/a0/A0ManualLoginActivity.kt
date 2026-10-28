@@ -244,11 +244,9 @@ class A0ManualLoginActivity : Activity() {
             text="Baixar 1 arquivo autorizado como música local (piloto devDebug)"
         }
         page.addView(saveAction)
-        val autoAction=Button(this).apply {
-            text=if(batch!=null) "Baixar lote automaticamente (experimental)"
-                else "Baixar automaticamente (experimental)"
-        }
-        if(fromSongDownload && !manualRecovery)page.addView(autoAction)
+        // No second AUTO entrypoint in this manual picker. MainActivity's
+        // guarded one-tap queue preserves the actual source recording ID;
+        // hand-edited searches here cannot mint canonical identity.
         val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
         page.addView(exportAction)
         if (!fromSongDownload) text("Captura temporária se não existir uma captura manual ativa. " +
@@ -277,45 +275,6 @@ class A0ManualLoginActivity : Activity() {
             saveAction.isEnabled=false
             status.text="Falha ao limpar arquivos temporários do teste. Transferência bloqueada."
         }
-        // This only queues a session. DownloadService owns transport, A3
-        // publication, foreground notification and cancellation.
-        autoAction.setOnClickListener {
-            if(!fromSongDownload || stopping || manualRecovery) {
-                status.text="Recuperação manual: nova automação não autorizada."
-            }else if(!A0AndroidAutoConsent.enabled(this)) {
-                status.text="Ative a seleção automática em Configurações → Downloads → Soulseek."
-            }else if(!acknowledge.isChecked || !saveConsent.isChecked) {
-                status.text="Confirme o aviso TCP e a autorização para salvar antes de iniciar."
-            }else if(batch!=null && (batch.index!=0 || batch.succeeded>0)) {
-                status.text="Lote manual já iniciado. Continue manualmente para evitar duplicatas."
-            }else {
-                val entries=if(batch!=null)batch.entries else {
-                    val query=searchInput.text.toString().trim()
-                    val album=albumInput.text.toString().trim().takeIf { it.isNotEmpty() }
-                    val duration=intent.getIntExtra(
-                        "bitchord.soulseek.manual.duration_seconds",0)
-                    listOf(SoulseekBatchPlan.Entry(
-                        trackId="manual-"+java.util.UUID.randomUUID(),
-                        query=query,album=album,
-                        durationSeconds=duration.takeIf { it in 15..7200 },
-                    ))
-                }
-                if(Downloads.enqueueSoulseekAuto(this,entries)) {
-                    Toast.makeText(this,
-                        "Download na fila. Acompanhe pela notificação e no gerenciador.",
-                        Toast.LENGTH_LONG).show()
-                    // A second manual download from this screen could race
-                    // with the newly queued automatic publication. Reopen
-                    // the picker deliberately for any uncertain remaining song.
-                    autoAction.isEnabled=false
-                    finish()
-                } else {
-                    status.text="Automação recusada: confira a conta, a conexão, " +
-                        "a qualidade, o destino e a identidade da música."
-                }
-            }
-        }
-
         fun start(
             performSearch:Boolean,transferObserved:Boolean=false,saveToDevice:Boolean=false
         ) {
