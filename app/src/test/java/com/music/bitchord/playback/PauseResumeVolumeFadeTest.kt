@@ -170,6 +170,46 @@ class PauseResumeVolumeFadeTest {
         }
     }
 
+    @Test fun `diagnostics report one start and one completion without per frame noise`() = runTest {
+        val deck = FakeDeck(playingInitially = true)
+        val events = mutableListOf<PauseResumeFadeEvent>()
+        val fade = PauseResumeVolumeFade(
+            scope = this,
+            durationMs = { 200 },
+            overlapActive = { false },
+            clockMs = { testScheduler.currentTime },
+            onEvent = { event, _ -> events += event },
+        )
+        fade.pause(deck.player)
+        advanceTimeBy(240)
+        runCurrent()
+        assertEquals(
+            listOf(PauseResumeFadeEvent.FADE_OUT_STARTED, PauseResumeFadeEvent.FADE_OUT_COMPLETED),
+            events,
+        )
+    }
+
+    @Test fun `aborted fade emits a cancellation reason, not a completion`() = runTest {
+        val deck = FakeDeck(playingInitially = true)
+        val events = mutableListOf<PauseResumeFadeEvent>()
+        val fade = PauseResumeVolumeFade(
+            scope = this,
+            durationMs = { 200 },
+            overlapActive = { false },
+            clockMs = { testScheduler.currentTime },
+            onEvent = { event, _ -> events += event },
+        )
+        fade.pause(deck.player)
+        runCurrent()
+        advanceTimeBy(32)
+        runCurrent()
+        fade.reset()
+        assertEquals(
+            listOf(PauseResumeFadeEvent.FADE_OUT_STARTED, PauseResumeFadeEvent.CANCELED),
+            events,
+        )
+    }
+
     @Test fun `disabled preference bypasses the entire envelope`() = runTest {
         val deck = FakeDeck(playingInitially = true)
         val fade = PauseResumeVolumeFade(this, { 0 }, { false }, { testScheduler.currentTime })
