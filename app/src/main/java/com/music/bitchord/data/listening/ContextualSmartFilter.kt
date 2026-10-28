@@ -14,6 +14,17 @@ import com.music.bitchord.data.catalog.CanonicalLocalLibrary
  * become IS_MISSING or pass NOT. A later scoped evidence adapter can expand this
  * whitelist without changing the saved filter schema or recording identity.
  */
+/** Only these two proven canonical provider categories have Source Kind semantics. */
+internal fun verifiedContextualSourceKind(providerKey: String?): SmartPlaylistSourceKind? =
+    when {
+        providerKey == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER ->
+            SmartPlaylistSourceKind.LOCAL
+        providerKey?.startsWith("opensubsonic:") == true &&
+            providerKey.substringAfter(':').isNotBlank() ->
+            SmartPlaylistSourceKind.OPENSUBSONIC
+        else -> null
+    }
+
 internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalSongBrowse(): Boolean {
     fun supported(rule: SmartPlaylistRule): Boolean = when (rule) {
         is SmartPlaylistRule.Comparison ->
@@ -54,13 +65,7 @@ internal fun filterCanonicalBrowseSongs(
     require(tracks.distinctBy { it.recordingId }.size == tracks.size) {
         "Canonical browse must have one row per RecordingId"
     }
-    val sourceKind = when {
-        providerKey == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER ->
-            SmartPlaylistSourceKind.LOCAL
-        providerKey.startsWith("opensubsonic:") &&
-            providerKey.substringAfter(':').isNotBlank() -> SmartPlaylistSourceKind.OPENSUBSONIC
-        else -> null
-    }
+    val sourceKind = verifiedContextualSourceKind(providerKey)
     val query = SmartPlaylistV2Query(
         rules = filter.rules,
         sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
