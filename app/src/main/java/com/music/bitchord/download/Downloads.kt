@@ -1147,6 +1147,10 @@ object Downloads {
         }catch(e:CancellationException) {
             clear(id)
             throw e
+        }catch(_:A3AcquisitionLedger.AutomaticIdentityAlreadyReserved) {
+            fail(id,"Esta faixa ou lançamento já tem uma tentativa registrada. " +
+                "Confira a biblioteca antes de baixar novamente; " +
+                "para revisão explícita, desative a automação.")
         }catch(_:Exception) {
             fail(id,"Aquisição automática interrompida; confira a biblioteca e use o modo manual.")
         }
