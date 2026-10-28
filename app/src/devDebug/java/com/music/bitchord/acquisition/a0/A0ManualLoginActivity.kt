@@ -68,6 +68,7 @@ class A0ManualLoginActivity : Activity() {
         super.onCreate(savedInstanceState)
         // Launched by the in-app song Download action, not the old A0 tool entry.
         val fromSongDownload = intent.hasExtra("bitchord.soulseek.manual.query")
+        val manualRecovery=intent.getBooleanExtra("bitchord.soulseek.manual.recovery",false)
         val hasBatch=intent.hasExtra("bitchord.soulseek.batch.queries")
         // Process death cannot be assumed to preserve the completion of a
         // MediaStore commit. Fail closed instead of silently restarting at
@@ -111,9 +112,14 @@ class A0ManualLoginActivity : Activity() {
             it.setPadding(0, 12, 0, 12)
             page.addView(it)
         }
-        text(if (fromSongDownload) "Baixar com Soulseek" else
+        text(if (manualRecovery) "Revisar faixas manualmente" else
+            if (fromSongDownload) "Baixar com Soulseek" else
             "BitChord A0 — teste de conectividade P2P Soulseek")
-        text(if (fromSongDownload)
+        text(if (manualRecovery)
+            "A automação não selecionou com segurança estas faixas. Somente elas serão " +
+                "revisadas; músicas publicadas anteriormente não serão baixadas novamente. " +
+                "Você precisa pesquisar, escolher e autorizar cada arquivo manualmente."
+        else if (fromSongDownload)
             "Busque arquivos usando sua conta configurada em Configurações → Downloads. " +
                 "A pesquisa não baixa arquivos automaticamente: você deverá escolher um " +
                 "candidato e confirmar que tem autorização para salvá-lo."
@@ -203,7 +209,7 @@ class A0ManualLoginActivity : Activity() {
             text=if(batch!=null) "Baixar lote automaticamente (experimental)"
                 else "Baixar automaticamente (experimental)"
         }
-        if(fromSongDownload)page.addView(autoAction)
+        if(fromSongDownload && !manualRecovery)page.addView(autoAction)
         val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
         page.addView(exportAction)
         if (!fromSongDownload) text("Captura temporária se não existir uma captura manual ativa. " +
@@ -235,8 +241,8 @@ class A0ManualLoginActivity : Activity() {
         // This only queues a session. DownloadService owns transport, A3
         // publication, foreground notification and cancellation.
         autoAction.setOnClickListener {
-            if(!fromSongDownload || stopping) {
-                status.text="Automação só está disponível após tocar em Baixar."
+            if(!fromSongDownload || stopping || manualRecovery) {
+                status.text="Recuperação manual: nova automação não autorizada."
             }else if(!A0AndroidAutoConsent.enabled(this)) {
                 status.text="Ative a seleção automática em Configurações → Downloads → Soulseek."
             }else if(!acknowledge.isChecked || !saveConsent.isChecked) {
