@@ -159,6 +159,8 @@ object Downloads {
         val quality:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
     )
     private val autoRequests=LinkedHashMap<String,AutoRequest>()
+    /** Never couple duplicate physical P/F admission to a dismissible UI row. */
+    private val autoAttemptGuard=SoulseekAutoAttemptGuard()
     /** One automatic release in flight even when four service workers run. */
     private val autoMutex=Mutex()
     /** Bounded results only in RAM, not a second download or peer-history store. */
@@ -168,6 +170,7 @@ object Downloads {
     internal val soulseekAutoReviews:StateFlow<Map<String,SoulseekAutoReviewPlan>> =
         _autoReviews.asStateFlow()
 
+    /** Clearing presentation does not clear the physical auto-attempt fence. */
     internal fun clearSoulseekAutoReviews() { _autoReviews.value=emptyMap() }
 
     /**
@@ -360,18 +363,9 @@ object Downloads {
         synchronized(lock) {
             // Do not overlap a manual recovery P/F with a new automatic batch.
             if(openManualReviews.isNotEmpty())return false
-            // No repeat auto-request of a release already attempted this session.
-            if(_autoReviews.value.values.any { prior ->
-                    prior.rows.map { it.entry.query to it.entry.album } ==
-                        captured.map { it.query to it.album }
-                })return false
-            if(autoRequests.values.any { runningRequest ->
-                    runningRequest.entries.size==captured.size &&
-                        runningRequest.entries.zip(captured).all { (old,fresh) ->
-                            old.query==fresh.query && old.album==fresh.album &&
-                                old.durationSeconds==fresh.durationSeconds
-                        }
-                })return false
+            // Even after the result is cleared, evicted or cancelled, do not
+            // automatically repeat the same canonical audio in this process.
+            if(!autoAttemptGuard.reserve(captured))return false
             autoRequests[id]=AutoRequest(captured,quality)
             pending[id]=song
         }
@@ -385,6 +379,8 @@ object Downloads {
             synchronized(lock) {
                 pending.remove(id)
                 autoRequests.remove(id)
+                // No worker was accepted: this is the sole rollback case.
+                autoAttemptGuard.rollback(captured)
             }
             fail(id,"Não foi possível iniciar o serviço de downloads.")
             false
