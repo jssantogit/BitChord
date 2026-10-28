@@ -99,4 +99,56 @@ class ContextualSmartFilterTest {
         }
     }
 
+    @Test fun knownSourceKindRulesWorkForActualScopedLocalAndRemoteAssets() {
+        val local = com.music.bitchord.data.catalog.CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER
+        val localTrack = track("same").copy(
+            availableAssets = listOf(CanonicalBrowseMediaAsset("media:1", local)),
+        )
+        val remoteTrack = track("same")
+        val onlyLocal = filter(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.SOURCE_KIND, SmartPlaylistRuleOperator.EQUAL,
+            textValue = "local",
+        ))
+        val onlyRemote = filter(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.SOURCE_KIND, SmartPlaylistRuleOperator.EQUAL,
+            textValue = "opensubsonic",
+        ))
+        assertTrue(onlyLocal.isSupportedForCanonicalSongBrowse())
+        assertEquals(listOf("same"),
+            filterCanonicalBrowseSongs(listOf(localTrack), onlyLocal, local)
+                .map { it.recordingId })
+        assertTrue(filterCanonicalBrowseSongs(listOf(localTrack), onlyRemote, local).isEmpty())
+        assertEquals(listOf("same"),
+            filterCanonicalBrowseSongs(listOf(remoteTrack), onlyRemote, "opensubsonic:current")
+                .map { it.recordingId })
+        assertTrue(filterCanonicalBrowseSongs(listOf(remoteTrack), onlyLocal,
+            "opensubsonic:current").isEmpty())
+        val notRemote = filter(SmartPlaylistRule.Not(onlyRemote.rules))
+        assertEquals(listOf("same"),
+            filterCanonicalBrowseSongs(listOf(localTrack), notRemote, local)
+                .map { it.recordingId })
+        assertTrue(filterCanonicalBrowseSongs(listOf(remoteTrack), notRemote,
+            "opensubsonic:current").isEmpty())
+    }
+
+    @Test fun unknownSourceDoesNotBecomeLocalUnderNotOrNegativeOperator() {
+        val unknownProvider = "custom-unverified:session"
+        val input = listOf(track("unproven").copy(
+            availableAssets = listOf(CanonicalBrowseMediaAsset("unproven", unknownProvider)),
+        ))
+        val remote = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.SOURCE_KIND, SmartPlaylistRuleOperator.EQUAL,
+            textValue = "opensubsonic",
+        )
+        val filters = listOf(remote,
+            SmartPlaylistRule.Not(remote),
+            SmartPlaylistRule.Comparison(SmartPlaylistRuleField.SOURCE_KIND,
+                SmartPlaylistRuleOperator.NOT_EQUAL, textValue = "opensubsonic"))
+        for (rule in filters) {
+            val f = filter(rule)
+            assertTrue(f.isSupportedForCanonicalSongBrowse())
+            assertTrue(filterCanonicalBrowseSongs(input, f, unknownProvider).isEmpty())
+        }
+    }
+
 }
