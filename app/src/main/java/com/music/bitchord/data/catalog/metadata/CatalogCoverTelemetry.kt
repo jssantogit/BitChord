@@ -30,8 +30,8 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         val coilDiskHits: Int,
         val coilNetworkFetches: Int,
         val coilOtherSources: Int,
-        val artistCachedBatchReads: Int,
-        val artistCachedRowsReused: Int,
+        val verifiedGroupCachedBatchReads: Int,
+        val verifiedGroupCachedRowsReused: Int,
         val recoveredCoalescedOwnerCancellations: Int,
     )
 
@@ -51,8 +51,8 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
     private var imageDisk = 0
     private var imageNetwork = 0
     private var imageOther = 0
-    private var artistCacheBatchReads = 0
-    private var artistCacheRows = 0
+    private var groupCacheBatchReads = 0
+    private var groupCacheRows = 0
     private var recoveredSharedOwners = 0
 
     /** Start a clean anonymous metric window for each explicit capture. */
@@ -73,15 +73,15 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         imageDisk = 0
         imageNetwork = 0
         imageOther = 0
-        artistCacheBatchReads = 0
-        artistCacheRows = 0
+        groupCacheBatchReads = 0
+        groupCacheRows = 0
         recoveredSharedOwners = 0
     }
 
     /** No MBID/album is captured: only counts of successfully verified fronts. */
-    @Synchronized fun recordArtistCachedGroupBatch(reusedRows: Int) {
-        artistCacheBatchReads++
-        artistCacheRows += reusedRows.coerceAtLeast(0)
+    @Synchronized fun recordVerifiedGroupCachedBatch(reusedRows: Int) {
+        groupCacheBatchReads++
+        groupCacheRows += reusedRows.coerceAtLeast(0)
     }
 
     @Synchronized fun recordRecoveredCoalescedOwnerCancellation() {
@@ -142,7 +142,7 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
             loadedImages, failedImages, imagesSorted.size,
             quantile(imagesSorted, 50), quantile(imagesSorted, 95),
             imageMemory, imageDisk, imageNetwork, imageOther,
-            artistCacheBatchReads, artistCacheRows, recoveredSharedOwners)
+            groupCacheBatchReads, groupCacheRows, recoveredSharedOwners)
     }
 
     companion object {
