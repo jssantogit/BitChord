@@ -2,6 +2,10 @@ package com.music.bitchord.download
 
 import java.io.IOException
 import java.net.URI
+import java.security.SecureRandom
+import java.util.Locale
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
@@ -45,18 +49,115 @@ internal class A3AcquisitionLedger(private val store:Store) {
         val id:String,
         val phase:Phase,
         val contentUri:String?=null,
-        val byteCount:Long?=null
+        val byteCount:Long?=null,
+        /** HMAC only, never user recording ID or query metadata in cleartext. */
+        val autoRecordingDigest:String?=null,
+        val autoReleaseDigest:String?=null,
+    )
+
+    /** Input exists only during explicit admission, never in A3 persistence. */
+    data class AutomaticSlot(
+        val id:String,
+        val recordingId:String,
+        val query:String,
+        val album:String?,
     )
 
     @Serializable
     private data class Envelope(
         val version:Int,
-        val jobs:List<Entry>
+        val jobs:List<Entry>,
+        /** Install-scoped secret committed atomically with the first slot. */
+        val autoSalt:String?=null,
     )
 
     private val lock=Any()
     private val json=Json { ignoreUnknownKeys=false; encodeDefaults=true }
+    private var autoSalt:String?=null
     private var items:LinkedHashMap<String,Entry> = load()
+
+    /**
+     * Reserve ALL canonical slots before Soulseek discovery or authentication.
+     * The same single A3 commit records both fingerprints and their opaque
+     * future job IDs. A process crash cannot leave an unindexed published
+     * artifact that a newly generated request could unknowingly repeat.
+     *
+     * Includes failed/interrupted slots: without proving A2 rolled back, a
+     * previous attempt is NOT permission for an unattended re-download.
+     */
+    fun reserveAutomaticBatch(requests:List<AutomaticSlot>):Unit=synchronized(lock) {
+        require(requests.size in 1..64) { "A3 auto album size invalid" }
+        require(requests.map { it.id }.distinct().size==requests.size)
+        require(requests.all { slot ->
+            validId(slot.id) && slot.recordingId.isNotBlank() &&
+                slot.recordingId.length<=180 &&
+                !slot.recordingId.any { it.isISOControl() } &&
+                slot.query.isNotBlank() && slot.query.length<=120 &&
+                !slot.query.any { it.isISOControl() } &&
+                (slot.album==null || (slot.album.length<=120 &&
+                    !slot.album.any { it.isISOControl() }))
+        }) { "A3 auto slot metadata invalid" }
+        val salt=autoSalt ?: ByteArray(32).also(SecureRandom()::nextBytes)
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        val rows=requests.map { slot ->
+            Entry(
+                id=slot.id,
+                phase=Phase.REQUESTED,
+                autoRecordingDigest=fingerprint(salt,"recording",slot.recordingId),
+                autoReleaseDigest=fingerprint(
+                    salt,"release",slot.query,slot.album.orEmpty()),
+            )
+        }
+        val existingRecordings=items.values.mapNotNull { it.autoRecordingDigest }.toSet()
+        val existingReleases=items.values.mapNotNull { it.autoReleaseDigest }.toSet()
+        check(rows.none { it.id in items ||
+            it.autoRecordingDigest in existingRecordings ||
+            it.autoReleaseDigest in existingReleases }) {
+            "A3 automatic identity previously reserved: verify local library"
+        }
+        check(rows.map { it.autoRecordingDigest }.distinct().size==rows.size &&
+            rows.map { it.autoReleaseDigest }.distinct().size==rows.size) {
+            "A3 duplicate identity inside album"
+        }
+        val retained=LinkedHashMap(items)
+        if(retained.size+rows.size>MAX_JOBS) {
+            val iterator=retained.entries.iterator()
+            while(iterator.hasNext() && retained.size+rows.size>MAX_JOBS) {
+                val row=iterator.next().value
+                if(row.autoRecordingDigest==null &&
+                    row.phase in setOf(Phase.FAILED,Phase.CANCELLED))
+                    iterator.remove()
+            }
+        }
+        check(retained.size+rows.size<=MAX_JOBS) {
+            "A3 automatic history capacity: requires explicit reconciliation"
+        }
+        rows.forEach { retained[it.id]=it }
+        // Any failed commit leaves both the old in-memory map AND the salt
+        // unchanged; never mint a new key over old durable reservations.
+        commit(retained,salt)
+    }
+
+    private fun fingerprint(salt:String,kind:String,vararg values:String):String {
+        val mac=Mac.getInstance("HmacSHA256")
+        val key=ByteArray(32) { i ->
+            salt.substring(i*2,i*2+2).toInt(16).toByte()
+        }
+        mac.init(SecretKeySpec(key,"HmacSHA256"))
+        val input=buildString {
+            append(kind)
+            for(value in values) {
+                val normalized=value.trim().lowercase(Locale.ROOT)
+                    .replace(Regex("\\s+")," ")
+                append('\\u0000')
+                append(normalized.length)
+                append(':')
+                append(normalized)
+            }
+        }
+        return mac.doFinal(input.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }
 
     fun all():List<Entry> = synchronized(lock) { items.values.toList() }
     fun get(id:String):Entry?=synchronized(lock){items[id]}
@@ -70,8 +171,9 @@ internal class A3AcquisitionLedger(private val store:Store) {
         if(retained.size>=MAX_JOBS) {
             val iterator=retained.entries.iterator()
             while(iterator.hasNext() && retained.size>=MAX_JOBS) {
-                val state=iterator.next().value.phase
-                if(state==Phase.FAILED || state==Phase.CANCELLED)
+                val row=iterator.next().value
+                if(row.autoRecordingDigest==null &&
+                    row.phase in setOf(Phase.FAILED,Phase.CANCELLED))
                     iterator.remove()
             }
         }
@@ -162,11 +264,12 @@ internal class A3AcquisitionLedger(private val store:Store) {
         record
     }
 
-    private fun commit(updated:Map<String,Entry>) {
+    private fun commit(updated:Map<String,Entry>,salt:String?=autoSalt) {
         val next=LinkedHashMap(updated)
-        val raw=json.encodeToString(Envelope(VERSION,next.values.toList()))
+        val raw=json.encodeToString(Envelope(VERSION,next.values.toList(),salt))
         if(!store.commit(raw))throw IOException("A3 journal commit failed")
         items=next
+        autoSalt=salt
     }
 
     private fun load():LinkedHashMap<String,Entry> {
@@ -177,15 +280,29 @@ internal class A3AcquisitionLedger(private val store:Store) {
             throw IOException("A3 acquisition journal format invalid",e)
         }
         if(decoded.version!=VERSION || decoded.jobs.size>MAX_JOBS ||
+            (decoded.autoSalt!=null && !DIGEST.matches(decoded.autoSalt)) ||
+            (decoded.autoSalt==null && decoded.jobs.any {
+                it.autoRecordingDigest!=null || it.autoReleaseDigest!=null
+            }) ||
             decoded.jobs.any { !validId(it.id) ||
+                ((it.autoRecordingDigest==null)!=(it.autoReleaseDigest==null)) ||
+                (it.autoRecordingDigest!=null &&
+                    !DIGEST.matches(it.autoRecordingDigest)) ||
+                (it.autoReleaseDigest!=null &&
+                    !DIGEST.matches(it.autoReleaseDigest)) ||
                 (it.phase in setOf(Phase.AVAILABLE,Phase.RECONCILE) &&
                     (!validUri(it.contentUri.orEmpty()) ||
                     it.byteCount==null || it.byteCount !in 1L..MAX_BYTES)) ||
                 (it.phase !in setOf(Phase.AVAILABLE,Phase.RECONCILE) &&
                     (it.contentUri!=null || it.byteCount!=null))
-            } || decoded.jobs.map{it.id}.toSet().size!=decoded.jobs.size) {
+            } || decoded.jobs.map{it.id}.toSet().size!=decoded.jobs.size ||
+            decoded.jobs.mapNotNull{it.autoRecordingDigest}.distinct().size !=
+                decoded.jobs.count { it.autoRecordingDigest!=null } ||
+            decoded.jobs.mapNotNull{it.autoReleaseDigest}.distinct().size !=
+                decoded.jobs.count { it.autoReleaseDigest!=null }) {
             throw IOException("A3 acquisition journal consistency violation")
         }
+        autoSalt=decoded.autoSalt
         return LinkedHashMap<String,Entry>().apply {
             decoded.jobs.forEach { put(it.id,it) }
         }
@@ -205,6 +322,7 @@ internal class A3AcquisitionLedger(private val store:Store) {
 
     private companion object {
         const val VERSION=1
+        val DIGEST=Regex("[0-9a-f]{64}")
         const val MAX_JOBS=2048
         val MAX_BYTES=com.music.bitchord.acquisition.a0.A0ObservedTransferLimits.MAX_AUDIO_BYTES
         val OPAQUE_ID=Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
