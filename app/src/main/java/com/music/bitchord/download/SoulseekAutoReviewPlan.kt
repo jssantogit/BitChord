@@ -43,6 +43,22 @@ internal class SoulseekAutoReviewPlan private constructor(
     val manualEntries:List<SoulseekBatchPlan.Entry> =
         manualIndices.map { rows[it].entry }
 
+    /** The Activity's non-exported Intent must describe this SAME ordered set
+     * of remaining slots. Synthetic batch payload IDs are intentionally ignored.
+     */
+    fun matchesManualPayload(
+        originalIndices:List<Int>,
+        proposed:List<SoulseekBatchPlan.Entry>,
+    ):Boolean {
+        if(!manualAllowed || originalIndices!=manualIndices ||
+            proposed.size!=manualEntries.size)return false
+        return proposed.zip(manualEntries).all { (candidate,canonical) ->
+            candidate.query==canonical.query &&
+                candidate.album==canonical.album &&
+                candidate.durationSeconds==canonical.durationSeconds
+        }
+    }
+
     /**
      * Called only after A3 confirms the manual publication. The caller must
      * carry the ORIGINAL slot index, not a moving index into manualEntries.
