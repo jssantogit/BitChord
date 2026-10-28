@@ -115,6 +115,40 @@ class A3AutomaticIdentityReservationTest {
         catch(_:IOException){}
     }
 
+    @Test fun revokedAuthorizationDuringCommitDoesNotPersistAnyReservations() {
+        val store=Store()
+        val journal=A3AcquisitionLedger(store)
+        var gateCalled=false
+        try {
+            journal.reserveAutomaticBatch(listOf(slot(first),slot(second,
+                "second-recording","Artist - Other")),commitGuard={ write ->
+                gateCalled=true
+                throw IOException("Account generation revoked")
+            })
+            fail("a revoked source cannot leave a permanent A3 claim")
+        }catch(_:IOException) {}
+        assertTrue(gateCalled)
+        assertNull(store.raw)
+        assertEquals(0,store.writes)
+        assertTrue(journal.all().isEmpty())
+        journal.reserveAutomaticBatch(listOf(slot(first)))
+        assertEquals(1,store.writes)
+    }
+
+    @Test fun allowedCommitGateInvokedOnceForWholeAlbum() {
+        val store=Store()
+        val journal=A3AcquisitionLedger(store)
+        var calls=0
+        journal.reserveAutomaticBatch(listOf(slot(first),slot(second,
+            "other","Artist - Other")),commitGuard={ action ->
+            calls++
+            action()
+        })
+        assertEquals(1,calls)
+        assertEquals(1,store.writes)
+        assertEquals(2,A3AcquisitionLedger(store).all().size)
+    }
+
     @Test fun multipleUniqueSlotsReserveInOneDurableCommit() {
         val store=Store();val ledger=A3AcquisitionLedger(store)
         ledger.reserveAutomaticBatch(listOf(
