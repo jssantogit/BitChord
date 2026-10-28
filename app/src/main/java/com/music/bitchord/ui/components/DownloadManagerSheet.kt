@@ -405,9 +405,14 @@ private fun DownloadManagerRow(
                     )
                     Spacer(Modifier.height(3.dp))
                     RowStatus(
-                        if (progress.fraction > 0f) {
-                            stringResource(R.string.downloading_progress, (progress.fraction * 100).toInt())
-                        } else {
+                        if(item.videoId.startsWith("soulseek-auto:")) {
+                            if(progress.fraction>0f)
+                                "${(progress.fraction*100).toInt()}% das faixas processadas"
+                            else "Pesquisando candidatos..."
+                        }else if(progress.fraction>0f) {
+                            stringResource(R.string.downloading_progress,
+                                (progress.fraction * 100).toInt())
+                        }else {
                             stringResource(R.string.starting)
                         },
                     )
