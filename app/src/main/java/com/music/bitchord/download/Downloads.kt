@@ -157,6 +157,7 @@ object Downloads {
     private data class AutoRequest(
         val entries:List<SoulseekBatchPlan.Entry>,
         val quality:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
+        val sourceSongs:List<Song>,
     )
     private val autoRequests=LinkedHashMap<String,AutoRequest>()
     /** Never couple duplicate physical P/F admission to a dismissible UI row. */
@@ -372,6 +373,7 @@ object Downloads {
     internal fun enqueueSoulseekAuto(
         context:Context,
         entries:List<SoulseekBatchPlan.Entry>,
+        sourceSongs:List<Song> = emptyList(),
     ):Boolean {
         val app=context.applicationContext
         val pilot=BuildConfig.DEBUG && BuildConfig.FLAVOR=="dev"
@@ -388,11 +390,17 @@ object Downloads {
         val id="soulseek-auto:"+UUID.randomUUID().toString()
         val album=if(captured.size>1) captured.mapNotNull { it.album }
             .distinct().singleOrNull() else null
+        val firstSong=sourceSongs.firstOrNull()
+        val firstQuery=captured.first().query
+        val fallbackArtist=firstQuery.substringBefore(" - ", "").ifBlank { "Artista" }
         val song=Song(
             videoId=id,
-            title=if(captured.size==1)captured.first().query
-                else album ?: "Lote Soulseek (${captured.size} músicas)",
-            artist="Soulseek",thumbnailUrl=null,albumName=album,
+            title=if(captured.size==1)
+                firstSong?.title ?: firstQuery.substringAfter(" - ",firstQuery)
+                else album ?: firstSong?.albumName ?: "Álbum (${captured.size} faixas)",
+            artist=firstSong?.artist?.takeIf { it.isNotBlank() } ?: fallbackArtist,
+            thumbnailUrl=firstSong?.thumbnailUrl,
+            albumName=album ?: firstSong?.albumName,
         )
         var displacedReviews=emptyMap<String,SoulseekAutoReviewPlan>()
         synchronized(lock) {
@@ -407,7 +415,7 @@ object Downloads {
                 _autoReviews.value,captured)
             displacedReviews=change.displaced
             _autoReviews.value=change.current
-            autoRequests[id]=AutoRequest(captured,quality)
+            autoRequests[id]=AutoRequest(captured,quality,sourceSongs.toList())
             pending[id]=song
         }
         _active.update { it + (id to DownloadState.Queued) }
@@ -1186,6 +1194,7 @@ object Downloads {
                 val outcome=A0AndroidAutoAcquisitionEngine.run(
                     context,request.entries,request.quality,
                     userRequested=true,isCancelled={job?.isActive!=true},
+                    sourceSongs=request.sourceSongs,
                     onSlotResolved={index,_ ->
                         if(job?.isActive==true) {
                             // Fraction means resolved album slots, NOT byte
