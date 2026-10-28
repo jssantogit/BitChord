@@ -98,7 +98,7 @@ class A0ManualLoginActivity : Activity() {
         if(manualRecovery && (!fromSongDownload ||
                 recoverySession.isNullOrBlank() ||
                 recoveryIndices?.size!=(batchEntries?.size ?: 1) ||
-                recoveryIndices.toList()!=recoveryIndices.distinct())) {
+                recoveryIndices?.toList()!=recoveryIndices?.distinct())) {
             Toast.makeText(this,"Revisão indisponível: nenhum download iniciado.",
                 Toast.LENGTH_LONG).show()
             finish()
