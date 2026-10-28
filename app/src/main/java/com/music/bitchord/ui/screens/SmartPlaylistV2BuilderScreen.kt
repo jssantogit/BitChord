@@ -33,6 +33,10 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
+import com.music.bitchord.data.listening.SavedSmartPlaylistV2Filter
+import com.music.bitchord.data.listening.SmartPlaylistV2FilterRepository
+import com.music.bitchord.data.listening.andSavedFilter
+import com.music.bitchord.data.listening.toPlaylistCopy
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.SavedSmartPlaylistDefinition
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionRepository
@@ -352,6 +356,9 @@ internal fun SmartPlaylistV2BuilderScreen(
         )
     }
     val definitionDatabase = remember(context) { SmartPlaylistDefinitionDatabase.get(context) }
+    val filterRepo = remember(definitionDatabase) {
+        SmartPlaylistV2FilterRepository(definitionDatabase.v2FilterDao())
+    }
     val classicRepo = remember(context) {
         SmartPlaylistDefinitionRepository(
             SmartPlaylistDefinitionDatabase.get(context).definitionDao(),
@@ -376,6 +383,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     var preview by remember { mutableStateOf<List<V2DisplayRow>?>(null) }
     var previewQuery by remember { mutableStateOf<SmartPlaylistV2Query?>(null) }
     var savedFailure by remember { mutableStateOf(false) }
+    var filtersFailure by remember { mutableStateOf(false) }
     var legacyFailure by remember { mutableStateOf(false) }
     var editorEpoch by remember { mutableStateOf(0) }
     val saved by produceState(initialValue = emptyList<SavedSmartPlaylistV2Definition>(), key1 = repo) {
@@ -385,6 +393,18 @@ internal fun SmartPlaylistV2BuilderScreen(
             throw cancelled
         } catch (_: Exception) {
             savedFailure = true
+        }
+    }
+
+    val savedFilters by produceState(
+        initialValue = emptyList<SavedSmartPlaylistV2Filter>(), key1 = filterRepo,
+    ) {
+        try {
+            filterRepo.observe().collect { value = it; filtersFailure = false }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            filtersFailure = true
         }
     }
 
@@ -515,7 +535,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
                         value = name, onValueChange = { name = it },
-                        label = { Text("Nome da playlist") },
+                        label = { Text("Nome da playlist ou filtro") },
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
                     )
                     androidx.compose.runtime.key(editingId, editorEpoch) {
@@ -557,7 +577,26 @@ internal fun SmartPlaylistV2BuilderScreen(
                                     error = "Não foi possível salvar: verifique referências ausentes ou circulares."
                                 } finally { loading = false }
                             }
-                        }, enabled = !loading) { Text("Salvar") }
+                        }, enabled = !loading) { Text("Salvar playlist") }
+                        TextButton(onClick = {
+                            if (loading) return@TextButton
+                            loading = true
+                            scope.launch {
+                                try {
+                                    val parsed = query()
+                                    withContext(Dispatchers.IO) {
+                                        filterRepo.save(SavedSmartPlaylistV2Filter(
+                                            UUID.randomUUID().toString(), name, parsed.rules,
+                                        ))
+                                    }
+                                    error = null
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    error = "Não foi possível salvar o filtro reutilizável."
+                                } finally { loading = false }
+                            }
+                        }, enabled = !loading) { Text("Salvar filtro") }
                         TextButton(onClick = {
                             if (loading) return@TextButton
                             loading = true
@@ -634,6 +673,68 @@ internal fun SmartPlaylistV2BuilderScreen(
                     Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                         Text(item.title, style = MaterialTheme.typography.bodyMedium)
                         Text(item.artist, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            item(key = "v2-saved-filter-heading") {
+                Text("Filtros reutilizáveis", style = MaterialTheme.typography.titleMedium)
+                Text("Filtros guardam somente regras. Aplicar copia as regras; não vincula alterações futuras.",
+                    style = MaterialTheme.typography.bodySmall)
+                if (filtersFailure) Text("Não foi possível ler os filtros salvos.")
+                else if (savedFilters.isEmpty()) Text("Nenhum filtro reutilizável salvo.")
+            }
+            items(savedFilters, key = { "v2-filter-" + it.id }) { filter ->
+                Column {
+                    Text(filter.name, style = MaterialTheme.typography.bodyMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = {
+                            editorEpoch++
+                            rule = filter.rules
+                            preview = null
+                            previewQuery = null
+                            error = null
+                        }, enabled = !loading) { Text("Copiar regras") }
+                        TextButton(onClick = {
+                            try {
+                                val combined = rule.andSavedFilter(filter)
+                                editorEpoch++
+                                rule = combined
+                                preview = null
+                                previewQuery = null
+                                error = null
+                            } catch (_: IllegalArgumentException) {
+                                error = "O conjunto de regras excede o limite permitido."
+                            }
+                        }, enabled = !loading) { Text("Combinar (E)") }
+                        TextButton(onClick = {
+                            val copy = filter.toPlaylistCopy(
+                                UUID.randomUUID().toString(), filter.name,
+                            )
+                            editorEpoch++
+                            editingId = copy.id
+                            name = copy.name
+                            rule = copy.query.rules
+                            sort = copy.query.sort
+                            limit = copy.query.limit.toString()
+                            seed = copy.query.randomSeed.toString()
+                            preview = null
+                            previewQuery = null
+                            error = null
+                        }, enabled = !loading) { Text("Criar playlist") }
+                        TextButton(onClick = {
+                            if (loading) return@TextButton
+                            loading = true
+                            scope.launch {
+                                try {
+                                    withContext(Dispatchers.IO) { filterRepo.remove(filter.id) }
+                                    error = null
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    error = "Não foi possível excluir o filtro."
+                                } finally { loading = false }
+                            }
+                        }, enabled = !loading) { Text("Excluir") }
                     }
                 }
             }
