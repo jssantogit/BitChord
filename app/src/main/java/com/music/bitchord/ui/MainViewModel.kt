@@ -1303,7 +1303,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // that exact URL on the header instead of replacing it with the 1200px
         // variant and making Coil fetch the same sleeve a second time.
         // Detail tracks also inherit this URL in the initial state.
-        if (!entry.artworkUri.isNullOrBlank()) return
+        if (!canonicalNeedsCoverRefresh(entry.artworkUri)) return
         canonicalDetailCoverJob = viewModelScope.launch(Dispatchers.IO) {
             val artwork = try {
                 canonicalArtworkForRow(entry, CoverArtSize.HERO)
@@ -1314,9 +1314,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 canonicalPath.lastOrNull() != entry) return@launch
             val current = (_canonicalDetail.value as? UiState.Success)?.data
                 ?: return@launch
+            if (!canonicalShouldAcceptArtworkUpdate(current.artworkUri, artwork)) return@launch
             _canonicalDetail.value = UiState.Success(current.copy(
                 artworkUri = artwork,
-                rows = canonicalReleaseTracksWithArtwork(current.rows, artwork),
+                rows = canonicalReleaseTracksWithArtwork(
+                    current.rows, artwork,
+                    previousInheritedArtwork = current.artworkUri,
+                ),
             ))
             val id = canonicalNativeBrowseId(entry)
             _detailStack.value = _detailStack.value.map {
