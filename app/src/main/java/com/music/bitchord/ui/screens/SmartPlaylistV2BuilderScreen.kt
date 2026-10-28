@@ -27,6 +27,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
@@ -345,18 +348,40 @@ internal fun SmartPlaylistV2BuilderScreen(
             }
         }
 
-    // Only a visible, explicitly requested preview gets a live observer.
-    // Source/credential-scope changes are observed via the existing local
-    // preferences flow, and elapsed-day rules refresh only while previewing.
-    // The manual button remains useful for explicit current-account rechecks.
+    // Preview observation is active only while the app is STARTED. Compose
+    // effects may outlive an Android onStop, so scope both account watching and
+    // age ticks to ProcessLifecycleOwner rather than relying on composition.
     LaunchedEffect(previewQuery, catalogDatabase, listeningDatabase, accountPersistence) {
         val active = previewQuery ?: return@LaunchedEffect
-        merge(
-            smartPlaylistEvidenceChanges(catalogDatabase, listeningDatabase)
-                .drop(1), // Initial Room state was evaluated on Preview.
-            smartPlaylistAccountChanges(accountPersistence.observe()),
-            smartPlaylistRelativeAgeChanges(active),
-        ).collectLatest {
+        var firstForegroundActivation = true
+        ProcessLifecycleOwner.get().lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            // Account changes or a relative-day boundary while the app was
+            // stopped are not emitted by a fresh subscription; refresh once on
+            // every foreground RESUME, but not immediately after manual Preview.
+            if (firstForegroundActivation) {
+                firstForegroundActivation = false
+            } else {
+                try {
+                    val rows = loadPreviewRows(active)
+                    if (previewQuery == active) {
+                        preview = rows
+                        error = null
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    if (previewQuery == active) {
+                        preview = null
+                        error = "Não foi possível atualizar a prévia ao voltar ao app."
+                    }
+                }
+            }
+            merge(
+                smartPlaylistEvidenceChanges(catalogDatabase, listeningDatabase)
+                    .drop(1), // Room emits an initial snapshot on each subscription.
+                smartPlaylistAccountChanges(accountPersistence.observe()),
+                smartPlaylistRelativeAgeChanges(active),
+            ).collectLatest {
                 try {
                     val rows = loadPreviewRows(active)
                     if (previewQuery == active) {
@@ -372,6 +397,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     }
                 }
             }
+        }
     }
 
     ListeningLibraryPage {
