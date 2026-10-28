@@ -3629,6 +3629,7 @@ private fun BitChordApp(
                     transparentBackdrop = true,
                     artworkPageChrome = true,
                     showActions = !homeRootVisible,
+                    showScrolledTitle = homeRootVisible,
                     backButtonHazeState = hazeState,
                     trailingTitle = if (detail != null && detailActiveShelf != null) detail.title else null,
                     // Search has no large in-list header to hand the title back to —
