@@ -9,6 +9,11 @@ import com.music.bitchord.data.DebugLog as Log
 import androidx.core.content.ContextCompat
 import com.music.bitchord.data.innertube.StreamResolver
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.BuildConfig
+import com.music.bitchord.acquisition.a0.A0AndroidAutoAcquisitionEngine
+import com.music.bitchord.acquisition.a0.A0AndroidAutoConsent
+import com.music.bitchord.acquisition.a0.A0CanonicalAcquisitionIntent
+import com.music.bitchord.acquisition.a0.A0SoulseekQualityProfiles
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.DownloadQuality
 import com.music.bitchord.data.sources.SourceResolver
@@ -19,6 +24,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +42,7 @@ import kotlinx.serialization.json.Json
 import java.io.OutputStream
 import java.io.File
 import java.util.Locale
+import java.util.UUID
 
 /** Where a track is between "not on this device" and "on it". */
 sealed interface DownloadState {
@@ -142,6 +151,17 @@ object Downloads {
      */
     private val running = LinkedHashMap<String, Job?>()
 
+    /** Transient request metadata shares the normal download queue, but NEVER
+     * treats its synthetic UI identifier as canonical recording identity.
+     * A3 owns the durable publication of physical local audio. */
+    private data class AutoRequest(
+        val entries:List<SoulseekBatchPlan.Entry>,
+        val quality:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
+    )
+    private val autoRequests=LinkedHashMap<String,AutoRequest>()
+    /** One automatic release in flight even when four service workers run. */
+    private val autoMutex=Mutex()
+
     fun init(context: Context) {
         prefs = context.getSharedPreferences("bitchord_settings", Context.MODE_PRIVATE)
         _saved.value = runCatching {
@@ -215,6 +235,57 @@ object Downloads {
     }
 
     /**
+     * Dedicated opt-in devDebug entrypoint: no search or transfer occurs here.
+     * Duplicate requests already queued for the same release are coalesced.
+     * An interrupted request is NEVER replayed after process restart.
+     */
+    internal fun enqueueSoulseekAuto(
+        context:Context,
+        entries:List<SoulseekBatchPlan.Entry>,
+    ):Boolean {
+        val app=context.applicationContext
+        val pilot=BuildConfig.DEBUG && BuildConfig.FLAVOR=="dev"
+        if(!SoulseekAutoQueueAdmission.allows(
+                entries,userRequested=true,optedIn=A0AndroidAutoConsent.enabled(app),
+                devPilot=pilot,downloadsAllowed=AppSettings.downloadsAllowedNow))
+            return false
+        val quality=runCatching {
+            A0SoulseekQualityProfiles.snapshot(
+                AppSettings.downloadQualityProfile.value,
+                AppSettings.downloadCustomOptions.value)
+        }.getOrNull() ?: return false
+        val captured=entries.map { it.copy() }
+        val id="soulseek-auto:"+UUID.randomUUID().toString()
+        val album=if(captured.size>1) captured.mapNotNull { it.album }
+            .distinct().singleOrNull() else null
+        val song=Song(
+            videoId=id,
+            title=if(captured.size==1)captured.first().query
+                else album ?: "Lote Soulseek (${captured.size} músicas)",
+            artist="Soulseek",thumbnailUrl=null,albumName=album,
+        )
+        synchronized(lock) {
+            if(autoRequests.values.any { it.entries==captured })return false
+            autoRequests[id]=AutoRequest(captured,quality)
+            pending[id]=song
+        }
+        _active.update { it + (id to DownloadState.Queued) }
+        DownloadSession.queued(song,album)
+        return runCatching {
+            ContextCompat.startForegroundService(
+                app,Intent(app,DownloadService::class.java))
+            true
+        }.getOrElse {
+            synchronized(lock) {
+                pending.remove(id)
+                autoRequests.remove(id)
+            }
+            fail(id,"Não foi possível iniciar o serviço de downloads.")
+            false
+        }
+    }
+
+    /**
      * Drop [videoId] from the queue, or stop it if it is one of the ones
      * running.
      *
@@ -226,6 +297,7 @@ object Downloads {
     fun cancel(videoId: String) {
         val job = synchronized(lock) {
             pending.remove(videoId)
+            autoRequests.remove(videoId)
             if (videoId !in running) return@synchronized null
             running.remove(videoId)
         }
@@ -784,7 +856,10 @@ object Downloads {
 
     /** [videoId] is finished, one way or another, and no longer holds a worker. */
     internal fun onIdle(videoId: String) {
-        synchronized(lock) { running.remove(videoId) }
+        synchronized(lock) {
+            running.remove(videoId)
+            autoRequests.remove(videoId)
+        }
     }
 
     /** Whether anything is still queued or in flight — see [DownloadService]'s workers. */
@@ -799,7 +874,18 @@ object Downloads {
      * forever as already in flight.
      */
     internal fun onStopped() {
-        synchronized(lock) { running.clear() }
+        val abandoned=synchronized(lock) {
+            running.clear()
+            val ids=autoRequests.keys.toList()
+            ids.forEach { pending.remove(it) }
+            autoRequests.clear()
+            ids
+        }
+        abandoned.forEach { id ->
+            if(_active.value[id] is DownloadState.Queued ||
+                _active.value[id] is DownloadState.Running)
+                fail(id,"Interrompido: verifique a biblioteca antes de tentar novamente.")
+        }
     }
 
     /**
@@ -828,6 +914,11 @@ object Downloads {
      */
     internal suspend fun run(context: Context, song: Song) = withContext(Dispatchers.IO) {
         val id = song.videoId
+        val auto=synchronized(lock) { autoRequests[id] }
+        if(auto!=null) {
+            runSoulseekAuto(context,id,auto)
+            return@withContext
+        }
         // Set before the lookup, not after it. Resolving where a lossless track
         // comes from is the long part of a download, and leaving the row on
         // "Queued" for all of it reads as a queue that has stopped rather than
@@ -849,6 +940,47 @@ object Downloads {
         } catch (e: Exception) {
             Log.w(TAG, "download failed for $id: ${e.message}", e)
             fail(id, e.friendly())
+        }
+    }
+
+    /**
+     * A service worker owns the whole serial auto batch (1..64 tracks).
+     * The same foreground notification and cancel path track this session.
+     * Any uncertain A3 commit requires manual reconciliation, never retry.
+     */
+    private suspend fun runSoulseekAuto(
+        context:Context,id:String,request:AutoRequest,
+    ) {
+        val job=currentCoroutineContext()[Job]
+        _active.update { it + (id to DownloadState.Running(0f)) }
+        DownloadSession.running(id,0f)
+        try {
+            autoMutex.withLock {
+                if(job?.isActive!=true)throw CancellationException()
+                val report=A0AndroidAutoAcquisitionEngine.run(
+                    context,request.entries,request.quality,
+                    userRequested=true,isCancelled={job?.isActive!=true},
+                ).batch
+                if(job?.isActive!=true)throw CancellationException()
+                when {
+                    report.published==request.entries.size -> {
+                        DownloadSession.done(id)
+                        clear(id)
+                    }
+                    report.needsReconciliation>0 ->
+                        fail(id,"Publicação incerta: verifique a biblioteca antes de tentar novamente.")
+                    report.cancelled>0 ->
+                        fail(id,"Automação interrompida; revise as faixas restantes manualmente.")
+                    else -> fail(id,
+                        "${report.published} de ${request.entries.size} faixas salvas. " +
+                            "Revise as demais pelo seletor manual.")
+                }
+            }
+        }catch(e:CancellationException) {
+            clear(id)
+            throw e
+        }catch(_:Exception) {
+            fail(id,"Aquisição automática interrompida; confira a biblioteca e use o modo manual.")
         }
     }
 
