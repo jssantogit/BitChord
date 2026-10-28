@@ -56,10 +56,20 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
         if (recordingIds.isEmpty()) return emptyList()
         require(recordingIds.all(String::isNotBlank))
         val recordings = catalog.recordingsByIds(recordingIds).associateBy { it.id }
-        val listeningById = listening.smartPlaylistBehaviorForIds(recordingIds)
-            .associateBy { it.recordingId }
-        val ratingsById = ratings.currentRatingsForIds(recordingIds)
-            .associateBy { it.recordingId }
+        val needsListening = requiredFields.any {
+            it == SmartPlaylistRuleField.AUDIBLE_COMPLETIONS ||
+                it == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE ||
+                it == SmartPlaylistRuleField.EARLY_SKIPS ||
+                it == SmartPlaylistRuleField.LATE_SKIPS
+        }
+        val needsRatings = SmartPlaylistRuleField.EXPLICIT_RATING in requiredFields ||
+            SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING in requiredFields
+        val listeningById = if (needsListening) {
+            listening.smartPlaylistBehaviorForIds(recordingIds).associateBy { it.recordingId }
+        } else emptyMap()
+        val ratingsById = if (needsRatings) {
+            ratings.currentRatingsForIds(recordingIds).associateBy { it.recordingId }
+        } else emptyMap()
         val releaseTitlesById = if (SmartPlaylistRuleField.RELEASE_TITLE in requiredFields) {
             catalog.recordingReleaseTitlesByIds(recordingIds)
                 .groupBy { it.recordingId }
