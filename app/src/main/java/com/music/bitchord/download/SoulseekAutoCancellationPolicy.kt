@@ -29,4 +29,17 @@ internal object SoulseekAutoCancellationPolicy {
         stillPending:Boolean,
         alreadyClaimed:Boolean,
     ):Boolean=stillPending && !alreadyClaimed
+
+    /**
+     * Called under Downloads.lock BEFORE running is cleared. An auto request
+     * still pending cannot have reached A3: only its process-local admission
+     * fence can be released. Already claimed/idle requests remain fenced.
+     */
+    fun unclaimedOnServiceStop(
+        autoRequestIds:Set<String>,
+        pendingIds:Set<String>,
+        runningIds:Set<String>,
+    ):Set<String> = autoRequestIds.filterTo(mutableSetOf()) {
+        it in pendingIds && it !in runningIds
+    }
 }
