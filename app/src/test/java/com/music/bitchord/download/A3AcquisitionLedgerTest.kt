@@ -85,6 +85,21 @@ class A3AcquisitionLedgerTest {
         assertEquals(A3AcquisitionLedger.Phase.PUBLISHING,j.get(id2)?.phase)
     }
 
+    @Test fun highResolutionReceiptLargerThan64MiBIsAcceptedUpToShared256MiBLimit() {
+        val ledger=A3AcquisitionLedger(MemoryStore())
+        ready(ledger,id1)
+        val large=128L*1024L*1024L
+        ledger.available(id1,"content://media/external/audio/media/128",large)
+        assertEquals(large,ledger.get(id1)?.byteCount)
+        ready(ledger,id2)
+        try {
+            ledger.available(id2,"content://media/external/audio/media/256",
+                com.music.bitchord.acquisition.a0.A0ObservedTransferLimits.MAX_AUDIO_BYTES+1)
+            fail("Must reject over-limit audio")
+        }catch(_:IllegalArgumentException) {}
+        assertEquals(A3AcquisitionLedger.Phase.PUBLISHING,ledger.get(id2)?.phase)
+    }
+
     @Test fun failedDiskCommitLeavesInMemoryAndPersistedStateUnchanged() {
         val store=MemoryStore()
         val j=A3AcquisitionLedger(store)
