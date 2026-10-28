@@ -36,12 +36,17 @@ internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalSongBrowse(): Boo
 internal fun filterCanonicalBrowseSongs(
     tracks: List<CanonicalBrowseTrack>,
     filter: SavedSmartPlaylistV2Filter,
+    providerKey: String,
 ): List<CanonicalBrowseTrack> {
+    require(providerKey.isNotBlank()) { "A configured provider identity is required" }
     require(filter.isSupportedForCanonicalSongBrowse()) {
         "This saved filter needs evidence unavailable in canonical Songs browse"
     }
-    require(tracks.all { it.recordingId.isNotBlank() && it.availableAssets.isNotEmpty() }) {
-        "An unscoped or unidentified recording cannot enter a saved filter"
+    require(tracks.all { track ->
+        track.recordingId.isNotBlank() && track.availableAssets.isNotEmpty() &&
+            track.availableAssets.all { it.providerKey == providerKey }
+    }) {
+        "A recording from another provider/account cannot enter the filtered browse"
     }
     require(tracks.distinctBy { it.recordingId }.size == tracks.size) {
         "Canonical browse must have one row per RecordingId"
