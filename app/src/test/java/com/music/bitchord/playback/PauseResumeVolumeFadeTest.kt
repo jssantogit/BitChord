@@ -133,6 +133,43 @@ class PauseResumeVolumeFadeTest {
         assertEquals(1f, deck.volume, 0f)
     }
 
+    @Test fun `ended stream cancels pending fade in without leaving player muted`() = runTest {
+        val deck = FakeDeck(playingInitially = false)
+        deck.audibleOnPlay = false
+        val fade = PauseResumeVolumeFade(this, { 200 }, { false }, { testScheduler.currentTime })
+        fade.play(deck.player)
+        runCurrent()
+        deck.playbackState = Player.STATE_ENDED
+        advanceTimeBy(32)
+        runCurrent()
+        assertEquals(1f, deck.volume, 0f)
+    }
+
+    @Test fun `a second play command recovers after an external pause during startup`() = runTest {
+        val deck = FakeDeck(playingInitially = false)
+        deck.audibleOnPlay = false
+        val fade = PauseResumeVolumeFade(this, { 200 }, { false }, { testScheduler.currentTime })
+        fade.play(deck.player)
+        runCurrent()
+        deck.playWhenReady = false // interrupted outside MediaSession (e.g. audio focus)
+        fade.play(deck.player)
+        runCurrent()
+        assertEquals(2, deck.playCalls)
+        assertTrue(deck.playWhenReady)
+    }
+
+    @Test fun `failed play command restores volume instead of stranding a muted deck`() = runTest {
+        val deck = FakeDeck(playingInitially = false)
+        deck.throwOnPlay = true
+        val fade = PauseResumeVolumeFade(this, { 200 }, { false }, { testScheduler.currentTime })
+        try {
+            fade.play(deck.player)
+            throw AssertionError("Expected thrown play failure")
+        } catch (_: IllegalStateException) {
+            assertEquals(1f, deck.volume, 0f)
+        }
+    }
+
     @Test fun `disabled preference bypasses the entire envelope`() = runTest {
         val deck = FakeDeck(playingInitially = true)
         val fade = PauseResumeVolumeFade(this, { 0 }, { false }, { testScheduler.currentTime })
@@ -147,17 +184,27 @@ class PauseResumeVolumeFadeTest {
         var audible = playingInitially
         var audibleOnPlay = true
         var pauseCalls = 0
+        var playCalls = 0
+        var playbackState = Player.STATE_READY
+        var throwOnPlay = false
 
         val player: Player = Proxy.newProxyInstance(
             Player::class.java.classLoader,
             arrayOf(Player::class.java),
         ) { proxy, method, args ->
             when (method.name) {
-                "play" -> { playWhenReady = true; audible = audibleOnPlay; null }
+                "play" -> {
+                    playCalls++
+                    if (throwOnPlay) throw IllegalStateException("player released")
+                    playWhenReady = true
+                    audible = audibleOnPlay
+                    null
+                }
                 "pause" -> { playWhenReady = false; audible = false; pauseCalls++; null }
                 "getVolume" -> volume
                 "setVolume" -> { volume = args!![0] as Float; null }
                 "getPlayWhenReady" -> playWhenReady
+                "getPlaybackState" -> playbackState
                 "isPlaying" -> audible
                 "equals" -> proxy === args?.get(0)
                 "hashCode" -> System.identityHashCode(proxy)
