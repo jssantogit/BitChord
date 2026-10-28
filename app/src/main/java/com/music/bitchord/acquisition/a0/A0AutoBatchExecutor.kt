@@ -67,6 +67,9 @@ internal class A0AutoBatchExecutor(
             return Report(List(count){TrackStatus.MANUAL_REVIEW},0)
         val status=ArrayList<TrackStatus>(count)
         var attempts=0
+        // One physical peer path must NEVER be automatically published as two
+        // different canonical album slots. Reprises need separate evidence.
+        val publishedSources=HashSet<Pair<String,String>>()
         for(index in entries.indices) {
             if(isCancelled() || !stillAuthorized() ||
                 Thread.currentThread().isInterrupted) {
@@ -80,21 +83,28 @@ internal class A0AutoBatchExecutor(
             }
             // Check eligibility before opening any transport, so an unknown
             // release slot never causes even an authenticated login.
+            val unspent=observedBySlot[index].filterNot { choice ->
+                (choice.peerUsername to choice.remotePath) in publishedSources
+            }
             val preview=A0AutoCandidateSelectionPolicy.preview(
-                entries[index],observedBySlot[index],profile)
+                entries[index],unspent,profile)
             if(preview.status!=A0AutoCandidateSelectionPolicy.Status.PROVISIONAL) {
                 status.add(TrackStatus.MANUAL_REVIEW)
                 continue
             }
             val result=try {
                 A0AutoAcquisitionExecutor(portForTrack(entries[index])).run(
-                    entries[index],observedBySlot[index],profile,
+                    entries[index],unspent,profile,
                     userRequested=true,optedIn=true,
                     isCancelled=isCancelled,stillAuthorized=stillAuthorized)
             }catch(_:Exception) {
                 null
             }
             if(result!=null)attempts+=result.attempts
+            if(result?.status==A0AutoAcquisitionExecutor.Status.PUBLISHED)
+                result.selectedSource?.let {
+                    publishedSources.add(it.peerUsername to it.remotePath)
+                }
             status.add(when(result?.status) {
                 A0AutoAcquisitionExecutor.Status.PUBLISHED -> TrackStatus.PUBLISHED
                 A0AutoAcquisitionExecutor.Status.CANCELLED -> TrackStatus.CANCELLED

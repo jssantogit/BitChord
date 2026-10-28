@@ -57,6 +57,8 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
         val status:Status,
         val reason:Reason?,
         val attempts:Int,
+        /** In-memory only, never logged or persisted. */ 
+        internal val selectedSource:A0ObservedCandidateHandoff.Choice?=null,
     ) {
         override fun toString()="AutoAcquisitionResult(status=$status,reason=$reason,attempts=$attempts)"
     }
@@ -156,7 +158,7 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                                         }catch(_:Exception) { false }
                                         sequence.complete(attempt,published)
                                         result=if(published)
-                                            Result(Status.PUBLISHED,null,sequence.attemptsStarted)
+                                            Result(Status.PUBLISHED,null,sequence.attemptsStarted,candidate)
                                         else if(revoked())cancelled(sequence.attemptsStarted)
                                         else manual(Reason.PUBLICATION_FAILURE,
                                             sequence.attemptsStarted)
@@ -180,7 +182,8 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                                 return Result(
                                     if(result.status==Status.PUBLISHED)Status.PUBLISHED
                                     else Status.MANUAL_REVIEW,
-                                    Reason.CLEANUP_FAILURE,sequence.attemptsStarted)
+                                    Reason.CLEANUP_FAILURE,sequence.attemptsStarted,
+                                    if(result.status==Status.PUBLISHED)candidate else null)
                             }
                         }
                         return result

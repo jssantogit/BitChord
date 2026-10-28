@@ -124,6 +124,21 @@ class A0AutoBatchExecutorTest {
         assertEquals(0,opened)
     }
 
+    @Test fun samePeerFileCannotSatisfyTwoDistinctCanonicalSlots() {
+        val first=entries[1]
+        val reprise=first.copy(trackId="reprise")
+        val two=listOf(first,reprise)
+        val source=candidates()
+        val published=mutableListOf<String>()
+        val report=A0AutoBatchExecutor(factory(published)).run(
+            two,two.map { source },emptySet(),profile,
+            userRequested=true,optedIn=true,isCancelled={false},
+            stillAuthorized={true})
+        assertEquals(1,report.published)
+        assertEquals(1,report.manualReview)
+        assertEquals(listOf(first.trackId),published)
+    }
+
     @Test fun truncatedSlotIsNotAutomaticallyDownloaded() {
         val done=mutableListOf<String>()
         val report=A0AutoBatchExecutor(factory(done)).run(
