@@ -188,3 +188,9 @@ Primary official evidence:
 - A Recording linked to multiple editions can match any **known** positive track number. Negative comparisons (and NOT) require complete linked-position evidence; NULL/nonpositive positions and absent links produce UNKNOWN, never track zero and never an unjustified negative match. `IS_MISSING` is intentionally unavailable because absent canonical links do not prove global absence.
 - Android rule builder exposes **Número da faixa no lançamento**. Added pure-engine tests for multiple editions, unknown under NOT, positive presence and target validation, plus Room test for a partially missing edition.
 - This is a BitChord capability; an exact matching Symfonium 15.1.0 field/operator claim still requires an on-device audit. No change to Android Room schema, Media3 handoff or source accounts. CI and physical smoke are separate gates.
+
+## 28/10/2026 — Track artist from canonical credits (new draft feature)
+
+- V2 field `TRACK_ARTIST` uses `catalog_recording_artist_credit` and `catalog_artist`, never `artistDisplay` or title matching. This is different from `ALBUM_ARTIST` (release credits).
+- Positive text comparisons use ANY known credited artist; negative comparisons require all known credits to disprove a match. No credits or unresolved names produce UNKNOWN and cannot satisfy a NOT or `IS_MISSING`; valid `IS_PRESENT` uses known credits only.
+- UI exposes **Artista da faixa (créditos canônicos)**. Pure and Room regression tests cover multiple credits and false-positive avoidance from a display artist string. No schema migration and no remote-per-item lookup. Parity status still *not verified* until exact Symfonium 15.1.0 field/operator audit.

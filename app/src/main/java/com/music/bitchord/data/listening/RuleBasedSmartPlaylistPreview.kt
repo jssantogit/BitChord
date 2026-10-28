@@ -67,6 +67,8 @@ internal data class RuleBasedRecordingCandidate(
     val albumArtistEvidenceUnknown: Boolean = true,
     val trackNumbers: List<Int> = emptyList(),
     val trackNumberEvidenceUnknown: Boolean = true,
+    val trackArtistNames: List<String> = emptyList(),
+    val trackArtistEvidenceUnknown: Boolean = true,
 )
 
 internal data class RuleBasedSmartPlaylistQuery(

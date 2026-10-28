@@ -563,4 +563,50 @@ class SmartPlaylistV2RuleEngineTest {
         }
     }
 
+
+    @Test fun creditedTrackArtistsAreDistinctFromDisplayStringAndProtectUnknownUnderNot() {
+        val credited = candidate("credited").copy(
+            artistDisplay = "Guest with Lead",
+            trackArtistNames = listOf("Lead", "Guest"),
+            trackArtistEvidenceUnknown = false,
+        )
+        val partial = candidate("partial").copy(
+            artistDisplay = "Lead",
+            trackArtistNames = listOf("Lead"),
+            trackArtistEvidenceUnknown = true,
+        )
+        val other = candidate("other").copy(
+            artistDisplay = "Lead",
+            trackArtistNames = listOf("Other"),
+            trackArtistEvidenceUnknown = false,
+        )
+        val noCredits = candidate("no-credits").copy(artistDisplay = "Lead")
+        val rows = listOf(credited, partial, other, noCredits)
+        fun q(op: SmartPlaylistRuleOperator, txt: String? = "lead") =
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TRACK_ARTIST, op, textValue = txt,
+            ), sort = SmartPlaylistV2Sort.RECORDING_ID_ASC)
+        assertEquals(listOf("credited", "partial"), planner.preview(
+            rows, q(SmartPlaylistRuleOperator.EQUAL),
+        ).map { it.recordingId })
+        assertEquals(listOf("other"), planner.preview(
+            rows, q(SmartPlaylistRuleOperator.NOT_EQUAL),
+        ).map { it.recordingId })
+        assertEquals(listOf("credited", "partial"), planner.preview(
+            rows, q(SmartPlaylistRuleOperator.CONTAINS, "lea"),
+        ).map { it.recordingId })
+        assertTrue(planner.preview(listOf(partial, noCredits), SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TRACK_ARTIST,
+                SmartPlaylistRuleOperator.EQUAL, textValue = "guest",
+            )),
+        )).isEmpty())
+        assertEquals(listOf("credited", "other", "partial"), planner.preview(
+            rows, q(SmartPlaylistRuleOperator.IS_PRESENT, null),
+        ).map { it.recordingId })
+        assertThrows(IllegalArgumentException::class.java) {
+            q(SmartPlaylistRuleOperator.IS_MISSING, null)
+        }
+    }
+
 }

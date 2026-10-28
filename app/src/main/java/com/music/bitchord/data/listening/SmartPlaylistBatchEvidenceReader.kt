@@ -62,6 +62,8 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
             .groupBy { it.recordingId }
         val trackPositionsById = catalog.recordingTrackPositionsByIds(recordingIds)
             .groupBy { it.recordingId }
+        val trackArtistsById = catalog.recordingTrackArtistCreditsByIds(recordingIds)
+            .groupBy { it.recordingId }
         // Missing canonical metadata means the Recording cannot be promoted
         // from a provider/native id; no fake row is synthesized.
         return recordingIds.distinct().mapNotNull { id ->
@@ -71,6 +73,7 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
             val parsedYears = datedReleases.map { parseTrustedMusicBrainzReleaseYear(it.releaseDate) }
             val albumArtistRows = albumArtistRowsById[id].orEmpty()
             val trackPositionRows = trackPositionsById[id].orEmpty()
+            val trackArtistRows = trackArtistsById[id].orEmpty()
             RuleBasedRecordingCandidate(
                 recordingId = recording.id,
                 explicitRating = ratingsById[id]?.ratingValue,
@@ -96,6 +99,11 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                 }.distinct().sorted(),
                 trackNumberEvidenceUnknown = trackPositionRows.isEmpty() ||
                     trackPositionRows.any { (it.trackNumber ?: 0) <= 0 },
+                trackArtistNames = trackArtistRows.mapNotNull {
+                    it.artistName?.trim()?.takeIf(String::isNotEmpty)
+                }.distinct().sorted(),
+                trackArtistEvidenceUnknown = trackArtistRows.isEmpty() ||
+                    trackArtistRows.any { it.artistName.isNullOrBlank() },
             )
         }
     }

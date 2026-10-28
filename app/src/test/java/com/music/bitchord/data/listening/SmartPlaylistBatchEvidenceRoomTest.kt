@@ -449,4 +449,38 @@ class SmartPlaylistBatchEvidenceRoomTest {
         }
     }
 
+
+    @Test fun trackArtistCreditsReadInBatchWithoutGuessingTheDisplayArtist() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:credited", "Duet", "Lead & Guest", 220_000L))
+            dao.upsertRecording(RecordingEntity("rec:display-only", "Solo", "Lead", 140_000L))
+            dao.upsertArtist(com.music.bitchord.data.catalog.ArtistEntity("artist:lead", "Lead"))
+            dao.upsertArtist(com.music.bitchord.data.catalog.ArtistEntity("artist:guest", "Guest"))
+            dao.upsertRecordingArtistCredits(listOf(
+                com.music.bitchord.data.catalog.RecordingArtistCreditEntity(
+                    "rec:credited", 0, "artist:lead",
+                ),
+                com.music.bitchord.data.catalog.RecordingArtistCreditEntity(
+                    "rec:credited", 1, "artist:guest",
+                ),
+            ))
+            val rows = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            ).read(listOf("rec:credited", "rec:display-only")).associateBy { it.recordingId }
+            assertEquals(listOf("Guest", "Lead"), rows.getValue("rec:credited").trackArtistNames)
+            assertTrue(!rows.getValue("rec:credited").trackArtistEvidenceUnknown)
+            assertTrue(rows.getValue("rec:display-only").trackArtistNames.isEmpty())
+            assertTrue(rows.getValue("rec:display-only").trackArtistEvidenceUnknown)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
 }

@@ -83,6 +83,7 @@ private fun fieldLabel(value: SmartPlaylistRuleField): String = when (value) {
     SmartPlaylistRuleField.RELEASE_YEAR -> "Ano de lançamento (MusicBrainz)"
     SmartPlaylistRuleField.ALBUM_ARTIST -> "Artista do álbum (créditos canônicos)"
     SmartPlaylistRuleField.TRACK_NUMBER -> "Número da faixa no lançamento"
+    SmartPlaylistRuleField.TRACK_ARTIST -> "Artista da faixa (créditos canônicos)"
 }
 
 private fun operatorLabel(value: SmartPlaylistRuleOperator): String = when (value) {
@@ -200,6 +201,8 @@ private fun V2RuleNode(
                         operator = op,
                         value = if (newField == SmartPlaylistRuleField.RELEASE_YEAR && !presence)
                             2026.0
+                            else if (newField == SmartPlaylistRuleField.TRACK_NUMBER && !presence)
+                                1.0
                             else if (!newField.isTextField() && !presence)
                                 rule.value ?: 1.0 else null,
                         textValue = if (newField == SmartPlaylistRuleField.SOURCE_KIND) "local"

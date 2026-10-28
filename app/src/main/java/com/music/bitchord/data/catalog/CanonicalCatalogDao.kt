@@ -34,6 +34,11 @@ internal data class CanonicalRecordingReleaseDateRow(
     val releaseDate: String?,
 )
 
+internal data class CanonicalRecordingTrackArtistRow(
+    val recordingId: String,
+    val artistName: String?,
+)
+
 internal data class CanonicalRecordingTrackPositionRow(
     val recordingId: String,
     val releaseId: String,
@@ -161,6 +166,21 @@ internal interface CanonicalCatalogDao {
     suspend fun recordingAlbumArtistCreditsByIds(
         recordingIds: List<String>,
     ): List<CanonicalRecordingAlbumArtistRow>
+
+    /** Linked track artist credits, not a guessed split of artistDisplay. */
+    @Query(
+        """
+        SELECT credit.recordingId AS recordingId,
+               artist.name AS artistName
+        FROM catalog_recording_artist_credit AS credit
+        LEFT JOIN catalog_artist AS artist ON artist.id = credit.artistId
+        WHERE credit.recordingId IN (:recordingIds)
+        ORDER BY credit.recordingId ASC, credit.position ASC
+        """,
+    )
+    suspend fun recordingTrackArtistCreditsByIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingTrackArtistRow>
 
     @Query("SELECT * FROM catalog_recording WHERE id IN (:recordingIds)")
     suspend fun recordingsByIds(recordingIds: List<String>): List<RecordingEntity>
