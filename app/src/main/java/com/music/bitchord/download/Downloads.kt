@@ -161,6 +161,53 @@ object Downloads {
     private val autoRequests=LinkedHashMap<String,AutoRequest>()
     /** One automatic release in flight even when four service workers run. */
     private val autoMutex=Mutex()
+    /** Bounded results only in RAM, not a second download or peer-history store. */
+    private val _autoReviews=MutableStateFlow<Map<String,SoulseekAutoReviewPlan>>(emptyMap())
+    internal val soulseekAutoReviews:StateFlow<Map<String,SoulseekAutoReviewPlan>> =
+        _autoReviews.asStateFlow()
+
+    internal fun clearSoulseekAutoReviews() { _autoReviews.value=emptyMap() }
+
+    /**
+     * Opens the existing MANUAL picker for only ambiguous/missing album slots.
+     * A3 uncertain commits and interrupted sessions are never eligible.
+     * Nothing here starts a P/F transfer or approves a peer candidate.
+     */
+    internal fun openSoulseekManualReview(context:Context,sessionId:String):Boolean {
+        if(!BuildConfig.DEBUG || BuildConfig.FLAVOR!="dev")return false
+        val plan=synchronized(lock) {
+            if(sessionId in running || sessionId in pending)return false
+            _autoReviews.value[sessionId]
+        } ?: return false
+        if(!plan.manualAllowed)return false
+        if(DownloadSession.state.value.items.firstOrNull {
+                it.videoId==sessionId
+            }?.progress !is DownloadProgress.Failed)return false
+        val entries=plan.manualEntries
+        if(!SoulseekAutoQueueAdmission.allows(
+                entries,true,true,true,true))return false
+        val first=entries.first()
+        val intent=Intent().setClassName(
+            context.packageName,
+            "com.music.bitchord.acquisition.a0.A0ManualLoginActivity",
+        ).putExtra("bitchord.soulseek.manual.query",first.query)
+            .putExtra("bitchord.soulseek.manual.album",first.album)
+            .putExtra("bitchord.soulseek.manual.duration_seconds",
+                first.durationSeconds ?: 0)
+            .putExtra("bitchord.soulseek.manual.recovery",true)
+        if(entries.size>1) {
+            intent.putStringArrayListExtra("bitchord.soulseek.batch.queries",
+                ArrayList(entries.map { it.query }))
+                .putStringArrayListExtra("bitchord.soulseek.batch.albums",
+                    ArrayList(entries.map { it.album.orEmpty() }))
+                .putExtra("bitchord.soulseek.batch.durations",
+                    entries.map { it.durationSeconds ?: 0 }.toIntArray())
+        }
+        return runCatching {
+            context.startActivity(intent)
+            true
+        }.getOrDefault(false)
+    }
 
     fun init(context: Context) {
         prefs = context.getSharedPreferences("bitchord_settings", Context.MODE_PRIVATE)
@@ -265,6 +312,11 @@ object Downloads {
             artist="Soulseek",thumbnailUrl=null,albumName=album,
         )
         synchronized(lock) {
+            // No repeat auto-request of a release already attempted this session.
+            if(_autoReviews.value.values.any { prior ->
+                    prior.rows.map { it.entry.query to it.entry.album } ==
+                        captured.map { it.query to it.album }
+                })return false
             if(autoRequests.values.any { runningRequest ->
                     runningRequest.entries.size==captured.size &&
                         runningRequest.entries.zip(captured).all { (old,fresh) ->
@@ -304,6 +356,7 @@ object Downloads {
         val job = synchronized(lock) {
             pending.remove(videoId)
             autoRequests.remove(videoId)
+            _autoReviews.update { it - videoId }
             if (videoId !in running) return@synchronized null
             running.remove(videoId)
         }
@@ -971,6 +1024,15 @@ object Downloads {
                     userRequested=true,isCancelled={job?.isActive!=true},
                 ).batch
                 if(job?.isActive!=true)throw CancellationException()
+                val review=SoulseekAutoReviewPlan.from(request.entries,report.results)
+                if(review==null) {
+                    fail(id,"Resultado incompleto: confira a biblioteca antes de tentar novamente.")
+                    return@withLock
+                }
+                _autoReviews.update { prior ->
+                    (prior + (id to review)).entries.toList().takeLast(24)
+                        .associate { it.key to it.value }
+                }
                 when {
                     report.published==request.entries.size -> {
                         DownloadSession.done(id)
