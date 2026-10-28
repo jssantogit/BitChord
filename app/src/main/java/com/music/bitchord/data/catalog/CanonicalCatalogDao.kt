@@ -72,12 +72,12 @@ internal interface CanonicalCatalogDao {
     @Query(
         """
         SELECT rt.recordingId AS recordingId,
-               release.id AS releaseId,
-               release.title AS releaseTitle
+               rel.id AS releaseId,
+               rel.title AS releaseTitle
         FROM catalog_release_track AS rt
-        INNER JOIN catalog_release AS release ON release.id = rt.releaseId
+        INNER JOIN catalog_release AS rel ON rel.id = rt.releaseId
         WHERE rt.recordingId IN (:recordingIds)
-        ORDER BY rt.recordingId ASC, release.title COLLATE NOCASE ASC, release.id ASC
+        ORDER BY rt.recordingId ASC, rel.title COLLATE NOCASE ASC, rel.id ASC
         """,
     )
     suspend fun recordingReleaseTitlesByIds(
