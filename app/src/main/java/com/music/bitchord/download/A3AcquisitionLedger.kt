@@ -63,6 +63,10 @@ internal class A3AcquisitionLedger(private val store:Store) {
         val album:String?,
     )
 
+    /** Safe for UI presentation: never contains the ID, query or peer path. */
+    class AutomaticIdentityAlreadyReserved:
+        IllegalStateException("A3 automatic identity previously reserved")
+
     @Serializable
     private data class Envelope(
         val version:Int,
@@ -110,14 +114,12 @@ internal class A3AcquisitionLedger(private val store:Store) {
         }
         val existingRecordings=items.values.mapNotNull { it.autoRecordingDigest }.toSet()
         val existingReleases=items.values.mapNotNull { it.autoReleaseDigest }.toSet()
-        check(rows.none { it.id in items ||
+        if(rows.any { it.id in items ||
             it.autoRecordingDigest in existingRecordings ||
-            it.autoReleaseDigest in existingReleases }) {
-            "A3 automatic identity previously reserved: verify local library"
-        }
-        check(rows.map { it.autoRecordingDigest }.distinct().size==rows.size &&
-            rows.map { it.autoReleaseDigest }.distinct().size==rows.size) {
-            "A3 duplicate identity inside album"
+            it.autoReleaseDigest in existingReleases } ||
+            rows.map { it.autoRecordingDigest }.distinct().size!=rows.size ||
+            rows.map { it.autoReleaseDigest }.distinct().size!=rows.size) {
+            throw AutomaticIdentityAlreadyReserved()
         }
         val retained=LinkedHashMap(items)
         if(retained.size+rows.size>MAX_JOBS) {
