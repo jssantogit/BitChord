@@ -50,6 +50,7 @@ internal enum class SmartPlaylistRuleField {
     ALBUM_ARTIST,
     TRACK_NUMBER,
     TRACK_ARTIST,
+    DAYS_SINCE_LOCAL_RATING,
 }
 
 internal enum class SmartPlaylistSourceKind { LOCAL, OPENSUBSONIC }
@@ -186,6 +187,12 @@ internal data class SmartPlaylistV2Query(
                             require(node.value!! in 1000.0..9999.0 &&
                                 node.value % 1.0 == 0.0) {
                                 "Release year must be a four-digit calendar year"
+                            }
+                        }
+                        if (node.field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING && !presence) {
+                            require(node.value!! in 0.0..100_000.0 &&
+                                node.value % 1.0 == 0.0) {
+                                "Days since local rating must be a nonnegative whole number"
                             }
                         }
                         if (node.field == SmartPlaylistRuleField.TRACK_NUMBER && !presence) {
@@ -491,12 +498,19 @@ internal class SmartPlaylistV2RuleEngine(
         if (rule.field == SmartPlaylistRuleField.EXPLICIT_RATING &&
             row.ratingEvidenceUnknown
         ) return RuleTruth.UNKNOWN
+        if (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING) {
+            if (!row.localRatingDateEvidenceKnown) return RuleTruth.UNKNOWN
+            val updated = row.localRatingUpdatedAtEpochMs
+            if (updated != null && (updated < 0L || updated > now)) return RuleTruth.UNKNOWN
+        }
         val value: Double? = when (rule.field) {
             SmartPlaylistRuleField.EXPLICIT_RATING -> row.explicitRating
             SmartPlaylistRuleField.AUDIBLE_COMPLETIONS -> row.audibleCompletions.toDouble()
             SmartPlaylistRuleField.DURATION_MS -> row.durationMs?.toDouble()
             SmartPlaylistRuleField.EARLY_SKIPS -> row.earlySkips.toDouble()
             SmartPlaylistRuleField.LATE_SKIPS -> row.lateSkips.toDouble()
+            SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING ->
+                row.localRatingUpdatedAtEpochMs?.let { ((now - it) / 86_400_000L).toDouble() }
             SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE ->
                 if (row.audibleCompletions > 0) {
                     row.lastAudibleAtEpochMs?.let { ((now - it) / 86_400_000L).toDouble() }
