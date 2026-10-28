@@ -4,11 +4,10 @@ import com.music.bitchord.download.SoulseekBatchPlan
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * A bounded, per-track policy+I/O boundary for a FUTURE opt-in Soulseek worker.
+ * A bounded, per-track policy+I/O boundary for an explicitly opted-in Soulseek worker.
  *
  * Unlike the shadow-only planners, this object composes a port that MAY
- * perform P/F and A3 publication. No production port is installed or invoked
- * by the Android app yet. The service must supply account-generation guards,
+ * perform P/F and A3 publication. A devDebug-only real Android port is now connected to the foreground queue. The service must supply account-generation guards,
  * cancelable private transport, a real Android decoder and a durable publisher.
  *
  * Network failure may retry only another metadata-equivalent source. Once
