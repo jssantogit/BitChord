@@ -265,7 +265,13 @@ object Downloads {
             artist="Soulseek",thumbnailUrl=null,albumName=album,
         )
         synchronized(lock) {
-            if(autoRequests.values.any { it.entries==captured })return false
+            if(autoRequests.values.any { runningRequest ->
+                    runningRequest.entries.size==captured.size &&
+                        runningRequest.entries.zip(captured).all { (old,fresh) ->
+                            old.query==fresh.query && old.album==fresh.album &&
+                                old.durationSeconds==fresh.durationSeconds
+                        }
+                })return false
             autoRequests[id]=AutoRequest(captured,quality)
             pending[id]=song
         }
@@ -915,8 +921,11 @@ object Downloads {
     internal suspend fun run(context: Context, song: Song) = withContext(Dispatchers.IO) {
         val id = song.videoId
         val auto=synchronized(lock) { autoRequests[id] }
-        if(auto!=null) {
-            runSoulseekAuto(context,id,auto)
+        if(id.startsWith("soulseek-auto:")) {
+            // A cancel can remove the request between takeNext and run().
+            // Never fall through into the disabled conventional downloader.
+            if(auto!=null)runSoulseekAuto(context,id,auto)
+            else clear(id)
             return@withContext
         }
         // Set before the lookup, not after it. Resolving where a lossless track
