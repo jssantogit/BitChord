@@ -623,7 +623,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_searchSource.value != SearchSource.CANONICAL || query.isEmpty()) return
         val pending = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
             .filter {
-                it.kind == CanonicalSearchKind.RECORDING && it.artworkUri.isNullOrBlank()
+                it.kind == CanonicalSearchKind.RECORDING &&
+                    (it.artworkUri.isNullOrBlank() ||
+                        it.artworkProvenance ==
+                            com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE)
             }.take(48)
         if (pending.isEmpty()) return
         canonicalSearchAlbumFanoutJob?.cancel()
@@ -675,7 +678,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // the same group sleeve without replaying up to 24 archive lookups.
         val knownTracks = visible.filter {
             it.kind == CanonicalSearchKind.RECORDING &&
-                canonicalNeedsCoverRefresh(it.artworkUri)
+                (canonicalNeedsCoverRefresh(it.artworkUri) ||
+                    it.artworkProvenance ==
+                        com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE)
         }.take(48)
         if (candidates.isEmpty() && portrait == null && knownTracks.isEmpty()) return
         canonicalSearchCoverJob = viewModelScope.launch(Dispatchers.IO) {
@@ -777,12 +782,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 ) else old.data
                                 UiState.Success(withAlbumArt.map {
                                     if (it.kind != row.kind || it.musicBrainzId != row.musicBrainzId) it
-                                    else it.copy(
-                                        title = officialTitle,
-                                        artworkUri = if (artwork != null &&
-                                            canonicalNeedsCoverRefresh(it.artworkUri))
-                                            artwork else it.artworkUri,
-                                    )
+                                    else {
+                                        val inheritRelease = artwork != null &&
+                                            it.kind == CanonicalSearchKind.RECORDING &&
+                                            (it.artworkUri.isNullOrBlank() ||
+                                                (it.artworkProvenance ==
+                                                    com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE &&
+                                                    canonicalNeedsCoverRefresh(it.artworkUri)))
+                                        it.copy(
+                                            title = officialTitle,
+                                            artworkUri = if (inheritRelease ||
+                                                (it.kind != CanonicalSearchKind.RECORDING &&
+                                                    artwork != null &&
+                                                    canonicalNeedsCoverRefresh(it.artworkUri))
+                                            ) artwork else it.artworkUri,
+                                            artworkProvenance = if (inheritRelease)
+                                                com.music.bitchord.ui.screens.CanonicalArtworkProvenance.INHERITED_RELEASE
+                                            else it.artworkProvenance,
+                                        )
+                                    }
                                 })
                             }
                         }
