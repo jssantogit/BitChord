@@ -71,7 +71,7 @@ class ContextualAlbumArtistFilterTest {
         ))
         assertFalse(composer.isSupportedForCanonicalArtistBrowse())
         assertFalse(composer.isSupportedForCanonicalAlbumBrowse())
-        assertFalse(filter(SmartPlaylistRule.Comparison(
+        assertTrue(filter(SmartPlaylistRule.Comparison(
             SmartPlaylistRuleField.RELEASE_YEAR,
             SmartPlaylistRuleOperator.IS_PRESENT,
         )).isSupportedForCanonicalAlbumBrowse())
@@ -149,6 +149,43 @@ class ContextualAlbumArtistFilterTest {
             assertTrue(filterCanonicalBrowseArtists(listOf(artist), f,
                 "custom:unknown").isEmpty())
         }
+    }
+
+    @Test fun releaseYearNeedsTrustedMusicBrainzEvidenceAndKeepsUnknownUnderNot() {
+        val releases = listOf(
+            ReleaseEntity("r:valid", "Get Up", "NewJeans", null),
+            ReleaseEntity("r:unknown", "Get Up", "NewJeans", null),
+            ReleaseEntity("r:invalid", "Get Up", "NewJeans", null),
+        )
+        val equal = filter(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.RELEASE_YEAR, SmartPlaylistRuleOperator.EQUAL,
+            value = 2023.0,
+        ))
+        val missing = filter(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.RELEASE_YEAR, SmartPlaylistRuleOperator.IS_PRESENT,
+        ))
+        assertEquals(emptyList<String>(), filterCanonicalBrowseAlbums(
+            releases, equal,
+        ).map { it.id })
+        assertEquals(listOf("r:valid"), filterCanonicalBrowseAlbums(
+            releases, equal, releaseYears = mapOf("r:valid" to 2023),
+        ).map { it.id })
+        assertEquals(listOf("r:valid"), filterCanonicalBrowseAlbums(
+            releases, missing, releaseYears = mapOf("r:valid" to 2023),
+        ).map { it.id })
+        assertTrue(filterCanonicalBrowseAlbums(releases, filter(
+            SmartPlaylistRule.Not(missing.rules)),
+            releaseYears = mapOf("r:valid" to 2023),
+        ).isEmpty())
+        val composite = filter(SmartPlaylistRule.Group(
+            SmartPlaylistRuleJoin.ALL,
+            listOf(SmartPlaylistRule.Comparison(SmartPlaylistRuleField.RELEASE_TITLE,
+                SmartPlaylistRuleOperator.CONTAINS, textValue = "get"),
+                equal.rules),
+        ))
+        assertEquals(listOf("r:valid"), filterCanonicalBrowseAlbums(
+            releases, composite, releaseYears = mapOf("r:valid" to 2023),
+        ).map { it.id })
     }
 
 }
