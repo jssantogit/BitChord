@@ -1256,11 +1256,19 @@ object Downloads {
                     sourceSongs=request.sourceSongs,
                     onSlotSearching={index ->
                         updateAutoTrack(id,index,AutoTrackStage.SEARCHING)
+                        Log.d(TAG,"soulseek_auto slot=$index searching")
                     },
                     onSlotTransferring={index ->
                         updateAutoTrack(id,index,AutoTrackStage.DOWNLOADING)
+                        Log.d(TAG,"soulseek_auto slot=$index transferring")
+                    },
+                    onCandidateDecision={index,decision ->
+                        Log.d(TAG,"soulseek_auto slot=$index candidate_" +
+                            "status=${decision.status} reason=${decision.reason} " +
+                            "observed=${decision.examined} eligible=${decision.eligible}")
                     },
                     onSlotResolved={index,status ->
+                        Log.d(TAG,"soulseek_auto slot=$index settled=$status")
                         val stage=when(status) {
                             A0AutoBatchExecutor.TrackStatus.PUBLISHED ->
                                 AutoTrackStage.SAVED
