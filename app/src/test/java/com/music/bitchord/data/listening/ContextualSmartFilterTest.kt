@@ -201,4 +201,19 @@ class ContextualSmartFilterTest {
         }
     }
 
+    @Test fun zeroMediaStoreAddedSecondsAreUnknownLikeGlobalBatchProjection() {
+        val local = com.music.bitchord.data.catalog.CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER
+        val song = track("zero").copy(
+            availableAssets = listOf(CanonicalBrowseMediaAsset("local:zero", local)),
+        )
+        val present = filter(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
+            SmartPlaylistRuleOperator.IS_PRESENT,
+        ))
+        val unknown = mapOf("zero" to listOf<Long?>(0L))
+        assertTrue(filterCanonicalBrowseSongs(listOf(song), present, local, unknown).isEmpty())
+        assertTrue(filterCanonicalBrowseSongs(listOf(song),
+            filter(SmartPlaylistRule.Not(present.rules)), local, unknown).isEmpty())
+    }
+
 }
