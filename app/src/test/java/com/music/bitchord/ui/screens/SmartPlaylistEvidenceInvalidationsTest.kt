@@ -5,6 +5,13 @@ import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.listening.ListeningEventDatabase
+import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
+import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
+import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
+import com.music.bitchord.data.listening.SmartPlaylistV2Query
+import com.music.bitchord.data.listening.SmartPlaylistRule
+import com.music.bitchord.data.listening.SmartPlaylistRuleField
+import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
 import com.music.bitchord.data.listening.RoomRecordingRatingStore
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -80,6 +87,36 @@ class SmartPlaylistEvidenceInvalidationsTest {
         } finally {
             catalog.close()
             listening.close()
+        }
+    }
+
+    @Test fun changingReferencedDefinitionInvalidatesDependentPreview() = runBlocking {
+        val context = RuntimeEnvironment.getApplication()
+        val database = Room.inMemoryDatabaseBuilder(
+            context, SmartPlaylistDefinitionDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val ready = CompletableDeferred<Unit>()
+            val changes = async(Dispatchers.Default) {
+                withTimeout(10_000) {
+                    var emissions = 0
+                    smartPlaylistReferenceDefinitionChanges(database)
+                        .onEach { if (++emissions == 1) ready.complete(Unit) }
+                        .take(2).toList()
+                }
+            }
+            withTimeout(10_000) { ready.await() }
+            SmartPlaylistV2DefinitionRepository(database.v2DefinitionDao()).save(
+                SavedSmartPlaylistV2Definition("base", "Base",
+                    SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                        SmartPlaylistRuleField.DURATION_MS,
+                        SmartPlaylistRuleOperator.IS_PRESENT,
+                    )),
+                ),
+            )
+            assertEquals(2, changes.await().size)
+        } finally {
+            database.close()
         }
     }
 }
