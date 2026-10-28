@@ -341,8 +341,14 @@ class CanonicalNativeNavigationTest {
         val base = CanonicalCatalogSearchRow(
             "rec-a", CanonicalSearchKind.RECORDING, "Attention", "NewJeans",
         )
+        // The old test supplied a populated URL with no ownership evidence.
+        // Build a genuinely inherited sleeve via the production helper; a
+        // track-owned URL, even if equal, must never be overwritten.
+        val inherited = com.music.bitchord.ui.canonicalReleaseTracksWithArtwork(
+            listOf(base), tiny,
+        ).single()
         val rows = listOf(
-            base.copy(artworkUri = tiny),
+            inherited,
             base.copy(musicBrainzId = "rec-b", artworkUri = specific),
             base.copy(musicBrainzId = "rec-c"),
         )
