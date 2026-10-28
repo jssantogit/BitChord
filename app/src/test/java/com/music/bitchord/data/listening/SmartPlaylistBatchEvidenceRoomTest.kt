@@ -750,4 +750,61 @@ class SmartPlaylistBatchEvidenceRoomTest {
             listening.close()
         }
     }
+
+    @Test fun referencedSourceFilterReadsOnlyOneCurrentAccountScopedSourceSnapshot() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            var sourceReads = 0
+            val availability = object : CanonicalLibraryAvailabilityReader {
+                override suspend fun availableRecordingIds(): List<String> =
+                    error("A source rule must not fall back to unscoped IDs")
+                override suspend fun availableRecordingSources(): List<CanonicalAvailableRecordingSources> {
+                    sourceReads++
+                    return listOf(
+                        CanonicalAvailableRecordingSources(
+                            "rec:local", setOf(CanonicalLibrarySourceKind.LOCAL),
+                        ),
+                        CanonicalAvailableRecordingSources(
+                            "rec:remote", setOf(CanonicalLibrarySourceKind.OPENSUBSONIC),
+                        ),
+                    )
+                }
+            }
+            val child = SavedSmartPlaylistV2Definition(
+                "local-only", "Only local", SmartPlaylistV2Query(
+                    SmartPlaylistRule.Comparison(
+                        SmartPlaylistRuleField.SOURCE_KIND,
+                        SmartPlaylistRuleOperator.EQUAL, textValue = "local",
+                    ),
+                    sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+                ),
+            )
+            val preview = CanonicalRuleBasedSmartPlaylistPreview(
+                availability = availability,
+                catalog = catalog.catalogDao(),
+                ratings = RoomRecordingRatingStore(listening.recordingRatingDao()),
+                listening = RoomListeningEventStore(listening.listeningEventDao()),
+                batchReader = SmartPlaylistBatchEvidenceReader { ids ->
+                    ids.map { RuleBasedRecordingCandidate(
+                        it, null, 0L, null, 100_000L, true,
+                    ) }
+                },
+                v2Planner = SmartPlaylistV2RuleEngine(nowEpochMs = { 900_000L }),
+                savedReferences = { listOf(child) },
+            )
+            val root = SmartPlaylistV2Query(
+                SmartPlaylistRule.Reference("local-only"),
+                sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+            )
+            assertEquals(listOf("rec:local"), preview.preview(root).map { it.recordingId })
+            assertEquals(1, sourceReads)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
 }
