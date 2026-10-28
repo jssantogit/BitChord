@@ -85,4 +85,38 @@ class CanonicalAvailabilityProjectionRoomTest {
         }
     }
 
+    @Test fun selectedLocalAssetProjectionDoesNotLoadOtherLocalOrRemoteAssets() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val db = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = db.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:selected", "Selected", "Artist", 180_000L))
+            dao.upsertRecording(RecordingEntity("rec:other", "Other", "Artist", 180_000L))
+            suspend fun asset(id: String, recording: String, provider: String) {
+                dao.upsertMediaAsset(MediaAssetEntity(
+                    id = id, recordingId = recording, provider = provider,
+                    sourceKey = id, uri = "content://test/$id", path = "/music/$id",
+                    dateAddedSeconds = null, dateModifiedSeconds = null,
+                    artworkUri = "content://art/$id",
+                ))
+            }
+            asset("asset:one", "rec:selected", CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
+            asset("asset:two", "rec:other", CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
+            asset("asset:remote", "rec:selected", "opensubsonic:other")
+            val result = dao.localRowsByAssetIds(
+                localProvider = CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER,
+                youtubeProvider = "youtube",
+                recordingEntityType = "recording",
+                mediaAssetIds = listOf("asset:one", "asset:remote", "asset:missing"),
+            )
+            assertEquals(listOf("asset:one"), result.map { it.mediaAssetId })
+            assertEquals("rec:selected", result.single().recordingId)
+            assertEquals("content://test/asset:one", result.single().uri)
+            assertEquals("content://art/asset:one", result.single().artworkUri)
+        } finally {
+            db.close()
+        }
+    }
+
 }
