@@ -738,4 +738,33 @@ class CanonicalCoverProgressiveEnrichmentTest {
                 listOf(other), mapOf(group to approved),
             ).single())
     }
+
+    @Test fun warmValidatedGroupBatchIncludesFullResolutionCardsForIdentityCorrection() {
+        val album = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            "group-1", com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP,
+            "Get Up", "NewJeans", releaseKind = "EP",
+            artworkUri = "https://archive.org/old-front-500.jpg",
+        )
+        val second = album.copy(musicBrainzId = "group-2",
+            artworkUri = "https://archive.org/other-front-500.jpg")
+        val otherVideo = album.copy(musicBrainzId = "group-video",
+            releaseKind = "Other", artworkUri = null)
+        val track = album.copy(
+            musicBrainzId = "recording",
+            kind = com.music.bitchord.ui.screens.CanonicalSearchKind.RECORDING,
+            coverGroupMbid = album.musicBrainzId,
+        )
+        assertEquals(
+            listOf("group-1", "group-2"),
+            com.music.bitchord.ui.canonicalWarmGroupArtworkCandidateMbids(
+                listOf(album, album, second, otherVideo, track), limit = 10,
+            ),
+        )
+        assertEquals(
+            listOf("group-1"),
+            com.music.bitchord.ui.canonicalWarmGroupArtworkCandidateMbids(
+                listOf(album, second), limit = 1,
+            ),
+        )
+    }
 }
