@@ -92,7 +92,9 @@ class SmartCollectionBatchHandoffTest {
                     CanonicalBrowseMediaAsset("remote-a", "opensubsonic:account"),
                 ),
             ),
-            track("rec-b"),
+            track("rec-b").copy(availableAssets = listOf(
+                CanonicalBrowseMediaAsset("remote-b", "opensubsonic:account"),
+            )),
         ))
         assertEquals(listOf("local-a"),
             canonicalBrowseOnlyProvider(both, "local-mediastore")
