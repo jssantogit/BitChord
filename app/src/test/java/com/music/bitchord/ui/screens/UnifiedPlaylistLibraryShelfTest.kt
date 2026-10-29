@@ -47,8 +47,22 @@ class UnifiedPlaylistLibraryShelfTest {
         assertEquals("local:local:playlist:a", cards[1].id)
     }
 
+    @Test fun collapsedRowsAreVerticalAndExpandedRowsAreCompleteTwoColumnGrid() {
+        val cards = listOf(smart("a"), normal("a"), smart("b"), normal("b"), smart("c"))
+        val compact = playlistShelfRows(cards, expanded = false)
+        assertEquals(listOf(1, 1, 1), compact.map { it.size })
+        assertEquals(cards.take(3), compact.flatten())
+        val grid = playlistShelfRows(cards, expanded = true)
+        assertEquals(listOf(2, 2, 1), grid.map { it.size })
+        assertEquals(cards, grid.flatten())
+    }
+
     @Test fun emptyAndOneItemShelvesNeverFabricatePlaylists() {
         assertEquals(emptyList<List<LibraryPlaylistCard>>(), unifiedPlaylistRows(emptyList()))
         assertEquals(listOf(listOf(smart("one"))), unifiedPlaylistRows(listOf(smart("one"))))
+        assertEquals(emptyList<List<LibraryPlaylistCard>>(), playlistShelfRows(emptyList(), false))
+        assertEquals(emptyList<List<LibraryPlaylistCard>>(), playlistShelfRows(emptyList(), true))
+        assertEquals(listOf(listOf(smart("one"))),
+            playlistShelfRows(listOf(smart("one")), false))
     }
 }

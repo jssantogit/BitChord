@@ -8,11 +8,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -67,6 +69,14 @@ internal sealed interface LibraryPlaylistCard {
 internal fun unifiedPlaylistRows(cards: List<LibraryPlaylistCard>): List<List<LibraryPlaylistCard>> =
     cards.chunked(2)
 
+/** Compact vertical rows by default; the expanded view is a complete 2-column grid. */
+internal fun playlistShelfRows(
+    cards: List<LibraryPlaylistCard>,
+    expanded: Boolean,
+): List<List<LibraryPlaylistCard>> =
+    if (expanded) unifiedPlaylistRows(cards)
+    else cards.take(3).map { listOf(it) }
+
 @Composable
 internal fun UnifiedPlaylistLibraryShelf(
     normalPlaylists: List<ShelfItem>,
@@ -100,7 +110,7 @@ internal fun UnifiedPlaylistLibraryShelf(
                 .map { LibraryPlaylistCard.Normal(it) }
     }
     var expanded by remember { mutableStateOf(false) }
-    val shown = if (expanded) cards else cards.take(4)
+    val rows = playlistShelfRows(cards, expanded)
 
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -111,9 +121,13 @@ internal fun UnifiedPlaylistLibraryShelf(
             horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier.fillMaxWidth()) {
             Text("Playlists", style = MaterialTheme.typography.headlineMedium)
-            if (cards.size > 4) {
+            if (cards.isNotEmpty()) {
                 TextButton(onClick = { expanded = !expanded }) {
-                    Text(if (expanded) "Mostrar menos" else "Ver todas", color = AccentRed)
+                    Text(
+                        if (expanded) "Recolher"
+                        else if (cards.size > 3) "Ver todas" else "Ver em grade",
+                        color = AccentRed,
+                    )
                 }
             }
         }
@@ -127,26 +141,37 @@ internal fun UnifiedPlaylistLibraryShelf(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        unifiedPlaylistRows(shown).forEach { pair ->
+        rows.forEach { pair ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 pair.forEach { card ->
-                    UnifiedPlaylistTile(
-                        card = card,
-                        modifier = Modifier.weight(1f),
-                        onClick = {
-                            when (card) {
-                                is LibraryPlaylistCard.Smart ->
-                                    onOpenSmartPlaylist(card.definition.id)
-                                is LibraryPlaylistCard.Normal ->
-                                    onOpenNormalPlaylist(card.shelfItem)
-                            }
-                        },
-                        onPlay = if (card is LibraryPlaylistCard.Smart) {
-                            { onSmartAction(card.definition.id, CanonicalCollectionIntent.PLAY_NOW) }
-                        } else null,
-                    )
+                    val openCard: () -> Unit = {
+                        when (card) {
+                            is LibraryPlaylistCard.Smart ->
+                                onOpenSmartPlaylist(card.definition.id)
+                            is LibraryPlaylistCard.Normal ->
+                                onOpenNormalPlaylist(card.shelfItem)
+                        }
+                    }
+                    val playCard: (() -> Unit)? = if (card is LibraryPlaylistCard.Smart) {
+                        { onSmartAction(card.definition.id, CanonicalCollectionIntent.PLAY_NOW) }
+                    } else null
+                    if (expanded) {
+                        UnifiedPlaylistTile(
+                            card = card,
+                            modifier = Modifier.weight(1f),
+                            onClick = openCard,
+                            onPlay = playCard,
+                        )
+                    } else {
+                        UnifiedPlaylistCompactRow(
+                            card = card,
+                            onClick = openCard,
+                            onPlay = playCard,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
-                if (pair.size == 1) Spacer(Modifier.weight(1f))
+                if (expanded && pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
         PlaylistWizardSecondaryAction(
@@ -202,6 +227,69 @@ private fun UnifiedPlaylistTile(
             TextButton(onClick = onPlay, modifier = Modifier.align(Alignment.Start)) {
                 Text("Reproduzir", color = AccentRed)
             }
+        }
+    }
+}
+
+/** Compact vertical Library presentation; the same actions work in the grid. */
+@Composable
+private fun UnifiedPlaylistCompactRow(
+    card: LibraryPlaylistCard,
+    onClick: () -> Unit,
+    onPlay: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 6.dp)
+            .heightIn(min = 58.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            val image = (card as? LibraryPlaylistCard.Normal)
+                ?.shelfItem?.thumbnailUrl?.takeIf { it.isNotBlank() }
+            if (image != null) {
+                AsyncImage(model = image, contentDescription = card.title,
+                    contentScale = ContentScale.Crop, modifier = Modifier.size(56.dp))
+            } else {
+                Card(
+                    modifier = Modifier.size(56.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                ) {
+                    Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                        Icon(
+                            if (card is LibraryPlaylistCard.Smart)
+                                Icons.Rounded.AutoAwesome else Icons.Rounded.LibraryMusic,
+                            contentDescription = null,
+                            modifier = Modifier.size(25.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(card.title, style = MaterialTheme.typography.titleMedium,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (card is LibraryPlaylistCard.Smart) "Inteligente" else "Normal",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (onPlay != null) {
+            TextButton(onClick = onPlay) {
+                Text("Reproduzir", color = AccentRed)
+            }
+        } else {
+            Icon(Icons.Rounded.ChevronRight, contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
