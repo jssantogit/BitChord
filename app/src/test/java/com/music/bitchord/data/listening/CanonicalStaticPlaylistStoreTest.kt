@@ -87,7 +87,7 @@ class CanonicalStaticPlaylistStoreTest {
                     id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL,
                     schemaVersion INTEGER NOT NULL, rulesJson TEXT NOT NULL)
             """.trimIndent())
-            sqlite.execSQL("INSERT INTO smart_playlist_definition (id,name,schemaVersion,`limit`) VALUES ('old','Before',1,100)")
+            sqlite.execSQL("INSERT INTO smart_playlist_definition (id,name,schemaVersion,minimumCompletions,`limit`) VALUES ('old','Before',1,1,100)")
             sqlite.version = 3
         } finally {
             sqlite.close()
