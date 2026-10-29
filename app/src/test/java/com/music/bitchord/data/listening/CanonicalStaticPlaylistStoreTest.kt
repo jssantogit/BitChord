@@ -28,12 +28,14 @@ class CanonicalStaticPlaylistStoreTest {
                 id = "normal-1",
                 name = "Viagem",
                 recordingIds = listOf("recording-a", "recording-b", "recording-c"),
+                sourceProviderKey = "local-mediastore",
             )
             repository.save(playlist)
             assertEquals(playlist, repository.list().single())
             assertEquals(playlist, repository.observe().first().single())
             repository.save(playlist.copy(name = "Viagem nova", recordingIds = listOf("recording-c")))
             assertEquals(listOf("recording-c"), repository.list().single().recordingIds)
+            assertEquals("local-mediastore", repository.list().single().sourceProviderKey)
             assertEquals("normal-1", repository.list().single().id)
             repository.remove("normal-1")
             assertTrue(repository.list().isEmpty())
@@ -56,6 +58,10 @@ class CanonicalStaticPlaylistStoreTest {
             ) }.isFailure)
             assertTrue(runCatching { repository.save(
                 SavedCanonicalStaticPlaylist("bad", "Ok", listOf(" https://not-a-recording "))
+            ) }.isFailure)
+            assertTrue(runCatching { repository.save(
+                SavedCanonicalStaticPlaylist("bad", "Ok", emptyList(),
+                    sourceProviderKey = "unknown-server")
             ) }.isFailure)
             assertEquals(emptyList<SavedCanonicalStaticPlaylist>(), repository.list())
         } finally {
@@ -97,6 +103,7 @@ class CanonicalStaticPlaylistStoreTest {
                 SmartPlaylistDefinitionDatabase.MIGRATION_1_2,
                 SmartPlaylistDefinitionDatabase.MIGRATION_2_3,
                 SmartPlaylistDefinitionDatabase.MIGRATION_3_4,
+                SmartPlaylistDefinitionDatabase.MIGRATION_4_5,
             ).allowMainThreadQueries().build()
         try {
             assertEquals("Before", SmartPlaylistDefinitionRepository(db.definitionDao()).list().single().name)
