@@ -230,8 +230,16 @@ internal class A0FreshAutoSearchTransport(
             }
             holder.markReadersStopped()
             val snapshot=holder.releaseShadowSnapshot()
+            val counts=holder.screening()
             Log.d("BitChord","soulseek_auto_search replies=${snapshot.choices.size}" +
-                " truncated_slots=${snapshot.truncatedSlots.size}")
+                " truncated_slots=${snapshot.truncatedSlots.size}" +
+                " raw_responses=${counts.responses} public_files=${counts.publicFiles}" +
+                " admitted_before_limit=${counts.validBeforeLimit}" +
+                " no_slot=${counts.noSlot} unsafe_path=${counts.unsafePath}" +
+                " unsupported_format=${counts.unsupportedFormat}" +
+                " duplicate=${counts.duplicates}" +
+                " manual_limit=${counts.capacityDropped}" +
+                " peer_limit=${counts.perPeerDropped}")
             return if(snapshot.choices.isEmpty() && snapshot.truncatedSlots.isEmpty())
                 A0AutoDiscoveryCoordinator.SearchResult.NoReply
             else A0AutoDiscoveryCoordinator.SearchResult.Found(

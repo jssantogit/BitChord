@@ -32,6 +32,26 @@ class A0AutoCandidateSelectionPolicyTest {
         return source.releaseShadowChoices()
     }
 
+    @Test fun noStrongCandidateReportsExclusiveGateRejectionsWithoutMetadata() {
+        val samples=offers("rank",name="Other - Another.mp3")+
+            offers("preflight",duration=140)+
+            offers("album",album="Other Album")+
+            offers("quality",bitrate=256)
+        val decision=A0AutoCandidateSelectionPolicy.preview(target,samples,profile)
+        assertEquals(A0AutoCandidateSelectionPolicy.Reason.NO_STRONG_CANDIDATE,
+            decision.reason)
+        assertEquals(4,decision.examined)
+        assertEquals(4,decision.funnel.rankRejected+
+            decision.funnel.preflightRejected+
+            decision.funnel.albumRejected+
+            decision.funnel.qualityRejected)
+        assertEquals(1,decision.funnel.rankRejected)
+        assertEquals(1,decision.funnel.preflightRejected)
+        assertEquals(1,decision.funnel.albumRejected)
+        assertEquals(1,decision.funnel.qualityRejected)
+        assertFalse(decision.toString().contains("Other"))
+    }
+
     @Test fun strongReadySingleTrackSuggestsButCannotTransfer() {
         val selection=A0AutoCandidateSelectionPolicy.preview(
             target,offers("source-one"),profile)

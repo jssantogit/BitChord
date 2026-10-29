@@ -20,6 +20,14 @@ internal object A0AutoCandidateSelectionPolicy {
         INVALID_TARGET, INCOMPLETE_SAMPLE, CONTRADICTORY_SOURCE,
         NO_STRONG_CANDIDATE, AMBIGUOUS_EDITION, NO_READY_SOURCE,
     }
+    /** Exclusive first-failing-stage counts; sanitized, no source identifiers. */
+    data class Funnel(
+        val rankRejected:Int=0,
+        val preflightRejected:Int=0,
+        val albumRejected:Int=0,
+        val qualityRejected:Int=0,
+    )
+
     class Decision(
         val status:Status,
         val reason:Reason?,
@@ -27,12 +35,14 @@ internal object A0AutoCandidateSelectionPolicy {
         val sequentialAlternatives:List<A0ObservedCandidateHandoff.Choice>,
         val examined:Int,
         val eligible:Int,
+        val funnel:Funnel=Funnel(),
     ) {
         val canTransfer:Boolean get()=false
         override fun toString()="AutoCandidateDecision(status=$status, reason=$reason)"
     }
-    private fun review(reason:Reason,examined:Int=0,eligible:Int=0)=
-        Decision(Status.MANUAL_REVIEW,reason,emptyList(),examined,eligible)
+    private fun review(
+        reason:Reason,examined:Int=0,eligible:Int=0,funnel:Funnel=Funnel(),
+    )=Decision(Status.MANUAL_REVIEW,reason,emptyList(),examined,eligible,funnel)
 
     private data class Eligible(
         val choice:A0ObservedCandidateHandoff.Choice,
@@ -115,6 +125,10 @@ internal object A0AutoCandidateSelectionPolicy {
                 return review(Reason.CONTRADICTORY_SOURCE,observed.size)
         }
         val artist=parts[0]
+        var rankRejected=0
+        var preflightRejected=0
+        var albumRejected=0
+        var qualityRejected=0
         val strong=observed.mapNotNull { choice ->
             val claim=choice.claim
             val ext=claim.format.lowercase(Locale.ROOT)
@@ -131,14 +145,18 @@ internal object A0AutoCandidateSelectionPolicy {
                 ranked.score<65 ||
                 A0CandidateRank.Warning.ARTIST_CONFLICT in ranked.warnings ||
                 A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in ranked.warnings ||
-                A0CandidateRank.Warning.VERSION_MISMATCH in ranked.warnings)
+                A0CandidateRank.Warning.VERSION_MISMATCH in ranked.warnings) {
+                rankRejected++
                 return@mapNotNull null
+            }
             val preflight=A0CandidatePreflight.assess(
                 target.query,ranked,claim.bitrateKbps,
                 claim.durationSeconds,expected,ext,claim.sizeBytes,
                 claim.sampleRateHz,claim.bitDepth)
-            if(preflight.confidence!=A0CandidatePreflight.Confidence.STRONG)
+            if(preflight.confidence!=A0CandidatePreflight.Confidence.STRONG) {
+                preflightRejected++
                 return@mapNotNull null
+            }
             val directory=choice.remotePath.replace('\\','/')
                 .substringBeforeLast('/',"")
             val folder=directory.substringAfterLast('/',"")
@@ -159,8 +177,10 @@ internal object A0AutoCandidateSelectionPolicy {
             }else nearest
             if(album.status !in setOf(
                     A0CanonicalAlbumPolicy.Status.UNCONSTRAINED,
-                    A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED))
+                    A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED)) {
+                albumRejected++
                 return@mapNotNull null
+            }
             val quality=A0DownloadQualityPolicy.evaluate(
                 profile,
                 A0DownloadQualityPolicy.Offer(
@@ -168,12 +188,15 @@ internal object A0AutoCandidateSelectionPolicy {
                     claim.sampleRateHz,claim.bitDepth),
                 supported)
             if(quality.status!=
-                A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED)
+                A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED) {
+                qualityRejected++
                 return@mapNotNull null
+            }
             Eligible(choice,ranked.score)
         }
+        val funnel=Funnel(rankRejected,preflightRejected,albumRejected,qualityRejected)
         if(strong.isEmpty())return review(
-            Reason.NO_STRONG_CANDIDATE,observed.size)
+            Reason.NO_STRONG_CANDIDATE,observed.size,funnel=funnel)
         // Exact equality of peer claims is not proof of actual equal audio.
         // It only limits which alternate connections may be considered.
         val clusters=mutableListOf<MutableList<Eligible>>()
@@ -198,7 +221,7 @@ internal object A0AutoCandidateSelectionPolicy {
         if(rankedGroups.size>1 &&
             rankedGroups[0].maxOf { it.rank } -
                 rankedGroups[1].maxOf { it.rank }<12)
-            return review(Reason.AMBIGUOUS_EDITION,observed.size,strong.size)
+            return review(Reason.AMBIGUOUS_EDITION,observed.size,strong.size,funnel)
         val leading=rankedGroups[0]
         // Only a peer claiming a currently free slot with acceptable queue/
         // speed evidence may be provisionally preferred for unattended use.
@@ -206,7 +229,7 @@ internal object A0AutoCandidateSelectionPolicy {
             it.choice.peerAvailability.tier==A0PeerAvailability.Tier.READY
         }
         if(ready.isEmpty())
-            return review(Reason.NO_READY_SOURCE,observed.size,strong.size)
+            return review(Reason.NO_READY_SOURCE,observed.size,strong.size,funnel)
         val ordered=reliability.sequentialFallbacks(
             ready.map { A0PeerReliabilityEvidence.Alternative(
                 it.choice.peerUsername,"same-claim",it.choice.peerAvailability.tier) },
@@ -216,6 +239,6 @@ internal object A0AutoCandidateSelectionPolicy {
         }
         if(handles.isEmpty())
             return review(Reason.NO_READY_SOURCE,observed.size,strong.size)
-        return Decision(Status.PROVISIONAL,null,handles,observed.size,strong.size)
+        return Decision(Status.PROVISIONAL,null,handles,observed.size,strong.size,funnel)
     }
 }

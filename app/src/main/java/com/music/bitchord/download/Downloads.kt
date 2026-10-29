@@ -1307,7 +1307,11 @@ object Downloads {
                     onCandidateDecision={index,decision ->
                         Log.d(TAG,"soulseek_auto slot=$index candidate_" +
                             "status=${decision.status} reason=${decision.reason} " +
-                            "observed=${decision.examined} eligible=${decision.eligible}")
+                            "observed=${decision.examined} eligible=${decision.eligible}" +
+                            " rank_rejected=${decision.funnel.rankRejected}" +
+                            " preflight_rejected=${decision.funnel.preflightRejected}" +
+                            " album_rejected=${decision.funnel.albumRejected}" +
+                            " quality_rejected=${decision.funnel.qualityRejected}")
                     },
                     onSlotEvidence={index,observed ->
                         val entry=request.entries[index]
