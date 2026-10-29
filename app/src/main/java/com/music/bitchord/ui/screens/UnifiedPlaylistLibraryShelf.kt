@@ -1,6 +1,10 @@
 package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -75,13 +79,12 @@ internal sealed interface LibraryPlaylistCard {
 internal fun unifiedPlaylistRows(cards: List<LibraryPlaylistCard>): List<List<LibraryPlaylistCard>> =
     cards.chunked(2)
 
-/** Compact vertical rows by default; the expanded view is a complete 2-column grid. */
+/** Library category owns one complete vertical list; no truncation or grid toggle. */
 internal fun playlistShelfRows(
     cards: List<LibraryPlaylistCard>,
     expanded: Boolean,
 ): List<List<LibraryPlaylistCard>> =
-    if (expanded) unifiedPlaylistRows(cards)
-    else cards.take(3).map { listOf(it) }
+    cards.map { listOf(it) }
 
 @Composable
 internal fun UnifiedPlaylistLibraryShelf(
@@ -136,27 +139,20 @@ internal fun UnifiedPlaylistLibraryShelf(
             normalPlaylists.filter { it.browseId?.startsWith("local:playlist:") == true }
                 .map { LibraryPlaylistCard.Normal(it) }
     }
-    var expanded by remember { mutableStateOf(false) }
-    val rows = playlistShelfRows(cards, expanded)
+    var openedCard by remember { mutableStateOf<LibraryPlaylistCard?>(null) }
+    val rows = playlistShelfRows(cards, expanded = false)
 
     Column(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxSize().statusBarsPadding()
+            .padding(top = 64.dp, bottom = 12.dp)
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = PAGE_GUTTER, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier.fillMaxWidth()) {
-            Text("Playlists", style = MaterialTheme.typography.headlineMedium)
-            if (cards.isNotEmpty()) {
-                TextButton(onClick = { expanded = !expanded }) {
-                    Text(
-                        if (expanded) "Recolher"
-                        else if (cards.size > 3) "Ver todas" else "Ver em grade",
-                        color = AccentRed,
-                    )
-                }
-            }
+            Text("Playlists", style = MaterialTheme.typography.headlineLarge)
         }
         if (failed) {
             Text("Não foi possível carregar playlists inteligentes.",
@@ -179,11 +175,11 @@ internal fun UnifiedPlaylistLibraryShelf(
                     val openCard: () -> Unit = {
                         when (card) {
                             is LibraryPlaylistCard.Smart ->
-                                onOpenSmartPlaylist(card.definition.id)
+                                openedCard = card
                             is LibraryPlaylistCard.Normal ->
                                 onOpenNormalPlaylist(card.shelfItem)
                             is LibraryPlaylistCard.CanonicalNormal ->
-                                onOpenCanonicalNormalPlaylist(card.definition.id)
+                                openedCard = card
                         }
                     }
                     val playCard: (() -> Unit)? = when (card) {
@@ -193,28 +189,44 @@ internal fun UnifiedPlaylistLibraryShelf(
                             { { onCanonicalNormalAction(card.definition.id, CanonicalCollectionIntent.PLAY_NOW) } }
                         is LibraryPlaylistCard.Normal -> null
                     }
-                    if (expanded) {
-                        UnifiedPlaylistTile(
-                            card = card,
-                            modifier = Modifier.weight(1f),
-                            onClick = openCard,
-                            onPlay = playCard,
-                        )
-                    } else {
-                        UnifiedPlaylistCompactRow(
-                            card = card,
-                            onClick = openCard,
-                            onPlay = playCard,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
+                    UnifiedPlaylistCompactRow(
+                        card = card,
+                        onClick = openCard,
+                        onPlay = playCard,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
-                if (expanded && pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
         PlaylistWizardSecondaryAction(
             label = "+ Nova playlist",
             onClick = onNewSmartPlaylist,
+        )
+    }
+    openedCard?.let { selected ->
+        CanonicalPlaylistDetailScreen(
+            card = selected,
+            onClose = { openedCard = null },
+            onEdit = {
+                openedCard = null
+                when (selected) {
+                    is LibraryPlaylistCard.Smart ->
+                        onOpenSmartPlaylist(selected.definition.id)
+                    is LibraryPlaylistCard.CanonicalNormal ->
+                        onOpenCanonicalNormalPlaylist(selected.definition.id)
+                    is LibraryPlaylistCard.Normal ->
+                        onOpenNormalPlaylist(selected.shelfItem)
+                }
+            },
+            onAction = { intent ->
+                when (selected) {
+                    is LibraryPlaylistCard.Smart ->
+                        onSmartAction(selected.definition.id, intent)
+                    is LibraryPlaylistCard.CanonicalNormal ->
+                        onCanonicalNormalAction(selected.definition.id, intent)
+                    is LibraryPlaylistCard.Normal -> Unit
+                }
+            },
         )
     }
 }
@@ -321,13 +333,7 @@ private fun UnifiedPlaylistCompactRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (onPlay != null) {
-            TextButton(onClick = onPlay) {
-                Text("Reproduzir", color = AccentRed)
-            }
-        } else {
-            Icon(Icons.Rounded.ChevronRight, contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        Icon(Icons.Rounded.ChevronRight, contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
