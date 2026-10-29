@@ -43,6 +43,18 @@ class SoulseekManualReviewLeaseGateTest {
         assertFalse(gate.hasOpen)
     }
 
+    @Test fun reviewedCandidateReadsRequireClaimedLiveToken() {
+        val gate=SoulseekManualReviewLeaseGate()
+        val token=gate.reserve("s")!!
+        assertFalse(gate.ownsClaimed("s",token))
+        assertTrue(gate.claim("s",token))
+        assertTrue(gate.ownsClaimed("s",token))
+        assertFalse(gate.ownsClaimed("s","wrong"))
+        assertFalse(gate.ownsClaimed("other",token))
+        assertTrue(gate.close("s",token))
+        assertFalse(gate.ownsClaimed("s",token))
+    }
+
     @Test fun invalidSessionCannotReserve() {
         val gate=SoulseekManualReviewLeaseGate()
         assertNull(gate.reserve(""))
