@@ -61,10 +61,13 @@ internal object A0ManualReviewCandidatePolicy {
             // usable source from HUMAN review. Only a clearly incompatible
             // profile is excluded. The real received bytes must still pass
             // the independent decoder/quality gate before A3 publication.
+            val uncertainButInspectable=
+                quality.status==A0DownloadQualityPolicy.Status.INCONCLUSIVE_MANUAL &&
+                quality.reason==A0DownloadQualityPolicy.Reason.INSUFFICIENT_TECHNICAL_CLAIMS
             if(quality.status !in setOf(
                 A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED,
-                A0DownloadQualityPolicy.Status.INCONCLUSIVE_MANUAL,
-                A0DownloadQualityPolicy.Status.NOT_CONSTRAINED))
+                A0DownloadQualityPolicy.Status.NOT_CONSTRAINED) &&
+                !uncertainButInspectable)
                 return@mapNotNull null
             // A directory hint must never be treated as an authenticated
             // album identity. A composite/inconclusive folder is shown for
