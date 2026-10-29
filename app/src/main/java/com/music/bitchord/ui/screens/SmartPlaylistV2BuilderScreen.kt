@@ -48,6 +48,8 @@ import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLocalLibrary
 import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
+import com.music.bitchord.data.listening.SavedCanonicalStaticPlaylist
+import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Filter
 import com.music.bitchord.data.listening.SmartPlaylistV2FilterRepository
 import com.music.bitchord.data.listening.andSavedFilter
@@ -76,6 +78,7 @@ import com.music.bitchord.sharedui.resources.smart_collection_batch_play
 import com.music.bitchord.sharedui.resources.smart_collection_batch_queue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
@@ -112,6 +115,7 @@ internal data class V2DisplayRow(
 internal fun SmartPlaylistV2BuilderScreen(
     onBack: () -> Unit,
     initialPlaylistId: String? = null,
+    initialNormalPlaylistId: String? = null,
     onClassic: () -> Unit,
     onSavedAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
     onPreviewAction: ((SmartPlaylistV2Query, String?, CanonicalCollectionIntent) -> Unit)? = null,
@@ -123,6 +127,9 @@ internal fun SmartPlaylistV2BuilderScreen(
         )
     }
     val definitionDatabase = remember(context) { SmartPlaylistDefinitionDatabase.get(context) }
+    val normalRepo = remember(definitionDatabase) {
+        CanonicalStaticPlaylistRepository(definitionDatabase.staticPlaylistDao())
+    }
     val filterRepo = remember(definitionDatabase) {
         SmartPlaylistV2FilterRepository(definitionDatabase.v2FilterDao())
     }
@@ -138,6 +145,13 @@ internal fun SmartPlaylistV2BuilderScreen(
     val evaluator = remember(context) { persistentSmartPlaylistPreview(context) }
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
+    var normalMode by remember { mutableStateOf(false) }
+    var editingNormalId by remember { mutableStateOf<String?>(null) }
+    var normalSearch by remember { mutableStateOf("") }
+    var normalRows by remember { mutableStateOf<List<V2DisplayRow>>(emptyList()) }
+    var normalSelectedIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    var normalSelectedRows by remember { mutableStateOf<List<V2DisplayRow>>(emptyList()) }
+    var normalLoading by remember { mutableStateOf(false) }
     var editingId by remember { mutableStateOf<String?>(null) }
     var editingFilterId by remember { mutableStateOf<String?>(null) }
     var rule by remember { mutableStateOf<SmartPlaylistRule>(
@@ -198,6 +212,12 @@ internal fun SmartPlaylistV2BuilderScreen(
         editorEpoch++
         editingId = null
         editingFilterId = null
+        editingNormalId = null
+        normalMode = false
+        normalSearch = ""
+        normalRows = emptyList()
+        normalSelectedIds = emptyList()
+        normalSelectedRows = emptyList()
         name = ""
         rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(newRule()))
         hasConfiguredRules = false
@@ -239,6 +259,59 @@ internal fun SmartPlaylistV2BuilderScreen(
         previewQuery = null
         error = null
         showWizard = true
+    }
+
+    // Editing a normal playlist never converts its members into legacy Song/videoId.
+    // Switching between Normal and Smart on a fresh draft preserves the name.
+    LaunchedEffect(initialNormalPlaylistId, normalRepo) {
+        val id = initialNormalPlaylistId ?: return@LaunchedEffect
+        val item = try {
+            withContext(Dispatchers.IO) { normalRepo.list().firstOrNull { it.id == id } }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            error = "Não foi possível ler a playlist normal."
+            return@LaunchedEffect
+        }
+        if (item == null) {
+            error = "Playlist normal indisponível."
+            return@LaunchedEffect
+        }
+        editorEpoch++
+        editingNormalId = item.id
+        normalMode = true
+        name = item.name
+        normalSelectedIds = item.recordingIds
+        normalSearch = ""
+        error = null
+        showWizard = true
+    }
+
+    LaunchedEffect(normalMode, normalSearch) {
+        if (!normalMode) return@LaunchedEffect
+        normalLoading = true
+        try {
+            delay(160)
+            normalRows = canonicalNormalPlaylistSearch(context, normalSearch)
+            error = null
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            normalRows = emptyList()
+            error = "Não foi possível consultar as músicas das fontes disponíveis."
+        } finally {
+            normalLoading = false
+        }
+    }
+    LaunchedEffect(normalMode, normalSelectedIds) {
+        if (!normalMode) return@LaunchedEffect
+        try {
+            normalSelectedRows = canonicalNormalPlaylistSelectedRows(context, normalSelectedIds)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            error = "Não foi possível carregar a revisão das músicas escolhidas."
+        }
     }
 
     fun query() = SmartPlaylistV2Query(
@@ -446,6 +519,41 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 } catch (_: Exception) {
                                     error = "Não foi possível salvar. Verifique as condições e referências."
                                 } finally { loading = false }
+                            }
+                        }
+                    },
+                    normalMode = normalMode,
+                    editingNormalId = editingNormalId,
+                    normalRows = normalRows,
+                    normalSelectedRows = normalSelectedRows,
+                    normalSelectedIds = normalSelectedIds,
+                    normalSearch = normalSearch,
+                    normalLoading = normalLoading,
+                    onNormalModeChange = { normalMode = it },
+                    onNormalSearchChange = { normalSearch = it },
+                    onToggleNormalTrack = { id ->
+                        normalSelectedIds = toggleCanonicalStaticMember(normalSelectedIds, id)
+                    },
+                    onSaveNormal = {
+                        if (!loading) {
+                            loading = true
+                            scope.launch {
+                                try {
+                                    val id = editingNormalId ?: UUID.randomUUID().toString()
+                                    withContext(Dispatchers.IO) {
+                                        normalRepo.save(SavedCanonicalStaticPlaylist(
+                                            id = id, name = name, recordingIds = normalSelectedIds,
+                                        ))
+                                    }
+                                    reset()
+                                    onBack()
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    error = "Não foi possível salvar a playlist normal."
+                                } finally {
+                                    loading = false
+                                }
                             }
                         }
                     },
