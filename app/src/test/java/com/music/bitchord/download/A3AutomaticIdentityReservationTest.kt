@@ -293,9 +293,16 @@ class A3AutomaticIdentityReservationTest {
             fail("mixed canonical identity not accepted")
         }catch(_:A3AcquisitionLedger.AutomaticIdentityAlreadyReserved) {}
         ledger.advance(first,A3AcquisitionLedger.Phase.SEARCHING)
+        try {
+            ledger.reservedForExplicitManualReview(
+                "recording-1","Artist - Track","Album")
+            fail("An altered release must not reuse the prior recording reservation")
+        }catch(_:A3AcquisitionLedger.AutomaticIdentityAlreadyReserved) {}
+        // The exact identity is still discoverable, but the manual transfer
+        // gate must reject a slot that is no longer REQUESTED.
         assertEquals(A3AcquisitionLedger.Phase.SEARCHING,
             ledger.reservedForExplicitManualReview(
-                "recording-1","Artist - Track","Album")?.phase)
+                "recording-1","ILLIT - Magnetic","SUPER REAL ME")?.phase)
     }
 
     @Test fun multipleUniqueSlotsReserveInOneDurableCommit() {

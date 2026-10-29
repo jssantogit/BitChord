@@ -166,7 +166,7 @@ class SoulseekAutoReviewPlanTest {
             com.music.bitchord.acquisition.a0.A0SoulseekSearchResponse(
                 peer,177,listOf(
                     com.music.bitchord.acquisition.a0.A0SoulseekSearchFile(
-                        "Music\\\\ILLIT\\\\Super Real Me\\\\ILLIT - $title.mp3",
+                        "Music\\ILLIT\\Super Real Me\\ILLIT - $title.mp3",
                         7_240_000L,"mp3",mapOf(0 to 320,1 to 181))
                 ),emptyList(),true,128_000,0),peer)
         return handoff.releaseShadowChoices().single()

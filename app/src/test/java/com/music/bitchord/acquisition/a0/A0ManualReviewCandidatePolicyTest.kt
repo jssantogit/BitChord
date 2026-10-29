@@ -19,7 +19,7 @@ class A0ManualReviewCandidatePolicyTest {
             expectedDurationSeconds=161,qualityProfile=profile,
             collectReleaseShadow=true)
         val file=A0SoulseekSearchFile(
-            "Music\\\\ILLIT\\\\SUPER REAL ME\\\\ILLIT - $track.mp3",
+            "Music\\ILLIT\\SUPER REAL ME\\ILLIT - $track.mp3",
             seconds.toLong()*40_000,"mp3",if(bitrate!=null)
                 mapOf(0 to bitrate,1 to seconds) else mapOf(1 to seconds))
         handoff.offerParsed(A0SoulseekSearchResponse(
