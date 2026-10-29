@@ -23,3 +23,31 @@ O primeiro gatilho encontrou uma restrição de parsing YAML: dentro de
 um scalar sem aspas, ` #192` foi interpretado como comentário.
 A expressão do ambiente foi corrigida para `issue 192` (sem `#`),
 preservando a autorização original e disparando apenas uma nova execução.
+
+## UI redesign — segundo smoke autorizado
+
+Autorizado explicitamente em 28/10/2026: **“Então vamos pro apk”**.
+
+Novo build físico do **editor de playlists inteligentes redesenhado**, na
+mesma branch de trabalho e com a Android CI do HEAD `05cb105210bd0f04045464bf78b6874642da8412`
+aprovada ([#40789880437](https://github.com/jssantogit/BitChord/actions/runs/40789880437)).
+
+Smoke no Galaxy A54, em particular:
+- identificar a diferença entre “Nova playlist” e “Minhas playlists”;
+- avançar Identidade → Regras → Grupo → Categorias → Condição → Revisão,
+  inclusive rolando uma página antes de voltar e abrir a próxima;
+- validar grupos aninhados, `NÃO`, E/OU e reordenação;
+- pesquisar condição, usar numéricos/duração, aplicar origem local e
+  referências a playlists salvas;
+- conferir a prévia real e os cards de fontes sem seleção de provedor falsa;
+- abrir as abas Inteligentes/Filtros/Clássicas, seus menus Mais, confirmação
+  de exclusão e criação/revisão;
+- testar Play/Fila e observar se mini-player/tab bar não se sobrepõem;
+- guardar diagnóstico se houver erro.
+
+Disparo limitado a este arquivo pelo workflow
+`.github/workflows/physical-smoke-apk.yml`. Esta edição documental não
+altera o comportamento do app. O commit deste gatilho será o SHA do APK,
+e o próprio workflow repetirá os testes e fará o `assembleDevDebug`.
+
+Nenhum merge, release ou alteração da `main` autorizado.
