@@ -309,6 +309,11 @@ internal fun SmartPlaylistV2WizardUi(
     normalSelectedIds: List<String> = emptyList(),
     normalSearch: String = "",
     normalLoading: Boolean = false,
+    normalBrowseType: CanonicalPlaylistBrowseType = CanonicalPlaylistBrowseType.TRACKS,
+    normalBrowseGroup: CanonicalPlaylistBrowseGroup? = null,
+    normalGroups: List<CanonicalPlaylistBrowseGroup> = emptyList(),
+    onNormalBrowseTypeChange: (CanonicalPlaylistBrowseType) -> Unit = {},
+    onNormalBrowseGroupChange: (CanonicalPlaylistBrowseGroup?) -> Unit = {},
     onNormalModeChange: (Boolean) -> Unit = {},
     onNormalSearchChange: (String) -> Unit = {},
     onToggleNormalTrack: (String) -> Unit = {},
@@ -502,22 +507,98 @@ internal fun SmartPlaylistV2WizardUi(
                     }
                     WizardStep.SONGS -> {
                         item {
-                            PlaylistWizardSearchEntry(
-                                value = normalSearch,
-                                onValueChange = onNormalSearchChange,
-                                placeholder = "Buscar músicas ou artistas",
-                            )
+                            Row(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                CanonicalPlaylistBrowseType.entries.forEach { type ->
+                                    val label = when (type) {
+                                        CanonicalPlaylistBrowseType.TRACKS -> "Músicas"
+                                        CanonicalPlaylistBrowseType.ALBUMS -> "Álbuns"
+                                        CanonicalPlaylistBrowseType.ARTISTS -> "Artistas"
+                                    }
+                                    TextButton(
+                                        onClick = { onNormalBrowseTypeChange(type) },
+                                        modifier = Modifier.weight(1f)
+                                            .clip(RoundedCornerShape(11.dp))
+                                            .background(
+                                                if (normalBrowseType == type)
+                                                    MaterialTheme.colorScheme.outline
+                                                else Color.Transparent,
+                                            ),
+                                    ) {
+                                        Text(label, style = MaterialTheme.typography.bodyMedium,
+                                            color = if (normalBrowseType == type)
+                                                MaterialTheme.colorScheme.onBackground
+                                            else MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        }
+                        if (normalBrowseGroup != null) {
+                            item {
+                                TextButton(onClick = { onNormalBrowseGroupChange(null) }) {
+                                    Icon(Icons.AutoMirrored.Rounded.ArrowBack,
+                                        contentDescription = null)
+                                    Text(normalBrowseGroup.title)
+                                }
+                            }
+                        } else {
+                            item {
+                                PlaylistWizardSearchEntry(
+                                    value = normalSearch,
+                                    onValueChange = onNormalSearchChange,
+                                    placeholder = when (normalBrowseType) {
+                                        CanonicalPlaylistBrowseType.TRACKS -> "Buscar músicas ou artistas"
+                                        CanonicalPlaylistBrowseType.ALBUMS -> "Buscar álbuns"
+                                        CanonicalPlaylistBrowseType.ARTISTS -> "Buscar artistas"
+                                    },
+                                )
+                            }
                         }
                         item {
                             WizardCard("Selecionadas: ${normalSelectedIds.size}",
-                                "As músicas seguem a ordem em que foram adicionadas. Busque para encontrar outras faixas.")
+                                "A seleção permanece ao alternar entre músicas, álbuns e artistas.")
+                        }
+                        if (normalBrowseGroup == null &&
+                            normalBrowseType != CanonicalPlaylistBrowseType.TRACKS) {
+                            if (normalGroups.isEmpty() && !normalLoading) item {
+                                Text("Nenhum item disponível para esta pesquisa.",
+                                    style = MaterialTheme.typography.bodyMedium)
+                            }
+                            items(normalGroups, key = { it.type.name + it.id }) { group ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable { onNormalBrowseGroupChange(group) }
+                                        .padding(vertical = 13.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Icon(
+                                        if (group.type == CanonicalPlaylistBrowseType.ALBUMS)
+                                            Icons.Rounded.LibraryMusic else Icons.Rounded.MusicNote,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(36.dp),
+                                    )
+                                    Text(group.title, modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Icon(Icons.Rounded.ChevronRight, contentDescription = null)
+                                }
+                            }
                         }
                         if (normalRows.size >= 200) item {
                             Text("Exibindo até 200 resultados. Refine a busca para encontrar outras músicas.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        if (normalRows.isEmpty() && !normalLoading) item {
+                        if (normalRows.isEmpty() && !normalLoading &&
+                            (normalBrowseType == CanonicalPlaylistBrowseType.TRACKS ||
+                                normalBrowseGroup != null)) item {
                             Text("Nenhuma música disponível para esta pesquisa.",
                                 style = MaterialTheme.typography.bodyMedium)
                         }
