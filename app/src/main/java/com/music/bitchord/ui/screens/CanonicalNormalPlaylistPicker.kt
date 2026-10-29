@@ -15,6 +15,19 @@ import kotlinx.coroutines.withContext
 internal fun toggleCanonicalStaticMember(ids: List<String>, id: String): List<String> =
     if (id in ids) ids.filterNot { it == id } else ids + id
 
+/** Reorders one selected RecordingId without fabricating any media identity. */
+internal fun moveCanonicalStaticMember(
+    ids: List<String>, id: String, towardStart: Boolean,
+): List<String> {
+    val from = ids.indexOf(id)
+    val to = from + if (towardStart) -1 else 1
+    if (from !in ids.indices || to !in ids.indices) return ids
+    return ids.toMutableList().apply {
+        this[from] = ids[to]
+        this[to] = ids[from]
+    }
+}
+
 /**
  * Search is capped at 200 rows per request inside SQLite, not 200 recordings
  * from the whole library. Every row is associated with a currently configured
