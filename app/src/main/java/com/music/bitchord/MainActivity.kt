@@ -2152,6 +2152,7 @@ private fun BitChordApp(
     var showCanonicalMyRatings by rememberSaveable { mutableStateOf(false) }
     var showSmartPlaylistBuilder by rememberSaveable { mutableStateOf(false) }
     var editingSmartPlaylistId by remember { mutableStateOf<String?>(null) }
+    var editingNormalPlaylistId by remember { mutableStateOf<String?>(null) }
     val replayOpen = showReplay || replayStory != null || showReplayShare ||
         (selectedTab == TAB_LIBRARY && detail == null && !showSettings)
     val (replay, setReplayPeriod) = rememberReplayState(replayOpen)
@@ -2710,8 +2711,10 @@ private fun BitChordApp(
                             onBack = {
                                 showSmartPlaylistBuilder = false
                                 editingSmartPlaylistId = null
+                                editingNormalPlaylistId = null
                             },
                             initialV2Id = editingSmartPlaylistId,
+                            initialNormalId = editingNormalPlaylistId,
                             onSavedAction = { id, intent ->
                                 executeSmartCollection(SmartCollectionActionSource.SavedDefinition(id), intent)
                             },
@@ -3409,12 +3412,24 @@ private fun BitChordApp(
                                     },
                                     onOpenSmartPlaylist = { id ->
                                         editingSmartPlaylistId = id
+                                        editingNormalPlaylistId = null
+                                        showSmartPlaylistBuilder = true
+                                    },
+                                    onOpenCanonicalNormalPlaylist = { id ->
+                                        editingNormalPlaylistId = id
+                                        editingSmartPlaylistId = null
                                         showSmartPlaylistBuilder = true
                                     },
                                     onOpenNormalPlaylist = onLibraryItemClick,
                                     onSmartAction = { id, intent ->
                                         executeSmartCollection(
                                             SmartCollectionActionSource.SavedV2Definition(id),
+                                            intent,
+                                        )
+                                    },
+                                    onCanonicalNormalAction = { id, intent ->
+                                        executeSmartCollection(
+                                            SmartCollectionActionSource.SavedStaticPlaylist(id),
                                             intent,
                                         )
                                     },
