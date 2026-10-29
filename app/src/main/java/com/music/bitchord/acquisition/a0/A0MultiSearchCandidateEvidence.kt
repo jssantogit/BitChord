@@ -19,7 +19,14 @@ internal class A0MultiSearchCandidateEvidence(
         entries.all { it.trackId.isNotBlank() && it.trackId.length<=180 &&
             it.query.isNotBlank() } &&
         entries.map { it.trackId }.distinct().size==entries.size
-    private val limitPerSlot=if(valid) minOf(128,512/entries.size) else 0
+    // The previous 512/album-size allocation made an 11-track album
+    // clip every popular song at 46 offers. Because clipping correctly
+    // forces manual review, this prevented all automatic selection despite
+    // hundreds of legitimate replies. Keep a bounded 8192-offer album
+    // portfolio, with at least 128 and at most 512 per track. A truly
+    // truncated population still fails closed, never silently drops risk.
+    private val limitPerSlot=if(valid)
+        minOf(512,maxOf(128,8192/entries.size)) else 0
     private val titleTokens=if(valid) entries.map {
         A0ReleaseDiscoveryShadowAdapter.titleTokens(it.query)
     } else emptyList()
