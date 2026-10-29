@@ -11,7 +11,7 @@ class A0ManualReviewCandidatePolicyTest {
     private val target=SoulseekBatchPlan.Entry(
         "magnetic","ILLIT - Magnetic","SUPER REAL ME",161)
 
-    private fun offer(peer:String,track:String,bitrate:Int=320,seconds:Int=161):
+    private fun offer(peer:String,track:String,bitrate:Int?=320,seconds:Int=161):
         A0ObservedCandidateHandoff.Choice {
         val handoff=A0ObservedCandidateHandoff(
             Socket(),"local",177,true,
@@ -20,7 +20,8 @@ class A0ManualReviewCandidatePolicyTest {
             collectReleaseShadow=true)
         val file=A0SoulseekSearchFile(
             "Music\\\\ILLIT\\\\SUPER REAL ME\\\\ILLIT - $track.mp3",
-            seconds.toLong()*40_000,"mp3",mapOf(0 to bitrate,1 to seconds))
+            seconds.toLong()*40_000,"mp3",if(bitrate!=null)
+                mapOf(0 to bitrate,1 to seconds) else mapOf(1 to seconds))
         handoff.offerParsed(A0SoulseekSearchResponse(
             peer,177,listOf(file),emptyList(),true,128_000,0),peer)
         return handoff.releaseShadowChoices().single()
@@ -38,6 +39,16 @@ class A0ManualReviewCandidatePolicyTest {
             offer("wrong","Other Track"),offer("low","Magnetic",128))
         val result=A0ManualReviewCandidatePolicy.retain(target,list,profile)
         assertEquals(listOf(list[0]),result)
+    }
+
+    @Test fun missingAdvertisedBitrateRemainsHumanReviewableButNotAutoAuthorized() {
+        val incomplete=offer("unknown-quality","Magnetic",bitrate=null)
+        val retained=A0ManualReviewCandidatePolicy.retain(
+            target,listOf(incomplete),profile)
+        assertEquals(listOf(incomplete),retained)
+        assertFalse(A0AutoCandidateSelectionPolicy.preview(
+            target,listOf(incomplete),profile).status==
+                A0AutoCandidateSelectionPolicy.Status.PROVISIONAL)
     }
 
     @Test fun largeDiscoveryRetainsAtMostSixteenWithoutSavingPeerIdsToString() {
