@@ -19,6 +19,8 @@ internal data class SavedCanonicalStaticPlaylist(
     val name: String,
     val recordingIds: List<String>,
     val schemaVersion: Int = 1,
+    /** Null means all available sources; otherwise an exact configured provider. */
+    val sourceProviderKey: String? = null,
 )
 
 @Entity(tableName = "canonical_static_playlist")
@@ -27,6 +29,7 @@ internal data class CanonicalStaticPlaylistEntity(
     val name: String,
     val schemaVersion: Int,
     val recordingIdsJson: String,
+    val sourceProviderKey: String?,
 )
 
 @Dao
@@ -59,6 +62,7 @@ internal class CanonicalStaticPlaylistRepository(
         dao.upsert(CanonicalStaticPlaylistEntity(
             id = value.id, name = value.name.trim(),
             schemaVersion = value.schemaVersion, recordingIdsJson = json.toString(),
+            sourceProviderKey = value.sourceProviderKey,
         ))
     }
 
@@ -80,7 +84,7 @@ internal class CanonicalStaticPlaylistRepository(
             require(members.opt(index) is String) { "Invalid canonical member" }
             members.getString(index)
         }
-        return SavedCanonicalStaticPlaylist(id, name, ids, schemaVersion)
+        return SavedCanonicalStaticPlaylist(id, name, ids, schemaVersion, sourceProviderKey)
             .also(::validate)
     }
 
@@ -91,6 +95,13 @@ internal class CanonicalStaticPlaylistRepository(
             "Invalid playlist id"
         }
         require(value.name.trim().length in 1..80) { "Invalid playlist name" }
+        val provider = value.sourceProviderKey
+        require(provider == null || provider == "local-mediastore" ||
+            (provider.startsWith("opensubsonic:") && provider.length in 15..180 &&
+                provider.substringAfter("opensubsonic:").isNotBlank() &&
+                provider.none { it.isWhitespace() || it.isISOControl() || it == '/' })) {
+            "Invalid canonical playlist source provider"
+        }
         require(value.recordingIds.size <= 50_000) { "Too many playlist members" }
         require(value.recordingIds.size == value.recordingIds.distinct().size) {
             "Repeated RecordingIds are not supported by the canonical queue"
