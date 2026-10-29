@@ -34,6 +34,7 @@ import com.music.bitchord.data.listening.RoomRecordingRatingStore
 import com.music.bitchord.data.listening.RuleBasedSmartPlaylistQuery
 import com.music.bitchord.data.listening.SmartPlaylistV2Query
 import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
+import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
 import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
 import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
@@ -73,6 +74,7 @@ internal sealed interface SmartCollectionActionSource {
     data class SavedDefinition(val id: String) : SmartCollectionActionSource
     data class PreviewQuery(val query: RuleBasedSmartPlaylistQuery) : SmartCollectionActionSource
     data class SavedV2Definition(val id: String) : SmartCollectionActionSource
+    data class SavedStaticPlaylist(val id: String) : SmartCollectionActionSource
     data class PreviewV2Query(val query: SmartPlaylistV2Query, val ownerId: String? = null) : SmartCollectionActionSource
 }
 
@@ -114,6 +116,7 @@ internal class SmartCollectionBatchHandoff(
                 is SmartCollectionActionSource.SavedDefinition -> "saved"
                 is SmartCollectionActionSource.PreviewQuery -> "preview"
                 is SmartCollectionActionSource.SavedV2Definition -> "saved_v2"
+                is SmartCollectionActionSource.SavedStaticPlaylist -> "normal_static"
                 is SmartCollectionActionSource.PreviewV2Query -> "preview_v2"
             },
         )
@@ -209,6 +212,12 @@ private suspend fun currentSmartCollectionIds(
     is SmartCollectionActionSource.PreviewV2Query -> {
         currentSmartPlaylistV2QueryIds(context, source.query, source.ownerId)
     }
+    is SmartCollectionActionSource.SavedStaticPlaylist -> {
+        val repo = CanonicalStaticPlaylistRepository(
+            SmartPlaylistDefinitionDatabase.get(context).staticPlaylistDao(),
+        )
+        repo.list().firstOrNull { it.id == source.id }?.recordingIds
+    }
     }
 }
 
@@ -276,6 +285,7 @@ private suspend fun currentScopedRatedAssetHints(
     val db = SmartPlaylistDefinitionDatabase.get(context)
     val minimum = when (source) {
         is SmartCollectionActionSource.Adaptive -> null
+        is SmartCollectionActionSource.SavedStaticPlaylist -> null
         is SmartCollectionActionSource.PreviewQuery -> source.query.minimumExplicitRating
         is SmartCollectionActionSource.PreviewV2Query ->
             source.query.guaranteedMinimumRatingForAssetHints()
