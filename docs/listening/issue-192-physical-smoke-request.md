@@ -79,3 +79,31 @@ Inspecionar no Galaxy A54:
 
 **Proibido:** merge, release pública, alterações da main ou encerramento
 automático da issue. O APK é somente **Dev Debug** para teste físico.
+
+
+## Smoke físico — playlists normais canônicas e integração na Biblioteca, 29/10/2026
+
+Autorização direta nesta conversa: **“Gere o apk”**.
+
+Disparar o workflow físico da PR draft #193 a partir do estado validado
+`9fb634771b20fac5c936c64deabb217b4e48a9e3`. A
+[Android CI #40880420633](https://github.com/jssantogit/BitChord/actions/runs/40880420633)
+terminou **SUCCESS** nesse código. Esta edição é **somente o gatilho documental**;
+o workflow executará novos testes e `assembleDevDebug` no SHA final.
+
+Checklist para o Galaxy A54:
+
+- Identidade: seleção **Normal/Inteligente**, nome e fluxo de volta sem perda do rascunho.
+- Normal: pesquisa de gravações locais e OpenSubsonic/Navidrome, inclusão e remoção
+  manual, ausência de duplicados, ordem de seleção, botões Subir/Descer, revisão e capas.
+- Salvar playlist vazia/com faixas, reabrir para edição, alterar nome/membros,
+  reproduzir pelo planejamento canônico/Media3, exclusão confirmada.
+- Biblioteca: lista vertical compacta de playlists normais, inteligentes e legadas;
+  expandir para grade de duas colunas; nenhuma seção “Minhas playlists” duplicada.
+- Inteligente: editor de condições, legibilidade no modo escuro, prévia com capas,
+  capa da criação em 224dp, Play/Fila e preservação dos filtros.
+- Troca de conta, referências de fontes, diagnósticos de playback e falhas de arte.
+
+**Escopo:** APK Dev Debug exclusivamente para smoke físico. Sem merge,
+sem alteração da `main`, sem assinatura/release de produção, sem fechamento
+da issue. O código desse build não é uma `main` reconciliada.
