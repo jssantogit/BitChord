@@ -53,7 +53,9 @@ internal fun CanonicalPlaylistDetailScreen(
         value = try {
             when (card) {
                 is LibraryPlaylistCard.CanonicalNormal ->
-                    canonicalNormalPlaylistSelectedRows(context, card.definition.recordingIds)
+                    canonicalNormalPlaylistSelectedRows(
+                        context, card.definition.recordingIds, card.definition.sourceProviderKey,
+                    )
                 is LibraryPlaylistCard.Smart -> {
                     val evaluator = persistentSmartPlaylistPreview(context)
                     val ids = withContext(Dispatchers.IO) {
