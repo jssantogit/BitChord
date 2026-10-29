@@ -702,6 +702,31 @@ internal interface CanonicalCatalogDao {
     suspend fun availableRecordingIdsForProvider(provider: String): List<String>
 
     /**
+     * Bounded normal-playlist picker. Identity comes from the Recording table,
+     * eligibility from an actual asset in one of the CURRENT configured sources.
+     * Search never falls back to provider-native/video IDs or another account.
+     */
+    @Query(
+        """
+        SELECT DISTINCT recording.*
+        FROM catalog_recording AS recording
+        INNER JOIN catalog_media_asset AS asset
+            ON asset.recordingId = recording.id
+        WHERE asset.provider IN (:providerKeys)
+          AND (:term = '' OR
+               recording.title LIKE '%' || :term || '%' COLLATE NOCASE OR
+               recording.artistDisplay LIKE '%' || :term || '%' COLLATE NOCASE)
+        ORDER BY recording.artistDisplay COLLATE NOCASE,
+                 recording.title COLLATE NOCASE, recording.id
+        LIMIT 200
+        """,
+    )
+    suspend fun searchAvailableRecordingsForPlaylist(
+        providerKeys: List<String>,
+        term: String,
+    ): List<RecordingEntity>
+
+    /**
      * Provider-neutral browse projection. It intentionally omits sourceKey and
      * URI so a provider-native track id cannot leak into UI identity/playback.
      */
