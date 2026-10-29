@@ -99,7 +99,7 @@ class A0RetainedCandidateReviewActivity:Activity() {
             "Toque em um arquivo para conferir e autorizar o salvamento. " +
             "Nome, álbum e qualidade são declarações do peer, não garantias " +
             "da gravação. Arquivos já publicados não aparecem aqui.")
-        val actionButtons=mutableListOf<Button>()
+        val actionButtons=mutableListOf<Pair<Int,Button>>()
         val attempted=HashSet<Int>()
         val global=label("Nenhuma transferência iniciada.")
         for(index in initial.manualIndices) {
@@ -117,6 +117,10 @@ class A0RetainedCandidateReviewActivity:Activity() {
             choices.forEachIndexed { position,choice ->
                 val claim=choice.claim
                 val sizeMiB=choice.sizeBytes/1_048_576L
+                val folder=A0CandidateRank.safeDisplayName(
+                    choice.remotePath.replace('\\','/')
+                        .substringBeforeLast('/').substringAfterLast('/')
+                ).take(80)
                 val details=buildString {
                     append(choice.displayName)
                     append("\n")
@@ -127,12 +131,16 @@ class A0RetainedCandidateReviewActivity:Activity() {
                     claim.bitrateKbps?.let { append(" · ");append(it);append(" kbps") }
                     claim.durationSeconds?.let { append(" · ");append(it);append(" s") }
                     append(" · fonte Soulseek")
+                    if(folder.isNotBlank()) {
+                        append("\nPasta/edição declarada: ")
+                        append(folder)
+                    }
                 }
                 val button=Button(this).apply {
                     isAllCaps=false
                     text=details
                 }
-                actionButtons.add(button)
+                actionButtons.add(index to button)
                 layout.addView(button)
                 button.setOnClickListener {
                     if(stopped.get() || busy.get() || index in attempted)return@setOnClickListener
@@ -147,6 +155,7 @@ class A0RetainedCandidateReviewActivity:Activity() {
                             "Faixa: ${row.entry.query}\n\nArquivo: ${choice.displayName}" +
                                 "\nFormato: ${claim.format.uppercase()}" +
                                 "\nTamanho: ${sizeMiB} MiB" +
+                                "\nPasta/edição declarada: $folder" +
                                 "\n\nConfira se a edição corresponde ao álbum solicitado. " +
                                 "O protocolo Soulseek utiliza TCP sem TLS. " +
                                 "Confirme que tem autorização para armazenar este arquivo.")
@@ -155,7 +164,7 @@ class A0RetainedCandidateReviewActivity:Activity() {
                             if(stopped.get() || !busy.compareAndSet(false,true))
                                 return@setPositiveButton
                             attempted.add(index)
-                            actionButtons.forEach { it.isEnabled=false }
+                            actionButtons.forEach { it.second.isEnabled=false }
                             outcome.text="Conectando à fonte selecionada, sem nova busca…"
                             worker.execute {
                                 val status=try {
@@ -211,8 +220,9 @@ class A0RetainedCandidateReviewActivity:Activity() {
                                     if(status!=A0ManualRetainedCandidateTransfer.Status.VERIFY_LIBRARY) {
                                         val remaining=Downloads.claimedSoulseekReviewPlan(
                                             session,token)?.manualIndices.orEmpty()
-                                        actionButtons.forEach { button ->
-                                            button.isEnabled=remaining.isNotEmpty()
+                                        actionButtons.forEach { (slot,button) ->
+                                            button.isEnabled=slot in remaining &&
+                                                slot !in attempted
                                         }
                                         if(remaining.isEmpty())finish()
                                     }
@@ -232,6 +242,8 @@ class A0RetainedCandidateReviewActivity:Activity() {
         stopped.set(true)
         runCatching {transport?.cancel()}
         super.onStop()
+        // Activity backgrounding revokes its one-shot P/F authorization.
+        if(!isFinishing)finish()
     }
 
     override fun onDestroy() {
