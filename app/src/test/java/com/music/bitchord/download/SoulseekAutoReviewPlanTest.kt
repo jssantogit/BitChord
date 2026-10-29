@@ -134,6 +134,54 @@ class SoulseekAutoReviewPlanTest {
                 "Other Release",180))))
     }
 
+    @Test fun reviewCandidatesAreSessionBoundAndCannotAttachToPublishedSlots() {
+        val all=entries(3)
+        val one=sampleChoice("peer-one","Track 2")
+        val two=sampleChoice("peer-two","Track 2")
+        val plan=SoulseekAutoReviewPlan.from(
+            all,listOf(done,review,review),
+            retainedCandidates=mapOf(0 to listOf(one),1 to listOf(one,two)))!!
+        assertTrue(plan.hasRetainedCandidates)
+        assertTrue(plan.candidatesForManual(0).isEmpty())
+        assertEquals(listOf(one,two),plan.candidatesForManual(1))
+        assertTrue(plan.candidatesForManual(2).isEmpty())
+        assertTrue(plan.candidatesForManual(999).isEmpty())
+        assertFalse(plan.toString().contains("peer-one"))
+        assertFalse(plan.rows[1].toString().contains("peer-one"))
+        val updated=plan.withManualPublication(1,all[1].query)!!
+        assertTrue(updated.candidatesForManual(1).isEmpty())
+        assertTrue(updated.candidatesForManual(2).isEmpty())
+    }
+
+    private fun sampleChoice(peer:String,title:String):
+        com.music.bitchord.acquisition.a0.A0ObservedCandidateHandoff.Choice {
+        val quality=com.music.bitchord.acquisition.a0.A0SoulseekQualityProfiles
+            .snapshot(com.music.bitchord.data.settings.DownloadQualityProfile.HIGH_QUALITY)
+        val handoff=com.music.bitchord.acquisition.a0.A0ObservedCandidateHandoff(
+            java.net.Socket(),"local",177,true,
+            searchPhrase="ILLIT - $title",requestedAlbum="Super Real Me",
+            expectedDurationSeconds=181,qualityProfile=quality,
+            collectReleaseShadow=true)
+        handoff.offerParsed(
+            com.music.bitchord.acquisition.a0.A0SoulseekSearchResponse(
+                peer,177,listOf(
+                    com.music.bitchord.acquisition.a0.A0SoulseekSearchFile(
+                        "Music\\\\ILLIT\\\\Super Real Me\\\\ILLIT - $title.mp3",
+                        7_240_000L,"mp3",mapOf(0 to 320,1 to 181))
+                ),emptyList(),true,128_000,0),peer)
+        return handoff.releaseShadowChoices().single()
+    }
+
+    @Test fun malformedRetainedReviewCandidateMapFailsClosed() {
+        val all=entries(2)
+        assertNull(SoulseekAutoReviewPlan.from(
+            all,listOf(review,review),
+            retainedCandidates=mapOf(4 to emptyList())))
+        assertNull(SoulseekAutoReviewPlan.from(
+            all,listOf(review,review),
+            retainedCandidates=mapOf(0 to List(17){sampleChoice("peer-$it","Track 1")})))
+    }
+
     @Test fun largeBatchRetainsEverySlotAndReturnsOnlyUnresolved() {
         val original=entries(64)
         val status=List(64) { index -> if(index%2==0)done else review }
