@@ -312,7 +312,9 @@ internal fun SmartPlaylistV2WizardUi(
     onNormalModeChange: (Boolean) -> Unit = {},
     onNormalSearchChange: (String) -> Unit = {},
     onToggleNormalTrack: (String) -> Unit = {},
+    onMoveNormalTrack: (String, Boolean) -> Unit = { _, _ -> },
     onSaveNormal: () -> Unit = {},
+    onDeleteNormal: () -> Unit = {},
     onPreviewAction: ((SmartPlaylistV2Query, String?, CanonicalCollectionIntent) -> Unit)?,
     currentPreviewQuery: SmartPlaylistV2Query?,
     onManage: () -> Unit,
@@ -330,6 +332,7 @@ internal fun SmartPlaylistV2WizardUi(
     var returnAfterEditor by remember { mutableStateOf(WizardStep.GROUP) }
     var picker by remember { mutableStateOf<String?>(null) }
     var confirmDiscard by remember { mutableStateOf(false) }
+    var confirmDeleteNormal by remember { mutableStateOf(false) }
     val names = savedDefinitions.associate { it.id to it.name }
 
     fun openField(field: SmartPlaylistRuleField) {
@@ -898,22 +901,34 @@ internal fun SmartPlaylistV2WizardUi(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
-                            if (normalSelectedRows.isEmpty()) item {
+                            if (normalSelectedIds.isEmpty()) item {
                                 WizardCard("Sem músicas", "Você pode salvar uma playlist vazia e adicionar músicas depois.")
                             }
-                            items(normalSelectedRows.take(50), key = { it.id }) { row ->
+                            itemsIndexed(normalSelectedRows.take(50), key = { _, row -> row.id }) { index, row ->
                                 Row(Modifier.fillMaxWidth().padding(vertical = 5.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     SmartPlaylistPreviewArtwork(row = row, modifier = Modifier.size(48.dp))
-                                    Column {
-                                        Text(row.title, style = MaterialTheme.typography.titleMedium)
+                                    Column(Modifier.weight(1f)) {
+                                        Text(row.title, style = MaterialTheme.typography.titleMedium,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         Text(row.artist, style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                    Column {
+                                        TextButton(
+                                            enabled = index > 0,
+                                            onClick = { onMoveNormalTrack(row.id, true) },
+                                        ) { Text("Subir") }
+                                        TextButton(
+                                            enabled = index < normalSelectedIds.lastIndex,
+                                            onClick = { onMoveNormalTrack(row.id, false) },
+                                        ) { Text("Descer") }
                                     }
                                 }
                             }
-                            if (normalSelectedRows.size > 50) item {
+                            if (normalSelectedIds.size > 50) item {
                                 Text("Exibindo as primeiras 50 músicas selecionadas.",
                                     style = MaterialTheme.typography.bodySmall)
                             }
@@ -1092,6 +1107,13 @@ internal fun SmartPlaylistV2WizardUi(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                        if (normalMode && editingNormalId != null) {
+                            TextButton(
+                                onClick = { confirmDeleteNormal = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !loading,
+                            ) { Text("Excluir playlist", color = MaterialTheme.colorScheme.error) }
+                        }
                         if (!normalMode) TextButton(onClick = onSaveFilter, enabled = canReview && !loading,
                             modifier = Modifier.fillMaxWidth()) {
                             Text(if (editingFilterId == null) "Salvar como filtro reutilizável"
@@ -1118,6 +1140,23 @@ internal fun SmartPlaylistV2WizardUi(
                 TextButton(onClick = { confirmDiscard = false }) {
                     Text("Continuar editando")
                 }
+            },
+        )
+    }
+
+    if (confirmDeleteNormal) {
+        AlertDialog(
+            onDismissRequest = { confirmDeleteNormal = false },
+            title = { Text("Excluir playlist normal?") },
+            text = { Text("A lista de músicas selecionadas será removida do dispositivo. As músicas originais não serão apagadas.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDeleteNormal = false
+                    onDeleteNormal()
+                }) { Text("Excluir", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteNormal = false }) { Text("Cancelar") }
             },
         )
     }
