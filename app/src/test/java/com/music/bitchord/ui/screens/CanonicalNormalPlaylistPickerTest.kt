@@ -25,6 +25,20 @@ class CanonicalNormalPlaylistPickerTest {
         assertEquals(initial, moveCanonicalStaticMember(initial, "absent", towardStart = true))
     }
 
+    @Test fun browsingAlbumsAndArtistsUsesCanonicalEntityIdsNotDisplayNames() {
+        val album = CanonicalPlaylistBrowseGroup(
+            "release-1", "Get Up", CanonicalPlaylistBrowseType.ALBUMS)
+        val duplicate = album.copy()
+        val edition = CanonicalPlaylistBrowseGroup(
+            "release-2", "Get Up", CanonicalPlaylistBrowseType.ALBUMS)
+        val artist = CanonicalPlaylistBrowseGroup(
+            "artist-1", "NewJeans", CanonicalPlaylistBrowseType.ARTISTS)
+        assertEquals(listOf(album, edition),
+            filterCanonicalPlaylistBrowseGroups(listOf(album, duplicate, edition, artist), "get"))
+        assertEquals(listOf(artist),
+            filterCanonicalPlaylistBrowseGroups(listOf(album, artist), "NEW"))
+    }
+
     @Test fun noDuplicateRecordingIsIntroducedByRepeatedSelection() {
         val first = toggleCanonicalStaticMember(emptyList(), "rec-a")
         val second = toggleCanonicalStaticMember(first, "rec-a")
