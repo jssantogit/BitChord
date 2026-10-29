@@ -106,12 +106,24 @@ class A0AutoCandidateSelectionPolicyTest {
     }
 
     @Test fun exactAlbumWithinOneGenericAudioSubfolderIsStillEligible() {
-        for(folder in listOf("FLAC","CD1","Disc 2","Lossless")) {
+        for(folder in listOf(
+            "FLAC","CD1","Disc 2","Lossless",
+            "AAC","Opus","Ogg","Ogg Vorbis","Vorbis"
+        )) {
             val decision=A0AutoCandidateSelectionPolicy.preview(
                 target,offers("source",album="SUPER REAL ME\\$folder"),profile)
             assertEquals("generic folder $folder beneath exact album",
                 A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,
                 decision.status)
+        }
+    }
+
+    @Test fun newCodecFolderUnderWrongReleaseRemainsManual() {
+        for(folder in listOf("AAC","Opus","Ogg","Ogg Vorbis","Vorbis")) {
+            val selection=A0AutoCandidateSelectionPolicy.preview(
+                target,offers("source",album="Other Album\\$folder"),profile)
+            assertEquals(folder,A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,
+                selection.status)
         }
     }
 

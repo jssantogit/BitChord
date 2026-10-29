@@ -86,7 +86,8 @@ class A0CanonicalAlbumPolicyTest {
     @Test fun artistOrGenericDownloadFoldersAreNotWrongAlbumEvidence() {
         val target=A0CanonicalAlbumPolicy.Target("Blue Sky",expectedArtist="Mira")
         for(folder in listOf("Mira","Music","Downloads","General",
-            "Unknown Album","Other","FLAC","Lossless")) {
+            "Unknown Album","Other","FLAC","Lossless",
+            "AAC","Opus","Ogg","Ogg Vorbis","Vorbis")) {
             val result=policy.assess(target,A0CanonicalAlbumPolicy.Claim(folder,
                 A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
             assertEquals("Folder: "+folder,

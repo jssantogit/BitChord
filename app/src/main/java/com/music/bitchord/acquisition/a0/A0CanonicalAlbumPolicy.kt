@@ -112,6 +112,10 @@ internal object A0CanonicalAlbumPolicy {
     private val genericFolders = setOf(
         "music", "downloads", "general", "unknown", "unknown album",
         "other", "misc", "tracks", "flac", "mp3", "lossless",
+        // Ogg/Opus/AAC can be technical leaf directories, never standalone
+        // proof of release identity. A selection may only skip ONE such
+        // folder when the direct parent is the exact requested album.
+        "ogg", "ogg vorbis", "vorbis", "opus", "aac",
     )
 
     private fun hasDisplayControl(ch: Char): Boolean =
