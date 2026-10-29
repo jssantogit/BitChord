@@ -64,4 +64,38 @@ class A0LocalAudioHeaderEvidenceTest {
         assertEquals(A0CanonicalAcquisitionIntent.Codec.MP3,
             A0LocalAudioHeaderEvidence.inspect(id3)?.codec)
     }
+    private fun oggHeader(opus:Boolean):ByteArray=ByteArray(128).also { data ->
+        "OggS".toByteArray().copyInto(data,0)
+        data[5]=2
+        data[26]=1
+        if(opus) {
+            data[27]=19
+            "OpusHead".toByteArray().copyInto(data,28)
+            data[36]=1
+            data[37]=2
+        }else {
+            data[27]=30
+            data[28]=1
+            "vorbis".toByteArray().copyInto(data,29)
+            data[39]=2
+            data[40]=0x80.toByte();data[41]=0xbb.toByte()
+        }
+    }
+
+    @Test fun oggIdentificationPacketSeparatesOpusAndVorbis() {
+        assertEquals(A0CanonicalAcquisitionIntent.Codec.OPUS,
+            A0LocalAudioHeaderEvidence.inspect(oggHeader(true))?.codec)
+        assertEquals(A0CanonicalAcquisitionIntent.Codec.VORBIS,
+            A0LocalAudioHeaderEvidence.inspect(oggHeader(false))?.codec)
+        assertTrue(A0LocalAudioHeaderEvidence.acceptsExtractorMime(
+            A0CanonicalAcquisitionIntent.Codec.OPUS,"audio/opus"))
+        assertFalse(A0LocalAudioHeaderEvidence.acceptsExtractorMime(
+            A0CanonicalAcquisitionIntent.Codec.VORBIS,"audio/opus"))
+        assertNull(A0LocalAudioHeaderEvidence.inspect(oggHeader(true).also {
+            it[36]=4
+        }))
+        assertNull(A0LocalAudioHeaderEvidence.inspect(oggHeader(false).also {
+            it[40]=0;it[41]=0;it[42]=0;it[43]=0
+        }))
+    }
 }

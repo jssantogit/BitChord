@@ -108,4 +108,22 @@ class A0AutoPostTransferTechnicalGateTest {
         assertEquals(A0AutoPostTransferTechnicalGate.Status.REJECT,
             verify(DownloadQualityProfile.LOSSLESS,"m4a",unsupported).status)
     }
+    @Test fun verifiedOpusAndVorbisRequireBitrateWithoutConfusingContainers() {
+        val opus=decoded(A0CanonicalAcquisitionIntent.Codec.OPUS,"opus",bitrate=160)
+        val vorbis=decoded(A0CanonicalAcquisitionIntent.Codec.VORBIS,"ogg",bitrate=192)
+        assertEquals(A0AutoPostTransferTechnicalGate.Status.TECHNICALLY_PLAUSIBLE,
+            verify(DownloadQualityProfile.HIGH_QUALITY,"opus",opus).status)
+        assertEquals(A0AutoPostTransferTechnicalGate.Status.TECHNICALLY_PLAUSIBLE,
+            verify(DownloadQualityProfile.HIGH_QUALITY,"ogg",vorbis).status)
+        assertEquals(A0AutoPostTransferTechnicalGate.Status.REJECT,
+            verify(DownloadQualityProfile.HIGH_QUALITY,"opus",
+                opus.copy(bitrateKbps=159)).status)
+        assertEquals(A0AutoPostTransferTechnicalGate.Status.REJECT,
+            verify(DownloadQualityProfile.HIGH_QUALITY,"ogg",
+                vorbis.copy(bitrateKbps=191)).status)
+        assertEquals(A0AutoPostTransferTechnicalGate.Status.REJECT,
+            verify(DownloadQualityProfile.LOSSLESS,"opus",opus).status)
+        assertEquals(A0AutoPostTransferTechnicalGate.Status.REJECT,
+            verify(DownloadQualityProfile.HIGH_QUALITY,"ogg",opus).status)
+    }
 }

@@ -232,7 +232,7 @@ internal class A0FreshAutoSearchTransport(
             val snapshot=holder.releaseShadowSnapshot()
             Log.d("BitChord","soulseek_auto_search replies=${snapshot.choices.size}" +
                 " truncated_slots=${snapshot.truncatedSlots.size}")
-            return if(snapshot.choices.isEmpty())
+            return if(snapshot.choices.isEmpty() && snapshot.truncatedSlots.isEmpty())
                 A0AutoDiscoveryCoordinator.SearchResult.NoReply
             else A0AutoDiscoveryCoordinator.SearchResult.Found(
                 snapshot.choices,snapshot.truncatedSlots)
