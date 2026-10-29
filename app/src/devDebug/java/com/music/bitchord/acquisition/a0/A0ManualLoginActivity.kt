@@ -1332,6 +1332,14 @@ class A0ManualLoginActivity : Activity() {
                             activeListener = null
                         }
                     }
+                } catch (_: InterruptedException) {
+                    // onDestroy may call shutdownNow while the 6/12/18-second
+                    // search inbox is blocked. This is cancellation, not an
+                    // uncaught crash or evidence of a failed A3 publication.
+                    Thread.currentThread().interrupt()
+                    finalOutcome=TraceOutcome.CANCELLED
+                    finalReason=A0SmokeTrace.Reason.CANCELLED
+                    result="Busca cancelada. Nenhum novo arquivo autorizado."
                 } catch (_: A0ExperimentalLoginCodec.LoginDenied) {
                     finalOutcome=TraceOutcome.FAILED
                     finalReason = A0SmokeTrace.Reason.LOGIN_DENIED

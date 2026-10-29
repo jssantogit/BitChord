@@ -26,7 +26,10 @@ internal class A0AutoDiscoveryCoordinator(
     }
 
     sealed interface SearchResult {
-        class Found(val choices:List<A0ObservedCandidateHandoff.Choice>):SearchResult
+        class Found(
+            val choices:List<A0ObservedCandidateHandoff.Choice>,
+            val truncatedSlots:Set<Int> = emptySet(),
+        ):SearchResult
         data object NoReply:SearchResult
         /** Auth/account/protocol failure: do NOT automatically reconnect. */
         data object Stop:SearchResult
@@ -117,7 +120,8 @@ internal class A0AutoDiscoveryCoordinator(
                         break
                     }
                     when(result) {
-                        is SearchResult.Found -> pooled.add(result.choices)
+                        is SearchResult.Found ->
+                            pooled.add(result.choices,result.truncatedSlots)
                         SearchResult.NoReply -> Unit
                         SearchResult.Stop -> {
                             append(index,A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW)

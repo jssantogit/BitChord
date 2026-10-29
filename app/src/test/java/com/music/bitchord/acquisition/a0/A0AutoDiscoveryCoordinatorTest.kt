@@ -139,6 +139,20 @@ class A0AutoDiscoveryCoordinatorTest {
         assertEquals(listOf("search:one","one","search:two"),events)
     }
 
+    @Test fun discardedRelevantShadowSlotNeverPublishesEvenWithStrongRemainingClaim() {
+        val search=FakeSearch {
+            A0AutoDiscoveryCoordinator.SearchResult.Found(
+                claims(listOf(entries[0])),setOf(0))
+        }
+        val done=mutableListOf<String>()
+        val result=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            listOf(entries[0]),quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(listOf(A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW),
+            result.batch.results)
+        assertTrue(done.isEmpty())
+    }
+
     @Test fun noExplicitOptInNeverOpensSearchOrTransfer() {
         val search=FakeSearch {
             throw AssertionError("Network must remain OFF")

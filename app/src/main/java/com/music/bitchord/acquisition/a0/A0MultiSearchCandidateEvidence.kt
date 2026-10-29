@@ -48,8 +48,14 @@ internal class A0MultiSearchCandidateEvidence(
     }
 
     @Synchronized
-    fun add(choices:List<A0ObservedCandidateHandoff.Choice>) {
+    fun add(
+        choices:List<A0ObservedCandidateHandoff.Choice>,
+        lostSlots:Set<Int> = emptySet(),
+    ) {
         if(!valid || stopped)return
+        for(index in lostSlots) {
+            if(index in entries.indices)clipped[index]=true
+        }
         // A collector is bounded at 512; distrust larger external lists and
         // signal lost coverage rather than silently treating it as complete.
         if(choices.size>512)clipped.fill(true)

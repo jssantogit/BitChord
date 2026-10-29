@@ -147,6 +147,15 @@ class A0MultiSearchCandidateEvidenceTest {
             evidence.selectionPreview()[0].reason)
     }
 
+    @Test fun upstreamCollectorTruncationIsNotLostInReleasePortfolio() {
+        val state=A0MultiSearchCandidateEvidence(entries,quality)
+        state.add(choices("peer-a","Magnetic",161),lostSlots=setOf(0))
+        assertEquals(A0AutoCandidateSelectionPolicy.Reason.INCOMPLETE_SAMPLE,
+            state.selectionPreview()[0].reason)
+        assertFalse(state.slotEvidence(1)!!.second)
+        assertTrue(state.slotEvidence(0)!!.second)
+    }
+
     @Test fun malformedReleaseEntriesCannotMintAutomaticPermission() {
         val malformed=listOf(entries[0],entries[0])
         val state=A0MultiSearchCandidateEvidence(malformed,quality)

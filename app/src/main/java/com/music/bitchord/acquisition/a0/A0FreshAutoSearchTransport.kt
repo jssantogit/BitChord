@@ -196,7 +196,7 @@ internal class A0FreshAutoSearchTransport(
                 for(at in listOf(6000,12000)) {
                     if(elapsed>=at && marks.add(at)) {
                         val variant=recovery.next(
-                            at.toLong(),holder.hasRelevantCandidateForSearchRecovery(),sent)
+                            at.toLong(),holder.hasAutoReadyCandidateForSearchRecovery(entry,quality),sent)
                         if(variant!=null && !stopped()) {
                             connection.getOutputStream().apply {
                                 write(A0OneShotPublicSearchWire.fileSearch(token,variant))
@@ -229,11 +229,13 @@ internal class A0FreshAutoSearchTransport(
                 return A0AutoDiscoveryCoordinator.SearchResult.Stop
             }
             holder.markReadersStopped()
-            val choices=holder.releaseShadowChoices()
-            Log.d("BitChord","soulseek_auto_search replies=${choices.size}")
-            return if(choices.isEmpty())
+            val snapshot=holder.releaseShadowSnapshot()
+            Log.d("BitChord","soulseek_auto_search replies=${snapshot.choices.size}" +
+                " truncated_slots=${snapshot.truncatedSlots.size}")
+            return if(snapshot.choices.isEmpty())
                 A0AutoDiscoveryCoordinator.SearchResult.NoReply
-            else A0AutoDiscoveryCoordinator.SearchResult.Found(choices)
+            else A0AutoDiscoveryCoordinator.SearchResult.Found(
+                snapshot.choices,snapshot.truncatedSlots)
         }catch(_:Exception) {
             return A0AutoDiscoveryCoordinator.SearchResult.Stop
         }finally {

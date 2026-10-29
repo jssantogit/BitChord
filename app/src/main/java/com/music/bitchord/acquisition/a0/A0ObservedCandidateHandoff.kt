@@ -91,6 +91,9 @@ internal class A0ObservedCandidateHandoff(
     // from the same peer, but the actual manual selector retains max 10/peer.
     private val releaseShadow=ArrayList<Choice>(512)
     private val releaseShadowPerPeer=HashMap<String,Int>()
+    // A later sample must not look complete after the bounded collector
+    // discarded a competing edition or a relevant source.
+    private val releaseShadowLostSlots=BooleanArray(releaseQueries.take(64).size)
     // Only an already-requested release may influence this read-only cache.
     // Matching a file's title is a DISCOVERY hint, not identity proof or
     // permission to transfer. No peer names or paths enter diagnostics.
@@ -377,6 +380,7 @@ internal class A0ObservedCandidateHandoff(
                     else -> null
                 }
                 if(victim!=null) {
+                    releaseSlotHits(victim).forEach { releaseShadowLostSlots[it]=true }
                     releaseShadow.remove(victim)
                     val remainder=checkNotNull(releaseShadowPerPeer[victim.peerUsername])-1
                     if(remainder==0)releaseShadowPerPeer.remove(victim.peerUsername)
@@ -386,6 +390,10 @@ internal class A0ObservedCandidateHandoff(
                     (releaseShadowPerPeer[peer] ?: 0)<64) {
                     releaseShadow.add(observedChoice)
                     releaseShadowPerPeer[peer]=(releaseShadowPerPeer[peer] ?: 0)+1
+                } else {
+                    releaseSlotHits(observedChoice).forEach {
+                        releaseShadowLostSlots[it]=true
+                    }
                 }
             }
             // A single enthusiastic peer cannot displace every other source.
@@ -560,10 +568,41 @@ internal class A0ObservedCandidateHandoff(
     @Synchronized
     fun choices():List<Choice> = if(cancelled||spent)emptyList() else candidates.toList()
 
+    data class ReleaseShadowSnapshot(
+        val choices:List<Choice>,
+        val truncatedSlots:Set<Int>,
+    )
+
     @Synchronized
-    fun releaseShadowChoices():List<Choice> =
-        if(!collectReleaseShadow || cancelled || spent)emptyList()
-        else releaseShadow.toList()
+    fun releaseShadowSnapshot():ReleaseShadowSnapshot =
+        if(!collectReleaseShadow || cancelled || spent)
+            ReleaseShadowSnapshot(emptyList(),emptySet())
+        else ReleaseShadowSnapshot(
+            releaseShadow.toList(),
+            releaseShadowLostSlots.indices.filter { releaseShadowLostSlots[it] }.toSet(),
+        )
+
+    @Synchronized
+    fun releaseShadowChoices():List<Choice> = releaseShadowSnapshot().choices
+
+    /**
+     * The MANUAL primary list can contain plausible but auto-ineligible files.
+     * Only a fully eligible, READY automatic candidate may suppress the bounded
+     * fallback query. A search variant never changes canonical target identity.
+     */
+    @Synchronized
+    fun hasAutoReadyCandidateForSearchRecovery(
+        entry:com.music.bitchord.download.SoulseekBatchPlan.Entry,
+        quality:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
+    ):Boolean {
+        val index=releaseQueries.indexOf(entry.query)
+        if(index<0 || index>=releaseShadowLostSlots.size || cancelled || spent)
+            return false
+        val related=releaseShadow.filter { index in releaseSlotHits(it) }
+        return A0AutoCandidateSelectionPolicy.preview(
+            entry,related,quality,sampleTruncated=releaseShadowLostSlots[index]
+        ).status==A0AutoCandidateSelectionPolicy.Status.PROVISIONAL
+    }
 
     @Synchronized
     fun hasCandidates()=candidates.isNotEmpty()&&!cancelled&&!spent
