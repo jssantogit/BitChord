@@ -83,6 +83,30 @@ class SmartCollectionBatchHandoffTest {
         assertEquals(CanonicalCollectionIntent.ADD_TO_QUEUE, submitted.single().intent)
     }
 
+    @Test fun selectedNormalSourceDoesNotFallBackToAnotherProvider() = runBlocking {
+        val both = CanonicalBrowseLibrary(listOf(
+            CanonicalBrowseTrack(
+                "rec-a", "Title", "Artist", 150_000L, null,
+                listOf(
+                    CanonicalBrowseMediaAsset("local-a", "local-mediastore"),
+                    CanonicalBrowseMediaAsset("remote-a", "opensubsonic:account"),
+                ),
+            ),
+            track("rec-b"),
+        ))
+        assertEquals(listOf("local-a"),
+            canonicalBrowseOnlyProvider(both, "local-mediastore")
+                .tracks.single().availableAssets.map { it.mediaAssetId })
+        assertEquals(listOf("rec-a"),
+            canonicalBrowseOnlyProvider(both, "local-mediastore").tracks.map { it.recordingId })
+        assertEquals(listOf("rec-a", "rec-b"),
+            canonicalBrowseOnlyProvider(both, "opensubsonic:account")
+                .tracks.map { it.recordingId })
+        // An unavailable provider cannot be silently substituted.
+        assertEquals(emptyList<CanonicalBrowseTrack>(),
+            canonicalBrowseOnlyProvider(both, "opensubsonic:revoked").tracks)
+    }
+
     @Test fun staleOrAmbiguousAssetFailsClosedBeforeSubmittingAnyQueueCommand() = runBlocking {
         var dispatches = 0
         val handoff = SmartCollectionBatchHandoff(
