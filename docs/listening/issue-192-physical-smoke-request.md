@@ -51,3 +51,31 @@ altera o comportamento do app. O commit deste gatilho será o SHA do APK,
 e o próprio workflow repetirá os testes e fará o `assembleDevDebug`.
 
 Nenhum merge, release ou alteração da `main` autorizado.
+
+## Smoke físico — fidelidade visual BitChord, 29/10/2026
+
+Novo APK **explicitamente autorizado** pelo usuário: **“Dispare apk”**.
+
+Esta rodada verifica a nova linguagem visual Android implementada após as
+capturas do Galaxy A54: controles próprios em vez de chips e inputs contornados
+Material 3, listas agrupadas para categorias/condições, CTA com AccentRed do
+BitChordTheme, escolhas em folha inferior, capa neutra, primeira condição não
+pré-selecionada, revisão, retorno/rolagem entre etapas e menus de grupos.
+
+Código-base: `d265f26a07d11663644abe237ae151a2cdb47249`.
+CI Android #40798528075: SUCCESS nesse SHA. O commit de disparo acrescenta
+**apenas esta autorização documental** e não modifica código nem temas.
+O próprio workflow testa novamente e compila `assembleDevDebug`; confirmar
+conclusão/upload antes de anunciar APK pronto.
+
+Inspecionar no Galaxy A54:
+- identidade inicial sem regra obrigatória implícita; primeira condição;
+- layout contra specs/tensions e `DESIGN.md`: tipografia, recuos, altura,
+  agrupamento das linhas, botões vermelho/escuro, acesso com teclado;
+- E/OU, NÃO, referência salva, catálogo de categorias, campo e valor;
+- ordenação, folha inferior, botão de revisão e edição do rascunho;
+- prévia real e persistência, fontes sem afirmações falsas, Play/Fila;
+- biblioteca de filtros/playlist, exclusão confirmada e logs.
+
+**Proibido:** merge, release pública, alterações da main ou encerramento
+automático da issue. O APK é somente **Dev Debug** para teste físico.
