@@ -397,6 +397,11 @@ internal fun SmartPlaylistV2WizardUi(
                 when (page) {
                     WizardStep.IDENTITY -> {
                         item {
+                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                PlaylistWizardArtworkPlaceholder()
+                            }
+                        }
+                        item {
                             PlaylistWizardTextEntry(
                                 value = name,
                                 onValueChange = onNameChange,
@@ -717,7 +722,22 @@ internal fun SmartPlaylistV2WizardUi(
                     WizardStep.REVIEW -> {
                         item {
                             WizardCard(name.trim().ifEmpty { "Sem nome" },
-                                "Playlist inteligente · ${smartRuleLeafCount(rule)} condições")
+                                "Playlist inteligente · ${smartRuleLeafCount(rule)} condições") {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    PlaylistWizardArtworkPlaceholder(60.dp)
+                                    Text(
+                                        "A seleção será atualizada conforme as regras " +
+                                            "e as fontes disponíveis.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                            }
                         }
                         item {
                             WizardCard("Fontes do catálogo",

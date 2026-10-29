@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,6 +37,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import com.music.bitchord.ui.theme.AccentRed
 
 /**
@@ -287,5 +289,30 @@ internal fun PlaylistWizardSelectionRow(
             Icon(Icons.Rounded.Check, contentDescription = "Selecionado",
                 tint = AccentRed, modifier = Modifier.size(20.dp))
         }
+    }
+}
+
+/**
+ * A deliberately neutral local cover placeholder. The V2 definition has no
+ * persisted artwork field, so this is NOT a claimed album/track image or an
+ * inert "change cover" button. Artwork editing can become interactive only
+ * after the playlist-art persistence contract exists.
+ */
+@Composable
+internal fun PlaylistWizardArtworkPlaceholder(
+    dimension: Dp = 112.dp,
+) {
+    Box(
+        modifier = Modifier.size(dimension)
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Rounded.LibraryMusic,
+            contentDescription = "Capa padrão da playlist",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(dimension * 0.39f),
+        )
     }
 }
