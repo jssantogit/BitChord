@@ -32,10 +32,36 @@ internal object A0LocalAudioHeaderEvidence {
             mime in setOf("audio/raw","audio/wav","audio/x-wav")
         A0CanonicalAcquisitionIntent.Codec.AAC_ADTS ->
             mime in setOf("audio/mp4a-latm","audio/aac")
+        A0CanonicalAcquisitionIntent.Codec.OPUS ->
+            mime.equals("audio/opus",ignoreCase=true)
+        A0CanonicalAcquisitionIntent.Codec.VORBIS ->
+            mime.equals("audio/vorbis",ignoreCase=true)
     }
 
     fun inspect(bytes:ByteArray):Info? {
         if(bytes.size<12)return null
+        // Ogg container is NOT a codec: validate the first identification
+        // packet before classifying Opus or Vorbis. No filename inference.
+        if(ascii(bytes,0,"OggS")) {
+            if(bytes.size<28 || u8(bytes,4)!=0 || (u8(bytes,5) and 2)==0)
+                return null
+            val segments=u8(bytes,26)
+            if(segments<1 || bytes.size<27+segments)return null
+            val packet=27+segments
+            val firstPacketSize=u8(bytes,27)
+            if(packet+firstPacketSize>bytes.size)return null
+            if(firstPacketSize>=19 && ascii(bytes,packet,"OpusHead") &&
+                u8(bytes,packet+8)==1 && u8(bytes,packet+9) in 1..8)
+                return Info(A0CanonicalAcquisitionIntent.Codec.OPUS,48_000)
+            if(firstPacketSize>=30 && u8(bytes,packet)==1 &&
+                ascii(bytes,packet+1,"vorbis")) {
+                val channels=u8(bytes,packet+11)
+                val rate=le32(bytes,packet+12)
+                if(channels in 1..8 && rate in 8_000L..384_000L)
+                    return Info(A0CanonicalAcquisitionIntent.Codec.VORBIS,rate.toInt())
+            }
+            return null
+        }
         if(ascii(bytes,0,"fLaC")) {
             if(bytes.size<42 || (u8(bytes,4) and 0x7f)!=0 ||
                 u8(bytes,5)!=0 || u8(bytes,6)!=0 || u8(bytes,7)!=34)

@@ -59,12 +59,19 @@ internal object A2LocalAudioPublisher {
             throw IOException("A2 private receipt byte count is not valid")
         }
         if(isCancelled())throw IOException("A2 publication cancelled")
-        val header=ByteArray(16)
-        source.inputStream().use { input ->
-            if(input.read(header)!=header.size)
-                throw IOException("A2 incomplete audio header")
+        val header=ByteArray(128)
+        val count=source.inputStream().use { input ->
+            var read=0
+            while(read<header.size) {
+                val n=input.read(header,read,header.size-read)
+                if(n<0)break
+                if(n==0)continue
+                read+=n
+            }
+            read
         }
-        val mime=classify(header,fileName)
+        if(count<16)throw IOException("A2 incomplete audio header")
+        val mime=classify(header.copyOf(count),fileName)
             ?: throw IOException("A2 unsupported audio signature or extension")
         val pending=destination.createPending(fileName,mime)
         var published=false
@@ -111,7 +118,16 @@ internal object A2LocalAudioPublisher {
         val marker={at:Int,text:String->
             header.copyOfRange(at,at+text.length).contentEquals(text.toByteArray(Charsets.US_ASCII))
         }
+        val oggCodec=if(extension in setOf("opus","ogg"))
+            com.music.bitchord.acquisition.a0.A0LocalAudioHeaderEvidence
+                .inspect(header)?.codec else null
         return when {
+            extension=="opus" &&
+                oggCodec==com.music.bitchord.acquisition.a0.A0CanonicalAcquisitionIntent.Codec.OPUS ->
+                    "audio/opus"
+            extension=="ogg" &&
+                oggCodec==com.music.bitchord.acquisition.a0.A0CanonicalAcquisitionIntent.Codec.VORBIS ->
+                    "audio/ogg"
             extension=="wav" && marker(0,"RIFF") && marker(8,"WAVE")->"audio/x-wav"
             extension=="flac" && marker(0,"fLaC")->"audio/flac"
             // ADTS AAC only; this does NOT grant ISO-BMFF .m4a/ALAC support.

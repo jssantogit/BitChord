@@ -75,12 +75,16 @@ internal object A0AutoCandidateSelectionPolicy {
         A0CanonicalAcquisitionIntent.Codec.FLAC,
         A0CanonicalAcquisitionIntent.Codec.PCM_WAV,
         A0CanonicalAcquisitionIntent.Codec.AAC_ADTS,
+        A0CanonicalAcquisitionIntent.Codec.OPUS,
+        A0CanonicalAcquisitionIntent.Codec.VORBIS,
     )
     private fun codec(format:String)=when(format.lowercase(Locale.ROOT)) {
         "mp3" -> A0CanonicalAcquisitionIntent.Codec.MP3
         "flac" -> A0CanonicalAcquisitionIntent.Codec.FLAC
         "wav" -> A0CanonicalAcquisitionIntent.Codec.PCM_WAV
         "aac" -> A0CanonicalAcquisitionIntent.Codec.AAC_ADTS
+        "opus" -> A0CanonicalAcquisitionIntent.Codec.OPUS
+        "ogg" -> A0CanonicalAcquisitionIntent.Codec.VORBIS
         else -> null
     }
 

@@ -62,6 +62,8 @@ internal object A0AutoPostTransferTechnicalGate {
             A0CanonicalAcquisitionIntent.Codec.PCM_WAV -> "wav"
             A0CanonicalAcquisitionIntent.Codec.MP3 -> "mp3"
             A0CanonicalAcquisitionIntent.Codec.AAC_ADTS -> "aac"
+            A0CanonicalAcquisitionIntent.Codec.OPUS -> "opus"
+            A0CanonicalAcquisitionIntent.Codec.VORBIS -> "ogg"
         }
         if(actualExtension!=canonical || expected!=canonical)
             return Assessment(Status.REJECT,Reason.UNSUPPORTED_CONTAINER)
@@ -80,6 +82,8 @@ internal object A0AutoPostTransferTechnicalGate {
             when(codec) {
                 A0CanonicalAcquisitionIntent.Codec.MP3 -> rate in 32..320
                 A0CanonicalAcquisitionIntent.Codec.AAC_ADTS -> rate in 32..1536
+                A0CanonicalAcquisitionIntent.Codec.OPUS,
+                A0CanonicalAcquisitionIntent.Codec.VORBIS -> rate in 32..512
                 A0CanonicalAcquisitionIntent.Codec.FLAC,
                 A0CanonicalAcquisitionIntent.Codec.PCM_WAV -> rate in 1..100_000
             }
@@ -105,7 +109,9 @@ internal object A0AutoPostTransferTechnicalGate {
             setOf(A0CanonicalAcquisitionIntent.Codec.FLAC,
                 A0CanonicalAcquisitionIntent.Codec.PCM_WAV,
                 A0CanonicalAcquisitionIntent.Codec.MP3,
-                A0CanonicalAcquisitionIntent.Codec.AAC_ADTS)
+                A0CanonicalAcquisitionIntent.Codec.AAC_ADTS,
+                A0CanonicalAcquisitionIntent.Codec.OPUS,
+                A0CanonicalAcquisitionIntent.Codec.VORBIS)
         )
         return when(checked.status) {
             A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED ->

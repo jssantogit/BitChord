@@ -243,7 +243,7 @@ internal class A0ObservedCandidateHandoff(
         publicSeen=(publicSeen+result.files.size).coerceAtMost(100000)
         lockedSeen=(lockedSeen+result.lockedFiles.size).coerceAtMost(100000)
 
-        val validExtensions=if(saveFormatsOnly) setOf("mp3","flac","wav","aac")
+        val validExtensions=if(saveFormatsOnly) setOf("mp3","flac","wav","aac","opus","ogg")
             else setOf("mp3","flac","wav","ogg","m4a","aac","opus")
         val locked=result.lockedFiles.map{it.remoteFilename}.toHashSet()
         for(file in result.files) {
@@ -335,6 +335,8 @@ internal class A0ObservedCandidateHandoff(
                 "flac" -> A0CanonicalAcquisitionIntent.Codec.FLAC
                 "wav" -> A0CanonicalAcquisitionIntent.Codec.PCM_WAV
                 "aac" -> A0CanonicalAcquisitionIntent.Codec.AAC_ADTS
+                "opus" -> A0CanonicalAcquisitionIntent.Codec.OPUS
+                "ogg" -> A0CanonicalAcquisitionIntent.Codec.VORBIS
                 else -> null
             }
             val qualityAssessment=A0DownloadQualityPolicy.evaluate(
@@ -343,7 +345,9 @@ internal class A0ObservedCandidateHandoff(
                 setOf(A0CanonicalAcquisitionIntent.Codec.MP3,
                     A0CanonicalAcquisitionIntent.Codec.FLAC,
                     A0CanonicalAcquisitionIntent.Codec.PCM_WAV,
-                    A0CanonicalAcquisitionIntent.Codec.AAC_ADTS),
+                    A0CanonicalAcquisitionIntent.Codec.AAC_ADTS,
+                    A0CanonicalAcquisitionIntent.Codec.OPUS,
+                    A0CanonicalAcquisitionIntent.Codec.VORBIS),
             )
             val observedChoice=Choice(
                 displayName=displayName,sizeBytes=file.sizeBytes,

@@ -67,6 +67,8 @@ internal object A0AndroidAudioTechnicalProbe {
             A0CanonicalAcquisitionIntent.Codec.PCM_WAV -> "wav"
             A0CanonicalAcquisitionIntent.Codec.MP3 -> "mp3"
             A0CanonicalAcquisitionIntent.Codec.AAC_ADTS -> "aac"
+            A0CanonicalAcquisitionIntent.Codec.OPUS -> "opus"
+            A0CanonicalAcquisitionIntent.Codec.VORBIS -> "ogg"
         }
         if(ext!=expected)return null
 
