@@ -280,6 +280,24 @@ class A3AutomaticIdentityReservationTest {
         assertEquals(A3AcquisitionLedger.Phase.SEARCHING,cold.get(first)?.phase)
     }
 
+    @Test fun manualReviewCanReuseOnlyExactUntouchedAutomaticSlot() {
+        val store=Store()
+        val ledger=A3AcquisitionLedger(store)
+        ledger.reserveAutomaticBatch(listOf(
+            slot(first),slot(second,"rec-two","Artist - Another Track")))
+        assertEquals(first,ledger.reservedForExplicitManualReview(
+            "recording-1","Artist - Track","Album")?.id)
+        try {
+            ledger.reservedForExplicitManualReview(
+                "recording-1","Artist - Wrong Song","Album")
+            fail("mixed canonical identity not accepted")
+        }catch(_:A3AcquisitionLedger.AutomaticIdentityAlreadyReserved) {}
+        ledger.advance(first,A3AcquisitionLedger.Phase.SEARCHING)
+        assertEquals(A3AcquisitionLedger.Phase.SEARCHING,
+            ledger.reservedForExplicitManualReview(
+                "recording-1","Artist - Track","Album")?.phase)
+    }
+
     @Test fun multipleUniqueSlotsReserveInOneDurableCommit() {
         val store=Store();val ledger=A3AcquisitionLedger(store)
         ledger.reserveAutomaticBatch(listOf(
