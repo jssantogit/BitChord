@@ -111,6 +111,42 @@ class A0MultiSearchCandidateEvidenceTest {
         assertFalse(state.snapshot().canTransfer)
     }
 
+    @Test fun elevenTrackAlbumDoesNotMark46RelevantOffersAsIncomplete() {
+        val album=(0 until 11).map { index ->
+            SoulseekBatchPlan.Entry("song-$index",
+                "ILLIT - Magnetic $index","SUPER REAL ME",161)
+        }
+        val evidence=A0MultiSearchCandidateEvidence(album,quality)
+        // Old 512 / 11 allocation clipped this slot at 46 candidates,
+        // forcing INCOMPLETE_SAMPLE even with valid peer source coverage.
+        val list=(0 until 80).flatMap { peer ->
+            choices("peer-$peer","Magnetic 0",161)
+        }
+        assertEquals(80,list.size)
+        evidence.add(list)
+        val snapshot=checkNotNull(evidence.slotEvidence(0))
+        assertEquals(80,snapshot.first.size)
+        assertFalse(snapshot.second)
+        assertEquals(0,evidence.snapshot().blockedSlots)
+    }
+
+    @Test fun boundedPortfolioStillFlagsTrulyIncompleteEvidence() {
+        val album=(0 until 64).map { index ->
+            SoulseekBatchPlan.Entry("song-$index",
+                "ILLIT - Magnetic $index","SUPER REAL ME",161)
+        }
+        val evidence=A0MultiSearchCandidateEvidence(album,quality)
+        val list=(0 until 129).flatMap { peer ->
+            choices("peer-$peer","Magnetic 0",161)
+        }
+        evidence.add(list)
+        val snapshot=checkNotNull(evidence.slotEvidence(0))
+        assertEquals(128,snapshot.first.size)
+        assertTrue("lost relevant tail must be marked",snapshot.second)
+        assertEquals(A0AutoCandidateSelectionPolicy.Reason.INCOMPLETE_SAMPLE,
+            evidence.selectionPreview()[0].reason)
+    }
+
     @Test fun malformedReleaseEntriesCannotMintAutomaticPermission() {
         val malformed=listOf(entries[0],entries[0])
         val state=A0MultiSearchCandidateEvidence(malformed,quality)
