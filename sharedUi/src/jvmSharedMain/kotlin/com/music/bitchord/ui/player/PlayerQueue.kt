@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.player
 
+import com.music.bitchord.ui.components.CanonicalSongRatingStars
+
 import com.music.bitchord.sharedui.resources.*
 import com.music.bitchord.ui.components.ExplicitSongTitle
 
@@ -32,7 +34,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DragHandle
-import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -779,15 +780,13 @@ private fun InlineQueueRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (isCurrent) {
-            Icon(
-                Icons.Rounded.GraphicEq,
-                contentDescription = stringResource(Res.string.now_playing),
-                tint = Color.White,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-        }
+        // The weighted credits surrender width to a fixed trailing star strip.
+        // ExplicitSongTitle ellipsizes earlier instead of pushing stars away.
+        CanonicalSongRatingStars(
+            song = song,
+            modifier = Modifier.padding(start = 8.dp, end = 6.dp),
+            color = Color.White.copy(alpha = 0.8f),
+        )
         if (!locked) {
             Box(
                 modifier = Modifier

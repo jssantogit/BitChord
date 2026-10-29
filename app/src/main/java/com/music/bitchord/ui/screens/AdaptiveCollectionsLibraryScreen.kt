@@ -1,4 +1,6 @@
 package com.music.bitchord.ui.screens
+import com.music.bitchord.ui.components.CanonicalRatingStars
+import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 
 import android.content.Context
 import androidx.compose.foundation.clickable
@@ -300,8 +302,15 @@ private fun AdaptiveCollectionsBody(
                                 onRecordingClick(section.kind, row.recordingId)
                             }) {
                                 Column(Modifier.padding(12.dp)) {
-                                    Text(row.title, style = MaterialTheme.typography.titleMedium,
-                                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                        Text(row.title, modifier = Modifier.weight(1f),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        CanonicalRatingStars(
+                                            LocalCanonicalRatingDisplay.current.byRecordingId[row.recordingId],
+                                            modifier = Modifier.padding(start = 6.dp),
+                                        )
+                                    }
                                     Text(row.artistDisplay, style = MaterialTheme.typography.bodySmall,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text(when (row.reason) {

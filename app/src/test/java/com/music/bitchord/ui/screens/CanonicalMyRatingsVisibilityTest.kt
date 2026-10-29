@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import kotlinx.coroutines.flow.flow
@@ -60,7 +61,9 @@ class CanonicalMyRatingsVisibilityTest {
         compose.onNodeWithText("My ratings").assertIsDisplayed()
         compose.onNodeWithText("Track A").assertIsDisplayed()
         compose.onNodeWithText("Artist A").assertIsDisplayed()
-        compose.onNodeWithText("Rating: 4.5").assertIsDisplayed()
+        // Icon-only presentation: numeric value survives through accessibility.
+        compose.onNodeWithContentDescription("4.5/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Rating: 4.5").assertDoesNotExist()
     }
 
     @Test fun failedRoomReadShowsErrorInsteadOfFalseEmptyState() {

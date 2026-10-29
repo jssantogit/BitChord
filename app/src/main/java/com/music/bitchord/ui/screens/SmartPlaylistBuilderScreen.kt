@@ -1,4 +1,6 @@
 package com.music.bitchord.ui.screens
+import com.music.bitchord.ui.components.CanonicalRatingStars
+import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -442,8 +444,18 @@ internal fun SmartPlaylistBuilderScreen(
         }
         items(preview.orEmpty(), key = { "preview-" + it.recordingId }) { row ->
             Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Text(row.title, style = MaterialTheme.typography.titleMedium)
-                Text(row.artistDisplay, style = MaterialTheme.typography.bodySmall)
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(row.title, style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text(row.artistDisplay, style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                    CanonicalRatingStars(
+                        LocalCanonicalRatingDisplay.current.byRecordingId[row.recordingId],
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                }
                 Text(row.reasons.joinToString(" · ") { reason -> reasonLabels.getValue(reason) },
                     style = MaterialTheme.typography.labelSmall)
             }

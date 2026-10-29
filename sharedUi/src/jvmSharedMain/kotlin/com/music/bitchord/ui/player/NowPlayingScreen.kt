@@ -69,6 +69,7 @@ import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import com.music.bitchord.ui.components.CanonicalSongRatingStars
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -668,6 +669,7 @@ fun NowPlayingScreen(
     autoplayEnabled: Boolean,
     signedIn: Boolean,
     accountName: String?,
+    onEditCanonicalRating: () -> Unit = {},
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -1895,6 +1897,7 @@ fun NowPlayingScreen(
                             credits = {
                                 LandscapeCredits(
                                     song = song,
+                                    onEditCanonicalRating = onEditCanonicalRating,
                                     onOpenMenu = openMenuWithArtwork,
                                     onOpenAlbum = onOpenAlbum,
                                     onOpenArtist = onOpenArtist,
@@ -3267,6 +3270,16 @@ fun NowPlayingScreen(
                                         )
                                     }
                                 }
+                            }
+                            // During Queue the current track is already rated in
+                            // its queue row: do not repeat stars in this header.
+                            if (!queueOpen) {
+                                CanonicalSongRatingStars(
+                                    song = song,
+                                    modifier = Modifier.padding(end = 8.dp),
+                                    color = Color.White.copy(alpha = 0.84f),
+                                    onClick = onEditCanonicalRating,
+                                )
                             }
                             Spacer(Modifier.width(10.dp))
                             // While the lyrics are up the menu glyph becomes the share

@@ -6,6 +6,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.provider.RemoteNumericRating
@@ -63,8 +64,10 @@ class RemoteRatingsPresentationTest {
             }
         }
         compose.onNodeWithText("Remote track").assertIsDisplayed()
-        compose.onNodeWithText("Remote rating: 4/5").assertIsDisplayed()
-        compose.onNodeWithText("OpenSubsonic (remote)").assertIsDisplayed()
+        compose.onNodeWithContentDescription("4/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("OpenSubsonic", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Remote rating: 4/5").assertDoesNotExist()
+        compose.onNodeWithText("OpenSubsonic (remote)").assertDoesNotExist()
         compose.onNodeWithText("No ratings yet. Rate a canonical song from its menu.").assertDoesNotExist()
     }
 
@@ -85,8 +88,10 @@ class RemoteRatingsPresentationTest {
                 )
             }
         }
-        compose.onNodeWithText("Rating: 4.5").assertIsDisplayed()
-        compose.onNodeWithText("Remote rating: 5/5").assertIsDisplayed()
+        compose.onNodeWithContentDescription("4.5/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("5/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Rating: 4.5").assertDoesNotExist()
+        compose.onNodeWithText("Remote rating: 5/5").assertDoesNotExist()
         compose.onNodeWithText("Local and remote ratings differ").assertIsDisplayed()
     }
 
@@ -120,7 +125,7 @@ class RemoteRatingsPresentationTest {
                 )
             }
         }
-        compose.onNodeWithText("Rating: 4.5").assertIsDisplayed()
+        compose.onNodeWithContentDescription("4.5/5", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Remote ratings unavailable").assertIsDisplayed()
     }
 
@@ -140,8 +145,10 @@ class RemoteRatingsPresentationTest {
             }
         }
         compose.onNodeWithText("Remote sources disagree").assertIsDisplayed()
-        compose.onNodeWithText("Remote rating: 3/5").assertIsDisplayed()
-        compose.onNodeWithText("Remote rating: 5/5").assertIsDisplayed()
+        compose.onNodeWithContentDescription("3/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("5/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Remote rating: 3/5").assertDoesNotExist()
+        compose.onNodeWithText("Remote rating: 5/5").assertDoesNotExist()
     }
 
     @Test fun consumerGroupsByProvenCanonicalRecordingAndNeverByTitle() = runBlocking {
@@ -201,7 +208,7 @@ class RemoteRatingsPresentationTest {
             }
         }
         compose.onNodeWithText("Could not load ratings. Try reopening this page.").assertIsDisplayed()
-        compose.onNodeWithText("Remote rating: 4/5").assertIsDisplayed()
+        compose.onNodeWithContentDescription("4/5", substring = true).assertIsDisplayed()
     }
 
     @Test fun partialCanonicalMatchingIsVisibleWithoutGuessingUnknownRecordings() {

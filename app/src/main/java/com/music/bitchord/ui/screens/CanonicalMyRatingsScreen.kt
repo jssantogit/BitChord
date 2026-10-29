@@ -1,5 +1,8 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.ui.components.CanonicalRatingStars
+import com.music.bitchord.ui.components.RatingDisplay
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +17,10 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -196,9 +203,14 @@ internal fun CanonicalMyRatingsScreen(
         state = state,
         remoteState = remoteState,
         onBack = onBack,
-        editingId = editingId,
-        onEdit = { id -> editingId = if (editingId == id) null else id },
+        onEdit = { id -> editingId = id },
     )
+    editingId?.let { canonicalId ->
+        CanonicalRecordingRatingDialog(
+            recordingId = canonicalId,
+            onDismiss = { editingId = null },
+        )
+    }
 }
 
 /** Pure state rendering: testable without a real provider, account or Room singleton. */
@@ -208,7 +220,6 @@ internal fun CanonicalMyRatingsContent(
     remoteState: RemoteRatingsUiState = RemoteRatingsUiState.Disabled,
     onBack: () -> Unit,
     onEdit: (String) -> Unit,
-    editingId: String? = null,
 ) {
     val remoteRows = (remoteState as? RemoteRatingsUiState.Ready)?.rows.orEmpty()
     val remoteByRecording = remoteRows.associateBy { it.recordingId }
@@ -251,30 +262,36 @@ internal fun CanonicalMyRatingsContent(
                     is MyRatingsUiState.Content -> {
                         items(state.items, key = { it.recordingId }) { rating ->
                             Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                                Text(
-                                    rating.title ?: stringResource(Res.string.rediscovery_unavailable),
-                                    style = MaterialTheme.typography.titleMedium,
-                                )
-                                if (rating.artistDisplay != null) {
-                                    Text(rating.artistDisplay, style = MaterialTheme.typography.bodySmall)
+                                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            rating.title ?: stringResource(Res.string.rediscovery_unavailable),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        )
+                                        rating.artistDisplay?.let {
+                                            Text(it, style = MaterialTheme.typography.bodySmall,
+                                                maxLines = 1,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                        }
+                                    }
+                                    MyRatingTrailingStars(
+                                        localValue = rating.value,
+                                        remote = remoteByRecording[rating.recordingId],
+                                    )
                                 }
-                                Text(
-                                    stringResource(Res.string.recording_feedback_current, rating.value.toString()),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                                Text(
-                                    stringResource(Res.string.my_ratings_local_source),
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
                                 remoteByRecording[rating.recordingId]?.let { remote ->
                                     RemoteRatingDetails(remote, localValue = rating.value)
                                 }
                                 if (rating.title != null) {
                                     TextButton(onClick = { onEdit(rating.recordingId) }) {
-                                        Text(stringResource(Res.string.recording_feedback_edit))
-                                    }
-                                    if (editingId == rating.recordingId) {
-                                        CanonicalRecordingFeedbackEntry(rating.recordingId)
+                                        Icon(Icons.Rounded.Star, contentDescription = null,
+                                            modifier = Modifier.size(18.dp))
+                                        Text(
+                                            stringResource(Res.string.recording_feedback_edit),
+                                            modifier = Modifier.padding(start = 6.dp),
+                                        )
                                     }
                                 }
                             }
@@ -292,14 +309,35 @@ internal fun CanonicalMyRatingsContent(
                 if (remoteOnlyRows.isNotEmpty()) {
                     items(remoteOnlyRows, key = { "remote-" + it.recordingId }) { row ->
                         Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                            Text(
-                                row.title ?: stringResource(Res.string.rediscovery_unavailable),
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            row.artistDisplay?.let {
-                                Text(it, style = MaterialTheme.typography.bodySmall)
+                            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        row.title ?: stringResource(Res.string.rediscovery_unavailable),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    )
+                                    row.artistDisplay?.let {
+                                        Text(it, style = MaterialTheme.typography.bodySmall,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    }
+                                }
+                                MyRatingTrailingStars(localValue = null, remote = row)
                             }
                             RemoteRatingDetails(row, localValue = null)
+                            // Remote evidence is read-only; this edits a separate LOCAL
+                            // score for the same verified canonical RecordingId.
+                            if (row.title != null) {
+                                TextButton(onClick = { onEdit(row.recordingId) }) {
+                                    Icon(Icons.Rounded.Star, contentDescription = null,
+                                        modifier = Modifier.size(18.dp))
+                                    Text(
+                                        stringResource(Res.string.recording_feedback_edit),
+                                        modifier = Modifier.padding(start = 6.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -334,22 +372,31 @@ internal fun CanonicalMyRatingsContent(
     }
 }
 
+/**
+ * Fixed right-side star strip(s), keeping raw local and remote evidence
+ * separate when different. Identical remote/local scores display only once.
+ * Pro-venance and numeric scores remain in the star accessibility semantics.
+ */
+@Composable
+private fun MyRatingTrailingStars(localValue: Double?, remote: RemoteRatingUiRow?) {
+    val numericValues = remote?.evidence?.mapNotNull { it.numericValue }?.distinct().orEmpty()
+    Column(
+        modifier = Modifier.padding(start = 8.dp),
+        horizontalAlignment = androidx.compose.ui.Alignment.End,
+    ) {
+        if (numericValues.size == 1) {
+            CanonicalRatingStars(RatingDisplay(localValue = localValue, remoteValue = numericValues.single()))
+        } else {
+            localValue?.let { CanonicalRatingStars(RatingDisplay(localValue = it)) }
+            numericValues.forEach { CanonicalRatingStars(RatingDisplay(remoteValue = it)) }
+        }
+    }
+}
+
 /** Remote evidence is descriptive and never an editor, an inferred score or a mutation. */
 @Composable
 private fun RemoteRatingDetails(row: RemoteRatingUiRow, localValue: Double?) {
-    Text(
-        stringResource(Res.string.my_ratings_remote_source),
-        style = MaterialTheme.typography.labelSmall,
-    )
     val numericValues = row.evidence.mapNotNull { it.numericValue }
-    row.evidence.forEach { evidence ->
-        if (evidence.numericValue != null) {
-            Text(
-                stringResource(Res.string.my_ratings_remote_rating, evidence.numericValue),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-    }
     if (row.evidence.any { it.starred }) {
         Text(stringResource(Res.string.my_ratings_remote_starred))
     }

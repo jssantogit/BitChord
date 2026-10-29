@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.platform.LocalContext
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.playback.androidCanonicalQueueResolver
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -13,17 +14,24 @@ import kotlinx.coroutines.withContext
 /**
  * L9 shared song-actions entry. It is intentionally invisible unless the
  * Playback-owned resolver proves the exact Recording and playable asset.
- * Legacy provider reactions are never exposed alongside this star action.
+ * Legacy provider reactions are never exposed alongside this native star action.
  *
  * No rating is changed by opening, closing, scrolling or switching this menu.
  */
 @Composable
 internal fun CanonicalSongMenuRating(song: Song) {
     val context = LocalContext.current.applicationContext
-    val resolvedId by produceState<String?>(null, context, song) {
+    val cachedId = LocalCanonicalRatingDisplay.current.recordingIdForSong(song)
+    val resolvedId by produceState<String?>(cachedId, context, song, cachedId) {
+        // A verified Catalog MediaAsset works offline for a first local rating.
+        // Don't require a Navidrome request when its local snapshot knows the
+        // canonical recording and the editor will recheck availability on save.
+        if (cachedId != null) {
+            value = cachedId
+            return@produceState
+        }
         value = try {
             withContext(Dispatchers.IO) {
-                // Construct the Catalog-backed resolver off the main thread.
                 CanonicalSongFeedbackTarget(androidCanonicalQueueResolver(context)).recordingId(song)
             }
         } catch (cancelled: CancellationException) {
@@ -34,6 +42,8 @@ internal fun CanonicalSongMenuRating(song: Song) {
         }
     }
     resolvedId?.let { canonicalId ->
+        // The shared SongActionsSheet already provides group separators.
+        // An extra divider here created a visibly doubled band above Edit.
         CanonicalRecordingFeedbackEntry(canonicalId)
     }
 }

@@ -162,6 +162,7 @@ import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.ROW_DIVIDER_INSET
 import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
 import com.music.bitchord.ui.components.SongRow
+import com.music.bitchord.ui.components.CanonicalSongRatingStars
 import com.music.bitchord.ui.components.SearchPlayingBars
 import com.music.bitchord.ui.components.libraryGrid
 import com.music.bitchord.ui.components.lightweightLiquidGlass
@@ -2054,6 +2055,12 @@ private fun CompactSongRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        // The weighted title/artist block truncates before trailing stars.
+        CanonicalSongRatingStars(
+            song = song,
+            modifier = Modifier.padding(start = 8.dp),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         if (downloadedTint != null) {
             DownloadedBadge(song.videoId, downloadedTint)
         }
@@ -2114,6 +2121,12 @@ private fun SuggestedSongRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        // The weighted title/artist block truncates before trailing stars.
+        CanonicalSongRatingStars(
+            song = song,
+            modifier = Modifier.padding(start = 8.dp),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         if (downloadedTint != null) {
             DownloadedBadge(song.videoId, downloadedTint)
         }

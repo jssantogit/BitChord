@@ -1,6 +1,14 @@
 package com.music.bitchord.ui.screens
 
 import android.app.Application
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import com.music.bitchord.ui.components.ActionRow
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Radio
+
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -19,39 +27,154 @@ import org.robolectric.annotation.ConscryptMode
 class CanonicalRecordingFeedbackControlsTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun selectingStarsDoesNotSaveUntilConfirmed() {
+    @Test fun openingAndSelectingStarsNeverWritesUntilSave() {
         val values = mutableListOf<Double>()
-        val clears = mutableListOf<Unit>()
+        var dismissals = 0
         compose.setContent {
-            CanonicalRecordingFeedbackPanel(
-                rating = null, onSetRating = { values += it }, onClear = { clears += Unit },
-            )
+            MaterialTheme {
+                CanonicalRecordingFeedbackPanel(
+                    rating = null,
+                    onSave = { values += it },
+                    onDismiss = { dismissals++ },
+                )
+            }
         }
-        compose.onNodeWithText("Edit rating").performClick()
-        compose.onNodeWithContentDescription("Rating: 5.0").performClick()
-        compose.runOnIdle { assertEquals(emptyList<Double>(), values) }
-        compose.onNodeWithText("Save").performClick()
+        compose.onNodeWithText("User rating").assertIsDisplayed()
+        compose.onNodeWithContentDescription("4 stars").performClick()
         compose.runOnIdle {
-            assertEquals(listOf(5.0), values)
-            assertEquals(0, clears.size)
+            assertEquals(emptyList<Double>(), values)
+            assertEquals(0, dismissals)
+        }
+        compose.onNodeWithText("Save rating").performClick()
+        compose.runOnIdle { assertEquals(listOf(4.0), values) }
+    }
+
+    @Test fun cancelCannotWriteAndDialogNeverExposesClear() {
+        val values = mutableListOf<Double>()
+        var dismissals = 0
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecordingFeedbackPanel(
+                    rating = 4.5,
+                    onSave = { values += it },
+                    onDismiss = { dismissals++ },
+                )
+            }
+        }
+        compose.onNodeWithText("Clear rating").assertDoesNotExist()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.runOnIdle {
+            assertEquals(1, dismissals)
+            assertEquals(emptyList<Double>(), values)
         }
     }
 
-    @Test fun halfStarsAreSelectableAndClearRatingIsNotShown() {
+    @Test fun halfStarIsSelectableAndExistingLocalValueIsPreselected() {
         val values = mutableListOf<Double>()
-        var clears = 0
         compose.setContent {
-            CanonicalRecordingFeedbackPanel(
-                rating = 4.5, onSetRating = { values += it }, onClear = { clears++ },
-            )
+            MaterialTheme {
+                CanonicalRecordingFeedbackPanel(
+                    rating = 2.5,
+                    onSave = { values += it },
+                    onDismiss = {},
+                )
+            }
         }
-        compose.onNodeWithText("Clear rating").assertDoesNotExist()
-        compose.onNodeWithText("Edit rating").performClick()
-        compose.onNodeWithContentDescription("Rating: 4.5").performClick()
-        compose.onNodeWithText("Save").performClick()
-        compose.runOnIdle {
-            assertEquals(listOf(4.5), values)
-            assertEquals(0, clears)
-        }
+        compose.onNodeWithContentDescription("2.5 stars selected").assertIsDisplayed()
+        compose.onNodeWithText("Save rating").performClick()
+        compose.runOnIdle { assertEquals(listOf(2.5), values) }
     }
+
+    @Test fun tappingLeftHalfOfThirdStarAndSavingWritesTwoPointFive() {
+        val values = mutableListOf<Double>()
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecordingFeedbackPanel(
+                    rating = null,
+                    onSave = { values += it },
+                    onDismiss = {},
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("2.5 stars").performClick()
+        compose.runOnIdle { assertEquals(emptyList<Double>(), values) }
+        compose.onNodeWithContentDescription("2.5 stars selected").assertIsDisplayed()
+        compose.onNodeWithText("Save rating").performClick()
+        compose.runOnIdle { assertEquals(listOf(2.5), values) }
+    }
+
+    @Test fun modalDisplaysOnlyCenteredStarsNotRedundantNumbers() {
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecordingFeedbackPanel(
+                    rating = 3.5,
+                    onSave = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("3.5 stars selected").assertIsDisplayed()
+        compose.onNodeWithText("3.5 / 5").assertDoesNotExist()
+        compose.onNodeWithText("— / 5").assertDoesNotExist()
+        compose.onNodeWithText("Clear rating").assertDoesNotExist()
+    }
+
+    @Test fun editRatingUsesSameMenuTextAlignmentAsOtherActions() {
+        compose.setContent {
+            MaterialTheme {
+                Column {
+                    CanonicalRecordingFeedbackAction(onClick = {})
+                    ActionRow(
+                        icon = Icons.Rounded.Radio,
+                        label = "Start radio",
+                        onClick = {},
+                    )
+                }
+            }
+        }
+        val edit = compose.onNodeWithText("Edit rating")
+        val radio = compose.onNodeWithText("Start radio")
+        edit.assertIsDisplayed()
+        radio.assertIsDisplayed()
+        assertEquals(
+            radio.getUnclippedBoundsInRoot().left,
+            edit.getUnclippedBoundsInRoot().left,
+        )
+    }
+
+    @Test fun lateRoomEmissionMustNotEraseAUserSelectionBeforeSave() {
+        val incoming = androidx.compose.runtime.mutableStateOf<Double?>(null)
+        val values = mutableListOf<Double>()
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecordingFeedbackPanel(
+                    rating = incoming.value,
+                    onSave = { values += it },
+                    onDismiss = {},
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("4 stars").performClick()
+        compose.onNodeWithContentDescription("4.0 stars selected").assertIsDisplayed()
+        compose.runOnIdle { incoming.value = 3.0 }
+        compose.onNodeWithContentDescription("4.0 stars selected").assertIsDisplayed()
+        compose.onNodeWithText("Save rating").performClick()
+        compose.runOnIdle { assertEquals(listOf(4.0), values) }
+    }
+
+    @Test fun latestRoomScoreIsPreselectedWhenTheUserHasNotEditedAnything() {
+        val incoming = androidx.compose.runtime.mutableStateOf<Double?>(null)
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecordingFeedbackPanel(
+                    rating = incoming.value,
+                    onSave = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        compose.runOnIdle { incoming.value = 3.5 }
+        compose.onNodeWithContentDescription("3.5 stars selected").assertIsDisplayed()
+    }
+
 }
