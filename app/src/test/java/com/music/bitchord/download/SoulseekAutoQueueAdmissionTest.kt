@@ -28,6 +28,23 @@ class SoulseekAutoQueueAdmissionTest {
             true,true,true,true))
     }
 
+    @Test fun meteredPolicyRefusesAutomaticEnqueueWithSpecificReason() {
+        val entries=listOf(entry())
+        assertEquals(SoulseekAutoQueueAdmission.Refusal.NETWORK_RESTRICTED,
+            SoulseekAutoQueueAdmission.refusal(entries,true,true,true,false))
+        assertFalse(SoulseekAutoQueueAdmission.allows(entries,true,true,true,false))
+        assertNull(SoulseekAutoQueueAdmission.refusal(entries,true,true,true,true))
+    }
+
+    @Test fun duplicateIdsAndMalformedMetadataHaveDifferentRefusalReasons() {
+        assertEquals(SoulseekAutoQueueAdmission.Refusal.DUPLICATE_TRACK_IDS,
+            SoulseekAutoQueueAdmission.refusal(
+                listOf(entry(),entry()),true,true,true,true))
+        assertEquals(SoulseekAutoQueueAdmission.Refusal.INVALID_TRACK_METADATA,
+            SoulseekAutoQueueAdmission.refusal(
+                listOf(entry(query=" ")),true,true,true,true))
+    }
+
     @Test fun malformedIntentMetadataNeverEntersTheServiceQueue() {
         val invalid=listOf(
             entry(query=" "),

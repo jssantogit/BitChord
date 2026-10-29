@@ -2100,8 +2100,14 @@ private fun BitChordApp(
                         Toast.LENGTH_LONG).show()
                 } else {
                     Toast.makeText(context,
-                        "Não foi possível iniciar o lote automático. " +
-                            "Desative a automação para escolher arquivos manualmente.",
+                        if(!AppSettings.downloadsAllowedNow)
+                            "Download automático bloqueado pela opção Somente Wi-Fi " +
+                                "na rede atual. Use uma rede não tarifada ou desative " +
+                                "Somente Wi-Fi nas configurações de Downloads."
+                        else
+                            "Não foi possível iniciar o lote automático. " +
+                                "Confira as faixas e a conta Soulseek; o modo manual " +
+                                "continua disponível.",
                         Toast.LENGTH_LONG).show()
                 }
             } else {
@@ -2159,8 +2165,14 @@ private fun BitChordApp(
                             Toast.LENGTH_LONG).show()
                     } else {
                         Toast.makeText(context,
-                            "Não foi possível iniciar a automação. " +
-                                "Desative-a em Configurações para escolher manualmente.",
+                            if(!AppSettings.downloadsAllowedNow)
+                                "Download automático bloqueado pela opção Somente Wi-Fi " +
+                                    "na rede atual. Use uma rede não tarifada ou desative " +
+                                    "Somente Wi-Fi nas configurações de Downloads."
+                            else
+                                "Não foi possível iniciar o download automático. " +
+                                    "Confira as configurações Soulseek; a seleção manual " +
+                                    "continua disponível.",
                             Toast.LENGTH_LONG).show()
                     }
                 } else {

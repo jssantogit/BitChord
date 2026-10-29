@@ -447,15 +447,21 @@ object Downloads {
     ):Boolean {
         val app=context.applicationContext
         val pilot=BuildConfig.DEBUG && BuildConfig.FLAVOR=="dev"
-        if(!SoulseekAutoQueueAdmission.allows(
-                entries,userRequested=true,optedIn=A0AndroidAutoConsent.enabled(app),
-                devPilot=pilot,downloadsAllowed=AppSettings.downloadsAllowedNow))
+        val refusal=SoulseekAutoQueueAdmission.refusal(
+            entries,userRequested=true,optedIn=A0AndroidAutoConsent.enabled(app),
+            devPilot=pilot,downloadsAllowed=AppSettings.downloadsAllowedNow)
+        if(refusal!=null) {
+            Log.i(TAG,"soulseek_auto enqueue_refused reason=${refusal.name}")
             return false
+        }
         val quality=runCatching {
             A0SoulseekQualityProfiles.snapshot(
                 AppSettings.downloadQualityProfile.value,
                 AppSettings.downloadCustomOptions.value)
-        }.getOrNull() ?: return false
+        }.getOrNull() ?: run {
+            Log.i(TAG,"soulseek_auto enqueue_refused reason=QUALITY_PROFILE_INVALID")
+            return false
+        }
         val captured=entries.map { it.copy() }
         val id="soulseek-auto:"+UUID.randomUUID().toString()
         val album=if(captured.size>1) captured.mapNotNull { it.album }
@@ -475,10 +481,16 @@ object Downloads {
         var displacedReviews=emptyMap<String,SoulseekAutoReviewPlan>()
         synchronized(lock) {
             // Do not overlap a manual recovery P/F with a new automatic batch.
-            if(openManualReviews.hasOpen)return false
+            if(openManualReviews.hasOpen) {
+                Log.i(TAG,"soulseek_auto enqueue_refused reason=MANUAL_REVIEW_ACTIVE")
+                return false
+            }
             // Even after the result is cleared, evicted or cancelled, do not
             // automatically repeat the same canonical audio in this process.
-            if(!autoAttemptGuard.reserve(captured))return false
+            if(!autoAttemptGuard.reserve(captured)) {
+                Log.i(TAG,"soulseek_auto enqueue_refused reason=DUPLICATE_OR_CAPACITY")
+                return false
+            }
             // Hide stale recovery pickers immediately. If Android refuses to
             // start the service, restore these exact reports atomically.
             val change=SoulseekAutoReviewSupersession.suppress(
@@ -524,8 +536,10 @@ object Downloads {
                     false to claimed
                 }
             }
-            if(rolledBack)
+            if(rolledBack) {
+                Log.i(TAG,"soulseek_auto enqueue_refused reason=SERVICE_START_REJECTED")
                 fail(id,"Não foi possível iniciar o serviço de downloads.")
+            }
             // If another Service claimed the job, the download was accepted.
             // If it already settled, do not overwrite its authoritative row.
             alreadyRunning
