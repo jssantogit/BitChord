@@ -33,6 +33,10 @@ internal class SoulseekManualReviewLeaseGate {
         return true
     }
 
+    /** Peer handles are exposed only to the Activity which consumed token. */
+    @Synchronized fun ownsClaimed(sessionId:String,token:String):Boolean =
+        leases[sessionId]?.let { it.token==token && it.claimed }==true
+
     /** A different, recreated or stale Activity cannot release the worker. */
     @Synchronized fun close(sessionId:String,token:String):Boolean {
         if(leases[sessionId]?.token!=token)return false
