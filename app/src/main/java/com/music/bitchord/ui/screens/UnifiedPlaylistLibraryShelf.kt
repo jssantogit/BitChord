@@ -37,6 +37,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
+import com.music.bitchord.data.listening.SavedCanonicalStaticPlaylist
+import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
 import com.music.bitchord.data.model.ShelfItem
@@ -58,6 +60,10 @@ internal sealed interface LibraryPlaylistCard {
         val definition: SavedSmartPlaylistV2Definition,
     ) : LibraryPlaylistCard {
         override val id: String get() = "v2:" + definition.id
+        override val title: String get() = definition.name
+    }
+    data class CanonicalNormal(val definition: SavedCanonicalStaticPlaylist) : LibraryPlaylistCard {
+        override val id: String get() = "normal:" + definition.id
         override val title: String get() = definition.name
     }
     data class Normal(val shelfItem: ShelfItem) : LibraryPlaylistCard {
@@ -82,8 +88,10 @@ internal fun UnifiedPlaylistLibraryShelf(
     normalPlaylists: List<ShelfItem>,
     onNewSmartPlaylist: () -> Unit,
     onOpenSmartPlaylist: (String) -> Unit,
+    onOpenCanonicalNormalPlaylist: (String) -> Unit,
     onOpenNormalPlaylist: (ShelfItem) -> Unit,
     onSmartAction: (String, CanonicalCollectionIntent) -> Unit,
+    onCanonicalNormalAction: (String, CanonicalCollectionIntent) -> Unit,
 ) {
     val context = LocalContext.current.applicationContext
     val repo = remember(context) {
@@ -91,7 +99,25 @@ internal fun UnifiedPlaylistLibraryShelf(
             SmartPlaylistDefinitionDatabase.get(context).v2DefinitionDao(),
         )
     }
+    val normalRepo = remember(context) {
+        CanonicalStaticPlaylistRepository(
+            SmartPlaylistDefinitionDatabase.get(context).staticPlaylistDao(),
+        )
+    }
     var failed by remember { mutableStateOf(false) }
+    var normalFailed by remember { mutableStateOf(false) }
+    val canonicalNormal by produceState(
+        initialValue = emptyList<SavedCanonicalStaticPlaylist>(), key1 = normalRepo,
+    ) {
+        try {
+            normalRepo.observe().collect {
+                value = it
+                normalFailed = false
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) { normalFailed = true }
+    }
     val smart by produceState(initialValue = emptyList<SavedSmartPlaylistV2Definition>(), key1 = repo) {
         try {
             repo.observe().collect {
@@ -104,8 +130,9 @@ internal fun UnifiedPlaylistLibraryShelf(
     }
     // Stable IDs make editing, queueing and ordering independent of display
     // names; only locally saved normal playlists are included in this slot.
-    val cards = remember(smart, normalPlaylists) {
+    val cards = remember(smart, canonicalNormal, normalPlaylists) {
         smart.map { LibraryPlaylistCard.Smart(it) } +
+            canonicalNormal.map { LibraryPlaylistCard.CanonicalNormal(it) } +
             normalPlaylists.filter { it.browseId?.startsWith("local:playlist:") == true }
                 .map { LibraryPlaylistCard.Normal(it) }
     }
@@ -136,6 +163,11 @@ internal fun UnifiedPlaylistLibraryShelf(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error)
         }
+        if (normalFailed) {
+            Text("Não foi possível carregar playlists normais canônicas.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error)
+        }
         if (cards.isEmpty()) {
             Text("Suas playlists aparecerão aqui.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -150,11 +182,17 @@ internal fun UnifiedPlaylistLibraryShelf(
                                 onOpenSmartPlaylist(card.definition.id)
                             is LibraryPlaylistCard.Normal ->
                                 onOpenNormalPlaylist(card.shelfItem)
+                            is LibraryPlaylistCard.CanonicalNormal ->
+                                onOpenCanonicalNormalPlaylist(card.definition.id)
                         }
                     }
-                    val playCard: (() -> Unit)? = if (card is LibraryPlaylistCard.Smart) {
-                        { onSmartAction(card.definition.id, CanonicalCollectionIntent.PLAY_NOW) }
-                    } else null
+                    val playCard: (() -> Unit)? = when (card) {
+                        is LibraryPlaylistCard.Smart ->
+                            { { onSmartAction(card.definition.id, CanonicalCollectionIntent.PLAY_NOW) } }
+                        is LibraryPlaylistCard.CanonicalNormal ->
+                            { { onCanonicalNormalAction(card.definition.id, CanonicalCollectionIntent.PLAY_NOW) } }
+                        is LibraryPlaylistCard.Normal -> null
+                    }
                     if (expanded) {
                         UnifiedPlaylistTile(
                             card = card,
@@ -175,7 +213,7 @@ internal fun UnifiedPlaylistLibraryShelf(
             }
         }
         PlaylistWizardSecondaryAction(
-            label = "+ Nova playlist inteligente",
+            label = "+ Nova playlist",
             onClick = onNewSmartPlaylist,
         )
     }
