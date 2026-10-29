@@ -252,7 +252,9 @@ object Downloads {
         val first=entries.first()
         val intent=Intent().setClassName(
             context.packageName,
-            "com.music.bitchord.acquisition.a0.A0ManualLoginActivity",
+            if(plan.hasRetainedCandidates)
+                "com.music.bitchord.acquisition.a0.A0RetainedCandidateReviewActivity"
+            else "com.music.bitchord.acquisition.a0.A0ManualLoginActivity",
         ).putExtra("bitchord.soulseek.manual.query",first.query)
             .putExtra("bitchord.soulseek.manual.album",first.album)
             .putExtra("bitchord.soulseek.manual.duration_seconds",
@@ -304,6 +306,27 @@ object Downloads {
         openManualReviews.claim(sessionId,token)
     }
 
+    /**
+     * The Activity receives only a session/token in its Intent. Peer handles
+     * stay in RAM and are readable exclusively while that token is claimed.
+     * Never store them in savedInstanceState, diagnostics, or a second cache.
+     */
+    internal fun claimedSoulseekReviewPlan(
+        sessionId:String,token:String,
+    ):SoulseekAutoReviewPlan? = synchronized(lock) {
+        if(!openManualReviews.ownsClaimed(sessionId,token) ||
+            autoRequests.isNotEmpty() || sessionId in running ||
+            sessionId in pending)return@synchronized null
+        _autoReviews.value[sessionId]?.takeIf { it.manualAllowed }
+    }
+
+    internal fun claimedSoulseekReviewSong(
+        sessionId:String,token:String,originalIndex:Int,
+    ):Song? = synchronized(lock) {
+        if(!openManualReviews.ownsClaimed(sessionId,token))return@synchronized null
+        _autoTrackRows.value[sessionId]?.getOrNull(originalIndex)?.song
+    }
+
     /** Only the originating Activity may release its lease after A3 exits. */
     internal fun closeSoulseekManualReview(sessionId:String,token:String) {
         synchronized(lock) {
@@ -326,6 +349,7 @@ object Downloads {
             val next=previous.withManualPublication(
                 originalIndex,originalQuery) ?: return false
             if(_autoReviews.compareAndSet(old,old + (sessionId to next))) {
+                updateAutoTrack(sessionId,originalIndex,AutoTrackStage.SAVED)
                 if(next.published==next.rows.size) {
                     DownloadSession.done(sessionId)
                     clear(sessionId)
