@@ -896,16 +896,34 @@ internal fun SmartPlaylistV2WizardUi(
                             item {
                                 WizardCard(name.trim().ifEmpty { "Sem nome" },
                                     "Playlist normal · ${normalSelectedIds.size} músicas") {
-                                    Text("Os arquivos serão revalidados antes da reprodução.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    ) {
+                                        val cover = normalSelectedRows.firstOrNull()
+                                        if (cover != null) {
+                                            SmartPlaylistPreviewArtwork(
+                                                row = cover,
+                                                modifier = Modifier.size(72.dp),
+                                            )
+                                        } else {
+                                            PlaylistWizardArtworkPlaceholder(72.dp)
+                                        }
+                                        Text(
+                                            "Músicas na ordem em que foram adicionadas.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                    }
                                 }
                             }
                             if (normalSelectedIds.isEmpty()) item {
                                 WizardCard("Sem músicas", "Você pode salvar uma playlist vazia e adicionar músicas depois.")
                             }
-                            itemsIndexed(normalSelectedRows.take(50), key = { _, row -> row.id }) { index, row ->
-                                Row(Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                            items(normalSelectedRows.take(50), key = { it.id }) { row ->
+                                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     SmartPlaylistPreviewArtwork(row = row, modifier = Modifier.size(48.dp))
@@ -915,16 +933,6 @@ internal fun SmartPlaylistV2WizardUi(
                                         Text(row.artist, style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                    Column {
-                                        TextButton(
-                                            enabled = index > 0,
-                                            onClick = { onMoveNormalTrack(row.id, true) },
-                                        ) { Text("Subir") }
-                                        TextButton(
-                                            enabled = index < normalSelectedIds.lastIndex,
-                                            onClick = { onMoveNormalTrack(row.id, false) },
-                                        ) { Text("Descer") }
                                     }
                                 }
                             }
