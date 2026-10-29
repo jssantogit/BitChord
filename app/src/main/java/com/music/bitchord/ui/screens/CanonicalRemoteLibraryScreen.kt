@@ -653,7 +653,7 @@ private fun CanonicalTrackRow(
 }
 
 @Composable
-private fun RemoteTrackArtwork(
+internal fun RemoteTrackArtwork(
     mediaAssetId: String?,
     artworkRevision: String?,
     title: String,

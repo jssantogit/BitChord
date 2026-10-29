@@ -45,6 +45,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.CanonicalLocalLibrary
 import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Filter
@@ -93,7 +94,15 @@ private fun newRule(): SmartPlaylistRule = SmartPlaylistRule.Comparison(
 private enum class SmartPlaylistManageTab { PLAYLISTS, FILTERS, CLASSIC }
 private data class PendingSmartDeletion(val id: String, val name: String, val isFilter: Boolean)
 
-internal data class V2DisplayRow(val id: String, val title: String, val artist: String)
+internal data class V2DisplayRow(
+    val id: String,
+    val title: String,
+    val artist: String,
+    // Only a MediaAsset linked to this exact RecordingId and an active source.
+    val localArtworkUri: String? = null,
+    val remoteMediaAssetId: String? = null,
+    val remoteArtworkRevision: String? = null,
+)
 
 /**
  * Initial Android V2 editing surface. Legacy playlists remain available via
@@ -210,12 +219,44 @@ internal fun SmartPlaylistV2BuilderScreen(
         ownerId: String? = editingId,
     ): List<V2DisplayRow> = withContext(Dispatchers.IO) {
             val matched = evaluator.preview(parsed, ownerId)
-            val known = matched.map { it.recordingId }.chunked(400)
+            val ids = matched.map { it.recordingId }
+            val accountId = SharedPrefsOpenSubsonicAccountPersistence(
+                context.applicationContext,
+            ).read()?.accountId
+            val providerKeys = listOfNotNull(
+                CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER,
+                accountId?.let { "opensubsonic:$it" },
+            )
+            val known = ids.chunked(400)
                 .flatMap { catalog.recordingsByIds(it) }
                 .associateBy { it.id }
+            // Lookup stays bounded to IDs selected by the existing evaluator.
+            // No title/artist heuristic and no whole-library artwork scan.
+            val assets = ids.chunked(400).flatMap {
+                catalog.browseAssetsForRecordingIds(providerKeys, it)
+            }.filter { it.artworkUri?.isNotBlank() == true }
+                .groupBy { it.recordingId }
             matched.mapNotNull { item ->
                 val info = known[item.recordingId] ?: return@mapNotNull null
-                V2DisplayRow(info.id, info.title, info.artistDisplay)
+                val linked = assets[item.recordingId].orEmpty()
+                val local = linked.firstOrNull {
+                    it.providerKey == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER &&
+                        (it.artworkUri?.startsWith("content://") == true ||
+                         it.artworkUri?.startsWith("file://") == true ||
+                         it.artworkUri?.startsWith("https://") == true)
+                }
+                val remote = linked.firstOrNull {
+                    it.providerKey.startsWith("opensubsonic:") &&
+                        it.providerKey == accountId?.let { id -> "opensubsonic:$id" }
+                }
+                V2DisplayRow(
+                    id = info.id,
+                    title = info.title,
+                    artist = info.artistDisplay,
+                    localArtworkUri = local?.artworkUri,
+                    remoteMediaAssetId = if (local == null) remote?.mediaAssetId else null,
+                    remoteArtworkRevision = if (local == null) remote?.artworkUri else null,
+                )
             }
         }
 

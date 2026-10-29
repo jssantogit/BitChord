@@ -886,20 +886,10 @@ internal fun SmartPlaylistV2WizardUi(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                // A neutral artwork placeholder, not an invented
-                                // cover or an unverified release image association.
-                                Surface(
+                                SmartPlaylistPreviewArtwork(
+                                    row = row,
                                     modifier = Modifier.size(48.dp),
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Rounded.MusicNote,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(24.dp))
-                                    }
-                                }
+                                )
                                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                     Text(row.title,
                                         style = MaterialTheme.typography.titleMedium,
