@@ -75,6 +75,36 @@ class SmartPlaylistV2WizardComposeTest {
         compose.runOnIdle { assertEquals(1, confirmed) }
     }
 
+    @Test fun newPlaylistDoesNotClaimAnAutomaticPlaybackRule() {
+        val placeholder = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
+                SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+                1.0,
+            ),
+        ))
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Nova seleção",
+                rule = placeholder, hasConfiguredRules = false,
+                sort = SmartPlaylistV2Sort.RATING_DESC,
+                limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null,
+                savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {},
+                onSortChange = {}, onLimitChange = {}, onSeedChange = {},
+                onPreview = {}, onSave = {}, onSaveFilter = {},
+                onPreviewAction = null, currentPreviewQuery = null,
+                onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithText("Nenhuma condição adicionada").assertExists()
+        compose.onNodeWithText("Adicionar primeira condição", substring = true).performClick()
+        compose.onNodeWithText("Adicionar condição").assertExists()
+    }
+
     @Test fun editorStartsWithIdentityAndKeepsRuleEngineOutOfTheMainForm() {
         val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
             SmartPlaylistRule.Comparison(

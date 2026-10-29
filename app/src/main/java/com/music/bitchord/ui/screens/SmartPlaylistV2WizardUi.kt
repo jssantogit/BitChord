@@ -276,6 +276,7 @@ private fun <T> WizardChoiceDialog(
 internal fun SmartPlaylistV2WizardUi(
     name: String,
     rule: SmartPlaylistRule,
+    hasConfiguredRules: Boolean = true,
     sort: SmartPlaylistV2Sort,
     limit: String,
     seed: String,
@@ -376,7 +377,7 @@ internal fun SmartPlaylistV2WizardUi(
         LazyListState()
     }
     val canContinue = name.trim().isNotEmpty() && name.length <= 80
-    val canReview = canContinue && runCatching {
+    val canReview = hasConfiguredRules && canContinue && runCatching {
         SmartPlaylistV2Query(rule, sort, limit.toInt(), seed.toInt())
     }.isSuccess
 
@@ -461,7 +462,8 @@ internal fun SmartPlaylistV2WizardUi(
                         // Não apresentar linguagem técnica de implementação ao usuário.
                     }
                     WizardStep.RULES -> {
-                        val root = rule as? SmartPlaylistRule.Group
+                        val root = if (hasConfiguredRules)
+                            rule as? SmartPlaylistRule.Group else null
                         item {
                             WizardCard("Combinação entre grupos",
                                 "Como os blocos abaixo se relacionam") {
@@ -470,7 +472,14 @@ internal fun SmartPlaylistV2WizardUi(
                                 } else Text("A playlist importada tem uma condição principal.")
                             }
                         }
-                        val children = root?.children ?: listOf(rule)
+                        val children = if (!hasConfiguredRules) emptyList()
+                            else root?.children ?: listOf(rule)
+                        if (!hasConfiguredRules) item {
+                            WizardCard(
+                                "Nenhuma condição adicionada",
+                                "Escolha a primeira regra para começar a playlist.",
+                            )
+                        }
                         itemsIndexed(children, key = { index, _ -> "group-$index" }) { index, child ->
                             val path = if (root == null) emptyList() else listOf(index)
                             WizardCard(
@@ -487,11 +496,13 @@ internal fun SmartPlaylistV2WizardUi(
                         }
                         item {
                             PlaylistWizardSecondaryAction(
-                                label = "+ Adicionar grupo",
-                                enabled = root != null && root.children.size < 64,
+                                label = if (hasConfiguredRules)
+                                    "+ Adicionar grupo" else "+ Adicionar primeira condição",
+                                enabled = !hasConfiguredRules ||
+                                    (root != null && root.children.size < 64),
                                 onClick = {
                                     targetGroupPath = emptyList()
-                                    addingGroup = true
+                                    addingGroup = hasConfiguredRules
                                     search = ""
                                     page = WizardStep.CATEGORIES
                                 },
@@ -933,7 +944,10 @@ internal fun SmartPlaylistV2WizardUi(
                             onClick = {
                                 val added: SmartPlaylistRule =
                                     if (negated) SmartPlaylistRule.Not(draft) else draft
-                                val updated = if (editingPath != null) {
+                                val updated = if (!hasConfiguredRules) {
+                                    SmartPlaylistRule.Group(
+                                        SmartPlaylistRuleJoin.ALL, listOf(added))
+                                } else if (editingPath != null) {
                                     smartRuleReplaceAt(rule, editingPath!!, added)
                                 } else if (addingGroup) {
                                     smartRuleAppendAt(rule, emptyList(),

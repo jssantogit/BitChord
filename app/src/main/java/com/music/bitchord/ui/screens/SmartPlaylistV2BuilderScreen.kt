@@ -133,6 +133,8 @@ internal fun SmartPlaylistV2BuilderScreen(
     var rule by remember { mutableStateOf<SmartPlaylistRule>(
         SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(newRule())),
     ) }
+    // The AST needs one child; never treat this seed as a chosen rule.
+    var hasConfiguredRules by remember { mutableStateOf(false) }
     var sort by remember { mutableStateOf(SmartPlaylistV2Sort.RATING_DESC) }
     var limit by remember { mutableStateOf("100") }
     var seed by remember { mutableStateOf("0") }
@@ -188,6 +190,7 @@ internal fun SmartPlaylistV2BuilderScreen(
         editingFilterId = null
         name = ""
         rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(newRule()))
+        hasConfiguredRules = false
         sort = SmartPlaylistV2Sort.RATING_DESC
         limit = "100"
         seed = "0"
@@ -325,6 +328,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                 SmartPlaylistV2WizardUi(
                     name = name,
                     rule = rule,
+                    hasConfiguredRules = hasConfiguredRules,
                     sort = sort,
                     limit = limit,
                     seed = seed,
@@ -336,7 +340,13 @@ internal fun SmartPlaylistV2BuilderScreen(
                     editingFilterId = editingFilterId,
                     savedDefinitions = saved.filterNot { it.id == editingId },
                     onNameChange = { name = it },
-                    onRuleChange = { rule = it; preview = null; previewQuery = null; error = null },
+                    onRuleChange = {
+                        rule = it
+                        hasConfiguredRules = true
+                        preview = null
+                        previewQuery = null
+                        error = null
+                    },
                     onSortChange = { sort = it; preview = null; previewQuery = null },
                     onLimitChange = { limit = it; preview = null; previewQuery = null },
                     onSeedChange = { seed = it; preview = null; previewQuery = null },
@@ -475,6 +485,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 editingFilterId = filter.id
                                 name = filter.name
                                 rule = filter.rules
+                            hasConfiguredRules = true
                                 preview = null
                                 previewQuery = null
                                 error = null
@@ -489,6 +500,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 editingFilterId = null
                                 name = copy.name
                                 rule = copy.query.rules
+                            hasConfiguredRules = true
                                 sort = copy.query.sort
                                 limit = copy.query.limit.toString()
                                 seed = copy.query.randomSeed.toString()
@@ -512,6 +524,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                             editingId = null
                                             editingFilterId = null
                                             rule = filter.rules
+                            hasConfiguredRules = true
                                             preview = null
                                             previewQuery = null
                                             error = null
@@ -527,6 +540,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                                 editorEpoch++
                                                 editingFilterId = null
                                                 rule = combined
+                            hasConfiguredRules = true
                                                 preview = null
                                                 previewQuery = null
                                                 error = null
@@ -581,6 +595,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 editingFilterId = null
                                 name = item.name
                                 rule = item.query.rules
+                            hasConfiguredRules = true
                                 sort = item.query.sort
                                 limit = item.query.limit.toString()
                                 seed = item.query.randomSeed.toString()
@@ -644,6 +659,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                             editingFilterId = null
                             name = copy.name
                             rule = copy.query.rules
+                            hasConfiguredRules = true
                             sort = copy.query.sort
                             limit = copy.query.limit.toString()
                             seed = copy.query.randomSeed.toString()
