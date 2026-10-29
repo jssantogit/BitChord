@@ -312,6 +312,7 @@ internal fun SmartPlaylistV2WizardUi(
     normalSourceProviderKey: String? = null,
     availableSourceKeys: List<String> = emptyList(),
     onNormalSourceChange: (String?) -> Unit = {},
+    onSmartSourceChange: (String?) -> Unit = {},
     normalBrowseType: CanonicalPlaylistBrowseType = CanonicalPlaylistBrowseType.TRACKS,
     normalBrowseGroup: CanonicalPlaylistBrowseGroup? = null,
     normalGroups: List<CanonicalPlaylistBrowseGroup> = emptyList(),
@@ -509,11 +510,36 @@ internal fun SmartPlaylistV2WizardUi(
                                 }
                             } else {
                                 WizardCard(
-                                    "Fontes do catálogo",
-                                    "A origem das músicas é definida pelas regras desta playlist.",
+                                    "Fonte da playlist",
+                                    "Esta escolha limita todas as condições, inclusive grupos E/OU.",
                                 ) {
-                                    Text(smartRuleSourceSummary(rule),
-                                        style = MaterialTheme.typography.bodySmall)
+                                    val selected = if (hasConfiguredRules)
+                                        smartRuleGlobalSource(rule) else null
+                                    PlaylistWizardSelectionRow(
+                                        label = "Todas as fontes",
+                                        selected = selected == null,
+                                        onClick = { onSmartSourceChange(null) },
+                                    )
+                                    PlaylistWizardSelectionRow(
+                                        label = "Música local",
+                                        selected = selected == "local",
+                                        onClick = { onSmartSourceChange("local") },
+                                    )
+                                    if (availableSourceKeys.any {
+                                        it.startsWith("opensubsonic:")
+                                    }) {
+                                        PlaylistWizardSelectionRow(
+                                            label = "Servidor (Navidrome)",
+                                            selected = selected == "opensubsonic",
+                                            onClick = { onSmartSourceChange("opensubsonic") },
+                                        )
+                                    } else if (selected == "opensubsonic") {
+                                        Text(
+                                            "Servidor selecionado, mas nenhuma conta está conectada.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.error,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1085,11 +1111,15 @@ internal fun SmartPlaylistV2WizardUi(
                             }
                         }
                         item {
-                            WizardCard("Fontes do catálogo",
-                                "Biblioteca canônica da conta ativa e arquivos locais disponíveis") {
-                                Text(smartRuleSourceSummary(rule),
-                                    style = MaterialTheme.typography.bodySmall)
-                            }
+                            WizardCard(
+                                "Fonte da playlist",
+                                when (smartRuleGlobalSource(rule)) {
+                                    "local" -> "Somente música local"
+                                    "opensubsonic" -> "Somente servidor atual (Navidrome)"
+                                    else -> "Todas as fontes (respeitando as condições configuradas)"
+                                },
+                                onClick = { page = WizardStep.IDENTITY },
+                            )
                         }
                         item {
                             WizardCard("Regras aplicadas",
