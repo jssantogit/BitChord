@@ -2,6 +2,7 @@ package com.music.bitchord.download
 
 import com.music.bitchord.acquisition.a0.A0AutoBatchExecutor
 import com.music.bitchord.acquisition.a0.A0ObservedCandidateHandoff
+import com.music.bitchord.acquisition.a0.A0CanonicalAcquisitionIntent
 import java.util.Locale
 
 /**
@@ -14,6 +15,9 @@ import java.util.Locale
  */
 internal class SoulseekAutoReviewPlan private constructor(
     val rows:List<Row>,
+    // The quality approved by the original automatic request, not whatever
+    // Settings happen to contain after the completed discovery.
+    val qualityProfile:A0CanonicalAcquisitionIntent.QualityProfileSnapshot?,
 ) {
     internal data class Row(
         val entry:SoulseekBatchPlan.Entry,
@@ -92,7 +96,7 @@ internal class SoulseekAutoReviewPlan private constructor(
                     candidates=emptyList())
             else row
         }
-        return SoulseekAutoReviewPlan(changed)
+        return SoulseekAutoReviewPlan(changed,qualityProfile)
     }
 
     /**
@@ -119,6 +123,7 @@ internal class SoulseekAutoReviewPlan private constructor(
             results:List<A0AutoBatchExecutor.TrackStatus>,
             retainedCandidates:Map<Int,List<A0ObservedCandidateHandoff.Choice>> =
                 emptyMap(),
+            qualityProfile:A0CanonicalAcquisitionIntent.QualityProfileSnapshot?=null,
         ):SoulseekAutoReviewPlan? {
             if(retainedCandidates.keys.any { it !in entries.indices } ||
                 retainedCandidates.values.any { it.size>16 } ||
@@ -133,7 +138,7 @@ internal class SoulseekAutoReviewPlan private constructor(
                         if(status==A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW)
                             retainedCandidates[index]?.toList().orEmpty()
                         else emptyList())
-                }
+                },qualityProfile
             )
         }
     }

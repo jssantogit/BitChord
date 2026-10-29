@@ -1356,7 +1356,8 @@ object Downloads {
                 val report=outcome.batch
                 if(job?.isActive!=true)throw CancellationException()
                 val review=SoulseekAutoReviewPlan.from(
-                    request.entries,report.results,retained)
+                    request.entries,report.results,retained,
+                    qualityProfile=request.quality)
                 if(review==null) {
                     fail(id,"Resultado incompleto: confira a biblioteca antes de tentar novamente.")
                     return@withLock

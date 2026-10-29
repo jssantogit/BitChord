@@ -10,13 +10,14 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import com.music.bitchord.data.model.Song
-import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.data.DebugLog as Log
 import com.music.bitchord.download.Downloads
 import com.music.bitchord.download.SoulseekBatchPayload
 import com.music.bitchord.download.SoulseekBatchPlan
 import com.music.bitchord.download.SoulseekManualRecoveryTermination
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Explicit human review of candidates ALREADY found by auto discovery.
@@ -79,7 +80,8 @@ class A0RetainedCandidateReviewActivity:Activity() {
         sessionId=session
         leaseToken=token
         val initial=Downloads.claimedSoulseekReviewPlan(session,token)
-        if(initial==null || !initial.hasRetainedCandidates) {
+        if(initial==null || !initial.hasRetainedCandidates ||
+            initial.qualityProfile==null) {
             finish()
             return
         }
@@ -167,6 +169,10 @@ class A0RetainedCandidateReviewActivity:Activity() {
                             actionButtons.forEach { it.second.isEnabled=false }
                             outcome.text="Conectando à fonte selecionada, sem nova busca…"
                             worker.execute {
+                                val lastStage=AtomicReference<
+                                    A0ManualRetainedCandidateTransfer.Stage?>(null)
+                                val lastReason=AtomicReference<
+                                    A0AutoPostTransferTechnicalGate.Reason?>(null)
                                 val status=try {
                                     val song=Downloads.claimedSoulseekReviewSong(
                                         session,token,index)
@@ -178,15 +184,24 @@ class A0RetainedCandidateReviewActivity:Activity() {
                                                 " - ","Artista"),
                                             thumbnailUrl=null,
                                             albumName=row.entry.album)
-                                    val profile=A0SoulseekQualityProfiles.snapshot(
-                                        AppSettings.downloadQualityProfile.value,
-                                        AppSettings.downloadCustomOptions.value)
+                                    // Never reinterpret a retained candidate
+                                    // using Settings changed since the search.
+                                    val profile=checkNotNull(initial.qualityProfile)
                                     A0ManualRetainedCandidateTransfer.run(
                                         this@A0RetainedCandidateReviewActivity,
                                         row.entry,choice,profile,song,
                                         isCancelled={stopped.get()},
-                                        onTransport={transport=it})
+                                        onTransport={transport=it},
+                                        onDiagnostic={stage,reason ->
+                                            lastStage.set(stage)
+                                            lastReason.set(reason)
+                                            Log.d("BitChord",
+                                                "soulseek_manual_review stage=${stage.name}" +
+                                                    " reason=${reason?.name ?: "NONE"}")
+                                        })
                                 }catch(_:Exception) {
+                                    Log.d("BitChord",
+                                        "soulseek_manual_review stage=UNEXPECTED_WORKER_FAILURE")
                                     A0ManualRetainedCandidateTransfer.Status.VERIFY_LIBRARY
                                 }finally {
                                     transport=null
@@ -201,8 +216,19 @@ class A0RetainedCandidateReviewActivity:Activity() {
                                     outcome.text=when(status) {
                                         A0ManualRetainedCandidateTransfer.Status.PUBLISHED ->
                                             "Salvo na biblioteca local."
+                                        A0ManualRetainedCandidateTransfer.Status.PRECHECK_REJECTED ->
+                                            "A seleção foi recusada antes da transferência: " +
+                                                "o candidato não atende aos requisitos da " +
+                                                "solicitação original. Nenhum arquivo baixado."
                                         A0ManualRetainedCandidateTransfer.Status.TECHNICAL_REJECTION ->
-                                            "Arquivo não atende às verificações técnicas. " +
+                                            if(lastStage.get()==
+                                                A0ManualRetainedCandidateTransfer.Stage.PROBE_UNAVAILABLE)
+                                                "O arquivo foi recebido, mas o Android não " +
+                                                    "conseguiu concluir a inspeção técnica. " +
+                                                    "Nenhuma publicação autorizada."
+                                            else "O arquivo foi recebido, mas a inspeção " +
+                                                "técnica ou a qualidade não foi aprovada " +
+                                                "(${lastReason.get()?.name ?: "SEM_DETALHE"}). " +
                                                 "Nenhuma publicação autorizada."
                                         A0ManualRetainedCandidateTransfer.Status.TRANSFER_FAILED ->
                                             "Transferência falhou. Confira a biblioteca antes de " +

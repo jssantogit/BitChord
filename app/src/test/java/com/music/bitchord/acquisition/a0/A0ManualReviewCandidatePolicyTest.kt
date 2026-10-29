@@ -27,6 +27,24 @@ class A0ManualReviewCandidatePolicyTest {
         return handoff.releaseShadowChoices().single()
     }
 
+    @Test fun efficientCodecCandidatesRemainManuallySelectableWhenQualityMatches() {
+        for((extension,rate) in listOf("opus" to 160,"ogg" to 192)) {
+            val handoff=A0ObservedCandidateHandoff(
+                Socket(),"local",177,true,searchPhrase=target.query,
+                requestedAlbum=target.album,expectedDurationSeconds=161,
+                qualityProfile=profile,collectReleaseShadow=true)
+            val file=A0SoulseekSearchFile(
+                "Music\\ILLIT\\SUPER REAL ME\\ILLIT - Magnetic.$extension",
+                161L*rate*125L,extension,mapOf(0 to rate,1 to 161))
+            assertTrue(handoff.offerParsed(A0SoulseekSearchResponse(
+                "peer-$extension",177,listOf(file),emptyList(),true,128_000,0),
+                "peer-$extension"))
+            val candidate=handoff.releaseShadowChoices().single()
+            assertEquals(listOf(candidate),
+                A0ManualReviewCandidatePolicy.retain(target,listOf(candidate),profile))
+        }
+    }
+
     @Test fun ambiguousGoodOffersRetainedForHumanInsteadOfAnotherSearch() {
         val all=listOf(offer("a","Magnetic"),offer("b","Magnetic"))
         val found=A0ManualReviewCandidatePolicy.retain(target,all,profile)

@@ -20,6 +20,17 @@ class SoulseekAutoReviewPlanTest {
         )
     }
 
+    @Test fun reviewRetainsOriginalQualityAcrossManualPublications() {
+        val original=com.music.bitchord.acquisition.a0.A0SoulseekQualityProfiles
+            .snapshot(com.music.bitchord.data.settings.DownloadQualityProfile.LOSSLESS)
+        val plan=SoulseekAutoReviewPlan.from(entries(2),listOf(review,review),
+            qualityProfile=original)!!
+        assertSame(original,plan.qualityProfile)
+        val updated=plan.withManualPublication(0,"ILLIT - Track 1")!!
+        assertSame(original,updated.qualityProfile)
+        assertFalse(updated.toString().contains("LOSSLESS"))
+    }
+
     @Test fun mixedAlbumOffersOnlyManualSlotsInCanonicalReleaseOrder() {
         val original=entries(4)
         val plan=SoulseekAutoReviewPlan.from(
