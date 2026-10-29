@@ -222,8 +222,11 @@ private fun <T> WizardChoiceDialog(
     onChosen: (T) -> Unit,
     onClose: () -> Unit,
 ) {
-    // A BitChord bottom-choice sheet, not a generic Material 3 AlertDialog.
-    // Keeps the music-style list language and native safe-area handling.
+    // Dialog windows do not always inherit Material's LocalContentColor.
+    // Capture the active palette OUTSIDE the window and apply foreground
+    // explicitly: black text on a black sheet fails basic night-mode contrast.
+    val palette = MaterialTheme.colorScheme
+    val sheetForeground = palette.onSurface
     Dialog(
         onDismissRequest = onClose,
         properties = DialogProperties(
@@ -238,7 +241,7 @@ private fun <T> WizardChoiceDialog(
             Column(
                 modifier = Modifier.fillMaxWidth()
                     .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                    .background(MaterialTheme.colorScheme.surface)
+                    .background(palette.surface)
                     .navigationBarsPadding().padding(bottom = 12.dp),
             ) {
                 Row(
@@ -247,8 +250,11 @@ private fun <T> WizardChoiceDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(title, style = MaterialTheme.typography.titleLarge)
-                    TextButton(onClick = onClose) { Text("Fechar") }
+                    Text(title, style = MaterialTheme.typography.titleLarge,
+                        color = sheetForeground)
+                    TextButton(onClick = onClose) {
+                        Text("Fechar", color = sheetForeground)
+                    }
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline)
                 LazyColumn(Modifier.heightIn(max = 480.dp)) {
@@ -256,6 +262,7 @@ private fun <T> WizardChoiceDialog(
                         Text(
                             label(option),
                             style = MaterialTheme.typography.bodyLarge,
+                            color = sheetForeground,
                             modifier = Modifier.fillMaxWidth()
                                 .clickable { onChosen(option); onClose() }
                                 .padding(horizontal = PAGE_GUTTER, vertical = 17.dp),

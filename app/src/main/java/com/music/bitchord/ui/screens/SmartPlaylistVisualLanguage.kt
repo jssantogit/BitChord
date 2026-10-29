@@ -324,7 +324,7 @@ internal fun PlaylistWizardSelectionRow(
  */
 @Composable
 internal fun PlaylistWizardArtworkPlaceholder(
-    dimension: Dp = 112.dp,
+    dimension: Dp = 224.dp,
 ) {
     Box(
         modifier = Modifier.size(dimension)
