@@ -2150,6 +2150,7 @@ private fun BitChordApp(
     // Page navigation is keyed by the canonical RecordingId, never provider/source IDs.
     var rediscoveryRecordingId by rememberSaveable { mutableStateOf<String?>(null) }
     var showCanonicalMyRatings by rememberSaveable { mutableStateOf(false) }
+    var showPlaylistLibrary by rememberSaveable { mutableStateOf(false) }
     var showSmartPlaylistBuilder by rememberSaveable { mutableStateOf(false) }
     var editingSmartPlaylistId by remember { mutableStateOf<String?>(null) }
     var editingNormalPlaylistId by remember { mutableStateOf<String?>(null) }
@@ -2581,6 +2582,7 @@ private fun BitChordApp(
         BackHandler(enabled = detailActiveShelf != null) { detailActiveShelf = null }
         BackHandler(enabled = rediscoveryRecordingId != null) { rediscoveryRecordingId = null }
         BackHandler(enabled = showCanonicalMyRatings) { showCanonicalMyRatings = false }
+        BackHandler(enabled = showPlaylistLibrary && detail == null) { showPlaylistLibrary = false }
         BackHandler(enabled = showSmartPlaylistBuilder) { showSmartPlaylistBuilder = false }
 
         // On a tablet the page and the player stand side by side rather than
@@ -2620,6 +2622,7 @@ private fun BitChordApp(
                         detail != null -> detail.browseId
                         rediscoveryRecordingId != null -> "rediscovery:" + rediscoveryRecordingId
                         showCanonicalMyRatings -> "my_ratings"
+                        showPlaylistLibrary -> "canonical_playlist_library"
                         showSmartPlaylistBuilder -> "smart_playlist_builder"
                         else -> "$TAB_KEY$selectedTab"
                     },
@@ -2704,7 +2707,37 @@ private fun BitChordApp(
                     val pageDetailListState = remember(key) {
                         detailListStates.getOrPut(key) { LazyListState() }
                     }
-                    if (key == "my_ratings") {
+                    if (key == "canonical_playlist_library") {
+                        com.music.bitchord.ui.screens.UnifiedPlaylistLibraryShelf(
+                            normalPlaylists = localPlaylistItems,
+                            onNewSmartPlaylist = {
+                                editingSmartPlaylistId = null
+                                editingNormalPlaylistId = null
+                                showSmartPlaylistBuilder = true
+                            },
+                            onOpenSmartPlaylist = { id ->
+                                editingSmartPlaylistId = id
+                                editingNormalPlaylistId = null
+                                showSmartPlaylistBuilder = true
+                            },
+                            onOpenCanonicalNormalPlaylist = { id ->
+                                editingNormalPlaylistId = id
+                                editingSmartPlaylistId = null
+                                showSmartPlaylistBuilder = true
+                            },
+                            onOpenNormalPlaylist = onLibraryItemClick,
+                            onSmartAction = { id, intent ->
+                                executeSmartCollection(
+                                    SmartCollectionActionSource.SavedV2Definition(id), intent,
+                                )
+                            },
+                            onCanonicalNormalAction = { id, intent ->
+                                executeSmartCollection(
+                                    SmartCollectionActionSource.SavedStaticPlaylist(id), intent,
+                                )
+                            },
+                        )
+                    } else if (key == "my_ratings") {
                         CanonicalMyRatingsScreen(onBack = { showCanonicalMyRatings = false })
                     } else if (key == "smart_playlist_builder") {
                         SmartPlaylistBuilderScreen(
@@ -3368,76 +3401,38 @@ private fun BitChordApp(
                             },
                             onImportSpotifyPlaylist = { showSpotifyImportDialog = true },
                             onShowAll = { shelf -> libraryShowAll = shelf },
-                            replay = {
-                                LibraryReplayEntry(
-                                    cards = replayCards,
-                                    loading = replay.loading,
-                                    holder = account?.name.orEmpty(),
-                                    memberSince = replay.memberSince,
-                                    onOpenReplay = { page ->
-                                        replayLandingPage = page
-                                        showReplay = true
-                                    },
-                                )
-                            },
-                            rediscovery = {
-                                Column {
-                                    CanonicalMyRatingsEntry(onOpen = { showCanonicalMyRatings = true })
-                                    LibraryRediscoveryShelfEntry(
-                                        refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
-                                        onOpenRecording = { rediscoveryRecordingId = it },
-                                    )
-                                    AdaptiveCollectionsLibraryEntry(
-                                        refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
-                                        onOpenRecording = { rediscoveryRecordingId = it },
-                                        onCollectionAction = { kind, intent ->
-                                            executeSmartCollection(SmartCollectionActionSource.Adaptive(kind), intent)
-                                        },
-                                    )
-                                }
-                            },
+                            replay = {},
+
                             onSignIn = { webSession = WebSessionMode.SIGN_IN },
                             onRetry = viewModel::loadLibrary,
                             refreshing = MainViewModel.Feed.LIBRARY in refreshing,
                             onRefresh = { viewModel.refresh(MainViewModel.Feed.LIBRARY) },
                             pullState = libraryPull,
                             contentPadding = listPadding,
-                            links = libraryLinks(),
-                            deviceItems = libraryDeviceItems(downloadedReleases),
-                            playlistsSection = {
-                                com.music.bitchord.ui.screens.UnifiedPlaylistLibraryShelf(
-                                    normalPlaylists = localPlaylistItems,
-                                    onNewSmartPlaylist = {
-                                        editingSmartPlaylistId = null
-                                        editingNormalPlaylistId = null
-                                        showSmartPlaylistBuilder = true
-                                    },
-                                    onOpenSmartPlaylist = { id ->
-                                        editingSmartPlaylistId = id
-                                        editingNormalPlaylistId = null
-                                        showSmartPlaylistBuilder = true
-                                    },
-                                    onOpenCanonicalNormalPlaylist = { id ->
-                                        editingNormalPlaylistId = id
-                                        editingSmartPlaylistId = null
-                                        editingNormalPlaylistId = null
-                                        showSmartPlaylistBuilder = true
-                                    },
-                                    onOpenNormalPlaylist = onLibraryItemClick,
-                                    onSmartAction = { id, intent ->
-                                        executeSmartCollection(
-                                            SmartCollectionActionSource.SavedV2Definition(id),
-                                            intent,
-                                        )
-                                    },
-                                    onCanonicalNormalAction = { id, intent ->
-                                        executeSmartCollection(
-                                            SmartCollectionActionSource.SavedStaticPlaylist(id),
-                                            intent,
-                                        )
-                                    },
-                                )
-                            },
+                            navigationHome = true,
+                            links = com.music.bitchord.ui.screens.libraryNavigationLinks(
+                                deviceLinks = libraryLinks(),
+                                onOpenPlaylists = { showPlaylistLibrary = true },
+                                onOpenRatings = { showCanonicalMyRatings = true },
+                                onOpenLocalCategory = { category ->
+                                    localFolderStates.getOrPut("local:all") { LocalFolderState() }
+                                        .tab = category
+                                    onLibraryItemClick(
+                                        ShelfItem(
+                                            title = when (category) {
+                                                com.music.bitchord.ui.screens.LocalFolderTab.ARTISTS -> "Artistas"
+                                                com.music.bitchord.ui.screens.LocalFolderTab.ALBUMS -> "Álbuns"
+                                                com.music.bitchord.ui.screens.LocalFolderTab.SONGS -> "Músicas"
+                                            },
+                                            subtitle = "",
+                                            thumbnailUrl = null,
+                                            videoId = null,
+                                            browseId = "local:all",
+                                        ),
+                                    )
+                                },
+                            ),
+                            deviceItems = emptyList(),
                         )
                     }
                 }
@@ -3630,6 +3625,7 @@ private fun BitChordApp(
                         showDiscord -> "Discord"
                         showHistory -> stringResource(R.string.history)
                         libraryShowAll != null && detail == null -> libraryShowAll?.title.orEmpty()
+                        showPlaylistLibrary && detail == null -> "Playlists"
                         showAccountScrobbling -> stringResource(R.string.account_scrobbling)
                         showSources -> stringResource(R.string.sources)
                         showListenTogether -> stringResource(R.string.listen_together)
@@ -3672,6 +3668,7 @@ private fun BitChordApp(
                         showDiscord -> ({ showDiscord = false })
                         showHistory -> ({ showHistory = false })
                         libraryShowAll != null && detail == null -> ({ libraryShowAll = null })
+                        showPlaylistLibrary && detail == null -> ({ showPlaylistLibrary = false })
                         showAccountScrobbling -> ({
                             showAccountScrobbling = false
                             if (settingsSubScreen == "account_scrobbling") settingsSubScreen = null
@@ -4027,6 +4024,7 @@ private fun BitChordApp(
                     settingsSubScreen = null
                     showHistory = false
                     libraryShowAll = null
+                    showPlaylistLibrary = false
                     selectedTab = index
 
                     // Every search tab tap resets the field, focuses it, and opens
