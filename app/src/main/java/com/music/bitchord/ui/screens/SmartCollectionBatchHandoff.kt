@@ -101,6 +101,8 @@ internal class SmartCollectionBatchHandoff(
     private val verifiedRemoteAssets: suspend (SmartCollectionActionSource) -> Map<String, CanonicalBrowseMediaAsset> = { emptyMap() },
     /** Production uses the selected-only Catalog path; legacy tests retain browse(). */
     private val browseSelected: suspend (List<String>) -> CanonicalBrowseLibrary = { browse() },
+    private val sourceLimit: suspend (SmartCollectionActionSource, CanonicalBrowseLibrary) -> CanonicalBrowseLibrary =
+        { _, library -> library },
 ) {
     suspend fun execute(
         source: SmartCollectionActionSource,
@@ -141,7 +143,7 @@ internal class SmartCollectionBatchHandoff(
                 return SmartCollectionBatchResult.LimitExceeded
             }
             val ids = selected.distinct()
-            val library = browseSelected(ids)
+            val library = sourceLimit(source, browseSelected(ids))
             mark("catalog", mapOf("trackCount" to library.tracks.size.toString()))
             val scopedRemote = verifiedRemoteAssets(source)
             mark("asset_evidence", mapOf("uniqueRatedAssets" to scopedRemote.size.toString()))
@@ -330,6 +332,16 @@ internal fun uniqueVerifiedRatedRemoteAssets(
         }.toMap()
 }
 
+/** Fail closed: never silently resolve a saved single-source playlist from another provider. */
+internal fun canonicalBrowseOnlyProvider(
+    library: CanonicalBrowseLibrary, providerKey: String,
+): CanonicalBrowseLibrary = CanonicalBrowseLibrary(
+    library.tracks.mapNotNull { track ->
+        val eligible = track.availableAssets.filter { it.providerKey == providerKey }
+        if (eligible.isEmpty()) null else track.copy(availableAssets = eligible)
+    },
+)
+
 /**
  * Catalog-only read projection. Provider configuration remains Catalog-owned,
  * using its existing local/credential-backed eligibility; no auth URLs, native
@@ -461,6 +473,16 @@ internal fun rememberSmartCollectionBatchAction(
             refreshIds = { source -> currentSmartCollectionIds(context, source) },
             browse = { CanonicalBrowseLibrary.EMPTY },
             browseSelected = { selectedIds -> currentCanonicalBrowse(context, selectedIds) },
+            sourceLimit = { source, library ->
+                if (source !is SmartCollectionActionSource.SavedStaticPlaylist) {
+                    library
+                } else {
+                    val chosen = CanonicalStaticPlaylistRepository(
+                        SmartPlaylistDefinitionDatabase.get(context).staticPlaylistDao(),
+                    ).list().firstOrNull { it.id == source.id }?.sourceProviderKey
+                    if (chosen == null) library else canonicalBrowseOnlyProvider(library, chosen)
+                }
+            },
             planner = CanonicalCollectionIntentPlanner(androidCanonicalQueueResolver(context)),
             submit = { plan -> submitCanonicalBatch(controller, plan) },
             verifiedRemoteAssets = { source -> currentScopedRatedAssetHints(context, source) },
