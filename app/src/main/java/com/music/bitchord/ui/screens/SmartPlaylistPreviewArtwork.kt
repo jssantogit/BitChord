@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,12 +35,19 @@ internal fun SmartPlaylistPreviewArtwork(
         androidOpenSubsonicArtworkLoader(context.applicationContext)
     }
     when {
-        row.localArtworkUri != null -> AsyncImage(
-            model = row.localArtworkUri,
-            contentDescription = row.title,
-            contentScale = ContentScale.Crop,
+        row.localArtworkUri != null -> Box(
             modifier = modifier.clip(RoundedCornerShape(8.dp)),
-        )
+        ) {
+            // The placeholder remains visible while loading and on Coil
+            // failure. A broken file URI must not render an empty black box.
+            PreviewArtworkPlaceholder(Modifier.fillMaxSize())
+            AsyncImage(
+                model = row.localArtworkUri,
+                contentDescription = row.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         row.remoteMediaAssetId != null && row.remoteArtworkRevision != null ->
             RemoteTrackArtwork(
                 mediaAssetId = row.remoteMediaAssetId,
@@ -48,16 +56,21 @@ internal fun SmartPlaylistPreviewArtwork(
                 artworkLoader = loader,
                 modifier = modifier,
             )
-        else -> Surface(
-            modifier = modifier,
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.MusicNote, contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp))
-            }
+        else -> PreviewArtworkPlaceholder(modifier)
+    }
+}
+
+@Composable
+private fun PreviewArtworkPlaceholder(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.MusicNote, contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp))
         }
     }
 }
