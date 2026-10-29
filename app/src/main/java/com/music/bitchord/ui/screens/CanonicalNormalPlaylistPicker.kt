@@ -28,6 +28,73 @@ internal fun moveCanonicalStaticMember(
     }
 }
 
+/** Typed canonical artist/release navigation, not text-based grouping of songs. */
+internal enum class CanonicalPlaylistBrowseType { TRACKS, ALBUMS, ARTISTS }
+
+internal data class CanonicalPlaylistBrowseGroup(
+    val id: String,
+    val title: String,
+    val type: CanonicalPlaylistBrowseType,
+)
+
+internal fun filterCanonicalPlaylistBrowseGroups(
+    groups: List<CanonicalPlaylistBrowseGroup>, term: String,
+): List<CanonicalPlaylistBrowseGroup> =
+    groups.filter { it.title.contains(term.trim(), ignoreCase = true) }
+        .distinctBy { it.type to it.id }
+        .sortedWith(compareBy({ it.title.lowercase() }, { it.id }))
+        .take(100)
+
+/**
+ * Use actual ReleaseIds and ArtistIds plus provider-scoped membership. No
+ * album inference from similarly titled tracks or display-artist strings.
+ */
+internal suspend fun canonicalNormalPlaylistBrowseGroups(
+    context: Context,
+    term: String,
+    type: CanonicalPlaylistBrowseType,
+): List<CanonicalPlaylistBrowseGroup> = withContext(Dispatchers.IO) {
+    if (type == CanonicalPlaylistBrowseType.TRACKS) return@withContext emptyList()
+    val app = context.applicationContext
+    val keys = activeCanonicalPlaylistProviderKeys(app)
+    val dao = CanonicalCatalogDatabase.get(app).catalogDao()
+    val groups = keys.flatMap { provider ->
+        when (type) {
+            CanonicalPlaylistBrowseType.ALBUMS ->
+                dao.providerScopedReleases(provider).map {
+                    CanonicalPlaylistBrowseGroup(it.id, it.title, type)
+                }
+            CanonicalPlaylistBrowseType.ARTISTS ->
+                dao.providerScopedArtists(provider).map {
+                    CanonicalPlaylistBrowseGroup(it.id, it.name, type)
+                }
+            else -> emptyList()
+        }
+    }
+    filterCanonicalPlaylistBrowseGroups(groups, term)
+}
+
+internal suspend fun canonicalNormalPlaylistGroupTracks(
+    context: Context,
+    group: CanonicalPlaylistBrowseGroup,
+): List<V2DisplayRow> = withContext(Dispatchers.IO) {
+    val app = context.applicationContext
+    val keys = activeCanonicalPlaylistProviderKeys(app)
+    val dao = CanonicalCatalogDatabase.get(app).catalogDao()
+    val ids = keys.flatMap { provider ->
+        when (group.type) {
+            CanonicalPlaylistBrowseType.ALBUMS ->
+                dao.providerScopedReleaseRecordingIds(provider, group.id)
+            CanonicalPlaylistBrowseType.ARTISTS ->
+                dao.providerScopedArtistRecordingIds(provider, group.id)
+            CanonicalPlaylistBrowseType.TRACKS -> emptyList()
+        }
+    }.distinct()
+    if (ids.isEmpty()) return@withContext emptyList()
+    val byId = ids.chunked(400).flatMap { dao.recordingsByIds(it) }.associateBy { it.id }
+    canonicalNormalRows(dao, ids.mapNotNull(byId::get), keys)
+}
+
 /**
  * Search is capped at 200 rows per request inside SQLite, not 200 recordings
  * from the whole library. Every row is associated with a currently configured
