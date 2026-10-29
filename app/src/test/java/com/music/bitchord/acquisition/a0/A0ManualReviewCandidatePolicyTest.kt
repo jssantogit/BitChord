@@ -51,6 +51,14 @@ class A0ManualReviewCandidatePolicyTest {
                 A0AutoCandidateSelectionPolicy.Status.PROVISIONAL)
     }
 
+    @Test fun losslessProfileNeverPresentsMP3EvenIfProfileIsNonStrict() {
+        val lossless=A0SoulseekQualityProfiles.snapshot(
+            DownloadQualityProfile.LOSSLESS)
+        val mp3=offer("lossy-peer","Magnetic",320)
+        assertTrue(A0ManualReviewCandidatePolicy.retain(
+            target,listOf(mp3),lossless).isEmpty())
+    }
+
     @Test fun largeDiscoveryRetainsAtMostSixteenWithoutSavingPeerIdsToString() {
         val choices=(0 until 80).map { offer("peer-$it","Magnetic") }
         val result=A0ManualReviewCandidatePolicy.retain(target,choices,profile)
