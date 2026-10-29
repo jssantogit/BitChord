@@ -120,6 +120,37 @@ class A0AutoDiscoveryCoordinatorTest {
             "search:three","three","search:four","four"),events)
     }
 
+    @Test fun laterSiblingEvidenceMayRescueAnEarlierReviewWithoutExtraSearch() {
+        val two=entries.take(2)
+        val search=FakeSearch { slot ->
+            if(slot.trackId=="one")A0AutoDiscoveryCoordinator.SearchResult.NoReply
+            else A0AutoDiscoveryCoordinator.SearchResult.Found(claims(two))
+        }
+        val done=mutableListOf<String>()
+        val report=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            two,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(2,report.searches)
+        assertEquals(listOf("one","two"),search.requests)
+        assertEquals(listOf("two","one"),done)
+        assertEquals(2,report.batch.published)
+    }
+
+    @Test fun lateEvidenceCannotRepeatAlreadyTransferredOrPublishedSlots() {
+        val two=entries.take(2)
+        val search=FakeSearch { slot ->
+            A0AutoDiscoveryCoordinator.SearchResult.Found(
+                claims(listOf(slot)))
+        }
+        val done=mutableListOf<String>()
+        val report=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            two,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(listOf("one","two"),done)
+        assertEquals(2,report.batch.published)
+        assertEquals(2,report.searches)
+    }
+
     @Test fun failedLaterDiscoveryKeepsEarlierPublishedTrackVisible() {
         val events=mutableListOf<String>()
         val search=FakeSearch { target ->

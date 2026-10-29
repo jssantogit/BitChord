@@ -84,6 +84,9 @@ internal class A0AutoDiscoveryCoordinator(
         val pooled=A0MultiSearchCandidateEvidence(entries,quality)
         val statuses=ArrayList<A0AutoBatchExecutor.TrackStatus>(count)
         val publishedPaths=HashSet<Pair<String,String>>()
+        // A slot that never began P/F may benefit from sibling evidence
+        // discovered later in this SAME explicitly requested release.
+        val reviewWithoutTransfer=LinkedHashSet<Int>()
         var attempts=0
         fun append(index:Int,status:A0AutoBatchExecutor.TrackStatus) {
             statuses.add(status)
@@ -159,12 +162,53 @@ internal class A0AutoDiscoveryCoordinator(
                     ?: A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW
                 // The executor already delivered this slot's progress.
                 statuses.add(status)
+                if(status==A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW &&
+                    decision.status==A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW &&
+                    decision.reason==A0AutoCandidateSelectionPolicy.Reason.NO_STRONG_CANDIDATE &&
+                    outcome.attempts==0)
+                    reviewWithoutTransfer.add(index)
                 if(status in setOf(
                     A0AutoBatchExecutor.TrackStatus.CANCELLED,
                     A0AutoBatchExecutor.TrackStatus.RECONCILE)) {
                     for(next in index+1 until count)
                         append(next,A0AutoBatchExecutor.TrackStatus.NOT_STARTED)
                     break
+                }
+            }
+            // ONE bounded late-evidence pass: no additional searches, no
+            // reconnections unless a newly eligible slot begins its FIRST P/F.
+            // Prior PUBLISHED, RECONCILE, CANCELLED and attempted slots are
+            // never revisited. A3 still requires REQUESTED before transfer.
+            if(statuses.size==count && !shouldStop()) {
+                for(index in reviewWithoutTransfer) {
+                    if(shouldStop())break
+                    val (choices,truncated)=checkNotNull(pooled.slotEvidence(index))
+                    if(truncated)continue
+                    val unspent=choices.filterNot {
+                        (it.peerUsername to it.remotePath) in publishedPaths
+                    }
+                    val late=A0AutoCandidateSelectionPolicy.preview(
+                        entries[index],unspent,quality)
+                    if(late.status!=A0AutoCandidateSelectionPolicy.Status.PROVISIONAL)
+                        continue
+                    try {onCandidateDecision(index,late)}catch(_:Exception){}
+                    try {onSlotEvidence(index,unspent.toList())}catch(_:Exception){}
+                    val recovery=batchExecutor.run(
+                        entries=listOf(entries[index]),
+                        observedBySlot=listOf(unspent),
+                        truncatedSlots=emptySet(),
+                        profile=quality,userRequested=true,optedIn=true,
+                        isCancelled=isCancelled,stillAuthorized=stillAuthorized,
+                        onSlotResolved={_,status -> onSlotResolved(index,status)},
+                    )
+                    attempts+=recovery.attempts
+                    publishedPaths.addAll(recovery.publishedSourceKeys)
+                    val status=recovery.results.singleOrNull()
+                        ?: A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW
+                    statuses[index]=status
+                    if(status in setOf(A0AutoBatchExecutor.TrackStatus.CANCELLED,
+                            A0AutoBatchExecutor.TrackStatus.RECONCILE))
+                        break
                 }
             }
             return finish()
