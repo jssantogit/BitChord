@@ -10,6 +10,38 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SmartPlaylistWizardModelTest {
+    @Test fun selectingSmartSourceAddsMandatoryAndConstraintWithoutDestroyingOrRules() {
+        val original = SmartPlaylistRule.Group(
+            SmartPlaylistRuleJoin.ANY,
+            listOf(
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.CONTAINS,
+                    textValue = "New",
+                ),
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.ARTIST_DISPLAY, SmartPlaylistRuleOperator.CONTAINS,
+                    textValue = "Jeans",
+                ),
+            ),
+        )
+        val scoped = smartRuleWithGlobalSource(original, "local", true)
+            as SmartPlaylistRule.Group
+        assertEquals(SmartPlaylistRuleJoin.ALL, scoped.join)
+        assertEquals(original, scoped.children.first())
+        assertEquals("local", smartRuleGlobalSource(scoped))
+        val changed = smartRuleWithGlobalSource(scoped, "opensubsonic", true)
+            as SmartPlaylistRule.Group
+        assertEquals(original, changed.children.first())
+        assertEquals("opensubsonic", smartRuleGlobalSource(changed))
+        assertEquals(
+            SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(original)),
+            smartRuleWithGlobalSource(changed, null, true),
+        )
+        val sourceOnly = smartRuleWithGlobalSource(original, "local", false)
+        assertEquals("local", smartRuleGlobalSource(sourceOnly!!))
+        assertEquals(null, smartRuleWithGlobalSource(sourceOnly, null, true))
+    }
+
     @Test fun catalogHasEveryAndOnlyAnImplementedV2FieldExactlyOnce() {
         val fields = smartConditionCategories.flatMap { it.fields }
         assertEquals(SmartPlaylistRuleField.entries.toSet(), fields.toSet())
