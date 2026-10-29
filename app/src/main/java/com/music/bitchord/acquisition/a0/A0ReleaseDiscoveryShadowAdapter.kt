@@ -59,7 +59,9 @@ internal object A0ReleaseDiscoveryShadowAdapter {
         val supportedCodecs=setOf(A0CanonicalAcquisitionIntent.Codec.MP3,
             A0CanonicalAcquisitionIntent.Codec.FLAC,
             A0CanonicalAcquisitionIntent.Codec.PCM_WAV,
-            A0CanonicalAcquisitionIntent.Codec.AAC_ADTS)
+            A0CanonicalAcquisitionIntent.Codec.AAC_ADTS,
+            A0CanonicalAcquisitionIntent.Codec.OPUS,
+            A0CanonicalAcquisitionIntent.Codec.VORBIS)
         // Cache title-word sets exactly once per advertised file, not once per
         // release track. Avoid heavy rank/preflight for unrelated titles.
         val indexed=choices.take(MAX_OBSERVED_CHOICES).map { candidate ->
@@ -111,6 +113,8 @@ internal object A0ReleaseDiscoveryShadowAdapter {
                     val codec=when(ext) {
                         "mp3" -> A0CanonicalAcquisitionIntent.Codec.MP3
                         "aac" -> A0CanonicalAcquisitionIntent.Codec.AAC_ADTS
+                        "opus" -> A0CanonicalAcquisitionIntent.Codec.OPUS
+                        "ogg" -> A0CanonicalAcquisitionIntent.Codec.VORBIS
                         "flac" -> A0CanonicalAcquisitionIntent.Codec.FLAC
                         "wav" -> A0CanonicalAcquisitionIntent.Codec.PCM_WAV
                         else -> null
