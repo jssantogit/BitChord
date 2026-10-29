@@ -63,6 +63,10 @@ internal class A0AutoDiscoveryCoordinator(
         onSlotResolved:(Int,A0AutoBatchExecutor.TrackStatus)->Unit={ _,_ -> },
         onSlotSearching:(Int)->Unit={},
         onCandidateDecision:(Int,A0AutoCandidateSelectionPolicy.Decision)->Unit={ _,_ -> },
+        /** Observed, never transfer-authorized; consumer may retain in RAM
+         * for one explicit human review after this search closes.
+         */
+        onSlotEvidence:(Int,List<A0ObservedCandidateHandoff.Choice>)->Unit={ _,_ -> },
     ):Report {
         val count=entries.size
         val valid=count in 1..SoulseekBatchPlan.MAX_TRACKS &&
@@ -129,6 +133,10 @@ internal class A0AutoDiscoveryCoordinator(
                 val unique=choices.filterNot {
                     (it.peerUsername to it.remotePath) in publishedPaths
                 }
+                // Preserve peer evidence before attempting automatic P/F;
+                // review screens must not force a second identical search.
+                // Callback is observational, not a transport command.
+                try {onSlotEvidence(index,unique.toList())}catch(_:Exception){}
                 val decision=A0AutoCandidateSelectionPolicy.preview(
                     entries[index],unique,quality,sampleTruncated=truncated)
                 // Counts and reason only: never expose peer/user/path to logs.
