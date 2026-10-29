@@ -145,7 +145,13 @@ internal class SmartCollectionBatchHandoff(
             val ids = selected.distinct()
             val library = sourceLimit(source, browseSelected(ids))
             mark("catalog", mapOf("trackCount" to library.tracks.size.toString()))
-            val scopedRemote = verifiedRemoteAssets(source)
+            // A rated remote preference is never an exception to a chosen source.
+            val currentAssets = library.tracks.associate { track ->
+                track.recordingId to track.availableAssets.toSet()
+            }
+            val scopedRemote = verifiedRemoteAssets(source).filter { (id, hint) ->
+                currentAssets[id]?.contains(hint) == true
+            }
             mark("asset_evidence", mapOf("uniqueRatedAssets" to scopedRemote.size.toString()))
             val plan = planner.preview(
                 ids, intent, library,
@@ -342,6 +348,22 @@ internal fun canonicalBrowseOnlyProvider(
     },
 )
 
+/** Global smart source rules must also constrain physical assets at playback. */
+internal fun canonicalBrowseOnlySourceKind(
+    library: CanonicalBrowseLibrary, kind: String,
+): CanonicalBrowseLibrary = CanonicalBrowseLibrary(
+    library.tracks.mapNotNull { track ->
+        val scoped = track.availableAssets.filter { asset ->
+            when (kind) {
+                "local" -> asset.providerKey == RoomCanonicalQueueResolver.LOCAL_PROVIDER
+                "opensubsonic" -> asset.providerKey.startsWith("opensubsonic:")
+                else -> false
+            }
+        }
+        if (scoped.isEmpty()) null else track.copy(availableAssets = scoped)
+    },
+)
+
 /**
  * Catalog-only read projection. Provider configuration remains Catalog-owned,
  * using its existing local/credential-backed eligibility; no auth URLs, native
@@ -474,13 +496,28 @@ internal fun rememberSmartCollectionBatchAction(
             browse = { CanonicalBrowseLibrary.EMPTY },
             browseSelected = { selectedIds -> currentCanonicalBrowse(context, selectedIds) },
             sourceLimit = { source, library ->
-                if (source !is SmartCollectionActionSource.SavedStaticPlaylist) {
-                    library
-                } else {
-                    val chosen = CanonicalStaticPlaylistRepository(
-                        SmartPlaylistDefinitionDatabase.get(context).staticPlaylistDao(),
-                    ).list().firstOrNull { it.id == source.id }?.sourceProviderKey
-                    if (chosen == null) library else canonicalBrowseOnlyProvider(library, chosen)
+                when (source) {
+                    is SmartCollectionActionSource.SavedStaticPlaylist -> {
+                        val chosen = CanonicalStaticPlaylistRepository(
+                            SmartPlaylistDefinitionDatabase.get(context).staticPlaylistDao(),
+                        ).list().firstOrNull { it.id == source.id }?.sourceProviderKey
+                        if (chosen == null) library
+                            else canonicalBrowseOnlyProvider(library, chosen)
+                    }
+                    is SmartCollectionActionSource.SavedV2Definition -> {
+                        val query = SmartPlaylistV2DefinitionRepository(
+                            SmartPlaylistDefinitionDatabase.get(context).v2DefinitionDao(),
+                        ).list().firstOrNull { it.id == source.id }?.query
+                        val kind = query?.let { smartRuleGlobalSource(it.rules) }
+                        if (kind == null) library
+                            else canonicalBrowseOnlySourceKind(library, kind)
+                    }
+                    is SmartCollectionActionSource.PreviewV2Query -> {
+                        val kind = smartRuleGlobalSource(source.query.rules)
+                        if (kind == null) library
+                            else canonicalBrowseOnlySourceKind(library, kind)
+                    }
+                    else -> library
                 }
             },
             planner = CanonicalCollectionIntentPlanner(androidCanonicalQueueResolver(context)),
