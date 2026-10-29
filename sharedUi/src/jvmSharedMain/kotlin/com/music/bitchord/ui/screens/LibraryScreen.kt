@@ -266,6 +266,7 @@ data class LibraryLink(
     val icon: ImageVector,
     val logo: DrawableResource? = null,
     val onClick: (() -> Unit)? = null,
+    val enabled: Boolean = true,
 )
 
 /**
@@ -282,7 +283,9 @@ private fun LibraryLinkList(links: List<LibraryLink>, onClick: (ShelfItem) -> Un
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 54.dp)
-                    .clickable { link.onClick?.invoke() ?: onClick(link.item) }
+                    .clickable(enabled = link.enabled) {
+                        link.onClick?.invoke() ?: onClick(link.item)
+                    }
                     .padding(horizontal = PAGE_GUTTER),
             ) {
                 if (link.logo != null) {
