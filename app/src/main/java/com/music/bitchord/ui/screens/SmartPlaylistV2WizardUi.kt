@@ -469,7 +469,13 @@ internal fun SmartPlaylistV2WizardUi(
                                 "Como os blocos abaixo se relacionam") {
                                 if (root != null) WizardJoinPicker(root.join) {
                                     onRuleChange(root.copy(join = it))
-                                } else Text("A playlist importada tem uma condição principal.")
+                                } else Text(
+                                    if (!hasConfiguredRules)
+                                        "Escolha sua primeira condição para configurar as combinações."
+                                    else "A playlist contém uma condição principal.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                         val children = if (!hasConfiguredRules) emptyList()
