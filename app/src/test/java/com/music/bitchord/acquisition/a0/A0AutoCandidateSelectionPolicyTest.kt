@@ -18,6 +18,7 @@ class A0AutoCandidateSelectionPolicyTest {
         album:String="SUPER REAL ME",
         speed:Int=128_000,
         queue:Int=0,
+        sizeBytes:Long?=null,
     ):List<A0ObservedCandidateHandoff.Choice> {
         val source=A0ObservedCandidateHandoff(Socket(),"local",177,true,
             searchPhrase=target.query,requestedAlbum=target.album,
@@ -25,7 +26,7 @@ class A0AutoCandidateSelectionPolicyTest {
             collectReleaseShadow=true)
         val file=A0SoulseekSearchFile(
             "Shared\\ILLIT\\$album\\$name",
-            duration*40_000L,"mp3",mapOf(0 to bitrate,1 to duration))
+            sizeBytes ?: duration*40_000L,"mp3",mapOf(0 to bitrate,1 to duration))
         source.offerParsed(A0SoulseekSearchResponse(
             peer,177,listOf(file),emptyList(),true,speed,queue),peer)
         return source.releaseShadowChoices()
@@ -51,9 +52,17 @@ class A0AutoCandidateSelectionPolicyTest {
         assertFalse(selection.canTransfer)
     }
 
-    @Test fun ambiguityBetweenDistinctStrongClaimsForcesManualReview() {
+    @Test fun harmlessTrackNumberPrefixWithIdenticalTechnicalClaimsDoesNotForceReview() {
         val a=offers("one")
         val b=offers("two",name="01 ILLIT - Magnetic.mp3")
+        val choice=A0AutoCandidateSelectionPolicy.preview(target,a+b,profile)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,choice.status)
+        assertEquals(2,choice.sequentialAlternatives.size)
+    }
+
+    @Test fun differentFileSizesStillForceReviewDespiteIdenticalTrackNames() {
+        val a=offers("one")
+        val b=offers("two",sizeBytes=161*40_000L+1024L)
         val choice=A0AutoCandidateSelectionPolicy.preview(target,a+b,profile)
         assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,choice.status)
         assertEquals(A0AutoCandidateSelectionPolicy.Reason.AMBIGUOUS_EDITION,choice.reason)
