@@ -109,6 +109,26 @@ class SmartCollectionBatchHandoffTest {
             canonicalBrowseOnlyProvider(both, "opensubsonic:revoked").tracks)
     }
 
+    @Test fun smartGlobalSourceRemovesDisallowedAssetRenditions() {
+        val lib = CanonicalBrowseLibrary(listOf(
+            CanonicalBrowseTrack("rec-a", "Song", "Artist", null, null,
+                listOf(
+                    CanonicalBrowseMediaAsset("local", "local-mediastore"),
+                    CanonicalBrowseMediaAsset("server", "opensubsonic:current"),
+                )),
+            CanonicalBrowseTrack("rec-b", "Remote only", "Artist", null, null,
+                listOf(CanonicalBrowseMediaAsset("server-2", "opensubsonic:current"))),
+        ))
+        val local = canonicalBrowseOnlySourceKind(lib, "local")
+        assertEquals(listOf("rec-a"), local.tracks.map { it.recordingId })
+        assertEquals(listOf("local"), local.tracks.single().availableAssets.map { it.mediaAssetId })
+        val remote = canonicalBrowseOnlySourceKind(lib, "opensubsonic")
+        assertEquals(listOf("rec-a", "rec-b"), remote.tracks.map { it.recordingId })
+        assertEquals(listOf("server"),
+            remote.tracks.first().availableAssets.map { it.mediaAssetId })
+        assertTrue(canonicalBrowseOnlySourceKind(lib, "unsupported").tracks.isEmpty())
+    }
+
     @Test fun staleOrAmbiguousAssetFailsClosedBeforeSubmittingAnyQueueCommand() = runBlocking {
         var dispatches = 0
         val handoff = SmartCollectionBatchHandoff(
