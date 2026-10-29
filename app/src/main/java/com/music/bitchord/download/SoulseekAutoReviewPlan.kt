@@ -1,6 +1,7 @@
 package com.music.bitchord.download
 
 import com.music.bitchord.acquisition.a0.A0AutoBatchExecutor
+import com.music.bitchord.acquisition.a0.A0ObservedCandidateHandoff
 import java.util.Locale
 
 /**
@@ -17,7 +18,21 @@ internal class SoulseekAutoReviewPlan private constructor(
     internal data class Row(
         val entry:SoulseekBatchPlan.Entry,
         val status:A0AutoBatchExecutor.TrackStatus,
-    )
+        /** Ephemeral peer claims: never Parcelable, never persisted/logged. */
+        val candidates:List<A0ObservedCandidateHandoff.Choice> = emptyList(),
+    ) {
+        override fun toString()="SoulseekAutoReviewRow(redacted)"
+    }
+
+    val hasRetainedCandidates:Boolean get() = manualIndices.any {
+        rows[it].candidates.isNotEmpty()
+    }
+
+    /** Original canonical slot index; disallow already published or uncertain. */
+    fun candidatesForManual(originalIndex:Int):
+        List<A0ObservedCandidateHandoff.Choice> =
+        if(manualAllowed && originalIndex in manualIndices)
+            rows[originalIndex].candidates.toList() else emptyList()
 
     val published:Int = rows.count { it.status==A0AutoBatchExecutor.TrackStatus.PUBLISHED }
     val needsManualReview:Int = rows.count {
@@ -73,7 +88,8 @@ internal class SoulseekAutoReviewPlan private constructor(
             rows[originalIndex].entry.query!=originalQuery)return null
         val changed=rows.mapIndexed { index,row ->
             if(index==originalIndex)
-                row.copy(status=A0AutoBatchExecutor.TrackStatus.PUBLISHED)
+                row.copy(status=A0AutoBatchExecutor.TrackStatus.PUBLISHED,
+                    candidates=emptyList())
             else row
         }
         return SoulseekAutoReviewPlan(changed)
@@ -101,13 +117,23 @@ internal class SoulseekAutoReviewPlan private constructor(
         fun from(
             entries:List<SoulseekBatchPlan.Entry>,
             results:List<A0AutoBatchExecutor.TrackStatus>,
+            retainedCandidates:Map<Int,List<A0ObservedCandidateHandoff.Choice>> =
+                emptyMap(),
         ):SoulseekAutoReviewPlan? {
-            if(results.size!=entries.size ||
+            if(retainedCandidates.keys.any { it !in entries.indices } ||
+                retainedCandidates.values.any { it.size>16 } ||
+                results.size!=entries.size ||
                 !SoulseekAutoQueueAdmission.allows(
                     entries,userRequested=true,optedIn=true,
                     devPilot=true,downloadsAllowed=true))return null
             return SoulseekAutoReviewPlan(
-                entries.zip(results) { entry,status -> Row(entry.copy(),status) }
+                entries.mapIndexed { index,entry ->
+                    val status=results[index]
+                    Row(entry.copy(),status,
+                        if(status==A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW)
+                            retainedCandidates[index]?.toList().orEmpty()
+                        else emptyList())
+                }
             )
         }
     }
