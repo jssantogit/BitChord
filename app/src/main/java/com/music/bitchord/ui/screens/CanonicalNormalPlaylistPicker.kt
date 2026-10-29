@@ -53,10 +53,11 @@ internal suspend fun canonicalNormalPlaylistBrowseGroups(
     context: Context,
     term: String,
     type: CanonicalPlaylistBrowseType,
+    sourceProviderKey: String? = null,
 ): List<CanonicalPlaylistBrowseGroup> = withContext(Dispatchers.IO) {
     if (type == CanonicalPlaylistBrowseType.TRACKS) return@withContext emptyList()
     val app = context.applicationContext
-    val keys = activeCanonicalPlaylistProviderKeys(app)
+    val keys = activeCanonicalPlaylistProviderKeys(app, sourceProviderKey)
     val dao = CanonicalCatalogDatabase.get(app).catalogDao()
     val groups = keys.flatMap { provider ->
         when (type) {
@@ -77,9 +78,10 @@ internal suspend fun canonicalNormalPlaylistBrowseGroups(
 internal suspend fun canonicalNormalPlaylistGroupTracks(
     context: Context,
     group: CanonicalPlaylistBrowseGroup,
+    sourceProviderKey: String? = null,
 ): List<V2DisplayRow> = withContext(Dispatchers.IO) {
     val app = context.applicationContext
-    val keys = activeCanonicalPlaylistProviderKeys(app)
+    val keys = activeCanonicalPlaylistProviderKeys(app, sourceProviderKey)
     val dao = CanonicalCatalogDatabase.get(app).catalogDao()
     val ids = keys.flatMap { provider ->
         when (group.type) {
@@ -103,9 +105,10 @@ internal suspend fun canonicalNormalPlaylistGroupTracks(
 internal suspend fun canonicalNormalPlaylistSearch(
     context: Context,
     term: String,
+    sourceProviderKey: String? = null,
 ): List<V2DisplayRow> = withContext(Dispatchers.IO) {
     val app = context.applicationContext
-    val keys = activeCanonicalPlaylistProviderKeys(app)
+    val keys = activeCanonicalPlaylistProviderKeys(app, sourceProviderKey)
     if (keys.isEmpty()) return@withContext emptyList()
     val dao = CanonicalCatalogDatabase.get(app).catalogDao()
     val recordings = dao.searchAvailableRecordingsForPlaylist(keys, term.trim())
@@ -116,10 +119,11 @@ internal suspend fun canonicalNormalPlaylistSearch(
 internal suspend fun canonicalNormalPlaylistSelectedRows(
     context: Context,
     ids: List<String>,
+    sourceProviderKey: String? = null,
 ): List<V2DisplayRow> = withContext(Dispatchers.IO) {
     if (ids.isEmpty()) return@withContext emptyList()
     val app = context.applicationContext
-    val keys = activeCanonicalPlaylistProviderKeys(app)
+    val keys = activeCanonicalPlaylistProviderKeys(app, sourceProviderKey)
     val dao = CanonicalCatalogDatabase.get(app).catalogDao()
     val recordings = ids.distinct().chunked(400)
         .flatMap { dao.recordingsByIds(it) }
@@ -129,13 +133,19 @@ internal suspend fun canonicalNormalPlaylistSelectedRows(
     }
 }
 
-private fun activeCanonicalPlaylistProviderKeys(context: Context): List<String> {
+internal fun canonicalAvailablePlaylistSourceKeys(context: Context): List<String> =
+    activeCanonicalPlaylistProviderKeys(context, null)
+
+private fun activeCanonicalPlaylistProviderKeys(
+    context: Context, selectedProvider: String?,
+): List<String> {
     val accountRepository = OpenSubsonicAccountRepository(
         persistence = SharedPrefsOpenSubsonicAccountPersistence(context),
         credentials = AndroidKeystoreOpenSubsonicCredentialStore(context),
     )
     return OpenSubsonicLibraryProviderConfigurationReader(accountRepository)
         .configuredProviderKeys().sorted()
+        .filter { selectedProvider == null || it == selectedProvider }
 }
 
 private suspend fun canonicalNormalRows(
