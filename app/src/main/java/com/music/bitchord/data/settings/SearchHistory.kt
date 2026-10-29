@@ -9,6 +9,8 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import com.music.bitchord.data.model.SearchHistoryEntity
+import com.music.bitchord.data.model.EntityType
+import java.util.Locale
 
 /**
  * What's been searched for lately, kept on this device only.
@@ -21,6 +23,22 @@ import com.music.bitchord.data.model.SearchHistoryEntity
  * Stored as JSON rather than a delimited string: a query can contain any
  * character, separators included.
  */
+/**
+ * Plain search terms use the existing on-device SearchHistoryEntity model,
+ * but their IDs must never be routed as audio/video IDs on history taps.
+ */
+internal fun canonicalQueryHistoryEntry(rawQuery: String): SearchHistoryEntity? {
+    val query = rawQuery.trim().replace(Regex("\\s+"), " ")
+    if (query.isEmpty()) return null
+    return SearchHistoryEntity(
+        id = "q:${query.lowercase(Locale.ROOT)}",
+        title = query,
+        subtitle = "",
+        artworkUrl = null,
+        entityType = EntityType.TRACK,
+    )
+}
+
 object SearchHistory {
 
     /** Deep enough to be useful, shallow enough that the list stays scannable. */
@@ -86,6 +104,11 @@ object SearchHistory {
      * Records [entity], or moves it back to the top if it's already there.
      * Matching is by id so re-tapping an existing entity updates its timestamp.
      */
+    /** Store submitted canonical terms in the same persisted recent-search list. */
+    fun recordCanonicalQuery(query: String) {
+        canonicalQueryHistoryEntry(query)?.let(::record)
+    }
+
     fun record(entity: SearchHistoryEntity) {
         val deduped = _recent.value.filterNot { it.id.equals(entity.id, ignoreCase = true) }
         save((listOf(entity) + deduped).take(MAX_ENTRIES))

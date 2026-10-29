@@ -96,6 +96,11 @@ internal interface RemoteCatalogProvider {
 }
 
 /** Small persistence seam so provider mapping/sync stays unit-testable without Room. */
+internal data class CanonicalReleaseTrackEdge(
+    val releaseId: String,
+    val recordingId: String,
+)
+
 internal interface CanonicalCatalogSyncStore {
     suspend fun mediaAsset(provider: String, sourceKey: String): MediaAssetEntity?
 
@@ -120,6 +125,16 @@ internal interface CanonicalCatalogSyncStore {
     suspend fun upsertRelease(release: ReleaseEntity)
 
     suspend fun upsertReleaseTrack(releaseTrack: ReleaseTrackEntity)
+
+    /**
+     * Called only after a fully validated provider snapshot. Room replaces
+     * this provider's edge ownership transactionally; legacy test stores may
+     * opt out until they exercise multi-provider relationship scenarios.
+     */
+    suspend fun reconcileReleaseTrackSources(
+        providerKey: String,
+        edges: List<CanonicalReleaseTrackEdge>,
+    ) { }
 
     /**
      * Legacy test stores that never receive structured artist evidence may omit these
@@ -226,6 +241,7 @@ internal object CanonicalRemoteCatalogSync {
     ): ProviderSyncResult.Success {
         var identityConflicts = 0
         val seenSourceKeys = LinkedHashSet<String>(snapshot.tracks.size)
+        val seenReleaseTrackEdges = LinkedHashSet<CanonicalReleaseTrackEdge>()
 
         for (track in snapshot.tracks) {
             val sourceKey = track.externalTrackId.trim()
@@ -408,6 +424,7 @@ internal object CanonicalRemoteCatalogSync {
                         trackNumber = track.trackNumber,
                     ),
                 )
+                seenReleaseTrackEdges += CanonicalReleaseTrackEdge(releaseId, recordingId)
             }
 
             val mediaAssetId = existingAsset?.id ?: idFactory()
@@ -428,6 +445,7 @@ internal object CanonicalRemoteCatalogSync {
 
         var removedAssets = 0
         if (snapshot.complete) {
+            store.reconcileReleaseTrackSources(providerKey, seenReleaseTrackEdges.toList())
             val existingSourceKeys = store.mediaAssetSourceKeys(providerKey)
             for (existingSourceKey in existingSourceKeys) {
                 if (existingSourceKey !in seenSourceKeys) {

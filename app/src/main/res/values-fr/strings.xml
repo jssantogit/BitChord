@@ -63,6 +63,7 @@
     </plurals>
     <string name="songs">Chansons</string>
     <string name="artists">Artistes</string>
+    <string name="canonical_singles_eps">Singles et EP</string>
     <string name="albums">Albums</string>
     <string name="no_album_metadata">Aucun de ces titres n\'indique son album.</string>
     <string name="search_empty">Recherchez des millions de chansons sur YouTube Music.</string>
@@ -1361,4 +1362,31 @@
     <string name="playback_recovery_retry">Réessayer</string>
     <string name="playback_recovery_retrying">Nouvelle tentative…</string>
     <string name="playback_recovery_dismiss">Fermer</string>
+    <string name="canonical_discovery_header">Découverte du catalogue</string>
+    <string name="canonical_discovery_setting_title">Accueil et Explorer avec le catalogue</string>
+    <string name="canonical_discovery_setting_subtitle">Utilisez la musique enregistrée et MusicBrainz dans Accueil et Explorer. Ce mode est aussi activé si YouTube Music est désactivé.</string>
+    <string name="canonical_discovery_home_title">Votre musique</string>
+    <string name="canonical_discovery_explore_title">Explorer le catalogue</string>
+    <string name="canonical_discovery_description">Parcourez les collections enregistrées sur cet appareil ou recherchez sur MusicBrainz. Les métadonnées ne garantissent pas un fichier audio lisible.</string>
+    <string name="canonical_discovery_search">Rechercher sur MusicBrainz</string>
+    <string name="canonical_discovery_open_library">Ouvrir la bibliothèque</string>
+    <string name="canonical_discovery_downloaded_collections">Collections téléchargées</string>
+    <string name="canonical_discovery_local_playlists">Playlists enregistrées sur cet appareil</string>
+    <string name="canonical_discovery_empty_collections">Aucune collection enregistrée sur cet appareil pour le moment.</string>
+    <string name="canonical_discovery_catalog_cache">Catalogue enregistré sur cet appareil</string>
+    <string name="canonical_discovery_cache_loading">Chargement du catalogue enregistré…</string>
+    <string name="canonical_discovery_cache_error">Impossible de lire le catalogue MusicBrainz enregistré.</string>
+    <string name="canonical_discovery_cache_empty">Aucune entrée MusicBrainz enregistrée. Effectuez une recherche pour parcourir les métadonnées publiques.</string>
+    <string name="canonical_discovery_metadata_only">Métadonnées seules · aucun audio catalogué</string>
+    <string name="canonical_discovery_asset_available">Audio catalogué · accès vérifié à la lecture</string>
+    <string name="canonical_discovery_cached_offline">Enregistré hors ligne</string>
+    <string name="canonical_discovery_retry">Réessayer</string>
+    <string name="canonical_discovery_refresh">Actualiser le catalogue enregistré</string>
+    <string name="legacy_library_youtube_disabled">Activez YouTube Music dans les paramètres pour charger cette bibliothèque en ligne. Les playlists et collections locales restent disponibles.</string>
+    <string name="spotify_import_youtube_required">Pour importer une playlist Spotify, la recherche via YouTube Music est encore nécessaire. Activez YouTube Music et désactivez la découverte par catalogue.</string>
+    <string name="search_origin_general">Général</string>
+    <string name="search_origin_server">Serveur</string>
+    <string name="search_origin_local">Local</string>
+    <string name="pause_resume_fade">Fondu à la pause et à la reprise</string>
+    <string name="pause_resume_fade_subtitle">Diminue progressivement le volume à la pause et le rétablit à la reprise</string>
 </resources>

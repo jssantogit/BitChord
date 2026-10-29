@@ -154,7 +154,7 @@
     <string name="recent_searches">Pesquisas recentes</string>
     <string name="replay_subtitle">Suas músicas, artistas, álbuns e gêneros mais ouvidos</string>
     <string name="retry">Tentar novamente</string>
-    <string name="saved_to_youtube_music">Salva no YouTube Music</string>
+    <string name="saved_to_youtube_music">Salva na sua biblioteca musical</string>
     <string name="search">Pesquisar</string>
     <string name="search_empty">Pesquise milhões de músicas no YouTube Music.</string>
     <string name="search_hint">Artistas, músicas, letras e mais</string>
@@ -277,4 +277,26 @@
     <string name="smart_collection_batch_played">Iniciando reprodução</string>
     <string name="smart_collection_batch_empty">Nenhuma gravação elegível</string>
     <string name="smart_collection_batch_failed">Coleção indisponível ou ação de fila recusada</string>
+    <string name="canonical_filter_all">Tudo</string>
+    <string name="canonical_filter_songs">Músicas</string>
+    <string name="canonical_filter_videos">Vídeos</string>
+    <string name="canonical_search_hint">Pesquise no catálogo musical. Metadados não representam áudio disponível.</string>
+    <string name="canonical_back">Voltar</string>
+    <string name="canonical_cover_art">Capa do álbum</string>
+    <string name="canonical_empty_search">Nenhum resultado encontrado no catálogo.</string>
+    <string name="canonical_recording_kind">Gravação</string>
+    <string name="canonical_artist_kind">Artista · discografia</string>
+    <string name="canonical_group_kind">Álbum ou single</string>
+    <string name="canonical_release_kind">Edição · faixas</string>
+    <string name="canonical_known_asset">Arquivo de áudio registrado · disponibilidade verificada ao reproduzir</string>
+    <string name="canonical_offline_metadata">Metadados salvos offline · nenhum áudio disponível conhecido</string>
+    <string name="canonical_metadata_only">Somente metadados · requer um arquivo local ou remoto autorizado</string>
+    <string name="canonical_more_editions">Mais edições</string>
+    <string name="canonical_more_results">Mais resultados</string>
+    <string name="canonical_loading_more">Carregando…</string>
+    <string name="canonical_server_heading">Dos seus servidores</string>
+    <string name="canonical_server_track_hint">Disponível em um servidor configurado · toque para reproduzir</string>
+    <string name="search_server_hint">Pesquisar nos servidores e addons</string>
+    <string name="search_server_empty">Pesquise músicas dos servidores conectados ou addons disponíveis.</string>
+    <string name="search_server_no_results">Nenhum servidor ou addon encontrou “%1$s”.</string>
 </resources>

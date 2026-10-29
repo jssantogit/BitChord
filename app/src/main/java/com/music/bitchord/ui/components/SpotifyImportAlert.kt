@@ -57,6 +57,7 @@ import kotlinx.coroutines.launch
 fun SpotifyImportAlert(
     hazeState: HazeState,
     signedIn: Boolean,
+    allowYoutubeMatching: () -> Boolean = { true },
     /** Called once the songs are matched; [privacy] is meaningful only when signed in. */
     onImported: (title: String, privacy: PlaylistPrivacy, songs: List<Song>) -> Unit,
     onDismiss: () -> Unit,
@@ -77,15 +78,26 @@ fun SpotifyImportAlert(
             failed = true
             return
         }
+        if (!allowYoutubeMatching()) {
+            status = context.getString(R.string.spotify_import_youtube_required)
+            failed = true
+            return
+        }
         working = true
         failed = false
         status = context.getString(R.string.spotify_import_fetching)
         scope.launch {
             try {
                 val (name, tracks) = SpotifyImporter.fetchPlaylistTracks(id)
-                val (songs, missed) = SpotifyImporter.resolveToSongs(tracks) { done, total ->
-                    status = context.getString(R.string.spotify_import_matching, done, total)
-                }
+                if (!allowYoutubeMatching()) error(context.getString(R.string.spotify_import_youtube_required))
+                val (songs, missed) = SpotifyImporter.resolveToSongs(
+                    tracks = tracks,
+                    onProgress = { done, total ->
+                        status = context.getString(R.string.spotify_import_matching, done, total)
+                    },
+                    allowYoutubeMatching = allowYoutubeMatching,
+                )
+                if (!allowYoutubeMatching()) error(context.getString(R.string.spotify_import_youtube_required))
                 if (songs.isEmpty()) error(context.getString(R.string.spotify_import_none))
                 onImported(name, privacy, songs)
                 if (missed.isEmpty()) onDismiss() else unmatched = missed

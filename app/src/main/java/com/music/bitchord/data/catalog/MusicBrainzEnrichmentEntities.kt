@@ -51,6 +51,10 @@ internal data class MusicBrainzRecordingEnrichmentEntity(
     val durationMs: Long?,
     val artistDisplay: String?,
     val fetchedAtEpochMs: Long,
+    /** Positive audio-format evidence from MusicBrainz Recording search. */
+    val hasOfficialAudioRelease: Boolean? = null,
+    /** Distinguishes explicit video recordings from official studio audio. */
+    val isVideo: Boolean? = null,
 )
 
 @Entity(

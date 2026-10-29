@@ -162,7 +162,6 @@ import com.music.bitchord.data.canvas.CanvasSource
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsSource
 import com.music.bitchord.data.settings.LastPlayerScreen
-import com.music.bitchord.data.model.LikeStatus
 import com.music.bitchord.data.model.PlaybackSourceType
 import com.music.bitchord.data.model.PLAYER_ART_PX
 import com.music.bitchord.data.model.Song
@@ -661,8 +660,6 @@ fun NowPlayingScreen(
     /** A version switch (video vs audio-only), triggered from the player's
      * menu, is fetching and measuring the target cut. */
     audioVersionSwitching: Boolean,
-    /** The player has just swapped this item to a higher-quality source. */
-    qualityUpgraded: Boolean,
     queue: List<Song>,
     queueIndex: Int,
     hasPrevious: Boolean,
@@ -672,8 +669,6 @@ fun NowPlayingScreen(
     autoplayEnabled: Boolean,
     signedIn: Boolean,
     accountName: String?,
-    likeStatus: LikeStatus,
-    onToggleLike: () -> Unit,
     onEditCanonicalRating: () -> Unit = {},
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
@@ -815,7 +810,6 @@ fun NowPlayingScreen(
         onSeek(adjustedLyricsSeekTarget(lineTimeMs, lyricsOffsetMs))
     }
     val hideVolumeBar by PlayerSettings.hideVolumeBar.collectAsStateWithLifecycle()
-    val hideSongStatus by PlayerSettings.hideSongStatus.collectAsStateWithLifecycle()
 
     // Animated cover art: the looping video some labels publish alongside a
     // release, laid over the sleeve. A miss is the normal answer — see
@@ -1012,20 +1006,6 @@ fun NowPlayingScreen(
     // so the words change underneath them and the panel stays. Closing it
     // dropped them back onto the artwork every few minutes with no gesture of
     // their own behind it.
-    // A brief, non-modal confirmation that the three-dot menu now contains a
-    // way back to the original YouTube rendition. The control keeps its usual
-    // action — opening the menu — so the cue teaches rather than surprises.
-    var showRevertCue by remember(song.videoId) { mutableStateOf(false) }
-    LaunchedEffect(song.videoId, qualityUpgraded) {
-        if (!qualityUpgraded) {
-            showRevertCue = false
-            return@LaunchedEffect
-        }
-        showRevertCue = true
-        delay(REVERT_CUE_MS)
-        showRevertCue = false
-    }
-
     // Lyrics are meant to be read continuously, so hold off the device's normal
     // screen timeout — but only while the panel is actually up. Closing it hands
     // the screen back, and the system starts its own timeout from that moment
@@ -1537,12 +1517,10 @@ fun NowPlayingScreen(
             onListenTogether = onListenTogether,
             onOpenListenTogetherMembers = openListenTogetherMembers,
         )
-        // Keep the current output caption visible in every state.
-        Spacer(Modifier.height(18.dp))
-        Box(
-            modifier = Modifier.fillMaxWidth().height(20.dp),
-            contentAlignment = Alignment.TopCenter,
-        ) {
+        // The output selector already lives in PlayerActionRow. A persistent
+        // "This Phone" label duplicates it and adds no actionable information.
+        if (NowPlayingChrome.showOutputCaption) {
+            Spacer(Modifier.height(18.dp))
             OutputCaption(
                 accountName = accountName,
                 onOpenOutput = openAudioOutput,
@@ -1899,7 +1877,7 @@ fun NowPlayingScreen(
                         ) {
                             // The stats belong to the player, not to the sleeve, so
                             // they leave it along with the rest of the player.
-                            SleeveNerdStats(
+                            if (NowPlayingChrome.showTechnicalOverlay) SleeveNerdStats(
                                 song = song,
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
@@ -1914,15 +1892,11 @@ fun NowPlayingScreen(
                     mainPane = { compact ->
                         LandscapeMainPane(
                             compact = compact,
-                            caption = if (hideSongStatus) null else playbackOriginText(song, playedBy),
+                            caption = if (NowPlayingChrome.showPlaybackOrigin) playbackOriginText(song, playedBy) else null,
                             onOpenCaption = openPlaybackOrigin,
                             credits = {
                                 LandscapeCredits(
                                     song = song,
-                                    signedIn = signedIn,
-                                    likeStatus = likeStatus,
-                                    showRevertCue = showRevertCue,
-                                    onToggleLike = onToggleLike,
                                     onEditCanonicalRating = onEditCanonicalRating,
                                     onOpenMenu = openMenuWithArtwork,
                                     onOpenAlbum = onOpenAlbum,
@@ -2413,16 +2387,16 @@ fun NowPlayingScreen(
                         // composition until its final frame gives the caption a real
                         // fade on both entry and exit, but removes its click target
                         // entirely once lyrics or the queue owns the player.
-                        if (!hideSongStatus) {
+                        // The title and artist already identify the recording.
+                        // Keep its origin in the playback model, not over the cover.
+                        if (NowPlayingChrome.showPlaybackOrigin) {
                             WhileShown({ !collapseAlmostDone }) {
                                 PlaybackOriginCaption(
                                     text = playbackOriginText(song, playedBy),
                                     onClick = openPlaybackOrigin,
                                     textAlign = TextAlign.Center,
-                                    contentPadding = PaddingValues(start = PLAYER_GUTTER, end = PLAYER_GUTTER, bottom = 1.dp),
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .graphicsLayer { alpha = (1f - p()) * spotifyChromeAlpha },
+                                    contentPadding = PaddingValues(horizontal = PLAYER_GUTTER),
+                                    modifier = Modifier.align(Alignment.BottomCenter),
                                 )
                             }
                         }
@@ -3131,7 +3105,7 @@ fun NowPlayingScreen(
                             // fade away with Spotify's lower control deck rather than
                             // following the compact credits to the bottom edge.
                             WhileShown({ !collapsePastHalf }) {
-                                SleeveNerdStats(
+                                if (NowPlayingChrome.showTechnicalOverlay) SleeveNerdStats(
                                     song = song,
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
@@ -3308,25 +3282,6 @@ fun NowPlayingScreen(
                                 )
                             }
                             Spacer(Modifier.width(10.dp))
-                            // Beside the credits rather than down in the toggle row:
-                            // liking is about *this song*, and the row below is about
-                            // how the queue plays. Guests get nothing to tap, since
-                            // there's no account to record it against — and neither
-                            // does a local file or a finished download, which carries
-                            // no YouTube identity to rate.
-                            if (signedIn && song.localUri == null) {
-                                val liked = likeStatus == LikeStatus.LIKE
-                                CircleGlyph(
-                                    icon = if (liked) BitChordIcons.HeartFilled else BitChordIcons.Heart,
-                                    contentDescription = stringResource(
-                                        if (liked) Res.string.remove_from_liked else Res.string.like,
-                                    ),
-                                    onClick = onToggleLike,
-                                    active = liked,
-                                    haptic = if (liked) Haptic.ToggleOff else Haptic.ToggleOn,
-                                )
-                                Spacer(Modifier.width(8.dp))
-                            }
                             // While the lyrics are up the menu glyph becomes the share
                             // entry: the same pick mode a long-press on a line opens,
                             // only on phones where a card can actually be made. While
@@ -3342,26 +3297,23 @@ fun NowPlayingScreen(
                                 !lyrics.isNullOrEmpty() && (!lyricsControlsOpen || lyricPicker.picking)
                             CircleGlyph(
                                 icon = when {
-                                    showRevertCue -> Icons.AutoMirrored.Rounded.Undo
                                     lyricsShareGlyphVisible && lyricPicker.picking -> Icons.Rounded.Close
                                     lyricsShareGlyphVisible -> Icons.Rounded.IosShare
                                     else -> Icons.Rounded.MoreHoriz
                                 },
                                 contentDescription = stringResource(
                                     when {
-                                        showRevertCue -> Res.string.more
                                         lyricsShareGlyphVisible && lyricPicker.picking -> Res.string.cancel
                                         lyricsShareGlyphVisible -> Res.string.share
                                         else -> Res.string.more
                                     },
                                 ),
                                 onClick = when {
-                                    showRevertCue -> openMenuWithArtwork
                                     lyricsShareGlyphVisible && lyricPicker.picking -> lyricPicker.cancel
                                     lyricsShareGlyphVisible -> lyricPicker.beginPicking
                                     else -> openMenuWithArtwork
                                 },
-                                haptic = if (lyricsShareGlyphVisible && !showRevertCue) {
+                                haptic = if (lyricsShareGlyphVisible) {
                                     Haptic.Select
                                 } else {
                                     Haptic.Tap

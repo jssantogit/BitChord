@@ -1,20 +1,18 @@
 package com.music.bitchord.playback
 
-/** An app-side PCM conversion verdict is not proof of the Android output route. */
+/**
+ * Truth confined to the PCM samples handed to AudioTrack, not the full
+ * Android/output chain. Neither a direct playback request nor observation
+ * alone proves mixer/HAL/DAC sample preservation.
+ */
 internal enum class FidelityTruth {
     ALTERED,
     PCM_EXACT_ROUTE_NOT_PROVEN,
-    END_TO_END_VERIFIED,
 }
 
 internal object AudioFidelityTruth {
-    fun classify(
-        pcmExact: Boolean,
-        anyDsp: Boolean,
-        routeActuallyObserved: Boolean,
-    ): FidelityTruth = when {
+    fun classify(pcmExact: Boolean, anyDsp: Boolean): FidelityTruth = when {
         anyDsp || !pcmExact -> FidelityTruth.ALTERED
-        !routeActuallyObserved -> FidelityTruth.PCM_EXACT_ROUTE_NOT_PROVEN
-        else -> FidelityTruth.END_TO_END_VERIFIED
+        else -> FidelityTruth.PCM_EXACT_ROUTE_NOT_PROVEN
     }
 }

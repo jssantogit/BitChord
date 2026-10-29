@@ -14,7 +14,9 @@ import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.ReleaseArtistCreditEntity
 import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.catalog.ReleaseTrackEntity
+import com.music.bitchord.data.catalog.CatalogReleaseTrackSourceEntity
 import com.music.bitchord.data.catalog.provider.CanonicalCatalogSyncStore
+import com.music.bitchord.data.catalog.provider.CanonicalReleaseTrackEdge
 import com.music.bitchord.data.catalog.provider.CanonicalRemoteCatalogSync
 import com.music.bitchord.data.catalog.provider.ProviderSyncResult
 import java.util.UUID
@@ -175,6 +177,18 @@ private class RoomCanonicalCatalogSyncStore(
 
     override suspend fun upsertReleaseTrack(releaseTrack: ReleaseTrackEntity) =
         dao.upsertReleaseTrack(releaseTrack)
+
+    override suspend fun reconcileReleaseTrackSources(
+        providerKey: String, edges: List<CanonicalReleaseTrackEdge>,
+    ) {
+        // Called within the existing guarded Room snapshot transaction.
+        dao.deleteReleaseTrackSourcesForProvider(providerKey)
+        edges.distinct().forEach { edge ->
+            dao.upsertCatalogReleaseTrackSource(CatalogReleaseTrackSourceEntity(
+                edge.releaseId, edge.recordingId, providerKey,
+            ))
+        }
+    }
 
     override suspend fun upsertArtist(artist: ArtistEntity) = dao.upsertArtist(artist)
 

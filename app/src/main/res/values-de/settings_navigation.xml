@@ -1,0 +1,32 @@
+<resources>
+    <string name="settings_nav_group_account">KONTO</string>
+    <string name="settings_nav_group_music">MUSIK</string>
+    <string name="settings_nav_group_experience">ERLEBNIS</string>
+    <string name="settings_nav_group_data">DATEN UND DOWNLOADS</string>
+    <string name="settings_nav_group_system">SYSTEM</string>
+    <string name="settings_nav_group_about">ÜBER</string>
+    <string name="settings_nav_lyrics">Songtexte</string>
+    <string name="settings_nav_about">Über</string>
+    <string name="settings_nav_filtered">Ergebnisse für: %1$s</string>
+    <string name="settings_nav_show_all">Alle anzeigen</string>
+    <string name="settings_nav_controls">Steuerung und Verhalten</string>
+    <string name="settings_nav_advanced">Erweitert</string>
+    <string name="settings_nav_desc_account">Konten und Musikintegrationen</string>
+    <string name="settings_nav_desc_audio">Quellen, WLAN und mobile Daten</string>
+    <string name="settings_nav_desc_playback">Audioausgabe, Übergänge und Warteschlange</string>
+    <string name="settings_nav_desc_local">Ordner und lokale Audiofilter</string>
+    <string name="settings_nav_desc_appearance">Design, Cover und visuelle Effekte</string>
+    <string name="settings_nav_desc_lyrics">Synchronisierung, Quellen und Übersetzung</string>
+    <string name="settings_nav_desc_downloads">Soulseek, Qualität und Speicherort</string>
+    <string name="settings_nav_desc_storage">Audio-Cache und Speicherplatz</string>
+    <string name="settings_nav_desc_data">Replay, Sicherungen und Importe</string>
+    <string name="settings_nav_desc_performance">Bildwiederholrate und Akku</string>
+    <string name="settings_nav_desc_misc">Gesten und Wiedergabeverhalten</string>
+    <string name="settings_nav_desc_language">Sprache der Oberfläche</string>
+    <string name="settings_nav_desc_advanced">Diagnose und technische Einstellungen</string>
+    <string name="settings_nav_desc_wear">Uhrenintegration</string>
+    <string name="settings_nav_desc_about">Version und Projektinformationen</string>
+    <string name="settings_nav_desc_sources">Musikquellen und Erweiterungen</string>
+    <string name="settings_nav_diagnostics_title">Diagnose</string>
+    <string name="settings_nav_diagnostics_subtitle">Diagnoseberichte erfassen, prüfen und teilen</string>
+</resources>

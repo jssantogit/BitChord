@@ -14,7 +14,7 @@ import kotlinx.coroutines.withContext
 /**
  * L9 shared song-actions entry. It is intentionally invisible unless the
  * Playback-owned resolver proves the exact Recording and playable asset.
- * YouTube account Likes / Dislikes remain an unrelated menu feature.
+ * Legacy provider reactions are never exposed alongside this native star action.
  *
  * No rating is changed by opening, closing, scrolling or switching this menu.
  */

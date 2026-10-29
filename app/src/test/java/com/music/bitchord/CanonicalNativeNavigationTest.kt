@@ -1,0 +1,465 @@
+package com.music.bitchord
+
+import com.music.bitchord.data.model.BrowseType
+import com.music.bitchord.ui.canonicalNativeBrowseId
+import com.music.bitchord.ui.canonicalNativePageType
+import com.music.bitchord.ui.canonicalNativeSections
+import com.music.bitchord.ui.canonicalPreferredEditions
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
+import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
+import com.music.bitchord.ui.screens.CanonicalSearchKind
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class CanonicalNativeNavigationTest {
+    private val artist = CanonicalCatalogSearchRow("artist-id", CanonicalSearchKind.ARTIST, "ILLIT", null)
+    private val group = CanonicalCatalogSearchRow("group-id", CanonicalSearchKind.RELEASE_GROUP,
+        "SUPER REAL ME", "ILLIT", releaseKind = "EP")
+    private val edition = CanonicalCatalogSearchRow("release-id", CanonicalSearchKind.RELEASE,
+        "SUPER REAL ME", "ILLIT")
+
+    @Test fun artistDiscographySeparatesAlbumsFromSinglesAndEpsWithoutDuplicatingTracks() {
+        val album = group.copy(musicBrainzId = "album-group", title = "NJWMX",
+            releaseKind = "Album", releaseDate = "2023-12-19")
+        val ep = group.copy(musicBrainzId = "ep-group", title = "Get Up",
+            releaseKind = "EP", releaseDate = "2023-07-21")
+        val single = group.copy(musicBrainzId = "single-group", title = "Supernatural",
+            releaseKind = "Single", releaseDate = "2024-06-21")
+        val unknown = group.copy(musicBrainzId = "unknown-group", title = "Right Now",
+            releaseKind = "Other")
+        val recording = group.copy(musicBrainzId = "recording", title = "Hype Boy",
+            kind = CanonicalSearchKind.RECORDING)
+        val sections = canonicalNativeSections(
+            parentKind = CanonicalSearchKind.ARTIST,
+            rows = listOf(ep, recording, unknown, single, album),
+            heading = "Novos álbuns e singles",
+            albumsHeading = "Álbuns",
+            singlesHeading = "Singles e EPs",
+        )
+        assertEquals(listOf("Álbuns", "Singles e EPs"), sections.map { it.title })
+        assertEquals(listOf("NJWMX"), sections[0].items.map { it.title })
+        assertEquals(listOf("Supernatural", "Get Up"), sections[1].items.map { it.title })
+        assertTrue(sections.flatMap { it.items }.all { it.videoId == null })
+    }
+
+    @Test fun artistAndAlbumKeepNativeDetailTypesWithoutLegacyVideoIds() {
+        assertEquals(BrowseType.ARTIST, canonicalNativePageType(artist.kind))
+        assertEquals(BrowseType.ALBUM, canonicalNativePageType(group.kind))
+        assertEquals(BrowseType.ALBUM, canonicalNativePageType(edition.kind))
+        assertNull(canonicalNativePageType(CanonicalSearchKind.RECORDING))
+    }
+
+    @Test fun artistDiscographyUsesNativeShelvesWithIdentitySafeNavigation() {
+        val sections = canonicalNativeSections(
+            parentKind = CanonicalSearchKind.ARTIST,
+            rows = listOf(group),
+            heading = "Lançamentos",
+        )
+        assertEquals(1, sections.size)
+        assertEquals("Lançamentos", sections.single().title)
+        val card = sections.single().items.single()
+        assertEquals(canonicalNativeBrowseId(group), card.browseId)
+        assertNull(card.videoId)
+        assertEquals("EP", card.subtitle)
+    }
+
+    @Test fun editionsStayDistinctAndNeverPretendToBePlayableTracks() {
+        val alternate = edition.copy(musicBrainzId = "japan-release-id")
+        val sections = canonicalNativeSections(
+            parentKind = CanonicalSearchKind.RELEASE_GROUP,
+            rows = listOf(edition, alternate),
+            heading = "Edições",
+        )
+        assertEquals(2, sections.single().items.size)
+        assertEquals(2, sections.single().items.map { it.browseId }.distinct().size)
+        assertTrue(sections.single().items.all { it.videoId == null })
+    }
+    @Test fun preferredEditionAvoidsBootlegsAndRemixes() {
+        val versions = listOf(
+            MusicBrainzReleaseHit("remix", "SUPER REAL ME (sped up)", "JP",
+                "2024-04-02", "ILLIT", status = "Official"),
+            MusicBrainzReleaseHit("bootleg", "SUPER REAL ME", "XW",
+                "2024-03-23", "ILLIT", status = "Bootleg"),
+            MusicBrainzReleaseHit("main", "SUPER REAL ME", "KR",
+                "2024-03-25", "ILLIT", status = "Official"),
+            MusicBrainzReleaseHit("deluxe", "SUPER REAL ME (Deluxe)", "XW",
+                "2024-04-01", "ILLIT", status = "Official"),
+        )
+        assertEquals("main", canonicalPreferredEditions(versions, "SUPER REAL ME").first().musicBrainzId)
+    }
+
+    @Test fun preferredEditionDoesNotInventIdentityOrMergeRealReleases() {
+        val releases = listOf(
+            MusicBrainzReleaseHit("first", "Original", null, null, "Artist", status = "Official"),
+            MusicBrainzReleaseHit("second", "Original", null, null, "Artist", status = "Official"),
+        )
+        assertEquals(2, canonicalPreferredEditions(releases, "Original").size)
+        assertEquals(setOf("first", "second"), canonicalPreferredEditions(releases, "Original").map { it.musicBrainzId }.toSet())
+    }
+
+    @Test fun unknownMusicBrainzGroupCannotDefaultToAnAlbumLabel() {
+        assertTrue(!com.music.bitchord.ui.canonicalMayUseAlbumFallbackLabel("catalog:RELEASE_GROUP:unknown"))
+        assertTrue(!com.music.bitchord.ui.canonicalMayUseAlbumFallbackLabel("catalog:RELEASE:edition"))
+        assertTrue(com.music.bitchord.ui.canonicalMayUseAlbumFallbackLabel("local:album:1"))
+    }
+
+    @Test fun nativeArtistShelfPublishesArtworkForItsExactVerifiedGroup() {
+        val verified = group.copy(
+            musicBrainzId = "verified-group", releaseKind = "EP",
+            artworkUri = "https://archive.org/verified-sleeve.jpg",
+        )
+        val result = canonicalNativeSections(
+            parentKind = CanonicalSearchKind.ARTIST,
+            rows = listOf(verified), heading = "Lançamentos",
+        )
+        assertEquals("https://archive.org/verified-sleeve.jpg",
+            result.single().items.single().thumbnailUrl)
+        assertNull(result.single().items.single().videoId)
+    }
+
+    @Test fun unknownMusicBrainzTypesMustNotEnterArtistAlbumsAndSinglesShelf() {
+        val unclassified = group.copy(
+            musicBrainzId = "unknown", title = "Right Now", releaseKind = "Other",
+        )
+        val known = group.copy(musicBrainzId = "known", title = "OMG", releaseKind = "Single")
+        val sections = canonicalNativeSections(
+            parentKind = CanonicalSearchKind.ARTIST,
+            rows = listOf(unclassified, known), heading = "Lançamentos",
+        )
+        assertEquals(listOf("OMG"), sections.single().items.map { it.title })
+    }
+
+    @Test fun canonicalGroupTracklistDoesNotInsertEditionShelf() {
+        val track = CanonicalCatalogSearchRow(
+            musicBrainzId = "recording-1",
+            kind = CanonicalSearchKind.RECORDING,
+            title = "Magnetic",
+            subtitle = "ILLIT",
+            durationMs = 160_000L,
+        )
+        assertTrue(canonicalNativeSections(
+            parentKind = CanonicalSearchKind.RELEASE_GROUP,
+            rows = listOf(track),
+            heading = "Edições",
+        ).isEmpty())
+        assertEquals(160_000L, track.durationMs)
+    }
+
+    @Test fun officialSecondaryTypesKeepTheirFormatAndDescribeRemixAlbumWithoutInventingSingles() {
+        val remix = group.copy(musicBrainzId = "njwmx", title = "NJWMX",
+            releaseKind = "Album", secondaryTypes = "Remix|Compilation")
+        val unknown = group.copy(musicBrainzId = "ambiguous", title = "Right Now",
+            releaseKind = "Other", secondaryTypes = "Soundtrack")
+        val sections = canonicalNativeSections(
+            CanonicalSearchKind.ARTIST, listOf(remix, unknown), "Lançamentos",
+            albumsHeading = "Álbuns", singlesHeading = "Singles e EPs",
+        )
+        assertEquals(listOf("Álbuns"), sections.map { it.title })
+        assertEquals("Album · Remix · Compilation", sections.single().items.single().subtitle)
+    }
+
+    @Test fun unverifiedEditionsCannotReplaceAnOfficialEditionOrSupplyAnOfficialTracklist() {
+        val verified = MusicBrainzReleaseHit("official", "Get Up", "XW",
+            "2023-07-21", "NewJeans", status = "Official")
+        val bootleg = verified.copy(musicBrainzId = "bootleg", status = "Bootleg")
+        val promo = verified.copy(musicBrainzId = "promo", status = "Promotion")
+        assertEquals(listOf("official"), canonicalPreferredEditions(
+            listOf(bootleg, promo, verified), "Get Up").map { it.musicBrainzId })
+        assertTrue(canonicalPreferredEditions(listOf(bootleg, promo), "Get Up").isEmpty())
+        // A missing MusicBrainz status cannot prove official availability,
+        // including old offline Release metadata saved before status tracking.
+        assertTrue(canonicalPreferredEditions(listOf(
+            verified.copy(musicBrainzId = "unknown", status = null)
+        ), "Get Up").isEmpty())
+    }
+
+
+    @Test fun artistCoverCandidatesRejectVideoVariantsAndUnknownEditionStatus() {
+        val groupTitle = "Almond Chocolate"
+        val base = MusicBrainzReleaseHit("official-xw", groupTitle, "XW", "2025-02-15",
+            "ILLIT", status = "Official")
+        val options = listOf(
+            base.copy(musicBrainzId = "video", title = "Almond Chocolate (performance ver.)"),
+            base.copy(musicBrainzId = "bootleg", status = "Bootleg"),
+            base.copy(musicBrainzId = "unknown", status = null),
+            base.copy(musicBrainzId = "korean-version", title = "Almond Chocolate (Korean ver.)"),
+            base,
+        )
+        assertEquals(listOf("official-xw"),
+            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(options, groupTitle)
+                .map { it.musicBrainzId })
+    }
+
+    @Test fun missingVerifiedEditionMustNotChooseArbitraryReleaseGroupArtwork() {
+        val options = listOf(
+            MusicBrainzReleaseHit("post", "Topping", null, "2025-07-05", "ILLIT", status = "Promotion"),
+            MusicBrainzReleaseHit("other", "Topping (Music Video)", null, null, "ILLIT", status = "Official"),
+        )
+        assertTrue(com.music.bitchord.ui.canonicalArtworkEditionsForGroup(options, "Topping")
+            .isEmpty())
+    }
+
+
+    @Test fun artworkSkipsConfirmedMissingFrontAndTriesKnownPositiveBeforeUnknown() {
+        val original = MusicBrainzReleaseHit("old-no-art", "Get Up", "KR",
+            "2023-07-21", "NewJeans", status = "Official", hasFrontCover = false)
+        val unknown = original.copy(musicBrainzId = "unknown-front",
+            releaseDate = "2023-07-22", hasFrontCover = null)
+        val positive = original.copy(musicBrainzId = "confirmed-front",
+            releaseDate = "2023-07-23", hasFrontCover = true)
+        assertEquals(listOf("confirmed-front", "unknown-front"),
+            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
+                listOf(original, unknown, positive), "Get Up"
+            ).map { it.musicBrainzId })
+    }
+
+
+    @Test fun catalogCoverUsesLinkedOfficialEditionWhenGroupAndReleaseTitlesDiffer() {
+        val howSweet = MusicBrainzReleaseHit(
+            "how-sweet-xw", "How Sweet", "XW", "2024-05-24", "NewJeans",
+            status = "Official", hasFrontCover = true,
+        )
+        val video = howSweet.copy(musicBrainzId = "video",
+            title = "How Sweet (music video)")
+        val promo = howSweet.copy(musicBrainzId = "promo", status = "Promotion")
+        assertEquals(listOf("how-sweet-xw"),
+            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
+                listOf(video, promo, howSweet), "How Sweet & Bubble Gum",
+            ).map { it.musicBrainzId })
+    }
+
+    @Test fun officialEditionPresentationCanCorrectCompositeGroupTitleWithoutChangingIdentity() {
+        val worldwide = MusicBrainzReleaseHit(
+            "xw", "How Sweet", "XW", "2024-05-24", "NewJeans", status = "Official",
+        )
+        val bootleg = worldwide.copy(musicBrainzId = "bootleg",
+            title = "Unrelated", status = "Bootleg")
+        assertEquals("How Sweet", com.music.bitchord.ui.canonicalOfficialGroupDisplayTitle(
+            "How Sweet & Bubble Gum", listOf(bootleg, worldwide)))
+        assertEquals("Get Up", com.music.bitchord.ui.canonicalOfficialGroupDisplayTitle(
+            "Get Up", listOf(worldwide)))
+        assertEquals("How Sweet & Bubble Gum",
+            com.music.bitchord.ui.canonicalOfficialGroupDisplayTitle(
+                "How Sweet & Bubble Gum", listOf(bootleg)))
+    }
+
+    @Test fun candidateRankingSkipsConfirmedNoFrontWithoutStarvingOtherOfficialTitles() {
+        val noCover = MusicBrainzReleaseHit(
+            "plain", "Get Up", "XW", "2023-07-21", "NewJeans",
+            status = "Official", hasFrontCover = false,
+        )
+        val official = noCover.copy(musicBrainzId = "other-official",
+            title = "NewJeans 2nd EP Get Up", hasFrontCover = true)
+        assertEquals(listOf("other-official"),
+            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
+                listOf(noCover, official), "Get Up",
+            ).map { it.musicBrainzId })
+    }
+
+
+    @Test fun groupArtworkNeverBorrowsAnotherEditionWithUnrelatedOrCollectorTitle() {
+        val normal = MusicBrainzReleaseHit("official", "Taste of Love", "XW",
+            "2021-06-11", "TWICE", status = "Official", hasFrontCover = true)
+        val variant = normal.copy(musicBrainzId = "product", title = "Taste of Love (Taste ver.)")
+        val unrelated = normal.copy(musicBrainzId = "unrelated", title = "Perfect World")
+        val remix = normal.copy(musicBrainzId = "remix", title = "Taste of Love (DJ remix)")
+        assertEquals(listOf("official"),
+            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
+                listOf(variant, unrelated, remix, normal), "Taste of Love",
+            ).map { it.musicBrainzId })
+        assertTrue(com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
+            listOf(variant, unrelated, remix), "Taste of Love",
+        ).isEmpty())
+    }
+
+    @Test fun officialRetailPackagingEditionsAreNotCanonicalStreamingAlbumSleeves() {
+        val canonical = MusicBrainzReleaseHit(
+            "main", "Taste of Love", "XW", "2021-06-11", "TWICE",
+            status = "Official", hasFrontCover = true,
+        )
+        val editions = listOf(
+            "Taste of Love (Digipack)" ,
+            "Taste of Love (Nemo ver.)",
+            "Taste of Love (Platform Album)",
+            "Taste of Love (POCA Album)",
+            "Taste of Love (Compact Edition)",
+            "Taste of Love (Member Edition)",
+            "Taste of Love (Store Exclusive)",
+            "Taste of Love (Signed Edition)",
+        ).mapIndexed { index, title ->
+            canonical.copy(musicBrainzId = "variant-$index", title = title)
+        }
+        assertEquals(
+            listOf("main"),
+            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
+                editions + canonical, "Taste of Love",
+            ).map { it.musicBrainzId },
+        )
+        assertTrue(com.music.bitchord.ui.canonicalEditionTitleIsSuitableForGroupArtwork(
+            "Taste of Love", "Taste of Love",
+        ))
+    }
+
+    @Test fun verifiedAlbumArtworkBelongsToItsTracksWithoutNewCoverSearch() {
+        val cover = "https://archive.org/verified-release-group-cover-500.jpg"
+        val tracks = listOf(
+            CanonicalCatalogSearchRow("r1", CanonicalSearchKind.RECORDING,
+                "Alcohol-Free", "TWICE"),
+            CanonicalCatalogSearchRow("r2", CanonicalSearchKind.RECORDING,
+                "First Time", "TWICE"),
+        )
+        val inherited = com.music.bitchord.ui.canonicalReleaseTracksWithArtwork(tracks, cover)
+        assertEquals(listOf(cover, cover), inherited.map { it.artworkUri })
+        assertEquals(listOf("r1", "r2"), inherited.map { it.musicBrainzId })
+        assertEquals(tracks, com.music.bitchord.ui.canonicalReleaseTracksWithArtwork(tracks, null))
+        val previouslyOwned = tracks.first().copy(artworkUri = "content://own-cover")
+        assertEquals("content://own-cover",
+            com.music.bitchord.ui.canonicalReleaseTracksWithArtwork(
+                listOf(previouslyOwned), cover,
+            ).single().artworkUri)
+    }
+
+
+    @Test fun identicalOfficialAlbumTitlesPreferWorldwideCoverOverEarlyLocalPackaging() {
+        val korean = MusicBrainzReleaseHit("kr", "Taste of Love", "KR",
+            "2021-06-09", "TWICE", status = "Official", hasFrontCover = true)
+        val worldwide = korean.copy(musicBrainzId = "xw", country = "XW",
+            releaseDate = "2021-06-11")
+        assertEquals(listOf("xw", "kr"),
+            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
+                listOf(korean, worldwide), "Taste of Love",
+            ).map { it.musicBrainzId })
+    }
+
+
+    @Test fun artistArtworkUpdatesOnlyAffectedCardsWithoutRebuildingShelves() {
+        val first = group.copy(musicBrainzId = "early", title = "Get Up",
+            releaseDate = "2023-07-21", artworkUri = null)
+        val second = group.copy(musicBrainzId = "cached", title = "Supernatural",
+            releaseDate = "2024-06-21", artworkUri = "https://archive.org/cached.jpg")
+        val sections = canonicalNativeSections(
+            CanonicalSearchKind.ARTIST, listOf(first, second), "Lançamentos",
+        )
+        val before = sections.single().items.first { it.browseId == canonicalNativeBrowseId(second) }
+        val painted = com.music.bitchord.ui.canonicalArtistShelvesWithCoverUpdates(
+            sections, mapOf("early" to (
+                "https://archive.org/verified.jpg" to "NewJeans 2nd EP 'Get Up'"
+            )),
+        )
+        val changed = painted.single().items.first { it.browseId == canonicalNativeBrowseId(first) }
+        val retained = painted.single().items.first { it.browseId == canonicalNativeBrowseId(second) }
+        assertEquals("https://archive.org/verified.jpg", changed.thumbnailUrl)
+        assertEquals("NewJeans 2nd EP 'Get Up'", changed.title)
+        assertTrue("Already-loaded cards retain object identity", retained === before)
+        assertEquals(sections.single().items.map { it.browseId },
+            painted.single().items.map { it.browseId })
+        assertTrue("No work when there is no matching group",
+            com.music.bitchord.ui.canonicalArtistShelvesWithCoverUpdates(
+                sections, mapOf("missing" to ("not-real" to "Fake"))
+            ) === sections)
+    }
+
+
+    @Test fun albumDetailHeroUpgradeUpdatesOnlyTracksThatInheritedPreviousSmallSleeve() {
+        val tiny = "https://coverartarchive.org/release/linked/front-250"
+        val hero = "https://coverartarchive.org/release/linked/front-1200"
+        val specific = "https://archive.org/song-specific-cover.jpg"
+        val base = CanonicalCatalogSearchRow(
+            "rec-a", CanonicalSearchKind.RECORDING, "Attention", "NewJeans",
+        )
+        // The old test supplied a populated URL with no ownership evidence.
+        // Build a genuinely inherited sleeve via the production helper; a
+        // track-owned URL, even if equal, must never be overwritten.
+        val inherited = com.music.bitchord.ui.canonicalReleaseTracksWithArtwork(
+            listOf(base), tiny,
+        ).single()
+        val rows = listOf(
+            inherited,
+            base.copy(musicBrainzId = "rec-b", artworkUri = specific),
+            base.copy(musicBrainzId = "rec-c"),
+        )
+        val upgraded = com.music.bitchord.ui.canonicalReleaseTracksWithArtwork(
+            rows = rows,
+            releaseArtworkUri = hero,
+            previousInheritedArtwork = tiny,
+        )
+        assertEquals(listOf(hero, specific, hero), upgraded.map { it.artworkUri })
+        val unchanged = com.music.bitchord.ui.canonicalReleaseTracksWithArtwork(
+            rows = upgraded,
+            releaseArtworkUri = tiny,
+            previousInheritedArtwork = hero,
+        )
+        assertEquals(upgraded, unchanged)
+    }
+
+    @Test fun cachedOfficialGroupTracklistCanAppearBeforeLiveBrowse() = kotlinx.coroutines.runBlocking {
+        val groupId = "group-1"
+        // Room's cachedGroupReleases intentionally stores the proven
+        // edition relation in a separate table, not in this DTO's group field.
+        val official = MusicBrainzReleaseHit(
+            "official", "Get Up", "XW", "2023-07-21", "NewJeans",
+            status = "Official", releaseGroupMbid = null,
+        )
+        val wrongGroup = official.copy(musicBrainzId = "wrong", releaseGroupMbid = "other")
+        val bootleg = official.copy(musicBrainzId = "bootleg", status = "Bootleg")
+        val release = com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail(
+            "official", groupId, "Get Up", "NewJeans", "XW", "2023-07-21",
+            tracks = listOf(com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogTrack(
+                "track-1", "recording-1", "Super Shy", 1, 1, 155_000L,
+            )),
+        )
+        val lookups = mutableListOf<String>()
+        val selected = com.music.bitchord.ui.canonicalCachedOfficialGroupTracklist(
+            groupMbid = groupId, groupTitle = "Get Up",
+            editions = listOf(bootleg, wrongGroup, official),
+            readRelease = { id ->
+                lookups += id
+                if (id == "official") release else null
+            },
+        )
+        assertEquals("official", selected?.musicBrainzId)
+        assertEquals(listOf("official"), lookups)
+    }
+
+    @Test fun cachedTracklistRefusesMismatchedReleaseGroupOrEmptyTracklist() =
+        kotlinx.coroutines.runBlocking {
+            val groupId = "group-1"
+            val edition = MusicBrainzReleaseHit(
+                "official", "Get Up", "XW", "2023-07-21", "NewJeans",
+                status = "Official", releaseGroupMbid = groupId,
+            )
+            val wrong = com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail(
+                "official", "other-group", "Get Up", "NewJeans", null, null,
+                tracks = listOf(com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogTrack(
+                    "track", "recording", "ETA", 1, 1, null,
+                )),
+            )
+            assertNull(com.music.bitchord.ui.canonicalCachedOfficialGroupTracklist(
+                groupId, "Get Up", listOf(edition), { wrong },
+            ))
+            assertNull(com.music.bitchord.ui.canonicalCachedOfficialGroupTracklist(
+                groupId, "Get Up", listOf(edition), { wrong.copy(groupMbid = groupId,
+                    tracks = emptyList()) },
+            ))
+        }
+
+    @Test fun exactEditionPreviewRejectsForeignOrEmptyCachedRelease() {
+        val detail = com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail(
+            "official-edition", "group-id", "Get Up", "NewJeans", "XW", "2023-07-21",
+            tracks = listOf(com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogTrack(
+                "track-1", "rec-1", "ETA", 1, 1, null,
+            )),
+        )
+        assertEquals(detail, com.music.bitchord.ui.canonicalMatchingCachedRelease(
+            "official-edition", detail,
+        ))
+        assertNull(com.music.bitchord.ui.canonicalMatchingCachedRelease(
+            "another-edition", detail,
+        ))
+        assertNull(com.music.bitchord.ui.canonicalMatchingCachedRelease(
+            "official-edition", detail.copy(tracks = emptyList()),
+        ))
+    }
+}

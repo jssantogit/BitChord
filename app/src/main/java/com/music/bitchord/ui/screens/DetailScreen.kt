@@ -125,6 +125,7 @@ import com.music.bitchord.data.matchesSearch
 import com.music.bitchord.data.sortedForLibrary
 import com.music.bitchord.data.useTrackTags
 import com.music.bitchord.ui.components.CoverPlaceholder
+import com.music.bitchord.data.catalog.metadata.isCoverArchiveImageHost
 import com.music.bitchord.data.canvas.AppleArtistArt
 import com.music.bitchord.data.DebugLog as Log
 import com.music.bitchord.data.canvas.AppleArtistArtRepository
@@ -338,6 +339,9 @@ fun DetailScreen(
      * [LocalFolder].
      */
     folder: LocalFolder? = null,
+    /** Public tracklist metadata; never manufactured as a playable Song. */
+    canonicalTracks: List<CanonicalCatalogSearchRow> = emptyList(),
+    onCanonicalTrackPlay: ((String) -> Unit)? = null,
 ) {
     val rawSongs = (page.songs as? UiState.Success)?.data.orEmpty()
     // A folder keeps its own sort — the one its top bar menu sets — rather
@@ -555,8 +559,13 @@ fun DetailScreen(
                         sleeveSize = sleeveSize,
                         canvas = canvas,
                         songs = songs,
-                        onPlay = { onSongClick(songs, 0) },
-                        onShuffle = { onShuffle(songs) },
+                        canonicalTracks = canonicalTracks,
+                        onPlay = {
+                            if (songs.isNotEmpty()) onSongClick(songs, 0)
+                            else canonicalTracks.firstOrNull { it.hasCatalogedAsset }
+                                ?.musicBrainzId?.let { onCanonicalTrackPlay?.invoke(it) }
+                        },
+                        onShuffle = { if (songs.isNotEmpty()) onShuffle(songs) },
                         // A folder's credit says where its tracks live, not who made them.
                         onArtistClick = onArtistClick.takeIf { folder == null },
                         onToggleLibrary = onToggleLibrary,
@@ -681,7 +690,68 @@ fun DetailScreen(
                         onSongLongPress = onSongLongPress,
                         onSongSwipe = onSongSwipe,
                     )
-                } else if (isArtist) {
+                } else if (canonicalTracks.isNotEmpty()) {
+                    // Keep the original release-page typography and numbered
+                    // tracklist. A metadata-only row is simply non-playable;
+                    // no synthetic video IDs or technical warning labels.
+                    itemsIndexed(
+                        items = canonicalTracks,
+                        key = { _, row -> "canonical:track:${row.trackMbid ?: row.musicBrainzId}" },
+                    ) { index, row ->
+                        val canPlay = row.hasCatalogedAsset && onCanonicalTrackPlay != null
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .then(if (canPlay) Modifier.clickable {
+                                    onCanonicalTrackPlay?.invoke(row.musicBrainzId)
+                                } else Modifier)
+                                .padding(start = PAGE_GUTTER, end = PAGE_GUTTER, top = 12.dp, bottom = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = (index + 1).toString(),
+                                modifier = Modifier.width(34.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = palette.onBackgroundVariant,
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = row.title.replace(Regex("^\\d+\\.\\d+\\s+"), ""),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = palette.onBackground,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                row.subtitle?.takeIf { it.isNotBlank() }?.let { artist ->
+                                    Text(
+                                        text = artist,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = palette.onBackgroundVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                            row.durationMs?.takeIf { it > 0L }?.let { duration ->
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = String.format(
+                                        Locale.ROOT, "%d:%02d",
+                                        duration / 60_000L, (duration / 1_000L) % 60L,
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = palette.onBackgroundVariant,
+                                )
+                            }
+                        }
+                        if (index < canonicalTracks.lastIndex) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = NUMBERED_ROW_DIVIDER_INSET),
+                                thickness = 0.5.dp,
+                                color = palette.divider,
+                            )
+                        }
+                    }
+                } else if (isArtist && state.data.isNotEmpty()) {
                     // An artist's full song list would bury the album shelves, so
                     // it pages sideways four at a time and stops at twenty.
                     item {
@@ -877,12 +947,30 @@ private fun ReleaseHeader(
     sleeveSize: Dp,
     canvas: CanvasArtwork?,
     songs: List<Song>,
+    canonicalTracks: List<CanonicalCatalogSearchRow>,
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
     onArtistClick: ((String, String) -> Unit)?,
     onToggleLibrary: (() -> Unit)?,
 ) {
-    val (credit, meta) = page.headerLines(songs.size, songs.playtime())
+    // Do not display a partial sum as if the album's total were complete.
+    val allCanonicalDurationsKnown = canonicalTracks.isNotEmpty() &&
+        canonicalTracks.all { (it.durationMs ?: 0L) > 0L }
+    val canonicalMinutes = if (allCanonicalDurationsKnown) {
+        canonicalTracks.sumOf { it.durationMs ?: 0L } / 60_000
+    } else 0L
+    val canonicalTime = when {
+        canonicalMinutes <= 0L -> null
+        canonicalMinutes < 60L -> stringResource(R.string.minutes_short, canonicalMinutes.toInt())
+        else -> stringResource(
+            R.string.hours_minutes_short,
+            (canonicalMinutes / 60L).toInt(), (canonicalMinutes % 60L).toInt(),
+        )
+    }
+    val (credit, meta) = page.headerLines(
+        if (songs.isNotEmpty()) songs.size else canonicalTracks.size,
+        if (songs.isNotEmpty()) songs.playtime() else canonicalTime,
+    )
     // Every row on a release carries the same credit — see [pageCredit] — so
     // the first one speaks for the whole page, the same source the rows'
     // own long-press "Open artist" already reads from.
@@ -983,7 +1071,7 @@ private fun ReleaseHeader(
             )
         }
 
-        if (songs.isNotEmpty()) {
+        if (songs.isNotEmpty() || canonicalTracks.any { it.hasCatalogedAsset }) {
             // Only where YouTube said the release can be saved and the caller
             // is willing to take the write — see [onToggleLibrary].
             val library = page.library?.takeIf { onToggleLibrary != null }
@@ -1025,6 +1113,7 @@ private fun ReleaseHeader(
                     onClick = onShuffle,
                     haptic = Haptic.Resume,
                     size = RELEASE_SIDE_BUTTON,
+                    enabled = songs.isNotEmpty(),
                 )
                 ActionPill(
                     icon = BitChordIcons.Play,
@@ -2114,6 +2203,7 @@ private fun TopReleaseCard(
     val shape = RoundedCornerShape(28.dp)
     val coverShape = RoundedCornerShape(12.dp)
     val haptics = rememberHaptics()
+    val observeCaaCover = rememberCaaCoverLoadObserver(item.thumbnailUrl)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2132,6 +2222,7 @@ private fun TopReleaseCard(
         AsyncImage(
             model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
             contentDescription = null,
+            onState = observeCaaCover,
             modifier = Modifier
                 .size(88.dp)
                 .clip(coverShape)
@@ -2197,6 +2288,36 @@ private const val DISABLED_ACTION_ALPHA = 0.38f
 private const val TOP_RELEASE_EDGE_ALPHA = 0.10f
 private const val TOP_RELEASE_COVER_EDGE_ALPHA = 0.215f
 
+/**
+ * Anonymous timing of the actual Coil CAA image consumer. Duration begins at
+ * first composition of that URL and ends once Coil signals Success or Error.
+ * Distinct URLs record once each per composed card; never store their URL,
+ * album name, MBID or user/device identity in the diagnostics report.
+ */
+@Composable
+private fun rememberCaaCoverLoadObserver(
+    url: String?,
+): (AsyncImagePainter.State) -> Unit {
+    val beganAt = remember(url) { android.os.SystemClock.elapsedRealtime() }
+    val seen = remember(url) { java.util.concurrent.atomic.AtomicBoolean(false) }
+    val isCaa = remember(url) { isCoverArchiveImageHost(url) }
+    return remember(url, beganAt) {
+        { state: AsyncImagePainter.State ->
+            val done = state is AsyncImagePainter.State.Success ||
+                state is AsyncImagePainter.State.Error
+            if (isCaa && done && seen.compareAndSet(false, true)) {
+                com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry.process
+                    .recordImageResult(
+                        state is AsyncImagePainter.State.Success,
+                        android.os.SystemClock.elapsedRealtime() - beganAt,
+                        source = (state as? AsyncImagePainter.State.Success)
+                            ?.result?.dataSource?.name,
+                    )
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SectionCard(
@@ -2206,6 +2327,7 @@ private fun SectionCard(
     modifier: Modifier = Modifier.width(SHELF_CARD_WIDTH),
     onLongPress: (() -> Unit)? = null,
 ) {
+    val observeCaaCover = rememberCaaCoverLoadObserver(item.thumbnailUrl)
     Column(
         modifier = modifier
             .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress),
@@ -2213,6 +2335,7 @@ private fun SectionCard(
         AsyncImage(
             model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
             contentDescription = null,
+            onState = observeCaaCover,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
@@ -2297,7 +2420,9 @@ private fun DetailPage.headerLines(trackCount: Int, playtime: String? = null): P
     // artist page, but it is still billed as the artist it is.
     val localKind = if (LocalGroups.isArtist(browseId)) stringResource(R.string.artist) else null
     val meta = listOfNotNull(
-        (kind ?: type.localizedLabel() ?: localKind)?.capitalizeWords(),
+        (kind ?: type.localizedLabel()?.takeIf {
+            com.music.bitchord.ui.canonicalMayUseAlbumFallbackLabel(browseId)
+        } ?: localKind)?.capitalizeWords(),
         year,
         trackCount.takeIf { it > 0 }?.let {
             pluralStringResource(R.plurals.track_count_plural, it, it).capitalizeWords()

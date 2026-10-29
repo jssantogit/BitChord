@@ -64,6 +64,7 @@
     </plurals>
     <string name="songs">Músicas</string>
     <string name="artists">Artistas</string>
+    <string name="canonical_singles_eps">Singles e EPs</string>
     <string name="albums">Álbuns</string>
     <string name="no_album_metadata">Nenhuma dessas faixas indica a qual álbum pertence.</string>
     <string name="search_empty">Pesquise milhões de músicas no YouTube Music.</string>
@@ -200,6 +201,8 @@
     <string name="blocking">Bloqueando</string>
     <string name="crossfade">Fade cruzado</string>
     <string name="crossfade_subtitle">Mescla uma faixa com a próxima</string>
+    <string name="pause_resume_fade">Fade ao pausar e retomar</string>
+    <string name="pause_resume_fade_subtitle">Reduz suavemente o volume ao pausar e aumenta ao retomar</string>
     <string name="automix">Automix [BETA]</string>
     <string name="skip_silence">Pular silêncio</string>
     <string name="skip_silence_subtitle">Corta pausas maiores que um segundo</string>
@@ -949,7 +952,7 @@
 
     <string name="shelf_party">Festa</string>
 
-    <string name="shelf_quick_picks">Escolhas rápidas</string>
+    <string name="shelf_quick_picks">Escolha a dedo</string>
 
     <string name="shelf_recents">Recentes</string>
 
@@ -1058,13 +1061,13 @@
 
     <string name="auto_unavailable_subtitle">Reopen the folder and try again</string>
 
-    <string name="settings_search_hint">Search settings</string>
+    <string name="settings_search_hint">Pesquisar configurações</string>
 
     <string name="settings_search_empty">No settings match “%1$s”</string>
 
-    <string name="prefer_music_only">Prefer music-only version</string>
+    <string name="prefer_music_only">Preferir versão somente música</string>
 
-    <string name="prefer_music_only_subtitle">For music videos, show the video details while finding and loading the catalogue audio version</string>
+    <string name="prefer_music_only_subtitle">Em vídeos musicais, procura e carrega a versão apenas de áudio, mantendo os detalhes do vídeo</string>
     <string name="smart_version_alignment">Alinhamento de áudio inteligente</string>
     <string name="smart_version_alignment_subtitle">Analisa as formas de onda para encontrar o momento exato de reprodução correspondente</string>
 
@@ -1147,13 +1150,13 @@
 
     <string name="eq_preset_custom">Custom</string>
 
-    <string name="translation_language">Translation language</string>
+    <string name="translation_language">Idioma da tradução</string>
 
     <string name="translation_language_description">The language the translate button turns lyrics into.</string>
 
     <string name="translation_language_app_default">App language</string>
 
-    <string name="translation_language_subtitle">Follows the app language</string>
+    <string name="translation_language_subtitle">Segue o idioma do aplicativo</string>
 
     <string name="search_languages">Search languages</string>
 
@@ -1366,4 +1369,29 @@
     <string name="playback_recovery_retry">Tentar novamente</string>
     <string name="playback_recovery_retrying">Tentando…</string>
     <string name="playback_recovery_dismiss">Dispensar</string>
+    <string name="canonical_discovery_header">Descoberta do catálogo</string>
+    <string name="canonical_discovery_setting_title">Início e Explorar com catálogo</string>
+    <string name="canonical_discovery_setting_subtitle">Use músicas salvas e MusicBrainz no Início e em Explorar. Este modo também é usado quando o YouTube Music está desativado.</string>
+    <string name="canonical_discovery_home_title">Suas músicas</string>
+    <string name="canonical_discovery_explore_title">Explore o catálogo</string>
+    <string name="canonical_discovery_description">Explore coleções salvas no dispositivo ou pesquise no MusicBrainz. Metadados do catálogo não garantem áudio reproduzível.</string>
+    <string name="canonical_discovery_search">Pesquisar no MusicBrainz</string>
+    <string name="canonical_discovery_open_library">Abrir biblioteca</string>
+    <string name="canonical_discovery_downloaded_collections">Coleções baixadas</string>
+    <string name="canonical_discovery_local_playlists">Playlists salvas no dispositivo</string>
+    <string name="canonical_discovery_empty_collections">Nenhuma coleção foi salva neste dispositivo ainda.</string>
+    <string name="canonical_discovery_catalog_cache">Catálogo salvo no dispositivo</string>
+    <string name="canonical_discovery_cache_loading">Carregando catálogo salvo…</string>
+    <string name="canonical_discovery_cache_error">Não foi possível ler o catálogo MusicBrainz salvo.</string>
+    <string name="canonical_discovery_cache_empty">Ainda não há itens MusicBrainz salvos. Pesquise no catálogo para explorar metadados públicos.</string>
+    <string name="canonical_discovery_metadata_only">Somente metadados · sem áudio catalogado</string>
+    <string name="canonical_discovery_asset_available">Áudio catalogado · o acesso será verificado ao reproduzir</string>
+    <string name="canonical_discovery_cached_offline">Salvo offline</string>
+    <string name="canonical_discovery_retry">Tentar novamente</string>
+    <string name="canonical_discovery_refresh">Atualizar catálogo salvo</string>
+    <string name="legacy_library_youtube_disabled">Ative o YouTube Music nas configurações para carregar esta biblioteca online. Playlists e coleções locais continuam disponíveis.</string>
+    <string name="spotify_import_youtube_required">A importação de playlists do Spotify ainda depende da busca no YouTube Music. Ative o YouTube Music e desative a descoberta pelo catálogo para importar.</string>
+    <string name="search_origin_general">Geral</string>
+    <string name="search_origin_server">Servidor</string>
+    <string name="search_origin_local">Local</string>
 </resources>
