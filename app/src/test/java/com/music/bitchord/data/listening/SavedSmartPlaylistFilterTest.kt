@@ -156,6 +156,7 @@ class SavedSmartPlaylistFilterTest {
             .addMigrations(
                 SmartPlaylistDefinitionDatabase.MIGRATION_1_2,
                 SmartPlaylistDefinitionDatabase.MIGRATION_2_3,
+            SmartPlaylistDefinitionDatabase.MIGRATION_3_4,
             ).allowMainThreadQueries().build()
         try {
             assertEquals("Old", db.definitionDao().all().single().name)
