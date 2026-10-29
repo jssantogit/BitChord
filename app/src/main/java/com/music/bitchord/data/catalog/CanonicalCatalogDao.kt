@@ -300,6 +300,28 @@ internal interface CanonicalCatalogDao {
         recordingIds: List<String>,
     ): List<CanonicalRecordingLocalAddedRow>
 
+    /** Bounded, factual local additions: actual MediaStore dates, never fake releases. */
+    @Query(
+        """
+        SELECT recording.id AS recordingId,
+               asset.id AS mediaAssetId,
+               asset.provider AS providerKey,
+               recording.title AS title,
+               recording.artistDisplay AS artistDisplay,
+               recording.durationMs AS durationMs,
+               asset.artworkUri AS artworkUri
+        FROM catalog_media_asset AS asset
+        INNER JOIN catalog_recording AS recording ON recording.id = asset.recordingId
+        WHERE asset.provider = :localProvider
+          AND asset.dateAddedSeconds IS NOT NULL
+        ORDER BY asset.dateAddedSeconds DESC, asset.id DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun recentLocalAdditions(
+        localProvider: String, limit: Int = 12,
+    ): List<CanonicalBrowseAssetRow>
+
     @Query("SELECT * FROM catalog_recording WHERE id IN (:recordingIds)")
     suspend fun recordingsByIds(recordingIds: List<String>): List<RecordingEntity>
 
