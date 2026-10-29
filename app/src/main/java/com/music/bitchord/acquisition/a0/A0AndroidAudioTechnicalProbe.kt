@@ -122,7 +122,7 @@ internal object A0AndroidAudioTechnicalProbe {
             val metadataRate=metadata.extractMetadata(
                 MediaMetadataRetriever.METADATA_KEY_BITRATE)
                 ?.toIntOrNull()?.takeIf {it>0}?.div(1000)
-            val bitrate=trackRate ?: metadataRate
+            val extractorBitrate=trackRate ?: metadataRate
 
             extractor.selectTrack(audioIndex)
             val input=ByteBuffer.allocateDirect(SAMPLE_BUFFER_BYTES)
@@ -158,6 +158,16 @@ internal object A0AndroidAudioTechnicalProbe {
                 lastUs<0 || abs(duration-lastUs/1000L)>3_000L ||
                 source.length()!=size || source.lastModified()!=modification ||
                 isCancelled() || Thread.currentThread().isInterrupted)return null
+            // Opus/Vorbis VBR may omit KEY_BIT_RATE entirely. After a full
+            // demux walk, sample bytes / locally inspected duration provide
+            // a bounded observed average. Never derive quality from the
+            // peer's unverified bitrate or the file's container overhead.
+            val bitrate=extractorBitrate ?: when(header.codec) {
+                A0CanonicalAcquisitionIntent.Codec.OPUS,
+                A0CanonicalAcquisitionIntent.Codec.VORBIS ->
+                    A0ObservedAudioBitrate.fromDemuxedSamples(bytes,duration)
+                else -> null
+            }
             // COMPLETED means full demux walk. It is NOT a complete PCM
             // decode or a source authentication. Policy cannot publish.
             return A0AutoPostTransferTechnicalGate.Decoded(
