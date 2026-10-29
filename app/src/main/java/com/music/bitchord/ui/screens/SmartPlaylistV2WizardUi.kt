@@ -352,21 +352,25 @@ internal fun SmartPlaylistV2WizardUi(
     // The caller hosts this in a full-width Dialog over the library tab bar.
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+            Box(
+                modifier = Modifier.fillMaxWidth()
+                    .heightIn(min = 56.dp)
+                    .padding(horizontal = PAGE_GUTTER),
             ) {
-                TextButton(onClick = ::back) {
+                TextButton(
+                    modifier = Modifier.align(Alignment.CenterStart),
+                    onClick = ::back,
+                ) {
                     Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null)
                     Text("Voltar")
                 }
-                Text(stepNote, style = MaterialTheme.typography.labelMedium,
+                Text(stepNote,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 15.dp))
+                    modifier = Modifier.align(Alignment.Center))
                 if (page == WizardStep.IDENTITY) {
-                    TextButton(onClick = onManage) { Text("Minhas playlists") }
-                } else {
-                    Spacer(Modifier.padding(30.dp))
+                    TextButton(modifier = Modifier.align(Alignment.CenterEnd),
+                        onClick = onManage) { Text("Minhas playlists") }
                 }
             }
             LazyColumn(
@@ -810,19 +814,20 @@ internal fun SmartPlaylistV2WizardUi(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 when (page) {
-                    WizardStep.IDENTITY -> Button(
-                        onClick = { page = WizardStep.RULES },
-                        modifier = Modifier.fillMaxWidth(),
+                    WizardStep.IDENTITY -> PlaylistWizardPrimaryAction(
+                        label = "Continuar",
                         enabled = canContinue,
-                    ) { Text("Continuar") }
-                    WizardStep.RULES -> Button(
-                        onClick = { page = WizardStep.REVIEW },
-                        enabled = canReview, modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Revisar playlist") }
-                    WizardStep.GROUP -> Button(
                         onClick = { page = WizardStep.RULES },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Salvar grupo") }
+                    )
+                    WizardStep.RULES -> PlaylistWizardPrimaryAction(
+                        label = "Revisar playlist",
+                        enabled = canReview,
+                        onClick = { page = WizardStep.REVIEW },
+                    )
+                    WizardStep.GROUP -> PlaylistWizardPrimaryAction(
+                        label = "Salvar grupo",
+                        onClick = { page = WizardStep.RULES },
+                    )
                     WizardStep.EDITOR -> {
                         val presence = draft.operator == SmartPlaylistRuleOperator.IS_PRESENT ||
                             draft.operator == SmartPlaylistRuleOperator.IS_MISSING
@@ -830,7 +835,9 @@ internal fun SmartPlaylistV2WizardUi(
                             draft.field.isTextField() -> !draft.textValue.isNullOrBlank()
                             else -> draft.value?.isFinite() == true
                         }
-                        Button(
+                        PlaylistWizardPrimaryAction(
+                            label = if (editingPath != null)
+                                "Salvar condição" else "Adicionar condição",
                             onClick = {
                                 val added: SmartPlaylistRule =
                                     if (negated) SmartPlaylistRule.Not(draft) else draft
@@ -848,18 +855,16 @@ internal fun SmartPlaylistV2WizardUi(
                                 editingPath = null
                             },
                             enabled = valueOk,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text(if (editingPath != null) "Salvar condição" else "Adicionar condição") }
+                        )
                     }
                     WizardStep.REVIEW -> {
-                        Button(
+                        PlaylistWizardPrimaryAction(
+                            label = if (editingId != null)
+                                "Salvar alterações" else "Criar playlist",
                             onClick = onSave,
                             enabled = canReview && !loading &&
                                 currentPreviewQuery != null && preview != null,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(if (editingId != null) "Salvar alterações" else "Criar playlist")
-                        }
+                        )
                         if (preview == null) {
                             Text("Calcule a prévia antes de criar a playlist.",
                                 style = MaterialTheme.typography.bodySmall,
