@@ -118,6 +118,12 @@ fun LibraryScreen(
     showTitle: Boolean = true,
     /** Optional Android-owned canonical read-only shelf; desktop remains unchanged. */
     rediscovery: (@Composable () -> Unit)? = null,
+    /**
+     * Android-owned first-party playlist section. When supplied it replaces
+     * the legacy YouTube-backed shelf and its sign-in prompt; desktop keeps
+     * the old optional behavior until its own migration is ready.
+     */
+    playlistsSection: (@Composable () -> Unit)? = null,
 ) {
     val pinnedPlaylists by AppUi.host.pinnedPlaylists.collectAsStateWithLifecycle()
     val onDevice = stringResource(Res.string.on_device)
@@ -158,8 +164,11 @@ fun LibraryScreen(
                     )
                 }
             }
+            playlistsSection?.let { section ->
+                item(key = "shelf:canonical-playlists") { section() }
+            }
             if (!signedIn) {
-                item(key = "shelf:$PLAYLISTS") {
+                if (playlistsSection == null) item(key = "shelf:$PLAYLISTS") {
                     val emptyPlaylists = HomeShelf(PLAYLISTS, emptyList())
                     PlaylistShelf(
                         shelf = emptyPlaylists,
@@ -170,7 +179,7 @@ fun LibraryScreen(
                         onShowAll = { onShowAll(emptyPlaylists) },
                     )
                 }
-                item {
+                if (playlistsSection == null) item {
                     MessageState(
                         message = stringResource(Res.string.library_sign_in_description),
                         actionLabel = stringResource(Res.string.sign_in),
@@ -190,7 +199,8 @@ fun LibraryScreen(
                     // makes one — so the row is drawn either way, empty but
                     // for the tile that creates the first playlist.
                     val shelves = state.data.shelves
-                    if (shelves.none { it.title == PLAYLISTS }) {
+                    if (playlistsSection == null &&
+                        shelves.none { it.title == PLAYLISTS }) {
                         item(key = "shelf:$PLAYLISTS") {
                             val emptyPlaylists = HomeShelf(PLAYLISTS, emptyList())
                             PlaylistShelf(
@@ -203,7 +213,8 @@ fun LibraryScreen(
                             )
                         }
                     }
-                    shelves.forEach { shelf ->
+                    shelves.filter { playlistsSection == null ||
+                        it.title != PLAYLISTS }.forEach { shelf ->
                         item(key = "shelf:${shelf.title}") {
                             if (shelf.title == PLAYLISTS) {
                                 val pinnedFirst = shelf.pinnedFirst(pinnedPlaylists)
