@@ -542,24 +542,59 @@ internal fun SmartPlaylistV2WizardUi(
                             }
                             itemsIndexed(group.children) { i, child ->
                                 val path = selectedPath + i
-                                WizardCard("Condição ${i + 1}", ruleUiSummary(child, names),
-                                    onClick = { editAt(path, WizardStep.GROUP) }) {
-                                    Row(Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween) {
-                                        TextButton(onClick = {
-                                            onRuleChange(smartRuleUpdateGroup(rule, selectedPath) {
-                                                it.moveChild(i, (i - 1).coerceAtLeast(0))
-                                            })
-                                        }, enabled = i > 0) { Text("Subir") }
-                                        TextButton(onClick = {
-                                            onRuleChange(smartRuleUpdateGroup(rule, selectedPath) {
-                                                it.moveChild(i, (i + 1).coerceAtMost(group.children.lastIndex))
-                                            })
-                                        }, enabled = i < group.children.lastIndex) { Text("Descer") }
-                                        TextButton(onClick = {
-                                            if (group.children.size > 1)
-                                                onRuleChange(smartRuleRemoveAt(rule, path))
-                                        }, enabled = group.children.size > 1) { Text("Excluir") }
+                                var actionsOpen by remember(path) { mutableStateOf(false) }
+                                WizardCard(
+                                    "Condição ${i + 1}",
+                                    ruleUiSummary(child, names),
+                                    onClick = { editAt(path, WizardStep.GROUP) },
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End,
+                                    ) {
+                                        Box {
+                                            TextButton(onClick = { actionsOpen = true }) {
+                                                Text("Opções")
+                                            }
+                                            androidx.compose.material3.DropdownMenu(
+                                                expanded = actionsOpen,
+                                                onDismissRequest = { actionsOpen = false },
+                                            ) {
+                                                if (i > 0) {
+                                                    androidx.compose.material3.DropdownMenuItem(
+                                                        text = { Text("Mover para cima") },
+                                                        onClick = {
+                                                            actionsOpen = false
+                                                            onRuleChange(smartRuleUpdateGroup(
+                                                                rule, selectedPath) {
+                                                                it.moveChild(i, i - 1)
+                                                            })
+                                                        },
+                                                    )
+                                                }
+                                                if (i < group.children.lastIndex) {
+                                                    androidx.compose.material3.DropdownMenuItem(
+                                                        text = { Text("Mover para baixo") },
+                                                        onClick = {
+                                                            actionsOpen = false
+                                                            onRuleChange(smartRuleUpdateGroup(
+                                                                rule, selectedPath) {
+                                                                it.moveChild(i, i + 1)
+                                                            })
+                                                        },
+                                                    )
+                                                }
+                                                if (group.children.size > 1) {
+                                                    androidx.compose.material3.DropdownMenuItem(
+                                                        text = { Text("Remover condição") },
+                                                        onClick = {
+                                                            actionsOpen = false
+                                                            onRuleChange(smartRuleRemoveAt(rule, path))
+                                                        },
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
