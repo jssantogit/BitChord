@@ -101,6 +101,14 @@ internal class A0ObservedCandidateHandoff(
         .map(A0ReleaseDiscoveryShadowAdapter::titleTokens)
         .filter { it.isNotEmpty() }
 
+    private fun markLostName(name:String) {
+        if(!collectReleaseShadow)return
+        val file=A0ReleaseDiscoveryShadowAdapter.fileTokens(name)
+        releaseSlotTokens.forEachIndexed { index,title ->
+            if(file.containsAll(title))releaseShadowLostSlots[index]=true
+        }
+    }
+
     private fun releaseSlotHits(choice:Choice):List<Int> {
         if(releaseSlotTokens.isEmpty())return emptyList()
         val file=A0ReleaseDiscoveryShadowAdapter.fileTokens(choice.claim.filename)
@@ -209,6 +217,10 @@ internal class A0ObservedCandidateHandoff(
     private var perPeerDropped=0
     private var claimBudgetDropped=0
     private val seen=A0BoundedPeerClaimLedger(8192)
+    // Bounded duplicate metadata witness: the dedup ledger alone would hide
+    // contradictions arriving on an identical (peer,path) within one search.
+    private val witnessedClaims=
+        LinkedHashMap<Pair<String,String>,A0CandidateClaimClusters.Claim>()
     private var replies=0
     private var publicSeen=0
     private var lockedSeen=0
@@ -271,10 +283,31 @@ internal class A0ObservedCandidateHandoff(
                 continue
             }
             val identity=result.peerUsername to path
+            val incomingClaim=A0CandidateClaimClusters.Claim(
+                filename=basename,format=ext,sizeBytes=file.sizeBytes,
+                bitrateKbps=file.attributes[0],
+                durationSeconds=file.attributes[1]?.takeIf { it in 1..14400 },
+                sampleRateHz=file.attributes[4]?.takeIf { it in 8000..384000 },
+                bitDepth=file.attributes[5]?.takeIf { it in 8..32 },
+            )
+            val earlier=witnessedClaims[identity]
+            if(earlier!=null && !A0CandidateClaimClusters.sameClaim(
+                    earlier,incomingClaim)) {
+                markLostName(earlier.filename)
+                markLostName(incomingClaim.filename)
+            }
             if(!seen.admit(identity.first,identity.second)) {
                 duplicateCount=(duplicateCount+1).coerceAtMost(100000)
                 continue
             }
+            if(witnessedClaims.size>=8192) {
+                val old=witnessedClaims.entries.iterator()
+                if(old.hasNext()) {
+                    markLostName(old.next().value.filename)
+                    old.remove()
+                }
+            }
+            witnessedClaims[identity]=incomingClaim
             eligible=(eligible+1).coerceAtMost(100000)
             // Preserve out-of-range claims for the codec conflict gate: dropping
             // an impossible MP3 bitrate would quietly downgrade UNSAFE to
@@ -359,11 +392,7 @@ internal class A0ObservedCandidateHandoff(
                 preflight=preflight,peerAvailability=peerAvailability,
                 albumEvidence=album,identityEvidence=identityDecision,
                 qualityEvidence=qualityAssessment,
-                claim=A0CandidateClaimClusters.Claim(
-                    filename=basename,format=ext,sizeBytes=file.sizeBytes,
-                    bitrateKbps=bitrateRaw,durationSeconds=duration,
-                    sampleRateHz=sampleRate,bitDepth=bitDepth
-                )
+                claim=incomingClaim
             )
             A0StableCandidateInsertion.add(candidates,observedChoice,choiceOrder)
             if(collectReleaseShadow) {

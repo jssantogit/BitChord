@@ -776,24 +776,24 @@ class A0ManualLoginActivity : Activity() {
                                                     A0SmokeTrace.Reason.SERVER_IO_FAILURE)
                                             }
                                         }
-                                        val early=inbox.poll(6,TimeUnit.SECONDS)
+                                        val early=A0ManualSearchWait.poll(inbox,6,TimeUnit.SECONDS)
                                         handoff?.progress()?.let {
                                             windowEvidence.record(6,it.responses,it.provisionalClaims)
                                         }
                                         if(early==null)sendRescue(6000L)
-                                        val middle=early ?: inbox.poll(6,TimeUnit.SECONDS)
+                                        val middle=early ?: A0ManualSearchWait.poll(inbox,6,TimeUnit.SECONDS)
                                         handoff?.progress()?.let {
                                             windowEvidence.record(12,it.responses,it.provisionalClaims)
                                         }
                                         if(middle==null)sendRescue(12000L)
-                                        val finalStatus=middle ?: inbox.poll(6,TimeUnit.SECONDS)
+                                        val finalStatus=middle ?: A0ManualSearchWait.poll(inbox,6,TimeUnit.SECONDS)
                                         // Capture the actual window-end observation BEFORE
                                         // server/peer shutdown and any later drain callbacks.
                                         handoff?.progress()?.let {
                                             windowEvidence.record(18,it.responses,it.provisionalClaims)
                                         }
                                         finalStatus
-                                    } else inbox.poll(12,TimeUnit.SECONDS)
+                                    } else A0ManualSearchWait.poll(inbox,12,TimeUnit.SECONDS)
                                     readerGate.stop()
                                     result = peerStatus ?: when {
                                         failedServerReader.get() ->
@@ -1332,6 +1332,11 @@ class A0ManualLoginActivity : Activity() {
                             activeListener = null
                         }
                     }
+                } catch (_: java.util.concurrent.CancellationException) {
+                    Thread.currentThread().interrupt()
+                    finalOutcome=TraceOutcome.CANCELLED
+                    finalReason=A0SmokeTrace.Reason.CANCELLED
+                    result="Busca cancelada. Nenhum novo arquivo autorizado."
                 } catch (_: InterruptedException) {
                     // onDestroy may call shutdownNow while the 6/12/18-second
                     // search inbox is blocked. This is cancellation, not an
