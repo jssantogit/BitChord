@@ -141,6 +141,14 @@ internal fun SmartPlaylistV2BuilderScreen(
     val catalogDatabase = remember(context) { CanonicalCatalogDatabase.get(context) }
     val listeningDatabase = remember(context) { ListeningEventDatabase.get(context) }
     val accountPersistence = remember(context) { SharedPrefsOpenSubsonicAccountPersistence(context) }
+    val availableSourceKeys by produceState(
+        initialValue = listOf(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER),
+        key1 = accountPersistence,
+    ) {
+        accountPersistence.observe().collect {
+            value = canonicalAvailablePlaylistSourceKeys(context)
+        }
+    }
     val catalog = remember(catalogDatabase) { catalogDatabase.catalogDao() }
     val evaluator = remember(context) { persistentSmartPlaylistPreview(context) }
     val scope = rememberCoroutineScope()
@@ -148,6 +156,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     var normalMode by remember { mutableStateOf(false) }
     var editingNormalId by remember { mutableStateOf<String?>(null) }
     var normalSearch by remember { mutableStateOf("") }
+    var normalSourceProviderKey by remember { mutableStateOf<String?>(null) }
     var normalBrowseType by remember { mutableStateOf(CanonicalPlaylistBrowseType.TRACKS) }
     var normalBrowseGroup by remember { mutableStateOf<CanonicalPlaylistBrowseGroup?>(null) }
     var normalGroups by remember { mutableStateOf<List<CanonicalPlaylistBrowseGroup>>(emptyList()) }
@@ -218,6 +227,7 @@ internal fun SmartPlaylistV2BuilderScreen(
         editingNormalId = null
         normalMode = false
         normalSearch = ""
+        normalSourceProviderKey = null
         normalBrowseType = CanonicalPlaylistBrowseType.TRACKS
         normalBrowseGroup = null
         normalGroups = emptyList()
@@ -288,6 +298,7 @@ internal fun SmartPlaylistV2BuilderScreen(
         normalMode = true
         name = item.name
         normalSelectedIds = item.recordingIds
+        normalSourceProviderKey = item.sourceProviderKey
         normalSearch = ""
         normalBrowseType = CanonicalPlaylistBrowseType.TRACKS
         normalBrowseGroup = null
@@ -295,20 +306,22 @@ internal fun SmartPlaylistV2BuilderScreen(
         showWizard = true
     }
 
-    LaunchedEffect(normalMode, normalSearch, normalBrowseType, normalBrowseGroup) {
+    LaunchedEffect(normalMode, normalSearch, normalBrowseType, normalBrowseGroup, normalSourceProviderKey) {
         if (!normalMode) return@LaunchedEffect
         normalLoading = true
         try {
             delay(160)
             if (normalBrowseGroup != null) {
-                normalRows = canonicalNormalPlaylistGroupTracks(context, normalBrowseGroup!!)
+                normalRows = canonicalNormalPlaylistGroupTracks(
+                    context, normalBrowseGroup!!, normalSourceProviderKey)
                 normalGroups = emptyList()
             } else if (normalBrowseType == CanonicalPlaylistBrowseType.TRACKS) {
-                normalRows = canonicalNormalPlaylistSearch(context, normalSearch)
+                normalRows = canonicalNormalPlaylistSearch(
+                    context, normalSearch, normalSourceProviderKey)
                 normalGroups = emptyList()
             } else {
                 normalGroups = canonicalNormalPlaylistBrowseGroups(
-                    context, normalSearch, normalBrowseType)
+                    context, normalSearch, normalBrowseType, normalSourceProviderKey)
                 normalRows = emptyList()
             }
             error = null
@@ -322,10 +335,11 @@ internal fun SmartPlaylistV2BuilderScreen(
             normalLoading = false
         }
     }
-    LaunchedEffect(normalMode, normalSelectedIds) {
+    LaunchedEffect(normalMode, normalSelectedIds, normalSourceProviderKey) {
         if (!normalMode) return@LaunchedEffect
         try {
-            normalSelectedRows = canonicalNormalPlaylistSelectedRows(context, normalSelectedIds)
+            normalSelectedRows = canonicalNormalPlaylistSelectedRows(
+                context, normalSelectedIds, normalSourceProviderKey)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -548,6 +562,9 @@ internal fun SmartPlaylistV2BuilderScreen(
                     normalSelectedIds = normalSelectedIds,
                     normalSearch = normalSearch,
                     normalLoading = normalLoading,
+                    normalSourceProviderKey = normalSourceProviderKey,
+                    availableSourceKeys = availableSourceKeys,
+                    onNormalSourceChange = { normalSourceProviderKey = it },
                     normalBrowseType = normalBrowseType,
                     normalBrowseGroup = normalBrowseGroup,
                     normalGroups = normalGroups,
@@ -591,6 +608,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                     withContext(Dispatchers.IO) {
                                         normalRepo.save(SavedCanonicalStaticPlaylist(
                                             id = id, name = name, recordingIds = normalSelectedIds,
+                                            sourceProviderKey = normalSourceProviderKey,
                                         ))
                                     }
                                     reset()
