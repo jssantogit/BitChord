@@ -184,6 +184,78 @@ class A0AutoDiscoveryCoordinatorTest {
         assertTrue(done.isEmpty())
     }
 
+    @Test fun authOrProtocolStopCannotTriggerLateTransferFromEarlierReview() {
+        val three=entries.take(3)
+        val search=FakeSearch { slot ->
+            when(slot.trackId) {
+                "one" -> A0AutoDiscoveryCoordinator.SearchResult.NoReply
+                "two" -> A0AutoDiscoveryCoordinator.SearchResult.Found(
+                    claims(listOf(three[0],three[1])))
+                else -> A0AutoDiscoveryCoordinator.SearchResult.Stop
+            }
+        }
+        val published=mutableListOf<String>()
+        val report=A0AutoDiscoveryCoordinator(search,batch(published)).run(
+            three,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(listOf("two"),published)
+        assertEquals(1,report.batch.published)
+        assertEquals(listOf("one","two","three"),search.requests)
+        assertEquals(A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW,
+            report.batch.results[0])
+    }
+
+    @Test fun uncertainPublicationBlocksLateRescueOfEarlierSlots() {
+        val three=entries.take(3)
+        val attempts=mutableListOf<String>()
+        val search=FakeSearch { slot ->
+            if(slot.trackId=="one")A0AutoDiscoveryCoordinator.SearchResult.NoReply
+            else A0AutoDiscoveryCoordinator.SearchResult.Found(claims(
+                if(slot.trackId=="two")listOf(three[0],three[1])
+                else listOf(three[2])))
+        }
+        val port=A0AutoBatchExecutor { entry ->
+            object:A0AutoAcquisitionExecutor.Port {
+                override fun fetch(candidate:A0ObservedCandidateHandoff.Choice,
+                    isCancelled:()->Boolean):A0AutoAcquisitionExecutor.FetchResult {
+                    val file=File.createTempFile("a0-stop-test-", ".observed")
+                    RandomAccessFile(file,"rw").use {
+                        it.setLength(entry.durationSeconds!!.toLong()*40_000L)
+                    }
+                    return A0AutoAcquisitionExecutor.FetchResult.Received(
+                        A0VerifiedByteStager.Receipt(
+                            file,file.length(),"a".repeat(64),"ID3_HEADER_ONLY"))
+                }
+                override fun inspect(receipt:A0VerifiedByteStager.Receipt,
+                    expectedExtension:String,isCancelled:()->Boolean)=
+                    A0AutoPostTransferTechnicalGate.Decoded(
+                        A0CanonicalAcquisitionIntent.Codec.MP3,"mp3",
+                        entry.durationSeconds!!.toLong()*1000L,320,44100,null,true)
+                override fun publish(receipt:A0VerifiedByteStager.Receipt,
+                    safeName:String,isCancelled:()->Boolean)
+                    :A0AutoAcquisitionExecutor.PublishResult {
+                    attempts.add(entry.trackId)
+                    return if(entry.trackId=="three")
+                        A0AutoAcquisitionExecutor.PublishResult.UNCERTAIN
+                    else A0AutoAcquisitionExecutor.PublishResult.DURABLE
+                }
+                override fun cleanup(receipt:A0VerifiedByteStager.Receipt) {
+                    assertTrue(receipt.file.delete())
+                }
+            }
+        }
+        val result=A0AutoDiscoveryCoordinator(search,port).run(
+            three,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(listOf("two","three"),attempts)
+        assertEquals(1,result.batch.published)
+        assertEquals(1,result.batch.needsReconciliation)
+        assertEquals(A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW,
+            result.batch.results[0])
+        assertEquals(A0AutoBatchExecutor.TrackStatus.RECONCILE,
+            result.batch.results[2])
+    }
+
     @Test fun noExplicitOptInNeverOpensSearchOrTransfer() {
         val search=FakeSearch {
             throw AssertionError("Network must remain OFF")

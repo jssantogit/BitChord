@@ -87,6 +87,9 @@ internal class A0AutoDiscoveryCoordinator(
         // A slot that never began P/F may benefit from sibling evidence
         // discovered later in this SAME explicitly requested release.
         val reviewWithoutTransfer=LinkedHashSet<Int>()
+        // An account/protocol stop or uncertain A3 publication terminates
+        // the entire automatic session, including late-evidence rescue.
+        var mayRescueLateSlots=true
         var attempts=0
         fun append(index:Int,status:A0AutoBatchExecutor.TrackStatus) {
             statuses.add(status)
@@ -127,6 +130,7 @@ internal class A0AutoDiscoveryCoordinator(
                             pooled.add(result.choices,result.truncatedSlots)
                         SearchResult.NoReply -> Unit
                         SearchResult.Stop -> {
+                            mayRescueLateSlots=false
                             append(index,A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW)
                             for(next in index+1 until count)
                                 append(next,A0AutoBatchExecutor.TrackStatus.NOT_STARTED)
@@ -170,6 +174,7 @@ internal class A0AutoDiscoveryCoordinator(
                 if(status in setOf(
                     A0AutoBatchExecutor.TrackStatus.CANCELLED,
                     A0AutoBatchExecutor.TrackStatus.RECONCILE)) {
+                    mayRescueLateSlots=false
                     for(next in index+1 until count)
                         append(next,A0AutoBatchExecutor.TrackStatus.NOT_STARTED)
                     break
@@ -179,7 +184,7 @@ internal class A0AutoDiscoveryCoordinator(
             // reconnections unless a newly eligible slot begins its FIRST P/F.
             // Prior PUBLISHED, RECONCILE, CANCELLED and attempted slots are
             // never revisited. A3 still requires REQUESTED before transfer.
-            if(statuses.size==count && !shouldStop()) {
+            if(statuses.size==count && mayRescueLateSlots && !shouldStop()) {
                 for(index in reviewWithoutTransfer) {
                     if(shouldStop())break
                     val (choices,truncated)=checkNotNull(pooled.slotEvidence(index))
