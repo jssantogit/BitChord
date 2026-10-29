@@ -309,6 +309,9 @@ internal fun SmartPlaylistV2WizardUi(
     normalSelectedIds: List<String> = emptyList(),
     normalSearch: String = "",
     normalLoading: Boolean = false,
+    normalSourceProviderKey: String? = null,
+    availableSourceKeys: List<String> = emptyList(),
+    onNormalSourceChange: (String?) -> Unit = {},
     normalBrowseType: CanonicalPlaylistBrowseType = CanonicalPlaylistBrowseType.TRACKS,
     normalBrowseGroup: CanonicalPlaylistBrowseGroup? = null,
     normalGroups: List<CanonicalPlaylistBrowseGroup> = emptyList(),
@@ -476,15 +479,42 @@ internal fun SmartPlaylistV2WizardUi(
                             )
                         }
                         item {
-                            WizardCard(
-                                "Fontes do catálogo",
-                                "Biblioteca canônica disponível neste dispositivo e na conta remota ativa.",
-                            ) {
-                                Text(
-                                    if (normalMode) "Somente gravações canônicas das fontes configuradas." else
-                                        smartRuleSourceSummary(rule),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
+                            if (normalMode) {
+                                WizardCard(
+                                    "Fonte da playlist",
+                                    "Escolha onde as músicas desta playlist serão encontradas.",
+                                ) {
+                                    PlaylistWizardSelectionRow(
+                                        label = "Todas as fontes",
+                                        selected = normalSourceProviderKey == null,
+                                        onClick = { onNormalSourceChange(null) },
+                                    )
+                                    availableSourceKeys.forEach { provider ->
+                                        val title = if (provider == "local-mediastore")
+                                            "Música local" else "Servidor (Navidrome)"
+                                        PlaylistWizardSelectionRow(
+                                            label = title,
+                                            selected = normalSourceProviderKey == provider,
+                                            onClick = { onNormalSourceChange(provider) },
+                                        )
+                                    }
+                                    if (normalSourceProviderKey != null &&
+                                        normalSourceProviderKey !in availableSourceKeys) {
+                                        Text(
+                                            "A fonte salva não está conectada. As músicas permanecem na playlist.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.error,
+                                        )
+                                    }
+                                }
+                            } else {
+                                WizardCard(
+                                    "Fontes do catálogo",
+                                    "A origem das músicas é definida pelas regras desta playlist.",
+                                ) {
+                                    Text(smartRuleSourceSummary(rule),
+                                        style = MaterialTheme.typography.bodySmall)
+                                }
                             }
                         }
                         item {
@@ -999,6 +1029,19 @@ internal fun SmartPlaylistV2WizardUi(
                                         )
                                     }
                                 }
+                            }
+                            item {
+                                WizardCard(
+                                    "Fonte da playlist",
+                                    when (normalSourceProviderKey) {
+                                        null -> "Todas as fontes disponíveis"
+                                        "local-mediastore" -> "Música local"
+                                        else -> if (normalSourceProviderKey in availableSourceKeys)
+                                            "Servidor (Navidrome)"
+                                        else "Servidor não disponível"
+                                    },
+                                    onClick = { page = WizardStep.IDENTITY },
+                                )
                             }
                             if (normalSelectedIds.isEmpty()) item {
                                 WizardCard("Sem músicas", "Você pode salvar uma playlist vazia e adicionar músicas depois.")
