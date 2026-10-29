@@ -430,7 +430,10 @@ internal fun SmartPlaylistV2BuilderScreen(
                                         repo.save(SavedSmartPlaylistV2Definition(id, name, parsed))
                                     }
                                     reset()
-                                    showWizard = false
+                                    // The Library owns saved playlists now. Close back
+                                    // to that live shelf rather than opening a second
+                                    // "Minhas playlists" manager after creation.
+                                    onBack()
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
                                 } catch (_: Exception) {
