@@ -38,7 +38,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -46,8 +45,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -489,19 +486,16 @@ internal fun SmartPlaylistV2WizardUi(
                             }
                         }
                         item {
-                            OutlinedButton(
+                            PlaylistWizardSecondaryAction(
+                                label = "+ Adicionar grupo",
+                                enabled = root != null && root.children.size < 64,
                                 onClick = {
                                     targetGroupPath = emptyList()
                                     addingGroup = true
                                     search = ""
                                     page = WizardStep.CATEGORIES
                                 },
-                                enabled = root != null && root.children.size < 64,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Icon(Icons.Rounded.Add, contentDescription = null)
-                                Text(" Adicionar grupo")
-                            }
+                            )
                         }
                         item {
                             WizardCard("Limite e ordenação",
@@ -570,8 +564,8 @@ internal fun SmartPlaylistV2WizardUi(
                                 }
                             }
                             item {
-                                OutlinedButton(
-                                    modifier = Modifier.fillMaxWidth(),
+                                PlaylistWizardSecondaryAction(
+                                    label = "+ Adicionar condição",
                                     enabled = group.children.size < 64,
                                     onClick = {
                                         targetGroupPath = selectedPath
@@ -579,15 +573,19 @@ internal fun SmartPlaylistV2WizardUi(
                                         search = ""
                                         page = WizardStep.CATEGORIES
                                     },
-                                ) { Text("+ Adicionar condição") }
+                                )
                             }
                             item {
-                                OutlinedButton(onClick = {
-                                    onRuleChange(smartRuleAddConditionAt(rule, selectedPath,
-                                        SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL,
-                                            listOf(smartRuleNewComparison(SmartPlaylistRuleField.AUDIBLE_COMPLETIONS)))))
-                                }, enabled = group.children.size < 64,
-                                    modifier = Modifier.fillMaxWidth()) { Text("+ Grupo aninhado") }
+                                PlaylistWizardSecondaryAction(
+                                    label = "+ Grupo aninhado",
+                                    enabled = group.children.size < 64,
+                                    onClick = {
+                                        onRuleChange(smartRuleAddConditionAt(rule, selectedPath,
+                                            SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL,
+                                                listOf(smartRuleNewComparison(
+                                                    SmartPlaylistRuleField.AUDIBLE_COMPLETIONS)))))
+                                    },
+                                )
                             }
                             if (savedDefinitions.isNotEmpty()) item {
                                 TextButton(onClick = { picker = "reference" }) {
@@ -605,15 +603,15 @@ internal fun SmartPlaylistV2WizardUi(
                                     onClick = { editAt(selectedPath, WizardStep.GROUP) })
                             }
                             item {
-                                OutlinedButton(
+                                PlaylistWizardSecondaryAction(
+                                    label = "+ Adicionar condição",
                                     onClick = {
                                         targetGroupPath = selectedPath
                                         addingGroup = false
                                         search = ""
                                         page = WizardStep.CATEGORIES
                                     },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) { Text("+ Adicionar condição") }
+                                )
                             }
                             if (selected is SmartPlaylistRule.Not) item {
                                 TextButton(onClick = {
@@ -787,16 +785,20 @@ internal fun SmartPlaylistV2WizardUi(
                                 onClick = { page = WizardStep.RULES })
                         }
                         item {
-                            WizardCard("Prévia real",
+                            WizardCard("Músicas selecionadas",
                                 when (preview) {
                                     null -> "Ainda não calculada para estas regras"
                                     else -> "${preview.size} músicas após ordenação e limite"
                                 }) {
-                                OutlinedButton(onClick = onPreview, enabled = !loading) {
-                                    Text(if (preview == null) "Calcular prévia" else "Atualizar prévia")
-                                }
-                                Text("Contagem após o limite, não o total de correspondências.",
-                                    style = MaterialTheme.typography.bodySmall)
+                                PlaylistWizardSecondaryAction(
+                                    label = if (preview == null)
+                                        "Calcular prévia" else "Atualizar prévia",
+                                    enabled = !loading,
+                                    onClick = onPreview,
+                                )
+                                Text("Resultado da consulta, após aplicar limite e ordenação.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 if (preview != null &&
                                     preview.size > CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE) {
                                     Text("Play/Fila aceitam no máximo " +
