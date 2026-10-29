@@ -71,17 +71,40 @@ internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (
 }
 
 internal fun smartConditionDescription(field: SmartPlaylistRuleField): String = when (field) {
+    SmartPlaylistRuleField.TITLE ->
+        "Escolha palavras do título e como elas devem corresponder."
+    SmartPlaylistRuleField.ARTIST_DISPLAY ->
+        "Compare o nome de artista exibido no catálogo."
+    SmartPlaylistRuleField.RELEASE_TITLE ->
+        "Compare o álbum ou lançamento ao qual a música está vinculada."
+    SmartPlaylistRuleField.ALBUM_ARTIST ->
+        "Considere apenas créditos de artista do álbum identificados."
+    SmartPlaylistRuleField.TRACK_ARTIST ->
+        "Use os créditos específicos da música, quando conhecidos."
+    SmartPlaylistRuleField.TRACK_NUMBER ->
+        "Compare a posição conhecida da música no lançamento."
     SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE ->
-        "Verifica somente se existe vínculo com uma referência de capa; não comprova que a imagem carregou."
+        "Verifica se há uma referência de capa no lançamento; não garante imagem disponível."
+    SmartPlaylistRuleField.EXPLICIT_RATING ->
+        "Compare a avaliação de uma a cinco estrelas, quando atribuída."
+    SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING ->
+        "Tempo desde que a nota desta música foi alterada no dispositivo."
+    SmartPlaylistRuleField.AUDIBLE_COMPLETIONS ->
+        "Número de vezes em que a reprodução foi concluída."
+    SmartPlaylistRuleField.EARLY_SKIPS ->
+        "Quantidade de vezes em que a música foi pulada no início."
+    SmartPlaylistRuleField.LATE_SKIPS ->
+        "Quantidade de vezes em que a música foi pulada perto do fim."
+    SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE ->
+        "Tempo desde a última reprodução concluída registrada."
     SmartPlaylistRuleField.RELEASE_YEAR ->
-        "Ano de uma edição identificada pelo MusicBrainz; não é necessariamente o lançamento original."
-    SmartPlaylistRuleField.SOURCE_KIND ->
-        "Local ou OpenSubsonic na conta ativa, apenas quando a origem é comprovada."
-    SmartPlaylistRuleField.DURATION_MS ->
-        "Informe a duração em segundos. O motor compara milissegundos."
+        "Ano da edição verificada no MusicBrainz, não necessariamente o lançamento original."
     SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED ->
-        "Disponível para arquivos com data MediaStore confiável."
-    else -> "A condição usa somente metadados verificáveis da biblioteca atual."
+        "Tempo desde a adição de um arquivo local com data confiável."
+    SmartPlaylistRuleField.SOURCE_KIND ->
+        "Compare músicas locais ou OpenSubsonic da conta ativa, com origem comprovada."
+    SmartPlaylistRuleField.DURATION_MS ->
+        "Informe a duração total da música em segundos."
 }
 
 private fun smartConditionNormalize(input: String): String =
