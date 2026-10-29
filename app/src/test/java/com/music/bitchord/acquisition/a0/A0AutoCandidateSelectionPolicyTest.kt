@@ -60,6 +60,22 @@ class A0AutoCandidateSelectionPolicyTest {
         assertEquals(2,choice.sequentialAlternatives.size)
     }
 
+    @Test fun conflictingExplicitTrackNumbersNeverBecomeOneGroupThroughUnnumberedPeer() {
+        val first=offers("unnumbered")
+        val second=offers("one",name="01 ILLIT - Magnetic.mp3")
+        val third=offers("two",name="02 ILLIT - Magnetic.mp3")
+        val a=A0AutoCandidateSelectionPolicy.preview(
+            target,first+second+third,profile)
+        val b=A0AutoCandidateSelectionPolicy.preview(
+            target,second+first+third,profile)
+        for(decision in listOf(a,b)) {
+            assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,
+                decision.status)
+            assertEquals(A0AutoCandidateSelectionPolicy.Reason.AMBIGUOUS_EDITION,
+                decision.reason)
+        }
+    }
+
     @Test fun differentFileSizesStillForceReviewDespiteIdenticalTrackNames() {
         val a=offers("one")
         val b=offers("two",sizeBytes=161*40_000L+1024L)
