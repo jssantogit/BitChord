@@ -534,6 +534,26 @@ internal fun SmartPlaylistV2BuilderScreen(
                     onToggleNormalTrack = { id ->
                         normalSelectedIds = toggleCanonicalStaticMember(normalSelectedIds, id)
                     },
+                    onMoveNormalTrack = { id, towardStart ->
+                        normalSelectedIds = moveCanonicalStaticMember(normalSelectedIds, id, towardStart)
+                    },
+                    onDeleteNormal = {
+                        val id = editingNormalId
+                        if (id != null && !loading) {
+                            loading = true
+                            scope.launch {
+                                try {
+                                    withContext(Dispatchers.IO) { normalRepo.remove(id) }
+                                    reset()
+                                    onBack()
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    error = "Não foi possível excluir a playlist normal."
+                                } finally { loading = false }
+                            }
+                        }
+                    },
                     onSaveNormal = {
                         if (!loading) {
                             loading = true
