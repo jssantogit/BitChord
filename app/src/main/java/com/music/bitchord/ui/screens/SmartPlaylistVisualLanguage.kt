@@ -48,6 +48,30 @@ import com.music.bitchord.ui.theme.AccentRed
  * These components do not change UI or domain state on their own.
  */
 @Composable
+internal fun PlaylistWizardSecondaryAction(
+    label: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(13.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = if (enabled) AccentRed
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
 internal fun PlaylistWizardPrimaryAction(
     label: String,
     enabled: Boolean = true,

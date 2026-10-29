@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +40,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -220,25 +225,55 @@ private fun <T> WizardChoiceDialog(
     onChosen: (T) -> Unit,
     onClose: () -> Unit,
 ) {
-    AlertDialog(
+    // A BitChord bottom-choice sheet, not a generic Material 3 AlertDialog.
+    // Keeps the music-style list language and native safe-area handling.
+    Dialog(
         onDismissRequest = onClose,
-        title = { Text(title) },
-        text = {
-            LazyColumn(Modifier.heightIn(max = 480.dp)) {
-                items(options) { option ->
-                    Text(
-                        label(option),
-                        modifier = Modifier.fillMaxWidth()
-                            .clickable { onChosen(option); onClose() }
-                            .padding(vertical = 15.dp, horizontal = 6.dp),
-                    )
-                    HorizontalDivider()
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        Box(
+            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.48f)),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .navigationBarsPadding().padding(bottom = 12.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(start = PAGE_GUTTER, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(title, style = MaterialTheme.typography.titleLarge)
+                    TextButton(onClick = onClose) { Text("Fechar") }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                LazyColumn(Modifier.heightIn(max = 480.dp)) {
+                    items(options) { option ->
+                        Text(
+                            label(option),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.fillMaxWidth()
+                                .clickable { onChosen(option); onClose() }
+                                .padding(horizontal = PAGE_GUTTER, vertical = 17.dp),
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = PAGE_GUTTER),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
+                        )
+                    }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = onClose) { Text("Fechar") } },
-    )
+        }
+    }
 }
+
 
 @Composable
 internal fun SmartPlaylistV2WizardUi(
