@@ -565,6 +565,21 @@ internal fun SmartPlaylistV2BuilderScreen(
                     normalSourceProviderKey = normalSourceProviderKey,
                     availableSourceKeys = availableSourceKeys,
                     onNormalSourceChange = { normalSourceProviderKey = it },
+                    onSmartSourceChange = { chosen ->
+                        val scoped = smartRuleWithGlobalSource(rule, chosen, hasConfiguredRules)
+                        if (scoped == null) {
+                            rule = SmartPlaylistRule.Group(
+                                SmartPlaylistRuleJoin.ALL, listOf(newRule()),
+                            )
+                            hasConfiguredRules = false
+                        } else {
+                            rule = scoped
+                            hasConfiguredRules = true
+                        }
+                        preview = null
+                        previewQuery = null
+                        error = null
+                    },
                     normalBrowseType = normalBrowseType,
                     normalBrowseGroup = normalBrowseGroup,
                     normalGroups = normalGroups,
