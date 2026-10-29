@@ -1,6 +1,7 @@
 package com.music.bitchord.acquisition.a0
 
 import com.music.bitchord.download.SoulseekBatchPlan
+import java.text.Normalizer
 import java.util.Locale
 import kotlin.math.abs
 
@@ -37,6 +38,38 @@ internal object A0AutoCandidateSelectionPolicy {
         val choice:A0ObservedCandidateHandoff.Choice,
         val rank:Int,
     )
+
+    /**
+     * One peer may write "01 Artist - Title.flac", while another uses
+     * "Artist - Title.flac". ONLY this numbering difference may be ignored:
+     * identical advertised byte size, codec, bit properties and duration
+     * are mandatory. This does NOT authenticate the recording/master.
+     * Different explicit track numbers (01 vs 02) remain distinct.
+     */
+    private fun sameNumberedTrackClaim(
+        a:A0CandidateClaimClusters.Claim,
+        b:A0CandidateClaimClusters.Claim,
+    ):Boolean {
+        if(a.format!=b.format || a.sizeBytes!=b.sizeBytes ||
+            a.bitrateKbps!=b.bitrateKbps ||
+            a.durationSeconds!=b.durationSeconds ||
+            a.sampleRateHz!=b.sampleRateHz ||
+            a.bitDepth!=b.bitDepth)return false
+        val number=Regex("^([0-9]{1,3})[ ._-]+")
+        fun label(name:String):Pair<String?,String> {
+            val normalized=Normalizer.normalize(name,Normalizer.Form.NFKC)
+                .trim().lowercase(Locale.ROOT)
+            val match=number.find(normalized)
+            val prefix=match?.groupValues?.get(1)
+            return prefix to if(match!=null)normalized.substring(match.value.length)
+                else normalized
+        }
+        val first=label(a.filename)
+        val second=label(b.filename)
+        return first.second==second.second &&
+            (first.first==second.first ||
+                first.first==null || second.first==null)
+    }
     private val supported=setOf(
         A0CanonicalAcquisitionIntent.Codec.MP3,
         A0CanonicalAcquisitionIntent.Codec.FLAC,
@@ -143,7 +176,9 @@ internal object A0AutoCandidateSelectionPolicy {
         for(candidate in strong) {
             val group=clusters.firstOrNull {
                 A0CandidateClaimClusters.sameClaim(
-                    it.first().choice.claim,candidate.choice.claim)
+                    it.first().choice.claim,candidate.choice.claim) ||
+                    sameNumberedTrackClaim(
+                        it.first().choice.claim,candidate.choice.claim)
             }
             if(group==null)clusters.add(mutableListOf(candidate))
             else group.add(candidate)
