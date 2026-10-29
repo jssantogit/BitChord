@@ -212,8 +212,15 @@ internal fun SmartPlaylistV2BuilderScreen(
     // This does not infer an ID from its visible name or create a duplicate.
     LaunchedEffect(initialPlaylistId, repo) {
         val id = initialPlaylistId ?: return@LaunchedEffect
-        val item = withContext(Dispatchers.IO) {
-            repo.list().firstOrNull { it.id == id }
+        val item = try {
+            withContext(Dispatchers.IO) {
+                repo.list().firstOrNull { it.id == id }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            error = "Não foi possível ler esta playlist; nenhum dado foi alterado."
+            return@LaunchedEffect
         }
         if (item == null) {
             error = "Playlist não encontrada na biblioteca local."
