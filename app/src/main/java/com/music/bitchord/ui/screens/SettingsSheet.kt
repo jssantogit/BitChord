@@ -1698,7 +1698,7 @@ fun SettingsScreen(
                     Text("Formato desejado",style=MaterialTheme.typography.titleMedium,
                         modifier=Modifier.padding(top=14.dp))
                     Row(modifier=Modifier.horizontalScroll(rememberScrollState())) {
-                        listOf("mp3","flac","wav","aac","m4a").forEach { format ->
+                        listOf("mp3","aac","opus","ogg","flac","wav","m4a").forEach { format ->
                             TextButton(onClick={
                                 customFormat=format
                                 if(format in setOf("flac","wav")) {
@@ -1721,7 +1721,7 @@ fun SettingsScreen(
                             style=MaterialTheme.typography.bodySmall,
                         )
                     }
-                    if(customFormat in setOf("mp3","aac","m4a")) {
+                    if(customFormat in setOf("mp3","aac","opus","ogg","m4a")) {
                         OutlinedTextField(
                             value=customBitrate,
                             onValueChange={customBitrate=it.filter(Char::isDigit).take(4)},
@@ -1754,10 +1754,10 @@ fun SettingsScreen(
                     val valid=(customBitrate.isBlank() || (bitrate!=null && bitrate in 32..1536)) &&
                         (customRate.isBlank() || (rate!=null && rate in 8000..384000)) &&
                         (customDepth.isBlank() || (depth!=null && depth in 8..32)) &&
-                        ((customFormat!="mp3" && customFormat!="aac") ||
+                        ((customFormat !in setOf("mp3","aac","opus","ogg","m4a")) ||
                             (customRate.isBlank() && customDepth.isBlank()))
                     if(!valid) Text(
-                        "Parâmetros inválidos: MP3/AAC usam bitrate, não profundidade PCM. " +
+                        "Parâmetros inválidos: MP3/AAC/Opus/Ogg usam bitrate, não profundidade PCM. " +
                             "Bitrate 32–1536 kbps, frequência 8–384 kHz " +
                             "(ex.: 44,1 ou 96) e 8–32 bits.",
                         color=MaterialTheme.colorScheme.error,
@@ -1769,7 +1769,7 @@ fun SettingsScreen(
                             AppSettings.setDownloadCustomOptions(
                                 DownloadCustomOptions(
                                     customFormat,
-                                    bitrate.takeIf { customFormat in setOf("mp3","aac","m4a") },
+                                    bitrate.takeIf { customFormat in setOf("mp3","aac","opus","ogg","m4a") },
                                     rate.takeIf { customFormat in setOf("flac","wav") },
                                     depth.takeIf { customFormat in setOf("flac","wav") }
                                 ))
