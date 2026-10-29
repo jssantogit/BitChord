@@ -185,6 +185,30 @@ internal class A3AcquisitionLedger(private val store:Store) {
             true
         }
 
+    /**
+     * Return an existing auto reservation for a user-approved manual peer,
+     * without altering its phase or ever reviving FAILED/AVAILABLE work.
+     * A partial recording/release hash match is a canonical conflict and
+     * cannot be used to create a second physical audio item.
+     */
+    fun reservedForExplicitManualReview(
+        recordingId:String,query:String,album:String?,
+    ):Entry?=synchronized(lock) {
+        val salt=autoSalt ?: return@synchronized null
+        val recording=fingerprint(salt,"recording",recordingId)
+        val release=fingerprint(salt,"release",query,album.orEmpty())
+        val matched=items.values.filter {
+            it.autoRecordingDigest==recording ||
+                it.autoReleaseDigest==release
+        }
+        if(matched.isEmpty())return@synchronized null
+        if(matched.size!=1 ||
+            matched[0].autoRecordingDigest!=recording ||
+            matched[0].autoReleaseDigest!=release)
+            throw AutomaticIdentityAlreadyReserved()
+        matched.single()
+    }
+
     private fun fingerprint(salt:String,kind:String,vararg values:String):String {
         val mac=Mac.getInstance("HmacSHA256")
         val key=ByteArray(32) { i ->
