@@ -284,12 +284,12 @@ class A3AutomaticIdentityReservationTest {
         val store=Store()
         val ledger=A3AcquisitionLedger(store)
         ledger.reserveAutomaticBatch(listOf(
-            slot(first),slot(second,"rec-two","Artist - Another Track")))
+            slot(first),slot(second,"rec-two","ILLIT - Another Track")))
         assertEquals(first,ledger.reservedForExplicitManualReview(
-            "recording-1","Artist - Track","Album")?.id)
+            "recording-1","ILLIT - Magnetic","SUPER REAL ME")?.id)
         try {
             ledger.reservedForExplicitManualReview(
-                "recording-1","Artist - Wrong Song","Album")
+                "recording-1","ILLIT - Wrong Song","SUPER REAL ME")
             fail("mixed canonical identity not accepted")
         }catch(_:A3AcquisitionLedger.AutomaticIdentityAlreadyReserved) {}
         ledger.advance(first,A3AcquisitionLedger.Phase.SEARCHING)
