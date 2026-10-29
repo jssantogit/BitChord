@@ -26,6 +26,13 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -140,14 +147,14 @@ private fun WizardCard(
         modifier = Modifier.fillMaxWidth().then(
             if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
         ),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(15.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface,
         ),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(PAGE_GUTTER),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp),
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -178,18 +185,13 @@ private fun WizardJoinPicker(
     value: SmartPlaylistRuleJoin,
     onChange: (SmartPlaylistRuleJoin) -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        FilterChip(
-            selected = value == SmartPlaylistRuleJoin.ALL,
-            onClick = { onChange(SmartPlaylistRuleJoin.ALL) },
-            label = { Text("Todas (E)") },
-        )
-        FilterChip(
-            selected = value == SmartPlaylistRuleJoin.ANY,
-            onClick = { onChange(SmartPlaylistRuleJoin.ANY) },
-            label = { Text("Qualquer (OU)") },
-        )
-    }
+    PlaylistWizardSegmented(
+        first = "Todas (E)",
+        second = "Qualquer (OU)",
+        firstSelected = value == SmartPlaylistRuleJoin.ALL,
+        onSelectFirst = { onChange(SmartPlaylistRuleJoin.ALL) },
+        onSelectSecond = { onChange(SmartPlaylistRuleJoin.ANY) },
+    )
     Text(
         if (value == SmartPlaylistRuleJoin.ALL)
             "A música deve satisfazer todas as condições deste nível."
@@ -198,6 +200,17 @@ private fun WizardJoinPicker(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
+
+private fun iconForConditionCategory(id: String) = when (id) {
+    "music" -> Icons.Rounded.LibraryMusic
+    "ratings" -> Icons.Rounded.Star
+    "history" -> Icons.Rounded.History
+    "dates" -> Icons.Rounded.Event
+    "library" -> Icons.Rounded.Folder
+    "audio" -> Icons.Rounded.GraphicEq
+    else -> Icons.Rounded.Tune
+}
+
 
 @Composable
 private fun <T> WizardChoiceDialog(
@@ -380,10 +393,13 @@ internal fun SmartPlaylistV2WizardUi(
                 when (page) {
                     WizardStep.IDENTITY -> {
                         item {
-                            OutlinedTextField(name, onNameChange, label = { Text("Nome da playlist") },
-                                supportingText = { Text("Obrigatório · até 80 caracteres") },
-                                isError = name.length > 80,
-                                modifier = Modifier.fillMaxWidth(), singleLine = true)
+                            PlaylistWizardTextEntry(
+                                value = name,
+                                onValueChange = onNameChange,
+                                label = "Nome da playlist",
+                                hint = "Obrigatório · até 80 caracteres",
+                                error = name.length > 80,
+                            )
                         }
                         item {
                             WizardCard(
@@ -400,12 +416,8 @@ internal fun SmartPlaylistV2WizardUi(
                             WizardCard("Playlist inteligente",
                                 "Seleciona músicas por regras e atualiza o resultado quando os dados relevantes mudam.")
                         }
-                        item {
-                            Text("Capas, descrição e destino de armazenamento exigem suporte próprio " +
-                                "antes de entrarem neste fluxo.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                        // Capas/descrição não são persistidas no V2 atual.
+                        // Não apresentar linguagem técnica de implementação ao usuário.
                     }
                     WizardStep.RULES -> {
                         val root = rule as? SmartPlaylistRule.Group
@@ -450,21 +462,26 @@ internal fun SmartPlaylistV2WizardUi(
                         item {
                             WizardCard("Limite e ordenação",
                                 "Aplicados depois de avaliar todas as condições") {
-                                OutlinedButton(onClick = { picker = "sort" },
-                                    modifier = Modifier.fillMaxWidth()) {
-                                    Text(sortUiLabel(sort))
-                                }
-                                OutlinedTextField(limit, onLimitChange,
-                                    label = { Text("Máximo de músicas") },
-                                    supportingText = { Text("De 1 a 10.000") },
+                                PlaylistWizardSelectionRow(
+                                    label = "Ordenar: " + sortUiLabel(sort),
+                                    selected = false,
+                                    onClick = { picker = "sort" },
+                                )
+                                PlaylistWizardTextEntry(
+                                    value = limit,
+                                    onValueChange = onLimitChange,
+                                    label = "Máximo de músicas",
+                                    hint = "De 1 a 10.000",
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    modifier = Modifier.fillMaxWidth(), singleLine = true)
+                                )
                                 if (sort == SmartPlaylistV2Sort.STABLE_RANDOM ||
                                     sort == SmartPlaylistV2Sort.STABLE_RANDOM_ALBUMS) {
-                                    OutlinedTextField(seed, onSeedChange,
-                                        label = { Text("Semente de ordem aleatória") },
+                                    PlaylistWizardTextEntry(
+                                        value = seed,
+                                        onValueChange = onSeedChange,
+                                        label = "Semente aleatória",
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        modifier = Modifier.fillMaxWidth(), singleLine = true)
+                                    )
                                 }
                             }
                         }
@@ -568,40 +585,55 @@ internal fun SmartPlaylistV2WizardUi(
                     }
                     WizardStep.CATEGORIES -> {
                         item {
-                            OutlinedTextField(search, { search = it },
-                                label = { Text("Buscar condições") },
-                                modifier = Modifier.fillMaxWidth(), singleLine = true)
+                            PlaylistWizardSearchEntry(search, { search = it }, "Buscar condições")
                         }
                         if (search.isNotBlank()) {
                             val matches = smartConditionSearch(search)
                             if (matches.isEmpty()) item {
-                                Text("Nenhuma condição implementada corresponde à busca.")
-                            }
-                            items(matches) { field ->
-                                WizardCard(smartConditionLabel(field),
-                                    smartConditionDescription(field),
-                                    onClick = { openField(field) })
+                                Text("Nenhuma condição encontrada.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            } else item {
+                                PlaylistWizardNavigationList(matches.map { field ->
+                                    PlaylistWizardNavOption(
+                                        title = smartConditionLabel(field),
+                                        description = if (smartConditionDescription(field).startsWith(
+                                            "A condição usa somente")) "" else smartConditionDescription(field),
+                                        onClick = { openField(field) },
+                                    )
+                                })
                             }
                         } else {
-                            items(smartConditionCategories) { category ->
-                                WizardCard(category.title, category.description, onClick = {
-                                    selectedCategory = category
-                                    page = WizardStep.FIELDS
+                            item {
+                                PlaylistWizardNavigationList(smartConditionCategories.map { category ->
+                                    PlaylistWizardNavOption(
+                                        title = category.title,
+                                        description = category.description,
+                                        icon = iconForConditionCategory(category.id),
+                                        onClick = {
+                                            selectedCategory = category
+                                            search = ""
+                                            page = WizardStep.FIELDS
+                                        },
+                                    )
                                 })
                             }
                         }
                     }
                     WizardStep.FIELDS -> {
                         item {
-                            OutlinedTextField(search, { search = it },
-                                label = { Text("Buscar nesta categoria") },
-                                modifier = Modifier.fillMaxWidth(), singleLine = true)
+                            PlaylistWizardSearchEntry(
+                                search, { search = it }, "Buscar nesta categoria")
                         }
                         val matches = smartConditionSearch(search, selectedCategory)
-                        items(matches) { field ->
-                            WizardCard(smartConditionLabel(field),
-                                smartConditionDescription(field),
-                                onClick = { openField(field) })
+                        if (matches.isNotEmpty()) item {
+                            PlaylistWizardNavigationList(matches.map { field ->
+                                PlaylistWizardNavOption(
+                                    title = smartConditionLabel(field),
+                                    description = if (smartConditionDescription(field).startsWith(
+                                        "A condição usa somente")) "" else smartConditionDescription(field),
+                                    onClick = { openField(field) },
+                                )
+                            })
                         }
                         if (matches.isEmpty()) item { Text("Nenhuma condição encontrada.") }
                         if (selectedCategory.id == "library") item {
@@ -614,32 +646,34 @@ internal fun SmartPlaylistV2WizardUi(
                     WizardStep.EDITOR -> {
                         item {
                             WizardCard("Condição", smartConditionLabel(draft.field)) {
-                                OutlinedButton(onClick = { picker = "operator" },
-                                    modifier = Modifier.fillMaxWidth()) {
-                                    Text(operatorUiLabel(draft.operator))
-                                }
+                                PlaylistWizardSelectionRow(
+                                    label = operatorUiLabel(draft.operator),
+                                    selected = false,
+                                    onClick = { picker = "operator" },
+                                )
                                 val presence = draft.operator == SmartPlaylistRuleOperator.IS_PRESENT ||
                                     draft.operator == SmartPlaylistRuleOperator.IS_MISSING
                                 if (!presence) {
                                     if (draft.field == SmartPlaylistRuleField.SOURCE_KIND) {
-                                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                            FilterChip(selected = draft.textValue == "local",
-                                                onClick = {
-                                                    draft = draft.copy(value = null, textValue = "local")
-                                                }, label = { Text("Dispositivo") })
-                                            FilterChip(selected = draft.textValue == "opensubsonic",
-                                                onClick = {
-                                                    draft = draft.copy(value = null,
-                                                        textValue = "opensubsonic")
-                                                }, label = { Text("OpenSubsonic") })
-                                        }
+                                        PlaylistWizardSegmented(
+                                            first = "Dispositivo",
+                                            second = "OpenSubsonic",
+                                            firstSelected = draft.textValue == "local",
+                                            onSelectFirst = {
+                                                draft = draft.copy(value = null, textValue = "local")
+                                            },
+                                            onSelectSecond = {
+                                                draft = draft.copy(
+                                                    value = null, textValue = "opensubsonic")
+                                            },
+                                        )
                                     } else if (draft.field.isTextField()) {
-                                        OutlinedTextField(
-                                            draft.textValue.orEmpty(),
-                                            { draft = draft.copy(textValue = it, value = null) },
-                                            label = { Text("Texto a comparar") },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            singleLine = true,
+                                        PlaylistWizardTextEntry(
+                                            value = draft.textValue.orEmpty(),
+                                            onValueChange = {
+                                                draft = draft.copy(textValue = it, value = null)
+                                            },
+                                            label = "Texto a comparar",
                                         )
                                     } else {
                                         var numericText by remember(draft.field, editingPath) {
@@ -647,9 +681,9 @@ internal fun SmartPlaylistV2WizardUi(
                                                 draft.value?.div(1000.0) else draft.value
                                             mutableStateOf(shown?.toString()?.removeSuffix(".0").orEmpty())
                                         }
-                                        OutlinedTextField(
-                                            numericText,
-                                            { raw ->
+                                        PlaylistWizardTextEntry(
+                                            value = numericText,
+                                            onValueChange = { raw ->
                                                 numericText = raw
                                                 val number = raw.replace(',', '.').toDoubleOrNull()
                                                 draft = draft.copy(value = number?.let {
@@ -657,11 +691,9 @@ internal fun SmartPlaylistV2WizardUi(
                                                         it * 1000.0 else it
                                                 }, textValue = null)
                                             },
-                                            label = { Text(if (draft.field == SmartPlaylistRuleField.DURATION_MS)
-                                                "Duração (segundos)" else "Valor numérico") },
+                                            label = if (draft.field == SmartPlaylistRuleField.DURATION_MS)
+                                                "Duração (segundos)" else "Valor numérico",
                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                            modifier = Modifier.fillMaxWidth(),
-                                            singleLine = true,
                                         )
                                     }
                                 }
@@ -670,8 +702,11 @@ internal fun SmartPlaylistV2WizardUi(
                         item {
                             WizardCard("Inverter condição",
                                 "Exclui músicas que correspondem; dados desconhecidos continuam excluídos da prévia.") {
-                                FilterChip(selected = negated, onClick = { negated = !negated },
-                                    label = { Text(if (negated) "NÃO ativado" else "Adicionar NÃO") })
+                                PlaylistWizardSelectionRow(
+                                    label = if (negated) "Negação ativa" else "Inverter resultado",
+                                    selected = negated,
+                                    onClick = { negated = !negated },
+                                )
                             }
                         }
                     }
