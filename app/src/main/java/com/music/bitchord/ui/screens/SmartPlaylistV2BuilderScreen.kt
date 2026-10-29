@@ -148,6 +148,9 @@ internal fun SmartPlaylistV2BuilderScreen(
     var normalMode by remember { mutableStateOf(false) }
     var editingNormalId by remember { mutableStateOf<String?>(null) }
     var normalSearch by remember { mutableStateOf("") }
+    var normalBrowseType by remember { mutableStateOf(CanonicalPlaylistBrowseType.TRACKS) }
+    var normalBrowseGroup by remember { mutableStateOf<CanonicalPlaylistBrowseGroup?>(null) }
+    var normalGroups by remember { mutableStateOf<List<CanonicalPlaylistBrowseGroup>>(emptyList()) }
     var normalRows by remember { mutableStateOf<List<V2DisplayRow>>(emptyList()) }
     var normalSelectedIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var normalSelectedRows by remember { mutableStateOf<List<V2DisplayRow>>(emptyList()) }
@@ -215,6 +218,9 @@ internal fun SmartPlaylistV2BuilderScreen(
         editingNormalId = null
         normalMode = false
         normalSearch = ""
+        normalBrowseType = CanonicalPlaylistBrowseType.TRACKS
+        normalBrowseGroup = null
+        normalGroups = emptyList()
         normalRows = emptyList()
         normalSelectedIds = emptyList()
         normalSelectedRows = emptyList()
@@ -283,21 +289,34 @@ internal fun SmartPlaylistV2BuilderScreen(
         name = item.name
         normalSelectedIds = item.recordingIds
         normalSearch = ""
+        normalBrowseType = CanonicalPlaylistBrowseType.TRACKS
+        normalBrowseGroup = null
         error = null
         showWizard = true
     }
 
-    LaunchedEffect(normalMode, normalSearch) {
+    LaunchedEffect(normalMode, normalSearch, normalBrowseType, normalBrowseGroup) {
         if (!normalMode) return@LaunchedEffect
         normalLoading = true
         try {
             delay(160)
-            normalRows = canonicalNormalPlaylistSearch(context, normalSearch)
+            if (normalBrowseGroup != null) {
+                normalRows = canonicalNormalPlaylistGroupTracks(context, normalBrowseGroup!!)
+                normalGroups = emptyList()
+            } else if (normalBrowseType == CanonicalPlaylistBrowseType.TRACKS) {
+                normalRows = canonicalNormalPlaylistSearch(context, normalSearch)
+                normalGroups = emptyList()
+            } else {
+                normalGroups = canonicalNormalPlaylistBrowseGroups(
+                    context, normalSearch, normalBrowseType)
+                normalRows = emptyList()
+            }
             error = null
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
             normalRows = emptyList()
+            normalGroups = emptyList()
             error = "Não foi possível consultar as músicas das fontes disponíveis."
         } finally {
             normalLoading = false
@@ -529,6 +548,15 @@ internal fun SmartPlaylistV2BuilderScreen(
                     normalSelectedIds = normalSelectedIds,
                     normalSearch = normalSearch,
                     normalLoading = normalLoading,
+                    normalBrowseType = normalBrowseType,
+                    normalBrowseGroup = normalBrowseGroup,
+                    normalGroups = normalGroups,
+                    onNormalBrowseTypeChange = { type ->
+                        normalBrowseType = type
+                        normalBrowseGroup = null
+                        normalSearch = ""
+                    },
+                    onNormalBrowseGroupChange = { group -> normalBrowseGroup = group },
                     onNormalModeChange = { normalMode = it },
                     onNormalSearchChange = { normalSearch = it },
                     onToggleNormalTrack = { id ->
