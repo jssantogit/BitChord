@@ -31,7 +31,7 @@ internal object A0ManualReviewCandidatePolicy {
         observed:List<A0ObservedCandidateHandoff.Choice>,
         profile:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
     ):List<A0ObservedCandidateHandoff.Choice> {
-        if(entry.durationSeconds !in 15..7200)return emptyList()
+        if(entry.durationSeconds?.takeIf { it in 15..7200 }==null)return emptyList()
         return observed.asSequence().mapNotNull { choice ->
             val claim=choice.claim
             val ext=claim.format.lowercase(Locale.ROOT)
