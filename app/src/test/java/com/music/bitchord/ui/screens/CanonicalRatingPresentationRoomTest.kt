@@ -88,4 +88,69 @@ class CanonicalRatingPresentationRoomTest {
             db.close()
         }
     }
+
+    @Test
+    fun musicBrainzIdentityCarriesNativeRatingWhenMediaAssetsAreAttachedLater() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val mbid = "e614e432-ca77-41c1-82c1-4e3a24ebbb0c"
+            val otherMbid = "3e619ba2-34f0-4649-83d8-05483e2fabe5"
+            var nextId = 0
+            val index = com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex(db) {
+                "canonical-recording-${++nextId}"
+            }
+            val original = com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit(
+                mbid, "Magnetic", "ILLIT", 160_000L,
+            )
+            val alternative = original.copy(musicBrainzId = otherMbid, durationMs = 124_000L)
+            val ids = index.persistRecordings(listOf(original, alternative))
+            val recordingId = ids.getValue(mbid)
+            val differentRecordingId = ids.getValue(otherMbid)
+            org.junit.Assert.assertNotEquals(recordingId, differentRecordingId)
+
+            val dao = db.catalogDao()
+            assertTrue(dao.observeRatingPresentationAssets(local, remote).first().isEmpty())
+            // The user-owned score belongs to the verified RecordingId, not
+            // a MusicBrainz query string or a temporary asset/provider key.
+            val native = mapOf(recordingId to 4.5, differentRecordingId to 2.0)
+            dao.upsertMediaAsset(MediaAssetEntity(
+                "local-asset", recordingId, local, "device-media",
+                "content://media/music/magnetic", null, null, null, null,
+            ))
+            dao.upsertMediaAsset(MediaAssetEntity(
+                "remote-asset", recordingId, remote, "navidrome-native",
+                "opensubsonic://canonical", null, null, null, null,
+            ))
+            val assets = dao.observeRatingPresentationAssets(local, remote).first()
+            val display = buildCanonicalRatingPresentation(
+                assets = assets,
+                localValues = native,
+                remote = listOf(
+                    CanonicalRemoteRatingInput(
+                        recordingId, "remote-asset", remote, "active-scope", 3, false,
+                    ),
+                ),
+                activeProvider = remote,
+                activeScope = "active-scope",
+            )
+            assertEquals(4.5, display.byMediaAssetId.getValue("local-asset").localValue!!, 0.0)
+            assertEquals(4.5, display.byMediaAssetId.getValue("remote-asset").localValue!!, 0.0)
+            assertEquals(3, display.byMediaAssetId.getValue("remote-asset").remoteValue)
+            assertEquals(4.5, display.byRecordingId.getValue(recordingId).localValue!!, 0.0)
+
+            // Re-indexing the exact MBID changes neither canonical ownership
+            // nor which RecordingId holds the native rating.
+            assertEquals(recordingId, index.persistRecordings(listOf(original))[mbid])
+            assertEquals(recordingId, dao.entityIdForExternalIdentity("musicbrainz", "recording", mbid))
+            assertEquals(differentRecordingId, dao.entityIdForExternalIdentity(
+                "musicbrainz", "recording", otherMbid,
+            ))
+        } finally {
+            db.close()
+        }
+    }
+
 }
