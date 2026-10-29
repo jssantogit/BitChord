@@ -126,6 +126,8 @@ fun LibraryScreen(
     playlistsSection: (@Composable () -> Unit)? = null,
     /** Android library landing page: category navigation replaces the old shelves. */
     navigationHome: Boolean = false,
+    /** Android-only factual local additions under the landing links. */
+    localAdditions: (@Composable () -> Unit)? = null,
 ) {
     val pinnedPlaylists by AppUi.host.pinnedPlaylists.collectAsStateWithLifecycle()
     val onDevice = stringResource(Res.string.on_device)
@@ -155,6 +157,9 @@ fun LibraryScreen(
                     item(key = "library-navigation") {
                         LibraryLinkList(links = links, onClick = onShelfItemClick)
                     }
+                }
+                localAdditions?.let { section ->
+                    item(key = "recent-local-additions") { section() }
                 }
                 // The category pages own their shelves; do not render the old
                 // Replay/rediscovery/playlists blocks underneath the home links.
