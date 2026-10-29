@@ -15,6 +15,8 @@ import com.music.bitchord.acquisition.a0.A0AndroidAutoAcquisitionEngine
 import com.music.bitchord.acquisition.a0.A0AndroidAutoConsent
 import com.music.bitchord.acquisition.a0.A0CanonicalAcquisitionIntent
 import com.music.bitchord.acquisition.a0.A0SoulseekQualityProfiles
+import com.music.bitchord.acquisition.a0.A0ManualReviewCandidatePolicy
+import com.music.bitchord.acquisition.a0.A0ObservedCandidateHandoff
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.DownloadQuality
 import com.music.bitchord.data.sources.SourceResolver
@@ -1245,6 +1247,8 @@ object Downloads {
     ) {
         val job=currentCoroutineContext()[Job]
         var unusedReservationConfirmed=false
+        // Raw peer handles never leave this process or enter diagnostics.
+        val retained=LinkedHashMap<Int,List<A0ObservedCandidateHandoff.Choice>>()
         _active.update { it + (id to DownloadState.Running(0f)) }
         DownloadSession.running(id,0f)
         try {
@@ -1266,6 +1270,11 @@ object Downloads {
                         Log.d(TAG,"soulseek_auto slot=$index candidate_" +
                             "status=${decision.status} reason=${decision.reason} " +
                             "observed=${decision.examined} eligible=${decision.eligible}")
+                    },
+                    onSlotEvidence={index,observed ->
+                        val entry=request.entries[index]
+                        retained[index]=A0ManualReviewCandidatePolicy.retain(
+                            entry,observed,request.quality)
                     },
                     onSlotResolved={index,status ->
                         Log.d(TAG,"soulseek_auto slot=$index settled=$status")
@@ -1304,7 +1313,8 @@ object Downloads {
                 )
                 val report=outcome.batch
                 if(job?.isActive!=true)throw CancellationException()
-                val review=SoulseekAutoReviewPlan.from(request.entries,report.results)
+                val review=SoulseekAutoReviewPlan.from(
+                    request.entries,report.results,retained)
                 if(review==null) {
                     fail(id,"Resultado incompleto: confira a biblioteca antes de tentar novamente.")
                     return@withLock
