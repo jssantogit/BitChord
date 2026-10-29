@@ -62,14 +62,16 @@ internal interface SmartPlaylistDefinitionDao {
         SmartPlaylistDefinitionEntity::class,
         SmartPlaylistV2DefinitionEntity::class,
         SmartPlaylistV2FilterEntity::class,
+        CanonicalStaticPlaylistEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 internal abstract class SmartPlaylistDefinitionDatabase : RoomDatabase() {
     abstract fun definitionDao(): SmartPlaylistDefinitionDao
     abstract fun v2DefinitionDao(): SmartPlaylistV2DefinitionDao
     abstract fun v2FilterDao(): SmartPlaylistV2FilterDao
+    abstract fun staticPlaylistDao(): CanonicalStaticPlaylistDao
 
     internal companion object {
         private const val DATABASE_NAME = "smart-playlist-definitions.db"
@@ -103,6 +105,20 @@ internal abstract class SmartPlaylistDefinitionDatabase : RoomDatabase() {
                 """.trimIndent())
             }
         }
+        /** Canonical normal playlists are independent of smart rules and provider songs. */
+        internal val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `canonical_static_playlist` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `schemaVersion` INTEGER NOT NULL,
+                        `recordingIdsJson` TEXT NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                """.trimIndent())
+            }
+        }
         @Volatile private var instance: SmartPlaylistDefinitionDatabase? = null
 
         fun get(context: Context): SmartPlaylistDefinitionDatabase =
@@ -111,7 +127,8 @@ internal abstract class SmartPlaylistDefinitionDatabase : RoomDatabase() {
                     context.applicationContext,
                     SmartPlaylistDefinitionDatabase::class.java,
                     DATABASE_NAME,
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .build().also { instance = it }
             }
     }
 }
