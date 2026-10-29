@@ -101,6 +101,8 @@ class SmartPlaylistV2WizardComposeTest {
         }
         compose.onNodeWithText("Continuar").performClick()
         compose.onNodeWithText("Nenhuma condição adicionada").assertExists()
+        // Scroll to the primary empty-state action on Robolectric's compact viewport.
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
         compose.onNodeWithText("Adicionar primeira condição", substring = true).performClick()
         compose.onNodeWithText("Adicionar condição").assertExists()
     }
