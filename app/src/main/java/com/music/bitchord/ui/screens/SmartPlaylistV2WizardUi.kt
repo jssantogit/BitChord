@@ -25,6 +25,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.LibraryMusic
@@ -80,7 +81,7 @@ import org.jetbrains.compose.resources.stringResource
 // Respect DESIGN.md: SF Pro Display and semantic ColorScheme from BitChordTheme,
 // the shared 16.dp PAGE_GUTTER, and locally rounded neutral cards.
 // Do not invent new global color or shape tokens for this flow.
-private enum class WizardStep { IDENTITY, RULES, GROUP, CATEGORIES, FIELDS, EDITOR, REVIEW }
+private enum class WizardStep { IDENTITY, SONGS, RULES, GROUP, CATEGORIES, FIELDS, EDITOR, REVIEW }
 
 private fun operatorUiLabel(operator: SmartPlaylistRuleOperator): String = when (operator) {
     SmartPlaylistRuleOperator.EQUAL -> "É igual a"
@@ -301,6 +302,17 @@ internal fun SmartPlaylistV2WizardUi(
     onPreview: () -> Unit,
     onSave: () -> Unit,
     onSaveFilter: () -> Unit,
+    normalMode: Boolean,
+    editingNormalId: String?,
+    normalRows: List<V2DisplayRow>,
+    normalSelectedRows: List<V2DisplayRow>,
+    normalSelectedIds: List<String>,
+    normalSearch: String,
+    normalLoading: Boolean,
+    onNormalModeChange: (Boolean) -> Unit,
+    onNormalSearchChange: (String) -> Unit,
+    onToggleNormalTrack: (String) -> Unit,
+    onSaveNormal: () -> Unit,
     onPreviewAction: ((SmartPlaylistV2Query, String?, CanonicalCollectionIntent) -> Unit)?,
     currentPreviewQuery: SmartPlaylistV2Query?,
     onManage: () -> Unit,
@@ -351,19 +363,21 @@ internal fun SmartPlaylistV2WizardUi(
                 }
                 WizardStep.IDENTITY
             }
+            WizardStep.SONGS -> WizardStep.IDENTITY
             WizardStep.RULES -> WizardStep.IDENTITY
             WizardStep.GROUP -> WizardStep.RULES
             WizardStep.CATEGORIES -> if (addingGroup || targetGroupPath.isEmpty())
                 WizardStep.RULES else WizardStep.GROUP
             WizardStep.FIELDS -> WizardStep.CATEGORIES
             WizardStep.EDITOR -> returnAfterEditor
-            WizardStep.REVIEW -> WizardStep.RULES
+            WizardStep.REVIEW -> if (normalMode) WizardStep.SONGS else WizardStep.RULES
         }
     }
     BackHandler { back() }
 
     val header = when (page) {
         WizardStep.IDENTITY -> "Nova playlist"
+        WizardStep.SONGS -> "Adicionar músicas"
         WizardStep.RULES -> "Regras da playlist"
         WizardStep.GROUP -> "Editar grupo de regras"
         WizardStep.CATEGORIES -> "Adicionar condição"
@@ -373,7 +387,7 @@ internal fun SmartPlaylistV2WizardUi(
     }
     val stepNote = when (page) {
         WizardStep.IDENTITY -> "ETAPA 1 DE 3"
-        WizardStep.RULES, WizardStep.GROUP, WizardStep.CATEGORIES,
+        WizardStep.SONGS, WizardStep.RULES, WizardStep.GROUP, WizardStep.CATEGORIES,
         WizardStep.FIELDS, WizardStep.EDITOR -> "ETAPA 2 DE 3"
         WizardStep.REVIEW -> "ETAPA 3 DE 3"
     }
@@ -425,12 +439,15 @@ internal fun SmartPlaylistV2WizardUi(
                 item {
                     WizardHeading(header, when (page) {
                         WizardStep.IDENTITY -> "Dê um nome e escolha como a biblioteca será organizada."
+                        WizardStep.SONGS -> "Escolha as faixas que farão parte desta playlist, na ordem desejada."
                         WizardStep.RULES -> "Organize condições em grupos. As opções avançadas ficam dentro de cada grupo."
                         WizardStep.GROUP -> "Ajuste as condições, a combinação e a ordem deste grupo."
                         WizardStep.CATEGORIES -> "Explore os tipos de condição disponíveis ou pesquise diretamente."
                         WizardStep.FIELDS -> "Escolha uma condição compatível com o catálogo atual."
                         WizardStep.EDITOR -> smartConditionDescription(draft.field)
-                        WizardStep.REVIEW -> "Confira fontes, regras e músicas antes de salvar."
+                        WizardStep.REVIEW -> if (normalMode)
+                            "Confira as músicas escolhidas antes de salvar." else
+                            "Confira fontes, regras e músicas antes de salvar."
                     })
                 }
 
@@ -456,17 +473,77 @@ internal fun SmartPlaylistV2WizardUi(
                                 "Biblioteca canônica disponível neste dispositivo e na conta remota ativa.",
                             ) {
                                 Text(
-                                    smartRuleSourceSummary(rule),
+                                    if (normalMode) "Somente gravações canônicas das fontes configuradas." else
+                                        smartRuleSourceSummary(rule),
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
                         }
                         item {
-                            WizardCard("Playlist inteligente",
-                                "Seleciona músicas por regras e atualiza o resultado quando os dados relevantes mudam.")
+                            WizardCard("Tipo de playlist", "Normal: escolha manual de músicas. Inteligente: seleção por regras.") {
+                                if (editingId != null || editingFilterId != null || editingNormalId != null) {
+                                    Text(if (normalMode) "Normal" else "Inteligente",
+                                        style = MaterialTheme.typography.bodyMedium)
+                                } else {
+                                    PlaylistWizardSegmented(
+                                        first = "Normal", second = "Inteligente",
+                                        firstSelected = normalMode,
+                                        onSelectFirst = { onNormalModeChange(true) },
+                                        onSelectSecond = { onNormalModeChange(false) },
+                                    )
+                                }
+                            }
                         }
                         // Capas/descrição não são persistidas no V2 atual.
                         // Não apresentar linguagem técnica de implementação ao usuário.
+                    }
+                    WizardStep.SONGS -> {
+                        item {
+                            PlaylistWizardSearchEntry(
+                                value = normalSearch,
+                                onValueChange = onNormalSearchChange,
+                                placeholder = "Buscar músicas ou artistas",
+                            )
+                        }
+                        item {
+                            WizardCard("Selecionadas: ${normalSelectedIds.size}",
+                                "As músicas seguem a ordem em que foram adicionadas. Busque para encontrar outras faixas.")
+                        }
+                        if (normalRows.size >= 200) item {
+                            Text("Exibindo até 200 resultados. Refine a busca para encontrar outras músicas.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (normalRows.isEmpty() && !normalLoading) item {
+                            Text("Nenhuma música disponível para esta pesquisa.",
+                                style = MaterialTheme.typography.bodyMedium)
+                        }
+                        items(normalRows, key = { it.id }) { row ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { onToggleNormalTrack(row.id) }
+                                    .padding(vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                SmartPlaylistPreviewArtwork(row = row, modifier = Modifier.size(48.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(row.title, style = MaterialTheme.typography.titleMedium,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(row.artist, style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                if (row.id in normalSelectedIds) {
+                                    Icon(Icons.Rounded.Check, contentDescription = "Selecionada",
+                                        tint = MaterialTheme.colorScheme.primary)
+                                } else {
+                                    Icon(Icons.Rounded.Add, contentDescription = "Adicionar música",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
                     }
                     WizardStep.RULES -> {
                         val root = if (hasConfiguredRules)
@@ -812,6 +889,35 @@ internal fun SmartPlaylistV2WizardUi(
                         }
                     }
                     WizardStep.REVIEW -> {
+                        if (normalMode) {
+                            item {
+                                WizardCard(name.trim().ifEmpty { "Sem nome" },
+                                    "Playlist normal · ${normalSelectedIds.size} músicas") {
+                                    Text("Os arquivos serão revalidados antes da reprodução.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            if (normalSelectedRows.isEmpty()) item {
+                                WizardCard("Sem músicas", "Você pode salvar uma playlist vazia e adicionar músicas depois.")
+                            }
+                            items(normalSelectedRows.take(50), key = { it.id }) { row ->
+                                Row(Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    SmartPlaylistPreviewArtwork(row = row, modifier = Modifier.size(48.dp))
+                                    Column {
+                                        Text(row.title, style = MaterialTheme.typography.titleMedium)
+                                        Text(row.artist, style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                            if (normalSelectedRows.size > 50) item {
+                                Text("Exibindo as primeiras 50 músicas selecionadas.",
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                        } else {
                         item {
                             WizardCard(name.trim().ifEmpty { "Sem nome" },
                                 "Playlist inteligente · ${smartRuleLeafCount(rule)} condições") {
@@ -906,6 +1012,7 @@ internal fun SmartPlaylistV2WizardUi(
                             Text("Exibindo as primeiras 24 músicas da prévia.",
                                 style = MaterialTheme.typography.bodySmall)
                         }
+                        }
                     }
                 }
                 if (error != null) item {
@@ -923,7 +1030,12 @@ internal fun SmartPlaylistV2WizardUi(
                     WizardStep.IDENTITY -> PlaylistWizardPrimaryAction(
                         label = "Continuar",
                         enabled = canContinue,
-                        onClick = { page = WizardStep.RULES },
+                        onClick = { page = if (normalMode) WizardStep.SONGS else WizardStep.RULES },
+                    )
+                    WizardStep.SONGS -> PlaylistWizardPrimaryAction(
+                        label = "Revisar playlist",
+                        enabled = canContinue && !normalLoading,
+                        onClick = { page = WizardStep.REVIEW },
                     )
                     WizardStep.RULES -> PlaylistWizardPrimaryAction(
                         label = "Revisar playlist",
@@ -968,18 +1080,19 @@ internal fun SmartPlaylistV2WizardUi(
                     }
                     WizardStep.REVIEW -> {
                         PlaylistWizardPrimaryAction(
-                            label = if (editingId != null)
+                            label = if (editingId != null || editingNormalId != null)
                                 "Salvar alterações" else "Criar playlist",
-                            onClick = onSave,
-                            enabled = canReview && !loading &&
-                                currentPreviewQuery != null && preview != null,
+                            onClick = if (normalMode) onSaveNormal else onSave,
+                            enabled = if (normalMode) canContinue && !loading && !normalLoading
+                                else canReview && !loading &&
+                                    currentPreviewQuery != null && preview != null,
                         )
-                        if (preview == null) {
+                        if (!normalMode && preview == null) {
                             Text("Calcule a prévia antes de criar a playlist.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        TextButton(onClick = onSaveFilter, enabled = canReview && !loading,
+                        if (!normalMode) TextButton(onClick = onSaveFilter, enabled = canReview && !loading,
                             modifier = Modifier.fillMaxWidth()) {
                             Text(if (editingFilterId == null) "Salvar como filtro reutilizável"
                                 else "Atualizar filtro reutilizável")
