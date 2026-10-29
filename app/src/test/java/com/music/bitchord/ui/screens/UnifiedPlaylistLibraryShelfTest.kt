@@ -47,14 +47,14 @@ class UnifiedPlaylistLibraryShelfTest {
         assertEquals("local:local:playlist:a", cards[1].id)
     }
 
-    @Test fun collapsedRowsAreVerticalAndExpandedRowsAreCompleteTwoColumnGrid() {
+    @Test fun playlistPageUsesOneColumnAndShowsEverySavedPlaylist() {
         val cards = listOf(smart("a"), normal("a"), smart("b"), normal("b"), smart("c"))
         val compact = playlistShelfRows(cards, expanded = false)
-        assertEquals(listOf(1, 1, 1), compact.map { it.size })
-        assertEquals(cards.take(3), compact.flatten())
-        val grid = playlistShelfRows(cards, expanded = true)
-        assertEquals(listOf(2, 2, 1), grid.map { it.size })
-        assertEquals(cards, grid.flatten())
+        assertEquals(listOf(1, 1, 1, 1, 1), compact.map { it.size })
+        assertEquals(cards, compact.flatten())
+        // Legacy callers requesting expanded mode never reintroduce a grid.
+        val expanded = playlistShelfRows(cards, expanded = true)
+        assertEquals(compact, expanded)
     }
 
     @Test fun emptyAndOneItemShelvesNeverFabricatePlaylists() {
