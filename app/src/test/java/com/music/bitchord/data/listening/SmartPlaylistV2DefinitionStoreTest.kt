@@ -126,6 +126,7 @@ class SmartPlaylistV2DefinitionStoreTest {
             SmartPlaylistDefinitionDatabase.MIGRATION_1_2,
             SmartPlaylistDefinitionDatabase.MIGRATION_2_3,
             SmartPlaylistDefinitionDatabase.MIGRATION_3_4,
+            SmartPlaylistDefinitionDatabase.MIGRATION_4_5,
         )
             .allowMainThreadQueries().build()
         try {
