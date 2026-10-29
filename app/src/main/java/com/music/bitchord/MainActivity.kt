@@ -2151,6 +2151,7 @@ private fun BitChordApp(
     var rediscoveryRecordingId by rememberSaveable { mutableStateOf<String?>(null) }
     var showCanonicalMyRatings by rememberSaveable { mutableStateOf(false) }
     var showSmartPlaylistBuilder by rememberSaveable { mutableStateOf(false) }
+    var editingSmartPlaylistId by remember { mutableStateOf<String?>(null) }
     val replayOpen = showReplay || replayStory != null || showReplayShare ||
         (selectedTab == TAB_LIBRARY && detail == null && !showSettings)
     val (replay, setReplayPeriod) = rememberReplayState(replayOpen)
@@ -2706,7 +2707,11 @@ private fun BitChordApp(
                         CanonicalMyRatingsScreen(onBack = { showCanonicalMyRatings = false })
                     } else if (key == "smart_playlist_builder") {
                         SmartPlaylistBuilderScreen(
-                            onBack = { showSmartPlaylistBuilder = false },
+                            onBack = {
+                                showSmartPlaylistBuilder = false
+                                editingSmartPlaylistId = null
+                            },
+                            initialV2Id = editingSmartPlaylistId,
                             onSavedAction = { id, intent ->
                                 executeSmartCollection(SmartCollectionActionSource.SavedDefinition(id), intent)
                             },
@@ -3353,7 +3358,10 @@ private fun BitChordApp(
                             // album or a Liked Music card gets. Holding an artist still
                             // does nothing; see [onBrowseLongPress].
                             onShelfItemLongPress = onBrowseLongPress,
-                            onNewPlaylist = { creatingPlaylist = true },
+                            onNewPlaylist = {
+                                editingSmartPlaylistId = null
+                                showSmartPlaylistBuilder = true
+                            },
                             onImportSpotifyPlaylist = { showSpotifyImportDialog = true },
                             onShowAll = { shelf -> libraryShowAll = shelf },
                             replay = {
@@ -3371,7 +3379,6 @@ private fun BitChordApp(
                             rediscovery = {
                                 Column {
                                     CanonicalMyRatingsEntry(onOpen = { showCanonicalMyRatings = true })
-                                    SmartPlaylistBuilderEntry(onOpen = { showSmartPlaylistBuilder = true })
                                     LibraryRediscoveryShelfEntry(
                                         refreshToken = MainViewModel.Feed.LIBRARY in refreshing,
                                         onOpenRecording = { rediscoveryRecordingId = it },
@@ -3392,7 +3399,27 @@ private fun BitChordApp(
                             pullState = libraryPull,
                             contentPadding = listPadding,
                             links = libraryLinks(),
-                            deviceItems = libraryDeviceItems(downloadedReleases) + localPlaylistItems,
+                            deviceItems = libraryDeviceItems(downloadedReleases),
+                            playlistsSection = {
+                                com.music.bitchord.ui.screens.UnifiedPlaylistLibraryShelf(
+                                    normalPlaylists = localPlaylistItems,
+                                    onNewSmartPlaylist = {
+                                        editingSmartPlaylistId = null
+                                        showSmartPlaylistBuilder = true
+                                    },
+                                    onOpenSmartPlaylist = { id ->
+                                        editingSmartPlaylistId = id
+                                        showSmartPlaylistBuilder = true
+                                    },
+                                    onOpenNormalPlaylist = onLibraryItemClick,
+                                    onSmartAction = { id, intent ->
+                                        executeSmartCollection(
+                                            SmartCollectionActionSource.SavedV2Definition(id),
+                                            intent,
+                                        )
+                                    },
+                                )
+                            },
                         )
                     }
                 }

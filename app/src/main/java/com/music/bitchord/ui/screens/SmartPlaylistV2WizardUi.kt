@@ -410,7 +410,7 @@ internal fun SmartPlaylistV2WizardUi(
                     modifier = Modifier.align(Alignment.Center))
                 if (page == WizardStep.IDENTITY) {
                     TextButton(modifier = Modifier.align(Alignment.CenterEnd),
-                        onClick = onManage) { Text("Minhas playlists") }
+                        onClick = onManage) { Text("Filtros") }
                 }
             }
             LazyColumn(

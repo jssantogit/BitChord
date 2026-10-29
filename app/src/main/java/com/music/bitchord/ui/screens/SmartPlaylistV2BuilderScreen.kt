@@ -111,6 +111,7 @@ internal data class V2DisplayRow(
 @Composable
 internal fun SmartPlaylistV2BuilderScreen(
     onBack: () -> Unit,
+    initialPlaylistId: String? = null,
     onClassic: () -> Unit,
     onSavedAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
     onPreviewAction: ((SmartPlaylistV2Query, String?, CanonicalCollectionIntent) -> Unit)? = null,
@@ -207,6 +208,32 @@ internal fun SmartPlaylistV2BuilderScreen(
         previewQuery = null
         error = null
     }
+    // Opening a saved card from the Library edits exactly that definition.
+    // This does not infer an ID from its visible name or create a duplicate.
+    LaunchedEffect(initialPlaylistId, repo) {
+        val id = initialPlaylistId ?: return@LaunchedEffect
+        val item = withContext(Dispatchers.IO) {
+            repo.list().firstOrNull { it.id == id }
+        }
+        if (item == null) {
+            error = "Playlist não encontrada na biblioteca local."
+            return@LaunchedEffect
+        }
+        editorEpoch++
+        editingId = item.id
+        editingFilterId = null
+        name = item.name
+        rule = item.query.rules
+        hasConfiguredRules = true
+        sort = item.query.sort
+        limit = item.query.limit.toString()
+        seed = item.query.randomSeed.toString()
+        preview = null
+        previewQuery = null
+        error = null
+        showWizard = true
+    }
+
     fun query() = SmartPlaylistV2Query(
         rules = rule,
         sort = sort,
@@ -435,7 +462,10 @@ internal fun SmartPlaylistV2BuilderScreen(
                         }
                     },
                     onPreviewAction = onPreviewAction,
-                    onManage = { showWizard = false },
+                    onManage = {
+                        manageTab = SmartPlaylistManageTab.FILTERS
+                        showWizard = false
+                    },
                     onBack = onBack,
                 )
             }
@@ -450,7 +480,8 @@ internal fun SmartPlaylistV2BuilderScreen(
                             .padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text("Minhas playlists", style = MaterialTheme.typography.headlineMedium)
+                        Text("Filtros e versões anteriores",
+                            style = MaterialTheme.typography.headlineMedium)
                         TextButton(onClick = onBack) { Text("Fechar") }
                     }
                     Row(

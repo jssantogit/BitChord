@@ -203,6 +203,7 @@ internal fun SmartPlaylistBuilderHeader(onBack: () -> Unit) {
 @Composable
 internal fun SmartPlaylistBuilderScreen(
     onBack: () -> Unit,
+    initialV2Id: String? = null,
     onSavedAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
     onPreviewAction: ((RuleBasedSmartPlaylistQuery, CanonicalCollectionIntent) -> Unit)? = null,
     onSavedV2Action: ((String, CanonicalCollectionIntent) -> Unit)? = null,
@@ -212,6 +213,7 @@ internal fun SmartPlaylistBuilderScreen(
     if (showAdvanced) {
         SmartPlaylistV2BuilderScreen(
             onBack = onBack,
+            initialPlaylistId = initialV2Id,
             onClassic = { showAdvanced = false },
             onSavedAction = onSavedV2Action,
             onPreviewAction = onPreviewV2Action,
