@@ -57,7 +57,14 @@ internal object A0ManualReviewCandidatePolicy {
                 A0DownloadQualityPolicy.Offer(codec(ext),ext,
                     claim.bitrateKbps,claim.sampleRateHz,claim.bitDepth),
                 supported)
-            if(quality.status!=A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED)
+            // Missing peer bitrate/bit-depth must not hide a potentially
+            // usable source from HUMAN review. Only a clearly incompatible
+            // profile is excluded. The real received bytes must still pass
+            // the independent decoder/quality gate before A3 publication.
+            if(quality.status !in setOf(
+                A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED,
+                A0DownloadQualityPolicy.Status.INCONCLUSIVE_MANUAL,
+                A0DownloadQualityPolicy.Status.NOT_CONSTRAINED))
                 return@mapNotNull null
             // A directory hint must never be treated as an authenticated
             // album identity. A composite/inconclusive folder is shown for
