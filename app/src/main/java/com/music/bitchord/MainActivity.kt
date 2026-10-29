@@ -3410,6 +3410,19 @@ private fun BitChordApp(
                             pullState = libraryPull,
                             contentPadding = listPadding,
                             navigationHome = true,
+                            localAdditions = {
+                                com.music.bitchord.ui.screens.CanonicalLocalRecentAdditions(
+                                    onOpenSongs = {
+                                        localFolderStates.getOrPut("local:all") { LocalFolderState() }
+                                            .tab = com.music.bitchord.ui.screens.LocalFolderTab.SONGS
+                                        onLibraryItemClick(ShelfItem(
+                                            title = "Músicas", subtitle = "",
+                                            thumbnailUrl = null, videoId = null,
+                                            browseId = "local:all",
+                                        ))
+                                    },
+                                )
+                            },
                             links = com.music.bitchord.ui.screens.libraryNavigationLinks(
                                 deviceLinks = libraryLinks(),
                                 onOpenPlaylists = { showPlaylistLibrary = true },
