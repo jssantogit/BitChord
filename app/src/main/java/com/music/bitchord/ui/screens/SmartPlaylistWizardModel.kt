@@ -243,6 +243,54 @@ internal fun smartRuleNewComparison(field: SmartPlaylistRuleField): SmartPlaylis
         }
     }
 
+/** An explicit global source is an ALL-condition, never a casual OR child. */
+private fun SmartPlaylistRule.isGlobalSourceComparison(): Boolean =
+    this is SmartPlaylistRule.Comparison &&
+        field == SmartPlaylistRuleField.SOURCE_KIND &&
+        operator == SmartPlaylistRuleOperator.EQUAL &&
+        textValue in setOf("local", "opensubsonic")
+
+internal fun smartRuleGlobalSource(rule: SmartPlaylistRule): String? =
+    when (rule) {
+        is SmartPlaylistRule.Group ->
+            if (rule.join == SmartPlaylistRuleJoin.ALL) {
+                (rule.children.firstOrNull { it.isGlobalSourceComparison() }
+                    as? SmartPlaylistRule.Comparison)?.textValue
+            } else null
+        is SmartPlaylistRule.Comparison -> if (rule.isGlobalSourceComparison())
+            rule.textValue else null
+        else -> null
+    }
+
+/**
+ * Null means no configured conditions remain. Existing ANY/NOT trees are
+ * preserved under mandatory ALL. A direct SOURCE_KIND equality in the ALL
+ * root is the editor's global constraint; nested rules stay untouched.
+ */
+internal fun smartRuleWithGlobalSource(
+    rule: SmartPlaylistRule, source: String?, hasConfiguredRules: Boolean,
+): SmartPlaylistRule? {
+    require(source == null || source == "local" || source == "opensubsonic")
+    val existing: SmartPlaylistRule? = if (!hasConfiguredRules) null else when (rule) {
+        is SmartPlaylistRule.Group ->
+            if (rule.join == SmartPlaylistRuleJoin.ALL) {
+                val kept = rule.children.filterNot { it.isGlobalSourceComparison() }
+                if (kept.isEmpty()) null else rule.copy(children = kept)
+            } else rule
+        else -> if (rule.isGlobalSourceComparison()) null else rule
+    }
+    if (source == null) return existing
+    val selector = SmartPlaylistRule.Comparison(
+        field = SmartPlaylistRuleField.SOURCE_KIND,
+        operator = SmartPlaylistRuleOperator.EQUAL,
+        textValue = source,
+    )
+    return if (existing == null) selector else if (existing is SmartPlaylistRule.Group &&
+        existing.join == SmartPlaylistRuleJoin.ALL) {
+        existing.copy(children = existing.children + selector)
+    } else SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(existing, selector))
+}
+
 /**
  * Read-only description of SOURCE_KIND evidence requested by the rule tree.
  * This is NOT a selection of sourceRefs. In OR/NOT trees even an equality is
