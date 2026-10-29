@@ -3363,6 +3363,7 @@ private fun BitChordApp(
                             onShelfItemLongPress = onBrowseLongPress,
                             onNewPlaylist = {
                                 editingSmartPlaylistId = null
+                                editingNormalPlaylistId = null
                                 showSmartPlaylistBuilder = true
                             },
                             onImportSpotifyPlaylist = { showSpotifyImportDialog = true },
@@ -3408,6 +3409,7 @@ private fun BitChordApp(
                                     normalPlaylists = localPlaylistItems,
                                     onNewSmartPlaylist = {
                                         editingSmartPlaylistId = null
+                                        editingNormalPlaylistId = null
                                         showSmartPlaylistBuilder = true
                                     },
                                     onOpenSmartPlaylist = { id ->
@@ -3418,6 +3420,7 @@ private fun BitChordApp(
                                     onOpenCanonicalNormalPlaylist = { id ->
                                         editingNormalPlaylistId = id
                                         editingSmartPlaylistId = null
+                                        editingNormalPlaylistId = null
                                         showSmartPlaylistBuilder = true
                                     },
                                     onOpenNormalPlaylist = onLibraryItemClick,
