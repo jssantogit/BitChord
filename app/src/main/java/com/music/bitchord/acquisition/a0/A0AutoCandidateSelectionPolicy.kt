@@ -174,11 +174,16 @@ internal object A0AutoCandidateSelectionPolicy {
         // It only limits which alternate connections may be considered.
         val clusters=mutableListOf<MutableList<Eligible>>()
         for(candidate in strong) {
-            val group=clusters.firstOrNull {
-                A0CandidateClaimClusters.sameClaim(
-                    it.first().choice.claim,candidate.choice.claim) ||
-                    sameNumberedTrackClaim(
-                        it.first().choice.claim,candidate.choice.claim)
+            // Equivalence must hold against EVERY member. An unnumbered
+            // filename cannot bridge conflicting explicit track numbers
+            // (e.g. 01 and 02), otherwise the result is order-dependent.
+            val group=clusters.firstOrNull { members ->
+                members.all { existing ->
+                    A0CandidateClaimClusters.sameClaim(
+                        existing.choice.claim,candidate.choice.claim) ||
+                        sameNumberedTrackClaim(
+                            existing.choice.claim,candidate.choice.claim)
+                }
             }
             if(group==null)clusters.add(mutableListOf(candidate))
             else group.add(candidate)
