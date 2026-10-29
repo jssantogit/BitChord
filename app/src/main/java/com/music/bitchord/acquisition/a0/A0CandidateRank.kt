@@ -104,14 +104,22 @@ internal object A0CandidateRank {
         val invalidMp3Bitrate=ext=="mp3" && declaredBitrateKbps!=null &&
             declaredBitrateKbps !in 32..320
         val validRate=declaredBitrateKbps?.takeIf {
-            it in 32..(if(ext=="mp3") 320 else 1536)
+            it in 32..(when(ext) {
+                "mp3" -> 320
+                "aac", "opus", "ogg" -> 512
+                else -> 1536
+            })
         }
         val lossless=ext in setOf("flac","wav")
         val quality=when {
             lossless && declaredSampleRateHz?.let { it in 8000..384000 } == true &&
                 declaredBitDepth?.let { it in 8..32 } == true -> Quality.LOSSLESS_ADVERTISED
             lossless -> Quality.UNKNOWN_ADVERTISED
-            validRate!=null && validRate>=256 -> Quality.HIGH_ADVERTISED
+            validRate!=null && validRate>=when(ext) {
+                "opus" -> 160
+                "ogg" -> 192
+                else -> 256
+            } -> Quality.HIGH_ADVERTISED
             validRate!=null && validRate>=160 -> Quality.MEDIUM_ADVERTISED
             validRate!=null -> Quality.LOW_ADVERTISED
             else -> Quality.UNKNOWN_ADVERTISED
