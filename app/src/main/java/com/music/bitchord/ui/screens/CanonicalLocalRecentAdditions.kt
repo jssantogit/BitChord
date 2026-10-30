@@ -64,6 +64,15 @@ internal fun CanonicalLocalRecentAdditions(
             }
         }
     }
+    CanonicalRecentAdditionsShelf(recent, onOpenSongs)
+}
+
+/** A renderable shelf with an explicit heading, independently regression-tested. */
+@Composable
+internal fun CanonicalRecentAdditionsShelf(
+    recent: List<V2DisplayRow>,
+    onOpenSongs: () -> Unit,
+) {
     if (recent.isEmpty()) return
     Column(
         modifier = Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 18.dp),
@@ -73,6 +82,7 @@ internal fun CanonicalLocalRecentAdditions(
             "Adições recentes",
             modifier = Modifier.padding(horizontal = PAGE_GUTTER),
             style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground,
         )
         // The Library already has a snapping/lazy shelf; reuse it rather than
         // recreating a horizontalScroll Row for recent local recordings.
