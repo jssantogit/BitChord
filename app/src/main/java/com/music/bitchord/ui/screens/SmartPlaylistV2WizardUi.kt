@@ -139,9 +139,6 @@ private fun ruleUiSummary(
         "${smartRuleLeafCount(rule)} condições · " + smartRuleJoinLabel(rule.join)
 }
 
-/** Review uses LazyColumn virtualization, not an arbitrary first-50 preview. */
-internal fun normalPlaylistReviewRows(rows: List<V2DisplayRow>): List<V2DisplayRow> = rows
-
 @Composable
 private fun WizardCard(
     title: String,
@@ -1079,7 +1076,7 @@ internal fun SmartPlaylistV2WizardUi(
                             if (normalSelectedIds.isEmpty()) item {
                                 WizardCard("Sem músicas", "Você pode salvar uma playlist vazia e adicionar músicas depois.")
                             }
-                            items(normalPlaylistReviewRows(normalSelectedRows), key = { it.id }) { row ->
+                            items(normalSelectedRows, key = { it.id }) { row ->
                                 Row(Modifier.fillMaxWidth().padding(vertical = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
