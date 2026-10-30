@@ -310,14 +310,16 @@ private fun LibraryLinkList(
                     Icon(
                         painter = painterResource(link.logo),
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onBackground,
+                        tint = if (link.enabled) MaterialTheme.colorScheme.onBackground
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(LINK_ICON_SIZE),
                     )
                 } else {
                     Icon(
                         imageVector = link.icon,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = if (link.enabled) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(LINK_ICON_SIZE),
                     )
                 }
@@ -325,7 +327,8 @@ private fun LibraryLinkList(
                 Text(
                     text = link.item.title,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = if (link.enabled) MaterialTheme.colorScheme.onBackground
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
