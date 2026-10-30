@@ -5,6 +5,7 @@ import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.os.Looper
 import android.os.SystemClock
+import com.music.bitchord.data.DebugLog as Log
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.file.Files
@@ -27,6 +28,22 @@ internal object A0AndroidAudioTechnicalProbe {
     private const val SAMPLE_BUFFER_BYTES=1 shl 20
     private const val HEADER_BYTES=65_536
 
+    /** Internal diagnostic categories only; never include filenames or paths. */
+    internal enum class Failure {
+        INVALID_PRIVATE_SOURCE, SOURCE_READ_FAILURE, HEADER_TOO_SHORT,
+        UNRECOGNIZED_AUDIO_HEADER, FILE_EXTENSION_CONFLICT,
+        MULTIPLE_AUDIO_TRACKS, NO_AUDIO_TRACK, EXTRACTOR_MIME_CONFLICT,
+        DISAGREEING_DURATIONS, DURATION_UNAVAILABLE, INVALID_DURATION,
+        SAMPLE_RATE_CONFLICT, INVALID_SAMPLE_STREAM, INCOMPLETE_SAMPLE_SCAN,
+        SOURCE_CHANGED_OR_REVOKED, MEDIA_EXTRACTOR_EXCEPTION,
+    }
+
+    private fun denied(reason:Failure):A0AutoPostTransferTechnicalGate.Decoded? {
+        try {Log.d("BitChord","soulseek_audio_probe refused=${reason.name}")}
+        catch(_:Exception) {}
+        return null
+    }
+
     fun inspect(
         source:File,
         declaredExtension:String,
@@ -37,7 +54,8 @@ internal object A0AndroidAudioTechnicalProbe {
         }
         if(!source.isFile || Files.isSymbolicLink(source.toPath()) ||
             source.length() !in 44L..A0ObservedTransferLimits.MAX_AUDIO_BYTES ||
-            isCancelled() || Thread.currentThread().isInterrupted)return null
+            isCancelled() || Thread.currentThread().isInterrupted)
+            return denied(Failure.INVALID_PRIVATE_SOURCE)
         val size=source.length()
         val modification=source.lastModified()
         val head=ByteArray(minOf(size.toInt(),HEADER_BYTES))
@@ -46,7 +64,7 @@ internal object A0AndroidAudioTechnicalProbe {
                 var count=0
                 while(count<head.size) {
                     if(isCancelled() || Thread.currentThread().isInterrupted)
-                        return null
+                        return denied(Failure.SOURCE_CHANGED_OR_REVOKED)
                     val part=input.read(head,count,head.size-count)
                     if(part<=0)break
                     count+=part
@@ -55,11 +73,11 @@ internal object A0AndroidAudioTechnicalProbe {
             }
         }catch(_:Exception) {
             // Do not expose transient private file paths or provider errors.
-            return null
+            return denied(Failure.SOURCE_READ_FAILURE)
         }
-        if(read<12)return null
+        if(read<12)return denied(Failure.HEADER_TOO_SHORT)
         val header=A0LocalAudioHeaderEvidence.inspect(head.copyOf(read))
-            ?:return null
+            ?:return denied(Failure.UNRECOGNIZED_AUDIO_HEADER)
         val ext=declaredExtension.trimStart('.')
             .lowercase(java.util.Locale.ROOT)
         val expected=when(header.codec) {
@@ -70,7 +88,7 @@ internal object A0AndroidAudioTechnicalProbe {
             A0CanonicalAcquisitionIntent.Codec.OPUS -> "opus"
             A0CanonicalAcquisitionIntent.Codec.VORBIS -> "ogg"
         }
-        if(ext!=expected)return null
+        if(ext!=expected)return denied(Failure.FILE_EXTENSION_CONFLICT)
 
         val extractor=MediaExtractor()
         val metadata=MediaMetadataRetriever()
@@ -82,18 +100,20 @@ internal object A0AndroidAudioTechnicalProbe {
                 val format=extractor.getTrackFormat(index)
                 val mime=if(format.containsKey(MediaFormat.KEY_MIME))
                     format.getString(MediaFormat.KEY_MIME).orEmpty() else ""
-                if(mime.startsWith("video/",ignoreCase=true))return null
+                if(mime.startsWith("video/",ignoreCase=true))
+                    return denied(Failure.MULTIPLE_AUDIO_TRACKS)
                 if(mime.startsWith("audio/",ignoreCase=true)) {
-                    if(audioIndex>=0)return null
+                    if(audioIndex>=0)return denied(Failure.MULTIPLE_AUDIO_TRACKS)
                     audioIndex=index
                     track=format
                 }
             }
-            if(audioIndex<0 || track==null)return null
+            if(audioIndex<0 || track==null)
+                return denied(Failure.NO_AUDIO_TRACK)
             val format=track
             val mime=format.getString(MediaFormat.KEY_MIME).orEmpty()
             if(!A0LocalAudioHeaderEvidence.acceptsExtractorMime(header.codec,mime))
-                return null
+                return denied(Failure.EXTRACTOR_MIME_CONFLICT)
             fun longOrNull(key:String):Long? =
                 if(format.containsKey(key))runCatching {
                     format.getLong(key)
@@ -109,13 +129,17 @@ internal object A0AndroidAudioTechnicalProbe {
                 MediaMetadataRetriever.METADATA_KEY_DURATION)
                 ?.toLongOrNull()?.takeIf {it>0L}
             if(extractorDuration!=null && retrieverDuration!=null &&
-                abs(extractorDuration-retrieverDuration)>2_000L)return null
-            val duration=retrieverDuration ?: extractorDuration ?: return null
-            if(duration !in 15_000L..7_200_000L)return null
+                abs(extractorDuration-retrieverDuration)>2_000L)
+                return denied(Failure.DISAGREEING_DURATIONS)
+            val duration=retrieverDuration ?: extractorDuration
+                ?:return denied(Failure.DURATION_UNAVAILABLE)
+            if(duration !in 15_000L..7_200_000L)
+                return denied(Failure.INVALID_DURATION)
 
             val fromExtractor=intOrNull(MediaFormat.KEY_SAMPLE_RATE)
             if(header.sampleRateHz!=null && fromExtractor!=null &&
-                header.sampleRateHz!=fromExtractor)return null
+                header.sampleRateHz!=fromExtractor)
+                return denied(Failure.SAMPLE_RATE_CONFLICT)
             val sampleRate=header.sampleRateHz ?: fromExtractor
             val trackRate=intOrNull(MediaFormat.KEY_BIT_RATE)
                 ?.takeIf {it>0}?.div(1000)
@@ -142,12 +166,14 @@ internal object A0AndroidAudioTechnicalProbe {
                 }
                 if(amount==0 || extractor.sampleTrackIndex!=audioIndex ||
                     (extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_ENCRYPTED)!=0)
-                    return null
+                    return denied(Failure.INVALID_SAMPLE_STREAM)
                 val timestamp=extractor.sampleTime
-                if(timestamp<0 || timestamp<lastUs)return null
+                if(timestamp<0 || timestamp<lastUs)
+                    return denied(Failure.INVALID_SAMPLE_STREAM)
                 lastUs=timestamp
                 bytes+=amount
-                if(bytes>A0ObservedTransferLimits.MAX_AUDIO_BYTES)return null
+                if(bytes>A0ObservedTransferLimits.MAX_AUDIO_BYTES)
+                    return denied(Failure.INVALID_SAMPLE_STREAM)
                 samples++
                 if(!extractor.advance()) {
                     reachedEos=true
@@ -155,9 +181,11 @@ internal object A0AndroidAudioTechnicalProbe {
                 }
             }
             if(!reachedEos || samples<2 ||
-                lastUs<0 || abs(duration-lastUs/1000L)>3_000L ||
-                source.length()!=size || source.lastModified()!=modification ||
-                isCancelled() || Thread.currentThread().isInterrupted)return null
+                lastUs<0 || abs(duration-lastUs/1000L)>3_000L)
+                return denied(Failure.INCOMPLETE_SAMPLE_SCAN)
+            if(source.length()!=size || source.lastModified()!=modification ||
+                isCancelled() || Thread.currentThread().isInterrupted)
+                return denied(Failure.SOURCE_CHANGED_OR_REVOKED)
             // Opus/Vorbis VBR may omit KEY_BIT_RATE entirely. After a full
             // demux walk, sample bytes / locally inspected duration provide
             // a bounded observed average. Never derive quality from the
@@ -175,7 +203,7 @@ internal object A0AndroidAudioTechnicalProbe {
                 bitrateKbps=bitrate,sampleRateHz=sampleRate,
                 bitDepth=header.bitDepth,completed=true)
         }catch(_:Exception) {
-            return null
+            return denied(Failure.MEDIA_EXTRACTOR_EXCEPTION)
         }finally {
             runCatching {metadata.release()}
             runCatching {extractor.release()}
