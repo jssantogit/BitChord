@@ -107,3 +107,26 @@ Checklist para o Galaxy A54:
 **Escopo:** APK Dev Debug exclusivamente para smoke físico. Sem merge,
 sem alteração da `main`, sem assinatura/release de produção, sem fechamento
 da issue. O código desse build não é uma `main` reconciliada.
+
+
+## PR #202 — smoke fisico de reutilizacao da UI (30/10/2026)
+
+Autorizado explicitamente pelo usuario em 30/10/2026: **"Ok. Agora pode disparar apk"**.
+
+Compilar **uma unica build `assembleDevDebug`** da branch
+`ui/library-playlists-alignment-20261030`, que integra a PR draft #202
+sobre a PR funcional #193. O codigo de interface foi validado na
+[Android CI #41040350273](https://github.com/jssantogit/BitChord/actions/runs/41040350273)
+no commit `cc96357fb4d4a49ab0cb42e68142acffbc65a813` (SUCCESS).
+O commit documental deste gatilho identifica o APK gerado.
+
+Smoke no Galaxy A54: Biblioteca -> Playlists -> Criar normal/inteligente;
+fontes de catalogo; navegacao Musicas/Albuns/Artistas; catalogo de
+condicoes (busca, grupos, E/OU, NOT); selecao por `RecordingId`;
+revisao longa; abrir detalhe, editar, reproduzir e adicionar a fila;
+capas, alinhamento, ausencia de cards duplicados, inset/mini-player e
+persistencia entre voltas.
+
+O gatilho `push` esta limitado a esta pagina de autorizacao e as branches
+de playlists #192/#202 em `.github/workflows/physical-smoke-apk.yml`.
+**Nao autoriza merge, release de producao, limpeza de dados nem alteracao da main.**
