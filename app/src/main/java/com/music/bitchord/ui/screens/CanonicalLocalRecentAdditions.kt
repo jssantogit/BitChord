@@ -3,6 +3,8 @@ package com.music.bitchord.ui.screens
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLocalLibrary
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.ShelfRow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
@@ -75,12 +78,13 @@ internal fun CanonicalLocalRecentAdditions(
             modifier = Modifier.padding(horizontal = PAGE_GUTTER),
             style = MaterialTheme.typography.headlineMedium,
         )
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-                .padding(horizontal = PAGE_GUTTER),
+        // The Library already has a snapping/lazy shelf; reuse it rather than
+        // recreating a horizontalScroll Row for recent local recordings.
+        ShelfRow(
+            contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            recent.forEach { track ->
+            items(recent, key = { it.id }) { track ->
                 Column(
                     modifier = Modifier.width(142.dp).clickable(onClick = onOpenSongs),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
