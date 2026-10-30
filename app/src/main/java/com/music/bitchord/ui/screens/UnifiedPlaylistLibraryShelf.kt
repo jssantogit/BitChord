@@ -107,6 +107,12 @@ internal fun visibleLibraryPlaylistCards(
     }
 }
 
+/** Stable card IDs, fresh saved definitions; never keep a stale UI snapshot after editing. */
+internal fun latestLibraryPlaylistCard(
+    selected: LibraryPlaylistCard,
+    current: List<LibraryPlaylistCard>,
+): LibraryPlaylistCard? = current.firstOrNull { it.id == selected.id }
+
 /** Same PillTextField used by Settings and creation: no unrelated Material text field. */
 @Composable
 internal fun PlaylistLibrarySearchField(
@@ -191,9 +197,15 @@ internal fun UnifiedPlaylistLibraryShelf(
             normalPlaylists.filter { it.browseId?.startsWith("local:playlist:") == true }
                 .map { LibraryPlaylistCard.Normal(it) }
     }
-    val openedCard = selectedCard
-    LaunchedEffect(openedCard?.id) {
-        if (openedCard != null) detailListState?.scrollToItem(0)
+    val openedCard = selectedCard?.let { latestLibraryPlaylistCard(it, cards) }
+    LaunchedEffect(selectedCard?.id, smartLoaded, normalLoaded, cards) {
+        if (selectedCard != null && smartLoaded && normalLoaded && openedCard == null) {
+            // Saved definition was deleted while this detail was open.
+            onSelectedCardChange(null)
+        }
+    }
+    LaunchedEffect(selectedCard?.id) {
+        if (selectedCard != null) detailListState?.scrollToItem(0)
     }
     val visible = visibleLibraryPlaylistCards(cards, query, filter, sort)
     val playlistScroll = listState ?: rememberLazyListState()
@@ -201,7 +213,7 @@ internal fun UnifiedPlaylistLibraryShelf(
     // The host owns status-bar and floating-player insets. Applying a second
     // statusBarsPadding() + 64dp here created an artificial gap and a second
     // page chrome inside Library. Use the same measured padding as LibraryScreen.
-    if (openedCard == null) LazyColumn(
+    if (selectedCard == null) LazyColumn(
         state = playlistScroll,
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
