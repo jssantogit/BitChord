@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
@@ -89,6 +90,20 @@ class PlaylistLibraryVisualReuseTest {
         }
         compose.onNodeWithText("Álbuns").performClick()
         compose.runOnIdle { assertEquals(1, selected) }
+    }
+
+    @Test fun reviewLibraryRowHasNoFakePlaybackClickAction() {
+        compose.setContent {
+            LibraryRow(
+                title = "Apenas revisão",
+                subtitle = "Artista",
+                imageUrl = null,
+                horizontalPadding = 0.dp,
+                artwork = { Box(Modifier.size(52.dp)) },
+            )
+        }
+        compose.onNodeWithText("Apenas revisão").assertExists()
+        compose.onNodeWithText("Apenas revisão").assertHasNoClickAction()
     }
 
     @Test fun wizardTextAndSearchFieldsPreserveUserInput() {
