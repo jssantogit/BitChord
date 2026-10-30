@@ -154,7 +154,7 @@ internal fun CanonicalPlaylistDetailScreen(
 ) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current.applicationContext
-    val rows by produceState<List<V2DisplayRow>?>(initialValue = null, key1 = card.id) {
+    val rows by produceState<List<V2DisplayRow>?>(initialValue = null, key1 = card.id, key2 = card) {
         value = try {
             when (card) {
                 is LibraryPlaylistCard.CanonicalNormal ->
