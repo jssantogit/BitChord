@@ -146,20 +146,19 @@ internal fun CanonicalPlaylistDetailScreen(
                         }
                     }
                     items(rows.orEmpty(), key = { it.id }) { track ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            SmartPlaylistPreviewArtwork(track, Modifier.size(52.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(track.title, style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(track.artist, style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                        }
+                        // Same read-only track row used in the playlist review.
+                        // Album/track art still comes from the canonical asset.
+                        LibraryRow(
+                            title = track.title,
+                            subtitle = track.artist,
+                            imageUrl = null,
+                            horizontalPadding = 0.dp,
+                            artwork = {
+                                SmartPlaylistPreviewArtwork(
+                                    row = track, modifier = Modifier.fillMaxSize(),
+                                )
+                            },
+                        )
                     }
                 }
             }
