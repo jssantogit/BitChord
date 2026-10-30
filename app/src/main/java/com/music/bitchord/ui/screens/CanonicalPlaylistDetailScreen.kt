@@ -151,7 +151,7 @@ internal fun CanonicalPlaylistDetailScreen(
                 Text(
                     text = (if (card is LibraryPlaylistCard.Smart) "Playlist inteligente" else
                         "Playlist normal") + " · " +
-                        (rows?.size?.let { "$" + "{it} músicas" } ?: "Carregando músicas…"),
+                        (rows?.size?.let { it.toString() + " músicas" } ?: "Carregando músicas…"),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
