@@ -125,11 +125,18 @@ internal suspend fun canonicalNormalPlaylistSelectedRows(
     val app = context.applicationContext
     val keys = activeCanonicalPlaylistProviderKeys(app, sourceProviderKey)
     val dao = CanonicalCatalogDatabase.get(app).catalogDao()
-    val recordings = ids.distinct().chunked(400)
-        .flatMap { dao.recordingsByIds(it) }
+    val distinctIds = ids.distinct()
+    val recordings = distinctIds.chunked(400).flatMap { dao.recordingsByIds(it) }
+    // A recording can survive in the canonical DB after its chosen source
+    // disappears. Metadata alone must not mark it as playable/available.
+    val available = if (keys.isEmpty()) emptySet() else distinctIds.chunked(400)
+        .flatMap { dao.browseAssetsForRecordingIds(keys, it) }
+        .mapTo(HashSet()) { it.recordingId }
     val indexed = canonicalNormalRows(dao, recordings, keys).associateBy { it.id }
     ids.map { id ->
-        indexed[id] ?: V2DisplayRow(id = id, title = "Gravação indisponível", artist = "Fonte não disponível")
+        if (id in available) indexed[id]
+            ?: V2DisplayRow(id, "Gravação indisponível", "Fonte não disponível")
+        else V2DisplayRow(id, "Gravação indisponível", "Fonte não disponível")
     }
 }
 
