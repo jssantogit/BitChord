@@ -58,6 +58,16 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("NewJeans").assertExists()
     }
 
+    @Test fun normalReviewNeverTruncatesTheSelectedTracks() {
+        val rows = (1..81).map { index ->
+            V2DisplayRow("rec-${index}", "Track ${index}", "Artist ${index}")
+        }
+        val review = normalPlaylistReviewRows(rows)
+        assertEquals(81, review.size)
+        assertEquals("rec-1", review.first().id)
+        assertEquals("rec-81", review.last().id)
+    }
+
     @Test fun deletingSavedPlaylistRequiresExplicitConfirmation() {
         var confirmed = 0
         var cancelled = 0
