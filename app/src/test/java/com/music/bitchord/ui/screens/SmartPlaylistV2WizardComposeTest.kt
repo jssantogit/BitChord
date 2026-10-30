@@ -58,14 +58,39 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("NewJeans").assertExists()
     }
 
-    @Test fun normalReviewNeverTruncatesTheSelectedTracks() {
+    @Test fun normalReviewShowsTrackAfterFiftyWithoutArtificialTruncation() {
         val rows = (1..81).map { index ->
             V2DisplayRow("rec-${index}", "Track ${index}", "Artist ${index}")
         }
-        val review = normalPlaylistReviewRows(rows)
-        assertEquals(81, review.size)
-        assertEquals("rec-1", review.first().id)
-        assertEquals("rec-81", review.last().id)
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE,
+                SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ))
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Todas as faixas",
+                rule = rule,
+                normalMode = true,
+                normalSelectedIds = rows.map { it.id },
+                normalSelectedRows = rows,
+                sort = SmartPlaylistV2Sort.RATING_DESC,
+                limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null,
+                savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {}, onSortChange = {},
+                onLimitChange = {}, onSeedChange = {}, onPreview = {},
+                onSave = {}, onSaveFilter = {}, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithText("Revisar playlist").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(83)
+        compose.onNodeWithText("Track 81").assertExists()
+        compose.onNodeWithText("Artist 81").assertExists()
     }
 
     @Test fun deletingSavedPlaylistRequiresExplicitConfirmation() {
