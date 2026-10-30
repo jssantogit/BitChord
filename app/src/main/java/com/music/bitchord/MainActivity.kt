@@ -2622,8 +2622,10 @@ private fun BitChordApp(
                         detail != null -> detail.browseId
                         rediscoveryRecordingId != null -> "rediscovery:" + rediscoveryRecordingId
                         showCanonicalMyRatings -> "my_ratings"
-                        showPlaylistLibrary -> "canonical_playlist_library"
+                        // The wizard is pushed FROM the playlist category. It must win
+                        // over that category while editing or creating a playlist.
                         showSmartPlaylistBuilder -> "smart_playlist_builder"
+                        showPlaylistLibrary -> "canonical_playlist_library"
                         else -> "$TAB_KEY$selectedTab"
                     },
                     // Tabs swap outright; everything else crossfades.
@@ -2736,6 +2738,7 @@ private fun BitChordApp(
                                     SmartCollectionActionSource.SavedStaticPlaylist(id), intent,
                                 )
                             },
+                            contentPadding = listPadding,
                         )
                     } else if (key == "my_ratings") {
                         CanonicalMyRatingsScreen(onBack = { showCanonicalMyRatings = false })
