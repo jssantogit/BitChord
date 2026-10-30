@@ -121,16 +121,17 @@ internal fun CanonicalPlaylistDetailScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            val canPlay = rows?.isNotEmpty() == true &&
+                                (rows?.size ?: 0) <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE &&
+                                rows.orEmpty().none { it.artist == "Fonte não disponível" }
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 TextButton(
                                     onClick = { onAction(CanonicalCollectionIntent.PLAY_NOW) },
-                                    enabled = rows?.isNotEmpty() == true &&
-                                        (rows?.size ?: 0) <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE,
+                                    enabled = canPlay,
                                 ) { Text("Reproduzir", color = AccentRed) }
                                 TextButton(
                                     onClick = { onAction(CanonicalCollectionIntent.ADD_TO_QUEUE) },
-                                    enabled = rows?.isNotEmpty() == true &&
-                                        (rows?.size ?: 0) <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE,
+                                    enabled = canPlay,
                                 ) { Text("Adicionar à fila") }
                             }
                         }
