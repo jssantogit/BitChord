@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -141,6 +142,7 @@ internal fun UnifiedPlaylistLibraryShelf(
     selectedCard: LibraryPlaylistCard? = null,
     onSelectedCardChange: (LibraryPlaylistCard?) -> Unit = {},
     listState: LazyListState? = null,
+    detailListState: LazyListState? = null,
 ) {
     val context = LocalContext.current.applicationContext
     val repo = remember(context) {
@@ -190,6 +192,9 @@ internal fun UnifiedPlaylistLibraryShelf(
                 .map { LibraryPlaylistCard.Normal(it) }
     }
     val openedCard = selectedCard
+    LaunchedEffect(openedCard?.id) {
+        if (openedCard != null) detailListState?.scrollToItem(0)
+    }
     val visible = visibleLibraryPlaylistCards(cards, query, filter, sort)
     val playlistScroll = listState ?: rememberLazyListState()
 
@@ -336,6 +341,7 @@ internal fun UnifiedPlaylistLibraryShelf(
                 }
             },
             contentPadding = contentPadding,
+            listState = detailListState,
         )
     }
 }
