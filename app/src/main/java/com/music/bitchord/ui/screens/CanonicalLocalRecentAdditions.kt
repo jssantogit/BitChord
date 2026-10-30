@@ -26,6 +26,7 @@ import com.music.bitchord.data.catalog.CanonicalLocalLibrary
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 
 /**
@@ -37,26 +38,31 @@ internal fun CanonicalLocalRecentAdditions(
     onOpenSongs: () -> Unit,
 ) {
     val context = LocalContext.current.applicationContext
-    val dao = remember(context) { CanonicalCatalogDatabase.get(context).catalogDao() }
+    val database = remember(context) { CanonicalCatalogDatabase.get(context) }
+    val dao = remember(database) { database.catalogDao() }
     val recent by produceState(initialValue = emptyList<V2DisplayRow>(), key1 = dao) {
-        value = try {
-            withContext(Dispatchers.IO) {
-                dao.recentLocalAdditions(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
-                    .distinctBy { it.recordingId }
-                    .take(6)
-                    .map { row ->
-                        V2DisplayRow(
-                            id = row.recordingId,
-                            title = row.title,
-                            artist = row.artistDisplay,
-                            localArtworkUri = row.artworkUri,
-                        )
-                    }
+        database.invalidationTracker.createFlow(
+            "catalog_media_asset", "catalog_recording",
+        ).collectLatest {
+            value = try {
+                withContext(Dispatchers.IO) {
+                    dao.recentLocalAdditions(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
+                        .distinctBy { it.recordingId }
+                        .take(6)
+                        .map { row ->
+                            V2DisplayRow(
+                                id = row.recordingId,
+                                title = row.title,
+                                artist = row.artistDisplay,
+                                localArtworkUri = row.artworkUri,
+                            )
+                        }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
             }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            emptyList()
         }
     }
     if (recent.isEmpty()) return
