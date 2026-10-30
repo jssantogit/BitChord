@@ -34,7 +34,7 @@ class PlaylistLibraryVisualReuseTest {
         fun normal(title: String) = LibraryPlaylistCard.Normal(
             com.music.bitchord.data.model.ShelfItem(
                 title = title, subtitle = "", thumbnailUrl = null,
-                videoId = null, browseId = "local:playlist:$" + "{title}",
+                videoId = null, browseId = "local:playlist:" + title,
             ),
         )
         val records = listOf(normal("Memórias"), normal("k-pop"), normal("Rock"))
@@ -43,7 +43,7 @@ class PlaylistLibraryVisualReuseTest {
         )
         assertEquals(listOf("k-pop"), matched.map { it.title })
         assertEquals(
-            listOf("Memórias", "Rock", "k-pop"),
+            listOf("k-pop", "Memórias", "Rock"),
             visibleLibraryPlaylistCards(
                 records, "", PlaylistLibraryTypeFilter.NORMAL, PlaylistLibrarySort.TITLE_ASC,
             ).map { it.title },
