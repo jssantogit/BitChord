@@ -230,6 +230,7 @@ internal fun LazyListScope.localFolderItems(
     groups: List<LocalGroup>,
     query: String,
     columns: Int,
+    hideTabPicker: Boolean = false,
     palette: ArtworkPalette,
     currentSong: Song?,
     isPlaying: Boolean,
@@ -237,7 +238,7 @@ internal fun LazyListScope.localFolderItems(
     onSongLongPress: (Song) -> Unit,
     onSongSwipe: (Song) -> Unit,
 ) {
-    item(key = "folder-tabs") {
+    if (!hideTabPicker) item(key = "folder-tabs") {
         SegmentedControl(
             options = listOf(
                 stringResource(R.string.songs),
