@@ -3,6 +3,7 @@ package com.music.bitchord.ui.screens
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Arrangement
@@ -135,6 +136,7 @@ internal fun UnifiedPlaylistLibraryShelf(
     filter: PlaylistLibraryTypeFilter = PlaylistLibraryTypeFilter.ALL,
     selectedCard: LibraryPlaylistCard? = null,
     onSelectedCardChange: (LibraryPlaylistCard?) -> Unit = {},
+    listState: LazyListState? = null,
 ) {
     val context = LocalContext.current.applicationContext
     val repo = remember(context) {
@@ -185,7 +187,7 @@ internal fun UnifiedPlaylistLibraryShelf(
     }
     val openedCard = selectedCard
     val visible = visibleLibraryPlaylistCards(cards, query, filter, sort)
-    val playlistScroll = rememberLazyListState()
+    val playlistScroll = listState ?: rememberLazyListState()
 
     // The host owns status-bar and floating-player insets. Applying a second
     // statusBarsPadding() + 64dp here created an artificial gap and a second
