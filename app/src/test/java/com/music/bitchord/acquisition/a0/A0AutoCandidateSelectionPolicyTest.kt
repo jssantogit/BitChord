@@ -103,6 +103,12 @@ class A0AutoCandidateSelectionPolicyTest {
         assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,choice.status)
         assertEquals(A0AutoCandidateSelectionPolicy.Reason.AMBIGUOUS_EDITION,choice.reason)
         assertTrue(choice.sequentialAlternatives.isEmpty())
+        assertEquals(2,choice.ambiguity?.clusterCount)
+        assertEquals(1,choice.ambiguity?.leadingSources)
+        assertEquals(1,choice.ambiguity?.competingSources)
+        assertEquals(0,choice.ambiguity?.scoreGap)
+        assertEquals(2,choice.ambiguity?.distinctByteSizes)
+        assertFalse(choice.toString().contains("peer"))
     }
 
     @Test fun exactAlbumWithinOneGenericAudioSubfolderIsStillEligible() {

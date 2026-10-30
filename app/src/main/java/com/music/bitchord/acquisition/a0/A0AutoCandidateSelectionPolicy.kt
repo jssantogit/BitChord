@@ -20,6 +20,15 @@ internal object A0AutoCandidateSelectionPolicy {
         INVALID_TARGET, INCOMPLETE_SAMPLE, CONTRADICTORY_SOURCE,
         NO_STRONG_CANDIDATE, AMBIGUOUS_EDITION, NO_READY_SOURCE,
     }
+    /** Aggregates cannot prove two masters identical. Do not log file sizes or peers. */
+    data class AmbiguityEvidence(
+        val clusterCount:Int,
+        val leadingSources:Int,
+        val competingSources:Int,
+        val scoreGap:Int,
+        val distinctByteSizes:Int,
+    )
+
     /** Exclusive first-failing-stage counts; sanitized, no source identifiers. */
     data class Funnel(
         val rankRejected:Int=0,
@@ -36,6 +45,7 @@ internal object A0AutoCandidateSelectionPolicy {
         val examined:Int,
         val eligible:Int,
         val funnel:Funnel=Funnel(),
+        val ambiguity:AmbiguityEvidence?=null,
     ) {
         val canTransfer:Boolean get()=false
         override fun toString()="AutoCandidateDecision(status=$status, reason=$reason)"
@@ -220,8 +230,20 @@ internal object A0AutoCandidateSelectionPolicy {
                 .thenBy { it.first().choice.claim.filename.lowercase(Locale.ROOT) })
         if(rankedGroups.size>1 &&
             rankedGroups[0].maxOf { it.rank } -
-                rankedGroups[1].maxOf { it.rank }<12)
-            return review(Reason.AMBIGUOUS_EDITION,observed.size,strong.size,funnel)
+                rankedGroups[1].maxOf { it.rank }<12) {
+            val gap=rankedGroups[0].maxOf { it.rank } -
+                rankedGroups[1].maxOf { it.rank }
+            val evidence=AmbiguityEvidence(
+                clusterCount=rankedGroups.size,
+                leadingSources=rankedGroups[0].size,
+                competingSources=rankedGroups[1].size,
+                scoreGap=gap,
+                distinctByteSizes=strong.map { it.choice.claim.sizeBytes }
+                    .distinct().size,
+            )
+            return Decision(Status.MANUAL_REVIEW,Reason.AMBIGUOUS_EDITION,
+                emptyList(),observed.size,strong.size,funnel,evidence)
+        }
         val leading=rankedGroups[0]
         // Only a peer claiming a currently free slot with acceptable queue/
         // speed evidence may be provisionally preferred for unattended use.

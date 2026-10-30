@@ -1311,7 +1311,12 @@ object Downloads {
                             " rank_rejected=${decision.funnel.rankRejected}" +
                             " preflight_rejected=${decision.funnel.preflightRejected}" +
                             " album_rejected=${decision.funnel.albumRejected}" +
-                            " quality_rejected=${decision.funnel.qualityRejected}")
+                            " quality_rejected=${decision.funnel.qualityRejected}" +
+                            " ambiguity_clusters=${decision.ambiguity?.clusterCount ?: 0}" +
+                            " leading_sources=${decision.ambiguity?.leadingSources ?: 0}" +
+                            " competing_sources=${decision.ambiguity?.competingSources ?: 0}" +
+                            " rank_gap=${decision.ambiguity?.scoreGap ?: -1}" +
+                            " distinct_sizes=${decision.ambiguity?.distinctByteSizes ?: 0}")
                     },
                     onSlotEvidence={index,observed ->
                         val entry=request.entries[index]
