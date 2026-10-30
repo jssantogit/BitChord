@@ -932,7 +932,8 @@ internal interface CanonicalCatalogDao {
         FROM catalog_release_track AS rt
         INNER JOIN catalog_media_asset AS asset ON asset.recordingId = rt.recordingId
         WHERE rt.releaseId = :releaseId AND asset.provider = :providerKey
-        ORDER BY rt.recordingId ASC
+        ORDER BY CASE WHEN rt.trackNumber IS NULL THEN 1 ELSE 0 END,
+                 rt.trackNumber ASC, rt.recordingId ASC
         """,
     )
     suspend fun providerScopedReleaseRecordingIds(
