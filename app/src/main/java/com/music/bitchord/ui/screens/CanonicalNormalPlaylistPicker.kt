@@ -59,8 +59,10 @@ internal fun filterCanonicalPlaylistBrowseGroups(
         .take(100)
 
 /**
- * Use actual ReleaseIds and ArtistIds plus provider-scoped membership. No
- * album inference from similarly titled tracks or display-artist strings.
+ * Releases use actual ReleaseIds. Artists prefer verified canonical ArtistIds;
+ * incompletely credited provider libraries also expose exact display-name
+ * browse groups. These groups are UI-only and resolve to real RecordingIds
+ * backed by the currently selected provider, never a fabricated ArtistId.
  */
 internal suspend fun canonicalNormalPlaylistBrowseGroups(
     context: Context,
