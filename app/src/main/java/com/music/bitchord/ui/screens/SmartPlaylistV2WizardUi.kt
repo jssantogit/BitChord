@@ -1165,7 +1165,8 @@ internal fun SmartPlaylistV2WizardUi(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 if (page == WizardStep.SONGS) {
-                    WizardCard("Selecionadas: ${normalSelectedIds.size}", "")
+                    WizardCard("Selecionadas: ${normalSelectedIds.size}",
+                        if (normalAddingAlbumId != null) "Adicionando músicas do álbum…" else "")
                 }
                 when (page) {
                     WizardStep.IDENTITY -> PlaylistWizardPrimaryAction(
@@ -1175,7 +1176,7 @@ internal fun SmartPlaylistV2WizardUi(
                     )
                     WizardStep.SONGS -> PlaylistWizardPrimaryAction(
                         label = "Revisar playlist",
-                        enabled = canContinue && !normalLoading,
+                        enabled = canContinue && !normalLoading && normalAddingAlbumId == null,
                         onClick = { page = WizardStep.REVIEW },
                     )
                     WizardStep.RULES -> PlaylistWizardPrimaryAction(
@@ -1224,7 +1225,8 @@ internal fun SmartPlaylistV2WizardUi(
                             label = if (editingId != null || editingNormalId != null)
                                 "Salvar alterações" else "Criar playlist",
                             onClick = if (normalMode) onSaveNormal else onSave,
-                            enabled = if (normalMode) canContinue && !loading && !normalLoading
+                            enabled = if (normalMode) canContinue && !loading && !normalLoading &&
+                                normalAddingAlbumId == null
                                 else canReview && !loading &&
                                     currentPreviewQuery != null && preview != null,
                         )
