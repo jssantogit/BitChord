@@ -34,6 +34,11 @@ class SmartCollectionBatchHandoffTest {
         )
         assertEquals(null, playlistPlaybackSuffix(members, "rec-not-in-playlist"))
         assertEquals(null, playlistPlaybackSuffix(emptyList(), "rec-second"))
+        assertEquals(
+            listOf("rec-second"),
+            playlistPlaybackSelection(members, "rec-second", includeFollowing = false),
+        )
+        assertNull(playlistPlaybackSelection(members, "rec-not-in-playlist", includeFollowing = false))
     }
 
     private class Resolver : CanonicalQueueResolver {
