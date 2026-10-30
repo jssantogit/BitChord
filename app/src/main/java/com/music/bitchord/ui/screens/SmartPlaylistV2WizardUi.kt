@@ -139,6 +139,9 @@ private fun ruleUiSummary(
         "${smartRuleLeafCount(rule)} condições · " + smartRuleJoinLabel(rule.join)
 }
 
+/** Review uses LazyColumn virtualization, not an arbitrary first-50 preview. */
+internal fun normalPlaylistReviewRows(rows: List<V2DisplayRow>): List<V2DisplayRow> = rows
+
 @Composable
 private fun WizardCard(
     title: String,
@@ -482,14 +485,18 @@ internal fun SmartPlaylistV2WizardUi(
                         item {
                             if (normalMode) {
                                 WizardCard(
-                                    "Fonte da playlist",
+                                    "Fontes do catálogo",
                                     "Escolha onde as músicas desta playlist serão encontradas.",
                                 ) {
-                                    PlaylistWizardSelectionRow(
-                                        label = "Todas as fontes",
-                                        selected = normalSourceProviderKey == null,
-                                        onClick = { onNormalSourceChange(null) },
-                                    )
+                                    if (availableSourceKeys.size > 1 ||
+                                        normalSourceProviderKey == null
+                                    ) {
+                                        PlaylistWizardSelectionRow(
+                                            label = "Todas as fontes",
+                                            selected = normalSourceProviderKey == null,
+                                            onClick = { onNormalSourceChange(null) },
+                                        )
+                                    }
                                     availableSourceKeys.forEach { provider ->
                                         val title = if (provider == "local-mediastore")
                                             "Música local" else "Servidor (Navidrome)"
@@ -510,7 +517,7 @@ internal fun SmartPlaylistV2WizardUi(
                                 }
                             } else {
                                 WizardCard(
-                                    "Fonte da playlist",
+                                    "Fontes do catálogo",
                                     "Esta escolha limita todas as condições, inclusive grupos E/OU.",
                                 ) {
                                     val selected = if (hasConfiguredRules)
@@ -1058,7 +1065,7 @@ internal fun SmartPlaylistV2WizardUi(
                             }
                             item {
                                 WizardCard(
-                                    "Fonte da playlist",
+                                    "Fontes do catálogo",
                                     when (normalSourceProviderKey) {
                                         null -> "Todas as fontes disponíveis"
                                         "local-mediastore" -> "Música local"
@@ -1072,7 +1079,7 @@ internal fun SmartPlaylistV2WizardUi(
                             if (normalSelectedIds.isEmpty()) item {
                                 WizardCard("Sem músicas", "Você pode salvar uma playlist vazia e adicionar músicas depois.")
                             }
-                            items(normalSelectedRows.take(50), key = { it.id }) { row ->
+                            items(normalPlaylistReviewRows(normalSelectedRows), key = { it.id }) { row ->
                                 Row(Modifier.fillMaxWidth().padding(vertical = 2.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1085,10 +1092,6 @@ internal fun SmartPlaylistV2WizardUi(
                                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
                                 }
-                            }
-                            if (normalSelectedIds.size > 50) item {
-                                Text("Exibindo as primeiras 50 músicas selecionadas.",
-                                    style = MaterialTheme.typography.bodySmall)
                             }
                         } else {
                         item {
@@ -1112,7 +1115,7 @@ internal fun SmartPlaylistV2WizardUi(
                         }
                         item {
                             WizardCard(
-                                "Fonte da playlist",
+                                "Fontes do catálogo",
                                 when (smartRuleGlobalSource(rule)) {
                                     "local" -> "Somente música local"
                                     "opensubsonic" -> "Somente servidor atual (Navidrome)"
