@@ -128,6 +128,8 @@ internal fun UnifiedPlaylistLibraryShelf(
     onOpenNormalPlaylist: (ShelfItem) -> Unit,
     onSmartAction: (String, CanonicalCollectionIntent) -> Unit,
     onCanonicalNormalAction: (String, CanonicalCollectionIntent) -> Unit,
+    onSmartTrackAction: (String, String) -> Unit,
+    onCanonicalNormalTrackAction: (String, String) -> Unit,
     contentPadding: PaddingValues,
     query: String = "",
     onQueryChange: (String) -> Unit = {},
@@ -302,6 +304,15 @@ internal fun UnifiedPlaylistLibraryShelf(
                         onSmartAction(selected.definition.id, intent)
                     is LibraryPlaylistCard.CanonicalNormal ->
                         onCanonicalNormalAction(selected.definition.id, intent)
+                    is LibraryPlaylistCard.Normal -> Unit
+                }
+            },
+            onTrackClick = { recordingId ->
+                when (selected) {
+                    is LibraryPlaylistCard.Smart ->
+                        onSmartTrackAction(selected.definition.id, recordingId)
+                    is LibraryPlaylistCard.CanonicalNormal ->
+                        onCanonicalNormalTrackAction(selected.definition.id, recordingId)
                     is LibraryPlaylistCard.Normal -> Unit
                 }
             },
