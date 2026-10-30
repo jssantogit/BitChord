@@ -168,13 +168,17 @@ internal object A0AndroidAudioTechnicalProbe {
                     reachedEos=true
                     break
                 }
+                // A zero-size packet is not permission to ignore its crypto
+                // flags or an unexpected source track.
+                if((extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_ENCRYPTED)!=0)
+                    return denied(Failure.ENCRYPTED_SAMPLE)
+                val reportedTrack=extractor.sampleTrackIndex
                 if(amount==0) {
-                    // Certain device extractors expose an empty terminal
-                    // packet instead of -1. This is ONLY EOS after enough
-                    // positive frames and a timestamp near the independently
-                    // measured full duration. Never skip an empty interior
-                    // packet, a first empty sample or an encrypted packet.
-                    val end= !extractor.advance()
+                    if(reportedTrack!=audioIndex && reportedTrack!=-1)
+                        return denied(Failure.WRONG_SAMPLE_TRACK)
+                    // Only a terminal empty packet is accepted, with enough
+                    // positive samples and independently measured duration.
+                    val end=!extractor.advance()
                     if(A0AudioSampleScanPolicy.acceptTerminalEmpty(
                             samples,lastUs,duration,end)) {
                         reachedEos=true
@@ -182,10 +186,8 @@ internal object A0AndroidAudioTechnicalProbe {
                     }
                     return denied(Failure.ZERO_LENGTH_SAMPLE)
                 }
-                if(extractor.sampleTrackIndex!=audioIndex)
+                if(reportedTrack!=audioIndex)
                     return denied(Failure.WRONG_SAMPLE_TRACK)
-                if((extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_ENCRYPTED)!=0)
-                    return denied(Failure.ENCRYPTED_SAMPLE)
                 val timestamp=extractor.sampleTime
                 if(timestamp<0)return denied(Failure.NEGATIVE_SAMPLE_TIME)
                 if(timestamp<lastUs)return denied(Failure.REGRESSING_SAMPLE_TIME)
