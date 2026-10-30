@@ -128,8 +128,8 @@ internal fun UnifiedPlaylistLibraryShelf(
     onOpenNormalPlaylist: (ShelfItem) -> Unit,
     onSmartAction: (String, CanonicalCollectionIntent) -> Unit,
     onCanonicalNormalAction: (String, CanonicalCollectionIntent) -> Unit,
-    onSmartTrackAction: (String, String) -> Unit,
-    onCanonicalNormalTrackAction: (String, String) -> Unit,
+    onSmartTrackAction: (String, String, CanonicalCollectionIntent, Boolean) -> Unit,
+    onCanonicalNormalTrackAction: (String, String, CanonicalCollectionIntent, Boolean) -> Unit,
     contentPadding: PaddingValues,
     query: String = "",
     onQueryChange: (String) -> Unit = {},
@@ -310,9 +310,26 @@ internal fun UnifiedPlaylistLibraryShelf(
             onTrackClick = { recordingId ->
                 when (selected) {
                     is LibraryPlaylistCard.Smart ->
-                        onSmartTrackAction(selected.definition.id, recordingId)
+                        onSmartTrackAction(
+                            selected.definition.id, recordingId,
+                            CanonicalCollectionIntent.PLAY_NOW, true,
+                        )
                     is LibraryPlaylistCard.CanonicalNormal ->
-                        onCanonicalNormalTrackAction(selected.definition.id, recordingId)
+                        onCanonicalNormalTrackAction(
+                            selected.definition.id, recordingId,
+                            CanonicalCollectionIntent.PLAY_NOW, true,
+                        )
+                    is LibraryPlaylistCard.Normal -> Unit
+                }
+            },
+            onTrackQueue = { recordingId, intent ->
+                when (selected) {
+                    is LibraryPlaylistCard.Smart ->
+                        onSmartTrackAction(selected.definition.id, recordingId, intent, false)
+                    is LibraryPlaylistCard.CanonicalNormal ->
+                        onCanonicalNormalTrackAction(
+                            selected.definition.id, recordingId, intent, false,
+                        )
                     is LibraryPlaylistCard.Normal -> Unit
                 }
             },
