@@ -44,6 +44,53 @@ class PlaylistLibraryVisualReuseTest {
         compose.onNodeWithText("12 músicas").assertExists()
     }
 
+    @Test fun conditionCategoryRowsReuseSettingsInteractionAndNavigate() {
+        var opened = ""
+        compose.setContent {
+            PlaylistWizardNavigationList(listOf(
+                PlaylistWizardNavOption(
+                    title = "Metadados",
+                    description = "Campos do catálogo",
+                    onClick = { opened = "metadata" },
+                ),
+                PlaylistWizardNavOption(
+                    title = "Histórico",
+                    description = "Estatísticas de reprodução",
+                    onClick = { opened = "history" },
+                ),
+            ))
+        }
+        compose.onNodeWithText("Histórico").performClick()
+        compose.runOnIdle { assertEquals("history", opened) }
+    }
+
+    @Test fun sourceSelectionRetainsCallbackAndSelectedSemantics() {
+        var changed = 0
+        compose.setContent {
+            PlaylistWizardSelectionRow(
+                label = "Música local",
+                selected = true,
+                onClick = { changed++ },
+            )
+        }
+        compose.onNodeWithText("Música local").performClick()
+        compose.runOnIdle { assertEquals(1, changed) }
+        compose.onNodeWithContentDescription("Selecionado").assertExists()
+    }
+
+    @Test fun catalogBrowseTabsUseExistingSegmentedControl() {
+        var selected = 0
+        compose.setContent {
+            SegmentedControl(
+                options = listOf("Músicas", "Álbuns", "Artistas"),
+                selectedIndex = selected,
+                onSelect = { selected = it },
+            )
+        }
+        compose.onNodeWithText("Álbuns").performClick()
+        compose.runOnIdle { assertEquals(1, selected) }
+    }
+
     @Test fun wizardTextAndSearchFieldsPreserveUserInput() {
         var name by mutableStateOf("")
         var search by mutableStateOf("")
