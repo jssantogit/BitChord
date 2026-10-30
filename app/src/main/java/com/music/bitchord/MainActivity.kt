@@ -2166,6 +2166,7 @@ private fun BitChordApp(
     var playlistLibrarySortMenu by remember { mutableStateOf(false) }
     var playlistLibraryOptionsMenu by remember { mutableStateOf(false) }
     val playlistLibraryListState = rememberLazyListState()
+    val playlistDetailListState = rememberLazyListState()
     var showSmartPlaylistBuilder by rememberSaveable { mutableStateOf(false) }
     var editingSmartPlaylistId by remember { mutableStateOf<String?>(null) }
     var editingNormalPlaylistId by remember { mutableStateOf<String?>(null) }
@@ -2787,6 +2788,7 @@ private fun BitChordApp(
                             selectedCard = openedCanonicalPlaylist,
                             onSelectedCardChange = { openedCanonicalPlaylist = it },
                             listState = playlistLibraryListState,
+                            detailListState = playlistDetailListState,
                         )
                     } else if (key == "my_ratings") {
                         CanonicalMyRatingsScreen(onBack = { showCanonicalMyRatings = false })
@@ -3690,7 +3692,8 @@ private fun BitChordApp(
                         showHistory -> stringResource(R.string.history)
                         libraryShowAll != null && detail == null -> libraryShowAll?.title.orEmpty()
                         showSmartPlaylistBuilder && detail == null -> "Nova playlist"
-                        showPlaylistLibrary && detail == null -> "Playlists"
+                        showPlaylistLibrary && detail == null ->
+                            openedCanonicalPlaylist?.title ?: "Playlists"
                         showAccountScrobbling -> stringResource(R.string.account_scrobbling)
                         showSources -> stringResource(R.string.sources)
                         showListenTogether -> stringResource(R.string.listen_together)
@@ -3721,9 +3724,13 @@ private fun BitChordApp(
                             (detail != null && detailActiveShelf != null) ||
                             selectedMoodGenre != null -> true
                         showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null ->
-                            openedCanonicalPlaylist != null ||
+                            if (openedCanonicalPlaylist != null) {
+                                playlistDetailListState.firstVisibleItemIndex > 0 ||
+                                    playlistDetailListState.firstVisibleItemScrollOffset > 64
+                            } else {
                                 playlistLibraryListState.firstVisibleItemIndex > 0 ||
-                                playlistLibraryListState.firstVisibleItemScrollOffset > 64
+                                    playlistLibraryListState.firstVisibleItemScrollOffset > 64
+                            }
                         // The page leads with its own large "Replay", so the bar
                         // stays out of the way until that has been scrolled off.
                         showReplay -> replayScrolled
