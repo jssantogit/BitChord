@@ -819,6 +819,52 @@ internal interface CanonicalCatalogDao {
     )
     suspend fun providerScopedArtists(providerKey: String): List<ArtistEntity>
 
+    /** Bounded canonical group search for playlist construction. */
+    @Query(
+        """
+        SELECT DISTINCT rel.*
+        FROM catalog_release AS rel
+        INNER JOIN catalog_release_track AS rt ON rt.releaseId = rel.id
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = rt.recordingId
+        WHERE asset.provider = :providerKey
+          AND instr(lower(rel.title), lower(:searchTerm)) > 0
+        ORDER BY rel.title COLLATE NOCASE, rel.id
+        LIMIT 100
+        """,
+    )
+    suspend fun searchProviderScopedReleases(
+        providerKey: String, searchTerm: String,
+    ): List<ReleaseEntity>
+
+    @Query(
+        """
+        SELECT artist.*
+        FROM catalog_artist AS artist
+        WHERE instr(lower(artist.name), lower(:searchTerm)) > 0
+          AND (
+              EXISTS (
+                  SELECT 1
+                  FROM catalog_recording_artist_credit AS credit
+                  INNER JOIN catalog_media_asset AS asset
+                      ON asset.recordingId = credit.recordingId
+                  WHERE credit.artistId = artist.id AND asset.provider = :providerKey
+              ) OR EXISTS (
+                  SELECT 1
+                  FROM catalog_release_artist_credit AS credit
+                  INNER JOIN catalog_release_track AS rt ON rt.releaseId = credit.releaseId
+                  INNER JOIN catalog_media_asset AS asset ON asset.recordingId = rt.recordingId
+                  WHERE credit.artistId = artist.id AND asset.provider = :providerKey
+              )
+          )
+        ORDER BY artist.name COLLATE NOCASE, artist.id
+        LIMIT 100
+        """,
+    )
+    suspend fun searchProviderScopedArtists(
+        providerKey: String, searchTerm: String,
+    ): List<ArtistEntity>
+
+
     /** Navigating a Release rechecks its Recording IDs against the active source. */
     @Query(
         """
