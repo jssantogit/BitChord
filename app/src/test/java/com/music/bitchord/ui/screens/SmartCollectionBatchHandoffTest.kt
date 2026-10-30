@@ -26,6 +26,16 @@ import org.junit.Test
 
 /** A read-only fake of B9's resolver, never legacy-title identity inference. */
 class SmartCollectionBatchHandoffTest {
+    @Test fun clickingPlaylistTrackUsesFreshMembershipAndRemainingOrder() {
+        val members = listOf("rec-first", "rec-second", "rec-third")
+        assertEquals(
+            listOf("rec-second", "rec-third"),
+            playlistPlaybackSuffix(members, "rec-second"),
+        )
+        assertEquals(null, playlistPlaybackSuffix(members, "rec-not-in-playlist"))
+        assertEquals(null, playlistPlaybackSuffix(emptyList(), "rec-second"))
+    }
+
     private class Resolver : CanonicalQueueResolver {
         var calls = 0
         override suspend fun identifyAll(songs: List<Song>): List<CanonicalQueueIdentity?> =
