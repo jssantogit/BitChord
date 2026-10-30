@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -151,6 +153,7 @@ internal fun CanonicalPlaylistDetailScreen(
     onTrackClick: (String) -> Unit,
     onTrackQueue: (String, CanonicalCollectionIntent) -> Unit,
     contentPadding: PaddingValues,
+    listState: LazyListState? = null,
 ) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current.applicationContext
@@ -184,6 +187,7 @@ internal fun CanonicalPlaylistDetailScreen(
         rows.orEmpty().none { it.artist == "Fonte não disponível" }
 
     LazyColumn(
+        state = listState ?: rememberLazyListState(),
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(12.dp),
