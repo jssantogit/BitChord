@@ -48,6 +48,8 @@ import com.music.bitchord.ui.components.PillTextField
 import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.components.CoverPlaceholder
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collect
 
 /**
@@ -362,7 +364,22 @@ private fun UnifiedPlaylistCompactRow(
                     emptyList()
                 }
             }
-            else -> emptyList()
+            is LibraryPlaylistCard.Smart -> {
+                try {
+                    val evaluator = persistentSmartPlaylistPreview(context)
+                    val ids = withContext(Dispatchers.IO) {
+                        evaluator.preview(card.definition.query, card.definition.id)
+                            .take(4).map { it.recordingId }
+                    }
+                    canonicalNormalPlaylistSelectedRows(context, ids)
+                        .filterNot { it.title == "Gravação indisponível" }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    emptyList()
+                }
+            }
+            is LibraryPlaylistCard.Normal -> emptyList()
         }
     }
     // Reuse the existing Spotify/Library row rather than maintaining a
