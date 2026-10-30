@@ -146,7 +146,7 @@ class SmartPlaylistV2WizardComposeTest {
         // Identity now includes a 112dp neutral artwork preview; the sources
         // card is below the fold on Robolectric's compact test window.
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
-        compose.onNodeWithText("Fontes do catálogo").assertExists()
+        compose.onNodeWithText("Fonte da playlist").assertExists()
         compose.onNodeWithText("Continuar").performClick()
         compose.onNodeWithText("Regras da playlist").assertExists()
         compose.onNodeWithText("Grupo 1").assertExists()
