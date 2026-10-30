@@ -50,6 +50,19 @@ class CanonicalNormalPlaylistPickerTest {
         )
     }
 
+    @Test fun canonicalPickerIncludesLocalSourceWithoutConfiguredRemoteAccounts() {
+        assertEquals(listOf("local-mediastore"),
+            canonicalPlaylistProviderKeys(emptyList(), null))
+        assertEquals(listOf("local-mediastore"),
+            canonicalPlaylistProviderKeys(listOf("opensubsonic:server-a"), "local-mediastore"))
+        assertEquals(listOf("opensubsonic:server-a"),
+            canonicalPlaylistProviderKeys(listOf("opensubsonic:server-a"), "opensubsonic:server-a"))
+        assertEquals(listOf("local-mediastore", "opensubsonic:server-a"),
+            canonicalPlaylistProviderKeys(listOf("opensubsonic:server-a"), null))
+        assertEquals(emptyList<String>(),
+            canonicalPlaylistProviderKeys(emptyList(), "opensubsonic:offline"))
+    }
+
     @Test fun localOnlySourceDefaultsToLocalButNeverOverridesMultisourceOrEditing() {
         assertEquals("local-mediastore", defaultCanonicalNormalPlaylistSource(
             listOf("local-mediastore"),
