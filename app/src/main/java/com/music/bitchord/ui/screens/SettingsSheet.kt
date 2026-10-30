@@ -2480,6 +2480,8 @@ internal fun SettingsRow(
     iconPainter: Painter? = null,
     onClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
+    /** Compact catalog rows have no leading glyph column. Existing settings keep theirs. */
+    reserveIconSpace: Boolean = true,
 ) {
     Row(
         modifier = Modifier
@@ -2505,7 +2507,9 @@ internal fun SettingsRow(
                 modifier = Modifier.size(ICON_SIZE),
             )
         }
-        Spacer(Modifier.width(ICON_GAP))
+        if (reserveIconSpace || icon != null || iconPainter != null) {
+            Spacer(Modifier.width(ICON_GAP))
+        }
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
