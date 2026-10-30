@@ -75,6 +75,27 @@ internal fun CanonicalPlaylistCoverArt(
     }
 }
 
+/** The same native Library row used everywhere, wired to canonical playback. */
+@Composable
+internal fun CanonicalPlaylistTrackRow(
+    track: V2DisplayRow,
+    onPlay: (String) -> Unit,
+) {
+    LibraryRow(
+        title = track.title,
+        subtitle = track.artist,
+        imageUrl = null,
+        onClick = { onPlay(track.id) },
+        modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+        horizontalPadding = 0.dp,
+        artwork = {
+            SmartPlaylistPreviewArtwork(
+                row = track, modifier = Modifier.fillMaxSize(),
+            )
+        },
+    )
+}
+
 /**
  * A playlist is a native Library detail page, not a separate full-screen Dialog.
  * The owning Library host keeps the floating mini-player and bottom navigation.
@@ -84,6 +105,7 @@ internal fun CanonicalPlaylistDetailScreen(
     card: LibraryPlaylistCard,
     onClose: () -> Unit,
     onAction: (CanonicalCollectionIntent) -> Unit,
+    onTrackClick: (String) -> Unit,
     contentPadding: PaddingValues,
 ) {
     BackHandler(onBack = onClose)
@@ -179,17 +201,9 @@ internal fun CanonicalPlaylistDetailScreen(
             }
         }
         items(rows.orEmpty(), key = { it.id }) { track ->
-            LibraryRow(
-                title = track.title,
-                subtitle = track.artist,
-                imageUrl = null,
-                modifier = Modifier.padding(horizontal = PAGE_GUTTER),
-                horizontalPadding = 0.dp,
-                artwork = {
-                    SmartPlaylistPreviewArtwork(
-                        row = track, modifier = Modifier.fillMaxSize(),
-                    )
-                },
+            CanonicalPlaylistTrackRow(
+                track = track,
+                onPlay = onTrackClick,
             )
         }
     }
