@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +38,7 @@ import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.components.CoverPlaceholder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
@@ -120,11 +122,13 @@ internal fun UnifiedPlaylistLibraryShelf(
                 .map { LibraryPlaylistCard.Normal(it) }
     }
     var openedCard by remember { mutableStateOf<LibraryPlaylistCard?>(null) }
+    val playlistScroll = rememberLazyListState()
 
     // The host owns status-bar and floating-player insets. Applying a second
     // statusBarsPadding() + 64dp here created an artificial gap and a second
     // page chrome inside Library. Use the same measured padding as LibraryScreen.
-    LazyColumn(
+    if (openedCard == null) LazyColumn(
+        state = playlistScroll,
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -144,7 +148,7 @@ internal fun UnifiedPlaylistLibraryShelf(
                 TextButton(
                     onClick = onNewSmartPlaylist,
                     modifier = Modifier.heightIn(min = 48.dp),
-                ) { Text("+ Nova") }
+                ) { Text("+ Nova", color = AccentRed) }
             }
         }
         if (failed) item(key = "smart-error") {
@@ -210,6 +214,7 @@ internal fun UnifiedPlaylistLibraryShelf(
                     is LibraryPlaylistCard.Normal -> Unit
                 }
             },
+            contentPadding = contentPadding,
         )
     }
 }
@@ -222,37 +227,44 @@ private fun UnifiedPlaylistCompactRow(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current.applicationContext
-    val canonicalCover by produceState<V2DisplayRow?>(
-        initialValue = null, key1 = card.id,
+    val canonicalCover by produceState<List<V2DisplayRow>>(
+        initialValue = emptyList(), key1 = card.id,
     ) {
         value = when (card) {
             is LibraryPlaylistCard.CanonicalNormal -> {
                 try {
-                    val firstId = card.definition.recordingIds.firstOrNull()
-                    if (firstId == null) null else canonicalNormalPlaylistSelectedRows(
-                        context, listOf(firstId), card.definition.sourceProviderKey,
-                    ).firstOrNull()?.takeIf { it.title != "Gravação indisponível" }
+                    canonicalNormalPlaylistSelectedRows(
+                        context, card.definition.recordingIds.take(4),
+                        card.definition.sourceProviderKey,
+                    ).filterNot { it.title == "Gravação indisponível" }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) {
-                    null
+                    emptyList()
                 }
             }
-            else -> null
+            else -> emptyList()
         }
     }
     // Reuse the existing Spotify/Library row rather than maintaining a
     // second cover/title/subtitle/touch-target implementation.
-    val firstArt = canonicalCover
     LibraryRow(
         title = card.title,
-        subtitle = if (card is LibraryPlaylistCard.Smart) "Inteligente" else "Normal",
+        subtitle = when (card) {
+            is LibraryPlaylistCard.Smart -> "Playlist inteligente"
+            is LibraryPlaylistCard.CanonicalNormal ->
+                "${card.definition.recordingIds.size} músicas · Normal"
+            is LibraryPlaylistCard.Normal -> "Playlist normal"
+        },
         imageUrl = (card as? LibraryPlaylistCard.Normal)?.shelfItem?.thumbnailUrl,
         onClick = onClick,
-        modifier = modifier.clip(RoundedCornerShape(14.dp)),
+        modifier = modifier,
         horizontalPadding = 4.dp,
+        artworkSize = 76.dp,
         artwork = when {
-            firstArt != null -> ({ SmartPlaylistPreviewArtwork(firstArt, Modifier.fillMaxSize()) })
+            canonicalCover.isNotEmpty() -> ({
+                CanonicalPlaylistCoverArt(canonicalCover, Modifier.fillMaxSize())
+            })
             card is LibraryPlaylistCard.Smart -> ({
                 CoverPlaceholder(
                     icon = Icons.Rounded.AutoAwesome,
@@ -260,14 +272,6 @@ private fun UnifiedPlaylistCompactRow(
                 )
             })
             else -> null
-        },
-        trailing = {
-            Icon(
-                Icons.Rounded.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
         },
     )
 }
