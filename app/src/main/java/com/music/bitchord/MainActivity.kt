@@ -2757,20 +2757,21 @@ private fun BitChordApp(
                                     SmartCollectionActionSource.SavedStaticPlaylist(id), intent,
                                 )
                             },
-                            onSmartTrackAction = { id, recordingId ->
+                            onSmartTrackAction = { id, recordingId, intent, includeFollowing ->
                                 executeSmartCollection(
                                     SmartCollectionActionSource.SavedV2PlaylistFromTrack(
-                                        id, recordingId,
+                                        id, recordingId, includeFollowing,
                                     ),
-                                    com.music.bitchord.playback.CanonicalCollectionIntent.PLAY_NOW,
+                                    intent,
                                 )
                             },
-                            onCanonicalNormalTrackAction = { id, recordingId ->
+                            onCanonicalNormalTrackAction = {
+                                id, recordingId, intent, includeFollowing ->
                                 executeSmartCollection(
                                     SmartCollectionActionSource.SavedStaticPlaylistFromTrack(
-                                        id, recordingId,
+                                        id, recordingId, includeFollowing,
                                     ),
-                                    com.music.bitchord.playback.CanonicalCollectionIntent.PLAY_NOW,
+                                    intent,
                                 )
                             },
                             contentPadding = listPadding,
