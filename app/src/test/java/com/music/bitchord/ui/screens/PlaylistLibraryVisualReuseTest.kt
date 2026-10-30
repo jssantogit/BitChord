@@ -65,6 +65,20 @@ class PlaylistLibraryVisualReuseTest {
         compose.runOnIdle { assertEquals("newjeans", query) }
     }
 
+    @Test fun recentAdditionsHeaderAndCanonicalTrackMetadataRemainVisible() {
+        compose.setContent {
+            CanonicalRecentAdditionsShelf(
+                recent = listOf(V2DisplayRow(
+                    id = "recording:one", title = "Hurt", artist = "NewJeans",
+                )),
+                onOpenSongs = {},
+            )
+        }
+        compose.onNodeWithText("Adições recentes").assertExists()
+        compose.onNodeWithText("Hurt").assertExists()
+        compose.onNodeWithText("NewJeans").assertExists()
+    }
+
     @Test fun playlistDetailTrackTapPreservesExactCanonicalRecordingId() {
         var clicked: String? = null
         compose.setContent {
