@@ -192,6 +192,7 @@ internal fun PlaylistWizardNavigationList(
                 subtitle = option.description.ifBlank { null },
                 onClick = option.onClick,
                 reserveIconSpace = false,
+                iconTint = AccentRed,
             )
             if (index < options.lastIndex) {
                 HorizontalDivider(
