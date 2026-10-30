@@ -148,14 +148,18 @@ fun LibraryScreen(
                         text = stringResource(Res.string.library),
                         style = MaterialTheme.typography.displayLarge,
                         color = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
+                        modifier = Modifier.padding(
+                            horizontal = PAGE_GUTTER,
+                            top = if (navigationHome) 4.dp else 8.dp,
+                            bottom = if (navigationHome) 0.dp else 8.dp,
+                        ),
                     )
                 }
             }
             if (navigationHome) {
                 if (links.isNotEmpty()) {
                     item(key = "library-navigation") {
-                        LibraryLinkList(links = links, onClick = onShelfItemClick)
+                        LibraryLinkList(links = links, onClick = onShelfItemClick, compact = true)
                     }
                 }
                 localAdditions?.let { section ->
@@ -280,8 +284,15 @@ data class LibraryLink(
  * look alike because none of them has artwork.
  */
 @Composable
-private fun LibraryLinkList(links: List<LibraryLink>, onClick: (ShelfItem) -> Unit) {
-    Column(Modifier.padding(top = 4.dp, bottom = 22.dp)) {
+private fun LibraryLinkList(
+    links: List<LibraryLink>,
+    onClick: (ShelfItem) -> Unit,
+    compact: Boolean = false,
+) {
+    Column(Modifier.padding(
+        top = if (compact) 0.dp else 4.dp,
+        bottom = if (compact) 12.dp else 22.dp,
+    )) {
         links.forEachIndexed { index, link ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
