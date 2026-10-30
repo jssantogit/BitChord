@@ -79,6 +79,24 @@ class PlaylistLibraryVisualReuseTest {
         compose.onNodeWithText("NewJeans").assertExists()
     }
 
+    @Test fun unavailableCanonicalPlaylistMemberHasNoFakePlaybackAction() {
+        var clicked = false
+        compose.setContent {
+            CanonicalPlaylistTrackRow(
+                track = V2DisplayRow(
+                    id = "recording:missing",
+                    title = "Gravação indisponível",
+                    artist = "Fonte não disponível",
+                ),
+                onPlay = { clicked = true },
+                onQueue = { _, _ -> clicked = true },
+            )
+        }
+        compose.onNodeWithText("Gravação indisponível").assertHasNoClickAction()
+        compose.onNodeWithContentDescription("Ações da música").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(false, clicked) }
+    }
+
     @Test fun playlistDetailTrackTapPreservesExactCanonicalRecordingId() {
         var clicked: String? = null
         compose.setContent {
