@@ -181,6 +181,18 @@ internal suspend fun canonicalNormalPlaylistSelectedRows(
 internal fun canonicalAvailablePlaylistSourceKeys(context: Context): List<String> =
     activeCanonicalPlaylistProviderKeys(context, null)
 
+/**
+ * Provider configuration reports authenticated remote providers. The on-device
+ * MediaStore catalog is independent of login and must remain available offline.
+ * Filtering happens after union, so selecting a remote account never permits
+ * silent fallback to local files.
+ */
+internal fun canonicalPlaylistProviderKeys(
+    remoteProviders: List<String>,
+    selectedProvider: String?,
+): List<String> = canonicalBrowseProviderKeys(remoteProviders)
+    .filter { selectedProvider == null || it == selectedProvider }
+
 private fun activeCanonicalPlaylistProviderKeys(
     context: Context, selectedProvider: String?,
 ): List<String> {
@@ -188,9 +200,11 @@ private fun activeCanonicalPlaylistProviderKeys(
         persistence = SharedPrefsOpenSubsonicAccountPersistence(context),
         credentials = AndroidKeystoreOpenSubsonicCredentialStore(context),
     )
-    return OpenSubsonicLibraryProviderConfigurationReader(accountRepository)
-        .configuredProviderKeys().sorted()
-        .filter { selectedProvider == null || it == selectedProvider }
+    return canonicalPlaylistProviderKeys(
+        OpenSubsonicLibraryProviderConfigurationReader(accountRepository)
+            .configuredProviderKeys(),
+        selectedProvider,
+    )
 }
 
 private suspend fun canonicalNormalRows(
