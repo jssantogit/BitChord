@@ -62,11 +62,11 @@ internal suspend fun canonicalNormalPlaylistBrowseGroups(
     val groups = keys.flatMap { provider ->
         when (type) {
             CanonicalPlaylistBrowseType.ALBUMS ->
-                dao.providerScopedReleases(provider).map {
+                dao.searchProviderScopedReleases(provider, term.trim()).map {
                     CanonicalPlaylistBrowseGroup(it.id, it.title, type)
                 }
             CanonicalPlaylistBrowseType.ARTISTS ->
-                dao.providerScopedArtists(provider).map {
+                dao.searchProviderScopedArtists(provider, term.trim()).map {
                     CanonicalPlaylistBrowseGroup(it.id, it.name, type)
                 }
             else -> emptyList()
