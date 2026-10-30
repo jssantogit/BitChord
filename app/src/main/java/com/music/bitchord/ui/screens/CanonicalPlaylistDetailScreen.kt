@@ -162,9 +162,11 @@ internal fun CanonicalPlaylistDetailScreen(
                         context, card.definition.recordingIds, card.definition.sourceProviderKey,
                     )
                 is LibraryPlaylistCard.Smart -> {
-                    val evaluator = persistentSmartPlaylistPreview(context)
                     val ids = withContext(Dispatchers.IO) {
-                        evaluator.preview(card.definition.query, card.definition.id)
+                        // Building the rule evaluator can read Room configuration.
+                        // Keep it away from the main thread, especially in a lazy shelf.
+                        persistentSmartPlaylistPreview(context)
+                            .preview(card.definition.query, card.definition.id)
                             .map { it.recordingId }
                     }
                     canonicalNormalPlaylistSelectedRows(context, ids)
