@@ -1,16 +1,15 @@
 package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -25,7 +24,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,7 +46,6 @@ import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.ui.components.PAGE_GUTTER
-import com.music.bitchord.ui.theme.AccentRed
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
 
@@ -77,7 +74,7 @@ internal sealed interface LibraryPlaylistCard {
 }
 
 internal fun unifiedPlaylistRows(cards: List<LibraryPlaylistCard>): List<List<LibraryPlaylistCard>> =
-    cards.chunked(2)
+    cards.map { listOf(it) }
 
 /** Library category owns one complete vertical list; no truncation or grid toggle. */
 internal fun playlistShelfRows(
@@ -95,6 +92,7 @@ internal fun UnifiedPlaylistLibraryShelf(
     onOpenNormalPlaylist: (ShelfItem) -> Unit,
     onSmartAction: (String, CanonicalCollectionIntent) -> Unit,
     onCanonicalNormalAction: (String, CanonicalCollectionIntent) -> Unit,
+    contentPadding: PaddingValues,
 ) {
     val context = LocalContext.current.applicationContext
     val repo = remember(context) {
@@ -140,68 +138,68 @@ internal fun UnifiedPlaylistLibraryShelf(
                 .map { LibraryPlaylistCard.Normal(it) }
     }
     var openedCard by remember { mutableStateOf<LibraryPlaylistCard?>(null) }
-    val rows = playlistShelfRows(cards, expanded = false)
 
-    Column(
-        modifier = Modifier.fillMaxSize().statusBarsPadding()
-            .padding(top = 64.dp, bottom = 12.dp)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = PAGE_GUTTER, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    // The host owns status-bar and floating-player insets. Applying a second
+    // statusBarsPadding() + 64dp here created an artificial gap and a second
+    // page chrome inside Library. Use the same measured padding as LibraryScreen.
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = contentPadding,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxWidth()) {
-            Text("Playlists", style = MaterialTheme.typography.headlineLarge)
+        item(key = "playlist-header") {
+            Text(
+                "Playlists",
+                style = MaterialTheme.typography.displayLarge,
+                modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 4.dp),
+            )
         }
-        if (failed) {
-            Text("Não foi possível carregar playlists inteligentes.",
+        if (failed) item(key = "smart-error") {
+            Text(
+                "Não foi possível carregar playlists inteligentes.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error)
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+            )
         }
-        if (normalFailed) {
-            Text("Não foi possível carregar playlists normais canônicas.",
+        if (normalFailed) item(key = "normal-error") {
+            Text(
+                "Não foi possível carregar playlists normais canônicas.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error)
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+            )
         }
-        if (cards.isEmpty()) {
-            Text("Suas playlists aparecerão aqui.",
+        if (cards.isEmpty()) item(key = "playlist-empty") {
+            Text(
+                "Suas playlists aparecerão aqui.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+            )
         }
-        rows.forEach { pair ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                pair.forEach { card ->
-                    val openCard: () -> Unit = {
-                        when (card) {
-                            is LibraryPlaylistCard.Smart ->
-                                openedCard = card
-                            is LibraryPlaylistCard.Normal ->
-                                onOpenNormalPlaylist(card.shelfItem)
-                            is LibraryPlaylistCard.CanonicalNormal ->
-                                openedCard = card
-                        }
-                    }
-                    val playCard: (() -> Unit)? = when (card) {
-                        is LibraryPlaylistCard.Smart ->
-                            { { onSmartAction(card.definition.id, CanonicalCollectionIntent.PLAY_NOW) } }
-                        is LibraryPlaylistCard.CanonicalNormal ->
-                            { { onCanonicalNormalAction(card.definition.id, CanonicalCollectionIntent.PLAY_NOW) } }
-                        is LibraryPlaylistCard.Normal -> null
-                    }
-                    UnifiedPlaylistCompactRow(
-                        card = card,
-                        onClick = openCard,
-                        onPlay = playCard,
-                        modifier = Modifier.weight(1f),
-                    )
+        items(cards, key = { it.id }) { card ->
+            val openCard: () -> Unit = {
+                when (card) {
+                    is LibraryPlaylistCard.Smart,
+                    is LibraryPlaylistCard.CanonicalNormal -> openedCard = card
+                    is LibraryPlaylistCard.Normal -> onOpenNormalPlaylist(card.shelfItem)
                 }
             }
+            UnifiedPlaylistCompactRow(
+                card = card,
+                onClick = openCard,
+                modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+            )
         }
-        PlaylistWizardSecondaryAction(
-            label = "+ Nova playlist",
-            onClick = onNewSmartPlaylist,
-        )
+        item(key = "playlist-create") {
+            Box(Modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp)) {
+                PlaylistWizardSecondaryAction(
+                    label = "+ Nova playlist",
+                    onClick = onNewSmartPlaylist,
+                )
+            }
+        }
     }
     openedCard?.let { selected ->
         CanonicalPlaylistDetailScreen(
@@ -231,62 +229,11 @@ internal fun UnifiedPlaylistLibraryShelf(
     }
 }
 
-@Composable
-private fun UnifiedPlaylistTile(
-    card: LibraryPlaylistCard,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-    onPlay: (() -> Unit)?,
-) {
-    Column(
-        modifier = modifier.clickable(onClick = onClick),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            ),
-            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-        ) {
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                val image = (card as? LibraryPlaylistCard.Normal)
-                    ?.shelfItem?.thumbnailUrl?.takeIf { it.isNotBlank() }
-                if (image != null) {
-                    AsyncImage(model = image, contentDescription = card.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
-                            .clip(RoundedCornerShape(16.dp)))
-                } else {
-                    Icon(
-                        if (card is LibraryPlaylistCard.Smart)
-                            Icons.Rounded.AutoAwesome else Icons.Rounded.LibraryMusic,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(42.dp),
-                    )
-                }
-            }
-        }
-        Text(card.title, style = MaterialTheme.typography.titleMedium,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(if (card is LibraryPlaylistCard.Smart) "Inteligente" else "Normal",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (onPlay != null) {
-            TextButton(onClick = onPlay, modifier = Modifier.align(Alignment.Start)) {
-                Text("Reproduzir", color = AccentRed)
-            }
-        }
-    }
-}
-
 /** Compact vertical Library presentation; the same actions work in the grid. */
 @Composable
 private fun UnifiedPlaylistCompactRow(
     card: LibraryPlaylistCard,
     onClick: () -> Unit,
-    onPlay: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current.applicationContext
