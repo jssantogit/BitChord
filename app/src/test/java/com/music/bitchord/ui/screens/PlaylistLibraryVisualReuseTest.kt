@@ -15,6 +15,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,6 +29,41 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class PlaylistLibraryVisualReuseTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun playlistLibrarySearchAndSortWorkOnActualLibraryCardIdentity() {
+        fun normal(title: String) = LibraryPlaylistCard.Normal(
+            com.music.bitchord.data.model.ShelfItem(
+                title = title, subtitle = "", thumbnailUrl = null,
+                videoId = null, browseId = "local:playlist:$" + "{title}",
+            ),
+        )
+        val records = listOf(normal("Memórias"), normal("k-pop"), normal("Rock"))
+        val matched = visibleLibraryPlaylistCards(
+            records, "POP", PlaylistLibraryTypeFilter.ALL, PlaylistLibrarySort.TITLE_ASC,
+        )
+        assertEquals(listOf("k-pop"), matched.map { it.title })
+        assertEquals(
+            listOf("Memórias", "Rock", "k-pop"),
+            visibleLibraryPlaylistCards(
+                records, "", PlaylistLibraryTypeFilter.NORMAL, PlaylistLibrarySort.TITLE_ASC,
+            ).map { it.title },
+        )
+        assertTrue(visibleLibraryPlaylistCards(
+            records, "", PlaylistLibraryTypeFilter.SMART, PlaylistLibrarySort.TITLE_ASC,
+        ).isEmpty())
+    }
+
+    @Test fun playlistLibrarySearchUsesNativePillInput() {
+        var query by mutableStateOf("")
+        compose.setContent {
+            PlaylistLibrarySearchField(
+                query = query,
+                onQueryChange = { query = it },
+            )
+        }
+        compose.onNodeWithContentDescription("Buscar em Playlists").performTextInput("newjeans")
+        compose.runOnIdle { assertEquals("newjeans", query) }
+    }
 
     @Test fun sharedLibraryRowKeepsArtworkSlotAndOpensSelectedPlaylist() {
         var opened = 0
