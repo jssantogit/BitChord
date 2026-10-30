@@ -34,8 +34,12 @@ internal object A0AndroidAudioTechnicalProbe {
         UNRECOGNIZED_AUDIO_HEADER, FILE_EXTENSION_CONFLICT,
         MULTIPLE_AUDIO_TRACKS, NO_AUDIO_TRACK, EXTRACTOR_MIME_CONFLICT,
         DISAGREEING_DURATIONS, DURATION_UNAVAILABLE, INVALID_DURATION,
-        SAMPLE_RATE_CONFLICT, INVALID_SAMPLE_STREAM, INCOMPLETE_SAMPLE_SCAN,
-        SOURCE_CHANGED_OR_REVOKED, MEDIA_EXTRACTOR_EXCEPTION,
+        SAMPLE_RATE_CONFLICT,
+        ZERO_LENGTH_SAMPLE, WRONG_SAMPLE_TRACK, ENCRYPTED_SAMPLE,
+        NEGATIVE_SAMPLE_TIME, REGRESSING_SAMPLE_TIME,
+        SAMPLE_BYTE_LIMIT_EXCEEDED,
+        INCOMPLETE_SAMPLE_SCAN, SOURCE_CHANGED_OR_REVOKED,
+        MEDIA_EXTRACTOR_EXCEPTION,
     }
 
     private fun denied(reason:Failure):A0AutoPostTransferTechnicalGate.Decoded? {
@@ -164,16 +168,31 @@ internal object A0AndroidAudioTechnicalProbe {
                     reachedEos=true
                     break
                 }
-                if(amount==0 || extractor.sampleTrackIndex!=audioIndex ||
-                    (extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_ENCRYPTED)!=0)
-                    return denied(Failure.INVALID_SAMPLE_STREAM)
+                if(amount==0) {
+                    // Certain device extractors expose an empty terminal
+                    // packet instead of -1. This is ONLY EOS after enough
+                    // positive frames and a timestamp near the independently
+                    // measured full duration. Never skip an empty interior
+                    // packet, a first empty sample or an encrypted packet.
+                    val end= !extractor.advance()
+                    if(A0AudioSampleScanPolicy.acceptTerminalEmpty(
+                            samples,lastUs,duration,end)) {
+                        reachedEos=true
+                        break
+                    }
+                    return denied(Failure.ZERO_LENGTH_SAMPLE)
+                }
+                if(extractor.sampleTrackIndex!=audioIndex)
+                    return denied(Failure.WRONG_SAMPLE_TRACK)
+                if((extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_ENCRYPTED)!=0)
+                    return denied(Failure.ENCRYPTED_SAMPLE)
                 val timestamp=extractor.sampleTime
-                if(timestamp<0 || timestamp<lastUs)
-                    return denied(Failure.INVALID_SAMPLE_STREAM)
+                if(timestamp<0)return denied(Failure.NEGATIVE_SAMPLE_TIME)
+                if(timestamp<lastUs)return denied(Failure.REGRESSING_SAMPLE_TIME)
                 lastUs=timestamp
                 bytes+=amount
                 if(bytes>A0ObservedTransferLimits.MAX_AUDIO_BYTES)
-                    return denied(Failure.INVALID_SAMPLE_STREAM)
+                    return denied(Failure.SAMPLE_BYTE_LIMIT_EXCEEDED)
                 samples++
                 if(!extractor.advance()) {
                     reachedEos=true
