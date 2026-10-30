@@ -589,7 +589,15 @@ internal fun SmartPlaylistV2BuilderScreen(
                         normalSearch = ""
                     },
                     onNormalBrowseGroupChange = { group -> normalBrowseGroup = group },
-                    onNormalModeChange = { normalMode = it },
+                    onNormalModeChange = { selected ->
+                        if (selected && !normalMode && editingNormalId == null &&
+                            normalSelectedIds.isEmpty() && normalSourceProviderKey == null
+                        ) {
+                            normalSourceProviderKey =
+                                defaultCanonicalNormalPlaylistSource(availableSourceKeys)
+                        }
+                        normalMode = selected
+                    },
                     onNormalSearchChange = { normalSearch = it },
                     onToggleNormalTrack = { id ->
                         normalSelectedIds = toggleCanonicalStaticMember(normalSelectedIds, id)
