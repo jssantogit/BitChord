@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -26,8 +27,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,7 +86,9 @@ internal fun CanonicalPlaylistCoverArt(
 internal fun CanonicalPlaylistTrackRow(
     track: V2DisplayRow,
     onPlay: (String) -> Unit,
+    onQueue: ((String, CanonicalCollectionIntent) -> Unit)? = null,
 ) {
+    var menuExpanded by remember(track.id) { mutableStateOf(false) }
     LibraryRow(
         title = track.title,
         subtitle = track.artist,
@@ -92,6 +100,41 @@ internal fun CanonicalPlaylistTrackRow(
             SmartPlaylistPreviewArtwork(
                 row = track, modifier = Modifier.fillMaxSize(),
             )
+        },
+        trailing = {
+            Box {
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(Icons.Rounded.MoreVert, contentDescription = "Ações da música")
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Reproduzir daqui") },
+                        onClick = {
+                            menuExpanded = false
+                            onPlay(track.id)
+                        },
+                    )
+                    if (onQueue != null) {
+                        DropdownMenuItem(
+                            text = { Text("Reproduzir a seguir") },
+                            onClick = {
+                                menuExpanded = false
+                                onQueue(track.id, CanonicalCollectionIntent.ADD_NEXT)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Adicionar à fila") },
+                            onClick = {
+                                menuExpanded = false
+                                onQueue(track.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
+                            },
+                        )
+                    }
+                }
+            }
         },
     )
 }
@@ -106,6 +149,7 @@ internal fun CanonicalPlaylistDetailScreen(
     onClose: () -> Unit,
     onAction: (CanonicalCollectionIntent) -> Unit,
     onTrackClick: (String) -> Unit,
+    onTrackQueue: (String, CanonicalCollectionIntent) -> Unit,
     contentPadding: PaddingValues,
 ) {
     BackHandler(onBack = onClose)
@@ -204,6 +248,7 @@ internal fun CanonicalPlaylistDetailScreen(
             CanonicalPlaylistTrackRow(
                 track = track,
                 onPlay = onTrackClick,
+                onQueue = onTrackQueue,
             )
         }
     }
