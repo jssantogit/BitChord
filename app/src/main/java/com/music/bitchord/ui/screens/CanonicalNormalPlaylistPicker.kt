@@ -11,6 +11,14 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/**
+ * A new playlist on a genuinely local-only catalog should not present a
+ * misleading multi-source choice. Existing persisted null (all-sources) values
+ * are never migrated or replaced when opening an editor.
+ */
+internal fun defaultCanonicalNormalPlaylistSource(keys: List<String>): String? =
+    "local-mediastore".takeIf { keys == listOf(it) }
+
 /** Preserves the user's hand-picked order, with no implicit duplicate members. */
 internal fun toggleCanonicalStaticMember(ids: List<String>, id: String): List<String> =
     if (id in ids) ids.filterNot { it == id } else ids + id
