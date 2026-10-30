@@ -24,6 +24,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -148,11 +149,22 @@ internal fun UnifiedPlaylistLibraryShelf(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item(key = "playlist-header") {
-            Text(
-                "Playlists",
-                style = MaterialTheme.typography.displayLarge,
-                modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 4.dp),
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = PAGE_GUTTER, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    "Playlists",
+                    style = MaterialTheme.typography.displayLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(
+                    onClick = onNewSmartPlaylist,
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) { Text("+ Nova") }
+            }
         }
         if (failed) item(key = "smart-error") {
             Text(
@@ -191,14 +203,6 @@ internal fun UnifiedPlaylistLibraryShelf(
                 onClick = openCard,
                 modifier = Modifier.padding(horizontal = PAGE_GUTTER),
             )
-        }
-        item(key = "playlist-create") {
-            Box(Modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp)) {
-                PlaylistWizardSecondaryAction(
-                    label = "+ Nova playlist",
-                    onClick = onNewSmartPlaylist,
-                )
-            }
         }
     }
     openedCard?.let { selected ->
