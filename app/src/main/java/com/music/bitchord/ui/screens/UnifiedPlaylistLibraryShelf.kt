@@ -343,13 +343,13 @@ private fun UnifiedPlaylistCompactRow(
             is LibraryPlaylistCard.Smart -> "Playlist inteligente"
             is LibraryPlaylistCard.CanonicalNormal ->
                 "${card.definition.recordingIds.size} músicas · Normal"
-            is LibraryPlaylistCard.Normal -> "Playlist normal"
+            is LibraryPlaylistCard.Normal -> card.shelfItem.subtitle.ifBlank { "Playlist normal" }
         },
         imageUrl = (card as? LibraryPlaylistCard.Normal)?.shelfItem?.thumbnailUrl,
         onClick = onClick,
         modifier = modifier,
         horizontalPadding = 4.dp,
-        artworkSize = 76.dp,
+        artworkSize = 64.dp,
         artwork = when {
             canonicalCover.isNotEmpty() -> ({
                 CanonicalPlaylistCoverArt(canonicalCover, Modifier.fillMaxSize())
