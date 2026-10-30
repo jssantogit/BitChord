@@ -156,6 +156,7 @@ internal object A0AndroidAudioTechnicalProbe {
             val input=ByteBuffer.allocateDirect(SAMPLE_BUFFER_BYTES)
             val endBy=SystemClock.elapsedRealtime()+MAX_SCAN_MILLIS
             var samples=0
+            var emptyLeading=0
             var bytes=0L
             var lastUs=-1L
             var reachedEos=false
@@ -176,11 +177,18 @@ internal object A0AndroidAudioTechnicalProbe {
                 if(amount==0) {
                     if(reportedTrack!=audioIndex && reportedTrack!=-1)
                         return denied(Failure.WRONG_SAMPLE_TRACK)
-                    // Only a terminal empty packet is accepted, with enough
-                    // positive samples and independently measured duration.
-                    val end=!extractor.advance()
+                    // A few extractors emit empty codec/config packets
+                    // before the first positive frame. Skip at most two;
+                    // never ignore empty gaps within real audio. All actual
+                    // samples and the end timestamp must still be checked.
+                    val more=extractor.advance()
+                    if(A0AudioSampleScanPolicy.skipLeadingEmpty(
+                            samples,emptyLeading,reportedTrack==audioIndex,more)) {
+                        emptyLeading++
+                        continue
+                    }
                     if(A0AudioSampleScanPolicy.acceptTerminalEmpty(
-                            samples,lastUs,duration,end)) {
+                            samples,lastUs,duration,!more)) {
                         reachedEos=true
                         break
                     }

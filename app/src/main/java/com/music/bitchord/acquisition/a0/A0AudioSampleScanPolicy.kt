@@ -9,6 +9,15 @@ import kotlin.math.abs
  * authorize an incomplete scan. No peer metadata enters this policy.
  */
 internal object A0AudioSampleScanPolicy {
+    fun skipLeadingEmpty(
+        positiveSamples:Int,
+        emptyLeadingAlreadySkipped:Int,
+        belongsToAudioTrack:Boolean,
+        extractorHasMore:Boolean,
+    ):Boolean = positiveSamples==0 &&
+        emptyLeadingAlreadySkipped in 0..1 &&
+        belongsToAudioTrack && extractorHasMore
+
     fun acceptTerminalEmpty(
         positiveSamples:Int,
         lastSampleUs:Long,
