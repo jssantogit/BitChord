@@ -144,7 +144,7 @@ internal class SmartCollectionBatchHandoff(
                 is SmartCollectionActionSource.SavedV2Definition -> "saved_v2"
                 is SmartCollectionActionSource.SavedStaticPlaylist -> "normal_static"
                 is SmartCollectionActionSource.SavedStaticPlaylistFromTrack -> "normal_track"
-                is SmartCollectionActionSource.SavedV2PlaylistFromTrack -> "smart_v2_track
+                is SmartCollectionActionSource.SavedV2PlaylistFromTrack -> "smart_v2_track"
                 is SmartCollectionActionSource.PreviewV2Query -> "preview_v2"
             },
         )
