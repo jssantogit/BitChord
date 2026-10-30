@@ -157,6 +157,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     var editingNormalId by remember { mutableStateOf<String?>(null) }
     var normalSearch by remember { mutableStateOf("") }
     var normalSourceProviderKey by remember { mutableStateOf<String?>(null) }
+    var normalSourceTouched by remember { mutableStateOf(false) }
     var normalBrowseType by remember { mutableStateOf(CanonicalPlaylistBrowseType.TRACKS) }
     var normalBrowseGroup by remember { mutableStateOf<CanonicalPlaylistBrowseGroup?>(null) }
     var normalGroups by remember { mutableStateOf<List<CanonicalPlaylistBrowseGroup>>(emptyList()) }
@@ -228,6 +229,7 @@ internal fun SmartPlaylistV2BuilderScreen(
         normalMode = false
         normalSearch = ""
         normalSourceProviderKey = null
+        normalSourceTouched = false
         normalBrowseType = CanonicalPlaylistBrowseType.TRACKS
         normalBrowseGroup = null
         normalGroups = emptyList()
@@ -299,6 +301,7 @@ internal fun SmartPlaylistV2BuilderScreen(
         name = item.name
         normalSelectedIds = item.recordingIds
         normalSourceProviderKey = item.sourceProviderKey
+        normalSourceTouched = true // preserve persisted All even if its server disconnects
         normalSearch = ""
         normalBrowseType = CanonicalPlaylistBrowseType.TRACKS
         normalBrowseGroup = null
@@ -564,7 +567,10 @@ internal fun SmartPlaylistV2BuilderScreen(
                     normalLoading = normalLoading,
                     normalSourceProviderKey = normalSourceProviderKey,
                     availableSourceKeys = availableSourceKeys,
-                    onNormalSourceChange = { normalSourceProviderKey = it },
+                    onNormalSourceChange = {
+                        normalSourceProviderKey = it
+                        normalSourceTouched = true
+                    },
                     onSmartSourceChange = { chosen ->
                         val scoped = smartRuleWithGlobalSource(rule, chosen, hasConfiguredRules)
                         if (scoped == null) {
@@ -590,11 +596,12 @@ internal fun SmartPlaylistV2BuilderScreen(
                     },
                     onNormalBrowseGroupChange = { group -> normalBrowseGroup = group },
                     onNormalModeChange = { selected ->
-                        if (selected && !normalMode && editingNormalId == null &&
-                            normalSelectedIds.isEmpty() && normalSourceProviderKey == null
+                        if (selected && !normalMode && !normalSourceTouched &&
+                            editingNormalId == null && normalSelectedIds.isEmpty()
                         ) {
                             normalSourceProviderKey =
                                 defaultCanonicalNormalPlaylistSource(availableSourceKeys)
+                            normalSourceTouched = true
                         }
                         normalMode = selected
                     },
