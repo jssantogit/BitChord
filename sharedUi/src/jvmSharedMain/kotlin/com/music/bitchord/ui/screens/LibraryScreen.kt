@@ -149,7 +149,8 @@ fun LibraryScreen(
                         style = MaterialTheme.typography.displayLarge,
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(
-                            horizontal = PAGE_GUTTER,
+                            start = PAGE_GUTTER,
+                            end = PAGE_GUTTER,
                             top = if (navigationHome) 4.dp else 8.dp,
                             bottom = if (navigationHome) 0.dp else 8.dp,
                         ),
