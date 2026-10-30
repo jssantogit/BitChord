@@ -130,6 +130,7 @@ internal fun UnifiedPlaylistLibraryShelf(
     contentPadding: PaddingValues,
     query: String = "",
     onQueryChange: (String) -> Unit = {},
+    onResetFilters: () -> Unit = {},
     sort: PlaylistLibrarySort = PlaylistLibrarySort.DEFAULT,
     filter: PlaylistLibraryTypeFilter = PlaylistLibraryTypeFilter.ALL,
     selectedCard: LibraryPlaylistCard? = null,
@@ -268,9 +269,7 @@ internal fun UnifiedPlaylistLibraryShelf(
                     Box(Modifier.padding(top = 14.dp)) {
                         PlaylistWizardPrimaryAction(
                             label = if (trulyEmpty) "Nova Playlist" else "Limpar busca e filtros",
-                            onClick = if (trulyEmpty) onNewSmartPlaylist else {
-                                { onQueryChange("") }
-                            },
+                            onClick = if (trulyEmpty) onNewSmartPlaylist else onResetFilters,
                         )
                     }
                 }
