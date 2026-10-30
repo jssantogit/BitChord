@@ -47,6 +47,7 @@ import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.CoverPlaceholder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
 
@@ -73,16 +74,6 @@ internal sealed interface LibraryPlaylistCard {
         override val title: String get() = shelfItem.title
     }
 }
-
-internal fun unifiedPlaylistRows(cards: List<LibraryPlaylistCard>): List<List<LibraryPlaylistCard>> =
-    cards.map { listOf(it) }
-
-/** Library category owns one complete vertical list; no truncation or grid toggle. */
-internal fun playlistShelfRows(
-    cards: List<LibraryPlaylistCard>,
-    expanded: Boolean,
-): List<List<LibraryPlaylistCard>> =
-    cards.map { listOf(it) }
 
 @Composable
 internal fun UnifiedPlaylistLibraryShelf(
@@ -260,53 +251,33 @@ private fun UnifiedPlaylistCompactRow(
             else -> null
         }
     }
-    Row(
-        modifier = modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 6.dp)
-            .heightIn(min = 58.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(
-            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            val image = (card as? LibraryPlaylistCard.Normal)
-                ?.shelfItem?.thumbnailUrl?.takeIf { it.isNotBlank() }
-            if (canonicalCover != null) {
-                SmartPlaylistPreviewArtwork(canonicalCover!!, Modifier.size(56.dp))
-            } else if (image != null) {
-                AsyncImage(model = image, contentDescription = card.title,
-                    contentScale = ContentScale.Crop, modifier = Modifier.size(56.dp))
-            } else {
-                Card(
-                    modifier = Modifier.size(56.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                ) {
-                    Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                        Icon(
-                            if (card is LibraryPlaylistCard.Smart)
-                                Icons.Rounded.AutoAwesome else Icons.Rounded.LibraryMusic,
-                            contentDescription = null,
-                            modifier = Modifier.size(25.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(card.title, style = MaterialTheme.typography.titleMedium,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(if (card is LibraryPlaylistCard.Smart) "Inteligente" else "Normal",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Icon(Icons.Rounded.ChevronRight, contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
+    // Reuse the existing Spotify/Library row rather than maintaining a
+    // second cover/title/subtitle/touch-target implementation.
+    val firstArt = canonicalCover
+    LibraryRow(
+        title = card.title,
+        subtitle = if (card is LibraryPlaylistCard.Smart) "Inteligente" else "Normal",
+        imageUrl = (card as? LibraryPlaylistCard.Normal)?.shelfItem?.thumbnailUrl,
+        onClick = onClick,
+        modifier = modifier.clip(RoundedCornerShape(14.dp)),
+        horizontalPadding = 4.dp,
+        artwork = when {
+            firstArt != null -> ({ SmartPlaylistPreviewArtwork(firstArt, Modifier.fillMaxSize()) })
+            card is LibraryPlaylistCard.Smart -> ({
+                CoverPlaceholder(
+                    icon = Icons.Rounded.AutoAwesome,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            })
+            else -> null
+        },
+        trailing = {
+            Icon(
+                Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp),
+            )
+        },
+    )
 }
