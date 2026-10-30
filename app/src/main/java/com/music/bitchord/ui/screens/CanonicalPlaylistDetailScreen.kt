@@ -83,7 +83,6 @@ internal fun CanonicalPlaylistCoverArt(
 internal fun CanonicalPlaylistDetailScreen(
     card: LibraryPlaylistCard,
     onClose: () -> Unit,
-    onEdit: () -> Unit,
     onAction: (CanonicalCollectionIntent) -> Unit,
     contentPadding: PaddingValues,
 ) {
@@ -121,18 +120,6 @@ internal fun CanonicalPlaylistDetailScreen(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item(key = "playlist-detail-toolbar") {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                IconButton(onClick = onClose) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Voltar")
-                }
-                TextButton(onClick = onEdit) { Text("Editar", color = AccentRed) }
-            }
-        }
         item(key = "playlist-detail-cover") {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
