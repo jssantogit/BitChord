@@ -1,34 +1,40 @@
 package com.music.bitchord.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.ui.components.PAGE_GUTTER
@@ -37,9 +43,41 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** A saved playlist opens for listening before it opens for editing.
- * Canonical recordings are resolved from the saved RecordingIds, never by title
- * or by fabricating legacy Song/videoIds for DetailScreen.
+/**
+ * Artwork always comes from recordings actually in the saved collection.
+ * No generated cover URLs, no legacy video IDs and no title-based album lookup.
+ */
+@Composable
+internal fun CanonicalPlaylistCoverArt(
+    rows: List<V2DisplayRow>,
+    modifier: Modifier = Modifier,
+) {
+    when {
+        rows.size >= 4 -> Column(modifier.clip(RoundedCornerShape(12.dp))) {
+            for (offset in listOf(0, 2)) {
+                Row(Modifier.weight(1f).fillMaxWidth()) {
+                    for (index in offset until offset + 2) {
+                        Box(Modifier.weight(1f).fillMaxHeight()) {
+                            SmartPlaylistPreviewArtwork(
+                                row = rows[index], modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        rows.isNotEmpty() -> SmartPlaylistPreviewArtwork(
+            row = rows.first(), modifier = modifier,
+        )
+        else -> Box(modifier, contentAlignment = Alignment.Center) {
+            PlaylistWizardArtworkPlaceholder(180.dp)
+        }
+    }
+}
+
+/**
+ * A playlist is a native Library detail page, not a separate full-screen Dialog.
+ * The owning Library host keeps the floating mini-player and bottom navigation.
  */
 @Composable
 internal fun CanonicalPlaylistDetailScreen(
@@ -47,7 +85,9 @@ internal fun CanonicalPlaylistDetailScreen(
     onClose: () -> Unit,
     onEdit: () -> Unit,
     onAction: (CanonicalCollectionIntent) -> Unit,
+    contentPadding: PaddingValues,
 ) {
+    BackHandler(onBack = onClose)
     val context = LocalContext.current.applicationContext
     val rows by produceState<List<V2DisplayRow>?>(initialValue = null, key1 = card.id) {
         value = try {
@@ -72,96 +112,98 @@ internal fun CanonicalPlaylistDetailScreen(
             emptyList()
         }
     }
-    Dialog(
-        onDismissRequest = onClose,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
-        ),
+    val canPlay = rows?.isNotEmpty() == true &&
+        (rows?.size ?: 0) <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE &&
+        rows.orEmpty().none { it.artist == "Fonte não disponível" }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = contentPadding,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    TextButton(onClick = onClose) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null)
-                        Text("Voltar")
-                    }
-                    TextButton(onClick = onEdit) { Text("Editar", color = AccentRed) }
+        item(key = "playlist-detail-toolbar") {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                IconButton(onClick = onClose) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Voltar")
                 }
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 24.dp,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                TextButton(onClick = onEdit) { Text("Editar", color = AccentRed) }
+            }
+        }
+        item(key = "playlist-detail-cover") {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                CanonicalPlaylistCoverArt(
+                    rows = rows.orEmpty(), modifier = Modifier.size(252.dp),
+                )
+                Text(
+                    text = card.title,
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = (if (card is LibraryPlaylistCard.Smart) "Playlist inteligente" else
+                        "Playlist normal") + " · " +
+                        (rows?.size?.let { "$" + "{it} músicas" } ?: "Carregando músicas…"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            val first = rows?.firstOrNull()
-                            if (first != null) {
-                                SmartPlaylistPreviewArtwork(
-                                    row = first,
-                                    modifier = Modifier.size(180.dp).align(Alignment.CenterHorizontally),
-                                )
-                            } else {
-                                androidx.compose.foundation.layout.Box(
-                                    Modifier.fillMaxWidth(), contentAlignment = Alignment.Center,
-                                ) { PlaylistWizardArtworkPlaceholder(180.dp) }
-                            }
-                            Text(card.title, style = MaterialTheme.typography.headlineLarge)
-                            Text(
-                                when (card) {
-                                    is LibraryPlaylistCard.Smart -> "Playlist inteligente"
-                                    else -> "Playlist normal"
-                                } + " · " + (rows?.size?.let { "$it músicas" } ?: "Carregando músicas…"),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            val canPlay = rows?.isNotEmpty() == true &&
-                                (rows?.size ?: 0) <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE &&
-                                rows.orEmpty().none { it.artist == "Fonte não disponível" }
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                TextButton(
-                                    onClick = { onAction(CanonicalCollectionIntent.PLAY_NOW) },
-                                    enabled = canPlay,
-                                ) { Text("Reproduzir", color = AccentRed) }
-                                TextButton(
-                                    onClick = { onAction(CanonicalCollectionIntent.ADD_TO_QUEUE) },
-                                    enabled = canPlay,
-                                ) { Text("Adicionar à fila") }
-                            }
-                        }
+                    Button(
+                        onClick = { onAction(CanonicalCollectionIntent.PLAY_NOW) },
+                        enabled = canPlay,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentRed),
+                    ) {
+                        Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+                        Text("Tocar")
                     }
-                    if (rows?.isEmpty() == true) {
-                        item {
-                            Text(
-                                "Esta playlist está vazia ou não foi possível consultar as fontes.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    items(rows.orEmpty(), key = { it.id }) { track ->
-                        // Same read-only track row used in the playlist review.
-                        // Album/track art still comes from the canonical asset.
-                        LibraryRow(
-                            title = track.title,
-                            subtitle = track.artist,
-                            imageUrl = null,
-                            horizontalPadding = 0.dp,
-                            artwork = {
-                                SmartPlaylistPreviewArtwork(
-                                    row = track, modifier = Modifier.fillMaxSize(),
-                                )
-                            },
-                        )
+                    FilledTonalButton(
+                        onClick = { onAction(CanonicalCollectionIntent.ADD_TO_QUEUE) },
+                        enabled = canPlay,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(24.dp),
+                    ) {
+                        Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = null)
+                        Text("Fila")
                     }
                 }
             }
+        }
+        if (rows?.isEmpty() == true) {
+            item(key = "playlist-detail-empty") {
+                Text(
+                    "Esta playlist está vazia ou não foi possível consultar as fontes.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+                )
+            }
+        }
+        items(rows.orEmpty(), key = { it.id }) { track ->
+            LibraryRow(
+                title = track.title,
+                subtitle = track.artist,
+                imageUrl = null,
+                modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+                horizontalPadding = 0.dp,
+                artwork = {
+                    SmartPlaylistPreviewArtwork(
+                        row = track, modifier = Modifier.fillMaxSize(),
+                    )
+                },
+            )
         }
     }
 }
