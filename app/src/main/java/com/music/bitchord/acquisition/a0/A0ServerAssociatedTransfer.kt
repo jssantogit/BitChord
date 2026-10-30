@@ -47,6 +47,7 @@ internal class A0ServerAssociatedTransfer(
 
     private val used=AtomicBoolean(false)
     private val cancelled=AtomicBoolean(false)
+    @Volatile private var externalCancelled:()->Boolean={false}
     @Volatile private var activeServer:Socket?=null
     @Volatile private var activeP:Socket?=null
     @Volatile private var activeF:Socket?=null
@@ -69,7 +70,7 @@ internal class A0ServerAssociatedTransfer(
         listing: A0OpenAudioCandidateGate.PublicPeerListing,
         privateDirectory: File
     ): A0VerifiedByteStager.Receipt = runInternal(
-        authenticatedServer,localUsername,peerUsername,reference,listing,privateDirectory,{})
+        authenticatedServer,localUsername,peerUsername,reference,listing,privateDirectory,{},{false})
 
     fun runObservedOnce(
         authenticatedServer: Socket,
@@ -77,9 +78,11 @@ internal class A0ServerAssociatedTransfer(
         peerUsername: String,
         listing: A0OpenAudioCandidateGate.PublicPeerListing,
         privateDirectory: File,
-        onPhase:(Phase)->Unit={}
+        externalCancelled:()->Boolean={false},
+        onPhase:(Phase)->Unit={},
     ): A0VerifiedByteStager.Receipt = runInternal(
-        authenticatedServer,localUsername,peerUsername,null,listing,privateDirectory,onPhase)
+        authenticatedServer,localUsername,peerUsername,null,listing,privateDirectory,
+        onPhase,externalCancelled)
 
     private fun runInternal(
         authenticatedServer: Socket,
@@ -88,9 +91,11 @@ internal class A0ServerAssociatedTransfer(
         reference: A0OpenAudioCandidateGate.ReviewedReference?,
         listing: A0OpenAudioCandidateGate.PublicPeerListing,
         privateDirectory: File,
-        onPhase:(Phase)->Unit
+        onPhase:(Phase)->Unit,
+        externalCancelled:()->Boolean,
     ): A0VerifiedByteStager.Receipt {
         check(used.compareAndSet(false,true)){"A0 server peer transfer already attempted"}
+        this.externalCancelled=externalCancelled
         checkNotCancelled()
         // Rights and destination are checked before any request, socket or
         // possible link to a peer. Never treat search results as license.
@@ -171,7 +176,7 @@ internal class A0ServerAssociatedTransfer(
                         absoluteDeadlineNanos=deadline,
                         allowLoopbackForLocalTest=allowLoopbackForLocalTest,
                         isCancelled={
-                            cancelled.get() || Thread.currentThread().isInterrupted
+                            shouldStop()
                         },
                         onSocketActivated={activeF=it}
                     ).use{f->
@@ -186,12 +191,12 @@ internal class A0ServerAssociatedTransfer(
                         checkNotCancelled()
                         val receipt=session.receiveFile(
                             f.getInputStream(),f.getOutputStream(),privateDirectory,
-                            isCancelled={cancelled.get()||Thread.currentThread().isInterrupted||
+                            isCancelled={shouldStop()||
                                 A0TransferDeadlines.isExpired(
                                     receiveDeadline,System.nanoTime())}
                         )
                         onPhase(Phase.BYTES_RECEIVED)
-                        if(cancelled.get()||Thread.currentThread().isInterrupted||
+                        if(shouldStop()||
                             A0TransferDeadlines.isExpired(
                                 receiveDeadline,System.nanoTime())) {
                             receipt.file.delete()
@@ -304,10 +309,12 @@ internal class A0ServerAssociatedTransfer(
         return minOf(4000L,leftMillis).toInt().coerceAtLeast(1)
     }
 
+    private fun shouldStop():Boolean =
+        cancelled.get() || Thread.currentThread().isInterrupted ||
+            runCatching {externalCancelled()}.getOrDefault(true)
+
     private fun checkNotCancelled() {
-        if(cancelled.get()||Thread.currentThread().isInterrupted) {
-            throw IOException("A0 transfer cancelled")
-        }
+        if(shouldStop())throw IOException("A0 transfer cancelled")
     }
 
     companion object {

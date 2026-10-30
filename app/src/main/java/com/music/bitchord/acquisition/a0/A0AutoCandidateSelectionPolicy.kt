@@ -1,0 +1,266 @@
+package com.music.bitchord.acquisition.a0
+
+import com.music.bitchord.download.SoulseekBatchPlan
+import java.text.Normalizer
+import java.util.Locale
+import kotlin.math.abs
+
+/**
+ * Per-canonical-slot candidate decision over the SAME observed offers used
+ * by the manual selector. Every sibling track is rescored independently:
+ * the preflight attached to a Choice belongs to its ORIGINAL search, and
+ * must never be recycled as proof for another song in a release.
+ *
+ * This class is a read-only recommendation, not an automatic P/F instruction.
+ * Paths, peers and file names never enter its public diagnostics/toString.
+ */
+internal object A0AutoCandidateSelectionPolicy {
+    enum class Status { PROVISIONAL, MANUAL_REVIEW }
+    enum class Reason {
+        INVALID_TARGET, INCOMPLETE_SAMPLE, CONTRADICTORY_SOURCE,
+        NO_STRONG_CANDIDATE, AMBIGUOUS_EDITION, NO_READY_SOURCE,
+    }
+    /** Aggregates cannot prove two masters identical. Do not log file sizes or peers. */
+    data class AmbiguityEvidence(
+        val clusterCount:Int,
+        val leadingSources:Int,
+        val competingSources:Int,
+        val scoreGap:Int,
+        val distinctByteSizes:Int,
+    )
+
+    /** Exclusive first-failing-stage counts; sanitized, no source identifiers. */
+    data class Funnel(
+        val rankRejected:Int=0,
+        val preflightRejected:Int=0,
+        val albumRejected:Int=0,
+        val qualityRejected:Int=0,
+    )
+
+    class Decision(
+        val status:Status,
+        val reason:Reason?,
+        /** Internal read-only handles, equivalent declared metadata only. */
+        val sequentialAlternatives:List<A0ObservedCandidateHandoff.Choice>,
+        val examined:Int,
+        val eligible:Int,
+        val funnel:Funnel=Funnel(),
+        val ambiguity:AmbiguityEvidence?=null,
+    ) {
+        val canTransfer:Boolean get()=false
+        override fun toString()="AutoCandidateDecision(status=$status, reason=$reason)"
+    }
+    private fun review(
+        reason:Reason,examined:Int=0,eligible:Int=0,funnel:Funnel=Funnel(),
+    )=Decision(Status.MANUAL_REVIEW,reason,emptyList(),examined,eligible,funnel)
+
+    private data class Eligible(
+        val choice:A0ObservedCandidateHandoff.Choice,
+        val rank:Int,
+    )
+
+    /**
+     * One peer may write "01 Artist - Title.flac", while another uses
+     * "Artist - Title.flac". ONLY this numbering difference may be ignored:
+     * identical advertised byte size, codec, bit properties and duration
+     * are mandatory. This does NOT authenticate the recording/master.
+     * Different explicit track numbers (01 vs 02) remain distinct.
+     */
+    private fun sameNumberedTrackClaim(
+        a:A0CandidateClaimClusters.Claim,
+        b:A0CandidateClaimClusters.Claim,
+    ):Boolean {
+        if(a.format!=b.format || a.sizeBytes!=b.sizeBytes ||
+            a.bitrateKbps!=b.bitrateKbps ||
+            a.durationSeconds!=b.durationSeconds ||
+            a.sampleRateHz!=b.sampleRateHz ||
+            a.bitDepth!=b.bitDepth)return false
+        val number=Regex("^([0-9]{1,3})[ ._-]+")
+        fun label(name:String):Pair<String?,String> {
+            val normalized=Normalizer.normalize(name,Normalizer.Form.NFKC)
+                .trim().lowercase(Locale.ROOT)
+            val match=number.find(normalized)
+            val prefix=match?.groupValues?.get(1)
+            return prefix to if(match!=null)normalized.substring(match.value.length)
+                else normalized
+        }
+        val first=label(a.filename)
+        val second=label(b.filename)
+        return first.second==second.second &&
+            (first.first==second.first ||
+                first.first==null || second.first==null)
+    }
+    private val supported=setOf(
+        A0CanonicalAcquisitionIntent.Codec.MP3,
+        A0CanonicalAcquisitionIntent.Codec.FLAC,
+        A0CanonicalAcquisitionIntent.Codec.PCM_WAV,
+        A0CanonicalAcquisitionIntent.Codec.AAC_ADTS,
+        A0CanonicalAcquisitionIntent.Codec.OPUS,
+        A0CanonicalAcquisitionIntent.Codec.VORBIS,
+    )
+    private fun codec(format:String)=when(format.lowercase(Locale.ROOT)) {
+        "mp3" -> A0CanonicalAcquisitionIntent.Codec.MP3
+        "flac" -> A0CanonicalAcquisitionIntent.Codec.FLAC
+        "wav" -> A0CanonicalAcquisitionIntent.Codec.PCM_WAV
+        "aac" -> A0CanonicalAcquisitionIntent.Codec.AAC_ADTS
+        "opus" -> A0CanonicalAcquisitionIntent.Codec.OPUS
+        "ogg" -> A0CanonicalAcquisitionIntent.Codec.VORBIS
+        else -> null
+    }
+
+    fun preview(
+        target:SoulseekBatchPlan.Entry,
+        observed:List<A0ObservedCandidateHandoff.Choice>,
+        profile:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
+        reliability:A0PeerReliabilityEvidence=A0PeerReliabilityEvidence(),
+        sampleTruncated:Boolean=false,
+    ):Decision {
+        val parts=target.query.split(Regex("\\s+[-–—]\\s+"),limit=2)
+        val expected=target.durationSeconds
+        if(target.trackId.isBlank() || target.trackId.length>180 ||
+            parts.size!=2 || parts.any { it.isBlank() } ||
+            A0ReleaseDiscoveryShadowAdapter.titleTokens(target.query).isEmpty() ||
+            expected==null || expected !in 15..7200)
+            return review(Reason.INVALID_TARGET)
+        // The collector and multi-search cache are both bounded. Silently
+        // ignoring the tail could turn an ambiguous population into one winner.
+        if(sampleTruncated || observed.size>512)
+            return review(Reason.INCOMPLETE_SAMPLE,observed.size)
+        val seen=HashMap<Pair<String,String>,A0CandidateClaimClusters.Claim>()
+        for(choice in observed) {
+            val id=choice.peerUsername to choice.remotePath
+            val previous=seen.putIfAbsent(id,choice.claim)
+            if(previous!=null && !A0CandidateClaimClusters.sameClaim(
+                    previous,choice.claim))
+                return review(Reason.CONTRADICTORY_SOURCE,observed.size)
+        }
+        val artist=parts[0]
+        var rankRejected=0
+        var preflightRejected=0
+        var albumRejected=0
+        var qualityRejected=0
+        val strong=observed.mapNotNull { choice ->
+            val claim=choice.claim
+            val ext=claim.format.lowercase(Locale.ROOT)
+            val ranked=A0CandidateRank.rank(
+                target.query,claim.filename,claim.bitrateKbps,
+                remotePath=choice.remotePath,format=ext,
+                declaredDurationSeconds=claim.durationSeconds,
+                expectedDurationSeconds=expected,
+                declaredSampleRateHz=claim.sampleRateHz,
+                declaredBitDepth=claim.bitDepth,
+                sizeBytes=claim.sizeBytes
+            )
+            if(ranked.match!=A0CandidateRank.Match.ALL_TERMS ||
+                ranked.score<65 ||
+                A0CandidateRank.Warning.ARTIST_CONFLICT in ranked.warnings ||
+                A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in ranked.warnings ||
+                A0CandidateRank.Warning.VERSION_MISMATCH in ranked.warnings) {
+                rankRejected++
+                return@mapNotNull null
+            }
+            val preflight=A0CandidatePreflight.assess(
+                target.query,ranked,claim.bitrateKbps,
+                claim.durationSeconds,expected,ext,claim.sizeBytes,
+                claim.sampleRateHz,claim.bitDepth)
+            if(preflight.confidence!=A0CandidatePreflight.Confidence.STRONG) {
+                preflightRejected++
+                return@mapNotNull null
+            }
+            val directory=choice.remotePath.replace('\\','/')
+                .substringBeforeLast('/',"")
+            val folder=directory.substringAfterLast('/',"")
+            val albumTarget=A0CanonicalAlbumPolicy.Target(
+                target.album,expectedArtist=artist)
+            fun assessFolder(name:String)=A0CanonicalAlbumPolicy.assess(
+                albumTarget,A0CanonicalAlbumPolicy.Claim(name,
+                    A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
+            val nearest=assessFolder(folder)
+            // Only one level of generic audio-format/disc folders may be
+            // ignored, and ONLY when the immediate parent names the exact
+            // requested release. Never promote an unrelated album, an
+            // artist-only folder or a composite/remastered edition.
+            val album=if(nearest.reason==
+                A0CanonicalAlbumPolicy.Reason.ALBUM_HINT_GENERIC &&
+                '/' in directory) {
+                assessFolder(directory.substringBeforeLast('/').substringAfterLast('/'))
+            }else nearest
+            if(album.status !in setOf(
+                    A0CanonicalAlbumPolicy.Status.UNCONSTRAINED,
+                    A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED)) {
+                albumRejected++
+                return@mapNotNull null
+            }
+            val quality=A0DownloadQualityPolicy.evaluate(
+                profile,
+                A0DownloadQualityPolicy.Offer(
+                    codec(ext),ext,claim.bitrateKbps,
+                    claim.sampleRateHz,claim.bitDepth),
+                supported)
+            if(quality.status!=
+                A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED) {
+                qualityRejected++
+                return@mapNotNull null
+            }
+            Eligible(choice,ranked.score)
+        }
+        val funnel=Funnel(rankRejected,preflightRejected,albumRejected,qualityRejected)
+        if(strong.isEmpty())return review(
+            Reason.NO_STRONG_CANDIDATE,observed.size,funnel=funnel)
+        // Exact equality of peer claims is not proof of actual equal audio.
+        // It only limits which alternate connections may be considered.
+        val clusters=mutableListOf<MutableList<Eligible>>()
+        for(candidate in strong) {
+            // Equivalence must hold against EVERY member. An unnumbered
+            // filename cannot bridge conflicting explicit track numbers
+            // (e.g. 01 and 02), otherwise the result is order-dependent.
+            val group=clusters.firstOrNull { members ->
+                members.all { existing ->
+                    A0CandidateClaimClusters.sameClaim(
+                        existing.choice.claim,candidate.choice.claim) ||
+                        sameNumberedTrackClaim(
+                            existing.choice.claim,candidate.choice.claim)
+                }
+            }
+            if(group==null)clusters.add(mutableListOf(candidate))
+            else group.add(candidate)
+        }
+        val rankedGroups=clusters.sortedWith(
+            compareByDescending<List<Eligible>> { it.maxOf { e -> e.rank } }
+                .thenBy { it.first().choice.claim.filename.lowercase(Locale.ROOT) })
+        if(rankedGroups.size>1 &&
+            rankedGroups[0].maxOf { it.rank } -
+                rankedGroups[1].maxOf { it.rank }<12) {
+            val gap=rankedGroups[0].maxOf { it.rank } -
+                rankedGroups[1].maxOf { it.rank }
+            val evidence=AmbiguityEvidence(
+                clusterCount=rankedGroups.size,
+                leadingSources=rankedGroups[0].size,
+                competingSources=rankedGroups[1].size,
+                scoreGap=gap,
+                distinctByteSizes=strong.map { it.choice.claim.sizeBytes }
+                    .distinct().size,
+            )
+            return Decision(Status.MANUAL_REVIEW,Reason.AMBIGUOUS_EDITION,
+                emptyList(),observed.size,strong.size,funnel,evidence)
+        }
+        val leading=rankedGroups[0]
+        // Only a peer claiming a currently free slot with acceptable queue/
+        // speed evidence may be provisionally preferred for unattended use.
+        val ready=leading.filter {
+            it.choice.peerAvailability.tier==A0PeerAvailability.Tier.READY
+        }
+        if(ready.isEmpty())
+            return review(Reason.NO_READY_SOURCE,observed.size,strong.size,funnel)
+        val ordered=reliability.sequentialFallbacks(
+            ready.map { A0PeerReliabilityEvidence.Alternative(
+                it.choice.peerUsername,"same-claim",it.choice.peerAvailability.tier) },
+            claimKey="same-claim",failedPeers=emptySet(),maxPeers=3)
+        val handles=ordered.mapNotNull { peer ->
+            ready.firstOrNull { it.choice.peerUsername==peer }?.choice
+        }
+        if(handles.isEmpty())
+            return review(Reason.NO_READY_SOURCE,observed.size,strong.size)
+        return Decision(Status.PROVISIONAL,null,handles,observed.size,strong.size,funnel)
+    }
+}

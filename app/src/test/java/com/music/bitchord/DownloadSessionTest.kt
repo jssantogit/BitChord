@@ -140,6 +140,58 @@ class DownloadSessionTest {
         assertEquals(0, state.failed)
     }
 
+    @Test
+    fun `service shutdown marks uncompleted automatic sessions as interrupted`() {
+        DownloadSession.queued(song("soulseek-auto:batch"))
+        DownloadSession.running("soulseek-auto:batch",0f)
+        assertTrue(DownloadSession.interruptIfUnsettled(
+            "soulseek-auto:batch","Interrompido: confira a biblioteca"
+        ))
+        val state=DownloadSession.state.value
+        assertFalse(state.busy)
+        assertEquals(1,state.failed)
+        assertTrue(state.visible)
+    }
+
+    @Test
+    fun `shutdown never overwrites an A3 published result or a user-cancelled row`() {
+        DownloadSession.queued(song("soulseek-auto:done"))
+        DownloadSession.done("soulseek-auto:done")
+        assertFalse(DownloadSession.interruptIfUnsettled("soulseek-auto:done","Unknown"))
+        assertEquals(DownloadProgress.Done,
+            DownloadSession.state.value.items.single().progress)
+
+        DownloadSession.queued(song("soulseek-auto:cancelled"))
+        DownloadSession.forget("soulseek-auto:cancelled")
+        assertFalse(DownloadSession.interruptIfUnsettled("soulseek-auto:cancelled","Unknown"))
+        assertEquals(1,DownloadSession.state.value.items.size)
+    }
+
+    @Test
+    fun `service stop settles orphaned auto session even when request map already drained`() {
+        val id="soulseek-auto:orphan-after-onIdle"
+        DownloadSession.queued(song(id))
+        DownloadSession.running(id,0.5f)
+        Downloads.onStopped()
+        val result=DownloadSession.state.value.items.single()
+        assertEquals(id,result.videoId)
+        assertTrue(result.progress is DownloadProgress.Failed)
+        assertFalse(DownloadSession.state.value.busy)
+    }
+
+    @Test
+    fun `service stop never changes completed auto reports or legacy sessions`() {
+        DownloadSession.queued(song("soulseek-auto:published"))
+        DownloadSession.done("soulseek-auto:published")
+        DownloadSession.queued(song("legacy-running"))
+        DownloadSession.running("legacy-running",0.5f)
+        Downloads.onStopped()
+        assertEquals(DownloadProgress.Done,
+            DownloadSession.state.value.items.first().progress)
+        assertTrue(DownloadSession.state.value.items.last().progress is
+            DownloadProgress.Running)
+    }
+
     // ---- How far through it is ---------------------------------------------
 
     @Test

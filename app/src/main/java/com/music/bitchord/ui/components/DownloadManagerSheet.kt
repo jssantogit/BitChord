@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.components
 
+import android.widget.Toast
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
@@ -40,7 +42,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,6 +64,8 @@ import com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel
 import com.music.bitchord.download.DownloadProgress
 import com.music.bitchord.download.DownloadSession
 import com.music.bitchord.download.Downloads
+import com.music.bitchord.download.SoulseekAutoReviewPlan
+import com.music.bitchord.acquisition.a0.A0AutoBatchExecutor
 import com.music.bitchord.ui.haptics.Haptic
 import com.music.bitchord.ui.haptics.rememberHaptics
 
@@ -194,6 +200,9 @@ fun TopBarDownloadButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val session by DownloadSession.state.collectAsStateWithLifecycle()
+    val autoReviews by Downloads.soulseekAutoReviews.collectAsStateWithLifecycle()
+    val manualReviewBusy by Downloads.soulseekManualReviewBusy.collectAsStateWithLifecycle()
+    val autoTrackRows by Downloads.soulseekAutoTrackRows.collectAsStateWithLifecycle()
     // Newest ask last, the order the queue will actually reach them in.
     val items = remember(session.items) { session.items.sortedBy { it.sequence } }
 
@@ -210,8 +219,23 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onBackground,
                 )
+                val tracks=items.flatMap { autoTrackRows[it.videoId].orEmpty() }
+                val trackSummary=if(tracks.isNotEmpty()) {
+                    val waiting=tracks.count { it.stage==Downloads.AutoTrackStage.WAITING }
+                    val searching=tracks.count { it.stage==Downloads.AutoTrackStage.SEARCHING }
+                    val transferring=tracks.count { it.stage==Downloads.AutoTrackStage.DOWNLOADING }
+                    val saved=tracks.count { it.stage==Downloads.AutoTrackStage.SAVED }
+                    val review=tracks.size-waiting-searching-transferring-saved
+                    listOfNotNull(
+                        waiting.takeIf { it>0 }?.let { "$it aguardando" },
+                        searching.takeIf { it>0 }?.let { "$it pesquisando" },
+                        transferring.takeIf { it>0 }?.let { "$it baixando" },
+                        saved.takeIf { it>0 }?.let { "$it salvas" },
+                        review.takeIf { it>0 }?.let { "$it para revisão" }
+                    ).joinToString(" · ")
+                } else session.summary()
                 Text(
-                    text = session.summary(),
+                    text = trackSummary,
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (session.failed > 0 && !session.busy) {
                         MaterialTheme.colorScheme.error
@@ -232,11 +256,23 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                 ) {
                     Text(stringResource(R.string.cancel_all))
                 }
+            } else if(manualReviewBusy) {
+                Text(
+                    "Revisão manual em andamento",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             } else {
                 TextButton(
                     onClick = {
-                        DownloadSession.clear()
-                        onDismiss()
+                        if(Downloads.clearSoulseekAutoReviews()) {
+                            DownloadSession.clear()
+                            onDismiss()
+                        }else {
+                            Toast.makeText(context,
+                                "Uma revisão manual ainda está concluindo. Não limpe o relatório.",
+                                Toast.LENGTH_LONG).show()
+                        }
                     },
                 ) {
                     Text(stringResource(R.string.clear))
@@ -270,14 +306,133 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
         // back up before anything else can be reached.
         LazyColumn(Modifier.heightIn(max = LIST_MAX_HEIGHT)) {
             items(items, key = { it.videoId }) { item ->
-                DownloadManagerRow(
-                    item = item,
-                    onCancel = { Downloads.cancel(item.videoId) },
-                    onRetry = { Downloads.enqueue(context, item.song, item.from) },
-                )
+                val manualReview={
+                    if(!Downloads.openSoulseekManualReview(context,item.videoId)) {
+                        Toast.makeText(context,
+                            "Revisão indisponível. Confira a biblioteca antes de continuar.",
+                            Toast.LENGTH_LONG).show()
+                    }
+                }
+                val tracks=autoTrackRows[item.videoId]
+                if(item.videoId.startsWith("soulseek-auto:") && tracks!=null) {
+                    SoulseekAutoTrackList(
+                        tracks=tracks,session=item,
+                        review=autoReviews[item.videoId],
+                        onCancel={Downloads.cancel(item.videoId)},
+                        onManualReview=manualReview,
+                    )
+                }else {
+                    DownloadManagerRow(
+                        item=item,review=autoReviews[item.videoId],
+                        onCancel={Downloads.cancel(item.videoId)},
+                        onRetry={Downloads.enqueue(context,item.song,item.from)},
+                        onManualReview=manualReview,
+                    )
+                }
             }
         }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * A single A3 automatic album has one foreground worker, but each canonical
+ * song needs its OWN visible title, artist, cover and phase. This view never
+ * fabricates per-song Service jobs or makes a manual review eligible.
+ */
+@Composable
+private fun SoulseekAutoTrackList(
+    tracks:List<Downloads.AutoTrackRow>,
+    session:DownloadSession.Item,
+    review:SoulseekAutoReviewPlan?,
+    onCancel:()->Unit,
+    onManualReview:()->Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        tracks.forEachIndexed { index,track ->
+            Row(
+                Modifier.fillMaxWidth()
+                    .padding(horizontal=20.dp,vertical=9.dp),
+                verticalAlignment=Alignment.CenterVertically,
+            ) {
+                AsyncImage(
+                    model=rememberPlaybackArtworkImageModel(track.song,ROW_ART_PX),
+                    contentDescription=null,
+                    modifier=Modifier.size(ART_SIZE)
+                        .clip(RoundedCornerShape(8.dp))
+                        .thumbnailBorder(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                )
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    ExplicitSongTitle(
+                        song=track.song,
+                        style=MaterialTheme.typography.titleMedium,
+                        color=MaterialTheme.colorScheme.onBackground,
+                    )
+                    Text(
+                        listOfNotNull(track.song.artist.takeIf { it.isNotBlank() },
+                            track.song.albumName?.takeIf { it.isNotBlank() })
+                            .joinToString(" · "),
+                        style=MaterialTheme.typography.bodyMedium,
+                        color=MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines=1,overflow=TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    val stage=when(track.stage) {
+                        Downloads.AutoTrackStage.WAITING -> "Aguardando"
+                        Downloads.AutoTrackStage.SEARCHING -> "Pesquisando candidatos"
+                        Downloads.AutoTrackStage.DOWNLOADING -> "Baixando"
+                        Downloads.AutoTrackStage.SAVED -> "Salva"
+                        Downloads.AutoTrackStage.MANUAL_REVIEW -> "Revisão manual"
+                        Downloads.AutoTrackStage.CANCELLED -> "Cancelada"
+                        Downloads.AutoTrackStage.VERIFY_STORAGE ->
+                            "Verificar publicação na biblioteca"
+                    }
+                    Row(verticalAlignment=Alignment.CenterVertically) {
+                        if(track.stage in setOf(
+                            Downloads.AutoTrackStage.SEARCHING,
+                            Downloads.AutoTrackStage.DOWNLOADING)) {
+                            CircularProgressIndicator(
+                                modifier=Modifier.size(12.dp),
+                                strokeWidth=1.8.dp,
+                            )
+                            Spacer(Modifier.width(6.dp))
+                        }
+                        RowStatus(stage,
+                            if(track.stage in setOf(
+                                Downloads.AutoTrackStage.CANCELLED,
+                                Downloads.AutoTrackStage.VERIFY_STORAGE))
+                                MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            if(index!=tracks.lastIndex)
+                HorizontalDivider(
+                    modifier=Modifier.padding(start=ART_SIZE+34.dp),
+                    thickness=0.5.dp,
+                    color=MaterialTheme.colorScheme.outlineVariant,
+                )
+        }
+        if(!session.progress.settled) {
+            TextButton(onClick=onCancel,modifier=Modifier.padding(start=20.dp)) {
+                Text("Cancelar lote")
+            }
+        }
+        if(review?.manualAllowed==true &&
+            session.progress is DownloadProgress.Failed) {
+            TextButton(onClick=onManualReview,modifier=Modifier.padding(start=20.dp)) {
+                Text("Revisar ${review.manualEntries.size} faixa(s) manualmente")
+            }
+        }else if(review!=null && review.needsReconciliation>0) {
+            Text(
+                "Publicação incerta: confira os arquivos antes de repetir.",
+                modifier=Modifier.padding(horizontal=20.dp),
+                style=MaterialTheme.typography.bodySmall,
+                color=MaterialTheme.colorScheme.error,
+            )
+        }
     }
 }
 
@@ -285,11 +440,14 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
 @Composable
 private fun DownloadManagerRow(
     item: DownloadSession.Item,
+    review: SoulseekAutoReviewPlan?,
     onCancel: () -> Unit,
     onRetry: () -> Unit,
+    onManualReview: () -> Unit,
 ) {
     val progress = item.progress
     val failed = progress as? DownloadProgress.Failed
+    var showSlots by remember(item.videoId) { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
@@ -374,9 +532,14 @@ private fun DownloadManagerRow(
                     )
                     Spacer(Modifier.height(3.dp))
                     RowStatus(
-                        if (progress.fraction > 0f) {
-                            stringResource(R.string.downloading_progress, (progress.fraction * 100).toInt())
-                        } else {
+                        if(item.videoId.startsWith("soulseek-auto:")) {
+                            if(progress.fraction>0f)
+                                "${(progress.fraction*100).toInt()}% das faixas processadas"
+                            else "Pesquisando candidatos..."
+                        }else if(progress.fraction>0f) {
+                            stringResource(R.string.downloading_progress,
+                                (progress.fraction * 100).toInt())
+                        }else {
                             stringResource(R.string.starting)
                         },
                     )
@@ -385,12 +548,60 @@ private fun DownloadManagerRow(
                 is DownloadProgress.Failed ->
                     RowStatus(progress.reason, MaterialTheme.colorScheme.error)
             }
+            if(review != null && progress.settled) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "${review.published} salvas · ${review.needsManualReview} para revisão" +
+                        (if(review.needsReconciliation>0)
+                            " · ${review.needsReconciliation} incerta(s)" else "") +
+                        (if(review.cancelled+review.notStarted>0)
+                            " · ${review.cancelled+review.notStarted} interrompida(s)" else ""),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(onClick = { showSlots = !showSlots }) {
+                    Text(if(showSlots) "Ocultar faixas" else "Ver resultado por faixa")
+                }
+                if(showSlots) {
+                    review.rows.forEachIndexed { index,row ->
+                        val state=when(row.status) {
+                            A0AutoBatchExecutor.TrackStatus.PUBLISHED -> "Salva"
+                            A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW -> "Revisão manual"
+                            A0AutoBatchExecutor.TrackStatus.RECONCILE -> "Verificar armazenamento"
+                            A0AutoBatchExecutor.TrackStatus.CANCELLED -> "Cancelada"
+                            A0AutoBatchExecutor.TrackStatus.NOT_STARTED -> "Não iniciada"
+                        }
+                        Text(
+                            "${index+1}. ${row.entry.query} · ${state}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                if(review.manualAllowed && failed!=null) {
+                    TextButton(onClick = onManualReview) {
+                        Text("Revisar ${review.manualEntries.size} faixa(s) manualmente")
+                    }
+                } else if(review.needsReconciliation>0) {
+                    Text("Confira a biblioteca e os arquivos antes de repetir qualquer transferência.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error)
+                }
+            }
         }
         Spacer(Modifier.width(8.dp))
         // One control, and which one it is follows the row's state: a running
         // track can be stopped, a failed one can be asked for again, and a
         // finished one needs nothing at all.
         when {
+            // A synthetic Soulseek auto session was published by A3, not by
+            // Downloads.saved. Never send its Retry action into the disabled
+            // YouTube downloader; a partial/uncertain album needs manual
+            // review or reconciliation before any new peer transfer.
+            failed != null && item.videoId.startsWith("soulseek-auto:") ->
+                Spacer(Modifier.width(36.dp))
             failed != null -> RowAction(Icons.Rounded.Refresh, stringResource(R.string.retry), onRetry)
             !progress.settled -> RowAction(Icons.Rounded.Close, stringResource(R.string.cancel), onCancel)
             else -> Spacer(Modifier.width(36.dp))

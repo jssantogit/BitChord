@@ -85,6 +85,36 @@ class A3AcquisitionLedgerTest {
         assertEquals(A3AcquisitionLedger.Phase.PUBLISHING,j.get(id2)?.phase)
     }
 
+    @Test fun highResolutionReceiptLargerThan64MiBIsAcceptedUpToShared256MiBLimit() {
+        val ledger=A3AcquisitionLedger(MemoryStore())
+        ready(ledger,id1)
+        val large=128L*1024L*1024L
+        ledger.available(id1,"content://media/external/audio/media/128",large)
+        assertEquals(large,ledger.get(id1)?.byteCount)
+        ready(ledger,id2)
+        try {
+            ledger.available(id2,"content://media/external/audio/media/256",
+                com.music.bitchord.acquisition.a0.A0ObservedTransferLimits.MAX_AUDIO_BYTES+1)
+            fail("Must reject over-limit audio")
+        }catch(_:IllegalArgumentException) {}
+        assertEquals(A3AcquisitionLedger.Phase.PUBLISHING,ledger.get(id2)?.phase)
+    }
+
+    @Test fun orphanedPublishedUriSurvivesRestartAndCannotRetryAutomatically() {
+        val store=MemoryStore()
+        val journal=A3AcquisitionLedger(store)
+        ready(journal,id1)
+        val uri="content://media/external/audio/media/orphan"
+        journal.reconcile(id1,uri,1024)
+        assertEquals(A3AcquisitionLedger.Phase.RECONCILE,journal.get(id1)?.phase)
+        assertEquals(0,A3AcquisitionLedger(store).interruptActiveOnColdStart())
+        val recovered=A3AcquisitionLedger(store).get(id1)!!
+        assertEquals(uri,recovered.contentUri)
+        assertEquals(1024L,recovered.byteCount)
+        try {journal.retry(id1);fail("Must not retry uncertain publication")}
+        catch(_:IllegalStateException) {}
+    }
+
     @Test fun failedDiskCommitLeavesInMemoryAndPersistedStateUnchanged() {
         val store=MemoryStore()
         val j=A3AcquisitionLedger(store)
@@ -101,6 +131,18 @@ class A3AcquisitionLedgerTest {
         try{A3AcquisitionLedger(store);fail("Corruption cannot mean empty downloads")}
         catch(_:IOException){}
         assertEquals("{bad json",store.data)
+    }
+
+    @Test fun manyAlbumsCannotExhaustJournalAfterOnly128Tracks() {
+        val store=MemoryStore()
+        val ledger=A3AcquisitionLedger(store)
+        repeat(160) { index ->
+            val next=java.util.UUID.nameUUIDFromBytes(
+                "auto-album-track-$index".toByteArray()).toString()
+            ledger.create(next)
+        }
+        assertEquals(160,ledger.all().size)
+        assertEquals(160,A3AcquisitionLedger(store).all().size)
     }
 
     @Test fun noRawPeerFileOrSearchFieldsAreWritten() {

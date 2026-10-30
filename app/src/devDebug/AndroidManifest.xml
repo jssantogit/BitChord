@@ -3,6 +3,12 @@
     <!-- DevDebug ONLY; never present in prod, release or benchmark variants. -->
     <application>
         <activity
+            android:name="com.music.bitchord.acquisition.a0.A0RetainedCandidateReviewActivity"
+            android:exported="false"
+            android:label="Revisar candidatos Soulseek"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+        <activity
             android:name="com.music.bitchord.acquisition.a0.A0ManualLoginActivity"
             android:exported="false"
             android:label="BitChord A0 Login Test"

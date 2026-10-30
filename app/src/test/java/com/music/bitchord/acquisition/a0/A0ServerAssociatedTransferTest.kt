@@ -132,12 +132,12 @@ class A0ServerAssociatedTransferTest {
                     try {
                         A0ServerAssociatedTransfer(allowLoopbackForLocalTest=true)
                             .runObservedOnce(server,"testaccount","owner",
-                                listing(),temp.root) { phase ->
+                                listing(),temp.root,onPhase={ phase ->
                                 if(phase==A0ServerAssociatedTransfer.Phase.PEER_ADDRESS_RESOLVED) {
                                     addressResolved=true
                                     throw IllegalStateException("address resolved; fixture stop")
                                 }
-                            }
+                            })
                         fail("Fixture must stop after address resolution")
                     } catch(e:IllegalStateException) {
                         assertEquals("address resolved; fixture stop",e.message)
@@ -496,5 +496,44 @@ class A0ServerAssociatedTransferTest {
         u32(24,8000);u32(28,16000);u16(32,2);u16(34,16)
         ascii(36,"data");u32(40,256)
         return h+ByteArray(256){(it and 0x7f).toByte()}
+    }
+    @Test
+    fun externalCancellationBeforePeerNegotiationNeverTouchesSocket() {
+        val transfer=A0ServerAssociatedTransfer(true)
+        val folder=java.nio.file.Files.createTempDirectory("a0-external-cancel").toFile()
+        try {
+            try {
+                transfer.runObservedOnce(
+                    java.net.Socket(),"owned-user","owned-peer",
+                    A0OpenAudioCandidateGate.PublicPeerListing(
+                        "Album\\\\Track.mp3",100_000L,locked=false,freeSlot=true),
+                    folder,externalCancelled={true})
+                org.junit.Assert.fail("External stop must prevent P/F")
+            }catch(_:java.io.IOException) {}
+        }finally {folder.delete()}
+    }
+
+    @Test
+    fun revokingAccountClosesRegisteredAutoPeerTransferGeneration() {
+        val epoch=SoulseekActiveSession.generation()
+        val transfer=A0ServerAssociatedTransfer(true)
+        org.junit.Assert.assertTrue(
+            SoulseekActiveSession.registerAutoTransfer(transfer,epoch))
+        SoulseekActiveSession.revoke()
+        org.junit.Assert.assertFalse(SoulseekActiveSession.isCurrent(epoch))
+        org.junit.Assert.assertFalse(
+            SoulseekActiveSession.registerAutoTransfer(
+                A0ServerAssociatedTransfer(true),epoch))
+        val folder=java.nio.file.Files.createTempDirectory("a0-revoked-pf").toFile()
+        try {
+            try {
+                transfer.runObservedOnce(
+                    java.net.Socket(),"owned-user","owned-peer",
+                    A0OpenAudioCandidateGate.PublicPeerListing(
+                        "Album\\\\Track.mp3",100_000L,locked=false,freeSlot=true),
+                    folder)
+                org.junit.Assert.fail("Revoked transfer must fail")
+            }catch(_:java.io.IOException) {}
+        }finally {folder.delete()}
     }
 }

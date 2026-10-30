@@ -9,6 +9,14 @@ import com.music.bitchord.data.DebugLog as Log
 import androidx.core.content.ContextCompat
 import com.music.bitchord.data.innertube.StreamResolver
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.BuildConfig
+import com.music.bitchord.acquisition.a0.A0AutoBatchExecutor
+import com.music.bitchord.acquisition.a0.A0AndroidAutoAcquisitionEngine
+import com.music.bitchord.acquisition.a0.A0AndroidAutoConsent
+import com.music.bitchord.acquisition.a0.A0CanonicalAcquisitionIntent
+import com.music.bitchord.acquisition.a0.A0SoulseekQualityProfiles
+import com.music.bitchord.acquisition.a0.A0ManualReviewCandidatePolicy
+import com.music.bitchord.acquisition.a0.A0ObservedCandidateHandoff
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.DownloadQuality
 import com.music.bitchord.data.sources.SourceResolver
@@ -19,6 +27,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,6 +45,7 @@ import kotlinx.serialization.json.Json
 import java.io.OutputStream
 import java.io.File
 import java.util.Locale
+import java.util.UUID
 
 /** Where a track is between "not on this device" and "on it". */
 sealed interface DownloadState {
@@ -142,6 +154,215 @@ object Downloads {
      */
     private val running = LinkedHashMap<String, Job?>()
 
+    /** Transient request metadata shares the normal download queue, but NEVER
+     * treats its synthetic UI identifier as canonical recording identity.
+     * A3 owns the durable publication of physical local audio. */
+    private data class AutoRequest(
+        val entries:List<SoulseekBatchPlan.Entry>,
+        val quality:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
+        val sourceSongs:List<Song>,
+    )
+    private val autoRequests=LinkedHashMap<String,AutoRequest>()
+
+    /** Visible individual tracks, not the synthetic service-worker album ID. */
+    internal enum class AutoTrackStage {
+        WAITING, SEARCHING, DOWNLOADING, SAVED, MANUAL_REVIEW,
+        CANCELLED, VERIFY_STORAGE,
+    }
+    internal data class AutoTrackRow(
+        val song:Song,
+        val stage:AutoTrackStage=AutoTrackStage.WAITING,
+    )
+    private val _autoTrackRows=
+        MutableStateFlow<Map<String,List<AutoTrackRow>>>(emptyMap())
+    internal val soulseekAutoTrackRows:StateFlow<Map<String,List<AutoTrackRow>>> =
+        _autoTrackRows.asStateFlow()
+
+    private fun updateAutoTrack(
+        sessionId:String,index:Int,stage:AutoTrackStage,
+    ) {
+        _autoTrackRows.update { current ->
+            val rows=current[sessionId] ?: return@update current
+            if(index !in rows.indices)return@update current
+            current+(sessionId to rows.mapIndexed { i,row ->
+                if(i!=index || row.stage==AutoTrackStage.SAVED)row
+                else if(row.stage==AutoTrackStage.VERIFY_STORAGE &&
+                    stage==AutoTrackStage.WAITING)row
+                else row.copy(stage=stage)
+            })
+        }
+    }
+
+    /** Cancellation of a claimed batch is NOT proof of physical rollback. */
+    private fun settleAutoTrackRows(sessionId:String,claimed:Boolean) {
+        _autoTrackRows.update { current ->
+            val rows=current[sessionId] ?: return@update current
+            current+(sessionId to rows.map { row ->
+                if(row.stage==AutoTrackStage.SAVED ||
+                    row.stage==AutoTrackStage.MANUAL_REVIEW)row
+                else row.copy(stage=if(claimed)
+                    AutoTrackStage.VERIFY_STORAGE else AutoTrackStage.CANCELLED)
+            })
+        }
+    }
+    /** Never couple duplicate physical P/F admission to a dismissible UI row. */
+    private val autoAttemptGuard=SoulseekAutoAttemptGuard()
+    /** One automatic release in flight even when four service workers run. */
+    private val autoMutex=Mutex()
+    /** Bounded results only in RAM, not a second download or peer-history store. */
+    private val _autoReviews=MutableStateFlow<Map<String,SoulseekAutoReviewPlan>>(emptyMap())
+    /** At most one manual recovery picker per session. Protected by lock. */
+    private val openManualReviews=SoulseekManualReviewLeaseGate()
+    private val _manualReviewBusy=MutableStateFlow(false)
+    internal val soulseekManualReviewBusy:StateFlow<Boolean> =
+        _manualReviewBusy.asStateFlow()
+    internal val soulseekAutoReviews:StateFlow<Map<String,SoulseekAutoReviewPlan>> =
+        _autoReviews.asStateFlow()
+
+    /**
+     * Clear only the visual record, never the physical attempt fence.
+     * Do not erase a recovery report during its own A3 publication.
+     */
+    internal fun clearSoulseekAutoReviews():Boolean = synchronized(lock) {
+        if(openManualReviews.hasOpen)return@synchronized false
+        _autoReviews.value=emptyMap()
+        _autoTrackRows.value=emptyMap()
+        true
+    }
+
+    /**
+     * Opens the existing MANUAL picker for only ambiguous/missing album slots.
+     * A3 uncertain commits and interrupted sessions are never eligible.
+     * Nothing here starts a P/F transfer or approves a peer candidate.
+     */
+    internal fun openSoulseekManualReview(context:Context,sessionId:String):Boolean {
+        if(!BuildConfig.DEBUG || BuildConfig.FLAVOR!="dev")return false
+        val plan=synchronized(lock) {
+            if(sessionId in running || sessionId in pending ||
+                autoRequests.isNotEmpty() || openManualReviews.hasOpen)return false
+            _autoReviews.value[sessionId]
+        } ?: return false
+        if(!plan.manualAllowed)return false
+        if(DownloadSession.state.value.items.firstOrNull {
+                it.videoId==sessionId
+            }?.progress !is DownloadProgress.Failed)return false
+        val entries=plan.manualEntries
+        if(!SoulseekAutoQueueAdmission.allows(
+                entries,true,true,true,true))return false
+        val first=entries.first()
+        val intent=Intent().setClassName(
+            context.packageName,
+            if(plan.hasRetainedCandidates)
+                "com.music.bitchord.acquisition.a0.A0RetainedCandidateReviewActivity"
+            else "com.music.bitchord.acquisition.a0.A0ManualLoginActivity",
+        ).putExtra("bitchord.soulseek.manual.query",first.query)
+            .putExtra("bitchord.soulseek.manual.album",first.album)
+            .putExtra("bitchord.soulseek.manual.duration_seconds",
+                first.durationSeconds ?: 0)
+            .putExtra("bitchord.soulseek.manual.recovery",true)
+        intent.putExtra("bitchord.soulseek.manual.review_session",sessionId)
+            .putExtra("bitchord.soulseek.manual.review_indices",
+                plan.manualIndices.toIntArray())
+        if(entries.size>1) {
+            intent.putStringArrayListExtra("bitchord.soulseek.batch.queries",
+                ArrayList(entries.map { it.query }))
+                .putStringArrayListExtra("bitchord.soulseek.batch.albums",
+                    ArrayList(entries.map { it.album.orEmpty() }))
+                .putExtra("bitchord.soulseek.batch.durations",
+                    entries.map { it.durationSeconds ?: 0 }.toIntArray())
+        }
+        val leaseToken=synchronized(lock) {
+            if(openManualReviews.hasOpen || autoRequests.isNotEmpty() ||
+                sessionId in running || sessionId in pending ||
+                _autoReviews.value[sessionId] !== plan)return false
+            val token=openManualReviews.reserve(sessionId) ?: return false
+            _manualReviewBusy.value=true
+            token
+        }
+        // Only the first Activity instance may consume this one-time token.
+        intent.putExtra("bitchord.soulseek.manual.review_token",leaseToken)
+        return runCatching {
+            context.startActivity(intent)
+            true
+        }.getOrElse {
+            closeSoulseekManualReview(sessionId,leaseToken)
+            false
+        }
+    }
+
+    /** Verify the exactly pending slots before a new Activity may own the
+     * in-process recovery lease. A recreated/stale Intent has no authority.
+     */
+    internal fun validSoulseekManualReview(
+        sessionId:String,
+        token:String,
+        originalIndices:List<Int>,
+        entries:List<SoulseekBatchPlan.Entry>,
+    ):Boolean = synchronized(lock) {
+        if(_autoReviews.value[sessionId]?.matchesManualPayload(
+                originalIndices,entries)!=true)return@synchronized false
+        // A valid payload is necessary but never sufficient: consume exactly
+        // one use of the lease before the Activity can start a worker.
+        openManualReviews.claim(sessionId,token)
+    }
+
+    /**
+     * The Activity receives only a session/token in its Intent. Peer handles
+     * stay in RAM and are readable exclusively while that token is claimed.
+     * Never store them in savedInstanceState, diagnostics, or a second cache.
+     */
+    internal fun claimedSoulseekReviewPlan(
+        sessionId:String,token:String,
+    ):SoulseekAutoReviewPlan? = synchronized(lock) {
+        if(!openManualReviews.ownsClaimed(sessionId,token) ||
+            autoRequests.isNotEmpty() || sessionId in running ||
+            sessionId in pending)return@synchronized null
+        _autoReviews.value[sessionId]?.takeIf { it.manualAllowed }
+    }
+
+    internal fun claimedSoulseekReviewSong(
+        sessionId:String,token:String,originalIndex:Int,
+    ):Song? = synchronized(lock) {
+        if(!openManualReviews.ownsClaimed(sessionId,token))return@synchronized null
+        _autoTrackRows.value[sessionId]?.getOrNull(originalIndex)?.song
+    }
+
+    /** Only the originating Activity may release its lease after A3 exits. */
+    internal fun closeSoulseekManualReview(sessionId:String,token:String) {
+        synchronized(lock) {
+            if(openManualReviews.close(sessionId,token)) {
+                _manualReviewBusy.value=openManualReviews.hasOpen
+            }
+        }
+    }
+
+    /**
+     * A3 durable manual SAVE acknowledgement. No result may be created by a
+     * network claim or by simply pressing a button in the candidate picker.
+     */
+    internal fun confirmSoulseekManualPublication(
+        sessionId:String, originalIndex:Int, originalQuery:String,
+    ):Boolean {
+        while(true) {
+            val old=_autoReviews.value
+            val previous=old[sessionId] ?: return false
+            val next=previous.withManualPublication(
+                originalIndex,originalQuery) ?: return false
+            if(_autoReviews.compareAndSet(old,old + (sessionId to next))) {
+                updateAutoTrack(sessionId,originalIndex,AutoTrackStage.SAVED)
+                if(next.published==next.rows.size) {
+                    DownloadSession.done(sessionId)
+                    clear(sessionId)
+                }else {
+                    fail(sessionId,
+                        "${next.published} de ${next.rows.size} faixas salvas. " +
+                            "Revisão manual das restantes disponível.")
+                }
+                return true
+            }
+        }
+    }
+
     fun init(context: Context) {
         prefs = context.getSharedPreferences("bitchord_settings", Context.MODE_PRIVATE)
         _saved.value = runCatching {
@@ -215,6 +436,117 @@ object Downloads {
     }
 
     /**
+     * Dedicated opt-in devDebug entrypoint: no search or transfer occurs here.
+     * Duplicate requests already queued for the same release are coalesced.
+     * An interrupted request is NEVER replayed after process restart.
+     */
+    internal fun enqueueSoulseekAuto(
+        context:Context,
+        entries:List<SoulseekBatchPlan.Entry>,
+        sourceSongs:List<Song> = emptyList(),
+    ):Boolean {
+        val app=context.applicationContext
+        val pilot=BuildConfig.DEBUG && BuildConfig.FLAVOR=="dev"
+        val refusal=SoulseekAutoQueueAdmission.refusal(
+            entries,userRequested=true,optedIn=A0AndroidAutoConsent.enabled(app),
+            devPilot=pilot,downloadsAllowed=AppSettings.downloadsAllowedNow)
+        if(refusal!=null) {
+            Log.i(TAG,"soulseek_auto enqueue_refused reason=${refusal.name}")
+            return false
+        }
+        val quality=runCatching {
+            A0SoulseekQualityProfiles.snapshot(
+                AppSettings.downloadQualityProfile.value,
+                AppSettings.downloadCustomOptions.value)
+        }.getOrNull() ?: run {
+            Log.i(TAG,"soulseek_auto enqueue_refused reason=QUALITY_PROFILE_INVALID")
+            return false
+        }
+        val captured=entries.map { it.copy() }
+        val id="soulseek-auto:"+UUID.randomUUID().toString()
+        val album=if(captured.size>1) captured.mapNotNull { it.album }
+            .distinct().singleOrNull() else null
+        val firstSong=sourceSongs.firstOrNull()
+        val firstQuery=captured.first().query
+        val fallbackArtist=firstQuery.substringBefore(" - ", "").ifBlank { "Artista" }
+        val song=Song(
+            videoId=id,
+            title=if(captured.size==1)
+                firstSong?.title ?: firstQuery.substringAfter(" - ",firstQuery)
+                else album ?: firstSong?.albumName ?: "Álbum (${captured.size} faixas)",
+            artist=firstSong?.artist?.takeIf { it.isNotBlank() } ?: fallbackArtist,
+            thumbnailUrl=firstSong?.thumbnailUrl,
+            albumName=album ?: firstSong?.albumName,
+        )
+        var displacedReviews=emptyMap<String,SoulseekAutoReviewPlan>()
+        synchronized(lock) {
+            // Do not overlap a manual recovery P/F with a new automatic batch.
+            if(openManualReviews.hasOpen) {
+                Log.i(TAG,"soulseek_auto enqueue_refused reason=MANUAL_REVIEW_ACTIVE")
+                return false
+            }
+            // Even after the result is cleared, evicted or cancelled, do not
+            // automatically repeat the same canonical audio in this process.
+            if(!autoAttemptGuard.reserve(captured)) {
+                Log.i(TAG,"soulseek_auto enqueue_refused reason=DUPLICATE_OR_CAPACITY")
+                return false
+            }
+            // Hide stale recovery pickers immediately. If Android refuses to
+            // start the service, restore these exact reports atomically.
+            val change=SoulseekAutoReviewSupersession.suppress(
+                _autoReviews.value,captured)
+            displacedReviews=change.displaced
+            _autoReviews.value=change.current
+            autoRequests[id]=AutoRequest(captured,quality,sourceSongs.toList())
+            _autoTrackRows.value=_autoTrackRows.value+(id to captured.map { entry ->
+                val origin=sourceSongs.firstOrNull { it.videoId==entry.trackId }
+                    ?: Song(
+                        videoId=entry.trackId,
+                        title=entry.query.substringAfter(" - ",entry.query),
+                        artist=entry.query.substringBefore(" - ","Artista"),
+                        thumbnailUrl=firstSong?.thumbnailUrl,
+                        albumName=entry.album,
+                    )
+                AutoTrackRow(origin)
+            })
+            pending[id]=song
+        }
+        _active.update { it + (id to DownloadState.Queued) }
+        DownloadSession.queued(song,album)
+        return runCatching {
+            ContextCompat.startForegroundService(
+                app,Intent(app,DownloadService::class.java))
+            true
+        }.getOrElse {
+            val (rolledBack,alreadyRunning)=synchronized(lock) {
+                val claimed=id in running
+                val stillPending=id in pending
+                if(SoulseekAutoCancellationPolicy.canRollbackRejectedServiceStart(
+                        stillPending=stillPending,alreadyClaimed=claimed)) {
+                    pending.remove(id)
+                    autoRequests.remove(id)
+                    autoAttemptGuard.rollback(captured)
+                    _autoReviews.value=SoulseekAutoReviewSupersession.restore(
+                        _autoReviews.value,displacedReviews)
+                    true to false
+                }else {
+                    // A service may already have dequeued this job even when
+                    // a second startForegroundService call was rejected.
+                    // Never clear its A3 fence or overwrite its live UI.
+                    false to claimed
+                }
+            }
+            if(rolledBack) {
+                Log.i(TAG,"soulseek_auto enqueue_refused reason=SERVICE_START_REJECTED")
+                fail(id,"Não foi possível iniciar o serviço de downloads.")
+            }
+            // If another Service claimed the job, the download was accepted.
+            // If it already settled, do not overwrite its authoritative row.
+            alreadyRunning
+        }
+    }
+
+    /**
      * Drop [videoId] from the queue, or stop it if it is one of the ones
      * running.
      *
@@ -224,17 +556,42 @@ object Downloads {
      * told to run is no longer wanted, and stops it on arrival.
      */
     fun cancel(videoId: String) {
-        val job = synchronized(lock) {
+        val (job,wasClaimed)=synchronized(lock) {
+            val claimed=videoId in running
+            val queued=videoId in pending
+            val auto=autoRequests[videoId]
+            if(auto!=null)settleAutoTrackRows(videoId,claimed)
+            // takeNext() and cancellation both hold this same lock. A request
+            // still pending cannot have created an A3 automatic reservation.
+            // Release only that process-local admission to permit another
+            // explicit tap; never release a claimed job or any durable A3 row.
+            if(auto!=null && SoulseekAutoCancellationPolicy.canReleaseQueuedIdentity(
+                    isAutomatic=videoId.startsWith("soulseek-auto:"),
+                    wasQueued=queued,wasClaimedByWorker=claimed)) {
+                autoAttemptGuard.rollback(auto.entries)
+            }
             pending.remove(videoId)
-            if (videoId !in running) return@synchronized null
-            running.remove(videoId)
+            autoRequests.remove(videoId)
+            if(!claimed)_autoReviews.update { it - videoId }
+            running.remove(videoId) to claimed
         }
         job?.cancel()
-        clear(videoId)
-        // A download the user called off is not something they need reminding to
-        // check on, so it leaves the manager rather than sitting in it as a
-        // permanent "cancelled" row.
-        DownloadSession.forget(videoId)
+        if(SoulseekAutoCancellationPolicy.retainWarning(
+                isAutomatic=videoId.startsWith("soulseek-auto:"),
+                wasClaimedByWorker=wasClaimed)) {
+            // Some siblings may already be A3 AVAILABLE. Cancelling is not
+            // permission to erase evidence of an incomplete album.
+            val reason="Automação cancelada: algumas faixas podem ter sido " +
+                "salvas. Confira a biblioteca antes de iniciar outro lote."
+            if(DownloadSession.interruptIfUnsettled(videoId,reason))
+                _active.update { it + (videoId to DownloadState.Failed(reason)) }
+            else clear(videoId)
+        }else {
+            clear(videoId)
+            // A queued-only or legacy cancellation has no partial A3 batch
+            // to reconcile in this UI and retains the old dismiss behavior.
+            DownloadSession.forget(videoId)
+        }
     }
 
     // ---- The record ---------------------------------------------------------
@@ -537,6 +894,24 @@ object Downloads {
      * still know it is already on the device. A stale id costs nothing: the
      * verification in [savedUri] prunes whichever one stops resolving.
      */
+    /**
+     * A2/A3 already committed this MediaStore URI. Index it in the same
+     * persistent Downloads table used by Biblioteca → Downloads, rather than
+     * leaving a playable local file invisible to that section.
+     *
+     * Calling twice with the same ID and URI is idempotent; no new bytes,
+     * publication or P/F connection are initiated by this method.
+     */
+    internal fun rememberSoulseekPublished(
+        song:Song,
+        published:A2LocalAudioPublisher.Published,
+    ) {
+        require(published.contentUri.startsWith("content://") &&
+            published.byteCount>0L) { "Expected confirmed A3 local publication" }
+        val uri=Uri.parse(published.contentUri)
+        remember(song,song,uri,downloadFormat=published.mimeType)
+    }
+
     private fun remember(
         asked: Song,
         fetched: Song,
@@ -784,7 +1159,10 @@ object Downloads {
 
     /** [videoId] is finished, one way or another, and no longer holds a worker. */
     internal fun onIdle(videoId: String) {
-        synchronized(lock) { running.remove(videoId) }
+        synchronized(lock) {
+            running.remove(videoId)
+            autoRequests.remove(videoId)
+        }
     }
 
     /** Whether anything is still queued or in flight — see [DownloadService]'s workers. */
@@ -799,7 +1177,44 @@ object Downloads {
      * forever as already in flight.
      */
     internal fun onStopped() {
-        synchronized(lock) { running.clear() }
+        // onIdle may have drained autoRequests after cancelling its Job but
+        // before Service.onDestroy calls us. DownloadSession is the source
+        // of truth for any unfinished automatic report the user can still see.
+        val openAutoReports=DownloadSession.state.value.items
+            .filter { it.videoId.startsWith("soulseek-auto:") &&
+                !it.progress.settled }
+            .map { it.videoId }
+        val abandoned=synchronized(lock) {
+            // IMPORTANT: inspect running BEFORE clearing it. A work item
+            // still in pending cannot have reserved an A3 job; do not poison
+            // its in-memory identity fence when this Service disappears.
+            // Claimed/idle items may have started P/F or published content.
+            val unclaimed=SoulseekAutoCancellationPolicy.unclaimedOnServiceStop(
+                autoRequestIds=autoRequests.keys.toSet(),
+                pendingIds=pending.keys.toSet(),
+                runningIds=running.keys.toSet(),
+            )
+            unclaimed.forEach { id ->
+                autoRequests[id]?.let { autoAttemptGuard.rollback(it.entries) }
+            }
+            autoRequests.keys.forEach { id ->
+                settleAutoTrackRows(id,claimed=id !in unclaimed)
+            }
+            running.clear()
+            val ids=autoRequests.keys.toList()
+            ids.forEach { pending.remove(it) }
+            autoRequests.clear()
+            ids
+        }
+        (abandoned+openAutoReports).distinct().forEach { id ->
+            // runSoulseekAuto's cancellation handler may already have removed
+            // Downloads.active. The UI's unsettled session row, not active,
+            // is the authoritative indicator of unfinished work.
+            val reason="Interrompido: verifique a biblioteca antes de tentar novamente."
+            if(DownloadSession.interruptIfUnsettled(id,reason)) {
+                _active.update { it + (id to DownloadState.Failed(reason)) }
+            }
+        }
     }
 
     /**
@@ -828,6 +1243,14 @@ object Downloads {
      */
     internal suspend fun run(context: Context, song: Song) = withContext(Dispatchers.IO) {
         val id = song.videoId
+        val auto=synchronized(lock) { autoRequests[id] }
+        if(id.startsWith("soulseek-auto:")) {
+            // A cancel can remove the request between takeNext and run().
+            // Never fall through into the disabled conventional downloader.
+            if(auto!=null)runSoulseekAuto(context,id,auto)
+            else clear(id)
+            return@withContext
+        }
         // Set before the lookup, not after it. Resolving where a lossless track
         // comes from is the long part of a download, and leaving the row on
         // "Queued" for all of it reads as a queue that has stopped rather than
@@ -849,6 +1272,136 @@ object Downloads {
         } catch (e: Exception) {
             Log.w(TAG, "download failed for $id: ${e.message}", e)
             fail(id, e.friendly())
+        }
+    }
+
+    /**
+     * A service worker owns the whole serial auto batch (1..64 tracks).
+     * The same foreground notification and cancel path track this session.
+     * Any uncertain A3 commit requires manual reconciliation, never retry.
+     */
+    private suspend fun runSoulseekAuto(
+        context:Context,id:String,request:AutoRequest,
+    ) {
+        val job=currentCoroutineContext()[Job]
+        var unusedReservationConfirmed=false
+        // Raw peer handles never leave this process or enter diagnostics.
+        val retained=LinkedHashMap<Int,List<A0ObservedCandidateHandoff.Choice>>()
+        _active.update { it + (id to DownloadState.Running(0f)) }
+        DownloadSession.running(id,0f)
+        try {
+            autoMutex.withLock {
+                if(job?.isActive!=true)throw CancellationException()
+                val outcome=A0AndroidAutoAcquisitionEngine.run(
+                    context,request.entries,request.quality,
+                    userRequested=true,isCancelled={job?.isActive!=true},
+                    sourceSongs=request.sourceSongs,
+                    onSlotSearching={index ->
+                        updateAutoTrack(id,index,AutoTrackStage.SEARCHING)
+                        Log.d(TAG,"soulseek_auto slot=$index searching")
+                    },
+                    onSlotTransferring={index ->
+                        updateAutoTrack(id,index,AutoTrackStage.DOWNLOADING)
+                        Log.d(TAG,"soulseek_auto slot=$index transferring")
+                    },
+                    onCandidateDecision={index,decision ->
+                        Log.d(TAG,"soulseek_auto slot=$index candidate_" +
+                            "status=${decision.status} reason=${decision.reason} " +
+                            "observed=${decision.examined} eligible=${decision.eligible}" +
+                            " rank_rejected=${decision.funnel.rankRejected}" +
+                            " preflight_rejected=${decision.funnel.preflightRejected}" +
+                            " album_rejected=${decision.funnel.albumRejected}" +
+                            " quality_rejected=${decision.funnel.qualityRejected}" +
+                            " ambiguity_clusters=${decision.ambiguity?.clusterCount ?: 0}" +
+                            " leading_sources=${decision.ambiguity?.leadingSources ?: 0}" +
+                            " competing_sources=${decision.ambiguity?.competingSources ?: 0}" +
+                            " rank_gap=${decision.ambiguity?.scoreGap ?: -1}" +
+                            " distinct_sizes=${decision.ambiguity?.distinctByteSizes ?: 0}")
+                    },
+                    onSlotEvidence={index,observed ->
+                        val entry=request.entries[index]
+                        retained[index]=A0ManualReviewCandidatePolicy.retain(
+                            entry,observed,request.quality)
+                    },
+                    onSlotResolved={index,status ->
+                        Log.d(TAG,"soulseek_auto slot=$index settled=$status")
+                        val stage=when(status) {
+                            A0AutoBatchExecutor.TrackStatus.PUBLISHED ->
+                                AutoTrackStage.SAVED
+                            A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW ->
+                                AutoTrackStage.MANUAL_REVIEW
+                            A0AutoBatchExecutor.TrackStatus.CANCELLED ->
+                                AutoTrackStage.CANCELLED
+                            A0AutoBatchExecutor.TrackStatus.RECONCILE ->
+                                AutoTrackStage.VERIFY_STORAGE
+                            A0AutoBatchExecutor.TrackStatus.NOT_STARTED ->
+                                AutoTrackStage.WAITING
+                        }
+                        updateAutoTrack(id,index,stage)
+                        if(job?.isActive==true) {
+                            // Fraction means resolved album slots, NOT byte
+                            // progress: discovery may still be searching.
+                            val fraction=(index+1).toFloat()/request.entries.size
+                            _active.update {
+                                it + (id to DownloadState.Running(fraction))
+                            }
+                            DownloadSession.running(id,fraction)
+                        }
+                    },
+                    onUnusedReservationReleased={
+                        // Called after A3's all-REQUESTED durable commit, even
+                        // if discovery was interrupted by an exception. The
+                        // current process may accept another explicit tap.
+                        synchronized(lock) {
+                            autoAttemptGuard.rollback(request.entries)
+                        }
+                        unusedReservationConfirmed=true
+                    },
+                )
+                val report=outcome.batch
+                if(job?.isActive!=true)throw CancellationException()
+                val review=SoulseekAutoReviewPlan.from(
+                    request.entries,report.results,retained,
+                    qualityProfile=request.quality)
+                if(review==null) {
+                    fail(id,"Resultado incompleto: confira a biblioteca antes de tentar novamente.")
+                    return@withLock
+                }
+                _autoReviews.update { prior ->
+                    (prior + (id to review)).entries.toList().takeLast(24)
+                        .associate { it.key to it.value }
+                }
+                when {
+                    outcome.unusedReservationReleased ->
+                        fail(id,"Nenhuma transferência foi iniciada. " +
+                            "Você pode tocar em Baixar novamente para repetir a busca " +
+                            "ou escolher as faixas pelo seletor manual.")
+                    report.published==request.entries.size -> {
+                        DownloadSession.done(id)
+                        clear(id)
+                    }
+                    report.needsReconciliation>0 ->
+                        fail(id,"Publicação incerta: verifique a biblioteca antes de tentar novamente.")
+                    report.cancelled>0 ->
+                        fail(id,"Automação interrompida; revise as faixas restantes manualmente.")
+                    else -> fail(id,
+                        "${report.published} de ${request.entries.size} faixas salvas. " +
+                            "Revise as demais pelo seletor manual.")
+                }
+            }
+        }catch(e:CancellationException) {
+            clear(id)
+            throw e
+        }catch(_:A3AcquisitionLedger.AutomaticIdentityAlreadyReserved) {
+            fail(id,"Esta faixa ou lançamento já tem uma tentativa registrada. " +
+                "Confira a biblioteca antes de baixar novamente; " +
+                "para revisão explícita, desative a automação.")
+        }catch(_:Exception) {
+            fail(id,if(unusedReservationConfirmed)
+                "Busca interrompida antes de iniciar a transferência. " +
+                    "Você pode tocar em Baixar novamente para pesquisar."
+            else
+                "Aquisição automática interrompida; confira a biblioteca e use o modo manual.")
         }
     }
 
