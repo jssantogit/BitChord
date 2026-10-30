@@ -7,10 +7,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -19,6 +23,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +43,7 @@ import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.PillTextField
 import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.components.CoverPlaceholder
 import kotlinx.coroutines.CancellationException
@@ -67,6 +73,51 @@ internal sealed interface LibraryPlaylistCard {
     }
 }
 
+
+/** The playlist collection shares the Library host's search and sort, not a second page shell. */
+internal enum class PlaylistLibrarySort { DEFAULT, TITLE_ASC, TITLE_DESC }
+internal enum class PlaylistLibraryTypeFilter { ALL, NORMAL, SMART }
+
+internal fun visibleLibraryPlaylistCards(
+    cards: List<LibraryPlaylistCard>,
+    query: String,
+    filter: PlaylistLibraryTypeFilter,
+    sort: PlaylistLibrarySort,
+): List<LibraryPlaylistCard> {
+    val filtered = cards.filter { card ->
+        card.title.contains(query.trim(), ignoreCase = true) &&
+            when (filter) {
+                PlaylistLibraryTypeFilter.ALL -> true
+                PlaylistLibraryTypeFilter.NORMAL -> card !is LibraryPlaylistCard.Smart
+                PlaylistLibraryTypeFilter.SMART -> card is LibraryPlaylistCard.Smart
+            }
+    }
+    return when (sort) {
+        PlaylistLibrarySort.DEFAULT -> filtered
+        PlaylistLibrarySort.TITLE_ASC -> filtered.sortedWith(
+            compareBy<LibraryPlaylistCard> { it.title.lowercase() }.thenBy { it.id },
+        )
+        PlaylistLibrarySort.TITLE_DESC -> filtered.sortedWith(
+            compareByDescending<LibraryPlaylistCard> { it.title.lowercase() }.thenBy { it.id },
+        )
+    }
+}
+
+/** Same PillTextField used by Settings and creation: no unrelated Material text field. */
+@Composable
+internal fun PlaylistLibrarySearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+) {
+    PillTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        placeholder = "Buscar em Playlists",
+        accessibilityLabel = "Buscar em Playlists",
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
 @Composable
 internal fun UnifiedPlaylistLibraryShelf(
     normalPlaylists: List<ShelfItem>,
@@ -77,6 +128,12 @@ internal fun UnifiedPlaylistLibraryShelf(
     onSmartAction: (String, CanonicalCollectionIntent) -> Unit,
     onCanonicalNormalAction: (String, CanonicalCollectionIntent) -> Unit,
     contentPadding: PaddingValues,
+    query: String = "",
+    onQueryChange: (String) -> Unit = {},
+    sort: PlaylistLibrarySort = PlaylistLibrarySort.DEFAULT,
+    filter: PlaylistLibraryTypeFilter = PlaylistLibraryTypeFilter.ALL,
+    selectedCard: LibraryPlaylistCard? = null,
+    onSelectedCardChange: (LibraryPlaylistCard?) -> Unit = {},
 ) {
     val context = LocalContext.current.applicationContext
     val repo = remember(context) {
@@ -91,6 +148,8 @@ internal fun UnifiedPlaylistLibraryShelf(
     }
     var failed by remember { mutableStateOf(false) }
     var normalFailed by remember { mutableStateOf(false) }
+    var smartLoaded by remember { mutableStateOf(false) }
+    var normalLoaded by remember { mutableStateOf(false) }
     val canonicalNormal by produceState(
         initialValue = emptyList<SavedCanonicalStaticPlaylist>(), key1 = normalRepo,
     ) {
@@ -98,20 +157,22 @@ internal fun UnifiedPlaylistLibraryShelf(
             normalRepo.observe().collect {
                 value = it
                 normalFailed = false
+                normalLoaded = true
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) { normalFailed = true }
+        } catch (_: Exception) { normalFailed = true; normalLoaded = true }
     }
     val smart by produceState(initialValue = emptyList<SavedSmartPlaylistV2Definition>(), key1 = repo) {
         try {
             repo.observe().collect {
                 value = it
                 failed = false
+                smartLoaded = true
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) { failed = true }
+        } catch (_: Exception) { failed = true; smartLoaded = true }
     }
     // Stable IDs make editing, queueing and ordering independent of display
     // names; only locally saved normal playlists are included in this slot.
@@ -121,7 +182,8 @@ internal fun UnifiedPlaylistLibraryShelf(
             normalPlaylists.filter { it.browseId?.startsWith("local:playlist:") == true }
                 .map { LibraryPlaylistCard.Normal(it) }
     }
-    var openedCard by remember { mutableStateOf<LibraryPlaylistCard?>(null) }
+    val openedCard = selectedCard
+    val visible = visibleLibraryPlaylistCards(cards, query, filter, sort)
     val playlistScroll = rememberLazyListState()
 
     // The host owns status-bar and floating-player insets. Applying a second
@@ -145,10 +207,14 @@ internal fun UnifiedPlaylistLibraryShelf(
                     style = MaterialTheme.typography.displayLarge,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(
-                    onClick = onNewSmartPlaylist,
-                    modifier = Modifier.heightIn(min = 48.dp),
-                ) { Text("+ Nova", color = AccentRed) }
+
+            }
+        }
+        item(key = "playlist-search") {
+            Box(Modifier.fillMaxWidth().padding(
+                horizontal = PAGE_GUTTER, vertical = 2.dp,
+            )) {
+                PlaylistLibrarySearchField(query, onQueryChange)
             }
         }
         if (failed) item(key = "smart-error") {
@@ -167,19 +233,54 @@ internal fun UnifiedPlaylistLibraryShelf(
                 modifier = Modifier.padding(horizontal = PAGE_GUTTER),
             )
         }
-        if (cards.isEmpty()) item(key = "playlist-empty") {
-            Text(
-                "Suas playlists aparecerão aqui.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = PAGE_GUTTER),
-            )
+        if (!normalLoaded || !smartLoaded) item(key = "playlist-loading") {
+            Box(
+                Modifier.fillMaxWidth().height(240.dp),
+                contentAlignment = Alignment.Center,
+            ) { CircularProgressIndicator() }
         }
-        items(cards, key = { it.id }) { card ->
+        if (normalLoaded && smartLoaded && visible.isEmpty()) item(key = "playlist-empty") {
+            Box(
+                modifier = Modifier.fillMaxWidth()
+                    .heightIn(min = 380.dp)
+                    .padding(horizontal = PAGE_GUTTER),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    val trulyEmpty = cards.isEmpty()
+                    Text(
+                        if (trulyEmpty) "Nenhuma Playlist" else "Nenhuma playlist encontrada",
+                        style = MaterialTheme.typography.headlineMedium,
+                    )
+                    Text(
+                        when {
+                            !trulyEmpty -> "Experimente outra busca ou altere o filtro."
+                            else -> "Crie playlists com as músicas da sua biblioteca."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                    Box(Modifier.padding(top = 14.dp)) {
+                        PlaylistWizardPrimaryAction(
+                            label = if (trulyEmpty) "Nova Playlist" else "Limpar busca e filtros",
+                            onClick = if (trulyEmpty) onNewSmartPlaylist else {
+                                { onQueryChange("") }
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        items(visible, key = { it.id }) { card ->
             val openCard: () -> Unit = {
                 when (card) {
                     is LibraryPlaylistCard.Smart,
-                    is LibraryPlaylistCard.CanonicalNormal -> openedCard = card
+                    is LibraryPlaylistCard.CanonicalNormal -> onSelectedCardChange(card)
                     is LibraryPlaylistCard.Normal -> onOpenNormalPlaylist(card.shelfItem)
                 }
             }
@@ -193,9 +294,9 @@ internal fun UnifiedPlaylistLibraryShelf(
     openedCard?.let { selected ->
         CanonicalPlaylistDetailScreen(
             card = selected,
-            onClose = { openedCard = null },
+            onClose = { onSelectedCardChange(null) },
             onEdit = {
-                openedCard = null
+                onSelectedCardChange(null)
                 when (selected) {
                     is LibraryPlaylistCard.Smart ->
                         onOpenSmartPlaylist(selected.definition.id)
