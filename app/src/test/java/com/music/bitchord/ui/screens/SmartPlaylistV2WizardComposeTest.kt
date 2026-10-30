@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
@@ -86,12 +87,50 @@ class SmartPlaylistV2WizardComposeTest {
         }
         compose.onNodeWithText("Continuar").performClick()
         // A LazyColumn intentionally does not compose off-screen recording rows.
-        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
         compose.onNodeWithText("Faixa exata").performClick()
         compose.runOnIdle { assertEquals("canonical:recording-25", selectedId) }
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(1)
         compose.onNodeWithText("Álbuns").performClick()
         compose.runOnIdle { assertEquals(CanonicalPlaylistBrowseType.ALBUMS, browseType) }
+    }
+
+    @Test fun albumRowOffersBulkAddWithoutNavigatingToAlbum() {
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE,
+                SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ))
+        val album = CanonicalPlaylistBrowseGroup(
+            "release:exact-1", "Get Up", CanonicalPlaylistBrowseType.ALBUMS,
+        )
+        var addedId: String? = null
+        var openedId: String? = null
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Minha playlist", rule = rule, normalMode = true,
+                normalBrowseType = CanonicalPlaylistBrowseType.ALBUMS,
+                normalGroups = listOf(album),
+                onAddNormalAlbum = { addedId = it.id },
+                onNormalBrowseGroupChange = { openedId = it?.id },
+                sort = SmartPlaylistV2Sort.TITLE_ASC, limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {}, onSortChange = {},
+                onLimitChange = {}, onSeedChange = {}, onPreview = {},
+                onSave = {}, onSaveFilter = {}, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithText("Selecionadas: 0").assertExists()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
+        compose.onNodeWithContentDescription("Adicionar álbum inteiro").performClick()
+        compose.runOnIdle {
+            assertEquals("release:exact-1", addedId)
+            assertEquals(null, openedId)
+        }
     }
 
     @Test fun normalReviewShowsTrackAfterFiftyWithoutArtificialTruncation() {
