@@ -1,7 +1,6 @@
 package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,11 +14,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -32,8 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import com.music.bitchord.ui.theme.AccentRed
@@ -163,35 +160,12 @@ internal fun PlaylistWizardSegmented(
     onSelectFirst: () -> Unit,
     onSelectSecond: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(13.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        listOf(first, second).forEachIndexed { index, text ->
-            val selected = (index == 0) == firstSelected
-            Box(
-                modifier = Modifier.weight(1f).heightIn(min = 43.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.outline
-                        else androidx.compose.ui.graphics.Color.Transparent,
-                    )
-                    .clickable(onClick = if (index == 0) onSelectFirst else onSelectSecond),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text, style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (selected) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
+    // The local music browser already owns the segmented UI and its behavior.
+    SegmentedControl(
+        options = listOf(first, second),
+        selectedIndex = if (firstSelected) 0 else 1,
+        onSelect = { if (it == 0) onSelectFirst() else onSelectSecond() },
+    )
 }
 
 internal data class PlaylistWizardNavOption(
@@ -205,51 +179,25 @@ internal data class PlaylistWizardNavOption(
 internal fun PlaylistWizardNavigationList(
     options: List<PlaylistWizardNavOption>,
 ) {
+    // SettingsRow already provides icon, title, subtitle, chevron and click
+    // semantics. Avoid a separate implementation for the condition catalog.
     Column(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surface),
     ) {
         options.forEachIndexed { index, option ->
-            Row(
-                modifier = Modifier.fillMaxWidth()
-                    .clickable(onClick = option.onClick)
-                    .heightIn(min = 58.dp)
-                    .padding(start = 16.dp, end = 13.dp, top = 12.dp, bottom = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (option.icon != null) {
-                    Box(
-                        modifier = Modifier.size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(option.icon, contentDescription = null,
-                            tint = AccentRed, modifier = Modifier.size(20.dp))
-                    }
-                }
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                    Text(option.title, style = MaterialTheme.typography.titleMedium)
-                    if (option.description.isNotEmpty()) {
-                        Text(option.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                Icon(Icons.Rounded.ChevronRight, contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp))
-            }
+            SettingsRow(
+                icon = option.icon,
+                title = option.title,
+                subtitle = option.description.ifBlank { null },
+                onClick = option.onClick,
+                reserveIconSpace = false,
+            )
             if (index < options.lastIndex) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(start = if (option.icon != null) 64.dp else 16.dp)
-                        .height(0.5.dp)
-                        .background(MaterialTheme.colorScheme.outline),
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = if (option.icon != null) 52.dp else 16.dp),
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outline,
                 )
             }
         }
@@ -262,20 +210,27 @@ internal fun PlaylistWizardSelectionRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    // Reuse native SettingsRow for source/rule selection instead of manually
+    // reimplementing text, touch area, alignment and click semantics.
+    Box(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
-        Text(label, modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyLarge)
-        if (selected) {
-            Icon(Icons.Rounded.Check, contentDescription = "Selecionado",
-                tint = AccentRed, modifier = Modifier.size(20.dp))
-        }
+        SettingsRow(
+            title = label,
+            onClick = onClick,
+            reserveIconSpace = false,
+            trailing = {
+                if (selected) {
+                    Icon(
+                        Icons.Rounded.Check,
+                        contentDescription = "Selecionado",
+                        tint = AccentRed,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            },
+        )
     }
 }
 
