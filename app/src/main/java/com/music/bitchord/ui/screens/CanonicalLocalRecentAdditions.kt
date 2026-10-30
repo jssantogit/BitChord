@@ -70,7 +70,7 @@ internal fun CanonicalLocalRecentAdditions(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            "Adições locais",
+            "Adições recentes",
             modifier = Modifier.padding(horizontal = PAGE_GUTTER),
             style = MaterialTheme.typography.headlineMedium,
         )
