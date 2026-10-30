@@ -77,10 +77,10 @@ internal sealed interface SmartCollectionActionSource {
     data class SavedStaticPlaylist(val id: String) : SmartCollectionActionSource
     /** Click a real row: verify current saved membership before playing its ordered suffix. */
     data class SavedStaticPlaylistFromTrack(
-        val id: String, val recordingId: String,
+        val id: String, val recordingId: String, val includeFollowing: Boolean = true,
     ) : SmartCollectionActionSource
     data class SavedV2PlaylistFromTrack(
-        val id: String, val recordingId: String,
+        val id: String, val recordingId: String, val includeFollowing: Boolean = true,
     ) : SmartCollectionActionSource
     data class PreviewV2Query(val query: SmartPlaylistV2Query, val ownerId: String? = null) : SmartCollectionActionSource
 }
@@ -92,6 +92,15 @@ internal fun playlistPlaybackSuffix(
     val index = currentRecordingIds.indexOf(clickedRecordingId)
     return if (index < 0) null else currentRecordingIds.drop(index)
 }
+
+/** A queue menu action adds exactly one verified song, never the following songs. */
+internal fun playlistPlaybackSelection(
+    ids: List<String>, clickedRecordingId: String, includeFollowing: Boolean,
+): List<String>? = if (includeFollowing) {
+    playlistPlaybackSuffix(ids, clickedRecordingId)
+} else if (clickedRecordingId in ids) {
+    listOf(clickedRecordingId)
+} else null
 
 internal sealed interface SmartCollectionBatchResult {
     data object Submitted : SmartCollectionBatchResult
@@ -248,16 +257,16 @@ private suspend fun currentSmartCollectionIds(
             SmartPlaylistDefinitionDatabase.get(context).staticPlaylistDao(),
         )
         val saved = repo.list().firstOrNull { it.id == source.id } ?: return null
-        playlistPlaybackSuffix(saved.recordingIds, source.recordingId)
+        playlistPlaybackSelection(saved.recordingIds, source.recordingId, source.includeFollowing)
     }
     is SmartCollectionActionSource.SavedV2PlaylistFromTrack -> {
         val repo = SmartPlaylistV2DefinitionRepository(
             SmartPlaylistDefinitionDatabase.get(context).v2DefinitionDao(),
         )
         val saved = repo.list().firstOrNull { it.id == source.id } ?: return null
-        playlistPlaybackSuffix(
+        playlistPlaybackSelection(
             currentSmartPlaylistV2QueryIds(context, saved.query, saved.id),
-            source.recordingId,
+            source.recordingId, source.includeFollowing,
         )
     }
     }
