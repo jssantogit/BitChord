@@ -294,17 +294,6 @@ internal fun UnifiedPlaylistLibraryShelf(
         CanonicalPlaylistDetailScreen(
             card = selected,
             onClose = { onSelectedCardChange(null) },
-            onEdit = {
-                onSelectedCardChange(null)
-                when (selected) {
-                    is LibraryPlaylistCard.Smart ->
-                        onOpenSmartPlaylist(selected.definition.id)
-                    is LibraryPlaylistCard.CanonicalNormal ->
-                        onOpenCanonicalNormalPlaylist(selected.definition.id)
-                    is LibraryPlaylistCard.Normal ->
-                        onOpenNormalPlaylist(selected.shelfItem)
-                }
-            },
             onAction = { intent ->
                 when (selected) {
                     is LibraryPlaylistCard.Smart ->
