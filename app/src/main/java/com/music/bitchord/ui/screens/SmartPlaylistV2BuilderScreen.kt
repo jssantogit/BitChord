@@ -165,6 +165,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     var normalSelectedIds by remember { mutableStateOf<List<String>>(emptyList()) }
     var normalSelectedRows by remember { mutableStateOf<List<V2DisplayRow>>(emptyList()) }
     var normalLoading by remember { mutableStateOf(false) }
+    var normalAddingAlbumId by remember { mutableStateOf<String?>(null) }
     var editingId by remember { mutableStateOf<String?>(null) }
     var editingFilterId by remember { mutableStateOf<String?>(null) }
     var rule by remember { mutableStateOf<SmartPlaylistRule>(
@@ -565,6 +566,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     normalSelectedIds = normalSelectedIds,
                     normalSearch = normalSearch,
                     normalLoading = normalLoading,
+                    normalAddingAlbumId = normalAddingAlbumId,
                     normalSourceProviderKey = normalSourceProviderKey,
                     availableSourceKeys = availableSourceKeys,
                     onNormalSourceChange = {
@@ -608,6 +610,30 @@ internal fun SmartPlaylistV2BuilderScreen(
                     onNormalSearchChange = { normalSearch = it },
                     onToggleNormalTrack = { id ->
                         normalSelectedIds = toggleCanonicalStaticMember(normalSelectedIds, id)
+                    },
+                    onAddNormalAlbum = { group ->
+                        if (normalAddingAlbumId == null &&
+                            group.type == CanonicalPlaylistBrowseType.ALBUMS
+                        ) {
+                            normalAddingAlbumId = group.id
+                            scope.launch {
+                                try {
+                                    val tracks = canonicalNormalPlaylistGroupTracks(
+                                        context, group, normalSourceProviderKey,
+                                    )
+                                    // Playback membership stays canonical. Do not insert
+                                    // a ReleaseId or infer any members from its title.
+                                    normalSelectedIds =
+                                        (normalSelectedIds + tracks.map { it.id }).distinct()
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    error = "Não foi possível adicionar as músicas deste álbum."
+                                } finally {
+                                    normalAddingAlbumId = null
+                                }
+                            }
+                        }
                     },
                     onMoveNormalTrack = { id, towardStart ->
                         normalSelectedIds = moveCanonicalStaticMember(normalSelectedIds, id, towardStart)
