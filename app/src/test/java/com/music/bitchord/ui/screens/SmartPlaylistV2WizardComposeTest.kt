@@ -58,6 +58,39 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("NewJeans").assertExists()
     }
 
+    @Test fun normalCatalogSelectionUsesSharedTrackRowAndPreservesRecordingId() {
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE,
+                SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ))
+        var selectedId: String? = null
+        var browseType = CanonicalPlaylistBrowseType.TRACKS
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Nova playlist",
+                rule = rule,
+                normalMode = true,
+                normalRows = listOf(V2DisplayRow("canonical:recording-25", "Faixa exata", "Artista real")),
+                onToggleNormalTrack = { selectedId = it },
+                onNormalBrowseTypeChange = { browseType = it },
+                sort = SmartPlaylistV2Sort.TITLE_ASC, limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {}, onSortChange = {},
+                onLimitChange = {}, onSeedChange = {}, onPreview = {},
+                onSave = {}, onSaveFilter = {}, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithText("Faixa exata").performClick()
+        compose.runOnIdle { assertEquals("canonical:recording-25", selectedId) }
+        compose.onNodeWithText("Álbuns").performClick()
+        compose.runOnIdle { assertEquals(CanonicalPlaylistBrowseType.ALBUMS, browseType) }
+    }
+
     @Test fun normalReviewShowsTrackAfterFiftyWithoutArtificialTruncation() {
         val rows = (1..81).map { index ->
             V2DisplayRow("rec-${index}", "Track ${index}", "Artist ${index}")
