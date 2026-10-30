@@ -349,7 +349,7 @@ private fun UnifiedPlaylistCompactRow(
 ) {
     val context = LocalContext.current.applicationContext
     val canonicalCover by produceState<List<V2DisplayRow>>(
-        initialValue = emptyList(), key1 = card.id,
+        initialValue = emptyList(), key1 = card.id, key2 = card,
     ) {
         value = when (card) {
             is LibraryPlaylistCard.CanonicalNormal -> {
