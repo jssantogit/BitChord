@@ -65,6 +65,20 @@ class PlaylistLibraryVisualReuseTest {
         compose.runOnIdle { assertEquals("newjeans", query) }
     }
 
+    @Test fun playlistDetailTrackTapPreservesExactCanonicalRecordingId() {
+        var clicked: String? = null
+        compose.setContent {
+            CanonicalPlaylistTrackRow(
+                track = V2DisplayRow(
+                    id = "recording:exact-27", title = "ASAP", artist = "NewJeans",
+                ),
+                onPlay = { clicked = it },
+            )
+        }
+        compose.onNodeWithText("ASAP").performClick()
+        compose.runOnIdle { assertEquals("recording:exact-27", clicked) }
+    }
+
     @Test fun sharedLibraryRowKeepsArtworkSlotAndOpensSelectedPlaylist() {
         var opened = 0
         compose.setContent {
