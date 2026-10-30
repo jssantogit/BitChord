@@ -85,8 +85,11 @@ class SmartPlaylistV2WizardComposeTest {
             )
         }
         compose.onNodeWithText("Continuar").performClick()
+        // A LazyColumn intentionally does not compose off-screen recording rows.
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
         compose.onNodeWithText("Faixa exata").performClick()
         compose.runOnIdle { assertEquals("canonical:recording-25", selectedId) }
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(1)
         compose.onNodeWithText("Álbuns").performClick()
         compose.runOnIdle { assertEquals(CanonicalPlaylistBrowseType.ALBUMS, browseType) }
     }
