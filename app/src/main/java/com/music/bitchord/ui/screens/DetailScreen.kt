@@ -563,12 +563,14 @@ fun DetailScreen(
                 }
             }
 
-            if (searching) {
+            if (searching || (folder != null && page.browseId == "local:all")) {
                 item(key = "search") {
                     DetailSearchField(
                         query = query,
                         onQueryChange = { query = it },
-                        onClose = closeSearch,
+                        onClose = if (folder != null && page.browseId == "local:all") {
+                            { query = "" }
+                        } else closeSearch,
                         autoFocus = focusSearch,
                         onFocused = { focusSearch = false },
                         palette = palette,
@@ -673,6 +675,7 @@ fun DetailScreen(
                         groups = folderGroups,
                         query = query,
                         columns = gridColumns,
+                        hideTabPicker = page.browseId == "local:all",
                         palette = palette,
                         currentSong = currentSong,
                         isPlaying = isPlaying,
