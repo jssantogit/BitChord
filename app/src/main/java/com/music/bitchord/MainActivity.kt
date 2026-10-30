@@ -75,6 +75,8 @@ import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Sort
+import androidx.compose.material.icons.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Upgrade
 import com.music.bitchord.data.listentogether.ServerConnectionState
 import androidx.compose.material3.DropdownMenu
@@ -2151,6 +2153,18 @@ private fun BitChordApp(
     var rediscoveryRecordingId by rememberSaveable { mutableStateOf<String?>(null) }
     var showCanonicalMyRatings by rememberSaveable { mutableStateOf(false) }
     var showPlaylistLibrary by rememberSaveable { mutableStateOf(false) }
+    var openedCanonicalPlaylist by remember {
+        mutableStateOf<com.music.bitchord.ui.screens.LibraryPlaylistCard?>(null)
+    }
+    var playlistLibraryQuery by rememberSaveable { mutableStateOf("") }
+    var playlistLibrarySort by rememberSaveable {
+        mutableStateOf(com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT)
+    }
+    var playlistLibraryFilter by rememberSaveable {
+        mutableStateOf(com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.ALL)
+    }
+    var playlistLibrarySortMenu by remember { mutableStateOf(false) }
+    var playlistLibraryOptionsMenu by remember { mutableStateOf(false) }
     var showSmartPlaylistBuilder by rememberSaveable { mutableStateOf(false) }
     var editingSmartPlaylistId by remember { mutableStateOf<String?>(null) }
     var editingNormalPlaylistId by remember { mutableStateOf<String?>(null) }
@@ -2582,7 +2596,11 @@ private fun BitChordApp(
         BackHandler(enabled = detailActiveShelf != null) { detailActiveShelf = null }
         BackHandler(enabled = rediscoveryRecordingId != null) { rediscoveryRecordingId = null }
         BackHandler(enabled = showCanonicalMyRatings) { showCanonicalMyRatings = false }
-        BackHandler(enabled = showPlaylistLibrary && detail == null) { showPlaylistLibrary = false }
+        BackHandler(enabled = showPlaylistLibrary && detail == null &&
+            !showSmartPlaylistBuilder) {
+            if (openedCanonicalPlaylist != null) openedCanonicalPlaylist = null
+            else showPlaylistLibrary = false
+        }
         BackHandler(enabled = showSmartPlaylistBuilder) { showSmartPlaylistBuilder = false }
 
         // On a tablet the page and the player stand side by side rather than
@@ -2739,6 +2757,17 @@ private fun BitChordApp(
                                 )
                             },
                             contentPadding = listPadding,
+                            query = playlistLibraryQuery,
+                            onQueryChange = { playlistLibraryQuery = it },
+                            sort = playlistLibrarySort,
+                            filter = playlistLibraryFilter,
+                            onResetFilters = {
+                                playlistLibraryQuery = ""
+                                playlistLibraryFilter =
+                                    com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.ALL
+                            },
+                            selectedCard = openedCanonicalPlaylist,
+                            onSelectedCardChange = { openedCanonicalPlaylist = it },
                         )
                     } else if (key == "my_ratings") {
                         CanonicalMyRatingsScreen(onBack = { showCanonicalMyRatings = false })
@@ -3641,6 +3670,7 @@ private fun BitChordApp(
                         showDiscord -> "Discord"
                         showHistory -> stringResource(R.string.history)
                         libraryShowAll != null && detail == null -> libraryShowAll?.title.orEmpty()
+                        showSmartPlaylistBuilder && detail == null -> "Nova playlist"
                         showPlaylistLibrary && detail == null -> "Playlists"
                         showAccountScrobbling -> stringResource(R.string.account_scrobbling)
                         showSources -> stringResource(R.string.sources)
@@ -3684,7 +3714,15 @@ private fun BitChordApp(
                         showDiscord -> ({ showDiscord = false })
                         showHistory -> ({ showHistory = false })
                         libraryShowAll != null && detail == null -> ({ libraryShowAll = null })
-                        showPlaylistLibrary && detail == null -> ({ showPlaylistLibrary = false })
+                        showSmartPlaylistBuilder && detail == null -> ({
+                            showSmartPlaylistBuilder = false
+                            editingSmartPlaylistId = null
+                            editingNormalPlaylistId = null
+                        })
+                        showPlaylistLibrary && detail == null -> ({
+                            if (openedCanonicalPlaylist != null) openedCanonicalPlaylist = null
+                            else showPlaylistLibrary = false
+                        })
                         showAccountScrobbling -> ({
                             showAccountScrobbling = false
                             if (settingsSubScreen == "account_scrobbling") settingsSubScreen = null
@@ -3751,6 +3789,101 @@ private fun BitChordApp(
                         }
                     } else null,
                     actions = {
+                        if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null &&
+                            !showSettings && !showAccountScrobbling) {
+                            if (openedCanonicalPlaylist == null) {
+                                IconButton(onClick = {
+                                    editingSmartPlaylistId = null
+                                    editingNormalPlaylistId = null
+                                    showSmartPlaylistBuilder = true
+                                }) {
+                                    Icon(
+                                        Icons.Rounded.PlaylistAdd,
+                                        contentDescription = "Nova playlist",
+                                    )
+                                }
+                                Box {
+                                    IconButton(onClick = { playlistLibrarySortMenu = true }) {
+                                        Icon(Icons.Rounded.Sort,
+                                            contentDescription = "Ordenar playlists")
+                                    }
+                                    DropdownMenu(
+                                        expanded = playlistLibrarySortMenu,
+                                        onDismissRequest = { playlistLibrarySortMenu = false },
+                                    ) {
+                                        listOf(
+                                            com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT to
+                                                "Ordem padrão",
+                                            com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_ASC to
+                                                "Nome: A a Z",
+                                            com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_DESC to
+                                                "Nome: Z a A",
+                                        ).forEach { (choice, label) ->
+                                            DropdownMenuItem(
+                                                text = { Text(label) },
+                                                trailingIcon = if (playlistLibrarySort == choice) {
+                                                    { Icon(Icons.Rounded.Check, contentDescription = null) }
+                                                } else null,
+                                                onClick = {
+                                                    playlistLibrarySort = choice
+                                                    playlistLibrarySortMenu = false
+                                                },
+                                            )
+                                        }
+                                    }
+                                }
+                                Box {
+                                    IconButton(onClick = { playlistLibraryOptionsMenu = true }) {
+                                        Icon(Icons.Rounded.MoreVert,
+                                            contentDescription = "Opções de playlists")
+                                    }
+                                    DropdownMenu(
+                                        expanded = playlistLibraryOptionsMenu,
+                                        onDismissRequest = { playlistLibraryOptionsMenu = false },
+                                    ) {
+                                        listOf(
+                                            com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.ALL
+                                                to "Todas as playlists",
+                                            com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.NORMAL
+                                                to "Playlists normais",
+                                            com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.SMART
+                                                to "Playlists inteligentes",
+                                        ).forEach { (choice, label) ->
+                                            DropdownMenuItem(
+                                                text = { Text(label) },
+                                                trailingIcon = if (playlistLibraryFilter == choice) {
+                                                    { Icon(Icons.Rounded.Check, contentDescription = null) }
+                                                } else null,
+                                                onClick = {
+                                                    playlistLibraryFilter = choice
+                                                    playlistLibraryOptionsMenu = false
+                                                },
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                TextButton(onClick = {
+                                    val selected = openedCanonicalPlaylist
+                                    openedCanonicalPlaylist = null
+                                    when (selected) {
+                                        is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart -> {
+                                            editingSmartPlaylistId = selected.definition.id
+                                            editingNormalPlaylistId = null
+                                            showSmartPlaylistBuilder = true
+                                        }
+                                        is com.music.bitchord.ui.screens.LibraryPlaylistCard.CanonicalNormal -> {
+                                            editingNormalPlaylistId = selected.definition.id
+                                            editingSmartPlaylistId = null
+                                            showSmartPlaylistBuilder = true
+                                        }
+                                        else -> Unit
+                                    }
+                                }) {
+                                    Text("Editar", color = com.music.bitchord.ui.theme.AccentRed)
+                                }
+                            }
+                        }
                         // This is intentionally scoped to Listen together: the
                         // round-trip time is meaningful while coordinating a
                         // party, but would be noise in the rest of the app.
@@ -3830,7 +3963,7 @@ private fun BitChordApp(
                                 }
                             }
                         }
-                        if (!showSettings && !showAccountScrobbling) {
+                        if (!showSettings && !showAccountScrobbling && !showPlaylistLibrary) {
                             // Left of the account photo, and only on Library itself:
                             // a history is a record of what was played, which reads
                             // as that tab's business rather than every tab's.
@@ -4041,6 +4174,7 @@ private fun BitChordApp(
                     showHistory = false
                     libraryShowAll = null
                     showPlaylistLibrary = false
+                    openedCanonicalPlaylist = null
                     selectedTab = index
 
                     // Every search tab tap resets the field, focuses it, and opens
