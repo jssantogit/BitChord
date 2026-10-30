@@ -28,7 +28,12 @@ class A0AutoTransportAdmissionTest {
         assertTrue(A0AutoTransportAdmission.accepts(choice("mp3")))
     }
 
+    @Test fun efficientCodecSourcesPassFinalTransportGateAfterPolicyApproval() {
+        assertTrue(A0AutoTransportAdmission.accepts(choice("opus")))
+        assertTrue(A0AutoTransportAdmission.accepts(choice("ogg")))
+    }
+
     @Test fun unsupportedSourceContainerDoesNotReachAnySavedCredentials() {
-        assertFalse(A0AutoTransportAdmission.accepts(choice("opus")))
+        assertFalse(A0AutoTransportAdmission.accepts(choice("m4a")))
     }
 }

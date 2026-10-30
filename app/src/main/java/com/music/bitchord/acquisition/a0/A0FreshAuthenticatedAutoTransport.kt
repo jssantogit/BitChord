@@ -110,7 +110,7 @@ internal object A0AutoTransportAdmission {
             candidate.sizeBytes !in A0ObservedTransferLimits.MIN_AUDIO_BYTES..
                 A0ObservedTransferLimits.MAX_AUDIO_BYTES ||
             candidate.claim.format.lowercase(Locale.ROOT) !in
-                setOf("mp3","flac","wav","aac") ||
+                setOf("mp3","flac","wav","aac","opus","ogg") ||
             !A0ModernIncomingTransfer.isSafeRemoteName(candidate.remotePath))
             return false
         return runCatching {
