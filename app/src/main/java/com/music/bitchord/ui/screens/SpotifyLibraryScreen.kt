@@ -160,7 +160,7 @@ internal fun LibraryRow(
     title: String,
     subtitle: String,
     imageUrl: String?,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     artwork: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
@@ -168,7 +168,7 @@ internal fun LibraryRow(
 ) {
     Row(
         modifier = modifier.fillMaxWidth()
-            .clickable(onClick = onClick)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = horizontalPadding, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
