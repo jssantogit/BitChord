@@ -2482,6 +2482,7 @@ internal fun SettingsRow(
     trailing: (@Composable () -> Unit)? = null,
     /** Compact catalog rows have no leading glyph column. Existing settings keep theirs. */
     reserveIconSpace: Boolean = true,
+    iconTint: Color = MaterialTheme.colorScheme.onBackground,
 ) {
     Row(
         modifier = Modifier
@@ -2496,14 +2497,14 @@ internal fun SettingsRow(
             Icon(
                 painter = iconPainter,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onBackground,
+                tint = iconTint,
                 modifier = Modifier.size(ICON_SIZE),
             )
         } else if (icon != null) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onBackground,
+                tint = iconTint,
                 modifier = Modifier.size(ICON_SIZE),
             )
         }
