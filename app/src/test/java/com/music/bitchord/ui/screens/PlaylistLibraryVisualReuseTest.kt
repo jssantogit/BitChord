@@ -79,6 +79,28 @@ class PlaylistLibraryVisualReuseTest {
         compose.runOnIdle { assertEquals("recording:exact-27", clicked) }
     }
 
+    @Test fun playlistTrackMenuQueuesOnlyExplicitSelectedCanonicalRecording() {
+        var queued: Pair<String, com.music.bitchord.playback.CanonicalCollectionIntent>? = null
+        compose.setContent {
+            CanonicalPlaylistTrackRow(
+                track = V2DisplayRow(
+                    id = "recording:verified-28", title = "Bubble Gum", artist = "NewJeans",
+                ),
+                onPlay = {},
+                onQueue = { id, intent -> queued = id to intent },
+            )
+        }
+        compose.onNodeWithContentDescription("Ações da música").performClick()
+        compose.onNodeWithText("Adicionar à fila").performClick()
+        compose.runOnIdle {
+            assertEquals(
+                "recording:verified-28" to
+                    com.music.bitchord.playback.CanonicalCollectionIntent.ADD_TO_QUEUE,
+                queued,
+            )
+        }
+    }
+
     @Test fun sharedLibraryRowKeepsArtworkSlotAndOpensSelectedPlaylist() {
         var opened = 0
         compose.setContent {
