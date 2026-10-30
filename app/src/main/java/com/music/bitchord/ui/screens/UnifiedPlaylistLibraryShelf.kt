@@ -366,9 +366,11 @@ private fun UnifiedPlaylistCompactRow(
             }
             is LibraryPlaylistCard.Smart -> {
                 try {
-                    val evaluator = persistentSmartPlaylistPreview(context)
                     val ids = withContext(Dispatchers.IO) {
-                        evaluator.preview(card.definition.query, card.definition.id)
+                        // Building the rule evaluator can read Room configuration.
+                        // Keep it away from the main thread, especially in a lazy shelf.
+                        persistentSmartPlaylistPreview(context)
+                            .preview(card.definition.query, card.definition.id)
                             .take(4).map { it.recordingId }
                     }
                     canonicalNormalPlaylistSelectedRows(context, ids)
