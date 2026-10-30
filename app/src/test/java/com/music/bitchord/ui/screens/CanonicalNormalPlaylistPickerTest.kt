@@ -39,6 +39,17 @@ class CanonicalNormalPlaylistPickerTest {
             filterCanonicalPlaylistBrowseGroups(listOf(album, artist), "NEW"))
     }
 
+    @Test fun artistDisplayFallbackIsOnlyABrowseKeyNotARecordingId() {
+        assertEquals(
+            "browse-display-artist:NewJeans",
+            playlistDisplayArtistGroupId("NewJeans"),
+        )
+        assertEquals(
+            "browse-display-artist:aespa, G-Dragon",
+            playlistDisplayArtistGroupId("aespa, G-Dragon"),
+        )
+    }
+
     @Test fun localOnlySourceDefaultsToLocalButNeverOverridesMultisourceOrEditing() {
         assertEquals("local-mediastore", defaultCanonicalNormalPlaylistSource(
             listOf("local-mediastore"),
