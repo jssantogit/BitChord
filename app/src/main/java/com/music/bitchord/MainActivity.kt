@@ -2165,6 +2165,7 @@ private fun BitChordApp(
     }
     var playlistLibrarySortMenu by remember { mutableStateOf(false) }
     var playlistLibraryOptionsMenu by remember { mutableStateOf(false) }
+    val playlistLibraryListState = rememberLazyListState()
     var showSmartPlaylistBuilder by rememberSaveable { mutableStateOf(false) }
     var editingSmartPlaylistId by remember { mutableStateOf<String?>(null) }
     var editingNormalPlaylistId by remember { mutableStateOf<String?>(null) }
@@ -2768,6 +2769,7 @@ private fun BitChordApp(
                             },
                             selectedCard = openedCanonicalPlaylist,
                             onSelectedCardChange = { openedCanonicalPlaylist = it },
+                            listState = playlistLibraryListState,
                         )
                     } else if (key == "my_ratings") {
                         CanonicalMyRatingsScreen(onBack = { showCanonicalMyRatings = false })
@@ -3701,6 +3703,10 @@ private fun BitChordApp(
                             (libraryShowAll != null && detail == null) ||
                             (detail != null && detailActiveShelf != null) ||
                             selectedMoodGenre != null -> true
+                        showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null ->
+                            openedCanonicalPlaylist != null ||
+                                playlistLibraryListState.firstVisibleItemIndex > 0 ||
+                                playlistLibraryListState.firstVisibleItemScrollOffset > 64
                         // The page leads with its own large "Replay", so the bar
                         // stays out of the way until that has been scrolled off.
                         showReplay -> replayScrolled
