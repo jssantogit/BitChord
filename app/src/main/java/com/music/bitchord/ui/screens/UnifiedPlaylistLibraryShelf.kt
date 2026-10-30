@@ -289,6 +289,26 @@ private fun UnifiedPlaylistCompactRow(
     onPlay: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current.applicationContext
+    val canonicalCover by produceState<V2DisplayRow?>(
+        initialValue = null, key1 = card.id,
+    ) {
+        value = when (card) {
+            is LibraryPlaylistCard.CanonicalNormal -> {
+                try {
+                    val firstId = card.definition.recordingIds.firstOrNull()
+                    if (firstId == null) null else canonicalNormalPlaylistSelectedRows(
+                        context, listOf(firstId), card.definition.sourceProviderKey,
+                    ).firstOrNull()?.takeIf { it.title != "Gravação indisponível" }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            else -> null
+        }
+    }
     Row(
         modifier = modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
@@ -304,7 +324,9 @@ private fun UnifiedPlaylistCompactRow(
         ) {
             val image = (card as? LibraryPlaylistCard.Normal)
                 ?.shelfItem?.thumbnailUrl?.takeIf { it.isNotBlank() }
-            if (image != null) {
+            if (canonicalCover != null) {
+                SmartPlaylistPreviewArtwork(canonicalCover!!, Modifier.size(56.dp))
+            } else if (image != null) {
                 AsyncImage(model = image, contentDescription = card.title,
                     contentScale = ContentScale.Crop, modifier = Modifier.size(56.dp))
             } else {
