@@ -53,6 +53,20 @@ class UnifiedPlaylistLibraryShelfTest {
         assertTrue(cards[0] is LibraryPlaylistCard.Smart)
     }
 
+    @Test fun openPlaylistResolvesUpdatedSavedDefinitionByStableId() {
+        val before = LibraryPlaylistCard.CanonicalNormal(
+            SavedCanonicalStaticPlaylist("playlist-a", "Old title", listOf("rec-1")),
+        )
+        val after = LibraryPlaylistCard.CanonicalNormal(
+            SavedCanonicalStaticPlaylist("playlist-a", "Updated title", listOf("rec-2")),
+        )
+        val resolved = latestLibraryPlaylistCard(before, listOf(after))
+        assertEquals("Updated title", resolved?.title)
+        assertEquals(listOf("rec-2"),
+            (resolved as LibraryPlaylistCard.CanonicalNormal).definition.recordingIds)
+        assertEquals(null, latestLibraryPlaylistCard(before, emptyList()))
+    }
+
     @Test fun persistedNormalPlaylistKeepsCanonicalMemberOrderInItsCard() {
         val saved = SavedCanonicalStaticPlaylist(
             "p1", "Viagem", listOf("rec-3", "rec-1", "rec-2"),
