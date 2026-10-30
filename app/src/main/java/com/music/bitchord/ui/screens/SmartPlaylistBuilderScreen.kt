@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -331,12 +330,11 @@ internal fun SmartPlaylistBuilderScreen(
             Column {
                 @Composable
                 fun field(value: String, onValue: (String) -> Unit, label: String) {
-                    OutlinedTextField(
+                    PlaylistWizardTextEntry(
                         value = value,
                         onValueChange = { onValue(it); preview = null; previewQuery = null; error = null },
-                        label = { Text(label) },
+                        label = label,
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
                     )
                 }
                 field(draft.name, { draft = draft.copy(name = it) },
