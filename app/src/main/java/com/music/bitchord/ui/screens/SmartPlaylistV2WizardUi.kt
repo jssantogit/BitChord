@@ -260,13 +260,10 @@ private fun <T> WizardChoiceDialog(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline)
                 LazyColumn(Modifier.heightIn(max = 480.dp)) {
                     items(options) { option ->
-                        Text(
-                            label(option),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = sheetForeground,
-                            modifier = Modifier.fillMaxWidth()
-                                .clickable { onChosen(option); onClose() }
-                                .padding(horizontal = PAGE_GUTTER, vertical = 17.dp),
+                        SettingsRow(
+                            title = label(option),
+                            onClick = { onChosen(option); onClose() },
+                            reserveIconSpace = false,
                         )
                         HorizontalDivider(
                             modifier = Modifier.padding(start = PAGE_GUTTER),
@@ -567,35 +564,13 @@ internal fun SmartPlaylistV2WizardUi(
                     }
                     WizardStep.SONGS -> {
                         item {
-                            Row(
-                                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .padding(4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                CanonicalPlaylistBrowseType.entries.forEach { type ->
-                                    val label = when (type) {
-                                        CanonicalPlaylistBrowseType.TRACKS -> "Músicas"
-                                        CanonicalPlaylistBrowseType.ALBUMS -> "Álbuns"
-                                        CanonicalPlaylistBrowseType.ARTISTS -> "Artistas"
-                                    }
-                                    TextButton(
-                                        onClick = { onNormalBrowseTypeChange(type) },
-                                        modifier = Modifier.weight(1f)
-                                            .clip(RoundedCornerShape(11.dp))
-                                            .background(
-                                                if (normalBrowseType == type)
-                                                    MaterialTheme.colorScheme.outline
-                                                else Color.Transparent,
-                                            ),
-                                    ) {
-                                        Text(label, style = MaterialTheme.typography.bodyMedium,
-                                            color = if (normalBrowseType == type)
-                                                MaterialTheme.colorScheme.onBackground
-                                            else MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
-                            }
+                            SegmentedControl(
+                                options = listOf("Músicas", "Álbuns", "Artistas"),
+                                selectedIndex = CanonicalPlaylistBrowseType.entries.indexOf(normalBrowseType),
+                                onSelect = { index ->
+                                    onNormalBrowseTypeChange(CanonicalPlaylistBrowseType.entries[index])
+                                },
+                            )
                         }
                         if (normalBrowseGroup != null) {
                             item {
@@ -629,26 +604,13 @@ internal fun SmartPlaylistV2WizardUi(
                                     style = MaterialTheme.typography.bodyMedium)
                             }
                             items(normalGroups, key = { it.type.name + it.id }) { group ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable { onNormalBrowseGroupChange(group) }
-                                        .padding(vertical = 13.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    Icon(
-                                        if (group.type == CanonicalPlaylistBrowseType.ALBUMS)
-                                            Icons.Rounded.LibraryMusic else Icons.Rounded.MusicNote,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(36.dp),
-                                    )
-                                    Text(group.title, modifier = Modifier.weight(1f),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Icon(Icons.Rounded.ChevronRight, contentDescription = null)
-                                }
+                                SettingsRow(
+                                    icon = if (group.type == CanonicalPlaylistBrowseType.ALBUMS)
+                                        Icons.Rounded.LibraryMusic else Icons.Rounded.MusicNote,
+                                    title = group.title,
+                                    onClick = { onNormalBrowseGroupChange(group) },
+                                    reserveIconSpace = false,
+                                )
                             }
                         }
                         if (normalRows.size >= 200) item {
@@ -663,30 +625,27 @@ internal fun SmartPlaylistV2WizardUi(
                                 style = MaterialTheme.typography.bodyMedium)
                         }
                         items(normalRows, key = { it.id }) { row ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable { onToggleNormalTrack(row.id) }
-                                    .padding(vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                SmartPlaylistPreviewArtwork(row = row, modifier = Modifier.size(48.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(row.title, style = MaterialTheme.typography.titleMedium,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(row.artist, style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                                if (row.id in normalSelectedIds) {
-                                    Icon(Icons.Rounded.Check, contentDescription = "Selecionada",
-                                        tint = MaterialTheme.colorScheme.primary)
-                                } else {
-                                    Icon(Icons.Rounded.Add, contentDescription = "Adicionar música",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
+                            LibraryRow(
+                                title = row.title,
+                                subtitle = row.artist,
+                                imageUrl = null,
+                                artwork = {
+                                    SmartPlaylistPreviewArtwork(
+                                        row = row, modifier = Modifier.fillMaxSize(),
+                                    )
+                                },
+                                onClick = { onToggleNormalTrack(row.id) },
+                                horizontalPadding = 0.dp,
+                                trailing = {
+                                    val selected = row.id in normalSelectedIds
+                                    Icon(
+                                        if (selected) Icons.Rounded.Check else Icons.Rounded.Add,
+                                        contentDescription = if (selected) "Selecionada" else "Adicionar música",
+                                        tint = if (selected) MaterialTheme.colorScheme.primary
+                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                },
+                            )
                         }
                     }
                     WizardStep.RULES -> {
@@ -1077,18 +1036,17 @@ internal fun SmartPlaylistV2WizardUi(
                                 WizardCard("Sem músicas", "Você pode salvar uma playlist vazia e adicionar músicas depois.")
                             }
                             items(normalSelectedRows, key = { it.id }) { row ->
-                                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    SmartPlaylistPreviewArtwork(row = row, modifier = Modifier.size(48.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(row.title, style = MaterialTheme.typography.titleMedium,
-                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text(row.artist, style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                }
+                                LibraryRow(
+                                    title = row.title,
+                                    subtitle = row.artist,
+                                    imageUrl = null,
+                                    horizontalPadding = 0.dp,
+                                    artwork = {
+                                        SmartPlaylistPreviewArtwork(
+                                            row = row, modifier = Modifier.fillMaxSize(),
+                                        )
+                                    },
+                                )
                             }
                         } else {
                         item {
@@ -1164,26 +1122,17 @@ internal fun SmartPlaylistV2WizardUi(
                             }
                         }
                         items(preview.orEmpty().take(24), key = { it.id }) { row ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                SmartPlaylistPreviewArtwork(
-                                    row = row,
-                                    modifier = Modifier.size(48.dp),
-                                )
-                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                    Text(row.title,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis)
-                                    Text(row.artist, style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis)
-                                }
-                            }
+                            LibraryRow(
+                                title = row.title,
+                                subtitle = row.artist,
+                                imageUrl = null,
+                                horizontalPadding = 0.dp,
+                                artwork = {
+                                    SmartPlaylistPreviewArtwork(
+                                        row = row, modifier = Modifier.fillMaxSize(),
+                                    )
+                                },
+                            )
                         }
                         if ((preview?.size ?: 0) > 24) item {
                             Text("Exibindo as primeiras 24 músicas da prévia.",
