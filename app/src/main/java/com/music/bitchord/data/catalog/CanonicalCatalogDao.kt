@@ -8,6 +8,12 @@ import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
+/** Artwork is selected only from a recording with a provider-scoped MediaAsset. */
+internal data class CanonicalPlaylistAlbumCoverRow(
+    val groupId: String,
+    val recordingId: String,
+)
+
 internal data class CanonicalArtistCreditRow(
     val artistId: String,
     val artistName: String,
@@ -864,6 +870,60 @@ internal interface CanonicalCatalogDao {
         providerKey: String, searchTerm: String,
     ): List<ArtistEntity>
 
+
+    /**
+     * One eligible canonical recording per release, for the browse row cover.
+     * Avoids one SQL query per displayed album and never matches by album title.
+     */
+    @Query(
+        """
+        SELECT rt.releaseId AS groupId, MIN(asset.recordingId) AS recordingId
+        FROM catalog_release_track AS rt
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = rt.recordingId
+        WHERE rt.releaseId IN (:releaseIds)
+          AND asset.provider IN (:providerKeys)
+          AND asset.artworkUri IS NOT NULL AND trim(asset.artworkUri) != ''
+        GROUP BY rt.releaseId
+        """,
+    )
+    suspend fun playlistAlbumCoverRecordingIds(
+        providerKeys: List<String>, releaseIds: List<String>,
+    ): List<CanonicalPlaylistAlbumCoverRow>
+
+    /**
+     * Local and provider imports can have playable recordings before an
+     * ArtistCredit graph exists. Display-name groups are browse-only:
+     * the returned members remain independently verified RecordingIds.
+     */
+    @Query(
+        """
+        SELECT DISTINCT recording.artistDisplay
+        FROM catalog_recording AS recording
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = recording.id
+        WHERE asset.provider = :providerKey
+          AND trim(recording.artistDisplay) != ''
+          AND instr(lower(recording.artistDisplay), lower(:term)) > 0
+        ORDER BY recording.artistDisplay COLLATE NOCASE
+        LIMIT 100
+        """,
+    )
+    suspend fun playlistDisplayArtistNames(
+        providerKey: String, term: String,
+    ): List<String>
+
+    @Query(
+        """
+        SELECT DISTINCT recording.id
+        FROM catalog_recording AS recording
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = recording.id
+        WHERE asset.provider = :providerKey
+          AND recording.artistDisplay = :displayName
+        ORDER BY recording.title COLLATE NOCASE, recording.id
+        """,
+    )
+    suspend fun playlistDisplayArtistRecordingIds(
+        providerKey: String, displayName: String,
+    ): List<String>
 
     /** Navigating a Release rechecks its Recording IDs against the active source. */
     @Query(
