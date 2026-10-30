@@ -187,6 +187,9 @@ class A0RetainedCandidateReviewActivity:Activity() {
                                     // Never reinterpret a retained candidate
                                     // using Settings changed since the search.
                                     val profile=checkNotNull(initial.qualityProfile)
+                                    Log.d("BitChord",
+                                        "soulseek_manual_review preset=${profile.preset.name}" +
+                                            " strict=${profile.strict}")
                                     A0ManualRetainedCandidateTransfer.run(
                                         this@A0RetainedCandidateReviewActivity,
                                         row.entry,choice,profile,song,
