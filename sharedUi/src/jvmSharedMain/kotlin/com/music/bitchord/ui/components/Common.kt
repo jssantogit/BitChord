@@ -910,6 +910,8 @@ fun PillTextField(
     container: Color = MaterialTheme.colorScheme.surfaceVariant,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
+    /** Optional accessible label supplied by a form, without duplicating this field. */
+    accessibilityLabel: String? = null,
 ) {
     Box(
         modifier = modifier
@@ -941,7 +943,11 @@ fun PillTextField(
             visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().then(
+                if (accessibilityLabel != null)
+                    Modifier.semantics { contentDescription = accessibilityLabel }
+                else Modifier
+            ),
         )
     }
 }
