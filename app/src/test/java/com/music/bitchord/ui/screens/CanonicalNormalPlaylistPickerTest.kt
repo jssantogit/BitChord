@@ -39,6 +39,16 @@ class CanonicalNormalPlaylistPickerTest {
             filterCanonicalPlaylistBrowseGroups(listOf(album, artist), "NEW"))
     }
 
+    @Test fun localOnlySourceDefaultsToLocalButNeverOverridesMultisourceOrEditing() {
+        assertEquals("local-mediastore", defaultCanonicalNormalPlaylistSource(
+            listOf("local-mediastore"),
+        ))
+        assertEquals(null, defaultCanonicalNormalPlaylistSource(
+            listOf("local-mediastore", "opensubsonic:server-a"),
+        ))
+        assertEquals(null, defaultCanonicalNormalPlaylistSource(emptyList()))
+    }
+
     @Test fun noDuplicateRecordingIsIntroducedByRepeatedSelection() {
         val first = toggleCanonicalStaticMember(emptyList(), "rec-a")
         val second = toggleCanonicalStaticMember(first, "rec-a")
