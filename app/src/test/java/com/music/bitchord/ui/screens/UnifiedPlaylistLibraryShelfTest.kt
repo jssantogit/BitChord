@@ -37,10 +37,10 @@ class UnifiedPlaylistLibraryShelfTest {
         ),
     )
 
-    @Test fun canonicalAndNormalPlaylistsHaveSeparateStableIdsInTwoColumnRows() {
+    @Test fun canonicalAndNormalPlaylistsStaySeparateInSingleColumnRows() {
         val cards = listOf(smart("a"), normal("a"), smart("b"), normal("b"), smart("c"))
         val rows = unifiedPlaylistRows(cards)
-        assertEquals(listOf(2, 2, 1), rows.map { it.size })
+        assertEquals(listOf(1, 1, 1, 1, 1), rows.map { it.size })
         assertEquals(cards, rows.flatten())
         assertEquals(cards.size, cards.map { it.id }.distinct().size)
         assertEquals("v2:a", cards[0].id)
