@@ -83,6 +83,10 @@ internal fun CanonicalPlaylistCoverArt(
     }
 }
 
+/** A saved RecordingId without eligible MediaAsset remains visible but is not clickable. */
+internal fun V2DisplayRow.isAvailablePlaylistMember(): Boolean =
+    title != "Gravação indisponível" || artist != "Fonte não disponível"
+
 /** The same native Library row used everywhere, wired to canonical playback. */
 @Composable
 internal fun CanonicalPlaylistTrackRow(
@@ -91,11 +95,12 @@ internal fun CanonicalPlaylistTrackRow(
     onQueue: ((String, CanonicalCollectionIntent) -> Unit)? = null,
 ) {
     var menuExpanded by remember(track.id) { mutableStateOf(false) }
+    val available = track.isAvailablePlaylistMember()
     LibraryRow(
         title = track.title,
         subtitle = track.artist,
         imageUrl = null,
-        onClick = { onPlay(track.id) },
+        onClick = if (available) ({ onPlay(track.id) }) else null,
         modifier = Modifier.padding(horizontal = PAGE_GUTTER),
         horizontalPadding = 0.dp,
         artwork = {
@@ -103,7 +108,7 @@ internal fun CanonicalPlaylistTrackRow(
                 row = track, modifier = Modifier.fillMaxSize(),
             )
         },
-        trailing = {
+        trailing = if (available) ({
             Box {
                 IconButton(onClick = { menuExpanded = true }) {
                     Icon(Icons.Rounded.MoreVert, contentDescription = "Ações da música")
@@ -137,7 +142,7 @@ internal fun CanonicalPlaylistTrackRow(
                     }
                 }
             }
-        },
+        }) else null,
     )
 }
 
@@ -184,7 +189,7 @@ internal fun CanonicalPlaylistDetailScreen(
     }
     val canPlay = rows?.isNotEmpty() == true &&
         (rows?.size ?: 0) <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE &&
-        rows.orEmpty().none { it.artist == "Fonte não disponível" }
+        rows.orEmpty().all { it.isAvailablePlaylistMember() }
 
     LazyColumn(
         state = listState ?: rememberLazyListState(),
