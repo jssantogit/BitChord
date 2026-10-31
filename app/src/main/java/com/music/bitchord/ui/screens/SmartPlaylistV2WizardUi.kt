@@ -44,7 +44,7 @@ import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.AlertDialog
+import com.music.bitchord.ui.components.ConfirmationAlert
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -1251,37 +1251,33 @@ internal fun SmartPlaylistV2WizardUi(
     }
 
     if (confirmDiscard) {
-        AlertDialog(
-            onDismissRequest = { confirmDiscard = false },
-            title = { Text("Descartar alterações?") },
-            text = { Text("O rascunho desta playlist não será salvo.") },
-            confirmButton = {
-                TextButton(onClick = { confirmDiscard = false; onBack() }) {
-                    Text("Descartar")
-                }
+        ConfirmationAlert(
+            hazeState = null, // Wizard lives in a separate full-screen Dialog.
+            title = "Descartar alterações?",
+            description = "O rascunho desta playlist não será salvo.",
+            confirmLabel = "Descartar",
+            dismissLabel = "Continuar editando",
+            destructive = true,
+            onConfirm = {
+                confirmDiscard = false
+                onBack()
             },
-            dismissButton = {
-                TextButton(onClick = { confirmDiscard = false }) {
-                    Text("Continuar editando")
-                }
-            },
+            onDismiss = { confirmDiscard = false },
         )
     }
 
     if (confirmDeleteNormal) {
-        AlertDialog(
-            onDismissRequest = { confirmDeleteNormal = false },
-            title = { Text("Excluir playlist normal?") },
-            text = { Text("A lista de músicas selecionadas será removida do dispositivo. As músicas originais não serão apagadas.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDeleteNormal = false
-                    onDeleteNormal()
-                }) { Text("Excluir", color = MaterialTheme.colorScheme.error) }
+        ConfirmationAlert(
+            hazeState = null,
+            title = "Excluir playlist normal?",
+            description = "A lista de músicas selecionadas será removida do dispositivo. As músicas originais não serão apagadas.",
+            confirmLabel = "Excluir",
+            destructive = true,
+            onConfirm = {
+                confirmDeleteNormal = false
+                onDeleteNormal()
             },
-            dismissButton = {
-                TextButton(onClick = { confirmDeleteNormal = false }) { Text("Cancelar") }
-            },
+            onDismiss = { confirmDeleteNormal = false },
         )
     }
 
