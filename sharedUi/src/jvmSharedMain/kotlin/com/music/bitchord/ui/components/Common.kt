@@ -679,6 +679,7 @@ fun RowMoreButton(
     modifier: Modifier = Modifier,
     tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     iconSize: Dp = 20.dp,
+    contentDescription: String? = null,
 ) {
     Box(
         modifier = modifier
@@ -690,7 +691,7 @@ fun RowMoreButton(
     ) {
         Icon(
             Icons.Rounded.MoreVert,
-            contentDescription = stringResource(Res.string.more),
+            contentDescription = contentDescription ?: stringResource(Res.string.more),
             tint = tint,
             modifier = Modifier.size(iconSize),
         )
