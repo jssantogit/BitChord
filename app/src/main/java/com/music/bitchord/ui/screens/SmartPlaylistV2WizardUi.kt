@@ -323,6 +323,8 @@ internal fun SmartPlaylistV2WizardUi(
     editingFilterId: String?,
     savedDefinitions: List<SavedSmartPlaylistV2Definition>,
     onNameChange: (String) -> Unit,
+    description: String = "",
+    onDescriptionChange: (String) -> Unit = {},
     onRuleChange: (SmartPlaylistRule) -> Unit,
     onSortChange: (SmartPlaylistV2Sort) -> Unit,
     onLimitChange: (String) -> Unit,
@@ -400,7 +402,7 @@ internal fun SmartPlaylistV2WizardUi(
     fun back() {
         page = when (page) {
             WizardStep.IDENTITY -> {
-                if (name.isNotBlank() || editingId != null || editingFilterId != null) {
+                if (name.isNotBlank() || description.isNotBlank() || editingId != null || editingFilterId != null) {
                     confirmDiscard = true
                 } else {
                     onBack()
@@ -429,12 +431,6 @@ internal fun SmartPlaylistV2WizardUi(
         WizardStep.EDITOR -> smartConditionLabel(draft.field)
         WizardStep.REVIEW -> "Revisar e criar"
     }
-    val stepNote = when (page) {
-        WizardStep.IDENTITY -> "ETAPA 1 DE 3"
-        WizardStep.SONGS, WizardStep.RULES, WizardStep.GROUP, WizardStep.CATEGORIES,
-        WizardStep.FIELDS, WizardStep.EDITOR -> "ETAPA 2 DE 3"
-        WizardStep.REVIEW -> "ETAPA 3 DE 3"
-    }
     // Every stage has its own scroll origin. Reusing one LazyColumn state
     // caused the condition catalog to open midway down after editing a
     // scrolled group; the first category and header were not composed.
@@ -460,10 +456,6 @@ internal fun SmartPlaylistV2WizardUi(
                     hazeState = null,
                     modifier = Modifier.align(Alignment.CenterStart),
                 )
-                Text(stepNote,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.Center))
                 if (page == WizardStep.IDENTITY) {
                     TextButton(modifier = Modifier.align(Alignment.CenterEnd),
                         onClick = onManage) { Text("Filtros") }
@@ -504,13 +496,22 @@ internal fun SmartPlaylistV2WizardUi(
                             }
                         }
                         item {
-                            PlaylistWizardTextEntry(
-                                value = name,
-                                onValueChange = onNameChange,
-                                label = "Nome da playlist",
-                                hint = "Obrigatório · até 80 caracteres",
-                                error = name.length > 80,
-                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                PlaylistWizardTextEntry(
+                                    value = name,
+                                    onValueChange = onNameChange,
+                                    label = "Nome da playlist",
+                                    hint = "Obrigatório · até 80 caracteres",
+                                    error = name.length > 80,
+                                )
+                                PlaylistWizardTextEntry(
+                                    value = description,
+                                    onValueChange = { if (it.length <= 1000) onDescriptionChange(it) },
+                                    label = "Descrição (opcional)",
+                                    hint = "Exibida em Sobre a playlist · até 1.000 caracteres",
+                                    multiline = true,
+                                )
+                            }
                         }
                         item {
                             if (normalMode) {
