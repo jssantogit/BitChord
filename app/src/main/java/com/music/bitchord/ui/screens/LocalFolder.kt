@@ -137,6 +137,16 @@ enum class LocalFolderTab { SONGS, ARTISTS, ALBUMS }
 class LocalFolderState {
     var tab by mutableStateOf(LocalFolderTab.SONGS)
 
+    // Per-category view choice: changing Artists must never alter Albums or Songs.
+    // The folder's original preference is still the initial choice for each tab.
+    private var viewChoices by mutableStateOf<Map<LocalFolderTab, LibraryViewType>>(emptyMap())
+    fun viewTypeFor(tab: LocalFolderTab, default: LibraryViewType): LibraryViewType =
+        viewChoices[tab] ?: default
+
+    fun setViewTypeFor(tab: LocalFolderTab, viewType: LibraryViewType) {
+        viewChoices = viewChoices + (tab to viewType)
+    }
+
     var selectedIds by mutableStateOf<Set<String>>(emptySet())
         private set
     var selectedGroups by mutableStateOf<Set<String>>(emptySet())
