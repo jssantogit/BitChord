@@ -360,6 +360,15 @@ internal interface CanonicalCatalogDao {
     @Query("SELECT * FROM catalog_artist WHERE id = :artistId LIMIT 1")
     suspend fun artistById(artistId: String): ArtistEntity?
 
+    /** Batch-local source identity lookup for verified artist release chronology. */
+    @Query(
+        "SELECT * FROM catalog_media_asset WHERE provider = :provider " +
+            "AND sourceKey IN (:sourceKeys)"
+    )
+    suspend fun localAssetsBySourceKeys(
+        provider: String, sourceKeys: List<String>,
+    ): List<MediaAssetEntity>
+
     @Query("SELECT * FROM catalog_media_asset WHERE id IN (:mediaAssetIds)")
     suspend fun mediaAssetsByIds(mediaAssetIds: List<String>): List<MediaAssetEntity>
 
