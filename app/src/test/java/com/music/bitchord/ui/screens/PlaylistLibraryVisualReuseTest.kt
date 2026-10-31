@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -11,6 +12,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -316,6 +319,39 @@ class PlaylistLibraryVisualReuseTest {
         }
         compose.onNodeWithText("Histórico").performClick()
         compose.runOnIdle { assertEquals("history", opened) }
+    }
+
+    @Test fun conditionCategoriesUseSevenNativeCardsInsteadOfOneCompactBlock() {
+        compose.setContent {
+            PlaylistWizardNavigationList(
+                (1..7).map { n ->
+                    PlaylistWizardNavOption(
+                        title = "Categoria $n",
+                        description = "Descrição $n",
+                        icon = androidx.compose.material.icons.Icons.Rounded.LibraryMusic,
+                        onClick = {},
+                    )
+                },
+            )
+        }
+        compose.onAllNodesWithTag("native-settings-group-surface").assertCountEquals(7)
+        compose.onNodeWithText("Categoria 7").assertExists()
+    }
+
+    @Test fun playlistSynopsisUsesSameExpandableAboutComponentAsAlbums() {
+        compose.setContent {
+            val palette = com.music.bitchord.ui.theme.themeArtworkPalette()
+            AboutSection(
+                title = "Sobre a playlist",
+                text = "Uma descrição longa que o usuário pode expandir.",
+                palette = palette,
+                horizontalPadding = 0.dp,
+            )
+        }
+        compose.onNodeWithText("Sobre a playlist").assertExists()
+        compose.onNodeWithText(
+            "Uma descrição longa que o usuário pode expandir.",
+        ).assertExists()
     }
 
     @Test fun sourceSelectionRetainsCallbackAndSelectedSemantics() {
