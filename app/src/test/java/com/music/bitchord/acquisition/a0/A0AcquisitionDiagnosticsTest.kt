@@ -15,6 +15,10 @@ class A0AcquisitionDiagnosticsTest {
         assertEquals(d.Fault.EOF,d.fault(EOFException("private path")))
         assertEquals(d.Fault.IO,d.fault(IOException("credentials")))
         assertEquals(d.Fault.ARGUMENT,d.fault(IllegalArgumentException("path")))
+        assertEquals(d.Fault.TIMEOUT,d.fault(IOException(
+            "wrapper with private filename",SocketTimeoutException("peer"))))
+        assertEquals(d.Fault.CONNECT,d.fault(IOException(
+            "wrapped",IOException("layer 2",ConnectException("ip")))))
     }
     @Test fun scopesArePositiveAndDistinctForSuccessiveAttempts() {
         val a=A0AcquisitionDiagnostics.newScope()

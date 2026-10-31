@@ -13,6 +13,9 @@ class A0ManualExceptionStageTest {
             A0ManualExceptionStage.category(java.net.ConnectException("peer")))
         assertEquals(A0ManualExceptionStage.Category.EOF,
             A0ManualExceptionStage.category(java.io.EOFException("credentials")))
+        assertEquals(A0ManualExceptionStage.Category.TIMEOUT,
+            A0ManualExceptionStage.category(java.io.IOException(
+                "wrapper",java.net.SocketTimeoutException("private-peer"))))
     }
 
     @Test fun fetchFailureNeverClaimsAPossiblePublication() {

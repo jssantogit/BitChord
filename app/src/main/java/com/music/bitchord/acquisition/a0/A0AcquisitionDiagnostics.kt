@@ -34,7 +34,7 @@ internal object A0AcquisitionDiagnostics {
         A3_RESULT, A3_CLEANUP,
     }
 
-    fun fault(error:Throwable):Fault=when(error) {
+    private fun directFault(error:Throwable):Fault=when(error) {
         is A0ServerAssociatedTransfer.PeerAddressFailure -> Fault.PEER_ADDRESS
         is CancellationException, is InterruptedException -> Fault.CANCELLED
         is SocketTimeoutException -> Fault.TIMEOUT
@@ -46,6 +46,25 @@ internal object A0AcquisitionDiagnostics {
         is IllegalArgumentException -> Fault.ARGUMENT
         is IOException -> Fault.IO
         else -> Fault.OTHER
+    }
+
+    /** Network errors are often wrapped as IOException by the transfer port.
+     * Inspect at most four causal links, never log throwable messages or
+     * stack traces; preserve the first specific typed diagnosis. */
+    fun fault(error:Throwable):Fault {
+        var cursor:Throwable?=error
+        var fallback=Fault.OTHER
+        repeat(4) {
+            val current=cursor ?: return fallback
+            val classified=directFault(current)
+            if(classified!=Fault.IO && classified!=Fault.OTHER)
+                return classified
+            if(classified==Fault.IO)fallback=Fault.IO
+            val next=current.cause
+            if(next===current)return fallback
+            cursor=next
+        }
+        return fallback
     }
 
     /** The callback can run in a network worker; no exception can block P/F. */

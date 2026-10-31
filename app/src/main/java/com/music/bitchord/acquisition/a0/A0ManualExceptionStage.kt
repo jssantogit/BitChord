@@ -23,17 +23,18 @@ internal object A0ManualExceptionStage {
         else -> Phase.FETCH
     }
 
-    fun category(error:Exception):Category = when(error) {
-        is A0ServerAssociatedTransfer.PeerAddressFailure -> Category.PEER_ADDRESS
-        is CancellationException, is InterruptedException -> Category.CANCELLED
-        is SocketTimeoutException -> Category.TIMEOUT
-        is ConnectException -> Category.CONNECTION
-        is EOFException -> Category.EOF
-        is SocketException -> Category.SOCKET
-        is IOException -> Category.IO
-        is SecurityException -> Category.SECURITY
-        is IllegalStateException -> Category.STATE
-        is IllegalArgumentException -> Category.ARGUMENT
+    fun category(error:Exception):Category = when(
+        A0AcquisitionDiagnostics.fault(error)) {
+        A0AcquisitionDiagnostics.Fault.PEER_ADDRESS -> Category.PEER_ADDRESS
+        A0AcquisitionDiagnostics.Fault.CANCELLED -> Category.CANCELLED
+        A0AcquisitionDiagnostics.Fault.TIMEOUT -> Category.TIMEOUT
+        A0AcquisitionDiagnostics.Fault.CONNECT -> Category.CONNECTION
+        A0AcquisitionDiagnostics.Fault.EOF -> Category.EOF
+        A0AcquisitionDiagnostics.Fault.SOCKET -> Category.SOCKET
+        A0AcquisitionDiagnostics.Fault.IO -> Category.IO
+        A0AcquisitionDiagnostics.Fault.STATE -> Category.STATE
+        A0AcquisitionDiagnostics.Fault.SECURITY -> Category.SECURITY
+        A0AcquisitionDiagnostics.Fault.ARGUMENT -> Category.ARGUMENT
         else -> Category.OTHER
     }
 
