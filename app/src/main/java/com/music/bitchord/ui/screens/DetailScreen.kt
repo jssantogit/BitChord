@@ -1879,7 +1879,7 @@ private fun AboutSignature(
 }
 
 @Composable
-private fun AboutSection(
+internal fun AboutSection(
     title: String,
     text: String?,
     palette: ArtworkPalette,
