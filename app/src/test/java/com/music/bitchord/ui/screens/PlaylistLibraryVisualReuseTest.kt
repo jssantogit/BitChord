@@ -220,7 +220,10 @@ class PlaylistLibraryVisualReuseTest {
         }
         compose.onNodeWithText("Playlist canônica").assertExists()
         compose.onNodeWithText("Editar playlist").performClick()
-        compose.onNodeWithText("Tocar a seguir").performClick()
+        compose.onNodeWithText(
+            org.robolectric.RuntimeEnvironment.getApplication()
+                .getString(com.music.bitchord.R.string.play_next),
+        ).performClick()
         compose.runOnIdle {
             assertEquals(1, edited)
             assertEquals(1, queuedNext)
