@@ -832,7 +832,7 @@ internal fun SmartPlaylistV2WizardUi(
                                 },
                             )
                         }
-                        item {
+                        if (editingFilterId == null) item {
                             WizardCard("Limite e ordenação",
                                 "Aplicados depois de avaliar todas as condições") {
                                 PlaylistWizardSelectionRow(
