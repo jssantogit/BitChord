@@ -110,10 +110,23 @@ internal suspend fun canonicalNormalPlaylistBrowseGroups(
         }
     }
     val filtered = filterCanonicalPlaylistBrowseGroups(groups, term)
-    if (type != CanonicalPlaylistBrowseType.ALBUMS || filtered.isEmpty()) {
-        return@withContext filtered
+    if (filtered.isEmpty()) return@withContext filtered
+    val coverRecords = when (type) {
+        CanonicalPlaylistBrowseType.ALBUMS ->
+            dao.playlistAlbumCoverRecordingIds(keys, filtered.map { it.id })
+        CanonicalPlaylistBrowseType.ARTISTS -> {
+            val credited = filtered.filterNot { it.id.startsWith(DISPLAY_ARTIST_PREFIX) }
+            val display = filtered.filter { it.id.startsWith(DISPLAY_ARTIST_PREFIX) }
+            val creditArt = if (credited.isEmpty()) emptyList() else
+                dao.playlistCreditedArtistCoverRecordingIds(keys, credited.map { it.id })
+            val displayArt = if (display.isEmpty()) emptyList() else
+                dao.playlistDisplayArtistCoverRecordingIds(
+                    keys, display.map { it.id.removePrefix(DISPLAY_ARTIST_PREFIX) },
+                ).map { it.copy(groupId = playlistDisplayArtistGroupId(it.groupId)) }
+            creditArt + displayArt
+        }
+        CanonicalPlaylistBrowseType.TRACKS -> emptyList()
     }
-    val coverRecords = dao.playlistAlbumCoverRecordingIds(keys, filtered.map { it.id })
     val byId = coverRecords.map { it.recordingId }.distinct().chunked(400)
         .flatMap { dao.recordingsByIds(it) }.associateBy { it.id }
     val artwork = canonicalNormalRows(
