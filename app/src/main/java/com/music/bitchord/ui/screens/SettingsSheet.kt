@@ -83,7 +83,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import com.music.bitchord.data.lyrics.translationLanguageName
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -140,6 +139,10 @@ import com.music.bitchord.ui.components.isGlassSupported
 import com.music.bitchord.ui.components.languageDisplayNameRes
 import com.music.bitchord.ui.components.MessageState
 import com.music.bitchord.ui.components.SearchField
+import com.music.bitchord.ui.components.ConfirmationAlert
+import com.music.bitchord.ui.components.NativeAlertHost
+import com.music.bitchord.ui.components.ListenBrainzTokenAlert
+import com.music.bitchord.ui.components.LastfmLoginAlert
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.performance.resolvePerformanceRefreshRate
@@ -1685,134 +1688,99 @@ fun SettingsScreen(
 
     // Everything in the Cached songs folder goes with it, so say so first.
     if (confirmClearSongCache) {
-        AlertDialog(
-            onDismissRequest = { confirmClearSongCache = false },
-            title = { Text(stringResource(R.string.clear_song_cache_title)) },
-            text = { Text(stringResource(R.string.clear_song_cache_warning)) },
-            confirmButton = {
-                TextButton(onClick = {
+        NativeAlertHost(onDismiss = { confirmClearSongCache = false }) {
+            ConfirmationAlert(
+                hazeState = null,
+                title = stringResource(R.string.clear_song_cache_title),
+                description = stringResource(R.string.clear_song_cache_warning),
+                confirmLabel = stringResource(R.string.clear),
+                destructive = true,
+                onConfirm = {
                     confirmClearSongCache = false
                     AudioCache.clear {
-                        Toast.makeText(context, context.getString(R.string.song_cache_cleared), Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            context, context.getString(R.string.song_cache_cleared),
+                            Toast.LENGTH_SHORT,
+                        ).show()
                     }
-                }) {
-                    Text(stringResource(R.string.clear))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmClearSongCache = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
-        )
+                },
+                onDismiss = { confirmClearSongCache = false },
+            )
+        }
     }
 
     // Asked before the picker opens rather than after a file is chosen: the
     // thing being confirmed is that this device's own history is about to be
     // thrown away, and that is true whichever file gets picked.
     if (confirmImport) {
-        AlertDialog(
-            onDismissRequest = { confirmImport = false },
-            title = { Text(stringResource(R.string.import_backup_title)) },
-            text = {
-                Text(stringResource(R.string.import_backup_warning))
-            },
-            confirmButton = {
-                TextButton(onClick = {
+        NativeAlertHost(onDismiss = { confirmImport = false }) {
+            ConfirmationAlert(
+                hazeState = null,
+                title = stringResource(R.string.import_backup_title),
+                description = stringResource(R.string.import_backup_warning),
+                confirmLabel = stringResource(R.string.choose_file),
+                onConfirm = {
                     confirmImport = false
                     importPicker.launch(arrayOf("application/json", "text/plain", "*/*"))
-                }) {
-                    Text(stringResource(R.string.choose_file))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmImport = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
-        )
+                },
+                onDismiss = { confirmImport = false },
+            )
+        }
     }
 
     if (showPerformanceWarning) {
-        AlertDialog(
-            onDismissRequest = { showPerformanceWarning = false },
-            title = { Text(stringResource(R.string.high_performance_before_enabling)) },
-            text = { Text(stringResource(R.string.high_performance_battery_warning)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showPerformanceWarning = false
-                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                            data = Uri.fromParts("package", context.packageName, null)
-                        }
-                        val settingsIntent = intent.takeIf {
-                            it.resolveActivity(context.packageManager) != null
-                        } ?: Intent(Settings.ACTION_SETTINGS)
-                        batterySettingsLauncher.launch(settingsIntent)
-                    },
-                ) {
-                    Text(stringResource(R.string.open_battery_settings))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPerformanceWarning = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
-        )
+        NativeAlertHost(onDismiss = { showPerformanceWarning = false }) {
+            ConfirmationAlert(
+                hazeState = null,
+                title = stringResource(R.string.high_performance_before_enabling),
+                description = stringResource(R.string.high_performance_battery_warning),
+                confirmLabel = stringResource(R.string.open_battery_settings),
+                onConfirm = {
+                    showPerformanceWarning = false
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", context.packageName, null)
+                    }
+                    val settingsIntent = intent.takeIf {
+                        it.resolveActivity(context.packageManager) != null
+                    } ?: Intent(Settings.ACTION_SETTINGS)
+                    batterySettingsLauncher.launch(settingsIntent)
+                },
+                onDismiss = { showPerformanceWarning = false },
+            )
+        }
     }
 
     if (showPerformanceConfirmation) {
-        AlertDialog(
-            onDismissRequest = { showPerformanceConfirmation = false },
-            title = { Text(stringResource(R.string.enable_high_performance_title)) },
-            text = { Text(stringResource(R.string.enable_high_performance_confirmation)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showPerformanceConfirmation = false
-                        AppSettings.setHighPerformanceMode(true)
-                    },
-                ) {
-                    Text(stringResource(R.string.enable))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPerformanceConfirmation = false }) {
-                    Text(stringResource(R.string.not_yet))
-                }
-            },
-        )
+        NativeAlertHost(onDismiss = { showPerformanceConfirmation = false }) {
+            ConfirmationAlert(
+                hazeState = null,
+                title = stringResource(R.string.enable_high_performance_title),
+                description = stringResource(R.string.enable_high_performance_confirmation),
+                confirmLabel = stringResource(R.string.enable),
+                dismissLabel = stringResource(R.string.not_yet),
+                onConfirm = {
+                    showPerformanceConfirmation = false
+                    AppSettings.setHighPerformanceMode(true)
+                },
+                onDismiss = { showPerformanceConfirmation = false },
+            )
+        }
     }
 
     if (showListenBrainzTokenDialog) {
         var tokenInput by remember { mutableStateOf(listenBrainzToken) }
-        AlertDialog(
-            onDismissRequest = { showListenBrainzTokenDialog = false },
-            title = { Text(stringResource(R.string.listenbrainz_token)) },
-            text = {
-                OutlinedTextField(
-                    value = tokenInput,
-                    onValueChange = { tokenInput = it },
-                    label = { Text(stringResource(R.string.api_token)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
+        NativeAlertHost(onDismiss = { showListenBrainzTokenDialog = false }) {
+            ListenBrainzTokenAlert(
+                hazeState = null,
+                tokenInput = tokenInput,
+                onTokenInputChange = { tokenInput = it },
+                onSave = {
                     AppSettings.setListenBrainzToken(tokenInput.trim())
                     showListenBrainzTokenDialog = false
-                }) {
-                    Text(stringResource(R.string.save))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showListenBrainzTokenDialog = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
-        )
+                },
+                onDismiss = { showListenBrainzTokenDialog = false },
+            )
+        }
     }
 
     if (showLastfmLoginDialog) {
@@ -1820,76 +1788,44 @@ fun SettingsScreen(
         var passwordInput by remember { mutableStateOf("") }
         var lastfmError by remember { mutableStateOf<String?>(null) }
         var lastfmLoading by remember { mutableStateOf(false) }
-        AlertDialog(
-            onDismissRequest = { if (!lastfmLoading) showLastfmLoginDialog = false },
-            title = { Text(stringResource(R.string.lastfm_login)) },
-            text = {
-                Column {
-                    if (lastfmError != null) {
-                        Text(
-                            text = lastfmError!!,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(bottom = 8.dp),
-                        )
-                    }
-                    OutlinedTextField(
-                        value = usernameInput,
-                        onValueChange = { usernameInput = it },
-                        label = { Text(stringResource(R.string.username)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = passwordInput,
-                        onValueChange = { passwordInput = it },
-                        label = { Text(stringResource(R.string.password)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        lastfmLoading = true
-                        lastfmError = null
-                        scrobbleScope.launch {
-                            try {
-                                // Use the credentials supplied for this build.
-                                LastFM.initialize(
-                                    apiKey = AppSettings.lastfmApiKey.value,
-                                    secret = AppSettings.lastfmSecret.value,
-                                )
-                                LastFM.getMobileSession(usernameInput.trim(), passwordInput)
-                                    .onSuccess { auth ->
-                                        AppSettings.setLastfmSessionKey(auth.session.key)
-                                        AppSettings.setLastfmUsername(auth.session.name)
-                                        AppSettings.setLastfmEnabled(true)
-                                        showLastfmLoginDialog = false
-                                    }
-                                    .onFailure { e ->
-                                        lastfmError = e.message ?: context.getString(R.string.login_failed)
-                                    }
-                            } catch (e: Exception) {
-                                lastfmError = e.message ?: context.getString(R.string.login_failed)
-                            } finally {
-                                lastfmLoading = false
-                            }
+        NativeAlertHost(onDismiss = { if (!lastfmLoading) showLastfmLoginDialog = false }) {
+            LastfmLoginAlert(
+                hazeState = null,
+                usernameInput = usernameInput,
+                onUsernameInputChange = { usernameInput = it },
+                passwordInput = passwordInput,
+                onPasswordInputChange = { passwordInput = it },
+                error = lastfmError,
+                loading = lastfmLoading,
+                onSignIn = {
+                    lastfmLoading = true
+                    lastfmError = null
+                    scrobbleScope.launch {
+                        try {
+                            LastFM.initialize(
+                                apiKey = AppSettings.lastfmApiKey.value,
+                                secret = AppSettings.lastfmSecret.value,
+                            )
+                            LastFM.getMobileSession(usernameInput.trim(), passwordInput)
+                                .onSuccess { auth ->
+                                    AppSettings.setLastfmSessionKey(auth.session.key)
+                                    AppSettings.setLastfmUsername(auth.session.name)
+                                    AppSettings.setLastfmEnabled(true)
+                                    showLastfmLoginDialog = false
+                                }
+                                .onFailure { e ->
+                                    lastfmError = e.message ?: context.getString(R.string.login_failed)
+                                }
+                        } catch (e: Exception) {
+                            lastfmError = e.message ?: context.getString(R.string.login_failed)
+                        } finally {
+                            lastfmLoading = false
                         }
-                    },
-                    enabled = !lastfmLoading && usernameInput.isNotBlank() && passwordInput.isNotBlank(),
-                ) {
-                    Text(stringResource(if (lastfmLoading) R.string.signing_in else R.string.sign_in))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLastfmLoginDialog = false }, enabled = !lastfmLoading) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
-        )
+                    }
+                },
+                onDismiss = { if (!lastfmLoading) showLastfmLoginDialog = false },
+            )
+        }
     }
 
 }
