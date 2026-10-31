@@ -372,6 +372,8 @@ class SmartPlaylistV2WizardComposeTest {
             )
         }
         compose.onNodeWithText("Editar filtro").assertExists()
+        compose.onNodeWithText("Nome do filtro").assertExists()
+        compose.onNodeWithText("Nome da playlist").assertDoesNotExist()
         compose.onNodeWithText("Descrição (opcional)").assertDoesNotExist()
         compose.onNodeWithText("Editar regras").performClick()
         compose.onNodeWithText("Regras do filtro").assertExists()
