@@ -1124,7 +1124,7 @@ internal fun NativeReleaseHeaderLayout(
  * Material text field beside them would read as a different app's furniture.
  */
 @Composable
-private fun DetailSearchField(
+internal fun DetailSearchField(
     query: String,
     onQueryChange: (String) -> Unit,
     onClose: () -> Unit,
@@ -1132,11 +1132,13 @@ private fun DetailSearchField(
     onFocused: () -> Unit,
     palette: ArtworkPalette,
     type: BrowseType,
+    placeholder: String? = null,
 ) {
     // Opened by a tap on a button, which is as clear a statement of intent as
     // the keyboard is going to get — so it comes up with the field rather than
     // making the tap land twice. Once only: see [autoFocus]'s owner.
     val focus = remember { FocusRequester() }
+    val searchHint = placeholder ?: stringResource(R.string.search_this_list)
     LaunchedEffect(autoFocus) {
         if (autoFocus) {
             focus.requestFocus()
@@ -1166,7 +1168,7 @@ private fun DetailSearchField(
         Box(Modifier.weight(1f)) {
             if (query.isEmpty()) {
                 Text(
-                    text = stringResource(R.string.search_this_list),
+                    text = searchHint,
                     style = MaterialTheme.typography.bodyLarge,
                     color = palette.onBackgroundVariant,
                     maxLines = 1,
@@ -1181,7 +1183,8 @@ private fun DetailSearchField(
                 cursorBrush = SolidColor(palette.accent),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .focusRequester(focus),
+                    .focusRequester(focus)
+                    .semantics { contentDescription = searchHint },
             )
         }
         Box(
