@@ -1133,6 +1133,7 @@ internal fun DetailSearchField(
     onFocused: () -> Unit,
     palette: ArtworkPalette,
     placeholder: String? = null,
+    horizontalInset: Dp = HEADER_GUTTER,
 ) {
     // Opened by a tap on a button, which is as clear a statement of intent as
     // the keyboard is going to get — so it comes up with the field rather than
@@ -1149,7 +1150,7 @@ internal fun DetailSearchField(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = HEADER_GUTTER)
+            .padding(horizontal = horizontalInset)
             .padding(bottom = 10.dp)
             .height(46.dp)
             .testTag("native-detail-search-field")
