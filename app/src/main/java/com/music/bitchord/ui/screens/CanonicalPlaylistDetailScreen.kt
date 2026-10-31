@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,6 +31,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.DropdownMenu
@@ -47,6 +51,8 @@ import androidx.compose.ui.unit.dp
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.RowMoreButton
+import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
 import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import com.music.bitchord.ui.icons.BitChordIcons
@@ -101,41 +107,66 @@ internal fun V2DisplayRow.isAvailablePlaylistMember(): Boolean =
     title != "Gravação indisponível" || artist != "Fonte não disponível"
 
 /** The same native Library row used everywhere, wired to canonical playback. */
+/** Native SongRow's proven dimensions and controls, but canonical RecordingIds. */
+internal fun canonicalTrackDuration(durationMs: Long?): String? =
+    durationMs?.takeIf { it > 0 }?.let { ms ->
+        val seconds = ms / 1000L
+        if (seconds >= 3600L) "%d:%02d:%02d".format(
+            seconds / 3600L, (seconds / 60L) % 60L, seconds % 60L,
+        ) else "%d:%02d".format(seconds / 60L, seconds % 60L)
+    }
+
 @Composable
 internal fun CanonicalPlaylistTrackRow(
     track: V2DisplayRow,
     onPlay: (String) -> Unit,
     onQueue: ((String, CanonicalCollectionIntent) -> Unit)? = null,
+    titleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onBackground,
+    subtitleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     var menuExpanded by remember(track.id) { mutableStateOf(false) }
     val available = track.isAvailablePlaylistMember()
-    LibraryRow(
-        title = track.title,
-        subtitle = track.artist,
-        imageUrl = null,
+    NativeDetailTrackRowFrame(
         onClick = if (available) ({ onPlay(track.id) }) else null,
-        modifier = Modifier.padding(horizontal = PAGE_GUTTER),
-        horizontalPadding = 0.dp,
-        artwork = {
+        onMore = if (available) ({ menuExpanded = true }) else null,
+        opacity = if (available) 1f else 0.45f,
+    ) {
+        Box(
+            Modifier.size(52.dp).clip(RoundedCornerShape(8.dp)),
+        ) {
             SmartPlaylistPreviewArtwork(
                 row = track, modifier = Modifier.fillMaxSize(),
             )
-        },
-        trailing = if (available) ({
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                track.title, style = MaterialTheme.typography.titleMedium,
+                color = titleColor, maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                track.artist, style = MaterialTheme.typography.bodyMedium,
+                color = subtitleColor, maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        canonicalTrackDuration(track.durationMs)?.let {
+            Spacer(Modifier.width(8.dp))
+            Text(it, style = MaterialTheme.typography.labelMedium, color = subtitleColor)
+        }
+        if (available) {
             Box {
-                IconButton(onClick = { menuExpanded = true }) {
-                    Icon(Icons.Rounded.MoreVert, contentDescription = "Ações da música")
-                }
+                RowMoreButton(
+                    onClick = { menuExpanded = true }, tint = subtitleColor,
+                )
                 DropdownMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false },
+                    expanded = menuExpanded, onDismissRequest = { menuExpanded = false },
                 ) {
                     DropdownMenuItem(
                         text = { Text("Reproduzir daqui") },
-                        onClick = {
-                            menuExpanded = false
-                            onPlay(track.id)
-                        },
+                        onClick = { menuExpanded = false; onPlay(track.id) },
                     )
                     if (onQueue != null) {
                         DropdownMenuItem(
@@ -155,8 +186,8 @@ internal fun CanonicalPlaylistTrackRow(
                     }
                 }
             }
-        }) else null,
-    )
+        }
+    }
 }
 
 /**
@@ -209,7 +240,6 @@ internal fun CanonicalPlaylistDetailScreen(
         state = listState ?: rememberLazyListState(),
         modifier = Modifier.fillMaxSize().background(palette.background),
         contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item(key = "playlist-detail-cover") {
             // The same hero frame used by DetailScreen.ReleaseHeader; the
@@ -264,6 +294,12 @@ internal fun CanonicalPlaylistDetailScreen(
                 track = track,
                 onPlay = onTrackClick,
                 onQueue = onTrackQueue,
+                titleColor = palette.onBackground,
+                subtitleColor = palette.onBackgroundVariant,
+            )
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 80.dp),
+                thickness = 0.5.dp, color = palette.divider,
             )
         }
     }
