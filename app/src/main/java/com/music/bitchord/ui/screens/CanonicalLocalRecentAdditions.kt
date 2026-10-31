@@ -46,7 +46,7 @@ internal fun recentLocalPreferredDisplayTitle(
     mediaStoreAlbum: String?,
     displayName: String?,
 ): String {
-    val filename = displayName?.substringBeforeLast('.', displayName)?.trim()
+    val filename = displayName?.substringBeforeLast('.')?.trim()
     return listOf(canonicalTitle, mediaStoreTitle, releaseTitle, mediaStoreAlbum, filename)
         .firstOrNull { candidate ->
             !candidate.isNullOrBlank() &&
@@ -76,7 +76,7 @@ private fun localRecentMediaStoreLabels(
         )?.use { cursor ->
             if (!cursor.moveToFirst()) return@use Triple(null, null, null)
             fun read(name: String): String? =
-                cursor.getColumnIndex(name).takeIf { it >= 0 }?.let(cursor::getString)
+                cursor.getColumnIndex(name).takeIf { it >= 0 }?.let { cursor.getString(it) }
             Triple(
                 read(MediaStore.Audio.Media.TITLE),
                 read(MediaStore.Audio.Media.ALBUM),
