@@ -35,7 +35,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import com.music.bitchord.ui.theme.AccentRed
-import com.music.bitchord.ui.theme.rememberArtworkPalette
+import com.music.bitchord.ui.theme.themeArtworkPalette
 
 /**
  * The wizard borrows established Settings/Detail components. It is a workflow
@@ -178,7 +178,7 @@ internal fun PlaylistWizardSearchEntry(
         onClose = { onValueChange("") },
         autoFocus = false,
         onFocused = {},
-        palette = rememberArtworkPalette(imageUrl = null),
+        palette = themeArtworkPalette(),
         placeholder = placeholder,
         horizontalInset = 0.dp,
     )
