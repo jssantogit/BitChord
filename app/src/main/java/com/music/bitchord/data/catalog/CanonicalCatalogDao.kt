@@ -925,6 +925,47 @@ internal interface CanonicalCatalogDao {
         providerKey: String, displayName: String,
     ): List<String>
 
+    /** Artist list fallback image: a verified asset credited to that exact artist. */
+    @Query(
+        """
+        SELECT matched.groupId AS groupId, MIN(matched.recordingId) AS recordingId
+        FROM (
+            SELECT credit.artistId AS groupId, asset.recordingId AS recordingId
+            FROM catalog_recording_artist_credit AS credit
+            INNER JOIN catalog_media_asset AS asset
+                ON asset.recordingId = credit.recordingId
+            WHERE credit.artistId IN (:artistIds) AND asset.provider IN (:providerKeys)
+              AND asset.artworkUri IS NOT NULL AND trim(asset.artworkUri) != ''
+            UNION ALL
+            SELECT credit.artistId AS groupId, asset.recordingId AS recordingId
+            FROM catalog_release_artist_credit AS credit
+            INNER JOIN catalog_release_track AS rt ON rt.releaseId = credit.releaseId
+            INNER JOIN catalog_media_asset AS asset ON asset.recordingId = rt.recordingId
+            WHERE credit.artistId IN (:artistIds) AND asset.provider IN (:providerKeys)
+              AND asset.artworkUri IS NOT NULL AND trim(asset.artworkUri) != ''
+        ) AS matched
+        GROUP BY matched.groupId
+        """,
+    )
+    suspend fun playlistCreditedArtistCoverRecordingIds(
+        providerKeys: List<String>, artistIds: List<String>,
+    ): List<CanonicalPlaylistAlbumCoverRow>
+
+    /** Uncredited local files: the fallback artist name is browse-only. */
+    @Query(
+        """
+        SELECT recording.artistDisplay AS groupId, MIN(recording.id) AS recordingId
+        FROM catalog_recording AS recording
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = recording.id
+        WHERE recording.artistDisplay IN (:names) AND asset.provider IN (:providerKeys)
+          AND asset.artworkUri IS NOT NULL AND trim(asset.artworkUri) != ''
+        GROUP BY recording.artistDisplay
+        """,
+    )
+    suspend fun playlistDisplayArtistCoverRecordingIds(
+        providerKeys: List<String>, names: List<String>,
+    ): List<CanonicalPlaylistAlbumCoverRow>
+
     /** Navigating a Release rechecks its Recording IDs against the active source. */
     @Query(
         """
