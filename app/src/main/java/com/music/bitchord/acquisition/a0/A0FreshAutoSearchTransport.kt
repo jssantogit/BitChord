@@ -85,7 +85,13 @@ internal class A0FreshAutoSearchTransport(
         val readerFailed=AtomicBoolean(false)
         try {
             session=A0AutoAuthenticatedServer.open(
-                app,generation,::stopped,onSocketReady={activeServer=it})
+                app,generation,::stopped,onSocketReady={activeServer=it},
+                onStage={stage ->
+                    A0AcquisitionDiagnostics.emit(traceScope,
+                        A0AcquisitionDiagnostics.Phase.SEARCH_LOGIN_STAGE,
+                        reason=stage,
+                        elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart)
+                })
             A0AcquisitionDiagnostics.emit(traceScope,
                 A0AcquisitionDiagnostics.Phase.SEARCH_LOGIN_OK,
                 elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart)

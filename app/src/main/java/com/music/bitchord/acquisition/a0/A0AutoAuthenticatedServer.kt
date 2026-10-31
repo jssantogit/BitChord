@@ -17,6 +17,11 @@ import java.net.Socket
  * SoulseekActiveSession revokes and closes all registered sockets on logout.
  */
 internal object A0AutoAuthenticatedServer {
+    enum class Stage {
+        NOT_ENABLED, CANCELLED, VAULT_READ, VAULT_EMPTY,
+        CREDENTIALS_READY, SOCKET_REGISTERED, TCP_CONNECTED,
+        LOGIN_SENT, LOGIN_REJECTED, LOGIN_ACCEPTED,
+    }
     class Session internal constructor(
         val socket:Socket,
         val username:String,
@@ -33,15 +38,27 @@ internal object A0AutoAuthenticatedServer {
         accountGeneration:Long,
         isCancelled:()->Boolean,
         onSocketReady:(Socket)->Unit={},
+        onStage:(Stage)->Unit={},
     ):Session {
-        if(BuildConfig.FLAVOR!="dev" || !BuildConfig.DEBUG)
+        fun stage(value:Stage) { runCatching {onStage(value)} }
+        if(BuildConfig.FLAVOR!="dev" || !BuildConfig.DEBUG) {
+            stage(Stage.NOT_ENABLED)
             throw IOException("Soulseek autonomous login not enabled")
+        }
         fun revoked()=isCancelled() ||
             !SoulseekActiveSession.isCurrent(accountGeneration) ||
             Thread.currentThread().isInterrupted
-        if(revoked())throw IOException("Soulseek login cancelled")
+        if(revoked()) {
+            stage(Stage.CANCELLED)
+            throw IOException("Soulseek login cancelled")
+        }
+        stage(Stage.VAULT_READ)
         val credentials=SoulseekCredentialVault(context.applicationContext).read()
-            ?:throw IOException("Soulseek account not configured")
+            ?:run {
+                stage(Stage.VAULT_EMPTY)
+                throw IOException("Soulseek account not configured")
+            }
+        stage(Stage.CREDENTIALS_READY)
         var packet:ByteArray?=null
         val server=Socket()
         var success=false
@@ -54,9 +71,11 @@ internal object A0AutoAuthenticatedServer {
             credentials.erase()
             if(!SoulseekActiveSession.register(server,accountGeneration))
                 throw IOException("Soulseek session revoked")
+            stage(Stage.SOCKET_REGISTERED)
             onSocketReady(server)
             if(revoked())throw IOException("Soulseek login cancelled")
             server.connect(InetSocketAddress("server.slsknet.org",2416),7000)
+            stage(Stage.TCP_CONNECTED)
             server.soTimeout=12000
             if(revoked())throw IOException("Soulseek login cancelled")
             server.getOutputStream().apply {
@@ -65,10 +84,14 @@ internal object A0AutoAuthenticatedServer {
             }
             checkNotNull(packet).fill(0)
             packet=null
-            if(!A0ExperimentalLoginCodec.readResponse(server.getInputStream()))
+            stage(Stage.LOGIN_SENT)
+            if(!A0ExperimentalLoginCodec.readResponse(server.getInputStream())) {
+                stage(Stage.LOGIN_REJECTED)
                 throw IOException("Soulseek login refused")
+            }
             if(revoked())throw IOException("Soulseek account revoked")
             success=true
+            stage(Stage.LOGIN_ACCEPTED)
             return Session(server,credentials.username)
         }finally {
             packet?.fill(0)

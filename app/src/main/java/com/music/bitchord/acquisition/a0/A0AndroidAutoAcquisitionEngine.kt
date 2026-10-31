@@ -44,6 +44,13 @@ internal object A0AndroidAutoConsent {
  * unattended background scanning and no production-flavor P/F transport.
  */
 internal object A0AndroidAutoAcquisitionEngine {
+    private enum class EngineGate {
+        REQUEST_NOT_EXPLICIT, OPT_IN_OFF, PILOT_DISABLED,
+        NETWORK_RESTRICTED, DOWNLOAD_DESTINATION_UNAVAILABLE,
+        CONSENT_POLICY_REJECTED, SESSION_STOP,
+        CREDENTIALS_UNAVAILABLE, ACCOUNT_INVALID,
+        SCRATCH_CLEANUP_FAILED, READY_TO_RESERVE,
+    }
     private fun refused(size:Int):A0AutoDiscoveryCoordinator.Report =
         A0AutoDiscoveryCoordinator.Report(
             0,A0AutoBatchExecutor.Report(
@@ -66,44 +73,59 @@ internal object A0AndroidAutoAcquisitionEngine {
         sourceSongs:List<Song> = emptyList(),
     ):A0AutoDiscoveryCoordinator.Report {
         val app=context.applicationContext
+        val traceScope=A0AcquisitionDiagnostics.newScope()
+        fun gate(reason:EngineGate):A0AutoDiscoveryCoordinator.Report {
+            A0AcquisitionDiagnostics.emit(traceScope,
+                A0AcquisitionDiagnostics.Phase.ENGINE_REFUSAL,
+                reason,count=entries.size)
+            return refused(entries.size)
+        }
         // Zero socket, vault and journal calls until the user opts in AND
         // this specific request was initiated with a download tap.
         val pilot=BuildConfig.DEBUG && BuildConfig.FLAVOR=="dev"
         val optedIn=A0AndroidAutoConsent.enabled(app)
-        if(!userRequested || !optedIn || !pilot ||
-            !AppSettings.downloadsAllowedNow)return refused(entries.size)
+        if(!userRequested)return gate(EngineGate.REQUEST_NOT_EXPLICIT)
+        if(!optedIn)return gate(EngineGate.OPT_IN_OFF)
+        if(!pilot)return gate(EngineGate.PILOT_DISABLED)
+        if(!AppSettings.downloadsAllowedNow)
+            return gate(EngineGate.NETWORK_RESTRICTED)
         check(Looper.myLooper()!=Looper.getMainLooper()) {
             "Automatic Soulseek downloads must run off the UI thread"
         }
         val dest=A1AndroidDownloadDestination.current(app)
         val ready=dest is A1DownloadDestinationPolicy.Resolution.Ready
+        if(!ready)return gate(EngineGate.DOWNLOAD_DESTINATION_UNAVAILABLE)
         if(!A0AutoConsentPolicy.allows(
                 userRequested,optedIn,pilot,AppSettings.downloadsAllowedNow,ready))
-            return refused(entries.size)
+            return gate(EngineGate.CONSENT_POLICY_REJECTED)
         val generation=SoulseekActiveSession.generation()
         fun stopped()=isCancelled() || !A0AndroidAutoConsent.enabled(app) ||
             !AppSettings.downloadsAllowedNow ||
             !SoulseekActiveSession.isCurrent(generation) ||
             Thread.currentThread().isInterrupted
-        if(stopped())return refused(entries.size)
+        if(stopped())return gate(EngineGate.SESSION_STOP)
         // Do not permanently reserve a recording just because an account
         // was never configured. This read opens NO socket and the secret is
         // wiped immediately; the authenticated transport reads it freshly.
         val account=runCatching {
             SoulseekCredentialVault(app).read()
-        }.getOrNull() ?: return refused(entries.size)
+        }.getOrNull() ?: return gate(EngineGate.CREDENTIALS_UNAVAILABLE)
         try {
-            if(account.username.isBlank())return refused(entries.size)
+            if(account.username.isBlank())return gate(EngineGate.ACCOUNT_INVALID)
         }finally {
             account.erase()
         }
-        if(stopped())return refused(entries.size)
+        if(stopped())return gate(EngineGate.SESSION_STOP)
         // There must not be another auto P/F worker inside this private cache:
         // Downloads.autoMutex serializes the entire run. Clear crash leftovers
         // BEFORE irreversible A3 reservation so cleanup failure does not
         // poison the canonical identity of an otherwise unattempted track.
-        A0AutoScratchRecovery.clean(app.cacheDir)
-        if(stopped())return refused(entries.size)
+        try { A0AutoScratchRecovery.clean(app.cacheDir) }
+        catch(_:Exception) { return gate(EngineGate.SCRATCH_CLEANUP_FAILED) }
+        if(stopped())return gate(EngineGate.SESSION_STOP)
+        A0AcquisitionDiagnostics.emit(traceScope,
+            A0AcquisitionDiagnostics.Phase.ENGINE_STAGE,
+            reason=EngineGate.READY_TO_RESERVE,count=entries.size)
 
         // Atomic on the A3 journal BEFORE search, login or peer discovery.
         // Reboot does not erase this reservation: a duplicate recording ID

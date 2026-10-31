@@ -51,6 +51,12 @@ internal class A0FreshAuthenticatedAutoTransport(
                 app,expectedGeneration,
                 isCancelled={ cancelled.get() || isCancelled() },
                 onSocketReady={socket=it},
+                onStage={stage ->
+                    A0AcquisitionDiagnostics.emit(diagnosticScope,
+                        A0AcquisitionDiagnostics.Phase.TRANSPORT_LOGIN_STAGE,
+                        reason=stage,
+                        elapsedMillis=android.os.SystemClock.elapsedRealtime()-start)
+                },
             )
             A0AcquisitionDiagnostics.emit(diagnosticScope,
                 A0AcquisitionDiagnostics.Phase.TRANSPORT_LOGIN_OK,
