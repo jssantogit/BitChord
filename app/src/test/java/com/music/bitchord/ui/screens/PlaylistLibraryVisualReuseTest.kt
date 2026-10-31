@@ -376,6 +376,16 @@ class PlaylistLibraryVisualReuseTest {
         ).assertExists()
     }
 
+    @Test fun normalPlaylistFiltersMenuOffersOnlyCompatibleActions() {
+        val inNormal = savedFilterActionsForDraft(normalMode = true, editingNormalId = "normal-1")
+        assertEquals(listOf(
+            "Editar filtro", "Criar playlist com este filtro", "Excluir filtro",
+        ), inNormal)
+        val inSmart = savedFilterActionsForDraft(normalMode = false, editingNormalId = null)
+        assertTrue("Smart drafts must offer applying rules", "Aplicar regras ao rascunho" in inSmart)
+        assertTrue("Smart drafts must offer AND combination", "Combinar com o rascunho (E)" in inSmart)
+    }
+
     @Test fun applyingReusableSmartRulesDoesNotConvertAnExistingNormalPlaylist() {
         assertEquals(true, canApplySmartFilterToDraft(
             normalMode = false, editingNormalId = null,
