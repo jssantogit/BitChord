@@ -85,7 +85,7 @@ import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.ArtworkPageBackButton
 import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
 import com.music.bitchord.ui.components.NativeTrackRowText
-import com.music.bitchord.ui.theme.rememberArtworkPalette
+import com.music.bitchord.ui.theme.themeArtworkPalette
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.sharedui.resources.Res
@@ -205,7 +205,7 @@ private fun WizardReviewHeader(
     description: String,
     cover: V2DisplayRow?,
 ) {
-    val palette = rememberArtworkPalette(imageUrl = null)
+    val palette = themeArtworkPalette()
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         NativeReleaseHeaderLayout(
             title = name.ifBlank { "Sem nome" },
