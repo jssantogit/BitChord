@@ -135,6 +135,7 @@ internal fun PlaylistWizardSearchEntry(
         onFocused = {},
         palette = rememberArtworkPalette(imageUrl = null),
         placeholder = placeholder,
+        horizontalInset = 0.dp,
     )
 }
 
