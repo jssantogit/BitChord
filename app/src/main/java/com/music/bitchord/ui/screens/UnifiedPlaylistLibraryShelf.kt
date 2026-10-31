@@ -445,6 +445,12 @@ private fun UnifiedPlaylistCompactRow(
         horizontalPadding = 4.dp,
         artworkSize = 64.dp,
         artwork = when {
+            card.explicitCoverUri() != null -> ({
+                CanonicalPlaylistCoverArt(
+                    canonicalCover, Modifier.fillMaxSize(),
+                    customCoverUri = card.explicitCoverUri(),
+                )
+            })
             canonicalCover.isNotEmpty() -> ({
                 CanonicalPlaylistCoverArt(canonicalCover, Modifier.fillMaxSize())
             })
