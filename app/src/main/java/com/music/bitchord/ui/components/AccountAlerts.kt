@@ -36,6 +36,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -813,6 +815,26 @@ private fun ChoiceRow(
                 modifier = Modifier.size(19.dp),
             )
         }
+    }
+}
+
+/**
+ * Settings and other screens below a floating top bar need a window-level host.
+ * The content remains the real BitChord alert, not a new Material3 surface.
+ */
+@Composable
+fun NativeAlertHost(
+    onDismiss: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        content()
     }
 }
 
