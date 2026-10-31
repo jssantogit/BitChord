@@ -24,9 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material3.Icon
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,10 +46,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -208,34 +202,22 @@ fun LyricsSourcesDialog(
 
     if (showPaxSenixKeyDialog) {
         var input by remember(paxSenixApiKey) { mutableStateOf(paxSenixApiKey) }
-        AlertDialog(
-            onDismissRequest = { showPaxSenixKeyDialog = false },
-            title = { Text(stringResource(R.string.paxsenix_api_key)) },
-            text = {
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Password,
-                        imeAction = ImeAction.Done,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
+        NativeAlertHost(onDismiss = { showPaxSenixKeyDialog = false }) {
+            TextValueAlert(
+                hazeState = null,
+                title = stringResource(R.string.paxsenix_api_key),
+                message = "",
+                placeholder = stringResource(R.string.paxsenix_api_key),
+                value = input,
+                onValueChange = { input = it },
+                isPassword = true,
+                onSave = {
                     AppSettings.setPaxSenixApiKey(input)
                     showPaxSenixKeyDialog = false
-                }) { Text(stringResource(R.string.save)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPaxSenixKeyDialog = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
-        )
+                },
+                onDismiss = { showPaxSenixKeyDialog = false },
+            )
+        }
     }
 }
 
