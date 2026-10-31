@@ -846,28 +846,32 @@ internal fun SmartPlaylistV2BuilderScreen(
                         onChosen = { option ->
                             when (option) {
                                 "Aplicar regras ao rascunho" -> {
-                                    normalMode = false
-                                    editingFilterId = null
-                                    rule = filter.rules
-                                    hasConfiguredRules = true
-                                    preview = null
-                                    previewQuery = null
-                                    error = null
-                                    showWizard = true
-                                }
-                                "Combinar com o rascunho (E)" -> {
-                                    try {
-                                        val combined = rule.andSavedFilter(filter)
-                                        normalMode = false
-                                        editingFilterId = null
-                                        rule = combined
+                                    if (normalMode || editingNormalId != null) {
+                                        error = "Filtros inteligentes não podem alterar uma playlist normal. Use Criar playlist com este filtro."
+                                    } else {
+                                        rule = filter.rules
                                         hasConfiguredRules = true
                                         preview = null
                                         previewQuery = null
                                         error = null
                                         showWizard = true
-                                    } catch (_: IllegalArgumentException) {
-                                        error = "O conjunto de regras excede o limite permitido."
+                                    }
+                                }
+                                "Combinar com o rascunho (E)" -> {
+                                    if (normalMode || editingNormalId != null) {
+                                        error = "A combinação de regras é exclusiva de playlists inteligentes."
+                                    } else {
+                                        try {
+                                            val combined = rule.andSavedFilter(filter)
+                                            rule = combined
+                                            hasConfiguredRules = true
+                                            preview = null
+                                            previewQuery = null
+                                            error = null
+                                            showWizard = true
+                                        } catch (_: IllegalArgumentException) {
+                                            error = "O conjunto de regras excede o limite permitido."
+                                        }
                                     }
                                 }
                                 "Editar filtro" -> {
