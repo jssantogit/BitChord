@@ -45,9 +45,17 @@ internal object A0ManualRetainedCandidateTransfer {
     ):Status {
         check(BuildConfig.DEBUG && BuildConfig.FLAVOR=="dev")
         check(Looper.myLooper()!=Looper.getMainLooper())
+        val traceScope=A0AcquisitionDiagnostics.newScope()
+        val traceStart=android.os.SystemClock.elapsedRealtime()
         fun report(stage:Stage,reason:A0AutoPostTransferTechnicalGate.Reason?=null) {
+            A0AcquisitionDiagnostics.emit(traceScope,
+                A0AcquisitionDiagnostics.Phase.REVIEW_STAGE,
+                reason=stage,
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart)
             try { onDiagnostic(stage,reason) }catch(_:Exception) {}
         }
+        A0AcquisitionDiagnostics.emit(traceScope,
+            A0AcquisitionDiagnostics.Phase.REVIEW_START)
         val allowed=A0ManualReviewCandidatePolicy.retain(
             entry,listOf(choice),profile).singleOrNull()
         if(allowed!==choice) {
@@ -90,7 +98,7 @@ internal object A0ManualRetainedCandidateTransfer {
             report(Stage.A3_RESERVATION_BLOCKED)
             return Status.VERIFY_LIBRARY
         }
-        val transport=A0FreshAuthenticatedAutoTransport(app,generation)
+        val transport=A0FreshAuthenticatedAutoTransport(app,generation,traceScope)
         val port=A0AndroidAutoAcquisitionPort(
             app,generation,transport,id,reservedAutomatic=true,
             sourceSong=sourceSong)
@@ -154,6 +162,10 @@ internal object A0ManualRetainedCandidateTransfer {
                     "soulseek_manual_review exception_phase=${phase.name}" +
                         " category=${category.name}")
             }
+            A0AcquisitionDiagnostics.emit(traceScope,
+                A0AcquisitionDiagnostics.Phase.REVIEW_EXCEPTION,
+                reason=category,
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart)
             report(Stage.UNEXPECTED_ERROR)
             // No publish() was called before this exception; the A3 identity
             // stays fenced, and the transfer is NOT automatically retried.

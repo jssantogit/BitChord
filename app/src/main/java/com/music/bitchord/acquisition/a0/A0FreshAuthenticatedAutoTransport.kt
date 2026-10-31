@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal class A0FreshAuthenticatedAutoTransport(
     context:Context,
     private val expectedGeneration:Long,
+    private val diagnosticScope:Int=A0AcquisitionDiagnostics.newScope(),
 ):A0AndroidAutoAcquisitionPort.AuthenticatedTransport {
     private val app=context.applicationContext
     private val cancelled=AtomicBoolean(false)
@@ -41,12 +42,19 @@ internal class A0FreshAuthenticatedAutoTransport(
 
         var session:A0AutoAuthenticatedServer.Session?=null
         var current:A0ServerAssociatedTransfer?=null
+        val start=android.os.SystemClock.elapsedRealtime()
+        var lastPhase:A0ServerAssociatedTransfer.Phase?=null
+        A0AcquisitionDiagnostics.emit(diagnosticScope,
+            A0AcquisitionDiagnostics.Phase.TRANSPORT_START)
         try {
             session=A0AutoAuthenticatedServer.open(
                 app,expectedGeneration,
                 isCancelled={ cancelled.get() || isCancelled() },
                 onSocketReady={socket=it},
             )
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_LOGIN_OK,
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-start)
             val connection=session.socket
             val username=session.username
             current=A0ServerAssociatedTransfer()
@@ -64,6 +72,13 @@ internal class A0FreshAuthenticatedAutoTransport(
                 peerUsername=candidate.peerUsername,
                 listing=listing,
                 privateDirectory=scratchDirectory,
+                onPhase={ phase ->
+                    lastPhase=phase
+                    A0AcquisitionDiagnostics.emit(diagnosticScope,
+                        A0AcquisitionDiagnostics.Phase.TRANSPORT_PEER_PHASE,
+                        reason=phase,
+                        elapsedMillis=android.os.SystemClock.elapsedRealtime()-start)
+                },
                 externalCancelled={
                     cancelled.get() || isCancelled() ||
                         !SoulseekActiveSession.isCurrent(expectedGeneration)
@@ -74,14 +89,33 @@ internal class A0FreshAuthenticatedAutoTransport(
                 runCatching {receipt.file.delete()}
                 throw IOException("Soulseek auto transfer revoked after receiving bytes")
             }
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_RECEIPT,
+                reason=lastPhase,
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-start)
             return A0AutoAcquisitionExecutor.FetchResult.Received(receipt)
         }catch(error:A0ServerAssociatedTransfer.PeerAddressFailure) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_FAILURE,
+                reason=error.kind,
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-start,
+                count=error.unrelatedFrames)
             if(error.kind==A0ServerAssociatedTransfer.AddressFailureKind.PEER_UNREACHABLE &&
                 !cancelled.get() && !isCancelled() &&
                 SoulseekActiveSession.isCurrent(expectedGeneration))
                 return A0AutoAcquisitionExecutor.FetchResult.RetryableConnectionFailure
             throw IOException("Soulseek auto peer lookup failed",error)
+        }catch(error:Exception) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_FAILURE,
+                reason=A0AcquisitionDiagnostics.fault(error),
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-start,
+                count=lastPhase?.ordinal ?: -1)
+            throw error
         }finally {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_CLOSE,
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-start)
             current?.let {
                 SoulseekActiveSession.detachAutoTransfer(it)
                 runCatching {it.cancel()}

@@ -5,6 +5,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class A0ManualExceptionStageTest {
+    @Test fun distinctPeerConnectionFailuresHaveSeparateSafeCodes() {
+        assertEquals(A0ManualExceptionStage.Category.TIMEOUT,
+            A0ManualExceptionStage.category(
+                java.net.SocketTimeoutException("private-ip")))
+        assertEquals(A0ManualExceptionStage.Category.CONNECTION,
+            A0ManualExceptionStage.category(java.net.ConnectException("peer")))
+        assertEquals(A0ManualExceptionStage.Category.EOF,
+            A0ManualExceptionStage.category(java.io.EOFException("credentials")))
+    }
+
     @Test fun fetchFailureNeverClaimsAPossiblePublication() {
         assertEquals(A0ManualExceptionStage.Phase.FETCH,
             A0ManualExceptionStage.phase(false,false))
