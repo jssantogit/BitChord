@@ -49,6 +49,12 @@ class A0AutoCandidateSelectionPolicyTest {
         assertEquals(1,decision.funnel.preflightRejected)
         assertEquals(1,decision.funnel.albumRejected)
         assertEquals(1,decision.funnel.qualityRejected)
+        val detail=decision.rejectionDetails.summary()
+        assertTrue(detail.contains("album_detail=ALBUM_CLAIM_CONFLICT:1"))
+        assertTrue(detail.contains("quality_detail="))
+        assertTrue(detail.contains("rank_detail="))
+        assertFalse(detail.contains("Other Album"))
+        assertFalse(detail.contains("ILLIT"))
         assertFalse(decision.toString().contains("Other"))
     }
 

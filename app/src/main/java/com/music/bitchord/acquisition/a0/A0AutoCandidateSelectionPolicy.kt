@@ -20,6 +20,30 @@ internal object A0AutoCandidateSelectionPolicy {
         INVALID_TARGET, INCOMPLETE_SAMPLE, CONTRADICTORY_SOURCE,
         NO_STRONG_CANDIDATE, AMBIGUOUS_EDITION, NO_READY_SOURCE,
     }
+    /** Each candidate contributes to ONE first-failing gate and one subtype. */
+    enum class RankReject {
+        MISSING_TERMS, ARTIST_CONFLICT, IDENTITY_AMBIGUOUS,
+        VERSION_MISMATCH, SCORE_BELOW_THRESHOLD,
+    }
+    data class RejectionDetails(
+        val rank:Map<RankReject,Int> = emptyMap(),
+        val preflight:Map<A0CandidatePreflight.Reason,Int> = emptyMap(),
+        val album:Map<A0CanonicalAlbumPolicy.Reason,Int> = emptyMap(),
+        val quality:Map<A0DownloadQualityPolicy.Reason,Int> = emptyMap(),
+    ) {
+        /** Enum names and bounded aggregate counts ONLY, no peer metadata. */
+        fun summary():String {
+            fun <E:Enum<E>> render(values:Map<E,Int>):String =
+                values.entries.sortedBy { it.key.name }
+                    .joinToString(",") { "${it.key.name}:${it.value.coerceIn(0,512)}" }
+                    .ifEmpty { "NONE" }
+            return "rank_detail=${render(rank)}" +
+                " preflight_detail=${render(preflight)}" +
+                " album_detail=${render(album)}" +
+                " quality_detail=${render(quality)}"
+        }
+    }
+
     /** Aggregates cannot prove two masters identical. Do not log file sizes or peers. */
     data class AmbiguityEvidence(
         val clusterCount:Int,
@@ -46,13 +70,16 @@ internal object A0AutoCandidateSelectionPolicy {
         val eligible:Int,
         val funnel:Funnel=Funnel(),
         val ambiguity:AmbiguityEvidence?=null,
+        val rejectionDetails:RejectionDetails=RejectionDetails(),
     ) {
         val canTransfer:Boolean get()=false
         override fun toString()="AutoCandidateDecision(status=$status, reason=$reason)"
     }
     private fun review(
         reason:Reason,examined:Int=0,eligible:Int=0,funnel:Funnel=Funnel(),
-    )=Decision(Status.MANUAL_REVIEW,reason,emptyList(),examined,eligible,funnel)
+        details:RejectionDetails=RejectionDetails(),
+    )=Decision(Status.MANUAL_REVIEW,reason,emptyList(),examined,eligible,
+        funnel,rejectionDetails=details)
 
     private data class Eligible(
         val choice:A0ObservedCandidateHandoff.Choice,
@@ -139,6 +166,13 @@ internal object A0AutoCandidateSelectionPolicy {
         var preflightRejected=0
         var albumRejected=0
         var qualityRejected=0
+        val rankReasons=mutableMapOf<RankReject,Int>()
+        val preflightReasons=mutableMapOf<A0CandidatePreflight.Reason,Int>()
+        val albumReasons=mutableMapOf<A0CanonicalAlbumPolicy.Reason,Int>()
+        val qualityReasons=mutableMapOf<A0DownloadQualityPolicy.Reason,Int>()
+        fun <E:Enum<E>> increment(map:MutableMap<E,Int>,key:E) {
+            map[key]=(map[key] ?: 0)+1
+        }
         val strong=observed.mapNotNull { choice ->
             val claim=choice.claim
             val ext=claim.format.lowercase(Locale.ROOT)
@@ -157,6 +191,18 @@ internal object A0AutoCandidateSelectionPolicy {
                 A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in ranked.warnings ||
                 A0CandidateRank.Warning.VERSION_MISMATCH in ranked.warnings) {
                 rankRejected++
+                val why=when {
+                    ranked.match!=A0CandidateRank.Match.ALL_TERMS ->
+                        RankReject.MISSING_TERMS
+                    A0CandidateRank.Warning.ARTIST_CONFLICT in ranked.warnings ->
+                        RankReject.ARTIST_CONFLICT
+                    A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in ranked.warnings ->
+                        RankReject.IDENTITY_AMBIGUOUS
+                    A0CandidateRank.Warning.VERSION_MISMATCH in ranked.warnings ->
+                        RankReject.VERSION_MISMATCH
+                    else -> RankReject.SCORE_BELOW_THRESHOLD
+                }
+                increment(rankReasons,why)
                 return@mapNotNull null
             }
             val preflight=A0CandidatePreflight.assess(
@@ -165,6 +211,7 @@ internal object A0AutoCandidateSelectionPolicy {
                 claim.sampleRateHz,claim.bitDepth)
             if(preflight.confidence!=A0CandidatePreflight.Confidence.STRONG) {
                 preflightRejected++
+                preflight.reasons.firstOrNull()?.let { increment(preflightReasons,it) }
                 return@mapNotNull null
             }
             val directory=choice.remotePath.replace('\\','/')
@@ -189,6 +236,7 @@ internal object A0AutoCandidateSelectionPolicy {
                     A0CanonicalAlbumPolicy.Status.UNCONSTRAINED,
                     A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED)) {
                 albumRejected++
+                increment(albumReasons,album.reason)
                 return@mapNotNull null
             }
             val quality=A0DownloadQualityPolicy.evaluate(
@@ -200,13 +248,16 @@ internal object A0AutoCandidateSelectionPolicy {
             if(quality.status!=
                 A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED) {
                 qualityRejected++
+                increment(qualityReasons,quality.reason)
                 return@mapNotNull null
             }
             Eligible(choice,ranked.score)
         }
         val funnel=Funnel(rankRejected,preflightRejected,albumRejected,qualityRejected)
+        val details=RejectionDetails(rankReasons.toMap(),preflightReasons.toMap(),
+            albumReasons.toMap(),qualityReasons.toMap())
         if(strong.isEmpty())return review(
-            Reason.NO_STRONG_CANDIDATE,observed.size,funnel=funnel)
+            Reason.NO_STRONG_CANDIDATE,observed.size,funnel=funnel,details=details)
         // Exact equality of peer claims is not proof of actual equal audio.
         // It only limits which alternate connections may be considered.
         val clusters=mutableListOf<MutableList<Eligible>>()
@@ -242,7 +293,7 @@ internal object A0AutoCandidateSelectionPolicy {
                     .distinct().size,
             )
             return Decision(Status.MANUAL_REVIEW,Reason.AMBIGUOUS_EDITION,
-                emptyList(),observed.size,strong.size,funnel,evidence)
+                emptyList(),observed.size,strong.size,funnel,evidence,details)
         }
         val leading=rankedGroups[0]
         // Only a peer claiming a currently free slot with acceptable queue/
@@ -251,7 +302,7 @@ internal object A0AutoCandidateSelectionPolicy {
             it.choice.peerAvailability.tier==A0PeerAvailability.Tier.READY
         }
         if(ready.isEmpty())
-            return review(Reason.NO_READY_SOURCE,observed.size,strong.size,funnel)
+            return review(Reason.NO_READY_SOURCE,observed.size,strong.size,funnel,details)
         val ordered=reliability.sequentialFallbacks(
             ready.map { A0PeerReliabilityEvidence.Alternative(
                 it.choice.peerUsername,"same-claim",it.choice.peerAvailability.tier) },
@@ -260,7 +311,8 @@ internal object A0AutoCandidateSelectionPolicy {
             ready.firstOrNull { it.choice.peerUsername==peer }?.choice
         }
         if(handles.isEmpty())
-            return review(Reason.NO_READY_SOURCE,observed.size,strong.size)
-        return Decision(Status.PROVISIONAL,null,handles,observed.size,strong.size,funnel)
+            return review(Reason.NO_READY_SOURCE,observed.size,strong.size,funnel,details)
+        return Decision(Status.PROVISIONAL,null,handles,observed.size,strong.size,
+            funnel,rejectionDetails=details)
     }
 }

@@ -1316,7 +1316,8 @@ object Downloads {
                             " leading_sources=${decision.ambiguity?.leadingSources ?: 0}" +
                             " competing_sources=${decision.ambiguity?.competingSources ?: 0}" +
                             " rank_gap=${decision.ambiguity?.scoreGap ?: -1}" +
-                            " distinct_sizes=${decision.ambiguity?.distinctByteSizes ?: 0}")
+                            " distinct_sizes=${decision.ambiguity?.distinctByteSizes ?: 0}" +
+                            " ${decision.rejectionDetails.summary()}")
                     },
                     onSlotEvidence={index,observed ->
                         val entry=request.entries[index]
