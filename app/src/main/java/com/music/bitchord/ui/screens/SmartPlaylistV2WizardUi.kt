@@ -525,6 +525,19 @@ internal fun SmartPlaylistV2WizardUi(
 
                 when (page) {
                     WizardStep.IDENTITY, WizardStep.EDIT -> {
+                        if (page == WizardStep.EDIT) {
+                            item {
+                                WizardCard(
+                                    title = if (normalMode) "Editar músicas" else "Editar regras",
+                                    subtitle = if (normalMode)
+                                        "${normalSelectedIds.size} músicas selecionadas"
+                                    else "${smartRuleLeafCount(rule)} condições configuradas",
+                                    onClick = {
+                                        page = if (normalMode) WizardStep.SONGS else WizardStep.RULES
+                                    },
+                                )
+                            }
+                        }
                         if (editingFilterId == null) item {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
@@ -667,19 +680,6 @@ internal fun SmartPlaylistV2WizardUi(
                                         onSelectSecond = { onNormalModeChange(false) },
                                     )
                                 }
-                            }
-                        }
-                        if (page == WizardStep.EDIT) {
-                            item {
-                                WizardCard(
-                                    title = if (normalMode) "Editar músicas" else "Editar regras",
-                                    subtitle = if (normalMode)
-                                        "${normalSelectedIds.size} músicas selecionadas"
-                                    else "${smartRuleLeafCount(rule)} condições configuradas",
-                                    onClick = {
-                                        page = if (normalMode) WizardStep.SONGS else WizardStep.RULES
-                                    },
-                                )
                             }
                         }
                     }
