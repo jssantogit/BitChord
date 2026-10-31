@@ -87,6 +87,16 @@ class PlaylistLibraryVisualReuseTest {
         ).size)
     }
 
+    @Test fun canonicalHeaderReportsOnlyKnownTrackDurationWithoutGuessing() {
+        val known = listOf(
+            V2DisplayRow("rec-1", "A", "Artist", durationMs = 210000L),
+            V2DisplayRow("rec-2", "B", "Artist", durationMs = 240000L),
+        )
+        assertEquals("Playlist · 2 faixas · 7min", canonicalPlaylistDetailMeta(false, known))
+        assertEquals("Playlist inteligente · 2 faixas",
+            canonicalPlaylistDetailMeta(true, known.dropLast(1) + known.last().copy(durationMs = null)))
+    }
+
     @Test fun recentLocalMetadataFallsBackToRealFileNameButNeverAnArtistOnlyLabel() {
         assertEquals("Hurt", recentLocalPreferredDisplayTitle(
             canonicalTitle = "NewJeans", artist = "NewJeans", releaseTitle = null,
