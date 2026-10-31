@@ -200,6 +200,33 @@ class PlaylistLibraryVisualReuseTest {
         }
     }
 
+    @Test fun nativeBrowseSheetReusesArtworkAndCanonicalEditAction() {
+        var edited = 0
+        var queuedNext = 0
+        compose.setContent {
+            com.music.bitchord.ui.components.BrowseActionsSheet(
+                target = com.music.bitchord.ui.components.BrowseTarget(
+                    browseId = null,
+                    title = "Playlist canônica",
+                    subtitle = "Playlist · 2 faixas",
+                    type = com.music.bitchord.data.model.BrowseType.PLAYLIST,
+                    fromCard = false,
+                ),
+                onPlayNext = { queuedNext++ },
+                onAddToQueue = {},
+                headerArtwork = { Box(Modifier.size(52.dp)) },
+                onEdit = { edited++ },
+            )
+        }
+        compose.onNodeWithText("Playlist canônica").assertExists()
+        compose.onNodeWithText("Editar playlist").performClick()
+        compose.onNodeWithText("Tocar a seguir").performClick()
+        compose.runOnIdle {
+            assertEquals(1, edited)
+            assertEquals(1, queuedNext)
+        }
+    }
+
     @Test fun sharedLibraryRowKeepsArtworkSlotAndOpensSelectedPlaylist() {
         var opened = 0
         compose.setContent {
