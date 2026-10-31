@@ -345,6 +345,7 @@ internal fun SmartPlaylistV2WizardUi(
     onSaveFilter: () -> Unit,
     normalMode: Boolean = false,
     editingNormalId: String? = null,
+    openingAsEdit: Boolean = false,
     normalRows: List<V2DisplayRow> = emptyList(),
     normalSelectedRows: List<V2DisplayRow> = emptyList(),
     normalSelectedIds: List<String> = emptyList(),
@@ -374,7 +375,8 @@ internal fun SmartPlaylistV2WizardUi(
     onManage: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val isEditing = editingId != null || editingNormalId != null || editingFilterId != null
+    val isEditing = openingAsEdit ||
+        editingId != null || editingNormalId != null || editingFilterId != null
     var page by remember { mutableStateOf(if (isEditing) WizardStep.EDIT else WizardStep.IDENTITY) }
     var selectedPath by remember { mutableStateOf<List<Int>>(emptyList()) }
     var targetGroupPath by remember { mutableStateOf<List<Int>>(emptyList()) }
