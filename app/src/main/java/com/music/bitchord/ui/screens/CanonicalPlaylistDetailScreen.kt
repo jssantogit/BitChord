@@ -57,9 +57,9 @@ import kotlinx.coroutines.withContext
 /** Repeat each sleeve only once in a collage, as the native playlist page does. */
 internal fun distinctCanonicalPlaylistCoverRows(rows: List<V2DisplayRow>): List<V2DisplayRow> =
     rows.distinctBy { row ->
-        row.localArtworkUri?.let { "local:$" + "it" }
+        row.localArtworkUri?.let { "local:$it" }
             ?: row.remoteArtworkRevision?.takeIf { it.isNotBlank() }
-            ?: row.remoteMediaAssetId?.let { "remote:$" + "it" }
+            ?: row.remoteMediaAssetId?.let { "remote:$it" }
             ?: row.id
     }.take(4)
 
