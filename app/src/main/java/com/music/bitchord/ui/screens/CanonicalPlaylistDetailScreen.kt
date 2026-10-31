@@ -160,6 +160,7 @@ internal fun CanonicalPlaylistTrackRow(
             Box {
                 RowMoreButton(
                     onClick = { menuExpanded = true }, tint = subtitleColor,
+                    contentDescription = "Ações da música",
                 )
                 DropdownMenu(
                     expanded = menuExpanded, onDismissRequest = { menuExpanded = false },
