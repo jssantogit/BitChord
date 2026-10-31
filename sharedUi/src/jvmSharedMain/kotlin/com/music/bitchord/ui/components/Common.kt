@@ -644,7 +644,7 @@ private fun SongRowContent(
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NativeDetailTrackRowFrame(
-    onClick: () -> Unit,
+    onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     onLongPress: (() -> Unit)? = null,
     onMore: (() -> Unit)? = null,
@@ -657,8 +657,10 @@ fun NativeDetailTrackRowFrame(
             .fillMaxWidth()
             .alpha(opacity)
             .background(background)
-            .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
-            .contextClick(onMore ?: onLongPress)
+            .then(if (onClick != null) {
+                Modifier.longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
+                    .contextClick(onMore ?: onLongPress)
+            } else Modifier)
             .padding(horizontal = PAGE_GUTTER, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         content = content,
