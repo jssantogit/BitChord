@@ -38,6 +38,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
@@ -234,6 +235,7 @@ internal fun CanonicalPlaylistDetailScreen(
     onSearchingChange: (Boolean) -> Unit = {},
     query: String = "",
     onQueryChange: (String) -> Unit = {},
+    onRowsReady: (List<V2DisplayRow>) -> Unit = {},
     sort: PlaylistLibrarySort = PlaylistLibrarySort.DEFAULT,
     listState: LazyListState? = null,
 ) {
@@ -263,6 +265,9 @@ internal fun CanonicalPlaylistDetailScreen(
         } catch (_: Exception) {
             emptyList()
         }
+    }
+    LaunchedEffect(card.id, rows) {
+        onRowsReady(rows.orEmpty())
     }
     val visibleRows = remember(rows, query, sort) {
         val filtered = rows.orEmpty().filter {
