@@ -896,25 +896,18 @@ private fun ReleaseHeader(
 ) {
     val (credit, originalMeta) = page.headerLines(songs.size, songs.playtime())
     val meta = metaOverride ?: originalMeta
-    // Every row on a release carries the same credit — see [pageCredit] — so
-    // the first one speaks for the whole page, the same source the rows'
-    // own long-press "Open artist" already reads from.
     val artist = songs.firstOrNull()
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            // Clear of the floating bar, which the sleeve no longer runs under.
-            .padding(top = topBarContentPadding(), bottom = 18.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            Modifier
-                .size(sleeveSize)
-                .shadow(SLEEVE_SHADOW, SLEEVE_SHAPE)
-                .background(palette.elevated)
-                .thumbnailBorder(SLEEVE_SHAPE),
-        ) {
+    NativeReleaseHeaderLayout(
+        title = page.title,
+        credit = credit,
+        meta = meta,
+        palette = palette,
+        sleeveSize = sleeveSize,
+        onCreditClick = artist?.artistId?.takeIf { onArtistClick != null }?.let { id ->
+            { onArtistClick?.invoke(id, artist.artist) }
+        },
+        artwork = {
             // A cover that isn't there, or wouldn't load — a device folder, a
             // playlist with nothing on it yet, files with no picture — gets a
             // placeholder sleeve rather than an empty square. Not shown while a
@@ -946,56 +939,8 @@ private fun ReleaseHeader(
                     modifier = Modifier.matchParentSize(),
                 )
             }
-        }
-
-        Spacer(Modifier.height(20.dp))
-        Text(
-            text = page.title,
-            style = MaterialTheme.typography.headlineMedium,
-            color = palette.onBackground,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = HEADER_GUTTER),
-        )
-        if (credit.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = credit,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 19.sp,
-                ),
-                color = palette.onBackgroundVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .padding(horizontal = HEADER_GUTTER)
-                    .let { m ->
-                        val id = artist?.artistId
-                        if (id == null || onArtistClick == null) {
-                            m
-                        } else {
-                            m.clip(RoundedCornerShape(6.dp))
-                                .clickable { onArtistClick(id, artist.artist) }
-                        }
-                    },
-            )
-        }
-        if (meta.isNotBlank()) {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = meta,
-                style = MaterialTheme.typography.labelMedium,
-                color = palette.onBackgroundVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = HEADER_GUTTER),
-            )
-        }
-
+        },
+        actions = {
         if (songs.isNotEmpty()) {
             // Only where YouTube said the release can be saved and the caller
             // is willing to take the write — see [onToggleLibrary].
@@ -1074,6 +1019,77 @@ private fun ReleaseHeader(
                 }
             }
         }
+        },
+    )
+}
+
+/**
+ * The *same* hero/layout frame for existing DetailScreen releases and saved
+ * canonical playlists. Artwork and playback are typed slots: the caller
+ * never has to manufacture a legacy Song or YouTube browseId to reuse UI.
+ */
+@Composable
+internal fun NativeReleaseHeaderLayout(
+    title: String,
+    credit: String,
+    meta: String,
+    palette: ArtworkPalette,
+    sleeveSize: Dp,
+    artwork: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
+    onCreditClick: (() -> Unit)? = null,
+    actions: @Composable () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .padding(top = topBarContentPadding(), bottom = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier.size(sleeveSize)
+                .shadow(SLEEVE_SHADOW, SLEEVE_SHAPE)
+                .background(palette.elevated)
+                .thumbnailBorder(SLEEVE_SHAPE),
+            content = artwork,
+        )
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineMedium,
+            color = palette.onBackground,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = HEADER_GUTTER),
+        )
+        if (credit.isNotBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = credit,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Normal, fontSize = 19.sp,
+                ),
+                color = palette.onBackgroundVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = HEADER_GUTTER)
+                    .let { m -> if (onCreditClick == null) m
+                        else m.clip(RoundedCornerShape(6.dp)).clickable(onClick = onCreditClick) },
+            )
+        }
+        if (meta.isNotBlank()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = meta,
+                style = MaterialTheme.typography.labelMedium,
+                color = palette.onBackgroundVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = HEADER_GUTTER),
+            )
+        }
+        actions()
     }
 }
 
