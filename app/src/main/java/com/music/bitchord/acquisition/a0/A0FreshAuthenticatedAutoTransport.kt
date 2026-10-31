@@ -33,19 +33,36 @@ internal class A0FreshAuthenticatedAutoTransport(
         scratchDirectory:File,
         isCancelled:()->Boolean,
     ):A0AutoAcquisitionExecutor.FetchResult {
-        if(com.music.bitchord.BuildConfig.FLAVOR!="dev" || !com.music.bitchord.BuildConfig.DEBUG)
-            throw IOException("Soulseek unattended transport is disabled")
-        if(!A0AutoTransportAdmission.accepts(candidate) ||
-            cancelled.get() || isCancelled() ||
-            !SoulseekActiveSession.isCurrent(expectedGeneration))
-            throw IOException("Soulseek auto transport preflight rejected")
-
-        var session:A0AutoAuthenticatedServer.Session?=null
-        var current:A0ServerAssociatedTransfer?=null
         val start=android.os.SystemClock.elapsedRealtime()
-        var lastPhase:A0ServerAssociatedTransfer.Phase?=null
         A0AcquisitionDiagnostics.emit(diagnosticScope,
             A0AcquisitionDiagnostics.Phase.TRANSPORT_START)
+        if(com.music.bitchord.BuildConfig.FLAVOR!="dev" || !com.music.bitchord.BuildConfig.DEBUG) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_FAILURE,
+                A0AcquisitionDiagnostics.Fault.STATE)
+            throw IOException("Soulseek unattended transport is disabled")
+        }
+        val admission=A0AutoTransportAdmission.refusal(candidate)
+        if(admission!=null) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_FAILURE,admission)
+            throw IOException("Soulseek source admission rejected")
+        }
+        if(cancelled.get() || isCancelled()) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_FAILURE,
+                A0AcquisitionDiagnostics.Fault.CANCELLED)
+            throw IOException("Soulseek auto transfer cancelled")
+        }
+        if(!SoulseekActiveSession.isCurrent(expectedGeneration)) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_FAILURE,
+                A0AcquisitionDiagnostics.Fault.STATE)
+            throw IOException("Soulseek account generation revoked")
+        }
+        var session:A0AutoAuthenticatedServer.Session?=null
+        var current:A0ServerAssociatedTransfer?=null
+        var lastPhase:A0ServerAssociatedTransfer.Phase?=null
         try {
             session=A0AutoAuthenticatedServer.open(
                 app,expectedGeneration,
@@ -145,17 +162,26 @@ internal class A0FreshAuthenticatedAutoTransport(
  * Selection scoring happens separately per target, never inside this gate.
  */
 internal object A0AutoTransportAdmission {
-    fun accepts(candidate:A0ObservedCandidateHandoff.Choice):Boolean {
-        if(candidate.peerAvailability.tier!=A0PeerAvailability.Tier.READY ||
-            candidate.sizeBytes !in A0ObservedTransferLimits.MIN_AUDIO_BYTES..
-                A0ObservedTransferLimits.MAX_AUDIO_BYTES ||
-            candidate.claim.format.lowercase(Locale.ROOT) !in
-                setOf("mp3","flac","wav","aac","opus","ogg") ||
-            !A0ModernIncomingTransfer.isSafeRemoteName(candidate.remotePath))
-            return false
-        return runCatching {
-            A0PeerRendezvousWire.getPeerAddress(candidate.peerUsername)
-            true
-        }.getOrDefault(false)
+    enum class Refusal {
+        PEER_NOT_READY, INVALID_BYTE_BOUND, UNSUPPORTED_CODEC,
+        UNSAFE_REMOTE_PATH, INVALID_PEER_IDENTIFIER,
     }
+    fun refusal(candidate:A0ObservedCandidateHandoff.Choice):Refusal? {
+        if(candidate.peerAvailability.tier!=A0PeerAvailability.Tier.READY)
+            return Refusal.PEER_NOT_READY
+        if(candidate.sizeBytes !in A0ObservedTransferLimits.MIN_AUDIO_BYTES..
+                A0ObservedTransferLimits.MAX_AUDIO_BYTES)
+            return Refusal.INVALID_BYTE_BOUND
+        if(candidate.claim.format.lowercase(Locale.ROOT) !in
+                setOf("mp3","flac","wav","aac","opus","ogg"))
+            return Refusal.UNSUPPORTED_CODEC
+        if(!A0ModernIncomingTransfer.isSafeRemoteName(candidate.remotePath))
+            return Refusal.UNSAFE_REMOTE_PATH
+        if(runCatching {A0PeerRendezvousWire.getPeerAddress(
+                candidate.peerUsername)}.isFailure)
+            return Refusal.INVALID_PEER_IDENTIFIER
+        return null
+    }
+    fun accepts(candidate:A0ObservedCandidateHandoff.Choice):Boolean =
+        refusal(candidate)==null
 }

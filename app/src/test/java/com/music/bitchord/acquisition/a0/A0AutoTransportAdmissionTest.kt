@@ -35,5 +35,8 @@ class A0AutoTransportAdmissionTest {
 
     @Test fun unsupportedSourceContainerDoesNotReachAnySavedCredentials() {
         assertFalse(A0AutoTransportAdmission.accepts(choice("m4a")))
+        assertEquals(A0AutoTransportAdmission.Refusal.UNSUPPORTED_CODEC,
+            A0AutoTransportAdmission.refusal(choice("m4a")))
+        assertNull(A0AutoTransportAdmission.refusal(choice("mp3")))
     }
 }
