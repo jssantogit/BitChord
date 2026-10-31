@@ -286,7 +286,10 @@ class SmartPlaylistV2WizardComposeTest {
         }
         compose.onNodeWithText("Excluir playlist?").assertExists()
         compose.runOnIdle { assertEquals(0, confirmed) }
-        compose.onNodeWithText("Cancelar").performClick()
+        compose.onNodeWithText(
+            org.robolectric.RuntimeEnvironment.getApplication()
+                .getString(com.music.bitchord.R.string.cancel),
+        ).performClick()
         compose.runOnIdle { assertEquals(0, confirmed); assertEquals(1, cancelled) }
         compose.onNodeWithText("Excluir definitivamente").performClick()
         compose.runOnIdle { assertEquals(1, confirmed) }
