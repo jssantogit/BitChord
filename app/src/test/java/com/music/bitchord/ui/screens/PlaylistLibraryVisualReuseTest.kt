@@ -73,8 +73,8 @@ class PlaylistLibraryVisualReuseTest {
     @Test fun playlistCoverDoesNotRepeatTheSameAlbumArtInFourQuadrants() {
         val songs = (1..4).map { index ->
             V2DisplayRow(
-                id = "recording:$" + "{index}",
-                title = "Song $" + "{index}",
+                id = "recording:$index",
+                title = "Song $index",
                 artist = "SAY MY NAME",
                 localArtworkUri = "content://art/same-album",
             )
@@ -82,7 +82,7 @@ class PlaylistLibraryVisualReuseTest {
         assertEquals(1, distinctCanonicalPlaylistCoverRows(songs).size)
         assertEquals(4, distinctCanonicalPlaylistCoverRows(
             songs.mapIndexed { index, row ->
-                row.copy(localArtworkUri = "content://art/$" + "{index}")
+                row.copy(localArtworkUri = "content://art/$index")
             },
         ).size)
     }
