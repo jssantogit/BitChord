@@ -1055,12 +1055,13 @@ internal fun NativeReleaseHeaderLayout(
     palette: ArtworkPalette,
     sleeveSize: Dp,
     artwork: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
+    topInset: Dp? = null,
     onCreditClick: (() -> Unit)? = null,
     actions: @Composable () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth()
-            .padding(top = topBarContentPadding(), bottom = 18.dp),
+            .padding(top = topInset ?: topBarContentPadding(), bottom = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
