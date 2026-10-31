@@ -8,7 +8,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
 import com.music.bitchord.data.listening.SmartPlaylistRule
@@ -50,9 +49,16 @@ class SmartPlaylistV2WizardComposeTest {
                 currentPreviewQuery = null, onManage = {}, onBack = {},
             )
         }
-        // Two editor groups (catalog sources and type), using Settings' real
-        // container implementation rather than Material3 Cards.
-        compose.onAllNodesWithTag("native-settings-group-surface").assertCountEquals(2)
+        // The LazyColumn virtualizes cards on compact phone windows; assert
+        // each group when it is visible rather than requiring both composed.
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
+        compose.onNodeWithText("Fontes do catálogo").assertExists()
+        assertEquals(true, compose.onAllNodesWithTag("native-settings-group-surface")
+            .fetchSemanticsNodes().isNotEmpty())
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
+        compose.onNodeWithText("Tipo de playlist").assertExists()
+        assertEquals(true, compose.onAllNodesWithTag("native-settings-group-surface")
+            .fetchSemanticsNodes().isNotEmpty())
         compose.onNodeWithText("Continuar").performClick()
         compose.onNodeWithText("+ Adicionar primeira condição").performClick()
         compose.onNodeWithTag("native-detail-search-field").assertExists()
