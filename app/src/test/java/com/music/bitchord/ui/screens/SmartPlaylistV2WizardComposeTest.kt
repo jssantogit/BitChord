@@ -352,6 +352,31 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Regras da playlist").assertExists()
     }
 
+    @Test fun editingReusableFilterShowsOnlyPersistentFieldsAndNamesItsRuleEditor() {
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Filtro de avaliações",
+                rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+                    SmartPlaylistRule.Comparison(
+                        SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+                    ),
+                )),
+                sort = SmartPlaylistV2Sort.TITLE_ASC,
+                limit = "100", seed = "0", preview = null, loading = false,
+                error = null, editingId = null, editingFilterId = "filter-1",
+                savedDefinitions = emptyList(), onNameChange = {}, onRuleChange = {},
+                onSortChange = {}, onLimitChange = {}, onSeedChange = {},
+                onPreview = {}, onSave = {}, onSaveFilter = {},
+                normalMode = false, onPreviewAction = null, currentPreviewQuery = null,
+                onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Editar filtro").assertExists()
+        compose.onNodeWithText("Descrição (opcional)").assertDoesNotExist()
+        compose.onNodeWithText("Editar regras").performClick()
+        compose.onNodeWithText("Regras do filtro").assertExists()
+    }
+
     @Test fun newPlaylistDoesNotClaimAnAutomaticPlaybackRule() {
         val placeholder = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
             SmartPlaylistRule.Comparison(
