@@ -70,6 +70,12 @@ class PlaylistLibraryVisualReuseTest {
         compose.runOnIdle { assertEquals("newjeans", query) }
     }
 
+    @Test fun recentAdditionUsesVerifiedAlbumWhenRecordingTitleIsOnlyArtistName() {
+        assertEquals("Get Up", preferRecentLocalAdditionTitle("NewJeans", "NewJeans", "Get Up"))
+        assertEquals("Hurt", preferRecentLocalAdditionTitle("Hurt", "NewJeans", "Get Up"))
+        assertEquals("NewJeans", preferRecentLocalAdditionTitle("NewJeans", "NewJeans", null))
+    }
+
     @Test fun recentAdditionsHeaderAndCanonicalTrackMetadataRemainVisible() {
         compose.setContent {
             CanonicalRecentAdditionsShelf(
