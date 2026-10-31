@@ -5818,6 +5818,7 @@ private fun NativeCollectionOverflowAction(contentDescription: String, onClick: 
 /**
  * Native playlist menus live outside BitChordApp to keep its JVM method small.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CanonicalPlaylistMenus(
     hazeState: HazeState,
