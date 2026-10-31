@@ -106,7 +106,7 @@ internal object A0AndroidAudioTechnicalProbe {
             return denied(Failure.INVALID_PRIVATE_SOURCE,metrics)
         val size=source.length()
         val modification=source.lastModified()
-        val head=ByteArray(minOf(size.toInt(),HEADER_BYTES))
+        val head=ByteArray(minOf(size,HEADER_BYTES.toLong()).toInt())
         val read=try {
             source.inputStream().use { input ->
                 var count=0
@@ -119,8 +119,10 @@ internal object A0AndroidAudioTechnicalProbe {
                 }
                 count
             }
-        }catch(_:Exception) {
-            // Do not expose transient private file paths or provider errors.
+        }catch(error:Exception) {
+            // Only the typed fault is retained, never raw exception text or
+            // private filesystem paths.
+            metrics.fault=A0AcquisitionDiagnostics.fault(error)
             return denied(Failure.SOURCE_READ_FAILURE,metrics)
         }
         if(read<12)return denied(Failure.HEADER_TOO_SHORT,metrics)

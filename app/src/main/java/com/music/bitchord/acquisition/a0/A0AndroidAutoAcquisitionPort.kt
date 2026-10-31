@@ -119,9 +119,21 @@ internal class A0AndroidAutoAcquisitionPort(
         isCancelled:()->Boolean,
     ):A0AutoPostTransferTechnicalGate.Decoded? {
         requireWorker()
-        if(revoked(isCancelled) || !privateReceipt(receipt))return null
         A0AcquisitionDiagnostics.emit(diagnosticScope,
             A0AcquisitionDiagnostics.Phase.A3_INSPECT)
+        val precheckFailure=when {
+            revoked(isCancelled) ->
+                A0AndroidAudioTechnicalProbe.Failure.SOURCE_CHANGED_OR_REVOKED
+            !privateReceipt(receipt) ->
+                A0AndroidAudioTechnicalProbe.Failure.INVALID_PRIVATE_SOURCE
+            else -> null
+        }
+        if(precheckFailure!=null) {
+            runCatching {onTechnicalProbeFailure(precheckFailure)}
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.PROBE_REJECT,precheckFailure)
+            return null
+        }
         return A0AndroidAudioTechnicalProbe.inspect(
             receipt.file,expectedExtension,diagnosticScope,
             onRefused=onTechnicalProbeFailure) { revoked(isCancelled) }
