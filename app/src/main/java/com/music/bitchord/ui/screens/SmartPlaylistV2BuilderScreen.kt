@@ -745,47 +745,23 @@ internal fun SmartPlaylistV2BuilderScreen(
                 color = MaterialTheme.colorScheme.background,
             ) {
                 Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth()
-                            .padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text("Filtros e versões anteriores",
-                            style = MaterialTheme.typography.headlineMedium)
-                        TextButton(onClick = onBack) { Text("Fechar") }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Button(onClick = { reset(); showWizard = true }) {
-                            Text("Nova playlist")
-                        }
-                        TextButton(onClick = { showWizard = true }) {
-                            Text("Voltar ao rascunho")
-                        }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
-                            .padding(horizontal = PAGE_GUTTER),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        FilterChip(
-                            selected = manageTab == SmartPlaylistManageTab.PLAYLISTS,
-                            onClick = { manageTab = SmartPlaylistManageTab.PLAYLISTS },
-                            label = { Text("Inteligentes (${saved.size})") },
-                        )
-                        FilterChip(
-                            selected = manageTab == SmartPlaylistManageTab.FILTERS,
-                            onClick = { manageTab = SmartPlaylistManageTab.FILTERS },
-                            label = { Text("Filtros (${savedFilters.size})") },
-                        )
-                        FilterChip(
-                            selected = manageTab == SmartPlaylistManageTab.CLASSIC,
-                            onClick = { manageTab = SmartPlaylistManageTab.CLASSIC },
-                            label = { Text("Clássicas (${legacySaved.size})") },
-                        )
-                    }
+                    PlaylistManagerChrome(
+                        selectedIndex = when (manageTab) {
+                            SmartPlaylistManageTab.PLAYLISTS -> 0
+                            SmartPlaylistManageTab.FILTERS -> 1
+                            SmartPlaylistManageTab.CLASSIC -> 2
+                        },
+                        onSelect = { index ->
+                            manageTab = when (index) {
+                                0 -> SmartPlaylistManageTab.PLAYLISTS
+                                1 -> SmartPlaylistManageTab.FILTERS
+                                else -> SmartPlaylistManageTab.CLASSIC
+                            }
+                        },
+                        onBack = onBack,
+                        onNew = { reset(); showWizard = true },
+                        onDraft = { showWizard = true },
+                    )
                     if (error != null) {
                         Text(error.orEmpty(),
                             modifier = Modifier.padding(horizontal = PAGE_GUTTER),
