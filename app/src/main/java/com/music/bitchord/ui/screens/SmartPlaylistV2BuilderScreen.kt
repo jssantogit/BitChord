@@ -794,7 +794,6 @@ internal fun SmartPlaylistV2BuilderScreen(
                             }
                         },
                         onBack = { showWizard = true },
-                        onDraft = { showWizard = true },
                     )
                     if (error != null) {
                         Text(error.orEmpty(),
