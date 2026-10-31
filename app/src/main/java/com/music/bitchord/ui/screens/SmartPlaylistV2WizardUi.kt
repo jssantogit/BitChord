@@ -506,9 +506,9 @@ internal fun SmartPlaylistV2WizardUi(
                                 )
                                 PlaylistWizardTextEntry(
                                     value = description,
-                                    onValueChange = { if (it.length <= 1000) onDescriptionChange(it) },
+                                    onValueChange = { if (it.length <= 5000) onDescriptionChange(it) },
                                     label = "Descrição (opcional)",
-                                    hint = "Exibida em Sobre a playlist · até 1.000 caracteres",
+                                    hint = "Exibida em Sobre a playlist · até 5.000 caracteres",
                                     multiline = true,
                                 )
                             }
