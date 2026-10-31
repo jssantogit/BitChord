@@ -46,7 +46,7 @@ class PlaylistLibraryVisualReuseTest {
                 onDismiss = { continued++ },
             )
         }
-        compose.onNodeWithTag("native-confirmation-alert").assertExists()
+        compose.onNodeWithTag("native-alert-scaffold").assertExists()
         compose.onNodeWithText("Continuar editando").performClick()
         compose.onNodeWithText("Descartar").performClick()
         compose.runOnIdle {
