@@ -54,6 +54,15 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/** Repeat each sleeve only once in a collage, as the native playlist page does. */
+internal fun distinctCanonicalPlaylistCoverRows(rows: List<V2DisplayRow>): List<V2DisplayRow> =
+    rows.distinctBy { row ->
+        row.localArtworkUri?.let { "local:$" + "it" }
+            ?: row.remoteArtworkRevision?.takeIf { it.isNotBlank() }
+            ?: row.remoteMediaAssetId?.let { "remote:$" + "it" }
+            ?: row.id
+    }.take(4)
+
 /**
  * Artwork always comes from recordings actually in the saved collection.
  * No generated cover URLs, no legacy video IDs and no title-based album lookup.
@@ -63,22 +72,23 @@ internal fun CanonicalPlaylistCoverArt(
     rows: List<V2DisplayRow>,
     modifier: Modifier = Modifier,
 ) {
+    val covers = remember(rows) { distinctCanonicalPlaylistCoverRows(rows) }
     when {
-        rows.size >= 4 -> Column(modifier.clip(RoundedCornerShape(12.dp))) {
+        covers.size >= 4 -> Column(modifier.clip(RoundedCornerShape(12.dp))) {
             for (offset in listOf(0, 2)) {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     for (index in offset until offset + 2) {
                         Box(Modifier.weight(1f).fillMaxHeight()) {
                             SmartPlaylistPreviewArtwork(
-                                row = rows[index], modifier = Modifier.fillMaxSize(),
+                                row = covers[index], modifier = Modifier.fillMaxSize(),
                             )
                         }
                     }
                 }
             }
         }
-        rows.isNotEmpty() -> SmartPlaylistPreviewArtwork(
-            row = rows.first(), modifier = modifier,
+        covers.isNotEmpty() -> SmartPlaylistPreviewArtwork(
+            row = covers.first(), modifier = modifier,
         )
         else -> Box(modifier, contentAlignment = Alignment.Center) {
             PlaylistWizardArtworkPlaceholder(180.dp)
