@@ -1,6 +1,7 @@
 package com.music.bitchord.data.listening
 
 import androidx.room.Dao
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.Query
@@ -21,6 +22,7 @@ internal data class SavedCanonicalStaticPlaylist(
     val schemaVersion: Int = 1,
     /** Null means all available sources; otherwise an exact configured provider. */
     val sourceProviderKey: String? = null,
+    val description: String = "",
 )
 
 @Entity(tableName = "canonical_static_playlist")
@@ -30,6 +32,7 @@ internal data class CanonicalStaticPlaylistEntity(
     val schemaVersion: Int,
     val recordingIdsJson: String,
     val sourceProviderKey: String?,
+    @ColumnInfo(defaultValue = "''") val description: String = "",
 )
 
 @Dao
@@ -63,6 +66,7 @@ internal class CanonicalStaticPlaylistRepository(
             id = value.id, name = value.name.trim(),
             schemaVersion = value.schemaVersion, recordingIdsJson = json.toString(),
             sourceProviderKey = value.sourceProviderKey,
+            description = value.description.trim(),
         ))
     }
 
@@ -84,7 +88,7 @@ internal class CanonicalStaticPlaylistRepository(
             require(members.opt(index) is String) { "Invalid canonical member" }
             members.getString(index)
         }
-        return SavedCanonicalStaticPlaylist(id, name, ids, schemaVersion, sourceProviderKey)
+        return SavedCanonicalStaticPlaylist(id, name, ids, schemaVersion, sourceProviderKey, description)
             .also(::validate)
     }
 
@@ -95,6 +99,7 @@ internal class CanonicalStaticPlaylistRepository(
             "Invalid playlist id"
         }
         require(value.name.trim().length in 1..80) { "Invalid playlist name" }
+        require(value.description.length <= 5000 && value.description.none { it.isISOControl() && it != '\n' && it != '\t' }) { "Invalid playlist description" }
         val provider = value.sourceProviderKey
         require(provider == null || provider == "local-mediastore" ||
             (provider.startsWith("opensubsonic:") && provider.length in 15..180 &&
