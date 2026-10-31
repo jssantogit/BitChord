@@ -48,6 +48,20 @@ class CanonicalStaticPlaylistStoreTest {
         }
     }
 
+    @Test fun customCoverOnlyAcceptsExplicitContentDocumentUri() {
+        validateCanonicalPlaylistCoverUri(null)
+        validateCanonicalPlaylistCoverUri("content://media/document/cover-1")
+        assertTrue(runCatching {
+            validateCanonicalPlaylistCoverUri("https://example.org/cover.png")
+        }.isFailure)
+        assertTrue(runCatching {
+            validateCanonicalPlaylistCoverUri("file:///storage/shared/image.png")
+        }.isFailure)
+        assertTrue(runCatching {
+            validateCanonicalPlaylistCoverUri("content://bad provider/art")
+        }.isFailure)
+    }
+
     @Test fun invalidNamesIdsAndDuplicateMembersAreRejected() = runTest {
         val context = RuntimeEnvironment.getApplication()
         val db = Room.inMemoryDatabaseBuilder(context, SmartPlaylistDefinitionDatabase::class.java)
