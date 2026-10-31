@@ -377,6 +377,7 @@ internal fun SmartPlaylistV2WizardUi(
     onMoveNormalTrack: (String, Boolean) -> Unit = { _, _ -> },
     onSaveNormal: () -> Unit = {},
     onDeleteNormal: () -> Unit = {},
+    onDeleteSmart: () -> Unit = {},
     onPreviewAction: ((SmartPlaylistV2Query, String?, CanonicalCollectionIntent) -> Unit)?,
     currentPreviewQuery: SmartPlaylistV2Query?,
     onManage: () -> Unit,
@@ -397,6 +398,7 @@ internal fun SmartPlaylistV2WizardUi(
     var picker by remember { mutableStateOf<String?>(null) }
     var confirmDiscard by remember { mutableStateOf(false) }
     var confirmDeleteNormal by remember { mutableStateOf(false) }
+    var confirmDeleteSmart by remember { mutableStateOf(false) }
     val names = savedDefinitions.associate { it.id to it.name }
 
     fun openField(field: SmartPlaylistRuleField) {
@@ -1266,6 +1268,20 @@ internal fun SmartPlaylistV2WizardUi(
                             onClick = if (editingFilterId != null) onSaveFilter
                                 else if (normalMode) onSaveNormal else onSave,
                         )
+                        if (editingFilterId == null &&
+                            (editingNormalId != null || editingId != null)
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    if (normalMode) confirmDeleteNormal = true
+                                    else confirmDeleteSmart = true
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = !loading,
+                            ) {
+                                Text("Excluir playlist", color = MaterialTheme.colorScheme.error)
+                            }
+                        }
                     }
                     WizardStep.IDENTITY -> PlaylistWizardPrimaryAction(
                         label = "Continuar",
@@ -1333,13 +1349,6 @@ internal fun SmartPlaylistV2WizardUi(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        if (normalMode && editingNormalId != null) {
-                            TextButton(
-                                onClick = { confirmDeleteNormal = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !loading,
-                            ) { Text("Excluir playlist", color = MaterialTheme.colorScheme.error) }
-                        }
                         if (!normalMode) TextButton(onClick = onSaveFilter, enabled = canReview && !loading,
                             modifier = Modifier.fillMaxWidth()) {
                             Text(if (editingFilterId == null) "Salvar como filtro reutilizável"
@@ -1354,9 +1363,10 @@ internal fun SmartPlaylistV2WizardUi(
 
     // The full-screen editor captures back itself; an open native alert must
     // dismiss before that back action attempts to leave the draft.
-    BackHandler(enabled = confirmDiscard || confirmDeleteNormal) {
+    BackHandler(enabled = confirmDiscard || confirmDeleteNormal || confirmDeleteSmart) {
         confirmDiscard = false
         confirmDeleteNormal = false
+        confirmDeleteSmart = false
     }
     if (confirmDiscard) {
         ConfirmationAlert(
@@ -1389,6 +1399,20 @@ internal fun SmartPlaylistV2WizardUi(
         )
     }
 
+    if (confirmDeleteSmart) {
+        ConfirmationAlert(
+            hazeState = null,
+            title = "Excluir playlist inteligente?",
+            description = "A playlist salva será removida do dispositivo. Suas músicas originais não serão apagadas. Playlists que dependem dela podem impedir a exclusão.",
+            confirmLabel = "Excluir",
+            destructive = true,
+            onConfirm = {
+                confirmDeleteSmart = false
+                onDeleteSmart()
+            },
+            onDismiss = { confirmDeleteSmart = false },
+        )
+    }
     if (picker == "sort") {
         WizardChoiceDialog("Ordenar músicas", SmartPlaylistV2Sort.entries, ::sortUiLabel,
             onChosen = onSortChange, onClose = { picker = null })
