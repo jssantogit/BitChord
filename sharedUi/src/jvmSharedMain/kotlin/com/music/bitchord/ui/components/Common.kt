@@ -562,35 +562,36 @@ private fun SongRowContent(
         // screen edge to the number and from the number to the title match,
         // whatever its digit count.
         Spacer(Modifier.width(if (trackNumber == null) 14.dp else PAGE_GUTTER))
-        Column(Modifier.weight(1f)) {
-            ExplicitSongTitle(
-                song = song,
-                style = MaterialTheme.typography.titleMedium,
-                color = titleColor,
-            )
-            Spacer(Modifier.height(2.dp))
-            val subtitle = listOfNotNull(
-                song.artist.takeIf { it.isNotBlank() },
-                song.downloadFormat,
-            ).joinToString(" · ")
-            val quality = if (showSourceQuality) song.sourceQualityBadge() else null
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (quality != null) {
-                    SourceQualityBadge(
-                        quality = quality,
-                        color = subtitleColor,
+        NativeTrackRowText(
+            title = {
+                ExplicitSongTitle(
+                    song = song,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = titleColor,
+                )
+            },
+            subtitle = {
+                val subtitle = listOfNotNull(
+                    song.artist.takeIf { it.isNotBlank() },
+                    song.downloadFormat,
+                ).joinToString(" · ")
+                val quality = if (showSourceQuality) song.sourceQualityBadge() else null
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (quality != null) {
+                        SourceQualityBadge(
+                            quality = quality, color = subtitleColor,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    Text(
+                        text = if (quality != null && subtitle.isNotEmpty()) " · $subtitle" else subtitle,
                         style = MaterialTheme.typography.bodyMedium,
+                        color = subtitleColor, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Text(
-                    text = if (quality != null && subtitle.isNotEmpty()) " · $subtitle" else subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = subtitleColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+            },
+        )
         if (downloadedTint != null) {
             DownloadedBadge(song.videoId, downloadedTint)
         }
@@ -665,6 +666,19 @@ fun NativeDetailTrackRowFrame(
         verticalAlignment = Alignment.CenterVertically,
         content = content,
     )
+}
+
+/** SongRow and canonical rows share title/subtitle weight and baseline spacing. */
+@Composable
+fun RowScope.NativeTrackRowText(
+    title: @Composable () -> Unit,
+    subtitle: @Composable () -> Unit,
+) {
+    Column(Modifier.weight(1f)) {
+        title()
+        Spacer(Modifier.height(2.dp))
+        subtitle()
+    }
 }
 
 /**
