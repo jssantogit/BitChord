@@ -40,7 +40,7 @@ class SmartPlaylistV2WizardComposeTest {
         ))
         compose.setContent {
             SmartPlaylistV2WizardUi(
-                name = "Nova", rule = rule, normalMode = false,
+                name = "Nova", rule = rule, hasConfiguredRules = false, normalMode = false,
                 sort = SmartPlaylistV2Sort.TITLE_ASC, limit = "100", seed = "0",
                 preview = null, loading = false, error = null,
                 editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
@@ -54,7 +54,7 @@ class SmartPlaylistV2WizardComposeTest {
         // container implementation rather than Material3 Cards.
         compose.onAllNodesWithTag("native-settings-group-surface").assertCountEquals(2)
         compose.onNodeWithText("Continuar").performClick()
-        compose.onNodeWithText("Adicionar primeira condição").performClick()
+        compose.onNodeWithText("+ Adicionar primeira condição").performClick()
         compose.onNodeWithTag("native-detail-search-field").assertExists()
     }
 
