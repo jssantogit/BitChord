@@ -49,6 +49,7 @@ internal object A0AndroidAudioTechnicalProbe {
         var toleratedBacksteps=0
         var backstepMillis=-1L
         var endGapMillis=-1L
+        var termination:A0ProbeTermination.Reason?=null
         var fault:A0AcquisitionDiagnostics.Fault?=null
     }
     private fun denied(reason:Failure,m:ProbeMetrics)
@@ -61,6 +62,7 @@ internal object A0AndroidAudioTechnicalProbe {
                     " small_backsteps=${m.toleratedBacksteps}" +
                     " regression_ms=${m.backstepMillis.coerceIn(-1L,7200000L)}" +
                     " end_gap_ms=${m.endGapMillis.coerceIn(-1L,7200000L)}" +
+                    " termination=${m.termination?.name ?: "NONE"}" +
                     " fault=${m.fault?.name ?: "NONE"}" +
                     " elapsed_ms=${elapsed.coerceIn(0L,600000L)}" +
                     " scope=${m.scope}")
@@ -261,8 +263,13 @@ internal object A0AndroidAudioTechnicalProbe {
             metrics.step=Step.FINAL
             metrics.endGapMillis=if(lastUs>=0)
                 abs(duration-lastUs/1000L) else -1L
-            if(!reachedEos || samples<2 ||
-                lastUs<0 || abs(duration-lastUs/1000L)>3_000L)
+            val termination=A0ProbeTermination.classify(
+                reachedEos,samples,lastUs,duration,
+                capReached=samples>=MAX_SAMPLES,
+                timeExpired=SystemClock.elapsedRealtime()>=endBy,
+                cancelled=isCancelled() || Thread.currentThread().isInterrupted)
+            metrics.termination=termination
+            if(termination!=A0ProbeTermination.Reason.COMPLETE)
                 return denied(Failure.INCOMPLETE_SAMPLE_SCAN,metrics)
             if(source.length()!=size || source.lastModified()!=modification ||
                 isCancelled() || Thread.currentThread().isInterrupted)
