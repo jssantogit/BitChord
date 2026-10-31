@@ -77,6 +77,8 @@ internal class A0AndroidAutoAcquisitionPort(
     ):A0AutoAcquisitionExecutor.FetchResult {
         requireWorker()
         if(revoked(isCancelled))throw IOException("Soulseek auto session revoked")
+        A0AcquisitionDiagnostics.emit(diagnosticScope,
+            A0AcquisitionDiagnostics.Phase.A3_FETCH)
         job.beginTransfer()
         try { onTransferStarting() }catch(_:Exception) {}
         val result=transport.receive(candidate,scratchRoot) { revoked(isCancelled) }
@@ -88,6 +90,8 @@ internal class A0AndroidAutoAcquisitionPort(
             }
             try {
                 job.staged()
+                A0AcquisitionDiagnostics.emit(diagnosticScope,
+                    A0AcquisitionDiagnostics.Phase.A3_STAGED)
             }catch(error:Exception) {
                 runCatching {receipt.file.delete()}
                 throw IOException("Soulseek durable staging failed",error)
@@ -103,6 +107,8 @@ internal class A0AndroidAutoAcquisitionPort(
     ):A0AutoPostTransferTechnicalGate.Decoded? {
         requireWorker()
         if(revoked(isCancelled) || !privateReceipt(receipt))return null
+        A0AcquisitionDiagnostics.emit(diagnosticScope,
+            A0AcquisitionDiagnostics.Phase.A3_INSPECT)
         return A0AndroidAudioTechnicalProbe.inspect(
             receipt.file,expectedExtension,diagnosticScope) { revoked(isCancelled) }
     }
@@ -115,6 +121,8 @@ internal class A0AndroidAutoAcquisitionPort(
         requireWorker()
         if(revoked(isCancelled) || !privateReceipt(receipt))
             return A0AutoAcquisitionExecutor.PublishResult.ROLLED_BACK
+        A0AcquisitionDiagnostics.emit(diagnosticScope,
+            A0AcquisitionDiagnostics.Phase.A3_PUBLISH)
         return try {
             val published=A3AndroidAcquisitionLedger.publishStaged(
                 context=app,jobId=jobId,
@@ -136,14 +144,26 @@ internal class A0AndroidAutoAcquisitionPort(
                             "A3 published audio, but Downloads index failed",it)
                     }
             }
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.A3_RESULT,
+                A0AutoAcquisitionExecutor.PublishResult.DURABLE)
             A0AutoAcquisitionExecutor.PublishResult.DURABLE
         }catch(_:A3PublicationCommitFailure.RolledBack) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.A3_RESULT,
+                A0AutoAcquisitionExecutor.PublishResult.ROLLED_BACK)
             job.markRolledBack()
             A0AutoAcquisitionExecutor.PublishResult.ROLLED_BACK
         }catch(_:A3PublicationCommitFailure.ReconciliationRequired) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.A3_RESULT,
+                A0AutoAcquisitionExecutor.PublishResult.UNCERTAIN)
             job.markUncertain()
             A0AutoAcquisitionExecutor.PublishResult.UNCERTAIN
-        }catch(_:Exception) {
+        }catch(error:Exception) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.A3_RESULT,
+                A0AcquisitionDiagnostics.fault(error))
             // A3 may have made a provider row visible before failure;
             // without confirmed rollback, never permit silent re-download.
             job.markUncertain()
@@ -153,6 +173,8 @@ internal class A0AndroidAutoAcquisitionPort(
 
     override fun cleanup(receipt:A0VerifiedByteStager.Receipt) {
         requireWorker()
+        A0AcquisitionDiagnostics.emit(diagnosticScope,
+            A0AcquisitionDiagnostics.Phase.A3_CLEANUP)
         if(!privateReceipt(receipt) || !receipt.file.delete())
             throw IOException("Soulseek private receipt cleanup failed")
     }

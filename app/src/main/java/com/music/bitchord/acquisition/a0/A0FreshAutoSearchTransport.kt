@@ -55,11 +55,23 @@ internal class A0FreshAutoSearchTransport(
         fun stopped()=closed.get() || isCancelled() ||
             !SoulseekActiveSession.isCurrent(generation) ||
             Thread.currentThread().isInterrupted
+        val traceScope=A0AcquisitionDiagnostics.newScope()
+        val traceStart=android.os.SystemClock.elapsedRealtime()
+        A0AcquisitionDiagnostics.emit(traceScope,
+            A0AcquisitionDiagnostics.Phase.SEARCH_START,
+            count=releaseSlots.size)
         val valid=releaseSlots.size in 1..SoulseekBatchPlan.MAX_TRACKS &&
             releaseSlots.map{it.trackId}.distinct().size==releaseSlots.size &&
             entry in releaseSlots &&
             releaseSlots.all{it.trackId.isNotBlank() && it.query.isNotBlank()}
-        if(stopped() || !valid)return A0AutoDiscoveryCoordinator.SearchResult.Stop
+        if(stopped() || !valid) {
+            A0AcquisitionDiagnostics.emit(traceScope,
+                A0AcquisitionDiagnostics.Phase.SEARCH_STOP,
+                reason=if(stopped())
+                    A0AcquisitionDiagnostics.Fault.CANCELLED
+                else A0AcquisitionDiagnostics.Fault.ARGUMENT)
+            return A0AutoDiscoveryCoordinator.SearchResult.Stop
+        }
         val normalized=runCatching {
             A0SearchQuery.normalize(entry.query)
         }.getOrElse {return A0AutoDiscoveryCoordinator.SearchResult.Stop}
@@ -74,6 +86,9 @@ internal class A0FreshAutoSearchTransport(
         try {
             session=A0AutoAuthenticatedServer.open(
                 app,generation,::stopped,onSocketReady={activeServer=it})
+            A0AcquisitionDiagnostics.emit(traceScope,
+                A0AcquisitionDiagnostics.Phase.SEARCH_LOGIN_OK,
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart)
             val connection=checkNotNull(session).socket
             listener=ServerSocket(0,128)
             activeListener=listener
@@ -88,6 +103,9 @@ internal class A0FreshAutoSearchTransport(
                 releaseQueries=releaseSlots.map {it.query},
             )
             activeHandoff=handoff
+            A0AcquisitionDiagnostics.emit(traceScope,
+                A0AcquisitionDiagnostics.Phase.SEARCH_READER_READY,
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart)
             val holder=checkNotNull(handoff)
             connection.getOutputStream().apply {
                 write(A0OneShotPublicSearchWire.setWaitPort(checkNotNull(listener).localPort))
@@ -203,6 +221,10 @@ internal class A0FreshAutoSearchTransport(
                                 flush()
                             }
                             sent.add(variant)
+                            A0AcquisitionDiagnostics.emit(traceScope,
+                                A0AcquisitionDiagnostics.Phase.SEARCH_RECOVERY_SENT,
+                                elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart,
+                                count=sent.size)
                         }
                     }
                 }
@@ -223,6 +245,11 @@ internal class A0FreshAutoSearchTransport(
                 directCollector.stop(4500) && peerWorkers.stop(4500)
             }.getOrDefault(false)
             if(!joined || readerFailed.get() || stopped()) {
+                A0AcquisitionDiagnostics.emit(traceScope,
+                    A0AcquisitionDiagnostics.Phase.SEARCH_STOP,
+                    reason=if(stopped()) A0AcquisitionDiagnostics.Fault.CANCELLED
+                        else A0AcquisitionDiagnostics.Fault.STATE,
+                    elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart)
                 Log.d("BitChord","soulseek_auto_search stopped " +
                     "joined=$joined readerFailed=${readerFailed.get()} " +
                     "revoked=${stopped()}")
@@ -244,7 +271,11 @@ internal class A0FreshAutoSearchTransport(
                 A0AutoDiscoveryCoordinator.SearchResult.NoReply
             else A0AutoDiscoveryCoordinator.SearchResult.Found(
                 snapshot.choices,snapshot.truncatedSlots)
-        }catch(_:Exception) {
+        }catch(error:Exception) {
+            A0AcquisitionDiagnostics.emit(traceScope,
+                A0AcquisitionDiagnostics.Phase.SEARCH_EXCEPTION,
+                reason=A0AcquisitionDiagnostics.fault(error),
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart)
             return A0AutoDiscoveryCoordinator.SearchResult.Stop
         }finally {
             readerGate.stop()
