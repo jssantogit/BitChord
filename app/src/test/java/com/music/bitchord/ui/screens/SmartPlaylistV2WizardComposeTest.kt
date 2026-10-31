@@ -130,6 +130,41 @@ class SmartPlaylistV2WizardComposeTest {
         compose.runOnIdle { assertEquals(CanonicalPlaylistBrowseType.ALBUMS, browseType) }
     }
 
+    @Test fun normalPickerUsesNativeTrackGeometryAndAlbumCredit() {
+        val rules = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ))
+        val album = CanonicalPlaylistBrowseGroup(
+            "release:verified", "Bad Idea", CanonicalPlaylistBrowseType.ALBUMS,
+            artworkRow = V2DisplayRow("recording:verified", "Bad Idea", "SAY MY NAME"),
+        )
+        var added = 0
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Minha playlist",
+                rule = rules, normalMode = true,
+                normalBrowseType = CanonicalPlaylistBrowseType.ALBUMS,
+                normalGroups = listOf(album),
+                onAddNormalAlbum = { added++ },
+                sort = SmartPlaylistV2Sort.TITLE_ASC, limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {}, onSortChange = {},
+                onLimitChange = {}, onSeedChange = {}, onPreview = {},
+                onSave = {}, onSaveFilter = {}, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(2)
+        compose.onNodeWithText("SAY MY NAME").assertExists()
+        compose.onNodeWithTag("canonical-album-picker-release:verified").assertExists()
+        compose.onNodeWithContentDescription("Adicionar álbum inteiro").performClick()
+        compose.runOnIdle { assertEquals(1, added) }
+    }
+
     @Test fun albumRowOffersBulkAddWithoutNavigatingToAlbum() {
         val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
             SmartPlaylistRule.Comparison(
