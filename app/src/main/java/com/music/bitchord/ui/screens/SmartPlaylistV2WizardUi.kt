@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,11 +27,14 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.AddCircleOutline
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.LibraryMusic
@@ -78,6 +82,9 @@ import com.music.bitchord.data.listening.isTextField
 import com.music.bitchord.data.listening.moveChild
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.CoverPlaceholder
+import com.music.bitchord.ui.components.ArtworkPageBackButton
+import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
+import com.music.bitchord.ui.components.NativeTrackRowText
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
@@ -448,13 +455,11 @@ internal fun SmartPlaylistV2WizardUi(
                     .heightIn(min = 56.dp)
                     .padding(horizontal = PAGE_GUTTER),
             ) {
-                TextButton(
-                    modifier = Modifier.align(Alignment.CenterStart),
+                ArtworkPageBackButton(
                     onClick = ::back,
-                ) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null)
-                    Text("Voltar")
-                }
+                    hazeState = null,
+                    modifier = Modifier.align(Alignment.CenterStart),
+                )
                 Text(stepNote,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -471,7 +476,9 @@ internal fun SmartPlaylistV2WizardUi(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
                     start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 28.dp,
                 ),
-                verticalArrangement = Arrangement.spacedBy(15.dp),
+                verticalArrangement = Arrangement.spacedBy(
+                    if (page == WizardStep.SONGS) 0.dp else 15.dp,
+                ),
             ) {
                 item {
                     val headingDetail = when (page) {
@@ -593,24 +600,28 @@ internal fun SmartPlaylistV2WizardUi(
                     }
                     WizardStep.SONGS -> {
                         item {
-                            SegmentedControl(
-                                options = listOf("Músicas", "Álbuns", "Artistas"),
-                                selectedIndex = CanonicalPlaylistBrowseType.entries.indexOf(normalBrowseType),
-                                onSelect = { index ->
-                                    onNormalBrowseTypeChange(CanonicalPlaylistBrowseType.entries[index])
-                                },
-                            )
+                            Box(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                                SegmentedControl(
+                                    options = listOf("Músicas", "Álbuns", "Artistas"),
+                                    selectedIndex = CanonicalPlaylistBrowseType.entries.indexOf(normalBrowseType),
+                                    onSelect = { index ->
+                                        onNormalBrowseTypeChange(CanonicalPlaylistBrowseType.entries[index])
+                                    },
+                                )
+                            }
                         }
                         item {
-                            PlaylistWizardSearchEntry(
-                                value = normalSearch,
-                                onValueChange = onNormalSearchChange,
-                                placeholder = when (normalBrowseType) {
-                                    CanonicalPlaylistBrowseType.TRACKS -> "Buscar músicas ou artistas"
-                                    CanonicalPlaylistBrowseType.ALBUMS -> "Buscar álbuns"
-                                    CanonicalPlaylistBrowseType.ARTISTS -> "Buscar artistas"
-                                },
-                            )
+                            Box(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+                                PlaylistWizardSearchEntry(
+                                    value = normalSearch,
+                                    onValueChange = onNormalSearchChange,
+                                    placeholder = when (normalBrowseType) {
+                                        CanonicalPlaylistBrowseType.TRACKS -> "Buscar músicas ou artistas"
+                                        CanonicalPlaylistBrowseType.ALBUMS -> "Buscar álbuns"
+                                        CanonicalPlaylistBrowseType.ARTISTS -> "Buscar artistas"
+                                    },
+                                )
+                            }
                         }
                         if (normalBrowseType != CanonicalPlaylistBrowseType.TRACKS) {
                             if (normalGroups.isEmpty() && !normalLoading) item {
@@ -621,53 +632,31 @@ internal fun SmartPlaylistV2WizardUi(
                                 val members = normalGroupMembers[group.id].orEmpty()
                                 val selected = allCanonicalGroupMembersSelected(members, normalSelectedIds)
                                 item(key = "group-${group.type}-${group.id}") {
-                                    LibraryRow(
-                                        title = group.title, subtitle = "", imageUrl = null,
-                                        artwork = {
-                                            if (group.type == CanonicalPlaylistBrowseType.ARTISTS) {
-                                                PlaylistWizardArtistArtwork(group)
-                                            } else if (group.artworkRow != null) {
-                                                SmartPlaylistPreviewArtwork(
-                                                    row = group.artworkRow,
-                                                    modifier = Modifier.fillMaxSize(),
-                                                )
-                                            } else PlaylistWizardArtworkPlaceholder(52.dp)
-                                        },
-                                        onClick = {
-                                            if (group.type == CanonicalPlaylistBrowseType.ALBUMS)
+                                    CanonicalPlaylistPickerGroupRow(
+                                        group = group,
+                                        selected = selected,
+                                        loading = normalAddingAlbumId != null,
+                                        onOpen = {
+                                            if (group.type == CanonicalPlaylistBrowseType.ALBUMS) {
                                                 onNormalBrowseGroupChange(
                                                     if (normalBrowseGroup?.id == group.id) null else group,
                                                 )
+                                            } else {
+                                                onAddNormalArtist(group)
+                                            }
+                                        },
+                                        onToggleGroup = {
+                                            if (group.type == CanonicalPlaylistBrowseType.ALBUMS)
+                                                onAddNormalAlbum(group)
                                             else onAddNormalArtist(group)
                                         },
-                                        horizontalPadding = 0.dp,
-                                        trailing = {
-                                            if (group.type == CanonicalPlaylistBrowseType.ALBUMS) {
-                                                IconButton(
-                                                    onClick = { onAddNormalAlbum(group) },
-                                                    enabled = normalAddingAlbumId == null,
-                                                ) {
-                                                    Icon(
-                                                        if (selected) Icons.Rounded.Check else Icons.Rounded.Add,
-                                                        contentDescription = if (selected)
-                                                            "Remover álbum selecionado"
-                                                        else "Adicionar álbum inteiro",
-                                                    )
-                                                }
-                                            } else Icon(
-                                                if (selected) Icons.Rounded.Check else Icons.Rounded.Add,
-                                                contentDescription = if (selected)
-                                                    "Artista selecionado"
-                                                else "Selecionar álbuns do artista",
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        },
                                     )
+                                    PickerRowDivider()
                                 }
                                 if (group.type == CanonicalPlaylistBrowseType.ALBUMS &&
                                     normalBrowseGroup?.id == group.id) {
                                     items(normalRows, key = { "member-${group.id}-${it.id}" }) { row ->
-                                        Box(Modifier.padding(start = 18.dp)) {
+                                        Box(Modifier.padding(start = PAGE_GUTTER)) {
                                             NormalPlaylistTrackPickerRow(
                                                 row, row.id in normalSelectedIds,
                                                 onToggleNormalTrack,
@@ -694,6 +683,7 @@ internal fun SmartPlaylistV2WizardUi(
                                 NormalPlaylistTrackPickerRow(
                                     row, row.id in normalSelectedIds, onToggleNormalTrack,
                                 )
+                                PickerRowDivider()
                             }
                         }
                     }
@@ -1353,21 +1343,121 @@ private fun PlaylistWizardArtistArtwork(group: CanonicalPlaylistBrowseGroup) {
     } else PlaylistWizardArtworkPlaceholder(52.dp)
 }
 
+/** A native SongRow-size divider, indented past the 52dp artwork. */
 @Composable
-private fun NormalPlaylistTrackPickerRow(
-    row: V2DisplayRow, selected: Boolean, onToggle: (String) -> Unit,
+private fun PickerRowDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 66.dp),
+        thickness = 0.5.dp,
+        color = MaterialTheme.colorScheme.outline,
+    )
+}
+
+/** Reuses SongRow's native frame, thumbnail width, baseline and selection glyph. */
+@Composable
+private fun CanonicalPlaylistPickerGroupRow(
+    group: CanonicalPlaylistBrowseGroup,
+    selected: Boolean,
+    loading: Boolean,
+    onOpen: () -> Unit,
+    onToggleGroup: () -> Unit,
 ) {
-    LibraryRow(
-        title = row.title, subtitle = row.artist, imageUrl = null,
-        artwork = { SmartPlaylistPreviewArtwork(row, Modifier.fillMaxSize()) },
-        onClick = { onToggle(row.id) }, horizontalPadding = 0.dp,
-        trailing = {
+    val album = group.type == CanonicalPlaylistBrowseType.ALBUMS
+    NativeDetailTrackRowFrame(
+        onClick = onOpen,
+        modifier = Modifier.testTag("canonical-${if (album) "album" else "artist"}-picker-${group.id}"),
+        horizontalInset = 0.dp,
+        background = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+            else Color.Transparent,
+    ) {
+        val artworkShape = if (album) RoundedCornerShape(8.dp) else CircleShape
+        Box(Modifier.size(52.dp).clip(artworkShape)) {
+            if (!album) PlaylistWizardArtistArtwork(group)
+            else if (group.artworkRow != null) {
+                SmartPlaylistPreviewArtwork(group.artworkRow, Modifier.fillMaxSize())
+            } else PlaylistWizardArtworkPlaceholder(52.dp)
+        }
+        Spacer(Modifier.width(14.dp))
+        NativeTrackRowText(
+            title = {
+                Text(
+                    group.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+            subtitle = {
+                Text(
+                    if (album) group.artworkRow?.artist.orEmpty() else "Artista",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+        )
+        IconButton(onClick = onToggleGroup, enabled = !loading) {
             Icon(
-                if (selected) Icons.Rounded.Check else Icons.Rounded.Add,
-                contentDescription = if (selected) "Selecionada" else "Adicionar música",
+                if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline,
+                contentDescription = when {
+                    album && selected -> "Remover álbum selecionado"
+                    album -> "Adicionar álbum inteiro"
+                    selected -> "Remover artista selecionado"
+                    else -> "Adicionar artista inteiro",
+                },
                 tint = if (selected) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        },
-    )
+        }
+    }
+}
+
+@Composable
+private fun NormalPlaylistTrackPickerRow(
+    row: V2DisplayRow,
+    selected: Boolean,
+    onToggle: (String) -> Unit,
+) {
+    NativeDetailTrackRowFrame(
+        onClick = { onToggle(row.id) },
+        modifier = Modifier.testTag("canonical-track-picker-${row.id}"),
+        horizontalInset = 0.dp,
+        background = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+            else Color.Transparent,
+    ) {
+        Box(Modifier.size(52.dp).clip(RoundedCornerShape(8.dp))) {
+            SmartPlaylistPreviewArtwork(row, Modifier.fillMaxSize())
+        }
+        Spacer(Modifier.width(14.dp))
+        NativeTrackRowText(
+            title = {
+                Text(
+                    row.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+            subtitle = {
+                Text(
+                    row.artist,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+        )
+        IconButton(onClick = { onToggle(row.id) }) {
+            Icon(
+                if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline,
+                contentDescription = if (selected) "Remover música" else "Adicionar música",
+                tint = if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
