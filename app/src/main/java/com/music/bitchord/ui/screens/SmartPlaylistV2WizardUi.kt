@@ -12,6 +12,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.runtime.produceState
+import coil3.compose.AsyncImage
+import com.music.bitchord.data.canvas.AppleArtistArtRepository
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -321,6 +325,8 @@ internal fun SmartPlaylistV2WizardUi(
     onToggleNormalTrack: (String) -> Unit = {},
     onAddNormalAlbum: (CanonicalPlaylistBrowseGroup) -> Unit = {},
     normalAddingAlbumId: String? = null,
+    normalGroupMembers: Map<String, List<String>> = emptyMap(),
+    onAddNormalArtist: (CanonicalPlaylistBrowseGroup) -> Unit = {},
     onMoveNormalTrack: (String, Boolean) -> Unit = { _, _ -> },
     onSaveNormal: () -> Unit = {},
     onDeleteNormal: () -> Unit = {},
@@ -461,25 +467,7 @@ internal fun SmartPlaylistV2WizardUi(
                             "Confira as músicas escolhidas antes de salvar." else
                             "Confira fontes, regras e músicas antes de salvar."
                     }
-                    if (page == WizardStep.SONGS && normalBrowseGroup != null) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text(header, style = MaterialTheme.typography.headlineLarge,
-                                    modifier = Modifier.weight(1f))
-                                TextButton(onClick = { onNormalBrowseGroupChange(null) }) {
-                                    Icon(Icons.AutoMirrored.Rounded.ArrowBack,
-                                        contentDescription = null)
-                                    Text("Voltar")
-                                }
-                            }
-                            Text(headingDetail, style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    } else WizardHeading(header, headingDetail)
+                    WizardHeading(header, headingDetail)
                 }
 
                 when (page) {
@@ -594,90 +582,100 @@ internal fun SmartPlaylistV2WizardUi(
                                 },
                             )
                         }
-                        if (normalBrowseGroup == null) {
-                            item {
-                                PlaylistWizardSearchEntry(
-                                    value = normalSearch,
-                                    onValueChange = onNormalSearchChange,
-                                    placeholder = when (normalBrowseType) {
-                                        CanonicalPlaylistBrowseType.TRACKS -> "Buscar músicas ou artistas"
-                                        CanonicalPlaylistBrowseType.ALBUMS -> "Buscar álbuns"
-                                        CanonicalPlaylistBrowseType.ARTISTS -> "Buscar artistas"
-                                    },
-                                )
-                            }
+                        item {
+                            PlaylistWizardSearchEntry(
+                                value = normalSearch,
+                                onValueChange = onNormalSearchChange,
+                                placeholder = when (normalBrowseType) {
+                                    CanonicalPlaylistBrowseType.TRACKS -> "Buscar músicas ou artistas"
+                                    CanonicalPlaylistBrowseType.ALBUMS -> "Buscar álbuns"
+                                    CanonicalPlaylistBrowseType.ARTISTS -> "Buscar artistas"
+                                },
+                            )
                         }
-                        if (normalBrowseGroup == null &&
-                            normalBrowseType != CanonicalPlaylistBrowseType.TRACKS) {
+                        if (normalBrowseType != CanonicalPlaylistBrowseType.TRACKS) {
                             if (normalGroups.isEmpty() && !normalLoading) item {
                                 Text("Nenhum item disponível para esta pesquisa.",
                                     style = MaterialTheme.typography.bodyMedium)
                             }
-                            items(normalGroups, key = { it.type.name + it.id }) { group ->
-                                LibraryRow(
-                                    title = group.title,
-                                    subtitle = "",
-                                    imageUrl = null,
-                                    artwork = {
-                                        val cover = group.artworkRow
-                                        if (cover != null) SmartPlaylistPreviewArtwork(
-                                            row = cover, modifier = Modifier.fillMaxSize(),
-                                        ) else PlaylistWizardArtworkPlaceholder(52.dp)
-                                    },
-                                    onClick = { onNormalBrowseGroupChange(group) },
-                                    horizontalPadding = 0.dp,
-                                    trailing = {
-                                        if (group.type == CanonicalPlaylistBrowseType.ALBUMS) {
-                                            IconButton(
-                                                onClick = { onAddNormalAlbum(group) },
-                                                enabled = normalAddingAlbumId == null,
-                                            ) {
-                                                Icon(
-                                                    Icons.Rounded.Add,
-                                                    contentDescription = "Adicionar álbum inteiro",
+                            normalGroups.forEach { group ->
+                                val members = normalGroupMembers[group.id].orEmpty()
+                                val selected = allCanonicalGroupMembersSelected(members, normalSelectedIds)
+                                item(key = "group-${group.type}-${group.id}") {
+                                    LibraryRow(
+                                        title = group.title, subtitle = "", imageUrl = null,
+                                        artwork = {
+                                            if (group.type == CanonicalPlaylistBrowseType.ARTISTS) {
+                                                PlaylistWizardArtistArtwork(group)
+                                            } else if (group.artworkRow != null) {
+                                                SmartPlaylistPreviewArtwork(
+                                                    row = group.artworkRow,
+                                                    modifier = Modifier.fillMaxSize(),
                                                 )
-                                            }
-                                        } else Icon(
-                                            Icons.Rounded.ChevronRight,
-                                            contentDescription = null,
-                                        )
-                                    },
+                                            } else PlaylistWizardArtworkPlaceholder(52.dp)
+                                        },
+                                        onClick = {
+                                            if (group.type == CanonicalPlaylistBrowseType.ALBUMS)
+                                                onNormalBrowseGroupChange(
+                                                    if (normalBrowseGroup?.id == group.id) null else group,
+                                                )
+                                            else onAddNormalArtist(group)
+                                        },
+                                        horizontalPadding = 0.dp,
+                                        trailing = {
+                                            if (group.type == CanonicalPlaylistBrowseType.ALBUMS) {
+                                                IconButton(
+                                                    onClick = { onAddNormalAlbum(group) },
+                                                    enabled = normalAddingAlbumId == null,
+                                                ) {
+                                                    Icon(
+                                                        if (selected) Icons.Rounded.Check else Icons.Rounded.Add,
+                                                        contentDescription = if (selected)
+                                                            "Remover álbum selecionado"
+                                                        else "Adicionar álbum inteiro",
+                                                    )
+                                                }
+                                            } else Icon(
+                                                if (selected) Icons.Rounded.Check else Icons.Rounded.Add,
+                                                contentDescription = if (selected)
+                                                    "Artista selecionado"
+                                                else "Selecionar álbuns do artista",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        },
+                                    )
+                                }
+                                if (group.type == CanonicalPlaylistBrowseType.ALBUMS &&
+                                    normalBrowseGroup?.id == group.id) {
+                                    items(normalRows, key = { "member-${group.id}-${it.id}" }) { row ->
+                                        Box(Modifier.padding(start = 18.dp)) {
+                                            NormalPlaylistTrackPickerRow(
+                                                row, row.id in normalSelectedIds,
+                                                onToggleNormalTrack,
+                                            )
+                                        }
+                                    }
+                                    if (normalRows.isEmpty() && !normalLoading) item {
+                                        Text("Nenhuma faixa disponível neste álbum.",
+                                            style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                }
+                            }
+                        } else {
+                            if (normalRows.size >= 200) item {
+                                Text("Exibindo até 200 resultados. Refine a busca para encontrar outras músicas.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (normalRows.isEmpty() && !normalLoading) item {
+                                Text("Nenhuma música disponível para esta pesquisa.",
+                                    style = MaterialTheme.typography.bodyMedium)
+                            }
+                            items(normalRows, key = { it.id }) { row ->
+                                NormalPlaylistTrackPickerRow(
+                                    row, row.id in normalSelectedIds, onToggleNormalTrack,
                                 )
                             }
-                        }
-                        if (normalRows.size >= 200) item {
-                            Text("Exibindo até 200 resultados. Refine a busca para encontrar outras músicas.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        if (normalRows.isEmpty() && !normalLoading &&
-                            (normalBrowseType == CanonicalPlaylistBrowseType.TRACKS ||
-                                normalBrowseGroup != null)) item {
-                            Text("Nenhuma música disponível para esta pesquisa.",
-                                style = MaterialTheme.typography.bodyMedium)
-                        }
-                        items(normalRows, key = { it.id }) { row ->
-                            LibraryRow(
-                                title = row.title,
-                                subtitle = row.artist,
-                                imageUrl = null,
-                                artwork = {
-                                    SmartPlaylistPreviewArtwork(
-                                        row = row, modifier = Modifier.fillMaxSize(),
-                                    )
-                                },
-                                onClick = { onToggleNormalTrack(row.id) },
-                                horizontalPadding = 0.dp,
-                                trailing = {
-                                    val selected = row.id in normalSelectedIds
-                                    Icon(
-                                        if (selected) Icons.Rounded.Check else Icons.Rounded.Add,
-                                        contentDescription = if (selected) "Selecionada" else "Adicionar música",
-                                        tint = if (selected) MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                },
-                            )
                         }
                     }
                     WizardStep.RULES -> {
@@ -1328,4 +1326,40 @@ internal fun SmartPlaylistV2WizardUi(
                 }
             }, onClose = { picker = null })
     }
+}
+
+/** The same cached Apple Music artist photograph as DetailScreen, with art fallback. */
+@Composable
+private fun PlaylistWizardArtistArtwork(group: CanonicalPlaylistBrowseGroup) {
+    val art by produceState(
+        initialValue = AppleArtistArtRepository.cached(group.title),
+        key1 = group.title,
+    ) { value = AppleArtistArtRepository.artFor(group.title) }
+    if (art != null) {
+        AsyncImage(
+            model = art?.heroUrl, contentDescription = null,
+            contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+        )
+    } else if (group.artworkRow != null) {
+        SmartPlaylistPreviewArtwork(group.artworkRow, Modifier.fillMaxSize())
+    } else PlaylistWizardArtworkPlaceholder(52.dp)
+}
+
+@Composable
+private fun NormalPlaylistTrackPickerRow(
+    row: V2DisplayRow, selected: Boolean, onToggle: (String) -> Unit,
+) {
+    LibraryRow(
+        title = row.title, subtitle = row.artist, imageUrl = null,
+        artwork = { SmartPlaylistPreviewArtwork(row, Modifier.fillMaxSize()) },
+        onClick = { onToggle(row.id) }, horizontalPadding = 0.dp,
+        trailing = {
+            Icon(
+                if (selected) Icons.Rounded.Check else Icons.Rounded.Add,
+                contentDescription = if (selected) "Selecionada" else "Adicionar música",
+                tint = if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+    )
 }
