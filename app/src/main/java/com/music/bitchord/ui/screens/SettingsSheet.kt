@@ -106,6 +106,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
@@ -2427,13 +2428,7 @@ internal fun SettingsGroup(
     } else {
         Spacer(Modifier.height(topSpacing))
     }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = GROUP_INSET)
-            .clip(GroupShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-    ) {
+    SettingsGroupSurface(modifier = Modifier.padding(horizontal = GROUP_INSET)) {
         content()
     }
     if (footer != null) {
@@ -2447,6 +2442,24 @@ internal fun SettingsGroup(
                 top = 8.dp,
             ),
         )
+    }
+}
+
+/** Canonical Settings card surface, also used by first-party editors.
+ * The caller owns external margins; SettingsGroup keeps its 16dp inset.
+ */
+@Composable
+internal fun SettingsGroupSurface(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth()
+            .clip(GroupShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .testTag("native-settings-group-surface"),
+    ) {
+        content()
     }
 }
 
