@@ -29,6 +29,7 @@ class CanonicalStaticPlaylistStoreTest {
                 name = "Viagem",
                 recordingIds = listOf("recording-a", "recording-b", "recording-c"),
                 sourceProviderKey = "local-mediastore",
+                description = "Para ouvir na estrada",
             )
             repository.save(playlist)
             assertEquals(playlist, repository.list().single())
@@ -37,6 +38,7 @@ class CanonicalStaticPlaylistStoreTest {
             assertEquals(listOf("recording-c"), repository.list().single().recordingIds)
             assertEquals("local-mediastore", repository.list().single().sourceProviderKey)
             assertEquals("normal-1", repository.list().single().id)
+            assertEquals("Para ouvir na estrada", repository.list().single().description)
             repository.remove("normal-1")
             assertTrue(repository.list().isEmpty())
         } finally {
@@ -104,6 +106,7 @@ class CanonicalStaticPlaylistStoreTest {
                 SmartPlaylistDefinitionDatabase.MIGRATION_2_3,
                 SmartPlaylistDefinitionDatabase.MIGRATION_3_4,
                 SmartPlaylistDefinitionDatabase.MIGRATION_4_5,
+                SmartPlaylistDefinitionDatabase.MIGRATION_5_6,
             ).allowMainThreadQueries().build()
         try {
             assertEquals("Before", SmartPlaylistDefinitionRepository(db.definitionDao()).list().single().name)
