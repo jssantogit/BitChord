@@ -128,7 +128,7 @@ internal fun PlaylistLibrarySearchField(
         onValueChange = onQueryChange,
         placeholder = "Buscar em Playlists",
         accessibilityLabel = "Buscar em Playlists",
-        modifier = Modifier.fillMaxWidth().height(64.dp),
+        modifier = Modifier.fillMaxWidth().height(52.dp),
     )
 }
 
