@@ -2165,6 +2165,7 @@ private fun BitChordApp(
     }
     var playlistLibrarySortMenu by remember { mutableStateOf(false) }
     var playlistLibraryOptionsMenu by remember { mutableStateOf(false) }
+    var playlistLibraryCount by remember { mutableIntStateOf(0) }
     val playlistLibraryListState = rememberLazyListState()
     val playlistDetailListState = rememberLazyListState()
     var showSmartPlaylistBuilder by rememberSaveable { mutableStateOf(false) }
@@ -2789,6 +2790,7 @@ private fun BitChordApp(
                             onSelectedCardChange = { openedCanonicalPlaylist = it },
                             listState = playlistLibraryListState,
                             detailListState = playlistDetailListState,
+                            onPlaylistCountChange = { playlistLibraryCount = it },
                         )
                     } else if (key == "my_ratings") {
                         CanonicalMyRatingsScreen(onBack = { showCanonicalMyRatings = false })
@@ -3822,7 +3824,8 @@ private fun BitChordApp(
                         if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null &&
                             !showSettings && !showAccountScrobbling) {
                             if (openedCanonicalPlaylist == null) {
-                                IconButton(onClick = {
+                                if (com.music.bitchord.ui.screens.showPlaylistHeaderCreateAction(
+                                        playlistLibraryCount)) IconButton(onClick = {
                                     editingSmartPlaylistId = null
                                     editingNormalPlaylistId = null
                                     showSmartPlaylistBuilder = true
@@ -3830,12 +3833,14 @@ private fun BitChordApp(
                                     Icon(
                                         Icons.Rounded.PlaylistAdd,
                                         contentDescription = "Nova playlist",
+                                        tint = MaterialTheme.colorScheme.onBackground,
                                     )
                                 }
                                 Box {
                                     IconButton(onClick = { playlistLibrarySortMenu = true }) {
                                         Icon(Icons.Rounded.Sort,
-                                            contentDescription = "Ordenar playlists")
+                                            contentDescription = "Ordenar playlists",
+                                            tint = MaterialTheme.colorScheme.onBackground)
                                     }
                                     DropdownMenu(
                                         expanded = playlistLibrarySortMenu,
@@ -3865,7 +3870,8 @@ private fun BitChordApp(
                                 Box {
                                     IconButton(onClick = { playlistLibraryOptionsMenu = true }) {
                                         Icon(Icons.Rounded.MoreVert,
-                                            contentDescription = "Opções de playlists")
+                                            contentDescription = "Opções de playlists",
+                                            tint = MaterialTheme.colorScheme.onBackground)
                                     }
                                     DropdownMenu(
                                         expanded = playlistLibraryOptionsMenu,
