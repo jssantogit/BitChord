@@ -1405,7 +1405,7 @@ private fun CanonicalPlaylistPickerGroupRow(
                     album && selected -> "Remover álbum selecionado"
                     album -> "Adicionar álbum inteiro"
                     selected -> "Remover artista selecionado"
-                    else -> "Adicionar artista inteiro",
+                    else -> "Adicionar artista inteiro"
                 },
                 tint = if (selected) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
