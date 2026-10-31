@@ -141,6 +141,8 @@ internal fun UnifiedPlaylistLibraryShelf(
     onOpenNormalPlaylist: (ShelfItem) -> Unit,
     onSmartAction: (String, CanonicalCollectionIntent) -> Unit,
     onCanonicalNormalAction: (String, CanonicalCollectionIntent) -> Unit,
+    onSmartShuffle: (String) -> Unit,
+    onCanonicalNormalShuffle: (String) -> Unit,
     onSmartTrackAction: (String, String, CanonicalCollectionIntent, Boolean) -> Unit,
     onCanonicalNormalTrackAction: (String, String, CanonicalCollectionIntent, Boolean) -> Unit,
     contentPadding: PaddingValues,
@@ -331,6 +333,14 @@ internal fun UnifiedPlaylistLibraryShelf(
                         onSmartAction(selected.definition.id, intent)
                     is LibraryPlaylistCard.CanonicalNormal ->
                         onCanonicalNormalAction(selected.definition.id, intent)
+                    is LibraryPlaylistCard.Normal -> Unit
+                }
+            },
+            onShuffle = {
+                when (selected) {
+                    is LibraryPlaylistCard.Smart -> onSmartShuffle(selected.definition.id)
+                    is LibraryPlaylistCard.CanonicalNormal ->
+                        onCanonicalNormalShuffle(selected.definition.id)
                     is LibraryPlaylistCard.Normal -> Unit
                 }
             },
