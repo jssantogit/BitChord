@@ -1,6 +1,7 @@
 package com.music.bitchord.data.listening
 
 import androidx.room.Dao
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.Query
@@ -21,6 +22,7 @@ internal data class SavedSmartPlaylistV2Definition(
     val name: String,
     val query: SmartPlaylistV2Query,
     val schemaVersion: Int = 2,
+    val description: String = "",
 )
 
 @Entity(tableName = "smart_playlist_v2_definition")
@@ -29,6 +31,7 @@ internal data class SmartPlaylistV2DefinitionEntity(
     val name: String,
     val schemaVersion: Int,
     val queryJson: String,
+    @ColumnInfo(defaultValue = "''") val description: String = "",
 )
 
 @Dao
@@ -67,6 +70,7 @@ internal class SmartPlaylistV2DefinitionRepository(
         require(definition.id.isNotBlank() && definition.id.length <= 100)
         val name = definition.name.trim()
         require(name.isNotEmpty() && name.length <= 80)
+        require(definition.description.length <= 5000 && definition.description.none { it.isISOControl() && it != '\n' && it != '\t' })
         // Reject dangling or cyclic references before the Room write. This also
         // prevents an edit from creating a cycle through existing definitions.
         validateSmartPlaylistReferencesOnSave(definition, list())
@@ -77,6 +81,7 @@ internal class SmartPlaylistV2DefinitionRepository(
             name = name,
             schemaVersion = 2,
             queryJson = payload,
+            description = definition.description.trim(),
         ))
     }
 
@@ -97,7 +102,7 @@ internal class SmartPlaylistV2DefinitionRepository(
         // A bad or future schema fails closed. It must never silently become an
         // empty/match-all filter or remove the user's saved definition.
         val query = json.decodeFromString<SmartPlaylistV2Query>(queryJson)
-        return SavedSmartPlaylistV2Definition(id, name, query)
+        return SavedSmartPlaylistV2Definition(id, name, query, description = description)
     }
 }
 
