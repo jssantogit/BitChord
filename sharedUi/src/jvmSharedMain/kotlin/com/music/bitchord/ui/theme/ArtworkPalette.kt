@@ -70,6 +70,25 @@ data class ArtworkPalette(
 )
 
 /**
+ * Neutral palette for existing glass controls outside an artwork-driven player.
+ * Unlike [rememberArtworkPalette], this never observes PlayerPlatform or decodes
+ * a sleeve. It is exactly the theme fallback of the artwork palette above.
+ */
+@Composable
+fun themeArtworkPalette(): ArtworkPalette {
+    val scheme = MaterialTheme.colorScheme
+    return ArtworkPalette(
+        background = scheme.background,
+        wash = scheme.background,
+        elevated = scheme.surfaceVariant,
+        accent = scheme.primary,
+        onBackground = scheme.onBackground,
+        onBackgroundVariant = scheme.onSurfaceVariant,
+        divider = scheme.outline,
+    )
+}
+
+/**
  * Colours that came with the artwork rather than from decoding it — Apple
  * Music publishes a background and a text colour for every artist photograph.
  */
