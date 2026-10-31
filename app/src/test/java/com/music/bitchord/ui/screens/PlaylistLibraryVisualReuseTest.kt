@@ -72,7 +72,6 @@ class PlaylistLibraryVisualReuseTest {
                 selectedIndex = page,
                 onSelect = { page = it },
                 onBack = { backs++ },
-                onNew = {},
                 onDraft = { resumed++ },
             )
         }
