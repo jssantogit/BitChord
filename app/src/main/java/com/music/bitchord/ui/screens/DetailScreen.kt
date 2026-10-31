@@ -191,7 +191,7 @@ private const val SLEEVE_FRACTION = 0.76f
 /** ...and of its height, so a landscape window still shows the title under it. */
 private const val SLEEVE_MAX_HEIGHT = 0.5f
 
-private val SLEEVE_SHAPE = RoundedCornerShape(12.dp)
+internal val SLEEVE_SHAPE = RoundedCornerShape(12.dp)
 private val SLEEVE_SHADOW = 18.dp
 
 /** Shuffle and Add to Library either side of the release page's Play pill. */
