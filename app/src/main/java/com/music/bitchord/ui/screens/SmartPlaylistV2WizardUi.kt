@@ -217,12 +217,19 @@ private fun WizardReviewHeader(
             topInset = 0.dp,
             artwork = {
                 if (customCoverUri != null) {
-                    AsyncImage(
-                        model = customCoverUri,
-                        contentDescription = "Capa escolhida da playlist",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                    )
+                    Box(Modifier.fillMaxSize()) {
+                        if (cover != null) {
+                            SmartPlaylistPreviewArtwork(cover, Modifier.fillMaxSize())
+                        } else {
+                            PlaylistWizardArtworkPlaceholder(224.dp)
+                        }
+                        AsyncImage(
+                            model = customCoverUri,
+                            contentDescription = "Capa escolhida da playlist",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                    }
                 } else if (cover != null) {
                     SmartPlaylistPreviewArtwork(cover, Modifier.fillMaxSize())
                 } else {
@@ -524,13 +531,21 @@ internal fun SmartPlaylistV2WizardUi(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
                                 if (coverUri != null) {
-                                    AsyncImage(
-                                        model = coverUri,
-                                        contentDescription = "Capa escolhida da playlist",
-                                        modifier = Modifier.size(if (page == WizardStep.EDIT) 180.dp else 224.dp)
-                                        .clip(RoundedCornerShape(12.dp)),
-                                        contentScale = ContentScale.Crop,
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .size(if (page == WizardStep.EDIT) 180.dp else 224.dp)
+                                            .clip(RoundedCornerShape(12.dp)),
+                                    ) {
+                                        PlaylistWizardArtworkPlaceholder(
+                                            dimension = if (page == WizardStep.EDIT) 180.dp else 224.dp,
+                                        )
+                                        AsyncImage(
+                                            model = coverUri,
+                                            contentDescription = "Capa escolhida da playlist",
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop,
+                                        )
+                                    }
                                 } else {
                                     PlaylistWizardArtworkPlaceholder(
                                         dimension = if (page == WizardStep.EDIT) 180.dp else 224.dp,
