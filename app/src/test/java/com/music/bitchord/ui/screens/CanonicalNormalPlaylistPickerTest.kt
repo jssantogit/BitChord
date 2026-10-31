@@ -65,6 +65,15 @@ class CanonicalNormalPlaylistPickerTest {
             canonicalPlaylistProviderKeys(emptyList(), "opensubsonic:offline"))
     }
 
+    @Test fun localArtistCategoryOpensExistingArtistDetailScreenInsteadOfOther() {
+        assertEquals(
+            com.music.bitchord.data.model.BrowseType.ARTIST,
+            com.music.bitchord.data.LocalGroups.typeOf(
+                com.music.bitchord.data.LocalGroups.artistPageId("local:all", "ILLIT"),
+            ),
+        )
+    }
+
     @Test fun albumSelectionIsCompleteOnlyWhenEveryCurrentMemberIsSelected() {
         val album = listOf("rec-a", "rec-b", "rec-c")
         assertEquals(false, allCanonicalGroupMembersSelected(album, listOf("rec-a")))
