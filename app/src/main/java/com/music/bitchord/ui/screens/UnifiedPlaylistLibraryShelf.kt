@@ -164,7 +164,7 @@ internal fun UnifiedPlaylistLibraryShelf(
     onDetailSearchingChange: (Boolean) -> Unit = {},
     detailQuery: String = "",
     onDetailQueryChange: (String) -> Unit = {},
-    onDetailRowsReady: (List<V2DisplayRow>) -> Unit = {},
+    onDetailRowsReady: (List<V2DisplayRow>?) -> Unit = {},
     detailSort: PlaylistLibrarySort = PlaylistLibrarySort.DEFAULT,
     onPlaylistCountChange: (Int) -> Unit = {},
 ) {
