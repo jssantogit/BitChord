@@ -44,6 +44,11 @@ internal object A0AutoCandidateSelectionPolicy {
         }
     }
 
+    /** Names of differing fields only; never peer/file metadata values. */
+    enum class ClaimDifference {
+        BYTE_SIZE, CODEC, DURATION, BITRATE, SAMPLE_RATE, BIT_DEPTH, FILENAME,
+    }
+
     /** Aggregates cannot prove two masters identical. Do not log file sizes or peers. */
     data class AmbiguityEvidence(
         val clusterCount:Int,
@@ -51,6 +56,7 @@ internal object A0AutoCandidateSelectionPolicy {
         val competingSources:Int,
         val scoreGap:Int,
         val distinctByteSizes:Int,
+        val leadingClaimDifferences:Set<ClaimDifference> = emptySet(),
     )
 
     /** Exclusive first-failing-stage counts; sanitized, no source identifiers. */
@@ -284,6 +290,22 @@ internal object A0AutoCandidateSelectionPolicy {
                 rankedGroups[1].maxOf { it.rank }<12) {
             val gap=rankedGroups[0].maxOf { it.rank } -
                 rankedGroups[1].maxOf { it.rank }
+            val first=rankedGroups[0].first().choice.claim
+            val second=rankedGroups[1].first().choice.claim
+            val differences=buildSet {
+                if(first.sizeBytes!=second.sizeBytes)add(ClaimDifference.BYTE_SIZE)
+                if(first.format!=second.format)add(ClaimDifference.CODEC)
+                if(first.durationSeconds!=second.durationSeconds)
+                    add(ClaimDifference.DURATION)
+                if(first.bitrateKbps!=second.bitrateKbps)
+                    add(ClaimDifference.BITRATE)
+                if(first.sampleRateHz!=second.sampleRateHz)
+                    add(ClaimDifference.SAMPLE_RATE)
+                if(first.bitDepth!=second.bitDepth)
+                    add(ClaimDifference.BIT_DEPTH)
+                if(!first.filename.equals(second.filename,ignoreCase=true))
+                    add(ClaimDifference.FILENAME)
+            }
             val evidence=AmbiguityEvidence(
                 clusterCount=rankedGroups.size,
                 leadingSources=rankedGroups[0].size,
@@ -291,6 +313,7 @@ internal object A0AutoCandidateSelectionPolicy {
                 scoreGap=gap,
                 distinctByteSizes=strong.map { it.choice.claim.sizeBytes }
                     .distinct().size,
+                leadingClaimDifferences=differences,
             )
             return Decision(Status.MANUAL_REVIEW,Reason.AMBIGUOUS_EDITION,
                 emptyList(),observed.size,strong.size,funnel,evidence,details)

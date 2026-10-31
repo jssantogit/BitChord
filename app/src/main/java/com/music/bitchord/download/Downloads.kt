@@ -1321,6 +1321,9 @@ object Downloads {
                             " competing_sources=${decision.ambiguity?.competingSources ?: 0}" +
                             " rank_gap=${decision.ambiguity?.scoreGap ?: -1}" +
                             " distinct_sizes=${decision.ambiguity?.distinctByteSizes ?: 0}" +
+                            " claim_dimensions=${decision.ambiguity?.leadingClaimDifferences
+                                ?.sortedBy { it.name }?.joinToString(",") { it.name }
+                                ?: "NONE"}" +
                             " ${decision.rejectionDetails.summary()}")
                     },
                     onSlotEvidence={index,observed ->

@@ -114,6 +114,8 @@ class A0AutoCandidateSelectionPolicyTest {
         assertEquals(1,choice.ambiguity?.competingSources)
         assertEquals(0,choice.ambiguity?.scoreGap)
         assertEquals(2,choice.ambiguity?.distinctByteSizes)
+        assertEquals(setOf(A0AutoCandidateSelectionPolicy.ClaimDifference.BYTE_SIZE),
+            choice.ambiguity?.leadingClaimDifferences)
         assertFalse(choice.toString().contains("peer"))
     }
 
