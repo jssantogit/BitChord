@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,6 +48,8 @@ import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.theme.AccentRed
+import com.music.bitchord.ui.theme.rememberArtworkPalette
+import com.music.bitchord.ui.icons.BitChordIcons
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -187,63 +190,54 @@ internal fun CanonicalPlaylistDetailScreen(
             emptyList()
         }
     }
+    val palette = rememberArtworkPalette(imageUrl = rows?.firstOrNull()?.localArtworkUri)
     val canPlay = rows?.isNotEmpty() == true &&
         (rows?.size ?: 0) <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE &&
         rows.orEmpty().all { it.isAvailablePlaylistMember() }
 
     LazyColumn(
         state = listState ?: rememberLazyListState(),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = contentPadding,
+        modifier = Modifier.fillMaxSize().background(palette.background),
+        contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item(key = "playlist-detail-cover") {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                CanonicalPlaylistCoverArt(
-                    rows = rows.orEmpty(), modifier = Modifier.size(252.dp),
-                )
-                Text(
-                    text = card.title,
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    text = (if (card is LibraryPlaylistCard.Smart) "Playlist inteligente" else
-                        "Playlist normal") + " · " +
-                        (rows?.size?.let { it.toString() + " músicas" } ?: "Carregando músicas…"),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Button(
-                        onClick = { onAction(CanonicalCollectionIntent.PLAY_NOW) },
-                        enabled = canPlay,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentRed),
-                    ) {
-                        Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-                        Text("Tocar")
+            // The same hero frame used by DetailScreen.ReleaseHeader; the
+            // playlist still passes real RecordingIds to its playback handoff.
+            NativeReleaseHeaderLayout(
+                title = card.title,
+                credit = "",
+                meta = (if (card is LibraryPlaylistCard.Smart) "Playlist inteligente"
+                    else "Playlist normal") + " · " +
+                    (rows?.size?.let { "${it} músicas" } ?: "Carregando músicas…"),
+                palette = palette,
+                sleeveSize = 252.dp,
+                artwork = {
+                    CanonicalPlaylistCoverArt(
+                        rows = rows.orEmpty(), modifier = Modifier.fillMaxSize(),
+                    )
+                },
+                actions = {
+                    if (canPlay) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(horizontal = PAGE_GUTTER, vertical = 18.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            ActionPill(
+                                icon = BitChordIcons.Play, label = "Tocar",
+                                onClick = { onAction(CanonicalCollectionIntent.PLAY_NOW) },
+                                filled = true, modifier = Modifier.weight(1f),
+                            )
+                            ActionPill(
+                                icon = Icons.AutoMirrored.Rounded.QueueMusic, label = "Fila",
+                                onClick = { onAction(CanonicalCollectionIntent.ADD_TO_QUEUE) },
+                                filled = false, modifier = Modifier.weight(1f),
+                            )
+                        }
                     }
-                    FilledTonalButton(
-                        onClick = { onAction(CanonicalCollectionIntent.ADD_TO_QUEUE) },
-                        enabled = canPlay,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(24.dp),
-                    ) {
-                        Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = null)
-                        Text("Fila")
-                    }
-                }
-            }
+                },
+            )
         }
         if (rows?.isEmpty() == true) {
             item(key = "playlist-detail-empty") {
