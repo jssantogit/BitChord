@@ -355,9 +355,26 @@ fun DetailScreen(
         rawSongs.withIndex().associate { (i, s) -> s.videoId to ((if (byTag) s.trackNumber else null) ?: (i + 1)) }
     }
     val isArtist = page.type == BrowseType.ARTIST
+    val isLocalArtist = isArtist && LocalGroups.isArtist(page.browseId)
+    val localArtistContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    var localArtistRecent by remember(page.browseId) { mutableStateOf<ShelfItem?>(null) }
+    LaunchedEffect(page.browseId, rawSongs, page.sections) {
+        localArtistRecent = if (isLocalArtist && page.sections.isNotEmpty()) {
+            try {
+                mostRecentVerifiedLocalArtistAlbum(
+                    localArtistContext, rawSongs, page.sections,
+                )
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+        } else null
+    }
     // Whether the top release card's album is already saved isn't on the shelf
     // item; it is read off the album once, as soon as the card is known.
-    val topReleaseId = if (isArtist) page.sections.topRelease()?.browseId else null
+    val topReleaseId = if (isArtist && !isLocalArtist)
+        page.sections.topRelease()?.browseId else null
     LaunchedEffect(topReleaseId) { topReleaseId?.let { onLoadReleaseLibrary?.invoke(it) } }
     // Apple Music's hero photo and title logo for this artist, found by name.
     // Null until (and unless) it arrives; the YouTube header stands in meanwhile.
@@ -604,7 +621,8 @@ fun DetailScreen(
             }
 
             // The first release on the shelves below, pulled out as a card of its own.
-            val topRelease = if (isArtist) page.sections.topRelease() else null
+            val topRelease = if (isLocalArtist) localArtistRecent
+                else if (isArtist) page.sections.topRelease() else null
             if (topRelease != null) {
                 item(key = "top-release") {
                     TopReleaseCard(
@@ -699,7 +717,8 @@ fun DetailScreen(
                         val top = state.data.take(MAX_ARTIST_SONGS)
                         val isCurrentRow = playingRowMatcher(top, currentSong)
                         SectionHeading(
-                            title = stringResource(R.string.top_songs),
+                            title = if (isLocalArtist) "Faixas"
+                                else stringResource(R.string.top_songs),
                             palette = palette,
                             horizontalPadding = ARTIST_CONTENT_GUTTER,
                         )
