@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
@@ -76,6 +77,8 @@ import com.music.bitchord.data.listening.allowedOperators
 import com.music.bitchord.data.listening.isTextField
 import com.music.bitchord.data.listening.moveChild
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.CoverPlaceholder
+import com.music.bitchord.ui.theme.rememberArtworkPalette
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.sharedui.resources.Res
@@ -184,6 +187,37 @@ private fun WizardHeading(title: String, detail: String) {
             detail,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Same release hero as the native playlist detail, with actual RecordingId art. */
+@Composable
+private fun WizardReviewHeader(
+    name: String,
+    description: String,
+    cover: V2DisplayRow?,
+) {
+    val palette = rememberArtworkPalette(imageUrl = cover?.localArtworkUri)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        NativeReleaseHeaderLayout(
+            title = name.ifBlank { "Sem nome" },
+            credit = "",
+            meta = description,
+            palette = palette,
+            sleeveSize = maxWidth * 0.76f,
+            topInset = 0.dp,
+            artwork = {
+                if (cover != null) {
+                    SmartPlaylistPreviewArtwork(cover, Modifier.fillMaxSize())
+                } else {
+                    CoverPlaceholder(
+                        icon = Icons.Rounded.LibraryMusic,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            },
+            actions = {},
         )
     }
 }
@@ -1008,20 +1042,11 @@ internal fun SmartPlaylistV2WizardUi(
                     WizardStep.REVIEW -> {
                         if (normalMode) {
                             item {
-                                WizardCard(name.trim().ifEmpty { "Sem nome" },
-                                    "Playlist normal · ${normalSelectedIds.size} músicas") {
-                                    Box(
-                                        Modifier.fillMaxWidth(),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        val cover = normalSelectedRows.firstOrNull()
-                                        if (cover != null) {
-                                            SmartPlaylistPreviewArtwork(
-                                                row = cover, modifier = Modifier.size(210.dp),
-                                            )
-                                        } else PlaylistWizardArtworkPlaceholder(210.dp)
-                                    }
-                                }
+                                WizardReviewHeader(
+                                    name = name.trim(),
+                                    description = "Playlist normal · ${normalSelectedIds.size} músicas",
+                                    cover = normalSelectedRows.firstOrNull(),
+                                )
                             }
                             item {
                                 WizardCard(
@@ -1054,13 +1079,11 @@ internal fun SmartPlaylistV2WizardUi(
                             }
                         } else {
                         item {
-                            WizardCard(name.trim().ifEmpty { "Sem nome" },
-                                "Playlist inteligente · ${smartRuleLeafCount(rule)} condições") {
-                                Box(
-                                    Modifier.fillMaxWidth(),
-                                    contentAlignment = Alignment.Center,
-                                ) { PlaylistWizardArtworkPlaceholder(210.dp) }
-                            }
+                            WizardReviewHeader(
+                                name = name.trim(),
+                                description = "Playlist inteligente · ${smartRuleLeafCount(rule)} condições",
+                                cover = preview?.firstOrNull(),
+                            )
                         }
                         item {
                             WizardCard(
