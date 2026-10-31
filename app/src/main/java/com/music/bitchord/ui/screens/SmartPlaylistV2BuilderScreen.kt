@@ -32,6 +32,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.content.Intent
@@ -783,6 +784,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                         ))
                                     }
                                     reset()
+                                    manageTab = SmartPlaylistManageTab.FILTERS
                                     showWizard = false
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
@@ -801,6 +803,9 @@ internal fun SmartPlaylistV2BuilderScreen(
                 )
             }
         } else {
+            // This full-screen editor owns Back; Android's system Back must
+            // return from reusable filters just like the first-party back icon.
+            BackHandler(enabled = pendingDeletion == null) { showWizard = true }
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.background,
