@@ -4,6 +4,27 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class A0AudioSampleScanPolicyTest {
+    @Test fun oneSmallFlacExtractorTimestampBackstepIsTolerated() {
+        assertEquals(A0AudioSampleScanPolicy.TimestampVerdict.TOLERATE_SINGLE_SMALL_FLAC_BACKSTEP,
+            A0AudioSampleScanPolicy.timestampVerdict(
+                9_950_000L,10_000_000L,0,true))
+        assertEquals(A0AudioSampleScanPolicy.TimestampVerdict.OK,
+            A0AudioSampleScanPolicy.timestampVerdict(
+                10_050_000L,10_000_000L,1,true))
+    }
+
+    @Test fun multipleOrLargeFlacRegressionsAndAllOtherCodecsStayBlocked() {
+        val reject=A0AudioSampleScanPolicy.TimestampVerdict.REGRESSION
+        assertEquals(reject,A0AudioSampleScanPolicy.timestampVerdict(
+            9_950_000L,10_000_000L,1,true))
+        assertEquals(reject,A0AudioSampleScanPolicy.timestampVerdict(
+            9_899_999L,10_000_000L,0,true))
+        assertEquals(reject,A0AudioSampleScanPolicy.timestampVerdict(
+            9_999_999L,10_000_000L,0,false))
+        assertEquals(A0AudioSampleScanPolicy.TimestampVerdict.NEGATIVE,
+            A0AudioSampleScanPolicy.timestampVerdict(-1L,10_000_000L,0,true))
+    }
+
     @Test fun boundedLeadingCodecPacketsAreNotMistakenForAudioFrames() {
         assertTrue(A0AudioSampleScanPolicy.skipLeadingEmpty(0,0,true,true))
         assertTrue(A0AudioSampleScanPolicy.skipLeadingEmpty(0,1,true,true))

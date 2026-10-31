@@ -159,6 +159,7 @@ internal object A0AndroidAudioTechnicalProbe {
             var emptyLeading=0
             var bytes=0L
             var lastUs=-1L
+            var toleratedTimestampBacksteps=0
             var reachedEos=false
             while(samples<MAX_SAMPLES &&
                 SystemClock.elapsedRealtime()<endBy &&
@@ -197,9 +198,19 @@ internal object A0AndroidAudioTechnicalProbe {
                 if(reportedTrack!=audioIndex)
                     return denied(Failure.WRONG_SAMPLE_TRACK)
                 val timestamp=extractor.sampleTime
-                if(timestamp<0)return denied(Failure.NEGATIVE_SAMPLE_TIME)
-                if(timestamp<lastUs)return denied(Failure.REGRESSING_SAMPLE_TIME)
-                lastUs=timestamp
+                when(A0AudioSampleScanPolicy.timestampVerdict(
+                    timestamp,lastUs,toleratedTimestampBacksteps,
+                    header.codec==A0CanonicalAcquisitionIntent.Codec.FLAC)) {
+                    A0AudioSampleScanPolicy.TimestampVerdict.NEGATIVE ->
+                        return denied(Failure.NEGATIVE_SAMPLE_TIME)
+                    A0AudioSampleScanPolicy.TimestampVerdict.REGRESSION ->
+                        return denied(Failure.REGRESSING_SAMPLE_TIME)
+                    A0AudioSampleScanPolicy.TimestampVerdict.TOLERATE_SINGLE_SMALL_FLAC_BACKSTEP ->
+                        toleratedTimestampBacksteps++
+                    A0AudioSampleScanPolicy.TimestampVerdict.OK -> Unit
+                }
+                // Retain the highest *observed* time, never regress coverage.
+                lastUs=maxOf(lastUs,timestamp)
                 bytes+=amount
                 if(bytes>A0ObservedTransferLimits.MAX_AUDIO_BYTES)
                     return denied(Failure.SAMPLE_BYTE_LIMIT_EXCEEDED)
@@ -215,6 +226,10 @@ internal object A0AndroidAudioTechnicalProbe {
             if(source.length()!=size || source.lastModified()!=modification ||
                 isCancelled() || Thread.currentThread().isInterrupted)
                 return denied(Failure.SOURCE_CHANGED_OR_REVOKED)
+            if(toleratedTimestampBacksteps>0)
+                runCatching {
+                    Log.d("BitChord","soulseek_audio_probe accepted=SMALL_FLAC_BACKSTEP")
+                }
             // Opus/Vorbis VBR may omit KEY_BIT_RATE entirely. After a full
             // demux walk, sample bytes / locally inspected duration provide
             // a bounded observed average. Never derive quality from the

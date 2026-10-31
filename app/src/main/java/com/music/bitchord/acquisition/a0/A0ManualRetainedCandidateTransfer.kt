@@ -7,6 +7,7 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.download.A3AcquisitionLedger
 import com.music.bitchord.download.A3AndroidAcquisitionLedger
 import com.music.bitchord.download.SoulseekBatchPlan
+import com.music.bitchord.data.DebugLog as Log
 import java.io.IOException
 import java.util.UUID
 
@@ -95,6 +96,7 @@ internal object A0ManualRetainedCandidateTransfer {
             sourceSong=sourceSong)
         var receipt:A0VerifiedByteStager.Receipt?=null
         var result=Status.TRANSFER_FAILED
+        var publicationAttempted=false
         try {
             onTransport(transport)
             if(revoked()) {
@@ -131,6 +133,7 @@ internal object A0ManualRetainedCandidateTransfer {
                     report(Stage.DESTINATION_INVALID)
                     return Status.TECHNICAL_REJECTION
                 }
+            publicationAttempted=true
             result=when(port.publish(checkNotNull(receipt),safeName,::revoked)) {
                 A0AutoAcquisitionExecutor.PublishResult.DURABLE->Status.PUBLISHED
                 A0AutoAcquisitionExecutor.PublishResult.ROLLED_BACK->Status.TRANSFER_FAILED
@@ -142,11 +145,22 @@ internal object A0ManualRetainedCandidateTransfer {
                 else -> Stage.PUBLICATION_UNCERTAIN
             })
             return result
-        }catch(_:Exception) {
+        }catch(error:Exception) {
+            val phase=A0ManualExceptionStage.phase(
+                receipt!=null,publicationAttempted)
+            val category=A0ManualExceptionStage.category(error)
+            runCatching {
+                Log.d("BitChord",
+                    "soulseek_manual_review exception_phase=${phase.name}" +
+                        " category=${category.name}")
+            }
             report(Stage.UNEXPECTED_ERROR)
-            // Cannot know whether an unexpected exception happened after
-            // MediaStore publication. Never grant a second automatic attempt.
-            return Status.VERIFY_LIBRARY
+            // No publish() was called before this exception; the A3 identity
+            // stays fenced, and the transfer is NOT automatically retried.
+            // Only exceptions during/after A3 publish require reconciliation.
+            return if(A0ManualExceptionStage.publicationMayBeUncertain(
+                    publicationAttempted))Status.VERIFY_LIBRARY
+                else Status.TRANSFER_FAILED
         }finally {
             try {
                 receipt?.let { port.cleanup(it) }
