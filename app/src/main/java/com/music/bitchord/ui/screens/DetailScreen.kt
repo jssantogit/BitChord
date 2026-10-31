@@ -441,6 +441,14 @@ fun DetailScreen(
     } else {
         emptyList()
     }
+    // Folder category pages describe the category, not the 570 underlying tracks.
+    val folderCategoryMeta = if (folder != null && page.browseId == "local:all") {
+        when (folderState?.tab) {
+            LocalFolderTab.ARTISTS -> "${folderGroups.size} artistas"
+            LocalFolderTab.ALBUMS -> "${folderGroups.size} álbuns"
+            else -> null
+        }
+    } else null
     BackHandler(enabled = folderState?.selecting == true) { folderState?.clear() }
 
     // What marks a row as already downloaded, tinted from the sleeve like the
@@ -559,6 +567,7 @@ fun DetailScreen(
                         // A folder's credit says where its tracks live, not who made them.
                         onArtistClick = onArtistClick.takeIf { folder == null },
                         onToggleLibrary = onToggleLibrary,
+                        metaOverride = folderCategoryMeta,
                     )
                 }
             }
@@ -883,8 +892,10 @@ private fun ReleaseHeader(
     onShuffle: () -> Unit,
     onArtistClick: ((String, String) -> Unit)?,
     onToggleLibrary: (() -> Unit)?,
+    metaOverride: String? = null,
 ) {
-    val (credit, meta) = page.headerLines(songs.size, songs.playtime())
+    val (credit, originalMeta) = page.headerLines(songs.size, songs.playtime())
+    val meta = metaOverride ?: originalMeta
     // Every row on a release carries the same credit — see [pageCredit] — so
     // the first one speaks for the whole page, the same source the rows'
     // own long-press "Open artist" already reads from.
