@@ -359,6 +359,21 @@ class PlaylistLibraryVisualReuseTest {
         compose.onNodeWithText("Apenas revisão").assertHasNoClickAction()
     }
 
+    @Test fun playlistDescriptionUsesNativeMultilineFieldAndPreservesLineBreaks() {
+        var description by mutableStateOf("")
+        compose.setContent {
+            PlaylistWizardTextEntry(
+                value = description,
+                onValueChange = { description = it },
+                label = "Descrição (opcional)",
+                multiline = true,
+            )
+        }
+        compose.onNodeWithContentDescription("Descrição (opcional)")
+            .performTextInput("Primeiro verso\\nSegundo verso")
+        compose.runOnIdle { assertEquals("Primeiro verso\\nSegundo verso", description) }
+    }
+
     @Test fun wizardTextAndSearchFieldsPreserveUserInput() {
         var name by mutableStateOf("")
         var search by mutableStateOf("")
