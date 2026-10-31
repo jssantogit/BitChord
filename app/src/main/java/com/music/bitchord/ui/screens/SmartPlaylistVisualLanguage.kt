@@ -50,12 +50,14 @@ internal fun PlaylistManagerChrome(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     onBack: () -> Unit,
-    onNew: () -> Unit,
     onDraft: () -> Unit,
 ) {
+    // First-party native back, typography and segmented selector. Filters
+    // are the entry point, not a legacy playlist-management dashboard.
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = com.music.bitchord.ui.components.PAGE_GUTTER),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth()
+            .padding(horizontal = com.music.bitchord.ui.components.PAGE_GUTTER),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -63,22 +65,15 @@ internal fun PlaylistManagerChrome(
         ) {
             ArtworkPageBackButton(onClick = onBack, hazeState = null)
             Text(
-                "Filtros e versões anteriores",
+                "Filtros reutilizáveis",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.weight(1f).padding(start = 12.dp),
             )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(onClick = onNew) { Text("Nova playlist") }
-            TextButton(onClick = onDraft) { Text("Retomar rascunho") }
+            TextButton(onClick = onDraft) { Text("Editor") }
         }
         SegmentedControl(
-            options = listOf("Inteligentes", "Filtros", "Clássicas"),
+            options = listOf("Filtros", "Inteligentes", "Clássicas"),
             selectedIndex = selectedIndex,
             onSelect = onSelect,
         )
