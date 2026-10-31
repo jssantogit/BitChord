@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -59,7 +60,7 @@ import dev.chrisbanes.haze.materials.HazeMaterials
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun ListenBrainzTokenAlert(
-    hazeState: HazeState,
+    hazeState: HazeState?,
     tokenInput: String,
     onTokenInputChange: (String) -> Unit,
     onSave: () -> Unit,
@@ -103,7 +104,7 @@ fun ListenBrainzTokenAlert(
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun LastfmLoginAlert(
-    hazeState: HazeState,
+    hazeState: HazeState?,
     usernameInput: String,
     onUsernameInputChange: (String) -> Unit,
     passwordInput: String,
@@ -660,12 +661,14 @@ fun WebDavConflictAlert(
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun ConfirmationAlert(
-    hazeState: HazeState,
+    hazeState: HazeState?,
     title: String,
     description: String,
     confirmLabel: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
+    dismissLabel: String? = null,
+    destructive: Boolean = false,
 ) {
     AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
         Column(
@@ -689,9 +692,18 @@ fun ConfirmationAlert(
             )
         }
         AlertRule()
-        AlertAction(label = confirmLabel, emphasised = true, onClick = onConfirm)
+        AlertAction(
+            label = confirmLabel,
+            emphasised = true,
+            destructive = destructive,
+            onClick = onConfirm,
+        )
         AlertRule()
-        AlertAction(label = stringResource(R.string.cancel), emphasised = false, onClick = onDismiss)
+        AlertAction(
+            label = dismissLabel ?: stringResource(R.string.cancel),
+            emphasised = false,
+            onClick = onDismiss,
+        )
     }
 }
 
@@ -808,7 +820,7 @@ private fun ChoiceRow(
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 internal fun AlertScaffold(
-    hazeState: HazeState,
+    hazeState: HazeState?,
     onDismiss: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -830,8 +842,12 @@ internal fun AlertScaffold(
             modifier = Modifier
                 .width(ALERT_WIDTH)
                 .clip(shape)
+                .testTag("native-alert-scaffold")
                 .then(
-                    if (reduceDynamicBlur) {
+                    // A nested full-screen editor is its own dialog window and
+                    // cannot sample the Activity's haze source. Keep the exact
+                    // first-party alert metrics with a solid surface instead.
+                    if (reduceDynamicBlur || hazeState == null) {
                         Modifier.background(MaterialTheme.colorScheme.surface)
                     } else {
                         Modifier.optimizedHazeEffect(
