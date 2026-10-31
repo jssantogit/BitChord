@@ -52,6 +52,7 @@ import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
+import com.music.bitchord.ui.components.PillTextField
 import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
 import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.theme.rememberArtworkPalette
@@ -204,6 +205,10 @@ internal fun CanonicalPlaylistDetailScreen(
     onTrackClick: (String) -> Unit,
     onTrackQueue: (String, CanonicalCollectionIntent) -> Unit,
     contentPadding: PaddingValues,
+    searching: Boolean = false,
+    query: String = "",
+    onQueryChange: (String) -> Unit = {},
+    sort: PlaylistLibrarySort = PlaylistLibrarySort.DEFAULT,
     listState: LazyListState? = null,
 ) {
     BackHandler(onBack = onClose)
@@ -231,6 +236,17 @@ internal fun CanonicalPlaylistDetailScreen(
             throw cancelled
         } catch (_: Exception) {
             emptyList()
+        }
+    }
+    val visibleRows = remember(rows, query, sort) {
+        val filtered = rows.orEmpty().filter {
+            it.title.contains(query, ignoreCase = true) ||
+                it.artist.contains(query, ignoreCase = true)
+        }
+        when (sort) {
+            PlaylistLibrarySort.TITLE_ASC -> filtered.sortedBy { it.title.lowercase() }
+            PlaylistLibrarySort.TITLE_DESC -> filtered.sortedByDescending { it.title.lowercase() }
+            PlaylistLibrarySort.DEFAULT -> filtered
         }
     }
     val palette = rememberArtworkPalette(imageUrl = rows?.firstOrNull()?.localArtworkUri)
@@ -289,6 +305,19 @@ internal fun CanonicalPlaylistDetailScreen(
                 }
             )
         }
+        if (searching || query.isNotBlank()) {
+            item(key = "playlist-detail-search") {
+                PillTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    placeholder = "Buscar nesta playlist",
+                    accessibilityLabel = "Buscar nesta playlist",
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(horizontal = PAGE_GUTTER)
+                        .height(52.dp),
+                )
+            }
+        }
         if (rows?.isEmpty() == true) {
             item(key = "playlist-detail-empty") {
                 Text(
@@ -299,7 +328,7 @@ internal fun CanonicalPlaylistDetailScreen(
                 )
             }
         }
-        items(rows.orEmpty(), key = { it.id }) { track ->
+        items(visibleRows, key = { it.id }) { track ->
             CanonicalPlaylistTrackRow(
                 track = track,
                 onPlay = onTrackClick,
