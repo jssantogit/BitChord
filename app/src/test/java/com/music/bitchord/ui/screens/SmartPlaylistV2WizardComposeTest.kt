@@ -318,6 +318,8 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Editar playlist").assertExists()
         compose.onNodeWithText("Editar músicas").assertExists()
         compose.onNodeWithText("Nova playlist").assertDoesNotExist()
+        compose.onNodeWithText("Excluir playlist").performClick()
+        compose.onNodeWithText("Excluir playlist normal?").assertExists()
     }
 
     @Test fun existingSmartPlaylistCanOpenNativeRuleEditorFromEditPage() {
@@ -340,6 +342,12 @@ class SmartPlaylistV2WizardComposeTest {
             )
         }
         compose.onNodeWithText("Editar playlist").assertExists()
+        compose.onNodeWithText("Excluir playlist").performClick()
+        compose.onNodeWithText("Excluir playlist inteligente?").assertExists()
+        compose.onNodeWithText(
+            org.robolectric.RuntimeEnvironment.getApplication()
+                .getString(com.music.bitchord.R.string.cancel),
+        ).performClick()
         compose.onNodeWithText("Editar regras").performClick()
         compose.onNodeWithText("Regras da playlist").assertExists()
     }
