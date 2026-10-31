@@ -151,40 +151,40 @@ private fun WizardCard(
     onClick: (() -> Unit)? = null,
     content: @Composable (() -> Unit)? = null,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth().then(
-            if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
-        ),
-        shape = RoundedCornerShape(15.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(PAGE_GUTTER),
-            verticalArrangement = Arrangement.spacedBy(9.dp),
-        ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(title, style = MaterialTheme.typography.titleMedium)
-                    if (subtitle.isNotBlank()) {
-                        Text(subtitle, style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                if (onClick != null) Icon(Icons.Rounded.ChevronRight, contentDescription = null)
+    // This is the exact surface and row shared with Android Settings, not
+    // a separate Material3 Card with duplicated paddings and chevrons.
+    SettingsGroupSurface {
+        SettingsRow(
+            title = title,
+            subtitle = subtitle.ifBlank { null },
+            onClick = onClick,
+            reserveIconSpace = false,
+        )
+        if (content != null) {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(start = ROW_INSET, end = ROW_INSET, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                content()
             }
-            content?.invoke()
         }
     }
 }
 
 @Composable
 private fun WizardHeading(title: String, detail: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = MaterialTheme.typography.headlineLarge)
-        Text(detail, style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            title,
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            detail,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -228,41 +228,29 @@ private fun <T> WizardChoiceDialog(
     onChosen: (T) -> Unit,
     onClose: () -> Unit,
 ) {
-    // Dialog windows do not always inherit Material's LocalContentColor.
-    // Capture the active palette OUTSIDE the window and apply foreground
-    // explicitly: black text on a black sheet fails basic night-mode contrast.
-    val palette = MaterialTheme.colorScheme
-    val sheetForeground = palette.onSurface
-    Dialog(
+    // The app already uses ModalBottomSheet for details/actions. A second
+    // full-screen Dialog with a hand-drawn scrim is not needed.
+    androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onClose,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
         ),
+        containerColor = MaterialTheme.colorScheme.background,
     ) {
-        Box(
-            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.48f)),
-            contentAlignment = Alignment.BottomCenter,
+        Column(
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp),
         ) {
-            Column(
+            Row(
                 modifier = Modifier.fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                    .background(palette.surface)
-                    .navigationBarsPadding().padding(bottom = 12.dp),
+                    .padding(start = PAGE_GUTTER, end = 8.dp, bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .padding(start = PAGE_GUTTER, end = 8.dp, top = 6.dp, bottom = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(title, style = MaterialTheme.typography.titleLarge,
-                        color = sheetForeground)
-                    TextButton(onClick = onClose) {
-                        Text("Fechar", color = sheetForeground)
-                    }
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                Text(title, style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground)
+                TextButton(onClick = onClose) { Text("Fechar") }
+            }
+            SettingsGroupSurface(modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
                 LazyColumn(Modifier.heightIn(max = 480.dp)) {
                     items(options) { option ->
                         SettingsRow(
@@ -270,17 +258,13 @@ private fun <T> WizardChoiceDialog(
                             onClick = { onChosen(option); onClose() },
                             reserveIconSpace = false,
                         )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = PAGE_GUTTER),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
-                        )
+                        RowDivider()
                     }
                 }
             }
         }
     }
 }
-
 
 @Composable
 internal fun SmartPlaylistV2WizardUi(
