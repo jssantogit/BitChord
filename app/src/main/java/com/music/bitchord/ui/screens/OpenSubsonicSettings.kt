@@ -27,6 +27,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.R
+import com.music.bitchord.ui.components.ConfirmationAlert
+import com.music.bitchord.ui.components.NativeAlertHost
 import com.music.bitchord.data.catalog.provider.opensubsonic.AndroidOpenSubsonicAccountSession
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountDraft
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountRecord
@@ -142,27 +144,21 @@ internal fun OpenSubsonicRemoteLibrarySection() {
     }
 
     if (confirmForget) {
-        AlertDialog(
-            onDismissRequest = { confirmForget = false },
-            title = { Text(stringResource(R.string.opensubsonic_forget_confirm_title)) },
-            text = { Text(stringResource(R.string.opensubsonic_forget_confirm_text)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        session.forget()
-                        connectionStatus = null
-                        confirmForget = false
-                    },
-                ) {
-                    Text(stringResource(R.string.opensubsonic_forget))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmForget = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
-        )
+        NativeAlertHost(onDismiss = { confirmForget = false }) {
+            ConfirmationAlert(
+                hazeState = null,
+                title = stringResource(R.string.opensubsonic_forget_confirm_title),
+                description = stringResource(R.string.opensubsonic_forget_confirm_text),
+                confirmLabel = stringResource(R.string.opensubsonic_forget),
+                destructive = true,
+                onConfirm = {
+                    session.forget()
+                    connectionStatus = null
+                    confirmForget = false
+                },
+                onDismiss = { confirmForget = false },
+            )
+        }
     }
 }
 
