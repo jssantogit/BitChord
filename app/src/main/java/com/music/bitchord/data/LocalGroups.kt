@@ -1,6 +1,8 @@
 package com.music.bitchord.data
 
 import com.music.bitchord.data.model.BrowseType
+import com.music.bitchord.data.model.HomeShelf
+import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.LocalMusicSort
 import com.music.bitchord.download.DownloadedCollection
@@ -154,6 +156,37 @@ object LocalGroups {
      * The Artists tab, by name. No cover of their own: a track's sleeve is not
      * a picture of whoever made it, so the page opens on a placeholder.
      */
+    /**
+     * Local artist releases share DetailScreen's existing carousel UI.
+     * Tag-only libraries have no trusted release type: the single-track shelf
+     * is a provisional grouping, not a MusicBrainz-confirmed classification.
+     * Missing album tags are never turned into fictitious releases.
+     */
+    fun artistReleaseShelves(artistBrowseId: String, songs: List<Song>): List<HomeShelf> {
+        val folderId = folderOf(artistBrowseId) ?: return emptyList()
+        val groups = songs.filter { !it.albumName.isNullOrBlank() }
+            .groupBy { it.albumName!!.trim() }
+        fun shelf(title: String, condition: (List<Song>) -> Boolean): HomeShelf? {
+            val items = groups.entries
+                .filter { condition(it.value) }
+                .sortedBy { it.key.lowercase(Locale.ROOT) }
+                .map { (album, tracks) ->
+                    ShelfItem(
+                        title = album,
+                        subtitle = tracks.firstOrNull()?.artist.orEmpty(),
+                        thumbnailUrl = tracks.firstNotNullOfOrNull { it.thumbnailUrl },
+                        videoId = null,
+                        browseId = albumPageId(folderId, album),
+                    )
+                }
+            return items.takeIf { it.isNotEmpty() }?.let { HomeShelf(title, it) }
+        }
+        return listOfNotNull(
+            shelf("Álbuns") { it.size > 1 },
+            shelf("Singles e EPs") { it.size == 1 },
+        )
+    }
+
     fun artistsOf(folderId: String, songs: List<Song>): List<LocalGroup> =
         songs.groupBy { it.artist }
             .map { (name, group) ->
