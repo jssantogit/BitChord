@@ -3880,13 +3880,16 @@ private fun BitChordApp(
                                         if (!playlistLibrarySearching) playlistLibraryQuery = ""
                                     },
                                 )
+                                // The native filter icon now selects Normal/Intelligent.
+                                // Keep the secondary alphabetic ordering in the native
+                                // overflow surface rather than adding a bespoke filter.
                                 NativeCollectionSortAction(
-                                    contentDescription = "Ordenar playlists",
-                                    onClick = { playlistLibrarySortMenu = true },
-                                )
-                                NativeCollectionOverflowAction(
                                     contentDescription = "Filtrar playlists",
                                     onClick = { playlistLibraryOptionsMenu = true },
+                                )
+                                NativeCollectionOverflowAction(
+                                    contentDescription = "Ordenar playlists",
+                                    onClick = { playlistLibrarySortMenu = true },
                                 )
                             } else {
                                 NativeCollectionSearchAction(
