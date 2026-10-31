@@ -211,18 +211,41 @@ internal data class PlaylistWizardNavOption(
 
 @Composable
 internal fun PlaylistWizardNavigationList(options: List<PlaylistWizardNavOption>) {
-    // Share the actual SettingsGroup surface and SettingsRow geometry.
-    SettingsGroupSurface {
-        options.forEachIndexed { index, option ->
-            SettingsRow(
-                icon = option.icon,
-                title = option.title,
-                subtitle = option.description.ifBlank { null },
-                onClick = option.onClick,
-                reserveIconSpace = false,
-                iconTint = AccentRed,
-            )
-            if (index < options.lastIndex) RowDivider()
+    val categories = options.isNotEmpty() && options.all { it.icon != null }
+    if (categories) {
+        // The native Settings surface stays the source of truth, but each
+        // category gets its own row-sized card. This avoids one dense block
+        // followed by a large empty lower half on tall phones.
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            options.forEach { option ->
+                SettingsGroupSurface {
+                    SettingsRow(
+                        icon = option.icon,
+                        title = option.title,
+                        subtitle = option.description.ifBlank { null },
+                        onClick = option.onClick,
+                        reserveIconSpace = false,
+                        iconTint = AccentRed,
+                        minHeight = 88.dp,
+                    )
+                }
+            }
+        }
+    } else {
+        // Drill-down rows remain the same contiguous settings list used
+        // throughout the application, including their native dividers.
+        SettingsGroupSurface {
+            options.forEachIndexed { index, option ->
+                SettingsRow(
+                    icon = option.icon,
+                    title = option.title,
+                    subtitle = option.description.ifBlank { null },
+                    onClick = option.onClick,
+                    reserveIconSpace = false,
+                    iconTint = AccentRed,
+                )
+                if (index < options.lastIndex) RowDivider()
+            }
         }
     }
 }
