@@ -376,6 +376,18 @@ class PlaylistLibraryVisualReuseTest {
         ).assertExists()
     }
 
+    @Test fun applyingReusableSmartRulesDoesNotConvertAnExistingNormalPlaylist() {
+        assertEquals(true, canApplySmartFilterToDraft(
+            normalMode = false, editingNormalId = null,
+        ))
+        assertEquals(false, canApplySmartFilterToDraft(
+            normalMode = true, editingNormalId = "normal-1",
+        ))
+        assertEquals(false, canApplySmartFilterToDraft(
+            normalMode = false, editingNormalId = "normal-1",
+        ))
+    }
+
     @Test fun sourceSelectionRetainsCallbackAndSelectedSemantics() {
         var changed = 0
         compose.setContent {
