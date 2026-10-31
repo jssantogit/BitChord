@@ -45,7 +45,7 @@ import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.ui.components.PAGE_GUTTER
-import com.music.bitchord.ui.theme.rememberArtworkPalette
+import com.music.bitchord.ui.theme.themeArtworkPalette
 import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.components.CoverPlaceholder
 import kotlinx.coroutines.CancellationException
@@ -130,7 +130,7 @@ internal fun PlaylistLibrarySearchField(
         onClose = onClose,
         autoFocus = true,
         onFocused = {},
-        palette = rememberArtworkPalette(imageUrl = null),
+        palette = themeArtworkPalette(),
         placeholder = "Buscar em Playlists",
     )
 }
