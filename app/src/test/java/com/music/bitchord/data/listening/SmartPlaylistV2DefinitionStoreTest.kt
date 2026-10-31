@@ -44,8 +44,11 @@ class SmartPlaylistV2DefinitionStoreTest {
                 limit = 200,
                 randomSeed = 73,
             )
-            modern.save(SavedSmartPlaylistV2Definition("v2", "New", query))
+            modern.save(SavedSmartPlaylistV2Definition(
+                "v2", "New", query, description = "Somente favoritas",
+            ))
             assertEquals(query, modern.list().single().query)
+            assertEquals("Somente favoritas", modern.list().single().description)
             assertEquals("Old", legacy.list().single().name)
             assertEquals(4.0, legacy.list().single().query.minimumExplicitRating)
         } finally {
@@ -127,6 +130,7 @@ class SmartPlaylistV2DefinitionStoreTest {
             SmartPlaylistDefinitionDatabase.MIGRATION_2_3,
             SmartPlaylistDefinitionDatabase.MIGRATION_3_4,
             SmartPlaylistDefinitionDatabase.MIGRATION_4_5,
+            SmartPlaylistDefinitionDatabase.MIGRATION_5_6,
         )
             .allowMainThreadQueries().build()
         try {
