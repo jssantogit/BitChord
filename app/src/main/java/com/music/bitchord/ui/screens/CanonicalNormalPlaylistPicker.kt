@@ -257,6 +257,7 @@ private suspend fun canonicalNormalRows(
             it.providerKey in providerKeys }
         V2DisplayRow(
             id = info.id, title = info.title, artist = info.artistDisplay,
+            durationMs = info.durationMs,
             localArtworkUri = local?.artworkUri,
             remoteMediaAssetId = if (local == null) remote?.mediaAssetId else null,
             remoteArtworkRevision = if (local == null) remote?.artworkUri else null,
