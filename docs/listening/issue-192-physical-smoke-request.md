@@ -188,3 +188,30 @@ log físico.
 
 **Escopo:** gerar um único APK Android `assembleDevDebug` para smoke físico;
 sem merge, alteração da `main`, release pública ou assinatura de produção.
+
+
+## PR #202 — smoke físico após reuso nativo de avisos e correção dos testes (31/10/2026)
+
+**Autorização explícita do usuário:** “Ok, continue. Se tudo certo, dispare apk.”
+
+O HEAD funcional `6d18d3bbc70442550e0951b3ac23123acf8109e5` passou na
+[Android CI #41231974900](https://github.com/jssantogit/BitChord/actions/runs/41231974900)
+com **SUCCESS** após corrigir 13 falhas de UI e confirmar a remoção do
+`MethodTooLargeException`. Este commit altera **somente este documento**
+e aciona o gatilho `push` restrito à branch de playlists.
+O workflow `Android Physical Smoke APK` executa novamente os testes
+`:app:testDevDebugUnitTest`, depois `:app:assembleDevDebug`, e publica
+o artefato de APK somente se tiver sucesso.
+
+**Smoke Galaxy A54:** criação normal/inteligente e navegação em três etapas;
+seleção músicas/álbuns/artistas, capas 52dp, RecordingIds, botão de voltar,
+campos de busca glass, menus e filtros nativos; edição e exclusão;
+avisos Descartar alterações, Continuar editando, Excluir playlist/filtro,
+uso do alerta nativo em Settings, OpenSubsonic, Soulseek, Listen Together
+e letras; contraste das Adições recentes, listas/detalhes, fila, reprodução,
+miniplayer, rolagem e diagnósticos.
+
+**Restrições:** somente um APK Dev Debug para smoke físico; sem merge
+da PR #202 ou #193, sem alterar a main, sem publicação release e sem
+fechar a issue. Não declarar o APK disponível antes da conclusão do
+workflow e upload do artefato.
