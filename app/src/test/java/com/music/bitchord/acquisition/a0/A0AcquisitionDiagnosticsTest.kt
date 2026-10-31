@@ -10,14 +10,14 @@ import java.net.SocketTimeoutException
 class A0AcquisitionDiagnosticsTest {
     @Test fun typedNetworkFailuresDoNotRequireExceptionMessageOrPeer() {
         val d=A0AcquisitionDiagnostics
-        assertEquals(d.Fault.TIMEOUT,d.fault(SocketTimeoutException("private peer")))
-        assertEquals(d.Fault.CONNECT,d.fault(ConnectException("private ip")))
-        assertEquals(d.Fault.EOF,d.fault(EOFException("private path")))
-        assertEquals(d.Fault.IO,d.fault(IOException("credentials")))
-        assertEquals(d.Fault.ARGUMENT,d.fault(IllegalArgumentException("path")))
-        assertEquals(d.Fault.TIMEOUT,d.fault(IOException(
+        assertEquals(A0AcquisitionDiagnostics.Fault.TIMEOUT,d.fault(SocketTimeoutException("private peer")))
+        assertEquals(A0AcquisitionDiagnostics.Fault.CONNECT,d.fault(ConnectException("private ip")))
+        assertEquals(A0AcquisitionDiagnostics.Fault.EOF,d.fault(EOFException("private path")))
+        assertEquals(A0AcquisitionDiagnostics.Fault.IO,d.fault(IOException("credentials")))
+        assertEquals(A0AcquisitionDiagnostics.Fault.ARGUMENT,d.fault(IllegalArgumentException("path")))
+        assertEquals(A0AcquisitionDiagnostics.Fault.TIMEOUT,d.fault(IOException(
             "wrapper with private filename",SocketTimeoutException("peer"))))
-        assertEquals(d.Fault.CONNECT,d.fault(IOException(
+        assertEquals(A0AcquisitionDiagnostics.Fault.CONNECT,d.fault(IOException(
             "wrapped",IOException("layer 2",ConnectException("ip")))))
     }
     @Test fun scopesArePositiveAndDistinctForSuccessiveAttempts() {
