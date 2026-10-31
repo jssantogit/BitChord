@@ -1032,14 +1032,27 @@ internal fun SmartPlaylistV2WizardUi(
                         }
                     }
                     WizardStep.REVIEW -> {
-                        if (normalMode) {
-                            item {
-                                WizardReviewHeader(
-                                    name = name.trim(),
-                                    description = "Playlist normal · ${normalSelectedIds.size} músicas",
-                                    cover = normalSelectedRows.firstOrNull(),
+                        item {
+                            WizardReviewHeader(
+                                name = name.trim(),
+                                description = if (normalMode)
+                                    "Playlist normal · ${normalSelectedIds.size} músicas"
+                                else "Playlist inteligente · ${smartRuleLeafCount(rule)} condições",
+                                cover = if (normalMode) normalSelectedRows.firstOrNull()
+                                    else preview?.firstOrNull(),
+                            )
+                        }
+                        if (description.isNotBlank()) {
+                            item(key = "playlist-review-description") {
+                                AboutSection(
+                                    title = "Sobre a playlist",
+                                    text = description,
+                                    palette = themeArtworkPalette(),
+                                    horizontalPadding = 0.dp,
                                 )
                             }
+                        }
+                        if (normalMode) {
                             item {
                                 WizardCard(
                                     "Fontes do catálogo",
@@ -1070,13 +1083,6 @@ internal fun SmartPlaylistV2WizardUi(
                                 )
                             }
                         } else {
-                        item {
-                            WizardReviewHeader(
-                                name = name.trim(),
-                                description = "Playlist inteligente · ${smartRuleLeafCount(rule)} condições",
-                                cover = preview?.firstOrNull(),
-                            )
-                        }
                         item {
                             WizardCard(
                                 "Fontes do catálogo",
