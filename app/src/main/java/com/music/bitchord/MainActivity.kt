@@ -3055,10 +3055,13 @@ private fun BitChordApp(
                             val downloadCollections = remember(folderSongs, savedCollections, isDownloads) {
                                 if (isDownloads) Downloads.collectionsAmong(folderSongs) else emptyList()
                             }
+                            val folderState = localFolderStates.getOrPut(page.browseId) { LocalFolderState() }
                             LocalFolder(
-                                state = localFolderStates.getOrPut(page.browseId) { LocalFolderState() },
+                                state = folderState,
                                 sort = folderSortOf(page.browseId),
-                                viewType = folderViewTypeOf(page.browseId),
+                                viewType = folderState.viewTypeFor(
+                                    folderState.tab, folderViewTypeOf(page.browseId),
+                                ),
                                 collections = downloadCollections,
                                 selectable = isDownloads,
                                 onOpenGroup = viewModel::openLocalGroup,
@@ -5251,7 +5254,9 @@ private fun BitChordApp(
         if (folderMenuOpen && menuFolder != null) {
             BackHandler { folderMenuOpen = false }
             val downloadsFolder = menuFolder == "local:downloads"
-            val viewType = folderViewTypeOf(menuFolder)
+            val folderState = localFolderStates.getOrPut(menuFolder) { LocalFolderState() }
+            val selectedFolderTab = folderState.tab
+            val viewType = folderState.viewTypeFor(selectedFolderTab, folderViewTypeOf(menuFolder))
             FrostedFolderMenu(
                 hazeState = hazeState,
                 sort = folderSortOf(menuFolder),
@@ -5263,8 +5268,7 @@ private fun BitChordApp(
                 },
                 onToggleViewType = {
                     val next = if (viewType == LibraryViewType.GRID) LibraryViewType.LIST else LibraryViewType.GRID
-                    if (downloadsFolder) AppSettings.setDownloadedMusicViewType(next)
-                    else AppSettings.setLocalMusicViewType(next)
+                    folderState.setViewTypeFor(selectedFolderTab, next)
                     folderMenuOpen = false
                 },
                 onDismiss = { folderMenuOpen = false },
