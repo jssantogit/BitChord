@@ -75,9 +75,9 @@ class PlaylistLibraryVisualReuseTest {
                 onDraft = { resumed++ },
             )
         }
-        compose.onNodeWithText("Filtros e versões anteriores").assertExists()
+        compose.onNodeWithText("Filtros reutilizáveis").assertExists()
         compose.onNodeWithText("Clássicas").performClick()
-        compose.onNodeWithText("Retomar rascunho").performClick()
+        compose.onNodeWithText("Editor").performClick()
         compose.onNodeWithContentDescription(
             org.robolectric.RuntimeEnvironment.getApplication()
                 .getString(com.music.bitchord.R.string.back),
