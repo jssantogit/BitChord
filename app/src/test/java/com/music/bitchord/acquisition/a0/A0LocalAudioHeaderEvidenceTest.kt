@@ -23,6 +23,28 @@ class A0LocalAudioHeaderEvidenceTest {
             bytes.copyOf().also {it[7]=33}))
     }
 
+    @Test fun flacStreamInfoExposesIndependentFixedBlockAndTotalSamples() {
+        val bytes=ByteArray(42)
+        "fLaC".toByteArray().copyInto(bytes)
+        bytes[7]=34
+        val rate=44100
+        val samples=4_718_700L
+        bytes[8]=16;bytes[10]=16 // 4096, big endian
+        bytes[18]=(rate ushr 12).toByte()
+        bytes[19]=(rate ushr 4).toByte()
+        bytes[20]=((rate and 15) shl 4 or 2).toByte()
+        bytes[21]=((15 shl 4) or (samples ushr 32).toInt()).toByte()
+        bytes[22]=(samples ushr 24).toByte()
+        bytes[23]=(samples ushr 16).toByte()
+        bytes[24]=(samples ushr 8).toByte()
+        bytes[25]=samples.toByte()
+        val info=A0LocalAudioHeaderEvidence.inspect(bytes)!!
+        assertEquals(4096,info.flacBlockSize)
+        assertEquals(samples,info.flacTotalSamples)
+        bytes[10]=8 // Variable blocks never enable fixed-block recovery.
+        assertNull(A0LocalAudioHeaderEvidence.inspect(bytes)?.flacBlockSize)
+    }
+
     @Test fun wavPcmParsedFromFmtChunkNotFilenameOrClaim() {
         val data=ByteArray(44)
         "RIFF".toByteArray().copyInto(data,0)

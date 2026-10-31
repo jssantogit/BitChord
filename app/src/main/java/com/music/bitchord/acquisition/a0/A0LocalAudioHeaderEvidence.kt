@@ -10,6 +10,9 @@ internal object A0LocalAudioHeaderEvidence {
         val codec:A0CanonicalAcquisitionIntent.Codec,
         val sampleRateHz:Int?=null,
         val bitDepth:Int?=null,
+        /** Independent FLAC STREAMINFO evidence; never inferred from peers. */
+        val flacBlockSize:Int?=null,
+        val flacTotalSamples:Long?=null,
     )
     private fun u8(data:ByteArray,i:Int)=data[i].toInt() and 255
     private fun ascii(data:ByteArray,at:Int,s:String):Boolean=
@@ -74,7 +77,17 @@ internal object A0LocalAudioHeaderEvidence {
                 (u8(bytes,21) ushr 4))+1
             if(rate !in 8000..384000 || channels !in 1..8 ||
                 depth !in 8..32)return null
-            return Info(A0CanonicalAcquisitionIntent.Codec.FLAC,rate,depth)
+            val minBlock=(u8(bytes,8) shl 8) or u8(bytes,9)
+            val maxBlock=(u8(bytes,10) shl 8) or u8(bytes,11)
+            val fixedBlock=minBlock.takeIf { it>=16 && it==maxBlock }
+            // STREAMINFO stores total samples in 36 bits, after 20-bit
+            // sample rate, 3-bit channels and 5-bit sample depth.
+            val total=((u8(bytes,21) and 0x0f).toLong() shl 32) or
+                (u8(bytes,22).toLong() shl 24) or
+                (u8(bytes,23).toLong() shl 16) or
+                (u8(bytes,24).toLong() shl 8) or u8(bytes,25).toLong()
+            return Info(A0CanonicalAcquisitionIntent.Codec.FLAC,rate,depth,
+                fixedBlock,total.takeIf { it>0L })
         }
         if(ascii(bytes,0,"RIFF") && ascii(bytes,8,"WAVE")) {
             var offset=12
