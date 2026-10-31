@@ -171,9 +171,10 @@ internal fun CanonicalRecentAdditionsShelf(
                 ) {
                     SmartPlaylistPreviewArtwork(track, Modifier.size(142.dp))
                     Text(
-                        track.title,
+                        track.title.takeIf { it.isNotBlank() } ?: "Título indisponível",
                         style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
