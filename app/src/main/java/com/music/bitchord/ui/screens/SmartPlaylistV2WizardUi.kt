@@ -198,7 +198,7 @@ private fun WizardReviewHeader(
     description: String,
     cover: V2DisplayRow?,
 ) {
-    val palette = rememberArtworkPalette(imageUrl = cover?.localArtworkUri)
+    val palette = rememberArtworkPalette(imageUrl = null)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         NativeReleaseHeaderLayout(
             title = name.ifBlank { "Sem nome" },
