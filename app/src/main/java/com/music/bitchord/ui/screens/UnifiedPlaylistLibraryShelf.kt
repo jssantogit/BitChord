@@ -79,6 +79,10 @@ internal sealed interface LibraryPlaylistCard {
 
 
 /** The playlist collection shares the Library host's search and sort, not a second page shell. */
+/** The empty screen already owns a primary create action. */
+internal fun showPlaylistHeaderCreateAction(playlistCount: Int): Boolean =
+    playlistCount > 0
+
 internal enum class PlaylistLibrarySort { DEFAULT, TITLE_ASC, TITLE_DESC }
 internal enum class PlaylistLibraryTypeFilter { ALL, NORMAL, SMART }
 
@@ -124,7 +128,7 @@ internal fun PlaylistLibrarySearchField(
         onValueChange = onQueryChange,
         placeholder = "Buscar em Playlists",
         accessibilityLabel = "Buscar em Playlists",
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(64.dp),
     )
 }
 
@@ -149,6 +153,7 @@ internal fun UnifiedPlaylistLibraryShelf(
     onSelectedCardChange: (LibraryPlaylistCard?) -> Unit = {},
     listState: LazyListState? = null,
     detailListState: LazyListState? = null,
+    onPlaylistCountChange: (Int) -> Unit = {},
 ) {
     val context = LocalContext.current.applicationContext
     val repo = remember(context) {
@@ -196,6 +201,9 @@ internal fun UnifiedPlaylistLibraryShelf(
             canonicalNormal.map { LibraryPlaylistCard.CanonicalNormal(it) } +
             normalPlaylists.filter { it.browseId?.startsWith("local:playlist:") == true }
                 .map { LibraryPlaylistCard.Normal(it) }
+    }
+    LaunchedEffect(cards.size, smartLoaded, normalLoaded) {
+        if (smartLoaded && normalLoaded) onPlaylistCountChange(cards.size)
     }
     val openedCard = selectedCard?.let { latestLibraryPlaylistCard(it, cards) }
     LaunchedEffect(selectedCard?.id, smartLoaded, normalLoaded, cards) {
