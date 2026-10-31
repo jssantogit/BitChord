@@ -2759,6 +2759,18 @@ private fun BitChordApp(
                                     SmartCollectionActionSource.SavedStaticPlaylist(id), intent,
                                 )
                             },
+                            onSmartShuffle = { id ->
+                                executeSmartCollection(
+                                    SmartCollectionActionSource.SavedV2Definition(id, shuffle = true),
+                                    com.music.bitchord.playback.CanonicalCollectionIntent.PLAY_NOW,
+                                )
+                            },
+                            onCanonicalNormalShuffle = { id ->
+                                executeSmartCollection(
+                                    SmartCollectionActionSource.SavedStaticPlaylist(id, shuffle = true),
+                                    com.music.bitchord.playback.CanonicalCollectionIntent.PLAY_NOW,
+                                )
+                            },
                             onSmartTrackAction = { id, recordingId, intent, includeFollowing ->
                                 executeSmartCollection(
                                     SmartCollectionActionSource.SavedV2PlaylistFromTrack(
