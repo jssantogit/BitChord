@@ -210,6 +210,11 @@ class A0RetainedCandidateReviewActivity:Activity() {
                                 }finally {
                                     transport=null
                                 }
+                                Log.d("BitChord",
+                                    "soulseek_manual_summary diagnostic_schema=2" +
+                                        " slot=$index status=${status.name}" +
+                                        " last_stage=${lastStage.get()?.name ?: "NONE"}" +
+                                        " technical_reason=${lastReason.get()?.name ?: "NONE"}")
                                 if(status==A0ManualRetainedCandidateTransfer.Status.PUBLISHED) {
                                     Downloads.confirmSoulseekManualPublication(
                                         session,index,row.entry.query)

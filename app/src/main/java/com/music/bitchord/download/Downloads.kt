@@ -1363,6 +1363,19 @@ object Downloads {
                     },
                 )
                 val report=outcome.batch
+                // A compact end-of-batch checkpoint remains useful if early
+                // phase events were evicted from the in-memory debug ring.
+                Log.d(TAG,"soulseek_auto_summary diagnostic_schema=2" +
+                    " requested=${request.entries.size}" +
+                    " searches=${outcome.searches}" +
+                    " attempts=${report.attempts}" +
+                    " published=${report.published}" +
+                    " review=${report.results.count {
+                        it==A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW }}" +
+                    " reconcile=${report.needsReconciliation}" +
+                    " cancelled=${report.cancelled}" +
+                    " unused_reservation_released=${outcome.unusedReservationReleased}" +
+                    " retained_slots=${retained.size}")
                 if(job?.isActive!=true)throw CancellationException()
                 val review=SoulseekAutoReviewPlan.from(
                     request.entries,report.results,retained,
@@ -1397,10 +1410,14 @@ object Downloads {
             clear(id)
             throw e
         }catch(_:A3AcquisitionLedger.AutomaticIdentityAlreadyReserved) {
+            Log.d(TAG,"soulseek_auto_summary aborted=A3_IDENTITY_RESERVED")
             fail(id,"Esta faixa ou lançamento já tem uma tentativa registrada. " +
                 "Confira a biblioteca antes de baixar novamente; " +
                 "para revisão explícita, desative a automação.")
-        }catch(_:Exception) {
+        }catch(error:Exception) {
+            Log.d(TAG,"soulseek_auto_summary aborted=" +
+                "${A0AcquisitionDiagnostics.fault(error).name}" +
+                " unused_reservation_released=$unusedReservationConfirmed")
             fail(id,if(unusedReservationConfirmed)
                 "Busca interrompida antes de iniciar a transferência. " +
                     "Você pode tocar em Baixar novamente para pesquisar."
