@@ -374,7 +374,7 @@ internal fun LazyListScope.localFolderItems(
  * A short last row keeps its cards the width of the rest rather than
  * stretching them across the gap.
  */
-private fun <T> LazyListScope.gridRows(
+internal fun <T> LazyListScope.gridRows(
     items: List<T>,
     columns: Int,
     key: (T) -> Any,
