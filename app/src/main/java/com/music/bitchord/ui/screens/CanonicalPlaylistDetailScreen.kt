@@ -235,7 +235,7 @@ internal fun CanonicalPlaylistDetailScreen(
     onSearchingChange: (Boolean) -> Unit = {},
     query: String = "",
     onQueryChange: (String) -> Unit = {},
-    onRowsReady: (List<V2DisplayRow>) -> Unit = {},
+    onRowsReady: (List<V2DisplayRow>?) -> Unit = {},
     sort: PlaylistLibrarySort = PlaylistLibrarySort.DEFAULT,
     listState: LazyListState? = null,
 ) {
@@ -267,7 +267,7 @@ internal fun CanonicalPlaylistDetailScreen(
         }
     }
     LaunchedEffect(card.id, rows) {
-        onRowsReady(rows.orEmpty())
+        onRowsReady(rows)
     }
     val visibleRows = remember(rows, query, sort) {
         val filtered = rows.orEmpty().filter {
