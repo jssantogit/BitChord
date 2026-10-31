@@ -782,19 +782,13 @@ internal fun SmartPlaylistV2BuilderScreen(
             }
             items(savedFilters, key = { "v2-filter-" + it.id }) { filter ->
                 var more by remember(filter.id) { mutableStateOf(false) }
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(PAGE_GUTTER),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(filter.name, style = MaterialTheme.typography.titleMedium)
-                        Text("${smartRuleLeafCount(filter.rules)} condições · Filtro reutilizável",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SettingsGroupSurface {
+                    SettingsRow(
+                        title = filter.name,
+                        subtitle = "${smartRuleLeafCount(filter.rules)} condições · Filtro reutilizável",
+                        reserveIconSpace = false,
+                    )
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, bottom = 8.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             TextButton(onClick = {
                                 showWizard = true
@@ -890,21 +884,16 @@ internal fun SmartPlaylistV2BuilderScreen(
             }
             items(saved, key = { "v2-saved-" + it.id }) { item ->
                 var more by remember(item.id) { mutableStateOf(false) }
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                ) {
+                SettingsGroupSurface {
+                    SettingsRow(
+                        title = item.name,
+                        subtitle = "${smartRuleLeafCount(item.query.rules)} condições · Inteligente",
+                        reserveIconSpace = false,
+                    )
                     Column(
-                        Modifier.fillMaxWidth().padding(PAGE_GUTTER),
+                        Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(item.name, style = MaterialTheme.typography.titleMedium)
-                        Text("${smartRuleLeafCount(item.query.rules)} condições · Inteligente",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             TextButton(onClick = {
                                 showWizard = true
