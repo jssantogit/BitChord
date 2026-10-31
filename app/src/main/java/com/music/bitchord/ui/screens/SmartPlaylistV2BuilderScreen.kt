@@ -563,6 +563,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     error = error,
                     editingId = editingId,
                     editingFilterId = editingFilterId,
+                    openingAsEdit = initialPlaylistId != null || initialNormalPlaylistId != null,
                     savedDefinitions = saved.filterNot { it.id == editingId },
                     onNameChange = { name = it },
                     description = description,
