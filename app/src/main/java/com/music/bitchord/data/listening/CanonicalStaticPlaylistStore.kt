@@ -23,6 +23,8 @@ internal data class SavedCanonicalStaticPlaylist(
     /** Null means all available sources; otherwise an exact configured provider. */
     val sourceProviderKey: String? = null,
     val description: String = "",
+    /** User-picked document URI with persistable read grant; never inferred from a track. */
+    val coverUri: String? = null,
 )
 
 @Entity(tableName = "canonical_static_playlist")
@@ -33,6 +35,7 @@ internal data class CanonicalStaticPlaylistEntity(
     val recordingIdsJson: String,
     val sourceProviderKey: String?,
     @ColumnInfo(defaultValue = "''") val description: String = "",
+    val coverUri: String? = null,
 )
 
 @Dao
@@ -67,6 +70,7 @@ internal class CanonicalStaticPlaylistRepository(
             schemaVersion = value.schemaVersion, recordingIdsJson = json.toString(),
             sourceProviderKey = value.sourceProviderKey,
             description = value.description.trim(),
+            coverUri = value.coverUri,
         ))
     }
 
@@ -88,7 +92,7 @@ internal class CanonicalStaticPlaylistRepository(
             require(members.opt(index) is String) { "Invalid canonical member" }
             members.getString(index)
         }
-        return SavedCanonicalStaticPlaylist(id, name, ids, schemaVersion, sourceProviderKey, description)
+        return SavedCanonicalStaticPlaylist(id, name, ids, schemaVersion, sourceProviderKey, description, coverUri)
             .also(::validate)
     }
 
@@ -100,6 +104,7 @@ internal class CanonicalStaticPlaylistRepository(
         }
         require(value.name.trim().length in 1..80) { "Invalid playlist name" }
         require(value.description.length <= 5000 && value.description.none { it.isISOControl() && it != '\n' && it != '\t' }) { "Invalid playlist description" }
+        validateCanonicalPlaylistCoverUri(value.coverUri)
         val provider = value.sourceProviderKey
         require(provider == null || provider == "local-mediastore" ||
             (provider.startsWith("opensubsonic:") && provider.length in 15..180 &&
