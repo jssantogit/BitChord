@@ -1,11 +1,9 @@
 package com.music.bitchord.ui.screens
 
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import com.music.bitchord.ui.components.ConfirmationAlert
 
-/** Prevent accidental permanent deletion from the smart library. */
+/** Use the same native warning shell as the other BitChord confirmations. */
 @Composable
 internal fun SmartPlaylistDeletionConfirmation(
     name: String,
@@ -16,13 +14,13 @@ internal fun SmartPlaylistDeletionConfirmation(
     val noun = if (isFilter) "filtro" else "playlist"
     val warning = if (isFilter) "O filtro salvo será removido."
         else "Playlists dependentes podem impedir esta exclusão."
-    AlertDialog(
-        onDismissRequest = onCancel,
-        title = { Text("Excluir $noun?") },
-        text = { Text("Excluir \"$name\" do dispositivo? $warning") },
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Excluir definitivamente") }
-        },
-        dismissButton = { TextButton(onClick = onCancel) { Text("Cancelar") } },
+    ConfirmationAlert(
+        hazeState = null,
+        title = "Excluir $noun?",
+        description = "Excluir \"$name\" do dispositivo? $warning",
+        confirmLabel = "Excluir definitivamente",
+        destructive = true,
+        onConfirm = onConfirm,
+        onDismiss = onCancel,
     )
 }
