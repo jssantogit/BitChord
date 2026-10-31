@@ -1682,6 +1682,7 @@ internal fun CircleIconButton(
      * Dimmed rather than dropped, so the row keeps its shape.
      */
     enabled: Boolean = true,
+    tint: Color = MaterialTheme.colorScheme.onSurface,
 ) {
     val haptics = rememberHaptics()
     Box(
@@ -1703,7 +1704,7 @@ internal fun CircleIconButton(
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = MaterialTheme.colorScheme.onSurface,
+            tint = tint,
             modifier = Modifier.size(size * 0.44f),
         )
     }
