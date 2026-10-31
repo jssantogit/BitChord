@@ -3,7 +3,9 @@ package com.music.bitchord.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -156,6 +158,10 @@ fun BrowseActionsSheet(
     isPinned: Boolean = false,
     onTogglePin: (() -> Unit)? = null,
     onRename: ((String) -> Unit)? = null,
+    /** First-party playlist editing that does not require a YouTube UserPlaylist. */
+    onEdit: (() -> Unit)? = null,
+    /** Typed artwork slot for canonical RecordingId collections without a legacy thumbnail URL. */
+    headerArtwork: (@Composable () -> Unit)? = null,
     /**
      * Opens the reorder sheet for one of the account's own playlists — set
      * under the same rule as [onRename], since YouTube refuses to rearrange a
@@ -208,7 +214,7 @@ fun BrowseActionsSheet(
                 .then(if (menu) Modifier.verticalScroll(rememberScrollState()) else Modifier),
         ) {
             if (!menu) {
-                BrowseSheetHeader(target)
+                BrowseSheetHeader(target, headerArtwork)
                 HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
             }
 
@@ -291,6 +297,9 @@ fun BrowseActionsSheet(
                     }
                 }
             }
+            onEdit?.let { edit ->
+                ActionRow(Icons.Rounded.Edit, "Editar playlist", onClick = edit)
+            }
             onReorder?.let {
                 ActionRow(Icons.Rounded.SwapVert, stringResource(R.string.reorder_songs), onClick = it)
             }
@@ -327,7 +336,10 @@ fun BrowseActionsSheet(
 
 /** Which release the sheet is about: the same row the shelf card was. */
 @Composable
-private fun BrowseSheetHeader(target: BrowseTarget) {
+private fun BrowseSheetHeader(
+    target: BrowseTarget,
+    artwork: (@Composable () -> Unit)? = null,
+) {
     val shape = if (target.type == BrowseType.ARTIST) CircleShape else RoundedCornerShape(8.dp)
     Row(
         modifier = Modifier
@@ -335,15 +347,20 @@ private fun BrowseSheetHeader(target: BrowseTarget) {
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AsyncImage(
-            model = target.thumbnailUrl.artworkAt(ROW_ART_PX),
-            contentDescription = null,
+        Box(
             modifier = Modifier
                 .size(52.dp)
                 .clip(shape)
                 .thumbnailBorder(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
-        )
+        ) {
+            if (artwork != null) artwork()
+            else AsyncImage(
+                model = target.thumbnailUrl.artworkAt(ROW_ART_PX),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(
