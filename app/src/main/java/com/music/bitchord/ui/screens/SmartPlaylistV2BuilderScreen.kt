@@ -782,19 +782,18 @@ internal fun SmartPlaylistV2BuilderScreen(
                 Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                     PlaylistManagerChrome(
                         selectedIndex = when (manageTab) {
-                            SmartPlaylistManageTab.PLAYLISTS -> 0
-                            SmartPlaylistManageTab.FILTERS -> 1
+                            SmartPlaylistManageTab.FILTERS -> 0
+                            SmartPlaylistManageTab.PLAYLISTS -> 1
                             SmartPlaylistManageTab.CLASSIC -> 2
                         },
                         onSelect = { index ->
                             manageTab = when (index) {
-                                0 -> SmartPlaylistManageTab.PLAYLISTS
-                                1 -> SmartPlaylistManageTab.FILTERS
+                                0 -> SmartPlaylistManageTab.FILTERS
+                                1 -> SmartPlaylistManageTab.PLAYLISTS
                                 else -> SmartPlaylistManageTab.CLASSIC
                             }
                         },
-                        onBack = onBack,
-                        onNew = { reset(); showWizard = true },
+                        onBack = { showWizard = true },
                         onDraft = { showWizard = true },
                     )
                     if (error != null) {
@@ -817,99 +816,91 @@ internal fun SmartPlaylistV2BuilderScreen(
             }
             items(savedFilters, key = { "v2-filter-" + it.id }) { filter ->
                 var more by remember(filter.id) { mutableStateOf(false) }
+                // Reuse a single native settings row per saved filter. Clicking
+                // opens the existing action picker; it never silently overwrites
+                // the editing playlist's rule graph.
                 SettingsGroupSurface {
                     SettingsRow(
                         title = filter.name,
                         subtitle = "${smartRuleLeafCount(filter.rules)} condições · Filtro reutilizável",
                         reserveIconSpace = false,
-                    )
-                    Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 8.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            TextButton(onClick = {
-                                showWizard = true
-                                editorEpoch++
-                                editingId = null
-                                editingFilterId = filter.id
-                                name = filter.name
-                                description = ""
-                                rule = filter.rules
-                            hasConfiguredRules = true
-                                preview = null
-                                previewQuery = null
-                                error = null
-                            }, enabled = !loading) { Text("Editar") }
-                            TextButton(onClick = {
-                                val copy = filter.toPlaylistCopy(
-                                    UUID.randomUUID().toString(), filter.name,
-                                )
-                                showWizard = true
-                                editorEpoch++
-                                editingId = copy.id
-                                editingFilterId = null
-                                name = copy.name
-                                description = copy.description
-                                rule = copy.query.rules
-                            hasConfiguredRules = true
-                                sort = copy.query.sort
-                                limit = copy.query.limit.toString()
-                                seed = copy.query.randomSeed.toString()
-                                preview = null
-                                previewQuery = null
-                                error = null
-                            }, enabled = !loading) { Text("Criar playlist") }
+                        onClick = { more = true },
+                        trailing = {
                             RowMoreButton(
                                 onClick = { more = true },
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            if (more) {
-                                WizardChoiceDialog(
-                                    title = filter.name,
-                                    options = listOf(
-                                        "Copiar regras para novo rascunho",
-                                        "Combinar com o rascunho (E)",
-                                        "Excluir filtro",
-                                    ),
-                                    label = { it },
-                                    onChosen = { option ->
-                                        when (option) {
-                                            "Copiar regras para novo rascunho" -> {
-                                                showWizard = true
-                                                editorEpoch++
-                                                editingId = null
-                                                editingFilterId = null
-                                                rule = filter.rules
-                                                hasConfiguredRules = true
-                                                preview = null
-                                                previewQuery = null
-                                                error = null
-                                            }
-                                            "Combinar com o rascunho (E)" -> {
-                                                try {
-                                                    val combined = rule.andSavedFilter(filter)
-                                                    showWizard = true
-                                                    editorEpoch++
-                                                    editingFilterId = null
-                                                    rule = combined
-                                                    hasConfiguredRules = true
-                                                    preview = null
-                                                    previewQuery = null
-                                                    error = null
-                                                } catch (_: IllegalArgumentException) {
-                                                    error = "O conjunto de regras excede o limite permitido."
-                                                }
-                                            }
-                                            "Excluir filtro" -> {
-                                                pendingDeletion = PendingSmartDeletion(
-                                                    filter.id, filter.name, true,
-                                                )
-                                            }
-                                        }
-                                    },
-                                    onClose = { more = false },
-                                )
+                        },
+                    )
+                }
+                if (more) {
+                    WizardChoiceDialog(
+                        title = filter.name,
+                        options = listOf(
+                            "Aplicar regras ao rascunho",
+                            "Combinar com o rascunho (E)",
+                            "Editar filtro",
+                            "Criar playlist com este filtro",
+                            "Excluir filtro",
+                        ),
+                        label = { it },
+                        onChosen = { option ->
+                            when (option) {
+                                "Aplicar regras ao rascunho" -> {
+                                    normalMode = false
+                                    editingFilterId = null
+                                    rule = filter.rules
+                                    hasConfiguredRules = true
+                                    preview = null
+                                    previewQuery = null
+                                    error = null
+                                    showWizard = true
+                                }
+                                "Combinar com o rascunho (E)" -> {
+                                    try {
+                                        val combined = rule.andSavedFilter(filter)
+                                        normalMode = false
+                                        editingFilterId = null
+                                        rule = combined
+                                        hasConfiguredRules = true
+                                        preview = null
+                                        previewQuery = null
+                                        error = null
+                                        showWizard = true
+                                    } catch (_: IllegalArgumentException) {
+                                        error = "O conjunto de regras excede o limite permitido."
+                                    }
+                                }
+                                "Editar filtro" -> {
+                                    reset()
+                                    editingFilterId = filter.id
+                                    name = filter.name
+                                    rule = filter.rules
+                                    hasConfiguredRules = true
+                                    showWizard = true
+                                }
+                                "Criar playlist com este filtro" -> {
+                                    val copy = filter.toPlaylistCopy(
+                                        UUID.randomUUID().toString(), filter.name,
+                                    )
+                                    reset()
+                                    name = copy.name
+                                    rule = copy.query.rules
+                                    hasConfiguredRules = true
+                                    sort = copy.query.sort
+                                    limit = copy.query.limit.toString()
+                                    seed = copy.query.randomSeed.toString()
+                                    showWizard = true
+                                }
+                                "Excluir filtro" -> {
+                                    pendingDeletion = PendingSmartDeletion(
+                                        filter.id, filter.name, true,
+                                    )
+                                }
                             }
-                        }
-                    }
+                        },
+                        onClose = { more = false },
+                    )
                 }
             }
             }
