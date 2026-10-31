@@ -102,6 +102,13 @@ internal fun playlistPlaybackSelection(
     listOf(clickedRecordingId)
 } else null
 
+/** Shuffle only verified canonical IDs; never provider IDs or stale UI rows. */
+internal fun canonicalSavedPlaylistOrder(
+    selected: List<String>,
+    shuffle: Boolean,
+    random: kotlin.random.Random = kotlin.random.Random.Default,
+): List<String> = selected.distinct().let { if (shuffle) it.shuffled(random) else it }
+
 internal sealed interface SmartCollectionBatchResult {
     data object Submitted : SmartCollectionBatchResult
     data object Unavailable : SmartCollectionBatchResult
@@ -175,9 +182,7 @@ internal class SmartCollectionBatchHandoff(
                     is SmartCollectionActionSource.SavedV2Definition -> source.shuffle
                     else -> false
                 }
-            val ids = selected.distinct().let {
-                if (shuffleRequested) it.shuffled() else it
-            }
+            val ids = canonicalSavedPlaylistOrder(selected, shuffleRequested)
             val library = sourceLimit(source, browseSelected(ids))
             mark("catalog", mapOf("trackCount" to library.tracks.size.toString()))
             // A rated remote preference is never an exception to a chosen source.
