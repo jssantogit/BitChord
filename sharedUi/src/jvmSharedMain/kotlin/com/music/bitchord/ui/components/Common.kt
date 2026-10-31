@@ -651,6 +651,7 @@ fun NativeDetailTrackRowFrame(
     onMore: (() -> Unit)? = null,
     background: Color = Color.Transparent,
     opacity: Float = 1f,
+    horizontalInset: Dp = PAGE_GUTTER,
     content: @Composable RowScope.() -> Unit,
 ) {
     Row(
@@ -662,7 +663,7 @@ fun NativeDetailTrackRowFrame(
                 Modifier.longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
                     .contextClick(onMore ?: onLongPress)
             } else Modifier)
-            .padding(horizontal = PAGE_GUTTER, vertical = 4.dp),
+            .padding(horizontal = horizontalInset, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         content = content,
     )
