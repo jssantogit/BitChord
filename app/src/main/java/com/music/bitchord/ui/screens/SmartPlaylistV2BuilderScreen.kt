@@ -101,6 +101,7 @@ internal data class V2DisplayRow(
     val id: String,
     val title: String,
     val artist: String,
+    val durationMs: Long? = null,
     // Only a MediaAsset linked to this exact RecordingId and an active source.
     val localArtworkUri: String? = null,
     val remoteMediaAssetId: String? = null,
