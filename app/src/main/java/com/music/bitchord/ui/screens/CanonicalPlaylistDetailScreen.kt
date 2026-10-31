@@ -56,6 +56,7 @@ import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.PillTextField
 import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
+import com.music.bitchord.ui.components.NativeTrackRowText
 import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import com.music.bitchord.ui.icons.BitChordIcons
@@ -162,19 +163,22 @@ internal fun CanonicalPlaylistTrackRow(
             )
         }
         Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                track.title, style = MaterialTheme.typography.titleMedium,
-                color = titleColor, maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                track.artist, style = MaterialTheme.typography.bodyMedium,
-                color = subtitleColor, maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        NativeTrackRowText(
+            title = {
+                Text(
+                    track.title, style = MaterialTheme.typography.titleMedium,
+                    color = titleColor, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+            subtitle = {
+                Text(
+                    track.artist, style = MaterialTheme.typography.bodyMedium,
+                    color = subtitleColor, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+        )
         canonicalTrackDuration(track.durationMs)?.let {
             Spacer(Modifier.width(8.dp))
             Text(it, style = MaterialTheme.typography.labelMedium, color = subtitleColor)
