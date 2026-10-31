@@ -70,6 +70,23 @@ class PlaylistLibraryVisualReuseTest {
         compose.runOnIdle { assertEquals("newjeans", query) }
     }
 
+    @Test fun playlistCoverDoesNotRepeatTheSameAlbumArtInFourQuadrants() {
+        val songs = (1..4).map { index ->
+            V2DisplayRow(
+                id = "recording:$" + "{index}",
+                title = "Song $" + "{index}",
+                artist = "SAY MY NAME",
+                localArtworkUri = "content://art/same-album",
+            )
+        }
+        assertEquals(1, distinctCanonicalPlaylistCoverRows(songs).size)
+        assertEquals(4, distinctCanonicalPlaylistCoverRows(
+            songs.mapIndexed { index, row ->
+                row.copy(localArtworkUri = "content://art/$" + "{index}")
+            },
+        ).size)
+    }
+
     @Test fun recentAdditionUsesVerifiedAlbumWhenRecordingTitleIsOnlyArtistName() {
         assertEquals("Get Up", preferRecentLocalAdditionTitle("NewJeans", "NewJeans", "Get Up"))
         assertEquals("Hurt", preferRecentLocalAdditionTitle("Hurt", "NewJeans", "Get Up"))
