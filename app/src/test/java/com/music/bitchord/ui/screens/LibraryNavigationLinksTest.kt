@@ -18,6 +18,20 @@ class LibraryNavigationLinksTest {
             else Icons.Rounded.Folder,
     )
 
+    @Test fun categoryViewChangesDoNotLeakIntoOtherLibraryTabs() {
+        val state = LocalFolderState()
+        val fallback = LibraryViewType.LIST
+        state.setViewTypeFor(LocalFolderTab.ARTISTS, LibraryViewType.GRID)
+        assertEquals(LibraryViewType.GRID, state.viewTypeFor(LocalFolderTab.ARTISTS, fallback))
+        assertEquals(fallback, state.viewTypeFor(LocalFolderTab.SONGS, fallback))
+        assertEquals(fallback, state.viewTypeFor(LocalFolderTab.ALBUMS, fallback))
+        state.setViewTypeFor(LocalFolderTab.ALBUMS, LibraryViewType.GRID)
+        state.setViewTypeFor(LocalFolderTab.ARTISTS, LibraryViewType.LIST)
+        assertEquals(LibraryViewType.LIST, state.viewTypeFor(LocalFolderTab.ARTISTS, fallback))
+        assertEquals(LibraryViewType.GRID, state.viewTypeFor(LocalFolderTab.ALBUMS, fallback))
+        assertEquals(fallback, state.viewTypeFor(LocalFolderTab.SONGS, fallback))
+    }
+
     @Test fun libraryHomeIsCategoryFirstAndKeepsOnlyDownloadsFromDeviceLinks() {
         val result = libraryNavigationLinks(
             deviceLinks = listOf(
