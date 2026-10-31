@@ -35,6 +35,33 @@ class PlaylistLibraryVisualReuseTest {
         assertEquals(true, showPlaylistHeaderCreateAction(1))
     }
 
+    @Test fun playlistManagerNavigationUsesNativeBackAndSegments() {
+        var page by mutableStateOf(0)
+        var backs = 0
+        var resumed = 0
+        compose.setContent {
+            PlaylistManagerChrome(
+                selectedIndex = page,
+                onSelect = { page = it },
+                onBack = { backs++ },
+                onNew = {},
+                onDraft = { resumed++ },
+            )
+        }
+        compose.onNodeWithText("Filtros e versões anteriores").assertExists()
+        compose.onNodeWithText("Clássicas").performClick()
+        compose.onNodeWithText("Retomar rascunho").performClick()
+        compose.onNodeWithContentDescription(
+            org.robolectric.RuntimeEnvironment.getApplication()
+                .getString(com.music.bitchord.R.string.back),
+        ).performClick()
+        compose.runOnIdle {
+            assertEquals(2, page)
+            assertEquals(1, resumed)
+            assertEquals(1, backs)
+        }
+    }
+
     @Test fun playlistLibrarySearchAndSortWorkOnActualLibraryCardIdentity() {
         fun normal(title: String) = LibraryPlaylistCard.Normal(
             com.music.bitchord.data.model.ShelfItem(
