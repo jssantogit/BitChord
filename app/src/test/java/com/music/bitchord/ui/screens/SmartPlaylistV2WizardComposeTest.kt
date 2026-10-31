@@ -133,6 +133,43 @@ class SmartPlaylistV2WizardComposeTest {
         }
     }
 
+    @Test fun expandingAlbumKeepsItsRowAndRendersTracksNestedUnderIt() {
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ))
+        val album = CanonicalPlaylistBrowseGroup(
+            "release:newjeans", "Get Up", CanonicalPlaylistBrowseType.ALBUMS,
+        )
+        val expanded = mutableStateOf<CanonicalPlaylistBrowseGroup?>(null)
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Nova playlist", rule = rule, normalMode = true,
+                normalBrowseType = CanonicalPlaylistBrowseType.ALBUMS,
+                normalBrowseGroup = expanded.value, normalGroups = listOf(album),
+                normalRows = if (expanded.value != null)
+                    listOf(V2DisplayRow("recording:hurt", "Hurt", "NewJeans"))
+                    else emptyList(),
+                onNormalBrowseGroupChange = { expanded.value = it },
+                sort = SmartPlaylistV2Sort.TITLE_ASC, limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {}, onSortChange = {},
+                onLimitChange = {}, onSeedChange = {}, onPreview = {},
+                onSave = {}, onSaveFilter = {}, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
+        compose.onNodeWithText("Get Up").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
+        compose.onNodeWithText("Hurt").assertExists()
+        compose.onNodeWithText("Get Up").assertExists()
+        compose.runOnIdle { assertEquals(album, expanded.value) }
+    }
+
     @Test fun normalReviewShowsTrackAfterFiftyWithoutArtificialTruncation() {
         val rows = (1..81).map { index ->
             V2DisplayRow("rec-${index}", "Track ${index}", "Artist ${index}")
