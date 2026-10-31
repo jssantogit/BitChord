@@ -66,25 +66,21 @@ class PlaylistLibraryVisualReuseTest {
     @Test fun playlistManagerNavigationUsesNativeBackAndSegments() {
         var page by mutableStateOf(0)
         var backs = 0
-        var resumed = 0
-        compose.setContent {
+         compose.setContent {
             PlaylistManagerChrome(
                 selectedIndex = page,
                 onSelect = { page = it },
                 onBack = { backs++ },
-                onDraft = { resumed++ },
             )
         }
         compose.onNodeWithText("Filtros reutilizáveis").assertExists()
         compose.onNodeWithText("Clássicas").performClick()
-        compose.onNodeWithText("Editor").performClick()
         compose.onNodeWithContentDescription(
             org.robolectric.RuntimeEnvironment.getApplication()
                 .getString(com.music.bitchord.R.string.back),
         ).performClick()
         compose.runOnIdle {
             assertEquals(2, page)
-            assertEquals(1, resumed)
             assertEquals(1, backs)
         }
     }
