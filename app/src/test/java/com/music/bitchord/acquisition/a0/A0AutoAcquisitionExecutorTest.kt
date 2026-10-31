@@ -43,6 +43,14 @@ class A0AutoAcquisitionExecutorTest {
         var decoded:A0AutoPostTransferTechnicalGate.Decoded?=null
         var publicationSucceeds=true
         var publicationUncertain=false
+        val diagnosticStages=mutableListOf<Pair<
+            A0AutoAcquisitionExecutor.DiagnosticStage,Enum<*>?>>()
+        override fun diagnostic(
+            stage:A0AutoAcquisitionExecutor.DiagnosticStage,
+            reason:Enum<*>?,
+        ) {
+            diagnosticStages.add(stage to reason)
+        }
         override fun fetch(
             candidate:A0ObservedCandidateHandoff.Choice,
             isCancelled:()->Boolean,
@@ -137,6 +145,10 @@ class A0AutoAcquisitionExecutorTest {
         assertEquals(1,port.fetches)
         assertEquals(0,port.publishes)
         assertEquals(1,port.cleanups)
+        assertTrue(port.diagnosticStages.contains(
+            A0AutoAcquisitionExecutor.DiagnosticStage.POST_TRANSFER_GATE to
+                A0AutoPostTransferTechnicalGate.Reason.DURATION_MISMATCH))
+        assertFalse(port.diagnosticStages.toString().contains("ILLIT"))
     }
 
     @Test fun accountRevocationAfterTransportPreventsPublicationButCleansScratch() {

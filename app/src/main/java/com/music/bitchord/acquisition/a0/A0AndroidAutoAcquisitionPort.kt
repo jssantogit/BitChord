@@ -5,6 +5,7 @@ import android.os.Looper
 import com.music.bitchord.download.A3AndroidAcquisitionLedger
 import com.music.bitchord.download.A3PublicationCommitFailure
 import com.music.bitchord.download.Downloads
+import com.music.bitchord.data.DebugLog as Log
 import com.music.bitchord.data.model.Song
 import java.io.File
 import java.io.IOException
@@ -70,6 +71,16 @@ internal class A0AndroidAutoAcquisitionPort(
                 receipt.byteCount in A0ObservedTransferLimits.MIN_AUDIO_BYTES..
                     A0ObservedTransferLimits.MAX_AUDIO_BYTES
         }.getOrDefault(false)
+
+    override fun diagnostic(
+        stage:A0AutoAcquisitionExecutor.DiagnosticStage,
+        reason:Enum<*>?,
+    ) {
+        runCatching {
+            Log.d("BitChord","soulseek_auto_gate stage=${stage.name}" +
+                " reason=${reason?.name ?: "NONE"} scope=$diagnosticScope")
+        }
+    }
 
     override fun fetch(
         candidate:A0ObservedCandidateHandoff.Choice,

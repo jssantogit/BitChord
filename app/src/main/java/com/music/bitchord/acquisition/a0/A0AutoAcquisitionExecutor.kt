@@ -15,7 +15,14 @@ import java.util.concurrent.atomic.AtomicBoolean
  * spend another peer's bandwidth or publish unverified bytes.
  */
 internal class A0AutoAcquisitionExecutor(private val port:Port) {
+    enum class DiagnosticStage {
+        FETCH_STARTED, FETCH_RETRYABLE, FETCH_EXCEPTION, RECEIPT_RECEIVED,
+        PROBE_UNAVAILABLE, POST_TRANSFER_GATE, DESTINATION_INVALID,
+        PUBLISH_RESULT, CLEANUP_EXCEPTION,
+    }
     interface Port {
+        /** Safe enum-only events, no identities, paths or source metadata. */
+        fun diagnostic(stage:DiagnosticStage,reason:Enum<*>?=null) {}
         /** Transport MUST enforce one authenticated Soulseek session and P/F limits. */
         fun fetch(
             candidate:A0ObservedCandidateHandoff.Choice,
@@ -70,6 +77,9 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
     }
 
     private val running=AtomicBoolean(false)
+    private fun diagnostic(stage:DiagnosticStage,reason:Enum<*>?=null) {
+        try {port.diagnostic(stage,reason)}catch(_:Exception) {}
+    }
     private fun manual(reason:Reason,attempts:Int=0)=
         Result(Status.MANUAL_REVIEW,reason,attempts)
     private fun cancelled(attempts:Int=0)=
@@ -110,15 +120,19 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                 val attempt=sequence.begin()
                     ?: return manual(Reason.EXHAUSTED_PEERS,sequence.attemptsStarted)
                 val candidate=order[attempt.alternativeIndex]
+                diagnostic(DiagnosticStage.FETCH_STARTED)
                 val download=try {
                     port.fetch(candidate,::revoked)
-                }catch(_:Exception) {
+                }catch(error:Exception) {
+                    diagnostic(DiagnosticStage.FETCH_EXCEPTION,
+                        A0AcquisitionDiagnostics.fault(error))
                     sequence.cancel()
                     return if(revoked())cancelled(sequence.attemptsStarted)
                         else manual(Reason.TRANSPORT_FAILURE,sequence.attemptsStarted)
                 }
                 when(download) {
                     FetchResult.RetryableConnectionFailure -> {
+                        diagnostic(DiagnosticStage.FETCH_RETRYABLE)
                         sequence.complete(attempt,false)
                         continue
                     }
@@ -126,6 +140,7 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                         var result:Result=manual(Reason.TECHNICAL_REJECTION,
                             sequence.attemptsStarted)
                         val receipt=download.receipt
+                        diagnostic(DiagnosticStage.RECEIPT_RECEIVED)
                         try {
                             if(revoked()) {
                                 sequence.cancel()
@@ -135,13 +150,21 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                                     java.util.Locale.ROOT)
                                 val decoded=try {
                                     port.inspect(receipt,ext,::revoked)
-                                }catch(_:Exception) { null }
+                                }catch(error:Exception) {
+                                    diagnostic(DiagnosticStage.PROBE_UNAVAILABLE,
+                                        A0AcquisitionDiagnostics.fault(error))
+                                    null
+                                }
+                                if(decoded==null)
+                                    diagnostic(DiagnosticStage.PROBE_UNAVAILABLE)
                                 val assessed=A0AutoPostTransferTechnicalGate.assess(
                                     profile=profile,requestedExtension=ext,
                                     expectedDurationSeconds=target.durationSeconds,
                                     receiptByteCount=receipt.byteCount,
                                     actualByteCount=receipt.file.length(),
                                     decoded=decoded)
+                                diagnostic(DiagnosticStage.POST_TRANSFER_GATE,
+                                    assessed.reason ?: assessed.status)
                                 if(revoked()) {
                                     sequence.cancel()
                                     result=cancelled(sequence.attemptsStarted)
@@ -154,6 +177,7 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                                     val name=A5ManualSaveGate.safeDestinationName(
                                         candidate.displayName,receipt.byteCount)
                                     if(name==null) {
+                                        diagnostic(DiagnosticStage.DESTINATION_INVALID)
                                         sequence.cancel()
                                         result=manual(Reason.INVALID_DESTINATION,
                                             sequence.attemptsStarted)
@@ -167,6 +191,7 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                                             // AFTER the provider made the file visible.
                                             PublishResult.UNCERTAIN
                                         }
+                                        diagnostic(DiagnosticStage.PUBLISH_RESULT,published)
                                         sequence.complete(attempt,
                                             published==PublishResult.DURABLE)
                                         result=when(published) {
@@ -193,7 +218,9 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                             // failed cleanup cannot silently become success.
                             try {
                                 port.cleanup(receipt)
-                            }catch(_:Exception) {
+                            }catch(error:Exception) {
+                                diagnostic(DiagnosticStage.CLEANUP_EXCEPTION,
+                                    A0AcquisitionDiagnostics.fault(error))
                                 // No retry on cleanup errors, which may occur
                                 // AFTER a durable AVAILABLE commit. Never
                                 // request the same track again automatically.
