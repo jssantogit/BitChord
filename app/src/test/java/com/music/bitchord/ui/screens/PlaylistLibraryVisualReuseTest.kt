@@ -337,6 +337,33 @@ class PlaylistLibraryVisualReuseTest {
         compose.onNodeWithText("Categoria 7").assertExists()
     }
 
+    @Test fun explicitSavedCoverOverridesTheAutomaticCollageWithoutChangingCardIdentity() {
+        val normal = LibraryPlaylistCard.CanonicalNormal(
+            com.music.bitchord.data.listening.SavedCanonicalStaticPlaylist(
+                id = "normal-saved",
+                name = "Estrelas",
+                recordingIds = listOf("recording1"),
+                coverUri = "content://media/document/3",
+            ),
+        )
+        val smart = LibraryPlaylistCard.Smart(
+            com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition(
+                id = "smart-saved", name = "Recentes",
+                query = com.music.bitchord.data.listening.SmartPlaylistV2Query(
+                    com.music.bitchord.data.listening.SmartPlaylistRule.Comparison(
+                        com.music.bitchord.data.listening.SmartPlaylistRuleField.TITLE,
+                        com.music.bitchord.data.listening.SmartPlaylistRuleOperator.IS_PRESENT,
+                    ),
+                ),
+                coverUri = "content://media/document/4",
+            ),
+        )
+        assertEquals("content://media/document/3", normal.explicitCoverUri())
+        assertEquals("content://media/document/4", smart.explicitCoverUri())
+        assertEquals("normal:normal-saved", normal.id)
+        assertEquals("v2:smart-saved", smart.id)
+    }
+
     @Test fun playlistSynopsisUsesSameExpandableAboutComponentAsAlbums() {
         compose.setContent {
             val palette = com.music.bitchord.ui.theme.themeArtworkPalette()
