@@ -530,15 +530,24 @@ internal fun SmartPlaylistV2WizardUi(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                if (coverUri != null) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(if (page == WizardStep.EDIT) 180.dp else 224.dp)
-                                            .clip(RoundedCornerShape(12.dp)),
-                                    ) {
-                                        PlaylistWizardArtworkPlaceholder(
-                                            dimension = if (page == WizardStep.EDIT) 180.dp else 224.dp,
+                                // Preview real canonical member art when available,
+                                // as the Library's own playlist page does.
+                                val coverDimension = if (page == WizardStep.EDIT) 180.dp else 224.dp
+                                val automaticCoverRows = if (normalMode)
+                                    normalSelectedRows else preview.orEmpty()
+                                Box(
+                                    modifier = Modifier.size(coverDimension)
+                                        .clip(RoundedCornerShape(12.dp)),
+                                ) {
+                                    if (automaticCoverRows.isNotEmpty()) {
+                                        CanonicalPlaylistCoverArt(
+                                            rows = automaticCoverRows,
+                                            modifier = Modifier.fillMaxSize(),
                                         )
+                                    } else {
+                                        PlaylistWizardArtworkPlaceholder(coverDimension)
+                                    }
+                                    if (coverUri != null) {
                                         AsyncImage(
                                             model = coverUri,
                                             contentDescription = "Capa escolhida da playlist",
@@ -546,10 +555,6 @@ internal fun SmartPlaylistV2WizardUi(
                                             contentScale = ContentScale.Crop,
                                         )
                                     }
-                                } else {
-                                    PlaylistWizardArtworkPlaceholder(
-                                        dimension = if (page == WizardStep.EDIT) 180.dp else 224.dp,
-                                    )
                                 }
                                 PlaylistWizardSecondaryAction(
                                     label = "Escolher capa",
