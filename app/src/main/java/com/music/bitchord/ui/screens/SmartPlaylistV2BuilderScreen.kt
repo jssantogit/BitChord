@@ -580,6 +580,8 @@ internal fun SmartPlaylistV2BuilderScreen(
                     availableSourceKeys = availableSourceKeys,
                     onNormalSourceChange = {
                         normalSourceProviderKey = it
+                        normalGroupMembers = emptyMap()
+                        normalBrowseGroup = null
                         normalSourceTouched = true
                     },
                     onSmartSourceChange = { chosen ->
@@ -604,6 +606,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                         normalBrowseType = type
                         normalBrowseGroup = null
                         normalRows = emptyList()
+                        normalGroupMembers = emptyMap()
                         normalSearch = ""
                     },
                     onNormalBrowseGroupChange = { group -> normalBrowseGroup = group },
