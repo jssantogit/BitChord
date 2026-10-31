@@ -45,7 +45,7 @@ import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.ui.components.PAGE_GUTTER
-import com.music.bitchord.ui.components.PillTextField
+import com.music.bitchord.ui.theme.rememberArtworkPalette
 import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.components.CoverPlaceholder
 import kotlinx.coroutines.CancellationException
@@ -117,18 +117,21 @@ internal fun latestLibraryPlaylistCard(
     current: List<LibraryPlaylistCard>,
 ): LibraryPlaylistCard? = current.firstOrNull { it.id == selected.id }
 
-/** Same PillTextField used by Settings and creation: no unrelated Material text field. */
+/** Use the same 46dp glass field as the native music/playlist detail page. */
 @Composable
 internal fun PlaylistLibrarySearchField(
     query: String,
     onQueryChange: (String) -> Unit,
+    onClose: () -> Unit = {},
 ) {
-    PillTextField(
-        value = query,
-        onValueChange = onQueryChange,
+    DetailSearchField(
+        query = query,
+        onQueryChange = onQueryChange,
+        onClose = onClose,
+        autoFocus = true,
+        onFocused = {},
+        palette = rememberArtworkPalette(imageUrl = null),
         placeholder = "Buscar em Playlists",
-        accessibilityLabel = "Buscar em Playlists",
-        modifier = Modifier.fillMaxWidth().height(52.dp),
     )
 }
 
@@ -147,6 +150,8 @@ internal fun UnifiedPlaylistLibraryShelf(
     onCanonicalNormalTrackAction: (String, String, CanonicalCollectionIntent, Boolean) -> Unit,
     contentPadding: PaddingValues,
     query: String = "",
+    searching: Boolean = false,
+    onSearchingChange: (Boolean) -> Unit = {},
     onQueryChange: (String) -> Unit = {},
     onResetFilters: () -> Unit = {},
     sort: PlaylistLibrarySort = PlaylistLibrarySort.DEFAULT,
@@ -156,6 +161,7 @@ internal fun UnifiedPlaylistLibraryShelf(
     listState: LazyListState? = null,
     detailListState: LazyListState? = null,
     detailSearching: Boolean = false,
+    onDetailSearchingChange: (Boolean) -> Unit = {},
     detailQuery: String = "",
     onDetailQueryChange: (String) -> Unit = {},
     detailSort: PlaylistLibrarySort = PlaylistLibrarySort.DEFAULT,
@@ -248,11 +254,16 @@ internal fun UnifiedPlaylistLibraryShelf(
 
             }
         }
-        item(key = "playlist-search") {
-            Box(Modifier.fillMaxWidth().padding(
-                horizontal = PAGE_GUTTER, vertical = 2.dp,
-            )) {
-                PlaylistLibrarySearchField(query, onQueryChange)
+        if (searching || query.isNotBlank()) {
+            item(key = "playlist-search") {
+                PlaylistLibrarySearchField(
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    onClose = {
+                        onQueryChange("")
+                        onSearchingChange(false)
+                    },
+                )
             }
         }
         if (failed) item(key = "smart-error") {
@@ -376,6 +387,7 @@ internal fun UnifiedPlaylistLibraryShelf(
             },
             contentPadding = contentPadding,
             searching = detailSearching,
+            onSearchingChange = onDetailSearchingChange,
             query = detailQuery,
             onQueryChange = onDetailQueryChange,
             sort = detailSort,
