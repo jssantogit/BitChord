@@ -6,6 +6,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -95,11 +99,14 @@ private fun localRecentMediaStoreLabels(
 @Composable
 internal fun CanonicalLocalRecentAdditions(
     onOpenSongs: () -> Unit,
+    onSeeAll: () -> Unit = {},
+    showAll: Boolean = false,
+    contentPadding: PaddingValues = PaddingValues(),
 ) {
     val context = LocalContext.current.applicationContext
     val database = remember(context) { CanonicalCatalogDatabase.get(context) }
     val dao = remember(database) { database.catalogDao() }
-    val recent by produceState(initialValue = emptyList<V2DisplayRow>(), key1 = dao) {
+    val recent by produceState(initialValue = emptyList<V2DisplayRow>(), key1 = dao, key2 = showAll) {
         database.invalidationTracker.createFlow(
             "catalog_media_asset", "catalog_recording",
         ).collectLatest {
@@ -107,11 +114,17 @@ internal fun CanonicalLocalRecentAdditions(
                 withContext(Dispatchers.IO) {
                     val recentRows = dao.recentLocalAdditions(
                         CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER,
-                    ).distinctBy { it.recordingId }.take(6)
-                    val albums = dao.recentLocalReleaseTitles(recentRows.map { it.recordingId })
-                        .associate { it.recordingId to it.albumTitle }
-                    val assets = dao.mediaAssetsByIds(recentRows.map { it.mediaAssetId })
-                        .associateBy { it.id }
+                        limit = if (showAll) Int.MAX_VALUE else 12,
+                    ).distinctBy { it.recordingId }.let { rows ->
+                        if (showAll) rows else rows.take(6)
+                    }
+                    // Full history can exceed SQLite's bind-variable limit.
+                    val albums = recentRows.chunked(300).flatMap { batch ->
+                        dao.recentLocalReleaseTitles(batch.map { it.recordingId })
+                    }.associate { it.recordingId to it.albumTitle }
+                    val assets = recentRows.chunked(300).flatMap { batch ->
+                        dao.mediaAssetsByIds(batch.map { it.mediaAssetId })
+                    }.associateBy { it.id }
                     recentRows.map { row ->
                         val (mediaTitle, mediaAlbum, fileName) = localRecentMediaStoreLabels(
                             context, assets[row.mediaAssetId]?.uri,
@@ -138,7 +151,11 @@ internal fun CanonicalLocalRecentAdditions(
             }
         }
     }
-    CanonicalRecentAdditionsShelf(recent, onOpenSongs)
+    if (showAll) {
+        CanonicalRecentAdditionsGrid(recent, onOpenSongs, contentPadding)
+    } else {
+        CanonicalRecentAdditionsShelf(recent, onOpenSongs, onSeeAll)
+    }
 }
 
 /** A renderable shelf with an explicit heading, independently regression-tested. */
@@ -146,18 +163,26 @@ internal fun CanonicalLocalRecentAdditions(
 internal fun CanonicalRecentAdditionsShelf(
     recent: List<V2DisplayRow>,
     onOpenSongs: () -> Unit,
+    onSeeAll: () -> Unit = {},
 ) {
     if (recent.isEmpty()) return
     Column(
         modifier = Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            "Adições recentes",
-            modifier = Modifier.padding(horizontal = PAGE_GUTTER),
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier.fillMaxWidth()
+                .padding(start = PAGE_GUTTER, end = PAGE_GUTTER),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                "Adições recentes",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            TextButton(onClick = onSeeAll) { Text("Ver todos") }
+        }
         // The Library already has a snapping/lazy shelf; reuse it rather than
         // recreating a horizontalScroll Row for recent local recordings.
         ShelfRow(
@@ -165,27 +190,72 @@ internal fun CanonicalRecentAdditionsShelf(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(recent, key = { it.id }) { track ->
-                Column(
-                    modifier = Modifier.width(142.dp).clickable(onClick = onOpenSongs),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    SmartPlaylistPreviewArtwork(track, Modifier.size(142.dp))
-                    Text(
-                        track.title.takeIf { it.isNotBlank() } ?: "Título indisponível",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        track.artist,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                CanonicalRecentAdditionCard(
+                    track = track,
+                    modifier = Modifier.width(142.dp),
+                    onClick = onOpenSongs,
+                )
             }
+        }
+    }
+}
+
+/** The same canonical recording card is reused in the shelf and existing folder grid. */
+@Composable
+private fun CanonicalRecentAdditionCard(
+    track: V2DisplayRow,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = modifier.clickable(onClick = onClick),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+        ) {
+            SmartPlaylistPreviewArtwork(track, Modifier.fillMaxSize())
+        }
+        Text(
+            track.title.takeIf { it.isNotBlank() } ?: "Título indisponível",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            track.artist,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** Reuses LocalFolder's canonical two-column grid layout and card. */
+@Composable
+internal fun CanonicalRecentAdditionsGrid(
+    recent: List<V2DisplayRow>,
+    onOpenSongs: () -> Unit,
+    contentPadding: PaddingValues = PaddingValues(),
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = contentPadding,
+    ) {
+        if (recent.isEmpty()) item {
+            Text(
+                "Nenhuma adição local recente.",
+                modifier = Modifier.padding(PAGE_GUTTER),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        gridRows(recent, columns = 2, key = { it.id }) { track ->
+            CanonicalRecentAdditionCard(
+                track = track, modifier = Modifier.fillMaxWidth(),
+                onClick = onOpenSongs,
+            )
         }
     }
 }
