@@ -54,7 +54,6 @@ import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
-import com.music.bitchord.ui.components.PillTextField
 import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
 import com.music.bitchord.ui.components.NativeTrackRowText
 import com.music.bitchord.ui.theme.AccentRed
@@ -232,6 +231,7 @@ internal fun CanonicalPlaylistDetailScreen(
     onTrackQueue: (String, CanonicalCollectionIntent) -> Unit,
     contentPadding: PaddingValues,
     searching: Boolean = false,
+    onSearchingChange: (Boolean) -> Unit = {},
     query: String = "",
     onQueryChange: (String) -> Unit = {},
     sort: PlaylistLibrarySort = PlaylistLibrarySort.DEFAULT,
@@ -336,14 +336,16 @@ internal fun CanonicalPlaylistDetailScreen(
         }
         if (searching || query.isNotBlank()) {
             item(key = "playlist-detail-search") {
-                PillTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    placeholder = "Buscar nesta playlist",
-                    accessibilityLabel = "Buscar nesta playlist",
-                    modifier = Modifier.fillMaxWidth()
-                        .padding(horizontal = PAGE_GUTTER)
-                        .height(52.dp),
+                DetailSearchField(
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    onClose = {
+                        onQueryChange("")
+                        onSearchingChange(false)
+                    },
+                    autoFocus = searching,
+                    onFocused = {},
+                    palette = palette,
                 )
             }
         }
