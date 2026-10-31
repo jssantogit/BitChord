@@ -87,6 +87,21 @@ class PlaylistLibraryVisualReuseTest {
         ).size)
     }
 
+    @Test fun recentLocalMetadataFallsBackToRealFileNameButNeverAnArtistOnlyLabel() {
+        assertEquals("Hurt", recentLocalPreferredDisplayTitle(
+            canonicalTitle = "NewJeans", artist = "NewJeans", releaseTitle = null,
+            mediaStoreTitle = null, mediaStoreAlbum = null, displayName = "Hurt.flac",
+        ))
+        assertEquals("Get Up", recentLocalPreferredDisplayTitle(
+            canonicalTitle = "NewJeans", artist = "NewJeans", releaseTitle = "Get Up",
+            mediaStoreTitle = null, mediaStoreAlbum = null, displayName = null,
+        ))
+        assertEquals("Título indisponível", recentLocalPreferredDisplayTitle(
+            canonicalTitle = "NewJeans", artist = "NewJeans", releaseTitle = null,
+            mediaStoreTitle = null, mediaStoreAlbum = null, displayName = null,
+        ))
+    }
+
     @Test fun recentAdditionUsesVerifiedAlbumWhenRecordingTitleIsOnlyArtistName() {
         assertEquals("Get Up", preferRecentLocalAdditionTitle("NewJeans", "NewJeans", "Get Up"))
         assertEquals("Hurt", preferRecentLocalAdditionTitle("Hurt", "NewJeans", "Get Up"))
