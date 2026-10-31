@@ -452,7 +452,7 @@ internal fun SmartPlaylistV2WizardUi(
         WizardStep.IDENTITY -> "Nova playlist"
         WizardStep.EDIT -> if (editingFilterId != null) "Editar filtro" else "Editar playlist"
         WizardStep.SONGS -> if (isEditing) "Editar músicas" else "Adicionar músicas"
-        WizardStep.RULES -> "Regras da playlist"
+        WizardStep.RULES -> if (editingFilterId != null) "Regras do filtro" else "Regras da playlist"
         WizardStep.GROUP -> "Editar grupo de regras"
         WizardStep.CATEGORIES -> "Adicionar condição"
         WizardStep.FIELDS -> selectedCategory.title
@@ -588,17 +588,22 @@ internal fun SmartPlaylistV2WizardUi(
                                 PlaylistWizardTextEntry(
                                     value = name,
                                     onValueChange = onNameChange,
-                                    label = "Nome da playlist",
+                                    label = if (editingFilterId != null) "Nome do filtro"
+                                        else "Nome da playlist",
                                     hint = "Obrigatório · até 80 caracteres",
                                     error = name.length > 80,
                                 )
-                                PlaylistWizardTextEntry(
-                                    value = description,
-                                    onValueChange = { if (it.length <= 5000) onDescriptionChange(it) },
-                                    label = "Descrição (opcional)",
-                                    hint = "Exibida em Sobre a playlist · até 5.000 caracteres",
-                                    multiline = true,
-                                )
+                                if (editingFilterId == null) {
+                                    PlaylistWizardTextEntry(
+                                        value = description,
+                                        onValueChange = {
+                                            if (it.length <= 5000) onDescriptionChange(it)
+                                        },
+                                        label = "Descrição (opcional)",
+                                        hint = "Exibida em Sobre a playlist · até 5.000 caracteres",
+                                        multiline = true,
+                                    )
+                                }
                             }
                         }
                         item {
