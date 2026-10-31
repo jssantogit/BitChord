@@ -8,6 +8,23 @@ class SoulseekAutoAttemptGuardTest {
     private fun entry(id:String,query:String="ILLIT - Magnetic") =
         SoulseekBatchPlan.Entry(id,query,"SUPER REAL ME",180)
 
+    @Test fun diagnosticRefusalDistinguishesDedupCapacityAndInput() {
+        val gate=SoulseekAutoAttemptGuard(maxSlots=2)
+        assertEquals(SoulseekAutoAttemptGuard.Refusal.INVALID_BATCH,
+            gate.refusal(emptyList()))
+        assertEquals(SoulseekAutoAttemptGuard.Refusal.DUPLICATE_IN_REQUEST,
+            gate.refusal(listOf(entry("a"),entry("a"))))
+        assertNull(gate.refusal(listOf(entry("a","Artist - A"))))
+        assertTrue(gate.reserve(listOf(entry("a","Artist - A"))))
+        assertEquals(SoulseekAutoAttemptGuard.Refusal.SOURCE_ID_PREVIOUSLY_ATTEMPTED,
+            gate.refusal(listOf(entry("a","Artist - Another"))))
+        assertEquals(SoulseekAutoAttemptGuard.Refusal.RELEASE_HINT_PREVIOUSLY_ATTEMPTED,
+            gate.refusal(listOf(entry("new","Artist - A"))))
+        assertEquals(SoulseekAutoAttemptGuard.Refusal.CAPACITY_REACHED,
+            gate.refusal(listOf(entry("b","Artist - B"),entry("c","Artist - C"))))
+        assertEquals(1,gate.slotCount)
+    }
+
     @Test fun sameCanonicalSlotCannotBeQueuedAgainAfterCompletionOrClear() {
         val gate=SoulseekAutoAttemptGuard()
         assertTrue(gate.reserve(listOf(entry("recording-1"))))

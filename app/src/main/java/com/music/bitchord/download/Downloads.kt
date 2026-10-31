@@ -488,7 +488,10 @@ object Downloads {
             // Even after the result is cleared, evicted or cancelled, do not
             // automatically repeat the same canonical audio in this process.
             if(!autoAttemptGuard.reserve(captured)) {
-                Log.i(TAG,"soulseek_auto enqueue_refused reason=DUPLICATE_OR_CAPACITY")
+                val why=autoAttemptGuard.refusal(captured)
+                Log.i(TAG,"soulseek_auto enqueue_refused reason=" +
+                    "${why?.name ?: "DUPLICATE_OR_CAPACITY"}" +
+                    " retained_reservations=${autoAttemptGuard.slotCount}")
                 return false
             }
             // Hide stale recovery pickers immediately. If Android refuses to

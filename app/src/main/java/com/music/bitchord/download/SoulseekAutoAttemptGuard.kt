@@ -31,16 +31,33 @@ internal class SoulseekAutoAttemptGuard(
         e.album?.trim()?.lowercase(Locale.ROOT)?.replace(Regex("\\s+")," "),
     )
 
+    enum class Refusal {
+        INVALID_BATCH, DUPLICATE_IN_REQUEST, CAPACITY_REACHED,
+        SOURCE_ID_PREVIOUSLY_ATTEMPTED, RELEASE_HINT_PREVIOUSLY_ATTEMPTED,
+    }
+    /** Read-only classification, called under Downloads.lock. No identifiers
+     * are persisted or logged; returning null does not reserve anything. */
+    fun refusal(entries:List<SoulseekBatchPlan.Entry>):Refusal? {
+        if(entries.size !in 1..SoulseekBatchPlan.MAX_TRACKS ||
+            entries.any { it.trackId.isBlank() || it.query.isBlank() })
+            return Refusal.INVALID_BATCH
+        if(entries.map { it.trackId }.distinct().size!=entries.size)
+            return Refusal.DUPLICATE_IN_REQUEST
+        if(slots.size+entries.size>maxSlots)return Refusal.CAPACITY_REACHED
+        val newHints=entries.map(::fingerprint)
+        if(newHints.distinct().size!=newHints.size)
+            return Refusal.DUPLICATE_IN_REQUEST
+        if(entries.any { it.trackId in slots })
+            return Refusal.SOURCE_ID_PREVIOUSLY_ATTEMPTED
+        if(newHints.any { it in hints })
+            return Refusal.RELEASE_HINT_PREVIOUSLY_ATTEMPTED
+        return null
+    }
+
     /** Caller must hold Downloads.lock; false never modifies the fence. */
     fun reserve(entries:List<SoulseekBatchPlan.Entry>):Boolean {
-        if(entries.size !in 1..SoulseekBatchPlan.MAX_TRACKS ||
-            entries.any { it.trackId.isBlank() || it.query.isBlank() } ||
-            entries.map { it.trackId }.distinct().size!=entries.size ||
-            slots.size+entries.size>maxSlots)return false
+        if(refusal(entries)!=null)return false
         val newHints=entries.map(::fingerprint)
-        if(newHints.distinct().size!=newHints.size ||
-            entries.any { it.trackId in slots } ||
-            newHints.any { it in hints })return false
         entries.zip(newHints).forEach { (entry,hint) ->
             slots.add(entry.trackId)
             hints.add(hint)
