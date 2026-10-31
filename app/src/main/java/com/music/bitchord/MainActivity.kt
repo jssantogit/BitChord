@@ -5319,142 +5319,57 @@ private fun BitChordApp(
             )
         }
 
-        // Canonical playlists reuse the existing native frosted menu surface,
-        // not Material DropdownMenus anchored to newly drawn toolbar controls.
         if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null) {
-            if (playlistLibrarySortMenu && openedCanonicalPlaylist == null) {
-                BackHandler { playlistLibrarySortMenu = false }
-                FrostedMenuPanel(hazeState = hazeState, onDismiss = {
-                    playlistLibrarySortMenu = false
-                }) {
-                    listOf(
-                        com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT to "Ordem padrão",
-                        com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_ASC to "Nome: A a Z",
-                        com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_DESC to "Nome: Z a A",
-                    ).forEach { (choice, label) ->
-                        FrostedMenuRow(
-                            label = label,
-                            checked = playlistLibrarySort == choice,
-                            onClick = {
-                                playlistLibrarySort = choice
-                                playlistLibrarySortMenu = false
-                            },
-                        )
+            CanonicalPlaylistMenus(
+                hazeState = hazeState,
+                librarySortOpen = playlistLibrarySortMenu,
+                onLibrarySortDismiss = { playlistLibrarySortMenu = false },
+                librarySort = playlistLibrarySort,
+                onLibrarySort = { playlistLibrarySort = it },
+                libraryFilterOpen = playlistLibraryOptionsMenu,
+                onLibraryFilterDismiss = { playlistLibraryOptionsMenu = false },
+                libraryFilter = playlistLibraryFilter,
+                onLibraryFilter = { playlistLibraryFilter = it },
+                detailSortOpen = playlistDetailSortMenu,
+                onDetailSortDismiss = { playlistDetailSortMenu = false },
+                detailSort = playlistDetailSort,
+                onDetailSort = { playlistDetailSort = it },
+                detailOptionsOpen = playlistDetailOptionsMenu,
+                onDetailOptionsDismiss = { playlistDetailOptionsMenu = false },
+                selectedCard = openedCanonicalPlaylist,
+                detailRows = playlistDetailRows,
+                onDetailQueue = { selected, intent ->
+                    when (selected) {
+                        is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart ->
+                            executeSmartCollection(
+                                SmartCollectionActionSource.SavedV2Definition(selected.definition.id),
+                                intent,
+                            )
+                        is com.music.bitchord.ui.screens.LibraryPlaylistCard.CanonicalNormal ->
+                            executeSmartCollection(
+                                SmartCollectionActionSource.SavedStaticPlaylist(selected.definition.id),
+                                intent,
+                            )
+                        else -> Unit
                     }
-                }
-            }
-            if (playlistLibraryOptionsMenu && openedCanonicalPlaylist == null) {
-                BackHandler { playlistLibraryOptionsMenu = false }
-                FrostedMenuPanel(hazeState = hazeState, onDismiss = {
-                    playlistLibraryOptionsMenu = false
-                }) {
-                    listOf(
-                        com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.ALL to "Todas as playlists",
-                        com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.NORMAL to "Playlists normais",
-                        com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.SMART to "Playlists inteligentes",
-                    ).forEach { (choice, label) ->
-                        FrostedMenuRow(
-                            label = label,
-                            checked = playlistLibraryFilter == choice,
-                            onClick = {
-                                playlistLibraryFilter = choice
-                                playlistLibraryOptionsMenu = false
-                            },
-                        )
-                    }
-                }
-            }
-            if (playlistDetailSortMenu && openedCanonicalPlaylist != null) {
-                BackHandler { playlistDetailSortMenu = false }
-                FrostedMenuPanel(hazeState = hazeState, onDismiss = {
-                    playlistDetailSortMenu = false
-                }) {
-                    listOf(
-                        com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT to "Ordem da playlist",
-                        com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_ASC to "Música: A a Z",
-                        com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_DESC to "Música: Z a A",
-                    ).forEach { (choice, label) ->
-                        FrostedMenuRow(
-                            label = label,
-                            checked = playlistDetailSort == choice,
-                            onClick = {
-                                playlistDetailSort = choice
-                                playlistDetailSortMenu = false
-                            },
-                        )
-                    }
-                }
-            }
-
-        }
-
-        // Reuse the same native album/playlist bottom sheet, with canonical
-        // artwork and RecordingId-backed queue actions instead of legacy Songs.
-        if (showPlaylistLibrary && !showSmartPlaylistBuilder &&
-            playlistDetailOptionsMenu && openedCanonicalPlaylist != null) {
-            val selected = openedCanonicalPlaylist!!
-            val queueCanonical: (com.music.bitchord.playback.CanonicalCollectionIntent) -> Unit = { intent ->
-                playlistDetailOptionsMenu = false
-                when (selected) {
-                    is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart ->
-                        executeSmartCollection(
-                            SmartCollectionActionSource.SavedV2Definition(selected.definition.id),
-                            intent,
-                        )
-                    is com.music.bitchord.ui.screens.LibraryPlaylistCard.CanonicalNormal ->
-                        executeSmartCollection(
-                            SmartCollectionActionSource.SavedStaticPlaylist(selected.definition.id),
-                            intent,
-                        )
-                    else -> Unit
-                }
-            }
-            ModalBottomSheet(
-                onDismissRequest = { playlistDetailOptionsMenu = false },
-                containerColor = MaterialTheme.colorScheme.background,
-            ) {
-                BrowseActionsSheet(
-                    target = BrowseTarget(
-                        browseId = null,
-                        title = selected.title,
-                        subtitle = com.music.bitchord.ui.screens.canonicalPlaylistDetailMeta(
-                            smart = selected is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart,
-                            rows = playlistDetailRows,
-                        ),
-                        type = BrowseType.PLAYLIST,
-                        fromCard = false,
-                    ),
-                    onPlayNext = {
-                        queueCanonical(com.music.bitchord.playback.CanonicalCollectionIntent.ADD_NEXT)
-                    },
-                    onAddToQueue = {
-                        queueCanonical(com.music.bitchord.playback.CanonicalCollectionIntent.ADD_TO_QUEUE)
-                    },
-                    headerArtwork = {
-                        com.music.bitchord.ui.screens.CanonicalPlaylistCoverArt(
-                            rows = playlistDetailRows.orEmpty(),
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    },
-                    onEdit = {
-                        playlistDetailOptionsMenu = false
-                        openedCanonicalPlaylist = null
-                        when (selected) {
-                            is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart -> {
-                                editingSmartPlaylistId = selected.definition.id
-                                editingNormalPlaylistId = null
-                                showSmartPlaylistBuilder = true
-                            }
-                            is com.music.bitchord.ui.screens.LibraryPlaylistCard.CanonicalNormal -> {
-                                editingNormalPlaylistId = selected.definition.id
-                                editingSmartPlaylistId = null
-                                showSmartPlaylistBuilder = true
-                            }
-                            else -> Unit
+                },
+                onDetailEdit = { selected ->
+                    openedCanonicalPlaylist = null
+                    when (selected) {
+                        is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart -> {
+                            editingSmartPlaylistId = selected.definition.id
+                            editingNormalPlaylistId = null
+                            showSmartPlaylistBuilder = true
                         }
-                    },
-                )
-            }
+                        is com.music.bitchord.ui.screens.LibraryPlaylistCard.CanonicalNormal -> {
+                            editingNormalPlaylistId = selected.definition.id
+                            editingSmartPlaylistId = null
+                            showSmartPlaylistBuilder = true
+                        }
+                        else -> Unit
+                    }
+                },
+            )
         }
 
         if (songSortMenuOpen) {
@@ -5897,6 +5812,124 @@ private fun NativeCollectionOverflowAction(contentDescription: String, onClick: 
     IconButton(onClick = onClick) {
         Icon(Icons.Rounded.MoreHoriz, contentDescription = contentDescription,
             tint = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+/**
+ * Native playlist menus live outside BitChordApp to keep its JVM method small.
+ */
+@Composable
+private fun CanonicalPlaylistMenus(
+    hazeState: HazeState,
+    librarySortOpen: Boolean,
+    onLibrarySortDismiss: () -> Unit,
+    librarySort: com.music.bitchord.ui.screens.PlaylistLibrarySort,
+    onLibrarySort: (com.music.bitchord.ui.screens.PlaylistLibrarySort) -> Unit,
+    libraryFilterOpen: Boolean,
+    onLibraryFilterDismiss: () -> Unit,
+    libraryFilter: com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter,
+    onLibraryFilter: (com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter) -> Unit,
+    detailSortOpen: Boolean,
+    onDetailSortDismiss: () -> Unit,
+    detailSort: com.music.bitchord.ui.screens.PlaylistLibrarySort,
+    onDetailSort: (com.music.bitchord.ui.screens.PlaylistLibrarySort) -> Unit,
+    detailOptionsOpen: Boolean,
+    onDetailOptionsDismiss: () -> Unit,
+    selectedCard: com.music.bitchord.ui.screens.LibraryPlaylistCard?,
+    detailRows: List<com.music.bitchord.ui.screens.V2DisplayRow>?,
+    onDetailQueue: (
+        com.music.bitchord.ui.screens.LibraryPlaylistCard,
+        com.music.bitchord.playback.CanonicalCollectionIntent,
+    ) -> Unit,
+    onDetailEdit: (com.music.bitchord.ui.screens.LibraryPlaylistCard) -> Unit,
+) {
+    if (librarySortOpen && selectedCard == null) {
+        BackHandler { onLibrarySortDismiss() }
+        FrostedMenuPanel(hazeState = hazeState, onDismiss = onLibrarySortDismiss) {
+            listOf(
+                com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT to "Ordem padrão",
+                com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_ASC to "Nome: A a Z",
+                com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_DESC to "Nome: Z a A",
+            ).forEach { (choice, label) ->
+                FrostedMenuRow(
+                    label = label,
+                    checked = librarySort == choice,
+                    onClick = { onLibrarySort(choice); onLibrarySortDismiss() },
+                )
+            }
+        }
+    }
+    if (libraryFilterOpen && selectedCard == null) {
+        BackHandler { onLibraryFilterDismiss() }
+        FrostedMenuPanel(hazeState = hazeState, onDismiss = onLibraryFilterDismiss) {
+            listOf(
+                com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.ALL to "Todas as playlists",
+                com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.NORMAL to "Playlists normais",
+                com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.SMART to "Playlists inteligentes",
+            ).forEach { (choice, label) ->
+                FrostedMenuRow(
+                    label = label,
+                    checked = libraryFilter == choice,
+                    onClick = { onLibraryFilter(choice); onLibraryFilterDismiss() },
+                )
+            }
+        }
+    }
+    if (detailSortOpen && selectedCard != null) {
+        BackHandler { onDetailSortDismiss() }
+        FrostedMenuPanel(hazeState = hazeState, onDismiss = onDetailSortDismiss) {
+            listOf(
+                com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT to "Ordem da playlist",
+                com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_ASC to "Música: A a Z",
+                com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_DESC to "Música: Z a A",
+            ).forEach { (choice, label) ->
+                FrostedMenuRow(
+                    label = label,
+                    checked = detailSort == choice,
+                    onClick = { onDetailSort(choice); onDetailSortDismiss() },
+                )
+            }
+        }
+    }
+    if (detailOptionsOpen && selectedCard != null) {
+        val selected = selectedCard
+        val queue: (com.music.bitchord.playback.CanonicalCollectionIntent) -> Unit = { intent ->
+            onDetailOptionsDismiss()
+            onDetailQueue(selected, intent)
+        }
+        ModalBottomSheet(
+            onDismissRequest = onDetailOptionsDismiss,
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            BrowseActionsSheet(
+                target = BrowseTarget(
+                    browseId = null,
+                    title = selected.title,
+                    subtitle = com.music.bitchord.ui.screens.canonicalPlaylistDetailMeta(
+                        smart = selected is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart,
+                        rows = detailRows,
+                    ),
+                    type = BrowseType.PLAYLIST,
+                    fromCard = false,
+                ),
+                onPlayNext = {
+                    queue(com.music.bitchord.playback.CanonicalCollectionIntent.ADD_NEXT)
+                },
+                onAddToQueue = {
+                    queue(com.music.bitchord.playback.CanonicalCollectionIntent.ADD_TO_QUEUE)
+                },
+                headerArtwork = {
+                    com.music.bitchord.ui.screens.CanonicalPlaylistCoverArt(
+                        rows = detailRows.orEmpty(),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                },
+                onEdit = {
+                    onDetailOptionsDismiss()
+                    onDetailEdit(selected)
+                },
+            )
+        }
     }
 }
 
