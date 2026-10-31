@@ -725,6 +725,25 @@ internal fun SmartPlaylistV2BuilderScreen(
                             }
                         }
                     },
+                    onDeleteSmart = {
+                        val id = editingId
+                        if (id != null && !loading) {
+                            loading = true
+                            scope.launch {
+                                try {
+                                    withContext(Dispatchers.IO) { repo.remove(id) }
+                                    reset()
+                                    onBack()
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    error = "Não foi possível excluir: outra playlist pode depender desta."
+                                } finally {
+                                    loading = false
+                                }
+                            }
+                        }
+                    },
                     onSaveNormal = {
                         if (!loading) {
                             loading = true
