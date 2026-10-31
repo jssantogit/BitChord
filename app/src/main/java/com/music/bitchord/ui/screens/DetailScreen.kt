@@ -1562,7 +1562,7 @@ private fun ActionRow(
  * rim of the circles beside it — Shuffle, on a page with no Add to sit opposite.
  */
 @Composable
-private fun ActionPill(
+internal fun ActionPill(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
