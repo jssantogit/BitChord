@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -293,6 +294,55 @@ class SmartPlaylistV2WizardComposeTest {
         compose.runOnIdle { assertEquals(0, confirmed); assertEquals(1, cancelled) }
         compose.onNodeWithText("Excluir definitivamente").performClick()
         compose.runOnIdle { assertEquals(1, confirmed) }
+    }
+
+    @Test fun existingNormalPlaylistOpensDedicatedEditPageInsteadOfNewPlaylistWizard() {
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Minha lista", description = "Faixas selecionadas",
+                rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+                    SmartPlaylistRule.Comparison(
+                        SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+                    ),
+                )),
+                sort = SmartPlaylistV2Sort.TITLE_ASC,
+                limit = "100", seed = "0", preview = null, loading = false,
+                error = null, editingId = null, editingFilterId = null,
+                savedDefinitions = emptyList(), onNameChange = {}, onRuleChange = {},
+                onSortChange = {}, onLimitChange = {}, onSeedChange = {},
+                onPreview = {}, onSave = {}, onSaveFilter = {},
+                normalMode = true, editingNormalId = "normal-1",
+                onPreviewAction = null, currentPreviewQuery = null,
+                onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Editar playlist").assertExists()
+        compose.onNodeWithText("Editar músicas").assertExists()
+        compose.onNodeWithText("Nova playlist").assertDoesNotExist()
+    }
+
+    @Test fun existingSmartPlaylistCanOpenNativeRuleEditorFromEditPage() {
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Automática",
+                rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+                    SmartPlaylistRule.Comparison(
+                        SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+                    ),
+                )),
+                sort = SmartPlaylistV2Sort.TITLE_ASC,
+                limit = "100", seed = "0", preview = null, loading = false,
+                error = null, editingId = "smart-1", editingFilterId = null,
+                savedDefinitions = emptyList(), onNameChange = {}, onRuleChange = {},
+                onSortChange = {}, onLimitChange = {}, onSeedChange = {},
+                onPreview = {}, onSave = {}, onSaveFilter = {},
+                normalMode = false, onPreviewAction = null, currentPreviewQuery = null,
+                onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Editar playlist").assertExists()
+        compose.onNodeWithText("Editar regras").performClick()
+        compose.onNodeWithText("Regras da playlist").assertExists()
     }
 
     @Test fun newPlaylistDoesNotClaimAnAutomaticPlaybackRule() {
