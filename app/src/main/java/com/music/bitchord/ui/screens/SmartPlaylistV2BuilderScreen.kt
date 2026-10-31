@@ -789,7 +789,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                         subtitle = "${smartRuleLeafCount(filter.rules)} condições · Filtro reutilizável",
                         reserveIconSpace = false,
                     )
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, bottom = 8.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 8.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             TextButton(onClick = {
                                 showWizard = true
