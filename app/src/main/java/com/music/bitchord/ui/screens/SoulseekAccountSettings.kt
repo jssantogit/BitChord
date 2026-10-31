@@ -1,5 +1,8 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.ui.components.ConfirmationAlert
+import com.music.bitchord.ui.components.NativeAlertHost
+
 import android.app.Activity
 import android.view.WindowManager
 import androidx.compose.foundation.layout.Arrangement
@@ -10,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
@@ -206,12 +208,14 @@ internal fun SoulseekAccountSettingsScreen(contentPadding: PaddingValues) {
     }
 
     if (confirmForget) {
-        AlertDialog(
-            onDismissRequest = { confirmForget = false },
-            title = { Text("Esquecer conta Soulseek?") },
-            text = { Text("A credencial cifrada e sua chave serão apagadas. Os arquivos locais já salvos serão preservados.") },
-            confirmButton = {
-                TextButton(onClick = {
+        NativeAlertHost(onDismiss = { confirmForget = false }) {
+            ConfirmationAlert(
+                hazeState = null,
+                title = "Esquecer conta Soulseek?",
+                description = "A credencial cifrada e sua chave serão apagadas. Os arquivos locais já salvos serão preservados.",
+                confirmLabel = "Esquecer",
+                destructive = true,
+                onConfirm = {
                     vault.forget()
                     savedUsername = null
                     username = ""
@@ -219,11 +223,9 @@ internal fun SoulseekAccountSettingsScreen(contentPadding: PaddingValues) {
                     acknowledged = false
                     status = "Conta esquecida. Nenhuma sessão ativa."
                     confirmForget = false
-                }) { Text("Esquecer") }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmForget = false }) { Text("Cancelar") }
-            },
-        )
+                },
+                onDismiss = { confirmForget = false },
+            )
+        }
     }
 }
