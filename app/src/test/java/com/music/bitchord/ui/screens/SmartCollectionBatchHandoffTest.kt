@@ -26,6 +26,15 @@ import org.junit.Test
 
 /** A read-only fake of B9's resolver, never legacy-title identity inference. */
 class SmartCollectionBatchHandoffTest {
+    @Test fun shuffledSavedPlaylistRetainsOnlyFreshUniqueRecordingMembership() {
+        val ids = listOf("rec-a", "rec-b", "rec-b", "rec-c", "rec-d")
+        val normal = canonicalSavedPlaylistOrder(ids, shuffle = false, random = kotlin.random.Random(2))
+        val shuffled = canonicalSavedPlaylistOrder(ids, shuffle = true, random = kotlin.random.Random(2))
+        assertEquals(listOf("rec-a", "rec-b", "rec-c", "rec-d"), normal)
+        assertEquals(normal.toSet(), shuffled.toSet())
+        assertEquals(normal.size, shuffled.size)
+    }
+
     @Test fun clickingPlaylistTrackUsesFreshMembershipAndRemainingOrder() {
         val members = listOf("rec-first", "rec-second", "rec-third")
         assertEquals(
