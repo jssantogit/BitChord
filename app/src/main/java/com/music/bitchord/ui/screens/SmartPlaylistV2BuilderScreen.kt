@@ -155,6 +155,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     val evaluator = remember(context) { persistentSmartPlaylistPreview(context) }
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
     var normalMode by remember { mutableStateOf(false) }
     var editingNormalId by remember { mutableStateOf<String?>(null) }
     var normalSearch by remember { mutableStateOf("") }
@@ -243,6 +244,7 @@ internal fun SmartPlaylistV2BuilderScreen(
         normalSelectedIds = emptyList()
         normalSelectedRows = emptyList()
         name = ""
+        description = ""
         rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(newRule()))
         hasConfiguredRules = false
         sort = SmartPlaylistV2Sort.RATING_DESC
@@ -274,6 +276,7 @@ internal fun SmartPlaylistV2BuilderScreen(
         editingId = item.id
         editingFilterId = null
         name = item.name
+        description = item.description
         rule = item.query.rules
         hasConfiguredRules = true
         sort = item.query.sort
@@ -305,6 +308,7 @@ internal fun SmartPlaylistV2BuilderScreen(
         editingNormalId = item.id
         normalMode = true
         name = item.name
+        description = item.description
         normalSelectedIds = item.recordingIds
         normalSourceProviderKey = item.sourceProviderKey
         normalSourceTouched = true // preserve persisted All even if its server disconnects
@@ -535,6 +539,8 @@ internal fun SmartPlaylistV2BuilderScreen(
                     editingFilterId = editingFilterId,
                     savedDefinitions = saved.filterNot { it.id == editingId },
                     onNameChange = { name = it },
+                    description = description,
+                    onDescriptionChange = { description = it },
                     onRuleChange = {
                         rule = it
                         hasConfiguredRules = true
@@ -554,7 +560,9 @@ internal fun SmartPlaylistV2BuilderScreen(
                                     val parsed = query()
                                     val id = editingId ?: UUID.randomUUID().toString()
                                     withContext(Dispatchers.IO) {
-                                        repo.save(SavedSmartPlaylistV2Definition(id, name, parsed))
+                                        repo.save(SavedSmartPlaylistV2Definition(
+                                            id, name, parsed, description = description.trim(),
+                                        ))
                                     }
                                     reset()
                                     // The Library owns saved playlists now. Close back
@@ -696,6 +704,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                         normalRepo.save(SavedCanonicalStaticPlaylist(
                                             id = id, name = name, recordingIds = normalSelectedIds,
                                             sourceProviderKey = normalSourceProviderKey,
+                                            description = description.trim(),
                                         ))
                                     }
                                     reset()
@@ -797,6 +806,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 editingId = null
                                 editingFilterId = filter.id
                                 name = filter.name
+                                description = ""
                                 rule = filter.rules
                             hasConfiguredRules = true
                                 preview = null
@@ -812,6 +822,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 editingId = copy.id
                                 editingFilterId = null
                                 name = copy.name
+                                description = copy.description
                                 rule = copy.query.rules
                             hasConfiguredRules = true
                                 sort = copy.query.sort
@@ -902,6 +913,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 editingId = item.id
                                 editingFilterId = null
                                 name = item.name
+                                description = item.description
                                 rule = item.query.rules
                             hasConfiguredRules = true
                                 sort = item.query.sort
@@ -966,6 +978,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                             editingId = copy.id
                             editingFilterId = null
                             name = copy.name
+                            description = copy.description
                             rule = copy.query.rules
                             hasConfiguredRules = true
                             sort = copy.query.sort
