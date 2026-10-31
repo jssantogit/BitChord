@@ -50,7 +50,6 @@ internal fun PlaylistManagerChrome(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     onBack: () -> Unit,
-    onDraft: () -> Unit,
 ) {
     // First-party native back, typography and segmented selector. Filters
     // are the entry point, not a legacy playlist-management dashboard.
@@ -70,7 +69,6 @@ internal fun PlaylistManagerChrome(
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.weight(1f).padding(start = 12.dp),
             )
-            TextButton(onClick = onDraft) { Text("Editor") }
         }
         SegmentedControl(
             options = listOf("Filtros", "Inteligentes", "Clássicas"),
