@@ -60,6 +60,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -507,15 +508,13 @@ private fun SongRowContent(
     // has no match: shown, but not something a tap or a menu can act on.
     val matching = song.isMatchPending
     val unavailable = song.isMatchMissing
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .alpha(if (unavailable) 0.45f else 1f)
-            .background(activeBackground)
-            .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
-            .contextClick(onMore ?: onLongPress)
-            .padding(horizontal = PAGE_GUTTER, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    NativeDetailTrackRowFrame(
+        onClick = onClick,
+        onLongPress = onLongPress,
+        onMore = onMore,
+        modifier = modifier,
+        opacity = if (unavailable) 0.45f else 1f,
+        background = activeBackground,
     ) {
         if (trackNumber != null) {
             // Centred between the screen edge and the title (see
@@ -635,6 +634,35 @@ private fun SongRowContent(
             RowMoreButton(onClick = onMore, tint = subtitleColor)
         }
     }
+}
+
+/**
+ * The same physical row surface used by native SongRow and canonical RecordingId rows.
+ * Media identity belongs to the caller; this shared component owns touch, gutters,
+ * spacing and alignment, not playback resolution or queue conversion.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun NativeDetailTrackRowFrame(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onLongPress: (() -> Unit)? = null,
+    onMore: (() -> Unit)? = null,
+    background: Color = Color.Transparent,
+    opacity: Float = 1f,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .alpha(opacity)
+            .background(background)
+            .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
+            .contextClick(onMore ?: onLongPress)
+            .padding(horizontal = PAGE_GUTTER, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
 }
 
 /**
