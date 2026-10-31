@@ -44,7 +44,10 @@ internal object A0AndroidAudioTechnicalProbe {
     }
 
     private enum class Step { RECEIPT, HEADER, EXTRACTOR, TRACKS, DURATION, SCAN, FINAL }
-    private class ProbeMetrics(val scope:Int,val start:Long) {
+    private class ProbeMetrics(
+        val scope:Int,val start:Long,
+        val onRefused:(Failure)->Unit,
+    ) {
         var step=Step.RECEIPT
         var samples=0
         var toleratedBacksteps=0
@@ -76,6 +79,7 @@ internal object A0AndroidAudioTechnicalProbe {
                     " elapsed_ms=${elapsed.coerceIn(0L,600000L)}" +
                     " scope=${m.scope}")
         }
+        runCatching {m.onRefused(reason)}
         A0AcquisitionDiagnostics.emit(m.scope,
             A0AcquisitionDiagnostics.Phase.PROBE_REJECT,
             reason,elapsed,m.samples)
@@ -86,12 +90,14 @@ internal object A0AndroidAudioTechnicalProbe {
         source:File,
         declaredExtension:String,
         traceScope:Int=0,
+        onRefused:(Failure)->Unit={},
         isCancelled:()->Boolean={false},
     ):A0AutoPostTransferTechnicalGate.Decoded? {
         check(Looper.myLooper()!=Looper.getMainLooper()) {
             "Audio receipt inspection cannot run on Android main thread"
         }
-        val metrics=ProbeMetrics(traceScope,SystemClock.elapsedRealtime())
+        val metrics=ProbeMetrics(
+            traceScope,SystemClock.elapsedRealtime(),onRefused)
         A0AcquisitionDiagnostics.emit(traceScope,
             A0AcquisitionDiagnostics.Phase.PROBE_START)
         if(!source.isFile || Files.isSymbolicLink(source.toPath()) ||

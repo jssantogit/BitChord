@@ -173,6 +173,8 @@ class A0RetainedCandidateReviewActivity:Activity() {
                                     A0ManualRetainedCandidateTransfer.Stage?>(null)
                                 val lastReason=AtomicReference<
                                     A0AutoPostTransferTechnicalGate.Reason?>(null)
+                                val probeFailure=AtomicReference<
+                                    A0AndroidAudioTechnicalProbe.Failure?>(null)
                                 val status=try {
                                     val song=Downloads.claimedSoulseekReviewSong(
                                         session,token,index)
@@ -196,6 +198,9 @@ class A0RetainedCandidateReviewActivity:Activity() {
                                         isCancelled={stopped.get()},
                                         slotIndex=index,
                                         onTransport={transport=it},
+                                        onProbeFailure={failure ->
+                                            probeFailure.set(failure)
+                                        },
                                         onDiagnostic={stage,reason ->
                                             lastStage.set(stage)
                                             lastReason.set(reason)
@@ -214,7 +219,8 @@ class A0RetainedCandidateReviewActivity:Activity() {
                                     "soulseek_manual_summary diagnostic_schema=2" +
                                         " slot=$index status=${status.name}" +
                                         " last_stage=${lastStage.get()?.name ?: "NONE"}" +
-                                        " technical_reason=${lastReason.get()?.name ?: "NONE"}")
+                                        " technical_reason=${lastReason.get()?.name ?: "NONE"}" +
+                                        " probe_failure=${probeFailure.get()?.name ?: "NONE"}")
                                 if(status==A0ManualRetainedCandidateTransfer.Status.PUBLISHED) {
                                     Downloads.confirmSoulseekManualPublication(
                                         session,index,row.entry.query)

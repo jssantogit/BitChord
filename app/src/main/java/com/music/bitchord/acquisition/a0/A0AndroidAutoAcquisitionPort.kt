@@ -30,6 +30,8 @@ internal class A0AndroidAutoAcquisitionPort(
     private val reservedAutomatic:Boolean=false,
     private val sourceSong:Song?=null,
     private val diagnosticScope:Int=A0AcquisitionDiagnostics.newScope(),
+    private val onTechnicalProbeFailure:
+        (A0AndroidAudioTechnicalProbe.Failure)->Unit={},
     /** UI observation only; A3 state advances before this callback. */
     private val onTransferStarting:()->Unit={},
 ):A0AutoAcquisitionExecutor.Port {
@@ -121,7 +123,8 @@ internal class A0AndroidAutoAcquisitionPort(
         A0AcquisitionDiagnostics.emit(diagnosticScope,
             A0AcquisitionDiagnostics.Phase.A3_INSPECT)
         return A0AndroidAudioTechnicalProbe.inspect(
-            receipt.file,expectedExtension,diagnosticScope) { revoked(isCancelled) }
+            receipt.file,expectedExtension,diagnosticScope,
+            onRefused=onTechnicalProbeFailure) { revoked(isCancelled) }
     }
 
     override fun publish(

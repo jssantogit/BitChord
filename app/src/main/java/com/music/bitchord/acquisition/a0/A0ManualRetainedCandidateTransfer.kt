@@ -43,6 +43,7 @@ internal object A0ManualRetainedCandidateTransfer {
         slotIndex:Int=-1,
         onTransport:(A0FreshAuthenticatedAutoTransport)->Unit={},
         onDiagnostic:(Stage,A0AutoPostTransferTechnicalGate.Reason?)->Unit={_,_->},
+        onProbeFailure:(A0AndroidAudioTechnicalProbe.Failure)->Unit={},
     ):Status {
         check(BuildConfig.DEBUG && BuildConfig.FLAVOR=="dev")
         check(Looper.myLooper()!=Looper.getMainLooper())
@@ -103,7 +104,8 @@ internal object A0ManualRetainedCandidateTransfer {
         val transport=A0FreshAuthenticatedAutoTransport(app,generation,traceScope)
         val port=A0AndroidAutoAcquisitionPort(
             app,generation,transport,id,reservedAutomatic=true,
-            sourceSong=sourceSong,diagnosticScope=traceScope)
+            sourceSong=sourceSong,diagnosticScope=traceScope,
+            onTechnicalProbeFailure=onProbeFailure)
         var receipt:A0VerifiedByteStager.Receipt?=null
         var result=Status.TRANSFER_FAILED
         var publicationAttempted=false
