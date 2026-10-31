@@ -131,6 +131,7 @@ internal fun PlaylistWizardTextEntry(
     hint: String? = null,
     error: Boolean = false,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    multiline: Boolean = false,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -151,6 +152,7 @@ internal fun PlaylistWizardTextEntry(
             container = MaterialTheme.colorScheme.surfaceVariant,
             keyboardOptions = keyboardOptions,
             accessibilityLabel = label,
+            multiline = multiline,
         )
         if (hint != null) {
             Text(
