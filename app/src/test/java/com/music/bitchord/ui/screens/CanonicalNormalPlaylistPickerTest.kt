@@ -65,6 +65,17 @@ class CanonicalNormalPlaylistPickerTest {
             canonicalPlaylistProviderKeys(emptyList(), "opensubsonic:offline"))
     }
 
+    @Test fun albumSelectionIsCompleteOnlyWhenEveryCurrentMemberIsSelected() {
+        val album = listOf("rec-a", "rec-b", "rec-c")
+        assertEquals(false, allCanonicalGroupMembersSelected(album, listOf("rec-a")))
+        assertEquals(true, allCanonicalGroupMembersSelected(album, album))
+        assertEquals(listOf("rec-c"),
+            toggleCanonicalGroupMembers(album, listOf("rec-a", "rec-b")))
+        assertEquals(emptyList<String>(), toggleCanonicalGroupMembers(album, album))
+        assertEquals(listOf("rec-external", "rec-a", "rec-b", "rec-c"),
+            toggleCanonicalGroupMembers(album, listOf("rec-external")))
+    }
+
     @Test fun localOnlySourceDefaultsToLocalButNeverOverridesMultisourceOrEditing() {
         assertEquals("local-mediastore", defaultCanonicalNormalPlaylistSource(
             listOf("local-mediastore"),
