@@ -2771,6 +2771,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             thumbnailUrl = group.thumbnailUrl,
             songs = if (group.songs.isEmpty()) UiState.Error(text(R.string.no_tracks_here)) else UiState.Success(group.songs),
             type = group.type,
+            sections = if (LocalGroups.isArtist(group.browseId)) {
+                LocalGroups.artistReleaseShelves(group.browseId, group.songs)
+            } else emptyList(),
         )
     }
 
@@ -2779,7 +2782,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val state = localPageState(browseId) ?: return@launch
             _detailStack.value = _detailStack.value.map {
                 if (it.browseId == browseId) {
-                    it.copy(songs = state)
+                    it.copy(
+                        songs = state,
+                        sections = if (LocalGroups.isArtist(browseId) &&
+                            state is UiState.Success
+                        ) LocalGroups.artistReleaseShelves(browseId, state.data)
+                        else it.sections,
+                    )
                 } else it
             }
         }
