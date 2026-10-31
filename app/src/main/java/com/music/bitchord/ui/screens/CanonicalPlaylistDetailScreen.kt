@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -262,6 +263,7 @@ internal fun CanonicalPlaylistDetailScreen(
         item(key = "playlist-detail-cover") {
             // The same hero frame used by DetailScreen.ReleaseHeader; the
             // playlist still passes real RecordingIds to its playback handoff.
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             NativeReleaseHeaderLayout(
                 title = card.title,
                 credit = "",
@@ -269,7 +271,8 @@ internal fun CanonicalPlaylistDetailScreen(
                     else "Playlist normal") + " · " +
                     (rows?.size?.let { "${it} músicas" } ?: "Carregando músicas…"),
                 palette = palette,
-                sleeveSize = 252.dp,
+                // Exactly the same 76% frame as DetailScreen's native release hero.
+                sleeveSize = maxWidth * 0.76f,
                 artwork = {
                     CanonicalPlaylistCoverArt(
                         rows = rows.orEmpty(), modifier = Modifier.fillMaxSize(),
@@ -304,6 +307,7 @@ internal fun CanonicalPlaylistDetailScreen(
                     }
                 }
             )
+            }
         }
         if (searching || query.isNotBlank()) {
             item(key = "playlist-detail-search") {
