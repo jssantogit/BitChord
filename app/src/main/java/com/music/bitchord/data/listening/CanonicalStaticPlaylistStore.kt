@@ -10,6 +10,15 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 
+/** The cover must be a document explicitly selected by the user, not a network URL. */
+internal fun validateCanonicalPlaylistCoverUri(uri: String?) {
+    require(uri == null || (
+        uri.length <= 2048 &&
+        uri.startsWith("content://") &&
+        uri.none { it.isWhitespace() || it.isISOControl() }
+    )) { "Invalid custom playlist cover document" }
+}
+
 /**
  * A normal playlist is an ordered, user-authored list of canonical RecordingIds.
  * It is NOT a snapshot of provider URLs, YouTube videoIds or MediaAssetIds.
