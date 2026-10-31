@@ -204,6 +204,7 @@ private fun WizardReviewHeader(
     name: String,
     description: String,
     cover: V2DisplayRow?,
+    customCoverUri: String? = null,
 ) {
     val palette = themeArtworkPalette()
     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -215,7 +216,14 @@ private fun WizardReviewHeader(
             sleeveSize = maxWidth * 0.76f,
             topInset = 0.dp,
             artwork = {
-                if (cover != null) {
+                if (customCoverUri != null) {
+                    AsyncImage(
+                        model = customCoverUri,
+                        contentDescription = "Capa escolhida da playlist",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else if (cover != null) {
                     SmartPlaylistPreviewArtwork(cover, Modifier.fillMaxSize())
                 } else {
                     CoverPlaceholder(
@@ -636,8 +644,6 @@ internal fun SmartPlaylistV2WizardUi(
                                 }
                             }
                         }
-                        // Capas/descrição não são persistidas no V2 atual.
-                        // Não apresentar linguagem técnica de implementação ao usuário.
                         if (page == WizardStep.EDIT) {
                             item {
                                 WizardCard(
@@ -1093,6 +1099,7 @@ internal fun SmartPlaylistV2WizardUi(
                                 else "Playlist inteligente · ${smartRuleLeafCount(rule)} condições",
                                 cover = if (normalMode) normalSelectedRows.firstOrNull()
                                     else preview?.firstOrNull(),
+                                customCoverUri = coverUri,
                             )
                         }
                         if (description.isNotBlank()) {
