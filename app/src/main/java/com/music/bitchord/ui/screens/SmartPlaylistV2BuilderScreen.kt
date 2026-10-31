@@ -105,6 +105,20 @@ internal fun canApplySmartFilterToDraft(
     editingNormalId: String?,
 ): Boolean = !normalMode && editingNormalId == null
 
+/** The native filter action picker should never advertise incompatible changes. */
+internal fun savedFilterActionsForDraft(
+    normalMode: Boolean,
+    editingNormalId: String?,
+): List<String> = buildList {
+    if (canApplySmartFilterToDraft(normalMode, editingNormalId)) {
+        add("Aplicar regras ao rascunho")
+        add("Combinar com o rascunho (E)")
+    }
+    add("Editar filtro")
+    add("Criar playlist com este filtro")
+    add("Excluir filtro")
+}
+
 private enum class SmartPlaylistManageTab { PLAYLISTS, FILTERS, CLASSIC }
 private data class PendingSmartDeletion(val id: String, val name: String, val isFilter: Boolean)
 
@@ -866,13 +880,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                 if (more) {
                     WizardChoiceDialog(
                         title = filter.name,
-                        options = listOf(
-                            "Aplicar regras ao rascunho",
-                            "Combinar com o rascunho (E)",
-                            "Editar filtro",
-                            "Criar playlist com este filtro",
-                            "Excluir filtro",
-                        ),
+                        options = savedFilterActionsForDraft(normalMode, editingNormalId),
                         label = { it },
                         onChosen = { option ->
                             when (option) {
