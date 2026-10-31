@@ -240,21 +240,8 @@ internal fun UnifiedPlaylistLibraryShelf(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        item(key = "playlist-header") {
-            Row(
-                modifier = Modifier.fillMaxWidth()
-                    .padding(horizontal = PAGE_GUTTER, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    "Playlists",
-                    style = MaterialTheme.typography.displayLarge,
-                    modifier = Modifier.weight(1f),
-                )
-
-            }
-        }
+        // Page title belongs to the native floating top bar, not a second
+        // scrollable header that may vanish or restore at a stale offset.
         if (searching || query.isNotBlank()) {
             item(key = "playlist-search") {
                 PlaylistLibrarySearchField(
