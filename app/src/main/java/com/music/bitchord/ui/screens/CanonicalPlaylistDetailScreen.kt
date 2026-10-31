@@ -1,6 +1,8 @@
 package com.music.bitchord.ui.screens
 
 import androidx.activity.compose.BackHandler
+import coil3.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -64,6 +66,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/** Explicit user cover always takes priority over generated recording collages. */
+internal fun LibraryPlaylistCard.explicitCoverUri(): String? = when (this) {
+    is LibraryPlaylistCard.CanonicalNormal -> definition.coverUri
+    is LibraryPlaylistCard.Smart -> definition.coverUri
+    is LibraryPlaylistCard.Normal -> null
+}
+
 /** Repeat each sleeve only once in a collage, as the native playlist page does. */
 internal fun distinctCanonicalPlaylistCoverRows(rows: List<V2DisplayRow>): List<V2DisplayRow> =
     rows.distinctBy { row ->
@@ -81,9 +90,16 @@ internal fun distinctCanonicalPlaylistCoverRows(rows: List<V2DisplayRow>): List<
 internal fun CanonicalPlaylistCoverArt(
     rows: List<V2DisplayRow>,
     modifier: Modifier = Modifier,
+    customCoverUri: String? = null,
 ) {
     val covers = remember(rows) { distinctCanonicalPlaylistCoverRows(rows) }
     when {
+        customCoverUri != null -> AsyncImage(
+            model = customCoverUri,
+            contentDescription = "Capa personalizada",
+            modifier = modifier.clip(RoundedCornerShape(12.dp)),
+            contentScale = ContentScale.Crop,
+        )
         covers.size >= 4 -> Column(modifier.clip(RoundedCornerShape(12.dp))) {
             for (offset in listOf(0, 2)) {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
@@ -311,6 +327,7 @@ internal fun CanonicalPlaylistDetailScreen(
                 artwork = {
                     CanonicalPlaylistCoverArt(
                         rows = rows.orEmpty(), modifier = Modifier.fillMaxSize(),
+                        customCoverUri = card.explicitCoverUri(),
                     )
                 },
                 actions = {
