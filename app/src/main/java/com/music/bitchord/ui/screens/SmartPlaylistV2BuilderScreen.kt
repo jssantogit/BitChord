@@ -166,6 +166,9 @@ internal fun SmartPlaylistV2BuilderScreen(
     var normalSelectedRows by remember { mutableStateOf<List<V2DisplayRow>>(emptyList()) }
     var normalLoading by remember { mutableStateOf(false) }
     var normalAddingAlbumId by remember { mutableStateOf<String?>(null) }
+    // Only groups actually opened/selected are queried; no N+1 queries for
+    // an entire artist catalog while scrolling.
+    var normalGroupMembers by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var editingId by remember { mutableStateOf<String?>(null) }
     var editingFilterId by remember { mutableStateOf<String?>(null) }
     var rule by remember { mutableStateOf<SmartPlaylistRule>(
@@ -315,10 +318,15 @@ internal fun SmartPlaylistV2BuilderScreen(
         normalLoading = true
         try {
             delay(160)
-            if (normalBrowseGroup != null) {
+            if (normalBrowseGroup != null &&
+                normalBrowseType == CanonicalPlaylistBrowseType.ALBUMS) {
                 normalRows = canonicalNormalPlaylistGroupTracks(
                     context, normalBrowseGroup!!, normalSourceProviderKey)
-                normalGroups = emptyList()
+                normalGroupMembers = normalGroupMembers + (
+                    normalBrowseGroup!!.id to normalRows.map { it.id }
+                )
+                // Keep the album list in place: expanded tracks are nested
+                // under their album rather than replacing the entire page.
             } else if (normalBrowseType == CanonicalPlaylistBrowseType.TRACKS) {
                 normalRows = canonicalNormalPlaylistSearch(
                     context, normalSearch, normalSourceProviderKey)
@@ -567,6 +575,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     normalSearch = normalSearch,
                     normalLoading = normalLoading,
                     normalAddingAlbumId = normalAddingAlbumId,
+                    normalGroupMembers = normalGroupMembers,
                     normalSourceProviderKey = normalSourceProviderKey,
                     availableSourceKeys = availableSourceKeys,
                     onNormalSourceChange = {
@@ -594,6 +603,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     onNormalBrowseTypeChange = { type ->
                         normalBrowseType = type
                         normalBrowseGroup = null
+                        normalRows = emptyList()
                         normalSearch = ""
                     },
                     onNormalBrowseGroupChange = { group -> normalBrowseGroup = group },
@@ -612,26 +622,42 @@ internal fun SmartPlaylistV2BuilderScreen(
                         normalSelectedIds = toggleCanonicalStaticMember(normalSelectedIds, id)
                     },
                     onAddNormalAlbum = { group ->
-                        if (normalAddingAlbumId == null &&
-                            group.type == CanonicalPlaylistBrowseType.ALBUMS
-                        ) {
+                        if (normalAddingAlbumId == null) {
                             normalAddingAlbumId = group.id
                             scope.launch {
                                 try {
-                                    val tracks = canonicalNormalPlaylistGroupTracks(
+                                    val members = canonicalNormalPlaylistGroupTracks(
                                         context, group, normalSourceProviderKey,
+                                    ).map { it.id }
+                                    normalGroupMembers = normalGroupMembers + (group.id to members)
+                                    normalSelectedIds = toggleCanonicalGroupMembers(
+                                        members, normalSelectedIds,
                                     )
-                                    // Playback membership stays canonical. Do not insert
-                                    // a ReleaseId or infer any members from its title.
-                                    normalSelectedIds =
-                                        (normalSelectedIds + tracks.map { it.id }).distinct()
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
                                 } catch (_: Exception) {
-                                    error = "Não foi possível adicionar as músicas deste álbum."
-                                } finally {
-                                    normalAddingAlbumId = null
-                                }
+                                    error = "Não foi possível selecionar este álbum."
+                                } finally { normalAddingAlbumId = null }
+                            }
+                        }
+                    },
+                    onAddNormalArtist = { group ->
+                        if (normalAddingAlbumId == null) {
+                            normalAddingAlbumId = group.id
+                            scope.launch {
+                                try {
+                                    val members = canonicalNormalPlaylistGroupTracks(
+                                        context, group, normalSourceProviderKey,
+                                    ).map { it.id }
+                                    normalGroupMembers = normalGroupMembers + (group.id to members)
+                                    normalSelectedIds = toggleCanonicalGroupMembers(
+                                        members, normalSelectedIds,
+                                    )
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    error = "Não foi possível selecionar este artista."
+                                } finally { normalAddingAlbumId = null }
                             }
                         }
                     },
