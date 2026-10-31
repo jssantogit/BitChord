@@ -1670,7 +1670,7 @@ private fun PlayCircle(
  * edge, Apple's look for these, rather than the dark glass.
  */
 @Composable
-private fun CircleIconButton(
+internal fun CircleIconButton(
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
