@@ -218,7 +218,7 @@ internal fun PlaylistWizardArtworkPlaceholder(
     // The normal release/folder placeholder already defines this treatment.
     CoverPlaceholder(
         icon = Icons.Rounded.LibraryMusic,
-        modifier = Modifier.size(dimension).clip(RoundedCornerShape(18.dp))
+        modifier = Modifier.size(dimension).clip(SLEEVE_SHAPE)
             .semantics { contentDescription = "Capa padrão da playlist" },
         iconFraction = 0.39f,
     )
