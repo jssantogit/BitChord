@@ -3861,59 +3861,36 @@ private fun BitChordApp(
                     actions = {
                         if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null &&
                             !showSettings && !showAccountScrobbling) {
-                            if (openedCanonicalPlaylist == null) {
-                                if (com.music.bitchord.ui.screens.showPlaylistHeaderCreateAction(
-                                        playlistLibraryCount
-                                    )) {
-                                    IconButton(onClick = {
-                                        editingSmartPlaylistId = null
-                                        editingNormalPlaylistId = null
-                                        showSmartPlaylistBuilder = true
-                                    }) {
-                                        Icon(
-                                            Icons.Rounded.PlaylistAdd,
-                                            contentDescription = "Nova playlist",
-                                            tint = MaterialTheme.colorScheme.onSurface,
-                                        )
-                                    }
-                                }
-                                NativeCollectionSearchAction(
-                                    searching = playlistLibrarySearching,
-                                    contentDescription = "Pesquisar playlists",
-                                    onClick = {
+                            CanonicalPlaylistToolbarActions(
+                                hasDetail = openedCanonicalPlaylist != null,
+                                showCreate = com.music.bitchord.ui.screens.showPlaylistHeaderCreateAction(
+                                    playlistLibraryCount,
+                                ),
+                                searching = if (openedCanonicalPlaylist == null)
+                                    playlistLibrarySearching else playlistDetailSearching,
+                                onCreate = {
+                                    editingSmartPlaylistId = null
+                                    editingNormalPlaylistId = null
+                                    showSmartPlaylistBuilder = true
+                                },
+                                onSearch = {
+                                    if (openedCanonicalPlaylist == null) {
                                         playlistLibrarySearching = !playlistLibrarySearching
                                         if (!playlistLibrarySearching) playlistLibraryQuery = ""
-                                    },
-                                )
-                                // The native filter icon now selects Normal/Intelligent.
-                                // Keep the secondary alphabetic ordering in the native
-                                // overflow surface rather than adding a bespoke filter.
-                                NativeCollectionSortAction(
-                                    contentDescription = "Filtrar playlists",
-                                    onClick = { playlistLibraryOptionsMenu = true },
-                                )
-                                NativeCollectionOverflowAction(
-                                    contentDescription = "Ordenar playlists",
-                                    onClick = { playlistLibrarySortMenu = true },
-                                )
-                            } else {
-                                NativeCollectionSearchAction(
-                                    searching = playlistDetailSearching,
-                                    contentDescription = "Buscar na playlist",
-                                    onClick = {
+                                    } else {
                                         playlistDetailSearching = !playlistDetailSearching
                                         if (!playlistDetailSearching) playlistDetailQuery = ""
-                                    },
-                                )
-                                NativeCollectionSortAction(
-                                    contentDescription = "Ordenar músicas",
-                                    onClick = { playlistDetailSortMenu = true },
-                                )
-                                NativeCollectionOverflowAction(
-                                    contentDescription = "Opções da playlist",
-                                    onClick = { playlistDetailOptionsMenu = true },
-                                )
-                            }
+                                    }
+                                },
+                                onSortOrFilter = {
+                                    if (openedCanonicalPlaylist == null) playlistLibraryOptionsMenu = true
+                                    else playlistDetailSortMenu = true
+                                },
+                                onOverflow = {
+                                    if (openedCanonicalPlaylist == null) playlistLibrarySortMenu = true
+                                    else playlistDetailOptionsMenu = true
+                                },
+                            )
                         }
                         // This is intentionally scoped to Listen together: the
                         // round-trip time is meaningful while coordinating a
@@ -5778,6 +5755,43 @@ private fun BitChordApp(
         }
 
     }
+}
+
+/** Native toolbar actions shared by library and canonical playlist details.
+ * The same icon controls as other browse screens, with no UI logic in BitChordApp.
+ */
+@Composable
+private fun CanonicalPlaylistToolbarActions(
+    hasDetail: Boolean,
+    showCreate: Boolean,
+    searching: Boolean,
+    onCreate: () -> Unit,
+    onSearch: () -> Unit,
+    onSortOrFilter: () -> Unit,
+    onOverflow: () -> Unit,
+) {
+    if (!hasDetail && showCreate) {
+        IconButton(onClick = onCreate) {
+            Icon(
+                Icons.Rounded.PlaylistAdd,
+                contentDescription = "Nova playlist",
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+    NativeCollectionSearchAction(
+        searching = searching,
+        contentDescription = if (hasDetail) "Buscar na playlist" else "Pesquisar playlists",
+        onClick = onSearch,
+    )
+    NativeCollectionSortAction(
+        contentDescription = if (hasDetail) "Ordenar músicas" else "Filtrar playlists",
+        onClick = onSortOrFilter,
+    )
+    NativeCollectionOverflowAction(
+        contentDescription = if (hasDetail) "Opções da playlist" else "Ordenar playlists",
+        onClick = onOverflow,
+    )
 }
 
 /**
