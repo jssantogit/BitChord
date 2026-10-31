@@ -1250,6 +1250,12 @@ internal fun SmartPlaylistV2WizardUi(
         }
     }
 
+    // The full-screen editor captures back itself; an open native alert must
+    // dismiss before that back action attempts to leave the draft.
+    BackHandler(enabled = confirmDiscard || confirmDeleteNormal) {
+        confirmDiscard = false
+        confirmDeleteNormal = false
+    }
     if (confirmDiscard) {
         ConfirmationAlert(
             hazeState = null, // Wizard lives in a separate full-screen Dialog.
