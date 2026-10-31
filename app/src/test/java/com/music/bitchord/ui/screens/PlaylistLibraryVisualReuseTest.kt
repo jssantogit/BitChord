@@ -30,6 +30,11 @@ import org.robolectric.annotation.ConscryptMode
 class PlaylistLibraryVisualReuseTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun emptyPlaylistListDoesNotShowDuplicateHeaderCreationAction() {
+        assertEquals(false, showPlaylistHeaderCreateAction(0))
+        assertEquals(true, showPlaylistHeaderCreateAction(1))
+    }
+
     @Test fun playlistLibrarySearchAndSortWorkOnActualLibraryCardIdentity() {
         fun normal(title: String) = LibraryPlaylistCard.Normal(
             com.music.bitchord.data.model.ShelfItem(
