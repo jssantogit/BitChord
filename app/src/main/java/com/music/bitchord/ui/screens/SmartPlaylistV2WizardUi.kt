@@ -263,7 +263,7 @@ private fun iconForConditionCategory(id: String) = when (id) {
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun <T> WizardChoiceDialog(
+internal fun <T> WizardChoiceDialog(
     title: String,
     options: List<T>,
     label: (T) -> String,
