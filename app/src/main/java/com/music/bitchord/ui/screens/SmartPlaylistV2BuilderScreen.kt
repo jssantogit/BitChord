@@ -98,6 +98,12 @@ private fun newRule(): SmartPlaylistRule = SmartPlaylistRule.Comparison(
     1.0,
 )
 
+/** A reusable smart filter cannot mutate a canonical manual playlist in place. */
+internal fun canApplySmartFilterToDraft(
+    normalMode: Boolean,
+    editingNormalId: String?,
+): Boolean = !normalMode && editingNormalId == null
+
 private enum class SmartPlaylistManageTab { PLAYLISTS, FILTERS, CLASSIC }
 private data class PendingSmartDeletion(val id: String, val name: String, val isFilter: Boolean)
 
@@ -846,7 +852,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                         onChosen = { option ->
                             when (option) {
                                 "Aplicar regras ao rascunho" -> {
-                                    if (normalMode || editingNormalId != null) {
+                                    if (!canApplySmartFilterToDraft(normalMode, editingNormalId)) {
                                         error = "Filtros inteligentes não podem alterar uma playlist normal. Use Criar playlist com este filtro."
                                     } else {
                                         rule = filter.rules
@@ -858,7 +864,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                     }
                                 }
                                 "Combinar com o rascunho (E)" -> {
-                                    if (normalMode || editingNormalId != null) {
+                                    if (!canApplySmartFilterToDraft(normalMode, editingNormalId)) {
                                         error = "A combinação de regras é exclusiva de playlists inteligentes."
                                     } else {
                                         try {
