@@ -130,3 +130,28 @@ persistencia entre voltas.
 O gatilho `push` esta limitado a esta pagina de autorizacao e as branches
 de playlists #192/#202 em `.github/workflows/physical-smoke-apk.yml`.
 **Nao autoriza merge, release de producao, limpeza de dados nem alteracao da main.**
+
+
+## PR #202 — smoke físico pós-ajustes de Playlists (31/10/2026)
+
+**Contexto da autorização:** após a proposta de validar a CI e realizar um novo smoke visual/funcional no Galaxy A54, o usuário respondeu **“Seguimos então”**, em 31/10/2026. Isso autoriza o avanço ao próximo teste, não o merge da PR.
+
+O código da PR #202 `ef1df9c4658fc8addcf2cded5f910f483264bc53` passou na
+[Android CI #41194766991](https://github.com/jssantogit/BitChord/actions/runs/41194766991)
+com **SUCCESS** antes deste commit exclusivamente documental.
+Disparar somente uma build de teste `devDebug` sobre a branch
+`ui/library-playlists-alignment-20261030`, dependente da PR #193.
+O próprio workflow repete testes e `assembleDevDebug` antes de publicar o APK.
+
+### Checklist do Galaxy A54
+
+- Biblioteca: título “Adições recentes”, capas com nome de música e artista, links para Artistas/Álbuns/Músicas sem seletor redundante, busca em cada categoria.
+- Playlists: estado vazio, botão “Nova Playlist”, lista vertical com capas e subtítulos, busca, filtros Normal/Inteligente e ordenação.
+- Criação normal: fontes locais sem servidor, músicas/álbuns/artistas, capa de álbum, adicionar álbum inteiro pelo `+`, toque no álbum abre faixas, contagem e revisão, nome/arte e persistência após voltar.
+- Criação inteligente: categorias/condições, filtros, fontes, E/OU/NOT, revisão, prévia verdadeira e referências.
+- Detalhe: capa grande, botões Tocar/Fila, miniplayer e bottom bar, rolagem, edição, título atualizado, reprodução ao tocar faixa, menu `⋮` de fila; mídias indisponíveis não ficam reproduzíveis.
+- Reabrir app, pesquisar novamente, trocar conta/fonte e recolher diagnóstico de eventuais erros, capas ou `main_thread_stall`.
+
+O commit gatilho altera **apenas este documento**. Sem merge, atualização da main,
+release, assinatura de produção ou encerramento de issue. O APK não está concluído
+até o workflow terminar com sucesso e disponibilizar o artefato.
