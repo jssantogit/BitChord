@@ -155,6 +155,10 @@ internal fun UnifiedPlaylistLibraryShelf(
     onSelectedCardChange: (LibraryPlaylistCard?) -> Unit = {},
     listState: LazyListState? = null,
     detailListState: LazyListState? = null,
+    detailSearching: Boolean = false,
+    detailQuery: String = "",
+    onDetailQueryChange: (String) -> Unit = {},
+    detailSort: PlaylistLibrarySort = PlaylistLibrarySort.DEFAULT,
     onPlaylistCountChange: (Int) -> Unit = {},
 ) {
     val context = LocalContext.current.applicationContext
@@ -371,6 +375,10 @@ internal fun UnifiedPlaylistLibraryShelf(
                 }
             },
             contentPadding = contentPadding,
+            searching = detailSearching,
+            query = detailQuery,
+            onQueryChange = onDetailQueryChange,
+            sort = detailSort,
             listState = detailListState,
         )
     }
