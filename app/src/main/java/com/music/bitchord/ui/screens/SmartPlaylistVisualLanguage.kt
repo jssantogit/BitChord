@@ -21,7 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.TextButton
 import com.music.bitchord.ui.components.PillTextField
 import com.music.bitchord.ui.components.CoverPlaceholder
 import androidx.compose.material3.Text
@@ -34,13 +34,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import com.music.bitchord.ui.theme.AccentRed
+import com.music.bitchord.ui.theme.rememberArtworkPalette
 
 /**
- * Local BitChord/Apple Music treatment for the Android playlist flow.
- *
- * Uses existing BitChordTheme colours and SF Pro Display. AccentRed is the
- * established Apple Music red from Theme.kt, not a new Material 3 colorScheme.
- * These components do not change UI or domain state on their own.
+ * The wizard borrows established Settings/Detail components. It is a workflow
+ * composed from native controls, not a second Material3 design language.
  */
 @Composable
 internal fun PlaylistWizardSecondaryAction(
@@ -48,16 +46,12 @@ internal fun PlaylistWizardSecondaryAction(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    // Native Material button keeps focus, ripple and disabled semantics.
-    FilledTonalButton(
+    // The native Settings/Detail screens use text actions for secondary work.
+    // Avoid adding a second tall, filled Material3 button in a card.
+    TextButton(
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        shape = RoundedCornerShape(13.dp),
-        colors = ButtonDefaults.filledTonalButtonColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = AccentRed,
-        ),
     ) {
         Text(label, style = MaterialTheme.typography.bodyLarge)
     }
@@ -72,8 +66,8 @@ internal fun PlaylistWizardPrimaryAction(
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.fillMaxWidth().height(54.dp),
-        shape = RoundedCornerShape(15.dp),
+        modifier = Modifier.fillMaxWidth().height(50.dp),
+        shape = GroupShape,
         colors = ButtonDefaults.buttonColors(
             containerColor = AccentRed,
             contentColor = androidx.compose.ui.graphics.Color.White,
@@ -131,25 +125,17 @@ internal fun PlaylistWizardSearchEntry(
     onValueChange: (String) -> Unit,
     placeholder: String,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(
-            Icons.Rounded.Search,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
-        PillTextField(
-            value = value,
-            onValueChange = onValueChange,
-            placeholder = placeholder,
-            modifier = Modifier.weight(1f),
-            accessibilityLabel = placeholder,
-        )
-    }
+    // Exact field already used by the native DetailScreen and playlist library:
+    // search icon, glass treatment, 46dp target, text cursor and clear action.
+    DetailSearchField(
+        query = value,
+        onQueryChange = onValueChange,
+        onClose = { onValueChange("") },
+        autoFocus = false,
+        onFocused = {},
+        palette = rememberArtworkPalette(imageUrl = null),
+        placeholder = placeholder,
+    )
 }
 
 @Composable
@@ -176,15 +162,9 @@ internal data class PlaylistWizardNavOption(
 )
 
 @Composable
-internal fun PlaylistWizardNavigationList(
-    options: List<PlaylistWizardNavOption>,
-) {
-    // SettingsRow already provides icon, title, subtitle, chevron and click
-    // semantics. Avoid a separate implementation for the condition catalog.
-    Column(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface),
-    ) {
+internal fun PlaylistWizardNavigationList(options: List<PlaylistWizardNavOption>) {
+    // Share the actual SettingsGroup surface and SettingsRow geometry.
+    SettingsGroupSurface {
         options.forEachIndexed { index, option ->
             SettingsRow(
                 icon = option.icon,
@@ -194,13 +174,7 @@ internal fun PlaylistWizardNavigationList(
                 reserveIconSpace = false,
                 iconTint = AccentRed,
             )
-            if (index < options.lastIndex) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = if (option.icon != null) 52.dp else 16.dp),
-                    thickness = 0.5.dp,
-                    color = MaterialTheme.colorScheme.outline,
-                )
-            }
+            if (index < options.lastIndex) RowDivider()
         }
     }
 }
@@ -211,28 +185,23 @@ internal fun PlaylistWizardSelectionRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    // Reuse native SettingsRow for source/rule selection instead of manually
-    // reimplementing text, touch area, alignment and click semantics.
-    Box(
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        SettingsRow(
-            title = label,
-            onClick = onClick,
-            reserveIconSpace = false,
-            trailing = {
-                if (selected) {
-                    Icon(
-                        Icons.Rounded.Check,
-                        contentDescription = "Selecionado",
-                        tint = AccentRed,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            },
-        )
-    }
+    // A normal SettingsRow in its parent Settings group; no nested custom
+    // grey rounded rectangles for every single option.
+    SettingsRow(
+        title = label,
+        onClick = onClick,
+        reserveIconSpace = false,
+        trailing = {
+            if (selected) {
+                Icon(
+                    Icons.Rounded.Check,
+                    contentDescription = "Selecionado",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        },
+    )
 }
 
 /**
