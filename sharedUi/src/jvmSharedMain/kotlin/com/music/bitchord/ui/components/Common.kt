@@ -960,21 +960,23 @@ fun PillTextField(
     keyboardActions: KeyboardActions = KeyboardActions.Default,
     /** Optional accessible label supplied by a form, without duplicating this field. */
     accessibilityLabel: String? = null,
+    /** The same native field can grow for notes and playlist descriptions. */
+    multiline: Boolean = false,
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(40.dp)
+            .heightIn(min = if (multiline) 96.dp else 40.dp)
             .background(container, RoundedCornerShape(11.dp))
-            .padding(horizontal = 12.dp),
-        contentAlignment = Alignment.CenterStart,
+            .padding(horizontal = 12.dp, vertical = if (multiline) 12.dp else 0.dp),
+        contentAlignment = if (multiline) Alignment.TopStart else Alignment.CenterStart,
     ) {
         if (value.isEmpty()) {
             Text(
                 text = placeholder,
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+                maxLines = if (multiline) 3 else 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
@@ -982,7 +984,9 @@ fun PillTextField(
             value = value,
             onValueChange = onValueChange,
             enabled = enabled,
-            singleLine = true,
+            singleLine = !multiline,
+            minLines = if (multiline) 3 else 1,
+            maxLines = if (multiline) 8 else 1,
             textStyle = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 15.sp,
                 color = MaterialTheme.colorScheme.onBackground,
