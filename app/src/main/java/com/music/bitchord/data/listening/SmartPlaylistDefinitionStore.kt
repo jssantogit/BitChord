@@ -64,7 +64,7 @@ internal interface SmartPlaylistDefinitionDao {
         SmartPlaylistV2FilterEntity::class,
         CanonicalStaticPlaylistEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 internal abstract class SmartPlaylistDefinitionDatabase : RoomDatabase() {
@@ -127,6 +127,15 @@ internal abstract class SmartPlaylistDefinitionDatabase : RoomDatabase() {
                 )
             }
         }
+        /** Optional user descriptions for V2 and canonical static playlists.
+         * Existing rows keep their rule/member identity and default to blank.
+         */
+        internal val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE canonical_static_playlist ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE smart_playlist_v2_definition ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+            }
+        }
         @Volatile private var instance: SmartPlaylistDefinitionDatabase? = null
 
         fun get(context: Context): SmartPlaylistDefinitionDatabase =
@@ -135,7 +144,7 @@ internal abstract class SmartPlaylistDefinitionDatabase : RoomDatabase() {
                     context.applicationContext,
                     SmartPlaylistDefinitionDatabase::class.java,
                     DATABASE_NAME,
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build().also { instance = it }
             }
     }
