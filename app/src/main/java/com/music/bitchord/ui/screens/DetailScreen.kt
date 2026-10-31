@@ -96,6 +96,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -1150,6 +1151,7 @@ internal fun DetailSearchField(
             .padding(horizontal = HEADER_GUTTER)
             .padding(bottom = 10.dp)
             .height(46.dp)
+            .testTag("native-detail-search-field")
             .clip(PILL_SHAPE)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
             .border(0.5.dp, Color.White.copy(alpha = 0.10f), PILL_SHAPE)
