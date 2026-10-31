@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -24,6 +25,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.TextButton
 import com.music.bitchord.ui.components.PillTextField
 import com.music.bitchord.ui.components.CoverPlaceholder
+import com.music.bitchord.ui.components.ArtworkPageBackButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -40,6 +42,50 @@ import com.music.bitchord.ui.theme.rememberArtworkPalette
  * The wizard borrows established Settings/Detail components. It is a workflow
  * composed from native controls, not a second Material3 design language.
  */
+/**
+ * Navigation for saved filters/playlists is composed entirely from existing
+ * BitChord chrome: native floating back, text actions and Settings segments.
+ */
+@Composable
+internal fun PlaylistManagerChrome(
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+    onBack: () -> Unit,
+    onNew: () -> Unit,
+    onDraft: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = com.music.bitchord.ui.components.PAGE_GUTTER),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ArtworkPageBackButton(onClick = onBack, hazeState = null)
+            Text(
+                "Filtros e versões anteriores",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.weight(1f).padding(start = 12.dp),
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onNew) { Text("Nova playlist") }
+            TextButton(onClick = onDraft) { Text("Retomar rascunho") }
+        }
+        SegmentedControl(
+            options = listOf("Inteligentes", "Filtros", "Clássicas"),
+            selectedIndex = selectedIndex,
+            onSelect = onSelect,
+        )
+    }
+}
+
 @Composable
 internal fun PlaylistWizardSecondaryAction(
     label: String,
