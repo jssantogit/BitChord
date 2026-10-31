@@ -3767,13 +3767,12 @@ private fun BitChordApp(
                             (detail != null && detailActiveShelf != null) ||
                             selectedMoodGenre != null -> true
                         showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null ->
-                            if (openedCanonicalPlaylist != null) {
+                            // Always identify the Library's playlists collection.
+                            // The in-list header can be scrolled off or restored
+                            // at an old position; the native top bar must not be blank.
+                            openedCanonicalPlaylist == null ||
                                 playlistDetailListState.firstVisibleItemIndex > 0 ||
-                                    playlistDetailListState.firstVisibleItemScrollOffset > 64
-                            } else {
-                                playlistLibraryListState.firstVisibleItemIndex > 0 ||
-                                    playlistLibraryListState.firstVisibleItemScrollOffset > 64
-                            }
+                                playlistDetailListState.firstVisibleItemScrollOffset > 64
                         // The page leads with its own large "Replay", so the bar
                         // stays out of the way until that has been scrolled off.
                         showReplay -> replayScrolled
