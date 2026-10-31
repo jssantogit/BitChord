@@ -474,14 +474,12 @@ internal fun SmartPlaylistV2WizardUi(
                     modifier = Modifier.align(Alignment.CenterStart),
                 )
                 if (page == WizardStep.IDENTITY || page == WizardStep.EDIT) {
-                    IconButton(
-                        modifier = Modifier.align(Alignment.CenterEnd),
-                        onClick = onManage,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Tune,
+                    Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                        CircleIconButton(
+                            icon = Icons.Rounded.Tune,
                             contentDescription = "Filtros reutilizáveis",
-                            tint = MaterialTheme.colorScheme.onBackground,
+                            onClick = onManage,
+                            size = 50.dp,
                         )
                     }
                 }
