@@ -194,6 +194,7 @@ class A0RetainedCandidateReviewActivity:Activity() {
                                         this@A0RetainedCandidateReviewActivity,
                                         row.entry,choice,profile,song,
                                         isCancelled={stopped.get()},
+                                        slotIndex=index,
                                         onTransport={transport=it},
                                         onDiagnostic={stage,reason ->
                                             lastStage.set(stage)

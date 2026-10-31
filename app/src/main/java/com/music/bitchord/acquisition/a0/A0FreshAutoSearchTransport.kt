@@ -59,7 +59,8 @@ internal class A0FreshAutoSearchTransport(
         val traceStart=android.os.SystemClock.elapsedRealtime()
         A0AcquisitionDiagnostics.emit(traceScope,
             A0AcquisitionDiagnostics.Phase.SEARCH_START,
-            count=releaseSlots.size)
+            count=releaseSlots.size,
+            slot=releaseSlots.indexOf(entry))
         val valid=releaseSlots.size in 1..SoulseekBatchPlan.MAX_TRACKS &&
             releaseSlots.map{it.trackId}.distinct().size==releaseSlots.size &&
             entry in releaseSlots &&

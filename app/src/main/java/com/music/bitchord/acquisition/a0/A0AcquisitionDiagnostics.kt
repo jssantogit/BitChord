@@ -55,6 +55,7 @@ internal object A0AcquisitionDiagnostics {
         reason:Enum<*>?=null,
         elapsedMillis:Long=-1L,
         count:Int=-1,
+        slot:Int=-1,
     ) {
         if(scope<=0)return
         runCatching {
@@ -62,7 +63,8 @@ internal object A0AcquisitionDiagnostics {
                 "soulseek_trace scope=$scope phase=${phase.name}" +
                 " reason=${reason?.name ?: "NONE"}" +
                 " elapsed_ms=${elapsedMillis.coerceIn(-1L,600_000L)}" +
-                " count=${count.coerceIn(-1,100_000)}")
+                " count=${count.coerceIn(-1,100_000)}" +
+                " slot=${slot.coerceIn(-1,500)}")
         }
     }
 }

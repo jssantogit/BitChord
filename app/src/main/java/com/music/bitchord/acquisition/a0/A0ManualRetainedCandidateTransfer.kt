@@ -40,6 +40,7 @@ internal object A0ManualRetainedCandidateTransfer {
         profile:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
         sourceSong:Song,
         isCancelled:()->Boolean,
+        slotIndex:Int=-1,
         onTransport:(A0FreshAuthenticatedAutoTransport)->Unit={},
         onDiagnostic:(Stage,A0AutoPostTransferTechnicalGate.Reason?)->Unit={_,_->},
     ):Status {
@@ -55,7 +56,8 @@ internal object A0ManualRetainedCandidateTransfer {
             try { onDiagnostic(stage,reason) }catch(_:Exception) {}
         }
         A0AcquisitionDiagnostics.emit(traceScope,
-            A0AcquisitionDiagnostics.Phase.REVIEW_START)
+            A0AcquisitionDiagnostics.Phase.REVIEW_START,
+            slot=slotIndex)
         val allowed=A0ManualReviewCandidatePolicy.retain(
             entry,listOf(choice),profile).singleOrNull()
         if(allowed!==choice) {

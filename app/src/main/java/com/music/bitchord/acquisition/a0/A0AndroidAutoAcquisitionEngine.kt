@@ -163,11 +163,18 @@ internal object A0AndroidAutoAcquisitionEngine {
             else {
                 val discovery=A0FreshAutoSearchTransport(app,generation,quality)
                 val executor=A0AutoBatchExecutor { entry ->
+                    val transferScope=A0AcquisitionDiagnostics.newScope()
+                    val slotIndex=entries.indexOf(entry)
+                    A0AcquisitionDiagnostics.emit(transferScope,
+                        A0AcquisitionDiagnostics.Phase.TRANSPORT_START,
+                        slot=slotIndex)
                     A0AndroidAutoAcquisitionPort(
                         app,generation,
-                        A0FreshAuthenticatedAutoTransport(app,generation),
+                        A0FreshAuthenticatedAutoTransport(
+                            app,generation,transferScope),
                         jobId=checkNotNull(jobs[entry.trackId]),
                         reservedAutomatic=true,
+                        diagnosticScope=transferScope,
                         onTransferStarting={
                             try {onSlotTransferring(entries.indexOf(entry))}
                             catch(_:Exception){}
