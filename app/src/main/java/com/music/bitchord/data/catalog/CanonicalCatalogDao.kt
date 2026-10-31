@@ -14,6 +14,12 @@ internal data class CanonicalPlaylistAlbumCoverRow(
     val recordingId: String,
 )
 
+/** True Release title linked to a recorded local RecordingId, not an inferred album. */
+internal data class CanonicalRecentLocalReleaseTitleRow(
+    val recordingId: String,
+    val albumTitle: String,
+)
+
 internal data class CanonicalArtistCreditRow(
     val artistId: String,
     val artistName: String,
@@ -327,6 +333,20 @@ internal interface CanonicalCatalogDao {
     suspend fun recentLocalAdditions(
         localProvider: String, limit: Int = 12,
     ): List<CanonicalBrowseAssetRow>
+
+    @Query(
+        """
+        SELECT rt.recordingId AS recordingId, MIN(rel.title) AS albumTitle
+        FROM catalog_release_track AS rt
+        INNER JOIN catalog_release AS rel ON rel.id = rt.releaseId
+        WHERE rt.recordingId IN (:recordingIds)
+          AND rel.title IS NOT NULL AND trim(rel.title) != ''
+        GROUP BY rt.recordingId
+        """,
+    )
+    suspend fun recentLocalReleaseTitles(
+        recordingIds: List<String>,
+    ): List<CanonicalRecentLocalReleaseTitleRow>
 
     @Query("SELECT * FROM catalog_recording WHERE id IN (:recordingIds)")
     suspend fun recordingsByIds(recordingIds: List<String>): List<RecordingEntity>
