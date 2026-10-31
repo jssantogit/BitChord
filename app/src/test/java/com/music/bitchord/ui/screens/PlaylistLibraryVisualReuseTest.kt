@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -29,6 +30,30 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class PlaylistLibraryVisualReuseTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun discardPromptUsesNativeAlertAndPreservesBothActions() {
+        var discarded = 0
+        var continued = 0
+        compose.setContent {
+            com.music.bitchord.ui.components.ConfirmationAlert(
+                hazeState = null,
+                title = "Descartar alterações?",
+                description = "O rascunho desta playlist não será salvo.",
+                confirmLabel = "Descartar",
+                dismissLabel = "Continuar editando",
+                destructive = true,
+                onConfirm = { discarded++ },
+                onDismiss = { continued++ },
+            )
+        }
+        compose.onNodeWithTag("native-confirmation-alert").assertExists()
+        compose.onNodeWithText("Continuar editando").performClick()
+        compose.onNodeWithText("Descartar").performClick()
+        compose.runOnIdle {
+            assertEquals(1, continued)
+            assertEquals(1, discarded)
+        }
+    }
 
     @Test fun emptyPlaylistListDoesNotShowDuplicateHeaderCreationAction() {
         assertEquals(false, showPlaylistHeaderCreateAction(0))
