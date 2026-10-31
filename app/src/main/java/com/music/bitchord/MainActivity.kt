@@ -2172,12 +2172,16 @@ private fun BitChordApp(
     val playlistDetailListState = rememberLazyListState()
     var playlistDetailSearching by remember { mutableStateOf(false) }
     var playlistDetailQuery by rememberSaveable { mutableStateOf("") }
+    var playlistDetailRows by remember { mutableStateOf<List<com.music.bitchord.ui.screens.V2DisplayRow>?>(null) }
     var playlistDetailSort by rememberSaveable {
         mutableStateOf(com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT)
     }
     var playlistDetailSortMenu by remember { mutableStateOf(false) }
     var playlistDetailOptionsMenu by remember { mutableStateOf(false) }
     LaunchedEffect(openedCanonicalPlaylist?.id) {
+        playlistDetailRows = null
+        playlistDetailOptionsMenu = false
+        playlistDetailSortMenu = false
         playlistDetailSearching = false
         playlistDetailQuery = ""
         playlistDetailSort = com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT
@@ -2822,6 +2826,7 @@ private fun BitChordApp(
                             onDetailSearchingChange = { playlistDetailSearching = it },
                             detailQuery = playlistDetailQuery,
                             onDetailQueryChange = { playlistDetailQuery = it },
+                            onDetailRowsReady = { playlistDetailRows = it },
                             detailSort = playlistDetailSort,
                             onPlaylistCountChange = { playlistLibraryCount = it },
                         )
@@ -5380,34 +5385,75 @@ private fun BitChordApp(
                     }
                 }
             }
-            if (playlistDetailOptionsMenu && openedCanonicalPlaylist != null) {
-                BackHandler { playlistDetailOptionsMenu = false }
-                FrostedMenuPanel(hazeState = hazeState, onDismiss = {
-                    playlistDetailOptionsMenu = false
-                }) {
-                    FrostedMenuRow(
-                        label = "Editar playlist",
-                        checked = false,
-                        onClick = {
-                            playlistDetailOptionsMenu = false
-                            val selected = openedCanonicalPlaylist
-                            openedCanonicalPlaylist = null
-                            when (selected) {
-                                is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart -> {
-                                    editingSmartPlaylistId = selected.definition.id
-                                    editingNormalPlaylistId = null
-                                    showSmartPlaylistBuilder = true
-                                }
-                                is com.music.bitchord.ui.screens.LibraryPlaylistCard.CanonicalNormal -> {
-                                    editingNormalPlaylistId = selected.definition.id
-                                    editingSmartPlaylistId = null
-                                    showSmartPlaylistBuilder = true
-                                }
-                                else -> Unit
-                            }
-                        },
-                    )
+
+        }
+
+        // Reuse the same native album/playlist bottom sheet, with canonical
+        // artwork and RecordingId-backed queue actions instead of legacy Songs.
+        if (showPlaylistLibrary && !showSmartPlaylistBuilder &&
+            playlistDetailOptionsMenu && openedCanonicalPlaylist != null) {
+            val selected = openedCanonicalPlaylist!!
+            val queueCanonical: (com.music.bitchord.playback.CanonicalCollectionIntent) -> Unit = { intent ->
+                playlistDetailOptionsMenu = false
+                when (selected) {
+                    is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart ->
+                        executeSmartCollection(
+                            SmartCollectionActionSource.SavedV2Definition(selected.definition.id),
+                            intent,
+                        )
+                    is com.music.bitchord.ui.screens.LibraryPlaylistCard.CanonicalNormal ->
+                        executeSmartCollection(
+                            SmartCollectionActionSource.SavedStaticPlaylist(selected.definition.id),
+                            intent,
+                        )
+                    else -> Unit
                 }
+            }
+            ModalBottomSheet(
+                onDismissRequest = { playlistDetailOptionsMenu = false },
+                containerColor = MaterialTheme.colorScheme.background,
+            ) {
+                BrowseActionsSheet(
+                    target = BrowseTarget(
+                        browseId = null,
+                        title = selected.title,
+                        subtitle = com.music.bitchord.ui.screens.canonicalPlaylistDetailMeta(
+                            smart = selected is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart,
+                            rows = playlistDetailRows,
+                        ),
+                        type = BrowseType.PLAYLIST,
+                        fromCard = false,
+                    ),
+                    onPlayNext = {
+                        queueCanonical(com.music.bitchord.playback.CanonicalCollectionIntent.ADD_NEXT)
+                    },
+                    onAddToQueue = {
+                        queueCanonical(com.music.bitchord.playback.CanonicalCollectionIntent.ADD_TO_QUEUE)
+                    },
+                    headerArtwork = {
+                        com.music.bitchord.ui.screens.CanonicalPlaylistCoverArt(
+                            rows = playlistDetailRows.orEmpty(),
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    },
+                    onEdit = {
+                        playlistDetailOptionsMenu = false
+                        openedCanonicalPlaylist = null
+                        when (selected) {
+                            is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart -> {
+                                editingSmartPlaylistId = selected.definition.id
+                                editingNormalPlaylistId = null
+                                showSmartPlaylistBuilder = true
+                            }
+                            is com.music.bitchord.ui.screens.LibraryPlaylistCard.CanonicalNormal -> {
+                                editingNormalPlaylistId = selected.definition.id
+                                editingSmartPlaylistId = null
+                                showSmartPlaylistBuilder = true
+                            }
+                            else -> Unit
+                        }
+                    },
+                )
             }
         }
 
