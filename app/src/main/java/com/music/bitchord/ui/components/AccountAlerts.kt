@@ -248,7 +248,7 @@ fun DiscordTokenAlert(
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun TextValueAlert(
-    hazeState: HazeState,
+    hazeState: HazeState?,
     title: String,
     message: String,
     placeholder: String,
@@ -260,6 +260,8 @@ fun TextValueAlert(
     saveEnabled: Boolean = true,
     /** A third action between Save and Cancel, for a value that can be cleared. */
     onRemove: (() -> Unit)? = null,
+    /** Sensitive values use the same masked native PillTextField as Last.fm. */
+    isPassword: Boolean = false,
 ) {
     AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
         Column(
@@ -274,18 +276,26 @@ fun TextValueAlert(
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
             )
-            Text(
-                text = message,
-                modifier = Modifier.padding(top = 4.dp, bottom = 14.dp),
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 17.sp),
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-            )
+            if (message.isNotBlank()) {
+                Text(
+                    text = message,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 14.dp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 17.sp),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                )
+            } else {
+                Spacer(Modifier.height(14.dp))
+            }
             PillTextField(
                 value = value,
                 onValueChange = onValueChange,
                 placeholder = placeholder,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                isPassword = isPassword,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = if (isPassword) KeyboardType.Password else KeyboardType.Text,
+                    imeAction = ImeAction.Done,
+                ),
                 keyboardActions = KeyboardActions(onDone = { onSave() }),
             )
         }
