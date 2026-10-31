@@ -610,6 +610,7 @@ private fun BitChordApp(
     // A Library shelf's "Show all" — the shelf it was opened from, so its own
     // cards can be laid out again as a full-screen grid. See [LibraryGridPage].
     var libraryShowAll by remember { mutableStateOf<HomeShelf?>(null) }
+    var showAllLocalRecentAdditions by rememberSaveable { mutableStateOf(false) }
     var detailActiveShelf by remember { mutableStateOf<HomeShelf?>(null) }
     var librarySortMenuOpen by remember { mutableStateOf(false) }
     var showLyricsSources by remember { mutableStateOf(false) }
@@ -2614,6 +2615,7 @@ private fun BitChordApp(
         // BackHandler below has to close first, or back would skip past it
         // straight to Library. See [onLibraryItemClick].
         BackHandler(enabled = libraryShowAll != null && detail == null) { libraryShowAll = null }
+        BackHandler(enabled = showAllLocalRecentAdditions && detail == null) { showAllLocalRecentAdditions = false }
         BackHandler(enabled = detailActiveShelf != null) { detailActiveShelf = null }
         BackHandler(enabled = rediscoveryRecordingId != null) { rediscoveryRecordingId = null }
         BackHandler(enabled = showCanonicalMyRatings) { showCanonicalMyRatings = false }
@@ -2643,6 +2645,7 @@ private fun BitChordApp(
                         // give way to the `detail != null` branch below it
                         // rather than keep showing the grid underneath.
                         libraryShowAll != null && detail == null -> "library_show_all"
+                        showAllLocalRecentAdditions && detail == null -> "local_recent_additions"
                         // When a sub-screen overlay is active, keep SettingsSheet
                         // mounted so its scroll position survives.  The overlay is
                         // rendered below the AnimatedContent block.
@@ -2874,6 +2877,21 @@ private fun BitChordApp(
                             onSongSwipe = onSongSwipe,
                             onRetry = viewModel::loadHistory,
                             contentPadding = listPadding,
+                        )
+                    } else if (key == "local_recent_additions") {
+                        com.music.bitchord.ui.screens.CanonicalLocalRecentAdditions(
+                            showAll = true,
+                            contentPadding = listPadding,
+                            onOpenSongs = {
+                                showAllLocalRecentAdditions = false
+                                localFolderStates.getOrPut("local:all") { LocalFolderState() }
+                                    .tab = com.music.bitchord.ui.screens.LocalFolderTab.SONGS
+                                onLibraryItemClick(ShelfItem(
+                                    title = "Músicas", subtitle = "",
+                                    thumbnailUrl = null, videoId = null,
+                                    browseId = "local:all",
+                                ))
+                            },
                         )
                     } else if (key == "library_show_all") {
                         libraryShowAll?.let { shelf ->
@@ -3508,6 +3526,7 @@ private fun BitChordApp(
                             navigationHome = true,
                             localAdditions = {
                                 com.music.bitchord.ui.screens.CanonicalLocalRecentAdditions(
+                                    onSeeAll = { showAllLocalRecentAdditions = true },
                                     onOpenSongs = {
                                         localFolderStates.getOrPut("local:all") { LocalFolderState() }
                                             .tab = com.music.bitchord.ui.screens.LocalFolderTab.SONGS
@@ -3734,6 +3753,7 @@ private fun BitChordApp(
                         showDiscord -> "Discord"
                         showHistory -> stringResource(R.string.history)
                         libraryShowAll != null && detail == null -> libraryShowAll?.title.orEmpty()
+                        showAllLocalRecentAdditions && detail == null -> "Adições recentes"
                         showSmartPlaylistBuilder && detail == null -> "Nova playlist"
                         showPlaylistLibrary && detail == null ->
                             openedCanonicalPlaylist?.title ?: "Playlists"
@@ -3764,6 +3784,7 @@ private fun BitChordApp(
                             showEqualizer ||
                             showDiscord || showHistory ||
                             (libraryShowAll != null && detail == null) ||
+                            (showAllLocalRecentAdditions && detail == null) ||
                             (detail != null && detailActiveShelf != null) ||
                             selectedMoodGenre != null -> true
                         showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null ->
@@ -3786,6 +3807,7 @@ private fun BitChordApp(
                         showDiscord -> ({ showDiscord = false })
                         showHistory -> ({ showHistory = false })
                         libraryShowAll != null && detail == null -> ({ libraryShowAll = null })
+                        showAllLocalRecentAdditions && detail == null -> ({ showAllLocalRecentAdditions = false })
                         showSmartPlaylistBuilder && detail == null -> ({
                             showSmartPlaylistBuilder = false
                             editingSmartPlaylistId = null
