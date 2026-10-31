@@ -281,6 +281,11 @@ internal fun CanonicalPlaylistDetailScreen(
         }
     }
     val palette = rememberArtworkPalette(imageUrl = rows?.firstOrNull()?.localArtworkUri)
+    val playlistDescription = when (card) {
+        is LibraryPlaylistCard.CanonicalNormal -> card.definition.description
+        is LibraryPlaylistCard.Smart -> card.definition.description
+        is LibraryPlaylistCard.Normal -> ""
+    }.takeIf { it.isNotBlank() }
     val canPlay = rows?.isNotEmpty() == true &&
         (rows?.size ?: 0) <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE &&
         rows.orEmpty().all { it.isAvailablePlaylistMember() }
@@ -337,6 +342,16 @@ internal fun CanonicalPlaylistDetailScreen(
                     }
                 }
             )
+            }
+        }
+        if (playlistDescription != null) {
+            item(key = "playlist-detail-description") {
+                AboutSection(
+                    title = "Sobre a playlist",
+                    text = playlistDescription,
+                    palette = palette,
+                    horizontalPadding = PAGE_GUTTER,
+                )
             }
         }
         if (searching || query.isNotBlank()) {
