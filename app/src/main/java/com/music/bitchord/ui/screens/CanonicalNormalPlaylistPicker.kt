@@ -11,9 +11,31 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/**
+ * A new playlist on a genuinely local-only catalog should not present a
+ * misleading multi-source choice. Existing persisted null (all-sources) values
+ * are never migrated or replaced when opening an editor.
+ */
+internal fun defaultCanonicalNormalPlaylistSource(keys: List<String>): String? =
+    "local-mediastore".takeIf { keys == listOf(it) }
+
 /** Preserves the user's hand-picked order, with no implicit duplicate members. */
 internal fun toggleCanonicalStaticMember(ids: List<String>, id: String): List<String> =
     if (id in ids) ids.filterNot { it == id } else ids + id
+
+/** The group's full, current RecordingIds determine its checked state. */
+internal fun allCanonicalGroupMembersSelected(
+    members: List<String>, selected: List<String>,
+): Boolean = members.isNotEmpty() && members.all { it in selected }
+
+/** One tap on an album or artist toggles its complete verified set, preserving order. */
+internal fun toggleCanonicalGroupMembers(
+    members: List<String>, selected: List<String>,
+): List<String> = if (allCanonicalGroupMembersSelected(members, selected)) {
+    selected.filterNot { it in members }
+} else {
+    (selected + members).distinct()
+}
 
 /** Reorders one selected RecordingId without fabricating any media identity. */
 internal fun moveCanonicalStaticMember(
@@ -35,7 +57,12 @@ internal data class CanonicalPlaylistBrowseGroup(
     val id: String,
     val title: String,
     val type: CanonicalPlaylistBrowseType,
+    val artworkRow: V2DisplayRow? = null,
 )
+
+private const val DISPLAY_ARTIST_PREFIX = "browse-display-artist:"
+
+internal fun playlistDisplayArtistGroupId(name: String) = DISPLAY_ARTIST_PREFIX + name
 
 internal fun filterCanonicalPlaylistBrowseGroups(
     groups: List<CanonicalPlaylistBrowseGroup>, term: String,
@@ -46,8 +73,10 @@ internal fun filterCanonicalPlaylistBrowseGroups(
         .take(100)
 
 /**
- * Use actual ReleaseIds and ArtistIds plus provider-scoped membership. No
- * album inference from similarly titled tracks or display-artist strings.
+ * Releases use actual ReleaseIds. Artists prefer verified canonical ArtistIds;
+ * incompletely credited provider libraries also expose exact display-name
+ * browse groups. These groups are UI-only and resolve to real RecordingIds
+ * backed by the currently selected provider, never a fabricated ArtistId.
  */
 internal suspend fun canonicalNormalPlaylistBrowseGroups(
     context: Context,
@@ -65,14 +94,46 @@ internal suspend fun canonicalNormalPlaylistBrowseGroups(
                 dao.searchProviderScopedReleases(provider, term.trim()).map {
                     CanonicalPlaylistBrowseGroup(it.id, it.title, type)
                 }
-            CanonicalPlaylistBrowseType.ARTISTS ->
-                dao.searchProviderScopedArtists(provider, term.trim()).map {
+            CanonicalPlaylistBrowseType.ARTISTS -> {
+                val credited = dao.searchProviderScopedArtists(provider, term.trim()).map {
                     CanonicalPlaylistBrowseGroup(it.id, it.name, type)
                 }
+                val creditedNames = credited.mapTo(HashSet()) { it.title.lowercase() }
+                val displayOnly = dao.playlistDisplayArtistNames(provider, term.trim())
+                    .filterNot { it.lowercase() in creditedNames }
+                    .map { CanonicalPlaylistBrowseGroup(
+                        playlistDisplayArtistGroupId(it), it, type,
+                    ) }
+                credited + displayOnly
+            }
             else -> emptyList()
         }
     }
-    filterCanonicalPlaylistBrowseGroups(groups, term)
+    val filtered = filterCanonicalPlaylistBrowseGroups(groups, term)
+    if (filtered.isEmpty()) return@withContext filtered
+    val coverRecords = when (type) {
+        CanonicalPlaylistBrowseType.ALBUMS ->
+            dao.playlistAlbumCoverRecordingIds(keys, filtered.map { it.id })
+        CanonicalPlaylistBrowseType.ARTISTS -> {
+            val credited = filtered.filterNot { it.id.startsWith(DISPLAY_ARTIST_PREFIX) }
+            val display = filtered.filter { it.id.startsWith(DISPLAY_ARTIST_PREFIX) }
+            val creditArt = if (credited.isEmpty()) emptyList() else
+                dao.playlistCreditedArtistCoverRecordingIds(keys, credited.map { it.id })
+            val displayArt = if (display.isEmpty()) emptyList() else
+                dao.playlistDisplayArtistCoverRecordingIds(
+                    keys, display.map { it.id.removePrefix(DISPLAY_ARTIST_PREFIX) },
+                ).map { it.copy(groupId = playlistDisplayArtistGroupId(it.groupId)) }
+            creditArt + displayArt
+        }
+        CanonicalPlaylistBrowseType.TRACKS -> emptyList()
+    }
+    val byId = coverRecords.map { it.recordingId }.distinct().chunked(400)
+        .flatMap { dao.recordingsByIds(it) }.associateBy { it.id }
+    val artwork = canonicalNormalRows(
+        dao, coverRecords.mapNotNull { byId[it.recordingId] }, keys,
+    ).associateBy { it.id }
+    val artByGroup = coverRecords.associate { it.groupId to artwork[it.recordingId] }
+    filtered.map { it.copy(artworkRow = artByGroup[it.id]) }
 }
 
 internal suspend fun canonicalNormalPlaylistGroupTracks(
@@ -88,7 +149,11 @@ internal suspend fun canonicalNormalPlaylistGroupTracks(
             CanonicalPlaylistBrowseType.ALBUMS ->
                 dao.providerScopedReleaseRecordingIds(provider, group.id)
             CanonicalPlaylistBrowseType.ARTISTS ->
-                dao.providerScopedArtistRecordingIds(provider, group.id)
+                if (group.id.startsWith(DISPLAY_ARTIST_PREFIX)) {
+                    dao.playlistDisplayArtistRecordingIds(
+                        provider, group.id.removePrefix(DISPLAY_ARTIST_PREFIX),
+                    )
+                } else dao.providerScopedArtistRecordingIds(provider, group.id)
             CanonicalPlaylistBrowseType.TRACKS -> emptyList()
         }
     }.distinct()
@@ -143,6 +208,18 @@ internal suspend fun canonicalNormalPlaylistSelectedRows(
 internal fun canonicalAvailablePlaylistSourceKeys(context: Context): List<String> =
     activeCanonicalPlaylistProviderKeys(context, null)
 
+/**
+ * Provider configuration reports authenticated remote providers. The on-device
+ * MediaStore catalog is independent of login and must remain available offline.
+ * Filtering happens after union, so selecting a remote account never permits
+ * silent fallback to local files.
+ */
+internal fun canonicalPlaylistProviderKeys(
+    remoteProviders: Collection<String>,
+    selectedProvider: String?,
+): List<String> = canonicalBrowseProviderKeys(remoteProviders)
+    .filter { selectedProvider == null || it == selectedProvider }
+
 private fun activeCanonicalPlaylistProviderKeys(
     context: Context, selectedProvider: String?,
 ): List<String> {
@@ -150,9 +227,11 @@ private fun activeCanonicalPlaylistProviderKeys(
         persistence = SharedPrefsOpenSubsonicAccountPersistence(context),
         credentials = AndroidKeystoreOpenSubsonicCredentialStore(context),
     )
-    return OpenSubsonicLibraryProviderConfigurationReader(accountRepository)
-        .configuredProviderKeys().sorted()
-        .filter { selectedProvider == null || it == selectedProvider }
+    return canonicalPlaylistProviderKeys(
+        OpenSubsonicLibraryProviderConfigurationReader(accountRepository)
+            .configuredProviderKeys(),
+        selectedProvider,
+    )
 }
 
 private suspend fun canonicalNormalRows(

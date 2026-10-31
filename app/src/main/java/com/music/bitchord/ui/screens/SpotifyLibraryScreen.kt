@@ -16,6 +16,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.LibraryMusic
 import org.jetbrains.compose.resources.painterResource
 import com.music.bitchord.sharedui.resources.spotify_logo
 import com.music.bitchord.sharedui.resources.Res
@@ -25,7 +27,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,13 +40,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.music.bitchord.R
+import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.spotify.SpotifyLibrary
 import com.music.bitchord.data.spotify.SpotifyPlaylist
-import com.music.bitchord.data.spotify.SpotifyTrack
 
 /**
  * The signed-in Spotify account's playlists. A tap opens one as an ordinary
@@ -148,27 +150,45 @@ fun SpotifyLibraryScreen(
     }
 }
 
+/**
+ * Native library row shared by connected playlists and first-party collections.
+ * The generic title/subtitle/action layout is reused; canonical artwork stays
+ * in its typed loader rather than being converted to a fake legacy URL.
+ */
 @Composable
-private fun LibraryRow(
+internal fun LibraryRow(
     title: String,
     subtitle: String,
     imageUrl: String?,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+    artwork: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    horizontalPadding: Dp = 20.dp,
+    artworkSize: Dp = 52.dp,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 8.dp),
+        modifier = modifier.fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = horizontalPadding, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        AsyncImage(
-            model = imageUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.size(52.dp).clip(RoundedCornerShape(8.dp)),
-        )
+        Box(Modifier.size(artworkSize).clip(RoundedCornerShape(8.dp))) {
+            when {
+                artwork != null -> artwork()
+                !imageUrl.isNullOrBlank() -> AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                else -> CoverPlaceholder(
+                    icon = Icons.Rounded.LibraryMusic,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
@@ -187,5 +207,6 @@ private fun LibraryRow(
                 )
             }
         }
+        trailing?.invoke()
     }
 }

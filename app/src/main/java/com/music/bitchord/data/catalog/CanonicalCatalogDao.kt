@@ -8,6 +8,18 @@ import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
+/** Artwork is selected only from a recording with a provider-scoped MediaAsset. */
+internal data class CanonicalPlaylistAlbumCoverRow(
+    val groupId: String,
+    val recordingId: String,
+)
+
+/** True Release title linked to a recorded local RecordingId, not an inferred album. */
+internal data class CanonicalRecentLocalReleaseTitleRow(
+    val recordingId: String,
+    val albumTitle: String,
+)
+
 internal data class CanonicalArtistCreditRow(
     val artistId: String,
     val artistName: String,
@@ -321,6 +333,20 @@ internal interface CanonicalCatalogDao {
     suspend fun recentLocalAdditions(
         localProvider: String, limit: Int = 12,
     ): List<CanonicalBrowseAssetRow>
+
+    @Query(
+        """
+        SELECT rt.recordingId AS recordingId, MIN(rel.title) AS albumTitle
+        FROM catalog_release_track AS rt
+        INNER JOIN catalog_release AS rel ON rel.id = rt.releaseId
+        WHERE rt.recordingId IN (:recordingIds)
+          AND rel.title IS NOT NULL AND trim(rel.title) != ''
+        GROUP BY rt.recordingId
+        """,
+    )
+    suspend fun recentLocalReleaseTitles(
+        recordingIds: List<String>,
+    ): List<CanonicalRecentLocalReleaseTitleRow>
 
     @Query("SELECT * FROM catalog_recording WHERE id IN (:recordingIds)")
     suspend fun recordingsByIds(recordingIds: List<String>): List<RecordingEntity>
@@ -865,6 +891,101 @@ internal interface CanonicalCatalogDao {
     ): List<ArtistEntity>
 
 
+    /**
+     * One eligible canonical recording per release, for the browse row cover.
+     * Avoids one SQL query per displayed album and never matches by album title.
+     */
+    @Query(
+        """
+        SELECT rt.releaseId AS groupId, MIN(asset.recordingId) AS recordingId
+        FROM catalog_release_track AS rt
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = rt.recordingId
+        WHERE rt.releaseId IN (:releaseIds)
+          AND asset.provider IN (:providerKeys)
+          AND asset.artworkUri IS NOT NULL AND trim(asset.artworkUri) != ''
+        GROUP BY rt.releaseId
+        """,
+    )
+    suspend fun playlistAlbumCoverRecordingIds(
+        providerKeys: List<String>, releaseIds: List<String>,
+    ): List<CanonicalPlaylistAlbumCoverRow>
+
+    /**
+     * Local and provider imports can have playable recordings before an
+     * ArtistCredit graph exists. Display-name groups are browse-only:
+     * the returned members remain independently verified RecordingIds.
+     */
+    @Query(
+        """
+        SELECT DISTINCT recording.artistDisplay
+        FROM catalog_recording AS recording
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = recording.id
+        WHERE asset.provider = :providerKey
+          AND trim(recording.artistDisplay) != ''
+          AND instr(lower(recording.artistDisplay), lower(:term)) > 0
+        ORDER BY recording.artistDisplay COLLATE NOCASE
+        LIMIT 100
+        """,
+    )
+    suspend fun playlistDisplayArtistNames(
+        providerKey: String, term: String,
+    ): List<String>
+
+    @Query(
+        """
+        SELECT DISTINCT recording.id
+        FROM catalog_recording AS recording
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = recording.id
+        WHERE asset.provider = :providerKey
+          AND recording.artistDisplay = :displayName
+        ORDER BY recording.title COLLATE NOCASE, recording.id
+        """,
+    )
+    suspend fun playlistDisplayArtistRecordingIds(
+        providerKey: String, displayName: String,
+    ): List<String>
+
+    /** Artist list fallback image: a verified asset credited to that exact artist. */
+    @Query(
+        """
+        SELECT matched.groupId AS groupId, MIN(matched.recordingId) AS recordingId
+        FROM (
+            SELECT credit.artistId AS groupId, asset.recordingId AS recordingId
+            FROM catalog_recording_artist_credit AS credit
+            INNER JOIN catalog_media_asset AS asset
+                ON asset.recordingId = credit.recordingId
+            WHERE credit.artistId IN (:artistIds) AND asset.provider IN (:providerKeys)
+              AND asset.artworkUri IS NOT NULL AND trim(asset.artworkUri) != ''
+            UNION ALL
+            SELECT credit.artistId AS groupId, asset.recordingId AS recordingId
+            FROM catalog_release_artist_credit AS credit
+            INNER JOIN catalog_release_track AS rt ON rt.releaseId = credit.releaseId
+            INNER JOIN catalog_media_asset AS asset ON asset.recordingId = rt.recordingId
+            WHERE credit.artistId IN (:artistIds) AND asset.provider IN (:providerKeys)
+              AND asset.artworkUri IS NOT NULL AND trim(asset.artworkUri) != ''
+        ) AS matched
+        GROUP BY matched.groupId
+        """,
+    )
+    suspend fun playlistCreditedArtistCoverRecordingIds(
+        providerKeys: List<String>, artistIds: List<String>,
+    ): List<CanonicalPlaylistAlbumCoverRow>
+
+    /** Uncredited local files: the fallback artist name is browse-only. */
+    @Query(
+        """
+        SELECT recording.artistDisplay AS groupId, MIN(recording.id) AS recordingId
+        FROM catalog_recording AS recording
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = recording.id
+        WHERE recording.artistDisplay IN (:names) AND asset.provider IN (:providerKeys)
+          AND asset.artworkUri IS NOT NULL AND trim(asset.artworkUri) != ''
+        GROUP BY recording.artistDisplay
+        """,
+    )
+    suspend fun playlistDisplayArtistCoverRecordingIds(
+        providerKeys: List<String>, names: List<String>,
+    ): List<CanonicalPlaylistAlbumCoverRow>
+
     /** Navigating a Release rechecks its Recording IDs against the active source. */
     @Query(
         """
@@ -872,7 +993,8 @@ internal interface CanonicalCatalogDao {
         FROM catalog_release_track AS rt
         INNER JOIN catalog_media_asset AS asset ON asset.recordingId = rt.recordingId
         WHERE rt.releaseId = :releaseId AND asset.provider = :providerKey
-        ORDER BY rt.recordingId ASC
+        ORDER BY CASE WHEN rt.trackNumber IS NULL THEN 1 ELSE 0 END,
+                 rt.trackNumber ASC, rt.recordingId ASC
         """,
     )
     suspend fun providerScopedReleaseRecordingIds(

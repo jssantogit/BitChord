@@ -25,7 +25,7 @@ class LocalGroupsTest {
 
         val artist = LocalGroups.artistPageId("local:all", "AC/DC")
         assertEquals("local:all", LocalGroups.folderOf(artist))
-        assertEquals(BrowseType.OTHER, LocalGroups.typeOf(artist))
+        assertEquals(BrowseType.ARTIST, LocalGroups.typeOf(artist))
         assertTrue(LocalGroups.isArtist(artist))
     }
 

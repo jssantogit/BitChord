@@ -75,8 +75,32 @@ internal sealed interface SmartCollectionActionSource {
     data class PreviewQuery(val query: RuleBasedSmartPlaylistQuery) : SmartCollectionActionSource
     data class SavedV2Definition(val id: String) : SmartCollectionActionSource
     data class SavedStaticPlaylist(val id: String) : SmartCollectionActionSource
+    /** Click a real row: verify current saved membership before playing its ordered suffix. */
+    data class SavedStaticPlaylistFromTrack(
+        val id: String, val recordingId: String, val includeFollowing: Boolean = true,
+    ) : SmartCollectionActionSource
+    data class SavedV2PlaylistFromTrack(
+        val id: String, val recordingId: String, val includeFollowing: Boolean = true,
+    ) : SmartCollectionActionSource
     data class PreviewV2Query(val query: SmartPlaylistV2Query, val ownerId: String? = null) : SmartCollectionActionSource
 }
+
+/** Null means the clicked track is no longer a member of the saved playlist. */
+internal fun playlistPlaybackSuffix(
+    currentRecordingIds: List<String>, clickedRecordingId: String,
+): List<String>? {
+    val index = currentRecordingIds.indexOf(clickedRecordingId)
+    return if (index < 0) null else currentRecordingIds.drop(index)
+}
+
+/** A queue menu action adds exactly one verified song, never the following songs. */
+internal fun playlistPlaybackSelection(
+    ids: List<String>, clickedRecordingId: String, includeFollowing: Boolean,
+): List<String>? = if (includeFollowing) {
+    playlistPlaybackSuffix(ids, clickedRecordingId)
+} else if (clickedRecordingId in ids) {
+    listOf(clickedRecordingId)
+} else null
 
 internal sealed interface SmartCollectionBatchResult {
     data object Submitted : SmartCollectionBatchResult
@@ -119,6 +143,8 @@ internal class SmartCollectionBatchHandoff(
                 is SmartCollectionActionSource.PreviewQuery -> "preview"
                 is SmartCollectionActionSource.SavedV2Definition -> "saved_v2"
                 is SmartCollectionActionSource.SavedStaticPlaylist -> "normal_static"
+                is SmartCollectionActionSource.SavedStaticPlaylistFromTrack -> "normal_track"
+                is SmartCollectionActionSource.SavedV2PlaylistFromTrack -> "smart_v2_track"
                 is SmartCollectionActionSource.PreviewV2Query -> "preview_v2"
             },
         )
@@ -226,6 +252,23 @@ private suspend fun currentSmartCollectionIds(
         )
         repo.list().firstOrNull { it.id == source.id }?.recordingIds
     }
+    is SmartCollectionActionSource.SavedStaticPlaylistFromTrack -> {
+        val repo = CanonicalStaticPlaylistRepository(
+            SmartPlaylistDefinitionDatabase.get(context).staticPlaylistDao(),
+        )
+        val saved = repo.list().firstOrNull { it.id == source.id } ?: return null
+        playlistPlaybackSelection(saved.recordingIds, source.recordingId, source.includeFollowing)
+    }
+    is SmartCollectionActionSource.SavedV2PlaylistFromTrack -> {
+        val repo = SmartPlaylistV2DefinitionRepository(
+            SmartPlaylistDefinitionDatabase.get(context).v2DefinitionDao(),
+        )
+        val saved = repo.list().firstOrNull { it.id == source.id } ?: return null
+        playlistPlaybackSelection(
+            currentSmartPlaylistV2QueryIds(context, saved.query, saved.id),
+            source.recordingId, source.includeFollowing,
+        )
+    }
     }
 }
 
@@ -294,6 +337,7 @@ private suspend fun currentScopedRatedAssetHints(
     val minimum = when (source) {
         is SmartCollectionActionSource.Adaptive -> null
         is SmartCollectionActionSource.SavedStaticPlaylist -> null
+        is SmartCollectionActionSource.SavedStaticPlaylistFromTrack -> null
         is SmartCollectionActionSource.PreviewQuery -> source.query.minimumExplicitRating
         is SmartCollectionActionSource.PreviewV2Query ->
             source.query.guaranteedMinimumRatingForAssetHints()
@@ -302,6 +346,11 @@ private suspend fun currentScopedRatedAssetHints(
                 .list().firstOrNull { it.id == source.id }?.query?.minimumExplicitRating
         }
         is SmartCollectionActionSource.SavedV2Definition -> {
+            SmartPlaylistV2DefinitionRepository(db.v2DefinitionDao())
+                .list().firstOrNull { it.id == source.id }?.query
+                ?.guaranteedMinimumRatingForAssetHints()
+        }
+        is SmartCollectionActionSource.SavedV2PlaylistFromTrack -> {
             SmartPlaylistV2DefinitionRepository(db.v2DefinitionDao())
                 .list().firstOrNull { it.id == source.id }?.query
                 ?.guaranteedMinimumRatingForAssetHints()
@@ -497,17 +546,29 @@ internal fun rememberSmartCollectionBatchAction(
             browseSelected = { selectedIds -> currentCanonicalBrowse(context, selectedIds) },
             sourceLimit = { source, library ->
                 when (source) {
-                    is SmartCollectionActionSource.SavedStaticPlaylist -> {
+                    is SmartCollectionActionSource.SavedStaticPlaylist,
+                    is SmartCollectionActionSource.SavedStaticPlaylistFromTrack -> {
+                        val id = when (source) {
+                            is SmartCollectionActionSource.SavedStaticPlaylist -> source.id
+                            is SmartCollectionActionSource.SavedStaticPlaylistFromTrack -> source.id
+                            else -> error("Not a static playlist source")
+                        }
                         val chosen = CanonicalStaticPlaylistRepository(
                             SmartPlaylistDefinitionDatabase.get(context).staticPlaylistDao(),
-                        ).list().firstOrNull { it.id == source.id }?.sourceProviderKey
+                        ).list().firstOrNull { it.id == id }?.sourceProviderKey
                         if (chosen == null) library
                             else canonicalBrowseOnlyProvider(library, chosen)
                     }
-                    is SmartCollectionActionSource.SavedV2Definition -> {
+                    is SmartCollectionActionSource.SavedV2Definition,
+                    is SmartCollectionActionSource.SavedV2PlaylistFromTrack -> {
+                        val id = when (source) {
+                            is SmartCollectionActionSource.SavedV2Definition -> source.id
+                            is SmartCollectionActionSource.SavedV2PlaylistFromTrack -> source.id
+                            else -> error("Not a smart playlist source")
+                        }
                         val query = SmartPlaylistV2DefinitionRepository(
                             SmartPlaylistDefinitionDatabase.get(context).v2DefinitionDao(),
-                        ).list().firstOrNull { it.id == source.id }?.query
+                        ).list().firstOrNull { it.id == id }?.query
                         val kind = query?.let { smartRuleGlobalSource(it.rules) }
                         if (kind == null) library
                             else canonicalBrowseOnlySourceKind(library, kind)

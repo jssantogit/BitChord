@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
@@ -56,6 +57,152 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(5)
         compose.onNodeWithText("Hurt").assertExists()
         compose.onNodeWithText("NewJeans").assertExists()
+    }
+
+    @Test fun normalCatalogSelectionUsesSharedTrackRowAndPreservesRecordingId() {
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE,
+                SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ))
+        var selectedId: String? = null
+        var browseType = CanonicalPlaylistBrowseType.TRACKS
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Nova playlist",
+                rule = rule,
+                normalMode = true,
+                normalRows = listOf(V2DisplayRow("canonical:recording-25", "Faixa exata", "Artista real")),
+                onToggleNormalTrack = { selectedId = it },
+                onNormalBrowseTypeChange = { browseType = it },
+                sort = SmartPlaylistV2Sort.TITLE_ASC, limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {}, onSortChange = {},
+                onLimitChange = {}, onSeedChange = {}, onPreview = {},
+                onSave = {}, onSaveFilter = {}, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        // A LazyColumn intentionally does not compose off-screen recording rows.
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
+        compose.onNodeWithText("Faixa exata").performClick()
+        compose.runOnIdle { assertEquals("canonical:recording-25", selectedId) }
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(1)
+        compose.onNodeWithText("Álbuns").performClick()
+        compose.runOnIdle { assertEquals(CanonicalPlaylistBrowseType.ALBUMS, browseType) }
+    }
+
+    @Test fun albumRowOffersBulkAddWithoutNavigatingToAlbum() {
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE,
+                SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ))
+        val album = CanonicalPlaylistBrowseGroup(
+            "release:exact-1", "Get Up", CanonicalPlaylistBrowseType.ALBUMS,
+        )
+        var addedId: String? = null
+        var openedId: String? = null
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Minha playlist", rule = rule, normalMode = true,
+                normalBrowseType = CanonicalPlaylistBrowseType.ALBUMS,
+                normalGroups = listOf(album),
+                onAddNormalAlbum = { addedId = it.id },
+                onNormalBrowseGroupChange = { openedId = it?.id },
+                sort = SmartPlaylistV2Sort.TITLE_ASC, limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {}, onSortChange = {},
+                onLimitChange = {}, onSeedChange = {}, onPreview = {},
+                onSave = {}, onSaveFilter = {}, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithText("Selecionadas: 0").assertExists()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
+        compose.onNodeWithContentDescription("Adicionar álbum inteiro").performClick()
+        compose.runOnIdle {
+            assertEquals("release:exact-1", addedId)
+            assertEquals(null, openedId)
+        }
+    }
+
+    @Test fun expandingAlbumKeepsItsRowAndRendersTracksNestedUnderIt() {
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ))
+        val album = CanonicalPlaylistBrowseGroup(
+            "release:newjeans", "Get Up", CanonicalPlaylistBrowseType.ALBUMS,
+        )
+        val expanded = mutableStateOf<CanonicalPlaylistBrowseGroup?>(null)
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Nova playlist", rule = rule, normalMode = true,
+                normalBrowseType = CanonicalPlaylistBrowseType.ALBUMS,
+                normalBrowseGroup = expanded.value, normalGroups = listOf(album),
+                normalRows = if (expanded.value != null)
+                    listOf(V2DisplayRow("recording:hurt", "Hurt", "NewJeans"))
+                    else emptyList(),
+                onNormalBrowseGroupChange = { expanded.value = it },
+                sort = SmartPlaylistV2Sort.TITLE_ASC, limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {}, onSortChange = {},
+                onLimitChange = {}, onSeedChange = {}, onPreview = {},
+                onSave = {}, onSaveFilter = {}, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
+        compose.onNodeWithText("Get Up").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
+        compose.onNodeWithText("Hurt").assertExists()
+        compose.onNodeWithText("Get Up").assertExists()
+        compose.runOnIdle { assertEquals(album, expanded.value) }
+    }
+
+    @Test fun normalReviewShowsTrackAfterFiftyWithoutArtificialTruncation() {
+        val rows = (1..81).map { index ->
+            V2DisplayRow("rec-${index}", "Track ${index}", "Artist ${index}")
+        }
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE,
+                SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ))
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Todas as faixas",
+                rule = rule,
+                normalMode = true,
+                normalSelectedIds = rows.map { it.id },
+                normalSelectedRows = rows,
+                sort = SmartPlaylistV2Sort.RATING_DESC,
+                limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null,
+                savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {}, onSortChange = {},
+                onLimitChange = {}, onSeedChange = {}, onPreview = {},
+                onSave = {}, onSaveFilter = {}, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithText("Revisar playlist").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(83)
+        compose.onNodeWithText("Track 81").assertExists()
+        compose.onNodeWithText("Artist 81").assertExists()
     }
 
     @Test fun deletingSavedPlaylistRequiresExplicitConfirmation() {
@@ -146,7 +293,7 @@ class SmartPlaylistV2WizardComposeTest {
         // Identity now includes a 112dp neutral artwork preview; the sources
         // card is below the fold on Robolectric's compact test window.
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
-        compose.onNodeWithText("Fonte da playlist").assertExists()
+        compose.onNodeWithText("Fontes do catálogo").assertExists()
         compose.onNodeWithText("Continuar").performClick()
         compose.onNodeWithText("Regras da playlist").assertExists()
         compose.onNodeWithText("Grupo 1").assertExists()

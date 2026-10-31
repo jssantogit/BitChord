@@ -2,22 +2,18 @@ package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.data.catalog.provider.opensubsonic.androidOpenSubsonicArtworkLoader
 
 /**
@@ -62,15 +58,8 @@ internal fun SmartPlaylistPreviewArtwork(
 
 @Composable
 private fun PreviewArtworkPlaceholder(modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.MusicNote, contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp))
-        }
-    }
+    CoverPlaceholder(
+        icon = Icons.Rounded.MusicNote,
+        modifier = modifier.clip(RoundedCornerShape(8.dp)),
+    )
 }

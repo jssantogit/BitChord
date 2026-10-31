@@ -441,6 +441,14 @@ fun DetailScreen(
     } else {
         emptyList()
     }
+    // Folder category pages describe the category, not the 570 underlying tracks.
+    val folderCategoryMeta = if (folder != null && page.browseId == "local:all") {
+        when (folderState?.tab) {
+            LocalFolderTab.ARTISTS -> "${folderGroups.size} artistas"
+            LocalFolderTab.ALBUMS -> "${folderGroups.size} álbuns"
+            else -> null
+        }
+    } else null
     BackHandler(enabled = folderState?.selecting == true) { folderState?.clear() }
 
     // What marks a row as already downloaded, tinted from the sleeve like the
@@ -559,16 +567,19 @@ fun DetailScreen(
                         // A folder's credit says where its tracks live, not who made them.
                         onArtistClick = onArtistClick.takeIf { folder == null },
                         onToggleLibrary = onToggleLibrary,
+                        metaOverride = folderCategoryMeta,
                     )
                 }
             }
 
-            if (searching) {
+            if (searching || (folder != null && page.browseId == "local:all")) {
                 item(key = "search") {
                     DetailSearchField(
                         query = query,
                         onQueryChange = { query = it },
-                        onClose = closeSearch,
+                        onClose = if (folder != null && page.browseId == "local:all") {
+                            { query = "" }
+                        } else closeSearch,
                         autoFocus = focusSearch,
                         onFocused = { focusSearch = false },
                         palette = palette,
@@ -673,6 +684,7 @@ fun DetailScreen(
                         groups = folderGroups,
                         query = query,
                         columns = gridColumns,
+                        hideTabPicker = page.browseId == "local:all",
                         palette = palette,
                         currentSong = currentSong,
                         isPlaying = isPlaying,
@@ -880,27 +892,22 @@ private fun ReleaseHeader(
     onShuffle: () -> Unit,
     onArtistClick: ((String, String) -> Unit)?,
     onToggleLibrary: (() -> Unit)?,
+    metaOverride: String? = null,
 ) {
-    val (credit, meta) = page.headerLines(songs.size, songs.playtime())
-    // Every row on a release carries the same credit — see [pageCredit] — so
-    // the first one speaks for the whole page, the same source the rows'
-    // own long-press "Open artist" already reads from.
+    val (credit, originalMeta) = page.headerLines(songs.size, songs.playtime())
+    val meta = metaOverride ?: originalMeta
     val artist = songs.firstOrNull()
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            // Clear of the floating bar, which the sleeve no longer runs under.
-            .padding(top = topBarContentPadding(), bottom = 18.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            Modifier
-                .size(sleeveSize)
-                .shadow(SLEEVE_SHADOW, SLEEVE_SHAPE)
-                .background(palette.elevated)
-                .thumbnailBorder(SLEEVE_SHAPE),
-        ) {
+    NativeReleaseHeaderLayout(
+        title = page.title,
+        credit = credit,
+        meta = meta,
+        palette = palette,
+        sleeveSize = sleeveSize,
+        onCreditClick = artist?.artistId?.takeIf { onArtistClick != null }?.let { id ->
+            { onArtistClick?.invoke(id, artist?.artist.orEmpty()) }
+        },
+        artwork = {
             // A cover that isn't there, or wouldn't load — a device folder, a
             // playlist with nothing on it yet, files with no picture — gets a
             // placeholder sleeve rather than an empty square. Not shown while a
@@ -932,56 +939,8 @@ private fun ReleaseHeader(
                     modifier = Modifier.matchParentSize(),
                 )
             }
-        }
-
-        Spacer(Modifier.height(20.dp))
-        Text(
-            text = page.title,
-            style = MaterialTheme.typography.headlineMedium,
-            color = palette.onBackground,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = HEADER_GUTTER),
-        )
-        if (credit.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = credit,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 19.sp,
-                ),
-                color = palette.onBackgroundVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .padding(horizontal = HEADER_GUTTER)
-                    .let { m ->
-                        val id = artist?.artistId
-                        if (id == null || onArtistClick == null) {
-                            m
-                        } else {
-                            m.clip(RoundedCornerShape(6.dp))
-                                .clickable { onArtistClick(id, artist.artist) }
-                        }
-                    },
-            )
-        }
-        if (meta.isNotBlank()) {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = meta,
-                style = MaterialTheme.typography.labelMedium,
-                color = palette.onBackgroundVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = HEADER_GUTTER),
-            )
-        }
-
+        },
+        actions = {
         if (songs.isNotEmpty()) {
             // Only where YouTube said the release can be saved and the caller
             // is willing to take the write — see [onToggleLibrary].
@@ -1060,6 +1019,77 @@ private fun ReleaseHeader(
                 }
             }
         }
+        },
+    )
+}
+
+/**
+ * The *same* hero/layout frame for existing DetailScreen releases and saved
+ * canonical playlists. Artwork and playback are typed slots: the caller
+ * never has to manufacture a legacy Song or YouTube browseId to reuse UI.
+ */
+@Composable
+internal fun NativeReleaseHeaderLayout(
+    title: String,
+    credit: String,
+    meta: String,
+    palette: ArtworkPalette,
+    sleeveSize: Dp,
+    artwork: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
+    onCreditClick: (() -> Unit)? = null,
+    actions: @Composable () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .padding(top = topBarContentPadding(), bottom = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier.size(sleeveSize)
+                .shadow(SLEEVE_SHADOW, SLEEVE_SHAPE)
+                .background(palette.elevated)
+                .thumbnailBorder(SLEEVE_SHAPE),
+            content = artwork,
+        )
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineMedium,
+            color = palette.onBackground,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = HEADER_GUTTER),
+        )
+        if (credit.isNotBlank()) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = credit,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Normal, fontSize = 19.sp,
+                ),
+                color = palette.onBackgroundVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = HEADER_GUTTER)
+                    .let { m -> if (onCreditClick == null) m
+                        else m.clip(RoundedCornerShape(6.dp)).clickable(onClick = onCreditClick) },
+            )
+        }
+        if (meta.isNotBlank()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = meta,
+                style = MaterialTheme.typography.labelMedium,
+                color = palette.onBackgroundVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = HEADER_GUTTER),
+            )
+        }
+        actions()
     }
 }
 
@@ -1532,7 +1562,7 @@ private fun ActionRow(
  * rim of the circles beside it — Shuffle, on a page with no Add to sit opposite.
  */
 @Composable
-private fun ActionPill(
+internal fun ActionPill(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,

@@ -13,6 +13,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import com.music.bitchord.ui.player.MESH_CYCLE_MILLIS
@@ -910,6 +912,8 @@ fun PillTextField(
     container: Color = MaterialTheme.colorScheme.surfaceVariant,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
+    /** Optional accessible label supplied by a form, without duplicating this field. */
+    accessibilityLabel: String? = null,
 ) {
     Box(
         modifier = modifier
@@ -941,7 +945,11 @@ fun PillTextField(
             visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().then(
+                if (accessibilityLabel != null)
+                    Modifier.semantics { contentDescription = accessibilityLabel }
+                else Modifier
+            ),
         )
     }
 }

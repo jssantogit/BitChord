@@ -1,5 +1,6 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.data.listening.SavedCanonicalStaticPlaylist
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
 import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
@@ -8,6 +9,7 @@ import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
 import com.music.bitchord.data.listening.SmartPlaylistV2Query
 import com.music.bitchord.data.model.ShelfItem
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class UnifiedPlaylistLibraryShelfTest {
@@ -37,32 +39,42 @@ class UnifiedPlaylistLibraryShelfTest {
         ),
     )
 
-    @Test fun canonicalAndNormalPlaylistsHaveSeparateStableIdsInTwoColumnRows() {
-        val cards = listOf(smart("a"), normal("a"), smart("b"), normal("b"), smart("c"))
-        val rows = unifiedPlaylistRows(cards)
-        assertEquals(listOf(2, 2, 1), rows.map { it.size })
-        assertEquals(cards, rows.flatten())
+    @Test fun canonicalLegacyAndSmartPlaylistsKeepDistinctKeysWithoutFakeBrowseIds() {
+        val cards = listOf(
+            smart("a"),
+            LibraryPlaylistCard.CanonicalNormal(
+                SavedCanonicalStaticPlaylist("a", "Normal a", listOf("rec-a")),
+            ),
+            normal("a"),
+        )
+        assertEquals(listOf("v2:a", "normal:a", "local:local:playlist:a"),
+            cards.map { it.id })
         assertEquals(cards.size, cards.map { it.id }.distinct().size)
-        assertEquals("v2:a", cards[0].id)
-        assertEquals("local:local:playlist:a", cards[1].id)
+        assertTrue(cards[0] is LibraryPlaylistCard.Smart)
     }
 
-    @Test fun playlistPageUsesOneColumnAndShowsEverySavedPlaylist() {
-        val cards = listOf(smart("a"), normal("a"), smart("b"), normal("b"), smart("c"))
-        val compact = playlistShelfRows(cards, expanded = false)
-        assertEquals(listOf(1, 1, 1, 1, 1), compact.map { it.size })
-        assertEquals(cards, compact.flatten())
-        // Legacy callers requesting expanded mode never reintroduce a grid.
-        val expanded = playlistShelfRows(cards, expanded = true)
-        assertEquals(compact, expanded)
+    @Test fun openPlaylistResolvesUpdatedSavedDefinitionByStableId() {
+        val before = LibraryPlaylistCard.CanonicalNormal(
+            SavedCanonicalStaticPlaylist("playlist-a", "Old title", listOf("rec-1")),
+        )
+        val after = LibraryPlaylistCard.CanonicalNormal(
+            SavedCanonicalStaticPlaylist("playlist-a", "Updated title", listOf("rec-2")),
+        )
+        val resolved = latestLibraryPlaylistCard(before, listOf(after))
+        assertEquals("Updated title", resolved?.title)
+        assertEquals(listOf("rec-2"),
+            (resolved as LibraryPlaylistCard.CanonicalNormal).definition.recordingIds)
+        assertEquals(null, latestLibraryPlaylistCard(before, emptyList()))
     }
 
-    @Test fun emptyAndOneItemShelvesNeverFabricatePlaylists() {
-        assertEquals(emptyList<List<LibraryPlaylistCard>>(), unifiedPlaylistRows(emptyList()))
-        assertEquals(listOf(listOf(smart("one"))), unifiedPlaylistRows(listOf(smart("one"))))
-        assertEquals(emptyList<List<LibraryPlaylistCard>>(), playlistShelfRows(emptyList(), false))
-        assertEquals(emptyList<List<LibraryPlaylistCard>>(), playlistShelfRows(emptyList(), true))
-        assertEquals(listOf(listOf(smart("one"))),
-            playlistShelfRows(listOf(smart("one")), false))
+    @Test fun persistedNormalPlaylistKeepsCanonicalMemberOrderInItsCard() {
+        val saved = SavedCanonicalStaticPlaylist(
+            "p1", "Viagem", listOf("rec-3", "rec-1", "rec-2"),
+            sourceProviderKey = "local-mediastore",
+        )
+        val card = LibraryPlaylistCard.CanonicalNormal(saved)
+        assertEquals("Viagem", card.title)
+        assertEquals(saved.recordingIds, card.definition.recordingIds)
+        assertEquals("local-mediastore", card.definition.sourceProviderKey)
     }
 }

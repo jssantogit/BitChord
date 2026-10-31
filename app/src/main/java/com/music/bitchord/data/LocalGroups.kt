@@ -24,7 +24,7 @@ data class LocalGroup(
     /** The credit under the title: an album's artist, or blank. */
     val subtitle: String,
     val thumbnailUrl: String?,
-    /** [BrowseType.ALBUM], [BrowseType.PLAYLIST] for a playlist downloaded whole, [BrowseType.OTHER] for an artist. */
+    /** [BrowseType.ALBUM], [BrowseType.PLAYLIST] for a playlist downloaded whole, [BrowseType.ARTIST] for an artist. */
     val type: BrowseType,
     /** In the release's own order — see [sortedForAlbum]. */
     val songs: List<Song>,
@@ -74,7 +74,7 @@ object LocalGroups {
 
     /** What kind of page [browseId] is, or null if it isn't a grouping. */
     fun typeOf(browseId: String): BrowseType? =
-        parse(browseId)?.let { if (it.kind == ALBUM) BrowseType.ALBUM else BrowseType.OTHER }
+        parse(browseId)?.let { if (it.kind == ALBUM) BrowseType.ALBUM else BrowseType.ARTIST }
 
     fun isArtist(browseId: String?): Boolean = parse(browseId)?.kind == ARTIST
 
@@ -162,7 +162,7 @@ object LocalGroups {
                     title = name,
                     subtitle = "",
                     thumbnailUrl = null,
-                    type = BrowseType.OTHER,
+                    type = BrowseType.ARTIST,
                     songs = group.sortedByTitle(),
                 )
             }

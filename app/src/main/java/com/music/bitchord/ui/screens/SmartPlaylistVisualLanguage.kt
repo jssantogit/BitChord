@@ -1,41 +1,36 @@
 package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
+import com.music.bitchord.ui.components.PillTextField
+import com.music.bitchord.ui.components.CoverPlaceholder
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import com.music.bitchord.ui.theme.AccentRed
@@ -53,21 +48,18 @@ internal fun PlaylistWizardSecondaryAction(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(13.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        contentAlignment = Alignment.Center,
+    // Native Material button keeps focus, ripple and disabled semantics.
+    FilledTonalButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        shape = RoundedCornerShape(13.dp),
+        colors = ButtonDefaults.filledTonalButtonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = AccentRed,
+        ),
     ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = if (enabled) AccentRed
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
 
@@ -77,21 +69,17 @@ internal fun PlaylistWizardPrimaryAction(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier.fillMaxWidth()
-            .height(54.dp)
-            .clip(RoundedCornerShape(15.dp))
-            .background(if (enabled) AccentRed else MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
-        contentAlignment = Alignment.Center,
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth().height(54.dp),
+        shape = RoundedCornerShape(15.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = AccentRed,
+            contentColor = androidx.compose.ui.graphics.Color.White,
+        ),
     ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = if (enabled) androidx.compose.ui.graphics.Color.White
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
 
@@ -105,42 +93,26 @@ internal fun PlaylistWizardTextEntry(
     error: Boolean = false,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
 ) {
-    val surface = MaterialTheme.colorScheme.surface
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Column(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                .background(surface)
-                .padding(horizontal = 16.dp, vertical = 13.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelMedium,
-                color = if (error) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyLarge.copy(
-                    color = MaterialTheme.colorScheme.onSurface,
-                ),
-                cursorBrush = SolidColor(AccentRed),
-                keyboardOptions = keyboardOptions,
-                modifier = Modifier.fillMaxWidth().semantics { contentDescription = label },
-                decorationBox = { content ->
-                    Box {
-                        if (value.isEmpty()) {
-                            Text("Toque para preencher",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        content()
-                    }
-                },
-            )
-        }
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (error) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        // Reuse the same field as Settings and dialogs. Only the label and
+        // validation text are specific to this wizard.
+        PillTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = "Toque para preencher",
+            container = MaterialTheme.colorScheme.surfaceVariant,
+            keyboardOptions = keyboardOptions,
+            accessibilityLabel = label,
+        )
         if (hint != null) {
             Text(
                 hint,
@@ -160,34 +132,22 @@ internal fun PlaylistWizardSearchEntry(
     placeholder: String,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp)
-            .clip(RoundedCornerShape(13.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(
-            Icons.Rounded.Search, contentDescription = null,
+            Icons.Rounded.Search,
+            contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(19.dp),
+            modifier = Modifier.size(20.dp),
         )
-        BasicTextField(
-            value = value, onValueChange = onValueChange, singleLine = true,
-            modifier = Modifier.weight(1f).semantics { contentDescription = placeholder },
-            textStyle = MaterialTheme.typography.bodyLarge.copy(
-                color = MaterialTheme.colorScheme.onSurface,
-            ),
-            cursorBrush = SolidColor(AccentRed),
-            decorationBox = { inner ->
-                Box {
-                    if (value.isEmpty()) {
-                        Text(placeholder, style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    inner()
-                }
-            },
+        PillTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = placeholder,
+            modifier = Modifier.weight(1f),
+            accessibilityLabel = placeholder,
         )
     }
 }
@@ -200,35 +160,12 @@ internal fun PlaylistWizardSegmented(
     onSelectFirst: () -> Unit,
     onSelectSecond: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(13.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        listOf(first, second).forEachIndexed { index, text ->
-            val selected = (index == 0) == firstSelected
-            Box(
-                modifier = Modifier.weight(1f).heightIn(min = 43.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.outline
-                        else androidx.compose.ui.graphics.Color.Transparent,
-                    )
-                    .clickable(onClick = if (index == 0) onSelectFirst else onSelectSecond),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text, style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (selected) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
+    // The local music browser already owns the segmented UI and its behavior.
+    SegmentedControl(
+        options = listOf(first, second),
+        selectedIndex = if (firstSelected) 0 else 1,
+        onSelect = { if (it == 0) onSelectFirst() else onSelectSecond() },
+    )
 }
 
 internal data class PlaylistWizardNavOption(
@@ -242,51 +179,26 @@ internal data class PlaylistWizardNavOption(
 internal fun PlaylistWizardNavigationList(
     options: List<PlaylistWizardNavOption>,
 ) {
+    // SettingsRow already provides icon, title, subtitle, chevron and click
+    // semantics. Avoid a separate implementation for the condition catalog.
     Column(
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surface),
     ) {
         options.forEachIndexed { index, option ->
-            Row(
-                modifier = Modifier.fillMaxWidth()
-                    .clickable(onClick = option.onClick)
-                    .heightIn(min = 58.dp)
-                    .padding(start = 16.dp, end = 13.dp, top = 12.dp, bottom = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (option.icon != null) {
-                    Box(
-                        modifier = Modifier.size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(option.icon, contentDescription = null,
-                            tint = AccentRed, modifier = Modifier.size(20.dp))
-                    }
-                }
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                    Text(option.title, style = MaterialTheme.typography.titleMedium)
-                    if (option.description.isNotEmpty()) {
-                        Text(option.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-                Icon(Icons.Rounded.ChevronRight, contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp))
-            }
+            SettingsRow(
+                icon = option.icon,
+                title = option.title,
+                subtitle = option.description.ifBlank { null },
+                onClick = option.onClick,
+                reserveIconSpace = false,
+                iconTint = AccentRed,
+            )
             if (index < options.lastIndex) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(start = if (option.icon != null) 64.dp else 16.dp)
-                        .height(0.5.dp)
-                        .background(MaterialTheme.colorScheme.outline),
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = if (option.icon != null) 52.dp else 16.dp),
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outline,
                 )
             }
         }
@@ -299,20 +211,27 @@ internal fun PlaylistWizardSelectionRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    // Reuse native SettingsRow for source/rule selection instead of manually
+    // reimplementing text, touch area, alignment and click semantics.
+    Box(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
-        Text(label, modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyLarge)
-        if (selected) {
-            Icon(Icons.Rounded.Check, contentDescription = "Selecionado",
-                tint = AccentRed, modifier = Modifier.size(20.dp))
-        }
+        SettingsRow(
+            title = label,
+            onClick = onClick,
+            reserveIconSpace = false,
+            trailing = {
+                if (selected) {
+                    Icon(
+                        Icons.Rounded.Check,
+                        contentDescription = "Selecionado",
+                        tint = AccentRed,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            },
+        )
     }
 }
 
@@ -326,17 +245,11 @@ internal fun PlaylistWizardSelectionRow(
 internal fun PlaylistWizardArtworkPlaceholder(
     dimension: Dp = 224.dp,
 ) {
-    Box(
-        modifier = Modifier.size(dimension)
-            .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            Icons.Rounded.LibraryMusic,
-            contentDescription = "Capa padrão da playlist",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(dimension * 0.39f),
-        )
-    }
+    // The normal release/folder placeholder already defines this treatment.
+    CoverPlaceholder(
+        icon = Icons.Rounded.LibraryMusic,
+        modifier = Modifier.size(dimension).clip(RoundedCornerShape(18.dp))
+            .semantics { contentDescription = "Capa padrão da playlist" },
+        iconFraction = 0.39f,
+    )
 }

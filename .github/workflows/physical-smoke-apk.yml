@@ -3,11 +3,13 @@ name: Android Physical Smoke APK
 # An APK is prepared only when someone explicitly schedules a physical smoke.
 # The main Android CI remains test-only and keeps its required status context.
 on:
-  # One explicitly authorized APK request for smart playlists #192.
-  # This scoped push fallback is needed while PR #193 has a conflicted merge
-  # ref and the connected GitHub integration cannot dispatch workflows.
+  # A manually authorized APK only, scoped to one existing request marker.
+  # The connected GitHub integration cannot invoke workflow_dispatch directly;
+  # the push fallback supports both the functional PR #193 and its UI PR #202.
   push:
-    branches: [listening/smart-playlists-v2-192]
+    branches:
+      - listening/smart-playlists-v2-192
+      - ui/library-playlists-alignment-20261030
     paths: [docs/listening/issue-192-physical-smoke-request.md]
   workflow_dispatch:
     inputs:
@@ -32,7 +34,7 @@ jobs:
     steps:
       - name: Validate physical smoke request
         env:
-          SMOKE_PLAN: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke_plan || (github.event_name == 'push' && github.ref == 'refs/heads/listening/smart-playlists-v2-192' && 'Explicit user-approved physical smoke for issue 192') }}
+          SMOKE_PLAN: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke_plan || (github.event_name == 'push' && 'Explicit user-approved physical smoke for playlists issue 192 PR 202') }}
         run: test -n "$SMOKE_PLAN"
 
       - name: Checkout
