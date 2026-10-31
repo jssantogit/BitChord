@@ -94,12 +94,17 @@ internal fun CanonicalPlaylistCoverArt(
 ) {
     val covers = remember(rows) { distinctCanonicalPlaylistCoverRows(rows) }
     when {
-        customCoverUri != null -> AsyncImage(
-            model = customCoverUri,
-            contentDescription = "Capa personalizada",
-            modifier = modifier.clip(RoundedCornerShape(12.dp)),
-            contentScale = ContentScale.Crop,
-        )
+        customCoverUri != null -> Box(modifier.clip(RoundedCornerShape(12.dp))) {
+            // As with native track artwork, preserve the automatic sleeve
+            // beneath Coil. A revoked/broken document must not leave a blank cover.
+            CanonicalPlaylistCoverArt(rows = rows, modifier = Modifier.fillMaxSize())
+            AsyncImage(
+                model = customCoverUri,
+                contentDescription = "Capa personalizada",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        }
         covers.size >= 4 -> Column(modifier.clip(RoundedCornerShape(12.dp))) {
             for (offset in listOf(0, 2)) {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
