@@ -188,7 +188,7 @@ internal fun canonicalAvailablePlaylistSourceKeys(context: Context): List<String
  * silent fallback to local files.
  */
 internal fun canonicalPlaylistProviderKeys(
-    remoteProviders: List<String>,
+    remoteProviders: Collection<String>,
     selectedProvider: String?,
 ): List<String> = canonicalBrowseProviderKeys(remoteProviders)
     .filter { selectedProvider == null || it == selectedProvider }
