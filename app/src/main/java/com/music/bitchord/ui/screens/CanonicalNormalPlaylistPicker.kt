@@ -23,6 +23,20 @@ internal fun defaultCanonicalNormalPlaylistSource(keys: List<String>): String? =
 internal fun toggleCanonicalStaticMember(ids: List<String>, id: String): List<String> =
     if (id in ids) ids.filterNot { it == id } else ids + id
 
+/** The group's full, current RecordingIds determine its checked state. */
+internal fun allCanonicalGroupMembersSelected(
+    members: List<String>, selected: List<String>,
+): Boolean = members.isNotEmpty() && members.all { it in selected }
+
+/** One tap on an album or artist toggles its complete verified set, preserving order. */
+internal fun toggleCanonicalGroupMembers(
+    members: List<String>, selected: List<String>,
+): List<String> = if (allCanonicalGroupMembersSelected(members, selected)) {
+    selected.filterNot { it in members }
+} else {
+    (selected + members).distinct()
+}
+
 /** Reorders one selected RecordingId without fabricating any media identity. */
 internal fun moveCanonicalStaticMember(
     ids: List<String>, id: String, towardStart: Boolean,
