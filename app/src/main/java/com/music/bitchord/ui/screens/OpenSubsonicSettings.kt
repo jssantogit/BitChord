@@ -9,7 +9,6 @@ import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Dns
 import androidx.compose.material.icons.rounded.Sync
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -23,10 +22,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.R
+import com.music.bitchord.ui.components.EditorField
+import com.music.bitchord.ui.components.ServerEditorAlert
+import com.music.bitchord.ui.components.NativeAlertHost
 import com.music.bitchord.ui.components.ConfirmationAlert
 import com.music.bitchord.ui.components.NativeAlertHost
 import com.music.bitchord.data.catalog.provider.opensubsonic.AndroidOpenSubsonicAccountSession
@@ -193,29 +194,39 @@ private fun OpenSubsonicAccountEditor(
         serverUrl.trim().trimEnd('/') != account.serverUrl
     val credentialCanBeKept = hasCredential && !modeChanged && !serverChanged
 
-    AlertDialog(
-        onDismissRequest = { if (!testing) onDismiss() },
-        title = { Text(stringResource(R.string.opensubsonic_editor_title)) },
-        text = {
-            Column {
-                Text(
-                    text = stringResource(R.string.opensubsonic_editor_description),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
+    NativeAlertHost(onDismiss = { if (!testing) onDismiss() }) {
+        ServerEditorAlert(
+            hazeState = null,
+            title = stringResource(R.string.opensubsonic_editor_title),
+            description = stringResource(R.string.opensubsonic_editor_description),
+            fields = listOfNotNull(
+                EditorField(
                     value = serverUrl,
-                    onValueChange = { serverUrl = it; status = null },
-                    label = { Text(stringResource(R.string.opensubsonic_server_url)) },
-                    placeholder = { Text("https://music.example.com") },
-                    singleLine = true,
-                    enabled = !testing,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(12.dp))
+                    onChange = { serverUrl = it; status = null },
+                    placeholder = stringResource(R.string.opensubsonic_server_url),
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri,
+                ),
+                if (authMode == OpenSubsonicAuthMode.PASSWORD) {
+                    EditorField(
+                        value = username,
+                        onChange = { username = it; status = null },
+                        placeholder = stringResource(R.string.username),
+                    )
+                } else null,
+                EditorField(
+                    value = secretReplacement,
+                    onChange = { secretReplacement = it; status = null },
+                    placeholder = stringResource(
+                        if (authMode == OpenSubsonicAuthMode.API_KEY)
+                            R.string.opensubsonic_api_key
+                        else R.string.password,
+                    ),
+                    isPassword = true,
+                ),
+            ),
+            afterFirstField = {
                 Text(
-                    text = stringResource(R.string.opensubsonic_authentication),
+                    stringResource(R.string.opensubsonic_authentication),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -227,114 +238,58 @@ private fun OpenSubsonicAccountEditor(
                     ),
                     selectedIndex = if (authMode == OpenSubsonicAuthMode.API_KEY) 0 else 1,
                     onSelect = {
-                        authMode = if (it == 0) OpenSubsonicAuthMode.API_KEY else OpenSubsonicAuthMode.PASSWORD
+                        authMode = if (it == 0) OpenSubsonicAuthMode.API_KEY
+                            else OpenSubsonicAuthMode.PASSWORD
                         secretReplacement = ""
                         status = null
                     },
                     enabled = !testing,
                 )
-                if (authMode == OpenSubsonicAuthMode.PASSWORD) {
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = username,
-                        onValueChange = { username = it; status = null },
-                        label = { Text(stringResource(R.string.username)) },
-                        singleLine = true,
-                        enabled = !testing,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = secretReplacement,
-                    onValueChange = { secretReplacement = it; status = null },
-                    label = {
-                        Text(
-                            stringResource(
-                                if (authMode == OpenSubsonicAuthMode.API_KEY) {
-                                    R.string.opensubsonic_api_key
-                                } else {
-                                    R.string.password
-                                },
-                            ),
-                        )
-                    },
-                    supportingText = {
-                        Text(
-                            if (credentialCanBeKept && secretReplacement.isEmpty()) {
-                                stringResource(R.string.opensubsonic_credential_kept)
-                            } else {
-                                stringResource(R.string.opensubsonic_credential_change_only)
-                            },
-                        )
-                    },
-                    visualTransformation = PasswordVisualTransformation(),
-                    singleLine = true,
-                    enabled = !testing,
-                    modifier = Modifier.fillMaxWidth(),
+            },
+            afterFields = {
+                Text(
+                    if (credentialCanBeKept && secretReplacement.isEmpty())
+                        stringResource(R.string.opensubsonic_credential_kept)
+                    else stringResource(R.string.opensubsonic_credential_change_only),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (status != null) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = status!!,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (statusIsError) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.primary
+            },
+            status = status,
+            statusIsGood = !statusIsError,
+            testing = testing,
+            canSubmit = serverUrl.isNotBlank(),
+            onSave = {
+                val saved = session.save(draft())
+                if (saved.isSuccess) {
+                    onDismiss()
+                } else {
+                    statusIsError = true
+                    status = saved.exceptionOrNull()?.message
+                        ?: context.getString(R.string.opensubsonic_save_failed)
+                }
+            },
+            onTest = {
+                testing = true
+                status = null
+                scope.launch {
+                    session.testConnection(draft()).fold(
+                        onSuccess = { report ->
+                            statusIsError = false
+                            status = report.connectedLabel(context)
+                        },
+                        onFailure = { failure ->
+                            statusIsError = true
+                            status = failure.message
+                                ?: context.getString(R.string.opensubsonic_connection_failed)
                         },
                     )
+                    testing = false
                 }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = !testing && serverUrl.isNotBlank(),
-                onClick = {
-                    val saved = session.save(draft())
-                    if (saved.isSuccess) {
-                        onDismiss()
-                    } else {
-                        statusIsError = true
-                        status = saved.exceptionOrNull()?.message
-                            ?: context.getString(R.string.opensubsonic_save_failed)
-                    }
-                },
-            ) {
-                Text(stringResource(R.string.save))
-            }
-        },
-        dismissButton = {
-            Column {
-                TextButton(
-                    enabled = !testing && serverUrl.isNotBlank(),
-                    onClick = {
-                        testing = true
-                        status = null
-                        scope.launch {
-                            session.testConnection(draft()).fold(
-                                onSuccess = { report ->
-                                    statusIsError = false
-                                    status = report.connectedLabel(context)
-                                },
-                                onFailure = { failure ->
-                                    statusIsError = true
-                                    status = failure.message
-                                        ?: context.getString(R.string.opensubsonic_connection_failed)
-                                },
-                            )
-                            testing = false
-                        }
-                    },
-                ) {
-                    Text(stringResource(if (testing) R.string.testing else R.string.test))
-                }
-                TextButton(onClick = onDismiss, enabled = !testing) {
-                    Text(stringResource(R.string.cancel))
-                }
-            }
-        },
-    )
+            },
+            onDismiss = onDismiss,
+        )
+    }
 }
 
 private fun OpenSubsonicAccountRecord.displaySubtitle(): String = when {
