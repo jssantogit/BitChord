@@ -58,7 +58,7 @@ class PlaylistLibraryVisualReuseTest {
         ).isEmpty())
     }
 
-    @Test fun playlistLibrarySearchUsesNativePillInput() {
+    @Test fun playlistLibrarySearchReusesNativeDetailGlassInput() {
         var query by mutableStateOf("")
         compose.setContent {
             PlaylistLibrarySearchField(
@@ -66,6 +66,7 @@ class PlaylistLibraryVisualReuseTest {
                 onQueryChange = { query = it },
             )
         }
+        compose.onNodeWithText("Buscar em Playlists").assertExists()
         compose.onNodeWithContentDescription("Buscar em Playlists").performTextInput("newjeans")
         compose.runOnIdle { assertEquals("newjeans", query) }
     }
@@ -129,6 +130,19 @@ class PlaylistLibraryVisualReuseTest {
         }
         compose.onNodeWithText("Adições recentes").assertExists()
         compose.onNodeWithText("Hurt").assertExists()
+        compose.onNodeWithText("NewJeans").assertExists()
+    }
+
+    @Test fun recentAdditionsShowFallbackInsteadOfBlankTitle() {
+        compose.setContent {
+            CanonicalRecentAdditionsShelf(
+                recent = listOf(V2DisplayRow(
+                    id = "recording:missing-title", title = " ", artist = "NewJeans",
+                )),
+                onOpenSongs = {},
+            )
+        }
+        compose.onNodeWithText("Título indisponível").assertExists()
         compose.onNodeWithText("NewJeans").assertExists()
     }
 
