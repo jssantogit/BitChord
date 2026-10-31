@@ -200,6 +200,7 @@ internal fun CanonicalPlaylistDetailScreen(
     card: LibraryPlaylistCard,
     onClose: () -> Unit,
     onAction: (CanonicalCollectionIntent) -> Unit,
+    onShuffle: () -> Unit,
     onTrackClick: (String) -> Unit,
     onTrackQueue: (String, CanonicalCollectionIntent) -> Unit,
     contentPadding: PaddingValues,
@@ -263,21 +264,29 @@ internal fun CanonicalPlaylistDetailScreen(
                         Row(
                             modifier = Modifier.fillMaxWidth()
                                 .padding(horizontal = PAGE_GUTTER, vertical = 18.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
+                            CircleIconButton(
+                                icon = BitChordIcons.Shuffle,
+                                contentDescription = "Aleatório",
+                                onClick = onShuffle,
+                                tint = palette.onBackground,
+                            )
                             ActionPill(
                                 icon = BitChordIcons.Play, label = "Tocar",
                                 onClick = { onAction(CanonicalCollectionIntent.PLAY_NOW) },
                                 filled = true, modifier = Modifier.weight(1f),
                             )
-                            ActionPill(
-                                icon = Icons.AutoMirrored.Rounded.QueueMusic, label = "Fila",
+                            CircleIconButton(
+                                icon = BitChordIcons.Plus,
+                                contentDescription = "Adicionar à fila",
                                 onClick = { onAction(CanonicalCollectionIntent.ADD_TO_QUEUE) },
-                                filled = false, modifier = Modifier.weight(1f),
+                                tint = palette.onBackground,
                             )
                         }
                     }
-                },
+                }
             )
         }
         if (rows?.isEmpty() == true) {
