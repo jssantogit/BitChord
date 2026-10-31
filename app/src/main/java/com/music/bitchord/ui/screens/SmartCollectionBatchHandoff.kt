@@ -73,8 +73,8 @@ internal sealed interface SmartCollectionActionSource {
     data class Adaptive(val kind: AdaptiveCollectionKind) : SmartCollectionActionSource
     data class SavedDefinition(val id: String) : SmartCollectionActionSource
     data class PreviewQuery(val query: RuleBasedSmartPlaylistQuery) : SmartCollectionActionSource
-    data class SavedV2Definition(val id: String) : SmartCollectionActionSource
-    data class SavedStaticPlaylist(val id: String) : SmartCollectionActionSource
+    data class SavedV2Definition(val id: String, val shuffle: Boolean = false) : SmartCollectionActionSource
+    data class SavedStaticPlaylist(val id: String, val shuffle: Boolean = false) : SmartCollectionActionSource
     /** Click a real row: verify current saved membership before playing its ordered suffix. */
     data class SavedStaticPlaylistFromTrack(
         val id: String, val recordingId: String, val includeFollowing: Boolean = true,
@@ -168,7 +168,16 @@ internal class SmartCollectionBatchHandoff(
                 mark("rejected", mapOf("reason" to "limit_exceeded"))
                 return SmartCollectionBatchResult.LimitExceeded
             }
-            val ids = selected.distinct()
+            // Shuffle only freshly revalidated membership, not stale UI rows.
+            val shuffleRequested = intent == CanonicalCollectionIntent.PLAY_NOW &&
+                when (source) {
+                    is SmartCollectionActionSource.SavedStaticPlaylist -> source.shuffle
+                    is SmartCollectionActionSource.SavedV2Definition -> source.shuffle
+                    else -> false
+                }
+            val ids = selected.distinct().let {
+                if (shuffleRequested) it.shuffled() else it
+            }
             val library = sourceLimit(source, browseSelected(ids))
             mark("catalog", mapOf("trackCount" to library.tracks.size.toString()))
             // A rated remote preference is never an exception to a chosen source.
