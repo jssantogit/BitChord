@@ -338,7 +338,7 @@ data class EditorField(
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun ServerEditorAlert(
-    hazeState: HazeState,
+    hazeState: HazeState?,
     title: String,
     description: String,
     fields: List<EditorField>,
@@ -354,6 +354,10 @@ fun ServerEditorAlert(
     /** Offered only when there is something stored to remove. */
     onRemove: (() -> Unit)? = null,
     onDismiss: () -> Unit,
+    /** Optional existing controls between URL and credentials (e.g. authentication mode). */
+    afterFirstField: (@Composable () -> Unit)? = null,
+    /** Keep account-specific explanatory notes in the native editor shell. */
+    afterFields: (@Composable () -> Unit)? = null,
 ) {
     AlertScaffold(hazeState = hazeState, onDismiss = { if (!testing) onDismiss() }) {
         Column(
@@ -395,6 +399,14 @@ fun ServerEditorAlert(
                         onDone = { if (canSubmit && !testing) onSave() },
                     ),
                 )
+                if (index == 0 && afterFirstField != null) {
+                    Spacer(Modifier.height(8.dp))
+                    afterFirstField()
+                }
+            }
+            if (afterFields != null) {
+                Spacer(Modifier.height(8.dp))
+                afterFields()
             }
         }
         AlertRule()
