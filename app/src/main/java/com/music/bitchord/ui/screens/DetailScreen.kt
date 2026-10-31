@@ -600,7 +600,6 @@ fun DetailScreen(
                         autoFocus = focusSearch,
                         onFocused = { focusSearch = false },
                         palette = palette,
-                        type = page.type,
                     )
                 }
             }
@@ -1131,7 +1130,6 @@ internal fun DetailSearchField(
     autoFocus: Boolean,
     onFocused: () -> Unit,
     palette: ArtworkPalette,
-    type: BrowseType,
     placeholder: String? = null,
 ) {
     // Opened by a tap on a button, which is as clear a statement of intent as
