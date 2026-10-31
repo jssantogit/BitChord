@@ -498,7 +498,9 @@ internal fun SmartPlaylistV2WizardUi(
                 item {
                     val headingDetail = when (page) {
                         WizardStep.IDENTITY -> "Dê um nome e escolha como a biblioteca será organizada."
-                        WizardStep.EDIT -> "Atualize as informações e altere músicas ou regras sem criar outra playlist."
+                        WizardStep.EDIT -> if (editingFilterId != null)
+                            "Atualize o nome e as regras deste filtro reutilizável."
+                        else "Atualize a capa, a descrição e as faixas ou regras desta playlist."
                         WizardStep.SONGS -> "Escolha as faixas que farão parte desta playlist, na ordem desejada."
                         WizardStep.RULES -> "Organize condições em grupos. As opções avançadas ficam dentro de cada grupo."
                         WizardStep.GROUP -> "Ajuste as condições, a combinação e a ordem deste grupo."
@@ -523,11 +525,14 @@ internal fun SmartPlaylistV2WizardUi(
                                     AsyncImage(
                                         model = coverUri,
                                         contentDescription = "Capa escolhida da playlist",
-                                        modifier = Modifier.size(224.dp).clip(RoundedCornerShape(12.dp)),
+                                        modifier = Modifier.size(if (page == WizardStep.EDIT) 180.dp else 224.dp)
+                                        .clip(RoundedCornerShape(12.dp)),
                                         contentScale = ContentScale.Crop,
                                     )
                                 } else {
-                                    PlaylistWizardArtworkPlaceholder()
+                                    PlaylistWizardArtworkPlaceholder(
+                                        dimension = if (page == WizardStep.EDIT) 180.dp else 224.dp,
+                                    )
                                 }
                                 PlaylistWizardSecondaryAction(
                                     label = "Escolher capa",
@@ -627,7 +632,7 @@ internal fun SmartPlaylistV2WizardUi(
                                 }
                             }
                         }
-                        item {
+                        if (page == WizardStep.IDENTITY) item {
                             WizardCard("Tipo de playlist", "Normal: escolha manual de músicas. Inteligente: seleção por regras.") {
                                 if (editingId != null || editingFilterId != null || editingNormalId != null) {
                                     Text(if (normalMode) "Normal" else "Inteligente",
