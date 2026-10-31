@@ -17,6 +17,25 @@ class LocalGroupsTest {
         Song(videoId = id, title = title, artist = artist, thumbnailUrl = null, albumName = album, trackNumber = track)
 
     @Test
+    fun artistReleaseShelvesKeepActualAlbumMembershipAndDoNotInventMissingAlbums() {
+        val songs = listOf(
+            song("a", "Track A", album = "Album One"),
+            song("b", "Track B", album = "Album One"),
+            song("c", "Track C", album = "Single Candidate"),
+            song("d", "Loose Track", album = null),
+        )
+        val shelves = LocalGroups.artistReleaseShelves(
+            LocalGroups.artistPageId("local:all", "Artist"), songs,
+        )
+        assertEquals(listOf("Álbuns", "Singles e EPs"), shelves.map { it.title })
+        assertEquals("Album One", shelves.first().items.single().title)
+        assertEquals("Single Candidate", shelves.last().items.single().title)
+        assertTrue(shelves.flatMap { it.items }.all {
+            LocalGroups.typeOf(it.browseId!!) == BrowseType.ALBUM
+        })
+    }
+
+    @Test
     fun pageIds_roundTripNamesWithColons() {
         val id = LocalGroups.albumPageId("local:downloads", "Live: At The Hall")
         assertEquals("local:downloads", LocalGroups.folderOf(id))
