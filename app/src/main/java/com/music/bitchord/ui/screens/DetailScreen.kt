@@ -905,7 +905,7 @@ private fun ReleaseHeader(
         palette = palette,
         sleeveSize = sleeveSize,
         onCreditClick = artist?.artistId?.takeIf { onArtistClick != null }?.let { id ->
-            { onArtistClick?.invoke(id, artist.artist) }
+            { onArtistClick?.invoke(id, artist?.artist.orEmpty()) }
         },
         artwork = {
             // A cover that isn't there, or wouldn't load — a device folder, a
