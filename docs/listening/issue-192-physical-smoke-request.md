@@ -165,3 +165,26 @@ A [Android CI #41199221905](https://github.com/jssantogit/BitChord/actions/runs/
 **Smoke no Galaxy A54:** conferir os dez itens do último relatório: detalhe de playlist usando cabeçalho nativo, nome de música/álbum em Adições recentes, pesquisa proporcional e ícones contrastantes, um único CTA em biblioteca vazia, listas sem chevrons, detalhes canônicos de artistas, contadores de artistas/álbuns, expansão aninhada das faixas de álbum na criação, capas/seleção integral de artistas e indicador ✓ reversível em álbuns. Conferir ainda tocar música, fila, paleta, ações de edição, mini-player e logs.
 
 **Não autoriza:** merge da PR #202 ou #193, mudança na main, release, limpeza de histórico ou encerramento de issue. Somente considerar o APK pronto depois da conclusão do workflow e upload do artefato.
+
+
+## PR #202 — novo smoke físico depois da auditoria visual (31/10/2026)
+
+**Autorização explícita:** “Dispare apk”, em 31/10/2026, para compilar o estado
+atual da PR #202 no Galaxy A54. O HEAD funcional
+`ae3f351547d1a1b8fc9c699c482f4432c2a0bdcb` foi aprovado pela
+[Android CI #41206482569](https://github.com/jssantogit/BitChord/actions/runs/41206482569)
+com **SUCCESS**. Esta alteração **somente documental** aciona uma execução do
+workflow `physical-smoke-apk.yml` no branch
+`ui/library-playlists-alignment-20261030`. O workflow executa testes Android
+e produz o artefato `devDebug`; APK só estará pronto após sucesso e upload.
+
+**Smoke de regressão:** comparar o detalhe das playlists criadas com a tela
+nativa “2000's” (capa proporcional, toolbar pesquisar/ordenar/⋮, botões,
+altura e espaçamento das faixas, duração e menu); verificar títulos reais em
+Adições recentes em vez de artista; página de artistas locais com “Faixas”,
+álbuns e singles/EPs e destaque recente apenas com data verificável; pesquisa
+Playlists com 52dp; playback, shuffle, fila, rolagem, miniplayer, paleta e
+log físico.
+
+**Escopo:** gerar um único APK Android `assembleDevDebug` para smoke físico;
+sem merge, alteração da `main`, release pública ou assinatura de produção.
