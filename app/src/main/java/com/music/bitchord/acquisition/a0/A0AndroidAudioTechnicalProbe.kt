@@ -37,6 +37,7 @@ internal object A0AndroidAudioTechnicalProbe {
         SAMPLE_RATE_CONFLICT,
         ZERO_LENGTH_SAMPLE, WRONG_SAMPLE_TRACK, ENCRYPTED_SAMPLE,
         NEGATIVE_SAMPLE_TIME, REGRESSING_SAMPLE_TIME,
+        FLAC_TIMELINE_UNVERIFIED,
         SAMPLE_BYTE_LIMIT_EXCEEDED,
         INCOMPLETE_SAMPLE_SCAN, SOURCE_CHANGED_OR_REVOKED,
         MEDIA_EXTRACTOR_EXCEPTION,
@@ -49,6 +50,10 @@ internal object A0AndroidAudioTechnicalProbe {
         var toleratedBacksteps=0
         var backstepMillis=-1L
         var endGapMillis=-1L
+        var resetEvents=0
+        var timelineVerdict:A0FlacTimelineRecoveryPolicy.Verdict?=null
+        var fixedFlacBlockAvailable=false
+        var flacTotalSampleCountAvailable=false
         var termination:A0ProbeTermination.Reason?=null
         var fault:A0AcquisitionDiagnostics.Fault?=null
     }
@@ -61,6 +66,10 @@ internal object A0AndroidAudioTechnicalProbe {
                     " step=${m.step.name} samples=${m.samples.coerceIn(0,400000)}" +
                     " small_backsteps=${m.toleratedBacksteps}" +
                     " regression_ms=${m.backstepMillis.coerceIn(-1L,7200000L)}" +
+                    " reset_events=${m.resetEvents.coerceIn(0,400000)}" +
+                    " flac_fixed_block=${m.fixedFlacBlockAvailable}" +
+                    " flac_total_samples=${m.flacTotalSampleCountAvailable}" +
+                    " timeline=${m.timelineVerdict?.name ?: "NONE"}" +
                     " end_gap_ms=${m.endGapMillis.coerceIn(-1L,7200000L)}" +
                     " termination=${m.termination?.name ?: "NONE"}" +
                     " fault=${m.fault?.name ?: "NONE"}" +
@@ -112,6 +121,8 @@ internal object A0AndroidAudioTechnicalProbe {
         metrics.step=Step.HEADER
         val header=A0LocalAudioHeaderEvidence.inspect(head.copyOf(read))
             ?:return denied(Failure.UNRECOGNIZED_AUDIO_HEADER,metrics)
+        metrics.fixedFlacBlockAvailable=header.flacBlockSize!=null
+        metrics.flacTotalSampleCountAvailable=header.flacTotalSamples!=null
         val ext=declaredExtension.trimStart('.')
             .lowercase(java.util.Locale.ROOT)
         val expected=when(header.codec) {
@@ -193,7 +204,10 @@ internal object A0AndroidAudioTechnicalProbe {
             var emptyLeading=0
             var bytes=0L
             var lastUs=-1L
+            var previousUs=-1L
             var toleratedTimestampBacksteps=0
+            var largeFlacTimestampResets=0
+            var maximumFlacResetMillis=0L
             var reachedEos=false
             while(samples<MAX_SAMPLES &&
                 SystemClock.elapsedRealtime()<endBy &&
@@ -233,14 +247,24 @@ internal object A0AndroidAudioTechnicalProbe {
                 if(reportedTrack!=audioIndex)
                     return denied(Failure.WRONG_SAMPLE_TRACK,metrics)
                 val timestamp=extractor.sampleTime
+                val flac=header.codec==A0CanonicalAcquisitionIntent.Codec.FLAC
+                // Compare adjacent presentations, NOT with the highest
+                // timestamp: after a device reset, subsequent increasing
+                // samples must not each count as another regression.
                 when(A0AudioSampleScanPolicy.timestampVerdict(
-                    timestamp,lastUs,toleratedTimestampBacksteps,
-                    header.codec==A0CanonicalAcquisitionIntent.Codec.FLAC)) {
+                    timestamp,previousUs,toleratedTimestampBacksteps,flac)) {
                     A0AudioSampleScanPolicy.TimestampVerdict.NEGATIVE ->
                         return denied(Failure.NEGATIVE_SAMPLE_TIME,metrics)
                     A0AudioSampleScanPolicy.TimestampVerdict.REGRESSION -> {
-                        metrics.backstepMillis=(lastUs-timestamp).coerceAtLeast(0L)/1000L
-                        return denied(Failure.REGRESSING_SAMPLE_TIME,metrics)
+                        val delta=(previousUs-timestamp).coerceAtLeast(0L)/1000L
+                        metrics.backstepMillis=delta
+                        if(!flac)return denied(Failure.REGRESSING_SAMPLE_TIME,metrics)
+                        largeFlacTimestampResets++
+                        maximumFlacResetMillis=maxOf(maximumFlacResetMillis,delta)
+                        metrics.resetEvents=largeFlacTimestampResets
+                        // A suspicious PTS is NEVER proof of file integrity.
+                        // Only the independent STREAMINFO + complete demux
+                        // reconciliation below may authorize finishing.
                     }
                     A0AudioSampleScanPolicy.TimestampVerdict.TOLERATE_SINGLE_SMALL_FLAC_BACKSTEP -> {
                         toleratedTimestampBacksteps++
@@ -248,7 +272,7 @@ internal object A0AndroidAudioTechnicalProbe {
                     }
                     A0AudioSampleScanPolicy.TimestampVerdict.OK -> Unit
                 }
-                // Retain the highest *observed* time, never regress coverage.
+                previousUs=timestamp
                 lastUs=maxOf(lastUs,timestamp)
                 bytes+=amount
                 if(bytes>A0ObservedTransferLimits.MAX_AUDIO_BYTES)
@@ -263,8 +287,27 @@ internal object A0AndroidAudioTechnicalProbe {
             metrics.step=Step.FINAL
             metrics.endGapMillis=if(lastUs>=0)
                 abs(duration-lastUs/1000L) else -1L
+            val timeline=A0FlacTimelineRecoveryPolicy.assess(
+                resetEvents=largeFlacTimestampResets,
+                maximumRegressionMs=maximumFlacResetMillis,
+                fixedBlockSize=header.flacBlockSize,
+                totalPcmSamples=header.flacTotalSamples,
+                sampleRateHz=header.sampleRateHz,
+                durationMillis=duration,
+                positiveDemuxPackets=samples,
+                demuxedBytes=bytes,
+                fileBytes=size)
+            metrics.timelineVerdict=timeline
+            // STREAMINFO does not substitute for the actual demux walk:
+            // strict EOS, full packet count, encoded bytes and duration
+            // corroboration are required before discarding broken PTS.
+            val recoveryAllowed=timeline==
+                A0FlacTimelineRecoveryPolicy.Verdict.VERIFIED_FIXED_BLOCK_COUNT
+            if(largeFlacTimestampResets>0 && !recoveryAllowed)
+                return denied(Failure.FLAC_TIMELINE_UNVERIFIED,metrics)
+            val endTimestamp=if(recoveryAllowed)duration*1000L else lastUs
             val termination=A0ProbeTermination.classify(
-                reachedEos,samples,lastUs,duration,
+                reachedEos,samples,endTimestamp,duration,
                 capReached=samples>=MAX_SAMPLES,
                 timeExpired=SystemClock.elapsedRealtime()>=endBy,
                 cancelled=isCancelled() || Thread.currentThread().isInterrupted)
@@ -274,7 +317,15 @@ internal object A0AndroidAudioTechnicalProbe {
             if(source.length()!=size || source.lastModified()!=modification ||
                 isCancelled() || Thread.currentThread().isInterrupted)
                 return denied(Failure.SOURCE_CHANGED_OR_REVOKED,metrics)
-            if(toleratedTimestampBacksteps>0)
+            if(recoveryAllowed)
+                runCatching {
+                    Log.d("BitChord",
+                        "soulseek_audio_probe accepted=FLAC_STREAMINFO_RECONCILED" +
+                            " reset_events=${metrics.resetEvents}" +
+                            " samples=${samples.coerceIn(0,400000)}" +
+                            " scope=$traceScope")
+                }
+            else if(toleratedTimestampBacksteps>0)
                 runCatching {
                     Log.d("BitChord","soulseek_audio_probe accepted=SMALL_FLAC_BACKSTEP")
                 }
