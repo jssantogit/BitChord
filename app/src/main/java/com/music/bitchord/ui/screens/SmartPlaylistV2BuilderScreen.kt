@@ -9,6 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.RowMoreButton
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Surface
@@ -820,56 +821,56 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 previewQuery = null
                                 error = null
                             }, enabled = !loading) { Text("Criar playlist") }
-                            Box {
-                                TextButton(onClick = { more = true },
-                                    enabled = !loading) { Text("Mais") }
-                                DropdownMenu(
-                                    expanded = more,
-                                    onDismissRequest = { more = false },
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Copiar regras para novo rascunho") },
-                                        onClick = {
-                                            more = false
-                                            showWizard = true
-                                            editorEpoch++
-                                            editingId = null
-                                            editingFilterId = null
-                                            rule = filter.rules
-                            hasConfiguredRules = true
-                                            preview = null
-                                            previewQuery = null
-                                            error = null
-                                        },
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Combinar com o rascunho (E)") },
-                                        onClick = {
-                                            more = false
-                                            try {
-                                                val combined = rule.andSavedFilter(filter)
+                            RowMoreButton(
+                                onClick = { more = true },
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (more) {
+                                WizardChoiceDialog(
+                                    title = filter.name,
+                                    options = listOf(
+                                        "Copiar regras para novo rascunho",
+                                        "Combinar com o rascunho (E)",
+                                        "Excluir filtro",
+                                    ),
+                                    label = { it },
+                                    onChosen = { option ->
+                                        when (option) {
+                                            "Copiar regras para novo rascunho" -> {
                                                 showWizard = true
                                                 editorEpoch++
+                                                editingId = null
                                                 editingFilterId = null
-                                                rule = combined
-                            hasConfiguredRules = true
+                                                rule = filter.rules
+                                                hasConfiguredRules = true
                                                 preview = null
                                                 previewQuery = null
                                                 error = null
-                                            } catch (_: IllegalArgumentException) {
-                                                error = "O conjunto de regras excede o limite permitido."
                                             }
-                                        },
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Excluir filtro") },
-                                        onClick = {
-                                            more = false
-                                            pendingDeletion = PendingSmartDeletion(
-                                                filter.id, filter.name, true)
-                                        },
-                                    )
-                                }
+                                            "Combinar com o rascunho (E)" -> {
+                                                try {
+                                                    val combined = rule.andSavedFilter(filter)
+                                                    showWizard = true
+                                                    editorEpoch++
+                                                    editingFilterId = null
+                                                    rule = combined
+                                                    hasConfiguredRules = true
+                                                    preview = null
+                                                    previewQuery = null
+                                                    error = null
+                                                } catch (_: IllegalArgumentException) {
+                                                    error = "O conjunto de regras excede o limite permitido."
+                                                }
+                                            }
+                                            "Excluir filtro" -> {
+                                                pendingDeletion = PendingSmartDeletion(
+                                                    filter.id, filter.name, true,
+                                                )
+                                            }
+                                        }
+                                    },
+                                    onClose = { more = false },
+                                )
                             }
                         }
                     }
@@ -910,22 +911,22 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 previewQuery = null
                                 error = null
                             }, enabled = !loading) { Text("Editar") }
-                            Box {
-                                TextButton(onClick = { more = true },
-                                    enabled = !loading) { Text("Mais") }
-                                DropdownMenu(
-                                    expanded = more,
-                                    onDismissRequest = { more = false },
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Excluir playlist") },
-                                        onClick = {
-                                            more = false
-                                            pendingDeletion = PendingSmartDeletion(
-                                                item.id, item.name, false)
-                                        },
-                                    )
-                                }
+                            RowMoreButton(
+                                onClick = { more = true },
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (more) {
+                                WizardChoiceDialog(
+                                    title = item.name,
+                                    options = listOf("Excluir playlist"),
+                                    label = { it },
+                                    onChosen = {
+                                        pendingDeletion = PendingSmartDeletion(
+                                            item.id, item.name, false,
+                                        )
+                                    },
+                                    onClose = { more = false },
+                                )
                             }
                         }
                         if (onSavedAction != null) {
