@@ -2158,6 +2158,7 @@ private fun BitChordApp(
         mutableStateOf<com.music.bitchord.ui.screens.LibraryPlaylistCard?>(null)
     }
     var playlistLibraryQuery by rememberSaveable { mutableStateOf("") }
+    var playlistLibrarySearching by remember { mutableStateOf(false) }
     var playlistLibrarySort by rememberSaveable {
         mutableStateOf(com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT)
     }
@@ -2803,6 +2804,8 @@ private fun BitChordApp(
                             },
                             contentPadding = listPadding,
                             query = playlistLibraryQuery,
+                            searching = playlistLibrarySearching,
+                            onSearchingChange = { playlistLibrarySearching = it },
                             onQueryChange = { playlistLibraryQuery = it },
                             sort = playlistLibrarySort,
                             filter = playlistLibraryFilter,
@@ -2816,6 +2819,7 @@ private fun BitChordApp(
                             listState = playlistLibraryListState,
                             detailListState = playlistDetailListState,
                             detailSearching = playlistDetailSearching,
+                            onDetailSearchingChange = { playlistDetailSearching = it },
                             detailQuery = playlistDetailQuery,
                             onDetailQueryChange = { playlistDetailQuery = it },
                             detailSort = playlistDetailSort,
@@ -3854,144 +3858,53 @@ private fun BitChordApp(
                             !showSettings && !showAccountScrobbling) {
                             if (openedCanonicalPlaylist == null) {
                                 if (com.music.bitchord.ui.screens.showPlaylistHeaderCreateAction(
-                                        playlistLibraryCount)) IconButton(onClick = {
-                                    editingSmartPlaylistId = null
-                                    editingNormalPlaylistId = null
-                                    showSmartPlaylistBuilder = true
-                                }) {
-                                    Icon(
-                                        Icons.Rounded.PlaylistAdd,
-                                        contentDescription = "Nova playlist",
-                                        tint = MaterialTheme.colorScheme.onBackground,
-                                    )
-                                }
-                                Box {
-                                    IconButton(onClick = { playlistLibrarySortMenu = true }) {
-                                        Icon(Icons.Rounded.Sort,
-                                            contentDescription = "Ordenar playlists",
-                                            tint = MaterialTheme.colorScheme.onBackground)
-                                    }
-                                    DropdownMenu(
-                                        expanded = playlistLibrarySortMenu,
-                                        onDismissRequest = { playlistLibrarySortMenu = false },
-                                    ) {
-                                        listOf(
-                                            com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT to
-                                                "Ordem padrão",
-                                            com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_ASC to
-                                                "Nome: A a Z",
-                                            com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_DESC to
-                                                "Nome: Z a A",
-                                        ).forEach { (choice, label) ->
-                                            DropdownMenuItem(
-                                                text = { Text(label) },
-                                                trailingIcon = if (playlistLibrarySort == choice) {
-                                                    { Icon(Icons.Rounded.Check, contentDescription = null) }
-                                                } else null,
-                                                onClick = {
-                                                    playlistLibrarySort = choice
-                                                    playlistLibrarySortMenu = false
-                                                },
-                                            )
-                                        }
-                                    }
-                                }
-                                Box {
-                                    IconButton(onClick = { playlistLibraryOptionsMenu = true }) {
-                                        Icon(Icons.Rounded.MoreVert,
-                                            contentDescription = "Opções de playlists",
-                                            tint = MaterialTheme.colorScheme.onBackground)
-                                    }
-                                    DropdownMenu(
-                                        expanded = playlistLibraryOptionsMenu,
-                                        onDismissRequest = { playlistLibraryOptionsMenu = false },
-                                    ) {
-                                        listOf(
-                                            com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.ALL
-                                                to "Todas as playlists",
-                                            com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.NORMAL
-                                                to "Playlists normais",
-                                            com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.SMART
-                                                to "Playlists inteligentes",
-                                        ).forEach { (choice, label) ->
-                                            DropdownMenuItem(
-                                                text = { Text(label) },
-                                                trailingIcon = if (playlistLibraryFilter == choice) {
-                                                    { Icon(Icons.Rounded.Check, contentDescription = null) }
-                                                } else null,
-                                                onClick = {
-                                                    playlistLibraryFilter = choice
-                                                    playlistLibraryOptionsMenu = false
-                                                },
-                                            )
-                                        }
-                                    }
-                                }
-                            } else {
-                                IconButton(onClick = {
-                                    playlistDetailSearching = !playlistDetailSearching
-                                    if (!playlistDetailSearching) playlistDetailQuery = ""
-                                }) {
-                                    Icon(Icons.Rounded.Search, contentDescription = "Buscar na playlist",
-                                        tint = MaterialTheme.colorScheme.onBackground)
-                                }
-                                Box {
-                                    IconButton(onClick = { playlistDetailSortMenu = true }) {
-                                        Icon(Icons.Rounded.Sort, contentDescription = "Ordenar músicas",
-                                            tint = MaterialTheme.colorScheme.onBackground)
-                                    }
-                                    DropdownMenu(
-                                        expanded = playlistDetailSortMenu,
-                                        onDismissRequest = { playlistDetailSortMenu = false },
-                                    ) {
-                                        listOf(
-                                            com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT to "Ordem da playlist",
-                                            com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_ASC to "Música: A a Z",
-                                            com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_DESC to "Música: Z a A",
-                                        ).forEach { (choice, label) ->
-                                            DropdownMenuItem(
-                                                text = { Text(label) },
-                                                onClick = {
-                                                    playlistDetailSort = choice
-                                                    playlistDetailSortMenu = false
-                                                },
-                                            )
-                                        }
-                                    }
-                                }
-                                Box {
-                                    IconButton(onClick = { playlistDetailOptionsMenu = true }) {
-                                        Icon(Icons.Rounded.MoreVert,
-                                            contentDescription = "Opções da playlist",
-                                            tint = MaterialTheme.colorScheme.onBackground)
-                                    }
-                                    DropdownMenu(
-                                        expanded = playlistDetailOptionsMenu,
-                                        onDismissRequest = { playlistDetailOptionsMenu = false },
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("Editar playlist") },
-                                            onClick = {
-                                                playlistDetailOptionsMenu = false
-                                                val selected = openedCanonicalPlaylist
-                                                openedCanonicalPlaylist = null
-                                                when (selected) {
-                                                    is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart -> {
-                                                        editingSmartPlaylistId = selected.definition.id
-                                                        editingNormalPlaylistId = null
-                                                        showSmartPlaylistBuilder = true
-                                                    }
-                                                    is com.music.bitchord.ui.screens.LibraryPlaylistCard.CanonicalNormal -> {
-                                                        editingNormalPlaylistId = selected.definition.id
-                                                        editingSmartPlaylistId = null
-                                                        showSmartPlaylistBuilder = true
-                                                    }
-                                                    else -> Unit
-                                                }
-                                            },
+                                        playlistLibraryCount
+                                    )) {
+                                    IconButton(onClick = {
+                                        editingSmartPlaylistId = null
+                                        editingNormalPlaylistId = null
+                                        showSmartPlaylistBuilder = true
+                                    }) {
+                                        Icon(
+                                            Icons.Rounded.PlaylistAdd,
+                                            contentDescription = "Nova playlist",
+                                            tint = MaterialTheme.colorScheme.onSurface,
                                         )
                                     }
                                 }
+                                NativeCollectionSearchAction(
+                                    searching = playlistLibrarySearching,
+                                    contentDescription = "Pesquisar playlists",
+                                    onClick = {
+                                        playlistLibrarySearching = !playlistLibrarySearching
+                                        if (!playlistLibrarySearching) playlistLibraryQuery = ""
+                                    },
+                                )
+                                NativeCollectionSortAction(
+                                    contentDescription = "Ordenar playlists",
+                                    onClick = { playlistLibrarySortMenu = true },
+                                )
+                                NativeCollectionOverflowAction(
+                                    contentDescription = "Filtrar playlists",
+                                    onClick = { playlistLibraryOptionsMenu = true },
+                                )
+                            } else {
+                                NativeCollectionSearchAction(
+                                    searching = playlistDetailSearching,
+                                    contentDescription = "Buscar na playlist",
+                                    onClick = {
+                                        playlistDetailSearching = !playlistDetailSearching
+                                        if (!playlistDetailSearching) playlistDetailQuery = ""
+                                    },
+                                )
+                                NativeCollectionSortAction(
+                                    contentDescription = "Ordenar músicas",
+                                    onClick = { playlistDetailSortMenu = true },
+                                )
+                                NativeCollectionOverflowAction(
+                                    contentDescription = "Opções da playlist",
+                                    onClick = { playlistDetailOptionsMenu = true },
+                                )
                             }
                         }
                         // This is intentionally scoped to Listen together: the
@@ -4138,31 +4051,26 @@ private fun BitChordApp(
                             if ((isReleaseDetail || isLocalDetail) && detail != null) {
                                 val releaseSongs = (detail.songs as? UiState.Success)?.data.orEmpty()
                                 if (releaseSongs.isNotEmpty()) {
-                                    IconButton(onClick = { detailSearching = !detailSearching }) {
-                                        Icon(
-                                            if (detailSearching) Icons.Rounded.Close else BitChordIcons.Search,
-                                            contentDescription = stringResource(
-                                                if (detailSearching) R.string.close_search else R.string.search_this_list,
-                                            ),
-                                            tint = MaterialTheme.colorScheme.onSurface,
-                                        )
-                                    }
+                                    NativeCollectionSearchAction(
+                                        searching = detailSearching,
+                                        contentDescription = stringResource(
+                                            if (detailSearching) R.string.close_search else R.string.search_this_list,
+                                        ),
+                                        onClick = { detailSearching = !detailSearching },
+                                    )
                                 }
                                 // The menu itself is [FrostedSortMenu], composed
                                 // with the app's other frosted overlays further
                                 // down — in the main hierarchy, where the haze
                                 // can see the content it blurs.
-                                IconButton(
-                                    onClick = { if (isLocalDetail) folderMenuOpen = true else songSortMenuOpen = true },
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Sort,
-                                        contentDescription = stringResource(
-                                            if (isLocalDetail) R.string.sort_music else R.string.sort_songs,
-                                        ),
-                                        tint = MaterialTheme.colorScheme.onSurface,
-                                    )
-                                }
+                                NativeCollectionSortAction(
+                                    contentDescription = stringResource(
+                                        if (isLocalDetail) R.string.sort_music else R.string.sort_songs,
+                                    ),
+                                    onClick = {
+                                        if (isLocalDetail) folderMenuOpen = true else songSortMenuOpen = true
+                                    },
+                                )
                                 if (isReleaseDetail && releaseSongs.isNotEmpty()) {
                                     // The page's own tracks, in the order the page
                                     // shows them, so the sheet has them already and
@@ -4172,7 +4080,8 @@ private fun BitChordApp(
                                     // tracks arrive stamped with the album they came
                                     // off, which is what the download record groups
                                     // them under.
-                                    IconButton(
+                                    NativeCollectionOverflowAction(
+                                        contentDescription = stringResource(R.string.more),
                                         onClick = {
                                             browseActions = BrowseTarget(
                                                 browseId = detail.browseId,
@@ -4191,13 +4100,7 @@ private fun BitChordApp(
                                                 downloadId = downloadIdFor(detail.browseId),
                                             )
                                         },
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.MoreHoriz,
-                                            contentDescription = stringResource(R.string.more),
-                                            tint = MaterialTheme.colorScheme.onSurface,
-                                        )
-                                    }
+                                    )
                                 }
                             }
                             // Left of the account photo, on an artist page: iOS's
@@ -5408,6 +5311,103 @@ private fun BitChordApp(
             )
         }
 
+        // Canonical playlists reuse the existing native frosted menu surface,
+        // not Material DropdownMenus anchored to newly drawn toolbar controls.
+        if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null) {
+            if (playlistLibrarySortMenu && openedCanonicalPlaylist == null) {
+                BackHandler { playlistLibrarySortMenu = false }
+                FrostedMenuPanel(hazeState = hazeState, onDismiss = {
+                    playlistLibrarySortMenu = false
+                }) {
+                    listOf(
+                        com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT to "Ordem padrão",
+                        com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_ASC to "Nome: A a Z",
+                        com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_DESC to "Nome: Z a A",
+                    ).forEach { (choice, label) ->
+                        FrostedMenuRow(
+                            label = label,
+                            checked = playlistLibrarySort == choice,
+                            onClick = {
+                                playlistLibrarySort = choice
+                                playlistLibrarySortMenu = false
+                            },
+                        )
+                    }
+                }
+            }
+            if (playlistLibraryOptionsMenu && openedCanonicalPlaylist == null) {
+                BackHandler { playlistLibraryOptionsMenu = false }
+                FrostedMenuPanel(hazeState = hazeState, onDismiss = {
+                    playlistLibraryOptionsMenu = false
+                }) {
+                    listOf(
+                        com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.ALL to "Todas as playlists",
+                        com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.NORMAL to "Playlists normais",
+                        com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.SMART to "Playlists inteligentes",
+                    ).forEach { (choice, label) ->
+                        FrostedMenuRow(
+                            label = label,
+                            checked = playlistLibraryFilter == choice,
+                            onClick = {
+                                playlistLibraryFilter = choice
+                                playlistLibraryOptionsMenu = false
+                            },
+                        )
+                    }
+                }
+            }
+            if (playlistDetailSortMenu && openedCanonicalPlaylist != null) {
+                BackHandler { playlistDetailSortMenu = false }
+                FrostedMenuPanel(hazeState = hazeState, onDismiss = {
+                    playlistDetailSortMenu = false
+                }) {
+                    listOf(
+                        com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT to "Ordem da playlist",
+                        com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_ASC to "Música: A a Z",
+                        com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_DESC to "Música: Z a A",
+                    ).forEach { (choice, label) ->
+                        FrostedMenuRow(
+                            label = label,
+                            checked = playlistDetailSort == choice,
+                            onClick = {
+                                playlistDetailSort = choice
+                                playlistDetailSortMenu = false
+                            },
+                        )
+                    }
+                }
+            }
+            if (playlistDetailOptionsMenu && openedCanonicalPlaylist != null) {
+                BackHandler { playlistDetailOptionsMenu = false }
+                FrostedMenuPanel(hazeState = hazeState, onDismiss = {
+                    playlistDetailOptionsMenu = false
+                }) {
+                    FrostedMenuRow(
+                        label = "Editar playlist",
+                        checked = false,
+                        onClick = {
+                            playlistDetailOptionsMenu = false
+                            val selected = openedCanonicalPlaylist
+                            openedCanonicalPlaylist = null
+                            when (selected) {
+                                is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart -> {
+                                    editingSmartPlaylistId = selected.definition.id
+                                    editingNormalPlaylistId = null
+                                    showSmartPlaylistBuilder = true
+                                }
+                                is com.music.bitchord.ui.screens.LibraryPlaylistCard.CanonicalNormal -> {
+                                    editingNormalPlaylistId = selected.definition.id
+                                    editingSmartPlaylistId = null
+                                    showSmartPlaylistBuilder = true
+                                }
+                                else -> Unit
+                            }
+                        },
+                    )
+                }
+            }
+        }
+
         if (songSortMenuOpen) {
             BackHandler { songSortMenuOpen = false }
             FrostedSortMenu(
@@ -5813,6 +5813,41 @@ private fun BitChordApp(
             )
         }
 
+    }
+}
+
+/**
+ * The same top-bar actions used by native album/playlist details and canonical
+ * playlist list/details. Keep icon geometry and tint in one place.
+ */
+@Composable
+private fun NativeCollectionSearchAction(
+    searching: Boolean,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick) {
+        Icon(
+            if (searching) Icons.Rounded.Close else BitChordIcons.Search,
+            contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun NativeCollectionSortAction(contentDescription: String, onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(Icons.Rounded.Sort, contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+@Composable
+private fun NativeCollectionOverflowAction(contentDescription: String, onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(Icons.Rounded.MoreHoriz, contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onSurface)
     }
 }
 
