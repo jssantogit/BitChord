@@ -96,7 +96,7 @@ import org.jetbrains.compose.resources.stringResource
 // Respect DESIGN.md: SF Pro Display and semantic ColorScheme from BitChordTheme,
 // the shared 16.dp PAGE_GUTTER, and locally rounded neutral cards.
 // Do not invent new global color or shape tokens for this flow.
-private enum class WizardStep { IDENTITY, SONGS, RULES, GROUP, CATEGORIES, FIELDS, EDITOR, REVIEW }
+private enum class WizardStep { IDENTITY, EDIT, SONGS, RULES, GROUP, CATEGORIES, FIELDS, EDITOR, REVIEW }
 
 private fun operatorUiLabel(operator: SmartPlaylistRuleOperator): String = when (operator) {
     SmartPlaylistRuleOperator.EQUAL -> "É igual a"
@@ -325,6 +325,9 @@ internal fun SmartPlaylistV2WizardUi(
     onNameChange: (String) -> Unit,
     description: String = "",
     onDescriptionChange: (String) -> Unit = {},
+    coverUri: String? = null,
+    onChooseCover: () -> Unit = {},
+    onClearCover: () -> Unit = {},
     onRuleChange: (SmartPlaylistRule) -> Unit,
     onSortChange: (SmartPlaylistV2Sort) -> Unit,
     onLimitChange: (String) -> Unit,
@@ -363,7 +366,8 @@ internal fun SmartPlaylistV2WizardUi(
     onManage: () -> Unit,
     onBack: () -> Unit,
 ) {
-    var page by remember { mutableStateOf(WizardStep.IDENTITY) }
+    val isEditing = editingId != null || editingNormalId != null || editingFilterId != null
+    var page by remember { mutableStateOf(if (isEditing) WizardStep.EDIT else WizardStep.IDENTITY) }
     var selectedPath by remember { mutableStateOf<List<Int>>(emptyList()) }
     var targetGroupPath by remember { mutableStateOf<List<Int>>(emptyList()) }
     var selectedCategory by remember { mutableStateOf(smartConditionCategories.first()) }
@@ -401,6 +405,10 @@ internal fun SmartPlaylistV2WizardUi(
     }
     fun back() {
         page = when (page) {
+            WizardStep.EDIT -> {
+                confirmDiscard = true
+                WizardStep.EDIT
+            }
             WizardStep.IDENTITY -> {
                 if (name.isNotBlank() || description.isNotBlank() || editingId != null || editingFilterId != null) {
                     confirmDiscard = true
@@ -409,8 +417,8 @@ internal fun SmartPlaylistV2WizardUi(
                 }
                 WizardStep.IDENTITY
             }
-            WizardStep.SONGS -> WizardStep.IDENTITY
-            WizardStep.RULES -> WizardStep.IDENTITY
+            WizardStep.SONGS -> if (isEditing) WizardStep.EDIT else WizardStep.IDENTITY
+            WizardStep.RULES -> if (isEditing) WizardStep.EDIT else WizardStep.IDENTITY
             WizardStep.GROUP -> WizardStep.RULES
             WizardStep.CATEGORIES -> if (addingGroup || targetGroupPath.isEmpty())
                 WizardStep.RULES else WizardStep.GROUP
@@ -423,7 +431,8 @@ internal fun SmartPlaylistV2WizardUi(
 
     val header = when (page) {
         WizardStep.IDENTITY -> "Nova playlist"
-        WizardStep.SONGS -> "Adicionar músicas"
+        WizardStep.EDIT -> if (editingFilterId != null) "Editar filtro" else "Editar playlist"
+        WizardStep.SONGS -> if (isEditing) "Editar músicas" else "Adicionar músicas"
         WizardStep.RULES -> "Regras da playlist"
         WizardStep.GROUP -> "Editar grupo de regras"
         WizardStep.CATEGORIES -> "Adicionar condição"
@@ -456,9 +465,17 @@ internal fun SmartPlaylistV2WizardUi(
                     hazeState = null,
                     modifier = Modifier.align(Alignment.CenterStart),
                 )
-                if (page == WizardStep.IDENTITY) {
-                    TextButton(modifier = Modifier.align(Alignment.CenterEnd),
-                        onClick = onManage) { Text("Filtros") }
+                if (page == WizardStep.IDENTITY || page == WizardStep.EDIT) {
+                    IconButton(
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                        onClick = onManage,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Tune,
+                            contentDescription = "Filtros reutilizáveis",
+                            tint = MaterialTheme.colorScheme.onBackground,
+                        )
+                    }
                 }
             }
             LazyColumn(
@@ -475,6 +492,7 @@ internal fun SmartPlaylistV2WizardUi(
                 item {
                     val headingDetail = when (page) {
                         WizardStep.IDENTITY -> "Dê um nome e escolha como a biblioteca será organizada."
+                        WizardStep.EDIT -> "Atualize as informações e altere músicas ou regras sem criar outra playlist."
                         WizardStep.SONGS -> "Escolha as faixas que farão parte desta playlist, na ordem desejada."
                         WizardStep.RULES -> "Organize condições em grupos. As opções avançadas ficam dentro de cada grupo."
                         WizardStep.GROUP -> "Ajuste as condições, a combinação e a ordem deste grupo."
@@ -489,10 +507,32 @@ internal fun SmartPlaylistV2WizardUi(
                 }
 
                 when (page) {
-                    WizardStep.IDENTITY -> {
-                        item {
-                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                PlaylistWizardArtworkPlaceholder()
+                    WizardStep.IDENTITY, WizardStep.EDIT -> {
+                        if (editingFilterId == null) item {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                if (coverUri != null) {
+                                    AsyncImage(
+                                        model = coverUri,
+                                        contentDescription = "Capa escolhida da playlist",
+                                        modifier = Modifier.size(224.dp).clip(RoundedCornerShape(12.dp)),
+                                        contentScale = ContentScale.Crop,
+                                    )
+                                } else {
+                                    PlaylistWizardArtworkPlaceholder()
+                                }
+                                PlaylistWizardSecondaryAction(
+                                    label = "Escolher capa",
+                                    onClick = onChooseCover,
+                                )
+                                if (coverUri != null) {
+                                    PlaylistWizardSecondaryAction(
+                                        label = "Remover capa personalizada",
+                                        onClick = onClearCover,
+                                    )
+                                }
                             }
                         }
                         item {
@@ -598,6 +638,19 @@ internal fun SmartPlaylistV2WizardUi(
                         }
                         // Capas/descrição não são persistidas no V2 atual.
                         // Não apresentar linguagem técnica de implementação ao usuário.
+                        if (page == WizardStep.EDIT) {
+                            item {
+                                WizardCard(
+                                    title = if (normalMode) "Editar músicas" else "Editar regras",
+                                    subtitle = if (normalMode)
+                                        "${normalSelectedIds.size} músicas selecionadas"
+                                    else "${smartRuleLeafCount(rule)} condições configuradas",
+                                    onClick = {
+                                        page = if (normalMode) WizardStep.SONGS else WizardStep.RULES
+                                    },
+                                )
+                            }
+                        }
                     }
                     WizardStep.SONGS -> {
                         item {
@@ -1172,20 +1225,30 @@ internal fun SmartPlaylistV2WizardUi(
                         if (normalAddingAlbumId != null) "Adicionando músicas do álbum…" else "")
                 }
                 when (page) {
+                    WizardStep.EDIT -> {
+                        PlaylistWizardPrimaryAction(
+                            label = if (editingFilterId != null) "Salvar filtro" else "Salvar alterações",
+                            enabled = canContinue && !loading &&
+                                (normalMode || canReview) &&
+                                !normalLoading && normalAddingAlbumId == null,
+                            onClick = if (editingFilterId != null) onSaveFilter
+                                else if (normalMode) onSaveNormal else onSave,
+                        )
+                    }
                     WizardStep.IDENTITY -> PlaylistWizardPrimaryAction(
                         label = "Continuar",
                         enabled = canContinue,
                         onClick = { page = if (normalMode) WizardStep.SONGS else WizardStep.RULES },
                     )
                     WizardStep.SONGS -> PlaylistWizardPrimaryAction(
-                        label = "Revisar playlist",
+                        label = if (isEditing) "Concluir seleção" else "Revisar playlist",
                         enabled = canContinue && !normalLoading && normalAddingAlbumId == null,
-                        onClick = { page = WizardStep.REVIEW },
+                        onClick = { page = if (isEditing) WizardStep.EDIT else WizardStep.REVIEW },
                     )
                     WizardStep.RULES -> PlaylistWizardPrimaryAction(
-                        label = "Revisar playlist",
+                        label = if (isEditing) "Concluir regras" else "Revisar playlist",
                         enabled = canReview,
-                        onClick = { page = WizardStep.REVIEW },
+                        onClick = { page = if (isEditing) WizardStep.EDIT else WizardStep.REVIEW },
                     )
                     WizardStep.GROUP -> PlaylistWizardPrimaryAction(
                         label = "Salvar grupo",
