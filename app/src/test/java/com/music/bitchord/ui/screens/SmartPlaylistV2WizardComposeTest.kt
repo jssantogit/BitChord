@@ -377,6 +377,7 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Descrição (opcional)").assertDoesNotExist()
         compose.onNodeWithText("Editar regras").performClick()
         compose.onNodeWithText("Regras do filtro").assertExists()
+        compose.onNodeWithText("Limite e ordenação").assertDoesNotExist()
     }
 
     @Test fun newPlaylistDoesNotClaimAnAutomaticPlaybackRule() {
