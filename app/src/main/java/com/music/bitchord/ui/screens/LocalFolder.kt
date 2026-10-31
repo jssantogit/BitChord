@@ -280,10 +280,10 @@ internal fun LazyListScope.localFolderItems(
         if (folder.selectable) state.select(song) else onSongLongPress(song)
     }
     val groupClick: (LocalGroup) -> Unit = { group ->
-        if (state.selecting && group.type != BrowseType.OTHER) state.toggle(group) else folder.onOpenGroup(group)
+        if (state.selecting && group.type != BrowseType.ARTIST) state.toggle(group) else folder.onOpenGroup(group)
     }
     val groupHold: (LocalGroup) -> Unit = { group ->
-        if (folder.selectable && group.type != BrowseType.OTHER) state.select(group) else folder.onGroupLongPress(group)
+        if (folder.selectable && group.type != BrowseType.ARTIST) state.select(group) else folder.onGroupLongPress(group)
     }
 
     val isCurrentRow = playingRowMatcher(songs, currentSong)
@@ -503,7 +503,7 @@ private fun ArtistRow(
             palette = palette,
             modifier = Modifier.weight(1f),
         )
-        TrailingGlyph(selected = false, palette = palette)
+        // The whole row is a navigation target; no decorative chevron.
     }
 }
 
@@ -661,7 +661,10 @@ private fun AlbumRow(
             palette = palette,
             modifier = Modifier.weight(1f),
         )
-        TrailingGlyph(selected = selected, palette = palette)
+        if (selected) {
+            Icon(Icons.Rounded.Check, contentDescription = "Selecionado",
+                tint = palette.accent, modifier = Modifier.size(20.dp))
+        }
     }
 }
 
