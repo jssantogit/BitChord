@@ -155,3 +155,13 @@ O próprio workflow repete testes e `assembleDevDebug` antes de publicar o APK.
 O commit gatilho altera **apenas este documento**. Sem merge, atualização da main,
 release, assinatura de produção ou encerramento de issue. O APK não está concluído
 até o workflow terminar com sucesso e disponibilizar o artefato.
+
+## PR #202 — APK de smoke físico após CI verde de 31/10/2026
+
+**Autorização explícita:** “Pode disparar o apk”, em 31/10/2026, após a confirmação da CI verde no HEAD funcional `b3e91746d764ea49e60e22ff80ca3ac268797827`.
+
+A [Android CI #41199221905](https://github.com/jssantogit/BitChord/actions/runs/41199221905) concluiu com **SUCCESS** nesse commit. Este acréscimo é **exclusivamente documental**, publicado na branch da PR #202 para acionar o gatilho `push` restrito a este arquivo do workflow `Android Physical Smoke APK`. Executar testes Android novamente e gerar **um** APK `devDebug`, sem assinar release de produção.
+
+**Smoke no Galaxy A54:** conferir os dez itens do último relatório: detalhe de playlist usando cabeçalho nativo, nome de música/álbum em Adições recentes, pesquisa proporcional e ícones contrastantes, um único CTA em biblioteca vazia, listas sem chevrons, detalhes canônicos de artistas, contadores de artistas/álbuns, expansão aninhada das faixas de álbum na criação, capas/seleção integral de artistas e indicador ✓ reversível em álbuns. Conferir ainda tocar música, fila, paleta, ações de edição, mini-player e logs.
+
+**Não autoriza:** merge da PR #202 ou #193, mudança na main, release, limpeza de histórico ou encerramento de issue. Somente considerar o APK pronto depois da conclusão do workflow e upload do artefato.
