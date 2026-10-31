@@ -28,6 +28,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 
+/** Prefer a real music title; use verified Release title only for artist-only tags. */
+internal fun preferRecentLocalAdditionTitle(
+    title: String, artist: String, albumTitle: String?,
+): String = if (title.isBlank() || title.equals(artist, ignoreCase = true)) {
+    albumTitle?.takeIf { it.isNotBlank() } ?: title
+} else title
+
 /**
  * "Adições locais" only shows tracks with observed MediaStore addition timestamps.
  * No synthetic album or fabricated artwork from an unrelated release.
@@ -45,13 +52,17 @@ internal fun CanonicalLocalRecentAdditions(
         ).collectLatest {
             value = try {
                 withContext(Dispatchers.IO) {
-                    dao.recentLocalAdditions(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
-                        .distinctBy { it.recordingId }
-                        .take(6)
-                        .map { row ->
+                    val recentRows = dao.recentLocalAdditions(
+                        CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER,
+                    ).distinctBy { it.recordingId }.take(6)
+                    val albums = dao.recentLocalReleaseTitles(recentRows.map { it.recordingId })
+                        .associate { it.recordingId to it.albumTitle }
+                    recentRows.map { row ->
                             V2DisplayRow(
                                 id = row.recordingId,
-                                title = row.title,
+                                title = preferRecentLocalAdditionTitle(
+                                    row.title, row.artistDisplay, albums[row.recordingId],
+                                ),
                                 artist = row.artistDisplay,
                                 localArtworkUri = row.artworkUri,
                             )
