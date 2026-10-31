@@ -60,6 +60,7 @@ class SmartPlaylistV2WizardComposeTest {
         assertEquals(true, compose.onAllNodesWithTag("native-settings-group-surface")
             .fetchSemanticsNodes().isNotEmpty())
         compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
         compose.onNodeWithText("+ Adicionar primeira condição").performClick()
         compose.onNodeWithTag("native-detail-search-field").assertExists()
     }
