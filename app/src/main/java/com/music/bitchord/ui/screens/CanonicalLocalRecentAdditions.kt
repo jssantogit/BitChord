@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.screens
 
+import android.net.Uri
+import android.provider.MediaStore
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -35,6 +37,57 @@ internal fun preferRecentLocalAdditionTitle(
     albumTitle?.takeIf { it.isNotBlank() } ?: title
 } else title
 
+/** Never show an artist name as the apparent title of the latest addition. */
+internal fun recentLocalPreferredDisplayTitle(
+    canonicalTitle: String,
+    artist: String,
+    releaseTitle: String?,
+    mediaStoreTitle: String?,
+    mediaStoreAlbum: String?,
+    displayName: String?,
+): String {
+    val filename = displayName?.substringBeforeLast('.', displayName)?.trim()
+    return listOf(canonicalTitle, mediaStoreTitle, releaseTitle, mediaStoreAlbum, filename)
+        .firstOrNull { candidate ->
+            !candidate.isNullOrBlank() &&
+                !candidate.trim().equals(artist.trim(), ignoreCase = true) &&
+                !candidate.trim().equals("<unknown>", ignoreCase = true) &&
+                !candidate.trim().equals("unknown", ignoreCase = true)
+        }?.trim() ?: "Título indisponível"
+}
+
+/** Actual MediaStore data, queried only for the six observed local additions. */
+private fun localRecentMediaStoreLabels(
+    context: android.content.Context,
+    uri: String?,
+): Triple<String?, String?, String?> {
+    if (uri.isNullOrBlank() || !uri.startsWith("content://")) {
+        return Triple(null, null, null)
+    }
+    return try {
+        context.contentResolver.query(
+            Uri.parse(uri),
+            arrayOf(
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.ALBUM,
+                MediaStore.Audio.Media.DISPLAY_NAME,
+            ),
+            null, null, null,
+        )?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use Triple(null, null, null)
+            fun read(name: String): String? =
+                cursor.getColumnIndex(name).takeIf { it >= 0 }?.let(cursor::getString)
+            Triple(
+                read(MediaStore.Audio.Media.TITLE),
+                read(MediaStore.Audio.Media.ALBUM),
+                read(MediaStore.Audio.Media.DISPLAY_NAME),
+            )
+        } ?: Triple(null, null, null)
+    } catch (_: Exception) {
+        Triple(null, null, null)
+    }
+}
+
 /**
  * "Adições locais" only shows tracks with observed MediaStore addition timestamps.
  * No synthetic album or fabricated artwork from an unrelated release.
@@ -57,16 +110,26 @@ internal fun CanonicalLocalRecentAdditions(
                     ).distinctBy { it.recordingId }.take(6)
                     val albums = dao.recentLocalReleaseTitles(recentRows.map { it.recordingId })
                         .associate { it.recordingId to it.albumTitle }
+                    val assets = dao.mediaAssetsByIds(recentRows.map { it.mediaAssetId })
+                        .associateBy { it.id }
                     recentRows.map { row ->
-                            V2DisplayRow(
-                                id = row.recordingId,
-                                title = preferRecentLocalAdditionTitle(
-                                    row.title, row.artistDisplay, albums[row.recordingId],
-                                ),
+                        val (mediaTitle, mediaAlbum, fileName) = localRecentMediaStoreLabels(
+                            context, assets[row.mediaAssetId]?.uri,
+                        )
+                        V2DisplayRow(
+                            id = row.recordingId,
+                            title = recentLocalPreferredDisplayTitle(
+                                canonicalTitle = row.title,
                                 artist = row.artistDisplay,
-                                localArtworkUri = row.artworkUri,
-                            )
-                        }
+                                releaseTitle = albums[row.recordingId],
+                                mediaStoreTitle = mediaTitle,
+                                mediaStoreAlbum = mediaAlbum,
+                                displayName = fileName,
+                            ),
+                            artist = row.artistDisplay,
+                            localArtworkUri = row.artworkUri,
+                        )
+                    }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
