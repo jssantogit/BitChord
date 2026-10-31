@@ -42,24 +42,51 @@ internal object A0AndroidAudioTechnicalProbe {
         MEDIA_EXTRACTOR_EXCEPTION,
     }
 
-    private fun denied(reason:Failure):A0AutoPostTransferTechnicalGate.Decoded? {
-        try {Log.d("BitChord","soulseek_audio_probe refused=${reason.name}")}
-        catch(_:Exception) {}
+    private enum class Step { RECEIPT, HEADER, EXTRACTOR, TRACKS, DURATION, SCAN, FINAL }
+    private class ProbeMetrics(val scope:Int,val start:Long) {
+        var step=Step.RECEIPT
+        var samples=0
+        var toleratedBacksteps=0
+        var backstepMillis=-1L
+        var endGapMillis=-1L
+        var fault:A0AcquisitionDiagnostics.Fault?=null
+    }
+    private fun denied(reason:Failure,m:ProbeMetrics)
+        :A0AutoPostTransferTechnicalGate.Decoded? {
+        val elapsed=SystemClock.elapsedRealtime()-m.start
+        runCatching {
+            Log.d("BitChord",
+                "soulseek_audio_probe refused=${reason.name}" +
+                    " step=${m.step.name} samples=${m.samples.coerceIn(0,400000)}" +
+                    " small_backsteps=${m.toleratedBacksteps}" +
+                    " regression_ms=${m.backstepMillis.coerceIn(-1L,7200000L)}" +
+                    " end_gap_ms=${m.endGapMillis.coerceIn(-1L,7200000L)}" +
+                    " fault=${m.fault?.name ?: "NONE"}" +
+                    " elapsed_ms=${elapsed.coerceIn(0L,600000L)}" +
+                    " scope=${m.scope}")
+        }
+        A0AcquisitionDiagnostics.emit(m.scope,
+            A0AcquisitionDiagnostics.Phase.PROBE_REJECT,
+            reason,elapsed,m.samples)
         return null
     }
 
     fun inspect(
         source:File,
         declaredExtension:String,
+        traceScope:Int=0,
         isCancelled:()->Boolean={false},
     ):A0AutoPostTransferTechnicalGate.Decoded? {
         check(Looper.myLooper()!=Looper.getMainLooper()) {
             "Audio receipt inspection cannot run on Android main thread"
         }
+        val metrics=ProbeMetrics(traceScope,SystemClock.elapsedRealtime())
+        A0AcquisitionDiagnostics.emit(traceScope,
+            A0AcquisitionDiagnostics.Phase.PROBE_START)
         if(!source.isFile || Files.isSymbolicLink(source.toPath()) ||
             source.length() !in 44L..A0ObservedTransferLimits.MAX_AUDIO_BYTES ||
             isCancelled() || Thread.currentThread().isInterrupted)
-            return denied(Failure.INVALID_PRIVATE_SOURCE)
+            return denied(Failure.INVALID_PRIVATE_SOURCE,metrics)
         val size=source.length()
         val modification=source.lastModified()
         val head=ByteArray(minOf(size.toInt(),HEADER_BYTES))
@@ -68,7 +95,7 @@ internal object A0AndroidAudioTechnicalProbe {
                 var count=0
                 while(count<head.size) {
                     if(isCancelled() || Thread.currentThread().isInterrupted)
-                        return denied(Failure.SOURCE_CHANGED_OR_REVOKED)
+                        return denied(Failure.SOURCE_CHANGED_OR_REVOKED,metrics)
                     val part=input.read(head,count,head.size-count)
                     if(part<=0)break
                     count+=part
@@ -77,11 +104,12 @@ internal object A0AndroidAudioTechnicalProbe {
             }
         }catch(_:Exception) {
             // Do not expose transient private file paths or provider errors.
-            return denied(Failure.SOURCE_READ_FAILURE)
+            return denied(Failure.SOURCE_READ_FAILURE,metrics)
         }
-        if(read<12)return denied(Failure.HEADER_TOO_SHORT)
+        if(read<12)return denied(Failure.HEADER_TOO_SHORT,metrics)
+        metrics.step=Step.HEADER
         val header=A0LocalAudioHeaderEvidence.inspect(head.copyOf(read))
-            ?:return denied(Failure.UNRECOGNIZED_AUDIO_HEADER)
+            ?:return denied(Failure.UNRECOGNIZED_AUDIO_HEADER,metrics)
         val ext=declaredExtension.trimStart('.')
             .lowercase(java.util.Locale.ROOT)
         val expected=when(header.codec) {
@@ -92,12 +120,14 @@ internal object A0AndroidAudioTechnicalProbe {
             A0CanonicalAcquisitionIntent.Codec.OPUS -> "opus"
             A0CanonicalAcquisitionIntent.Codec.VORBIS -> "ogg"
         }
-        if(ext!=expected)return denied(Failure.FILE_EXTENSION_CONFLICT)
+        if(ext!=expected)return denied(Failure.FILE_EXTENSION_CONFLICT,metrics)
 
+        metrics.step=Step.EXTRACTOR
         val extractor=MediaExtractor()
         val metadata=MediaMetadataRetriever()
         try {
             extractor.setDataSource(source.absolutePath)
+            metrics.step=Step.TRACKS
             var audioIndex=-1
             var track:MediaFormat?=null
             for(index in 0 until extractor.trackCount) {
@@ -105,19 +135,19 @@ internal object A0AndroidAudioTechnicalProbe {
                 val mime=if(format.containsKey(MediaFormat.KEY_MIME))
                     format.getString(MediaFormat.KEY_MIME).orEmpty() else ""
                 if(mime.startsWith("video/",ignoreCase=true))
-                    return denied(Failure.MULTIPLE_AUDIO_TRACKS)
+                    return denied(Failure.MULTIPLE_AUDIO_TRACKS,metrics)
                 if(mime.startsWith("audio/",ignoreCase=true)) {
-                    if(audioIndex>=0)return denied(Failure.MULTIPLE_AUDIO_TRACKS)
+                    if(audioIndex>=0)return denied(Failure.MULTIPLE_AUDIO_TRACKS,metrics)
                     audioIndex=index
                     track=format
                 }
             }
             if(audioIndex<0 || track==null)
-                return denied(Failure.NO_AUDIO_TRACK)
+                return denied(Failure.NO_AUDIO_TRACK,metrics)
             val format=track
             val mime=format.getString(MediaFormat.KEY_MIME).orEmpty()
             if(!A0LocalAudioHeaderEvidence.acceptsExtractorMime(header.codec,mime))
-                return denied(Failure.EXTRACTOR_MIME_CONFLICT)
+                return denied(Failure.EXTRACTOR_MIME_CONFLICT,metrics)
             fun longOrNull(key:String):Long? =
                 if(format.containsKey(key))runCatching {
                     format.getLong(key)
@@ -126,6 +156,7 @@ internal object A0AndroidAudioTechnicalProbe {
                 if(format.containsKey(key))runCatching {
                     format.getInteger(key)
                 }.getOrNull() else null
+            metrics.step=Step.DURATION
             metadata.setDataSource(source.absolutePath)
             val extractorDuration=longOrNull(MediaFormat.KEY_DURATION)
                 ?.takeIf {it>0L}?.div(1000L)
@@ -134,16 +165,16 @@ internal object A0AndroidAudioTechnicalProbe {
                 ?.toLongOrNull()?.takeIf {it>0L}
             if(extractorDuration!=null && retrieverDuration!=null &&
                 abs(extractorDuration-retrieverDuration)>2_000L)
-                return denied(Failure.DISAGREEING_DURATIONS)
+                return denied(Failure.DISAGREEING_DURATIONS,metrics)
             val duration=retrieverDuration ?: extractorDuration
-                ?:return denied(Failure.DURATION_UNAVAILABLE)
+                ?:return denied(Failure.DURATION_UNAVAILABLE,metrics)
             if(duration !in 15_000L..7_200_000L)
-                return denied(Failure.INVALID_DURATION)
+                return denied(Failure.INVALID_DURATION,metrics)
 
             val fromExtractor=intOrNull(MediaFormat.KEY_SAMPLE_RATE)
             if(header.sampleRateHz!=null && fromExtractor!=null &&
                 header.sampleRateHz!=fromExtractor)
-                return denied(Failure.SAMPLE_RATE_CONFLICT)
+                return denied(Failure.SAMPLE_RATE_CONFLICT,metrics)
             val sampleRate=header.sampleRateHz ?: fromExtractor
             val trackRate=intOrNull(MediaFormat.KEY_BIT_RATE)
                 ?.takeIf {it>0}?.div(1000)
@@ -152,6 +183,7 @@ internal object A0AndroidAudioTechnicalProbe {
                 ?.toIntOrNull()?.takeIf {it>0}?.div(1000)
             val extractorBitrate=trackRate ?: metadataRate
 
+            metrics.step=Step.SCAN
             extractor.selectTrack(audioIndex)
             val input=ByteBuffer.allocateDirect(SAMPLE_BUFFER_BYTES)
             val endBy=SystemClock.elapsedRealtime()+MAX_SCAN_MILLIS
@@ -164,6 +196,7 @@ internal object A0AndroidAudioTechnicalProbe {
             while(samples<MAX_SAMPLES &&
                 SystemClock.elapsedRealtime()<endBy &&
                 !isCancelled() && !Thread.currentThread().isInterrupted) {
+                metrics.samples=samples
                 input.clear()
                 val amount=extractor.readSampleData(input,0)
                 if(amount<0) {
@@ -173,11 +206,11 @@ internal object A0AndroidAudioTechnicalProbe {
                 // A zero-size packet is not permission to ignore its crypto
                 // flags or an unexpected source track.
                 if((extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_ENCRYPTED)!=0)
-                    return denied(Failure.ENCRYPTED_SAMPLE)
+                    return denied(Failure.ENCRYPTED_SAMPLE,metrics)
                 val reportedTrack=extractor.sampleTrackIndex
                 if(amount==0) {
                     if(reportedTrack!=audioIndex && reportedTrack!=-1)
-                        return denied(Failure.WRONG_SAMPLE_TRACK)
+                        return denied(Failure.WRONG_SAMPLE_TRACK,metrics)
                     // A few extractors emit empty codec/config packets
                     // before the first positive frame. Skip at most two;
                     // never ignore empty gaps within real audio. All actual
@@ -193,39 +226,47 @@ internal object A0AndroidAudioTechnicalProbe {
                         reachedEos=true
                         break
                     }
-                    return denied(Failure.ZERO_LENGTH_SAMPLE)
+                    return denied(Failure.ZERO_LENGTH_SAMPLE,metrics)
                 }
                 if(reportedTrack!=audioIndex)
-                    return denied(Failure.WRONG_SAMPLE_TRACK)
+                    return denied(Failure.WRONG_SAMPLE_TRACK,metrics)
                 val timestamp=extractor.sampleTime
                 when(A0AudioSampleScanPolicy.timestampVerdict(
                     timestamp,lastUs,toleratedTimestampBacksteps,
                     header.codec==A0CanonicalAcquisitionIntent.Codec.FLAC)) {
                     A0AudioSampleScanPolicy.TimestampVerdict.NEGATIVE ->
-                        return denied(Failure.NEGATIVE_SAMPLE_TIME)
-                    A0AudioSampleScanPolicy.TimestampVerdict.REGRESSION ->
-                        return denied(Failure.REGRESSING_SAMPLE_TIME)
-                    A0AudioSampleScanPolicy.TimestampVerdict.TOLERATE_SINGLE_SMALL_FLAC_BACKSTEP ->
+                        return denied(Failure.NEGATIVE_SAMPLE_TIME,metrics)
+                    A0AudioSampleScanPolicy.TimestampVerdict.REGRESSION -> {
+                        metrics.backstepMillis=(lastUs-timestamp).coerceAtLeast(0L)/1000L
+                        return denied(Failure.REGRESSING_SAMPLE_TIME,metrics)
+                    }
+                    A0AudioSampleScanPolicy.TimestampVerdict.TOLERATE_SINGLE_SMALL_FLAC_BACKSTEP -> {
                         toleratedTimestampBacksteps++
+                        metrics.toleratedBacksteps=toleratedTimestampBacksteps
+                    }
                     A0AudioSampleScanPolicy.TimestampVerdict.OK -> Unit
                 }
                 // Retain the highest *observed* time, never regress coverage.
                 lastUs=maxOf(lastUs,timestamp)
                 bytes+=amount
                 if(bytes>A0ObservedTransferLimits.MAX_AUDIO_BYTES)
-                    return denied(Failure.SAMPLE_BYTE_LIMIT_EXCEEDED)
+                    return denied(Failure.SAMPLE_BYTE_LIMIT_EXCEEDED,metrics)
                 samples++
                 if(!extractor.advance()) {
                     reachedEos=true
                     break
                 }
             }
+            metrics.samples=samples
+            metrics.step=Step.FINAL
+            metrics.endGapMillis=if(lastUs>=0)
+                abs(duration-lastUs/1000L) else -1L
             if(!reachedEos || samples<2 ||
                 lastUs<0 || abs(duration-lastUs/1000L)>3_000L)
-                return denied(Failure.INCOMPLETE_SAMPLE_SCAN)
+                return denied(Failure.INCOMPLETE_SAMPLE_SCAN,metrics)
             if(source.length()!=size || source.lastModified()!=modification ||
                 isCancelled() || Thread.currentThread().isInterrupted)
-                return denied(Failure.SOURCE_CHANGED_OR_REVOKED)
+                return denied(Failure.SOURCE_CHANGED_OR_REVOKED,metrics)
             if(toleratedTimestampBacksteps>0)
                 runCatching {
                     Log.d("BitChord","soulseek_audio_probe accepted=SMALL_FLAC_BACKSTEP")
@@ -242,12 +283,18 @@ internal object A0AndroidAudioTechnicalProbe {
             }
             // COMPLETED means full demux walk. It is NOT a complete PCM
             // decode or a source authentication. Policy cannot publish.
+            A0AcquisitionDiagnostics.emit(traceScope,
+                A0AcquisitionDiagnostics.Phase.PROBE_ACCEPT,
+                reason=header.codec,
+                elapsedMillis=SystemClock.elapsedRealtime()-metrics.start,
+                count=samples)
             return A0AutoPostTransferTechnicalGate.Decoded(
                 codec=header.codec,extension=ext,durationMillis=duration,
                 bitrateKbps=bitrate,sampleRateHz=sampleRate,
                 bitDepth=header.bitDepth,completed=true)
-        }catch(_:Exception) {
-            return denied(Failure.MEDIA_EXTRACTOR_EXCEPTION)
+        }catch(error:Exception) {
+            metrics.fault=A0AcquisitionDiagnostics.fault(error)
+            return denied(Failure.MEDIA_EXTRACTOR_EXCEPTION,metrics)
         }finally {
             runCatching {metadata.release()}
             runCatching {extractor.release()}

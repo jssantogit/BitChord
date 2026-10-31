@@ -101,7 +101,7 @@ internal object A0ManualRetainedCandidateTransfer {
         val transport=A0FreshAuthenticatedAutoTransport(app,generation,traceScope)
         val port=A0AndroidAutoAcquisitionPort(
             app,generation,transport,id,reservedAutomatic=true,
-            sourceSong=sourceSong)
+            sourceSong=sourceSong,diagnosticScope=traceScope)
         var receipt:A0VerifiedByteStager.Receipt?=null
         var result=Status.TRANSFER_FAILED
         var publicationAttempted=false
