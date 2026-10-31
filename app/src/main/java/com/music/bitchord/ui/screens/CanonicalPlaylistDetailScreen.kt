@@ -104,6 +104,26 @@ internal fun CanonicalPlaylistCoverArt(
     }
 }
 
+/** Same music-page metadata format as the native playlist header. */
+internal fun canonicalPlaylistDetailMeta(
+    smart: Boolean, rows: List<V2DisplayRow>?,
+): String {
+    val type = if (smart) "Playlist inteligente" else "Playlist"
+    if (rows == null) return "${type} · Carregando músicas…"
+    val count = "${rows.size} " + if (rows.size == 1) "faixa" else "faixas"
+    val durations = rows.map { it.durationMs }
+    val total = if (durations.isNotEmpty() && durations.all { it != null }) {
+        durations.filterNotNull().sum()
+    } else 0L
+    val minutes = total / 60000L
+    val time = when {
+        total <= 0L -> ""
+        minutes >= 60L -> " · ${minutes / 60L}h ${minutes % 60L}min"
+        else -> " · ${minutes}min"
+    }
+    return "${type} · ${count}${time}"
+}
+
 /** A saved RecordingId without eligible MediaAsset remains visible but is not clickable. */
 internal fun V2DisplayRow.isAvailablePlaylistMember(): Boolean =
     title != "Gravação indisponível" || artist != "Fonte não disponível"
@@ -267,9 +287,9 @@ internal fun CanonicalPlaylistDetailScreen(
             NativeReleaseHeaderLayout(
                 title = card.title,
                 credit = "",
-                meta = (if (card is LibraryPlaylistCard.Smart) "Playlist inteligente"
-                    else "Playlist normal") + " · " +
-                    (rows?.size?.let { "${it} músicas" } ?: "Carregando músicas…"),
+                meta = canonicalPlaylistDetailMeta(
+                    smart = card is LibraryPlaylistCard.Smart, rows = rows,
+                ),
                 palette = palette,
                 // Exactly the same 76% frame as DetailScreen's native release hero.
                 sleeveSize = maxWidth * 0.76f,
