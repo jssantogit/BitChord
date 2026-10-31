@@ -32,6 +32,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -156,6 +159,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
+    var coverUri by remember { mutableStateOf<String?>(null) }
     var normalMode by remember { mutableStateOf(false) }
     var editingNormalId by remember { mutableStateOf<String?>(null) }
     var normalSearch by remember { mutableStateOf("") }
@@ -184,6 +188,19 @@ internal fun SmartPlaylistV2BuilderScreen(
     var seed by remember { mutableStateOf("0") }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+                coverUri = uri.toString()
+                error = null
+            } catch (_: SecurityException) {
+                error = "Não foi possível manter acesso à imagem escolhida. Tente outra imagem."
+            }
+        }
+    }
     var preview by remember { mutableStateOf<List<V2DisplayRow>?>(null) }
     var previewQuery by remember { mutableStateOf<SmartPlaylistV2Query?>(null) }
     var savedFailure by remember { mutableStateOf(false) }
@@ -245,6 +262,7 @@ internal fun SmartPlaylistV2BuilderScreen(
         normalSelectedRows = emptyList()
         name = ""
         description = ""
+        coverUri = null
         rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(newRule()))
         hasConfiguredRules = false
         sort = SmartPlaylistV2Sort.RATING_DESC
@@ -277,6 +295,7 @@ internal fun SmartPlaylistV2BuilderScreen(
         editingFilterId = null
         name = item.name
         description = item.description
+        coverUri = item.coverUri
         rule = item.query.rules
         hasConfiguredRules = true
         sort = item.query.sort
@@ -309,6 +328,7 @@ internal fun SmartPlaylistV2BuilderScreen(
         normalMode = true
         name = item.name
         description = item.description
+        coverUri = item.coverUri
         normalSelectedIds = item.recordingIds
         normalSourceProviderKey = item.sourceProviderKey
         normalSourceTouched = true // preserve persisted All even if its server disconnects
@@ -541,6 +561,9 @@ internal fun SmartPlaylistV2BuilderScreen(
                     onNameChange = { name = it },
                     description = description,
                     onDescriptionChange = { description = it },
+                    coverUri = coverUri,
+                    onChooseCover = { coverPicker.launch(arrayOf("image/*")) },
+                    onClearCover = { coverUri = null },
                     onRuleChange = {
                         rule = it
                         hasConfiguredRules = true
@@ -562,6 +585,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                     withContext(Dispatchers.IO) {
                                         repo.save(SavedSmartPlaylistV2Definition(
                                             id, name, parsed, description = description.trim(),
+                                            coverUri = coverUri,
                                         ))
                                     }
                                     reset()
@@ -705,6 +729,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                             id = id, name = name, recordingIds = normalSelectedIds,
                                             sourceProviderKey = normalSourceProviderKey,
                                             description = description.trim(),
+                                            coverUri = coverUri,
                                         ))
                                     }
                                     reset()
@@ -914,6 +939,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 editingFilterId = null
                                 name = item.name
                                 description = item.description
+                                coverUri = item.coverUri
                                 rule = item.query.rules
                             hasConfiguredRules = true
                                 sort = item.query.sort
