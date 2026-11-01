@@ -92,6 +92,24 @@ internal class SmartPlaylistV2FilterRepository(private val dao: SmartPlaylistV2F
     }
 }
 
+/** Applying to an unconfigured editor must NOT combine with its internal seed rule. */
+internal enum class SavedFilterApplication { REPLACE, ALL, ANY }
+
+/** Copies immutable saved rule trees; original filters are never linked or mutated. */
+internal fun applySavedFilterToDraft(
+    current: SmartPlaylistRule,
+    hasConfiguredRules: Boolean,
+    filter: SavedSmartPlaylistV2Filter,
+    application: SavedFilterApplication,
+): SmartPlaylistRule = when {
+    !hasConfiguredRules || application == SavedFilterApplication.REPLACE -> filter.rules
+    else -> SmartPlaylistRule.Group(
+        if (application == SavedFilterApplication.ALL) SmartPlaylistRuleJoin.ALL
+        else SmartPlaylistRuleJoin.ANY,
+        listOf(current, filter.rules),
+    )
+}.also { SmartPlaylistV2Query(it) }
+
 /** Explicit snapshot copy: no implicit dynamic link or hidden 100-song cap. */
 internal fun SmartPlaylistRule.andSavedFilter(
     filter: SavedSmartPlaylistV2Filter,
