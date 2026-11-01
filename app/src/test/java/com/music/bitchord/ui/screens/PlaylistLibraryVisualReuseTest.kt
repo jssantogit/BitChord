@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onParent
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.assertCountEquals
@@ -255,7 +256,9 @@ class PlaylistLibraryVisualReuseTest {
             )
         }
         compose.onNodeWithContentDescription("Ações da música").performClick()
-        compose.onNodeWithText("Adicionar à fila").performClick()
+        compose.waitForIdle()
+        // ActionRow owns the click target. The label is not itself clickable.
+        compose.onNodeWithText("Adicionar à fila").onParent().performClick()
         compose.runOnIdle {
             assertEquals(
                 "recording:verified-28" to
