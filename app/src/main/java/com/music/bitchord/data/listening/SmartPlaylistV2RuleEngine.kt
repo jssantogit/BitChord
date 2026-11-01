@@ -60,6 +60,7 @@ internal enum class SmartPlaylistRuleField {
     DAYS_SINCE_LOCAL_FILE_ADDED,
     LOCAL_FOLDER,
     LOCAL_FILE_PATH,
+    LOCAL_FILE_EXTENSION,
 }
 
 internal enum class SmartPlaylistSourceKind { LOCAL, OPENSUBSONIC }
@@ -90,7 +91,8 @@ internal fun SmartPlaylistRuleField.isTextField(): Boolean =
         this == SmartPlaylistRuleField.ALBUM_ARTIST ||
         this == SmartPlaylistRuleField.TRACK_ARTIST ||
         this == SmartPlaylistRuleField.LOCAL_FOLDER ||
-        this == SmartPlaylistRuleField.LOCAL_FILE_PATH
+        this == SmartPlaylistRuleField.LOCAL_FILE_PATH ||
+        this == SmartPlaylistRuleField.LOCAL_FILE_EXTENSION
 
 internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOperator> =
     if (this == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) listOf(
@@ -674,13 +676,22 @@ internal class SmartPlaylistV2RuleEngine(
             }
         }
         if (rule.field == SmartPlaylistRuleField.LOCAL_FOLDER ||
-            rule.field == SmartPlaylistRuleField.LOCAL_FILE_PATH) {
+            rule.field == SmartPlaylistRuleField.LOCAL_FILE_PATH ||
+            rule.field == SmartPlaylistRuleField.LOCAL_FILE_EXTENSION) {
             val verifiedPaths = row.localFilePaths.mapNotNull(::normalizeLocalSmartFilterPath)
-            val values = if (rule.field == SmartPlaylistRuleField.LOCAL_FOLDER)
-                verifiedPaths.mapNotNull { path ->
-                    path.substringBeforeLast('/', missingDelimiterValue = "")
-                        .takeIf(String::isNotBlank)
-                } else verifiedPaths
+            val values = when (rule.field) {
+                SmartPlaylistRuleField.LOCAL_FOLDER ->
+                    verifiedPaths.mapNotNull { path ->
+                        path.substringBeforeLast('/', missingDelimiterValue = "")
+                            .takeIf(String::isNotBlank)
+                    }
+                SmartPlaylistRuleField.LOCAL_FILE_EXTENSION ->
+                    verifiedPaths.mapNotNull { path ->
+                        path.substringAfterLast('/').substringAfterLast('.', "")
+                            .takeIf { it.isNotBlank() && it != path.substringAfterLast('/') }
+                    }
+                else -> verifiedPaths
+            }
             if (values.isEmpty() && !row.localFilePathsComplete) return RuleTruth.UNKNOWN
             if (rule.operator == SmartPlaylistRuleOperator.IS_PRESENT)
                 return if (values.isNotEmpty()) RuleTruth.TRUE else RuleTruth.FALSE
@@ -800,7 +811,8 @@ internal class SmartPlaylistV2RuleEngine(
             SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
             SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
             SmartPlaylistRuleField.LOCAL_FOLDER,
-            SmartPlaylistRuleField.LOCAL_FILE_PATH -> null
+            SmartPlaylistRuleField.LOCAL_FILE_PATH,
+            SmartPlaylistRuleField.LOCAL_FILE_EXTENSION -> null
         }
         if (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE &&
             row.audibleCompletions > 0 && row.lastAudibleAtEpochMs == null
