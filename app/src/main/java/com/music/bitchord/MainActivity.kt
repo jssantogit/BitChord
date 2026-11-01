@@ -4412,13 +4412,7 @@ private fun BitChordApp(
                                                 downloadId = downloadIdFor(detail.browseId),
                                             )
                                         },
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.MoreHoriz,
-                                            contentDescription = stringResource(R.string.more),
-                                            tint = MaterialTheme.colorScheme.onSurface,
-                                        )
-                                    }
+                                    )
                                 }
                             }
                             // Share the artist's name without inventing a provider-specific link.
