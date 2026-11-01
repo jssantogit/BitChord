@@ -22,6 +22,54 @@ import org.robolectric.annotation.ConscryptMode
 @Config(application = Application::class, sdk = [35])
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class SmartPlaylistBatchEvidenceRoomTest {
+    @Test fun musicBrainzDiscAndGroupTypeAreBoundToOfficialEdition() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:linked", "Song", "Artist", 180_000L))
+            dao.upsertRecording(RecordingEntity("rec:missing", "Song", "Artist", 180_000L))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "rel:linked", "Official Single", "Artist", null))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "rel:missing", "Same Name", "Artist", null))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "rel:linked", "rec:linked", 2))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "rel:missing", "rec:missing", 1))
+            dao.upsertCatalogReleaseGroup(
+                com.music.bitchord.data.catalog.CatalogReleaseGroupEntity(
+                    "grp:linked", "Official Single", "Artist", "Single", "2024-01-01"))
+            dao.upsertCatalogReleaseGroupEdition(
+                com.music.bitchord.data.catalog.CatalogReleaseGroupEditionEntity(
+                    "grp:linked", "rel:linked"))
+            dao.upsertCatalogMusicBrainzTrack(
+                com.music.bitchord.data.catalog.CatalogMusicBrainzTrackEntity(
+                    "track:linked", "rel:linked", "rec:linked", 3, 2, "Song", 180_000L))
+            val rows = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            ).read(listOf("rec:linked", "rec:missing"),
+                setOf(SmartPlaylistRuleField.DISC_NUMBER,
+                    SmartPlaylistRuleField.RELEASE_GROUP_TYPE))
+            val linked = rows.single { it.recordingId == "rec:linked" }
+            assertEquals(listOf(3), linked.discNumbers)
+            assertTrue(!linked.discNumberEvidenceUnknown)
+            assertEquals(listOf("Single"), linked.releaseGroupTypes)
+            assertTrue(!linked.releaseGroupTypeEvidenceUnknown)
+            val missing = rows.single { it.recordingId == "rec:missing" }
+            assertTrue(missing.discNumbers.isEmpty())
+            assertTrue(missing.discNumberEvidenceUnknown)
+            assertTrue(missing.releaseGroupTypes.isEmpty())
+            assertTrue(missing.releaseGroupTypeEvidenceUnknown)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
     @Test fun localAudioTagsAreVerifiedPerAssetAndNeverPromotedFromRemote() = runTest {
         val context = RuntimeEnvironment.getApplication()
         val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
