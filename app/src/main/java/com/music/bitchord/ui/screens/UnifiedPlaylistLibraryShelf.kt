@@ -443,7 +443,9 @@ private fun UnifiedPlaylistCompactRow(
         onClick = onClick,
         modifier = modifier,
         horizontalPadding = 4.dp,
-        artworkSize = 64.dp,
+        // The library playlist covers should be substantial, matching the
+        // 180dp artwork treatment of the native playlist edit/detail flow.
+        artworkSize = 180.dp,
         artwork = when {
             card.explicitCoverUri() != null -> ({
                 CanonicalPlaylistCoverArt(
