@@ -5017,157 +5017,38 @@ private fun BitChordApp(
         // the whole release — the queue rows above all.
         // One body for the sheet and the popup alike — see songMenuBody.
         val browseMenuBody: @Composable (BrowseTarget, SongActionsPresentation) -> Unit = { target, presentation ->
-            // Every row here closes the menu first: the tracks may still have to
-            // be fetched, and leaving the sheet up over a request nothing on it
-            // reports on reads as a tap that didn't land.
-            val act: ((List<Song>) -> Unit) -> () -> Unit = { action ->
-                {
-                    browseActions = null
-                    withBrowseSongs(target, action)
-                }
-            }
-            // Whose playlist this is, asked here rather than carried in by
-            // whatever opened the sheet.
-            //
-            // Only the playlist's own page states it (see
-            // InnertubeParser.parsePlaylistOwned), so a card has to send for the
-            // answer and the sheet is already up by the time it lands — hence
-            // read as state rather than settled once when the target was built.
-            // Rename and Delete are absent until the answer says they apply, so
-            // the sheet's worst moment is a beat without them on the user's own
-            // playlist, rather than offering to delete a stranger's.
-            LaunchedEffect(target.browseId) {
-                viewModel.resolvePlaylistOwnership(target.browseId)
-            }
-            // Spelt out here rather than left to MainViewModel.editablePlaylist,
-            // which is the same rule over the same two lists: that reads them as
-            // plain values, which is right for a click handler and invisible to
-            // Compose. Both are read from collected state so this sheet actually
-            // recomposes when the answer arrives.
-            val ownedPlaylists by viewModel.playlistOwned.collectAsStateWithLifecycle()
-            val playlist = target.browseId
-                ?.takeIf { signedIn && ownedPlaylists[it] == true }
-                ?.let { id -> playlists.firstOrNull { it.browseId == id } }
-            val remote = target.browseId?.startsWith("local:") == false
-            val pinnedPlaylists by AppSettings.pinnedPlaylists.collectAsStateWithLifecycle()
-            val pinnableId = target.browseId?.takeIf { target.type == BrowseType.PLAYLIST }
-            BrowseActionsSheet(
-                // The live answer, not the one the target was built with.
-                target = target.copy(playlist = playlist),
+            LegacyBrowseActionsMenuBody(
+                target = target,
                 presentation = presentation,
-                onRenameInSheet = {
+                viewModel = viewModel,
+                context = context,
+                signedIn = signedIn,
+                playlists = playlists,
+                startRenaming = browseRenameInSheet,
+                onBeginRename = {
                     browseRenameInSheet = true
                     browseMenuOrigin = null
                 },
-                startRenaming = browseRenameInSheet,
-                onPlayNext = act(playSongsNext),
-                onAddToQueue = act(addSongsToQueue),
-                onPlay = act { songs -> play(songs, 0) }.takeIf { target.fromCard },
-                onShuffle = act { songs ->
-                    // As on a release page: shuffle goes on before the queue
-                    // is built, so it is built shuffled rather than played
-                    // out of order.
-                    QueueShuffle.enableForNextQueue()
-                    play(songs, songs.indices.random())
-                }.takeIf { target.fromCard },
-                onOpen = target.browseId
-                    ?.takeIf { target.fromCard }
-                    ?.let { id ->
-                        {
-                            browseActions = null
-                            viewModel.openDetail(
-                                browseId = id,
-                                title = target.title,
-                                subtitle = target.subtitle,
-                                thumbnailUrl = target.thumbnailUrl,
-                                type = target.type,
-                            )
-                        }
-                    },
-                // The one place a whole release is asked for, from a card and
-                // from the release's own page alike — its header spends that
-                // spot on the search now. Nothing on this device needs
-                // fetching to be on it, so a local page is the exception.
-                // What the target carries that the tracks don't is the
-                // release's own name and cover, which is exactly what the
-                // record wants.
-                onDownloadAll = act { songs ->
-                    startDownload(
-                        songs,
-                        target.browseId
-                            ?.takeIf { target.type != BrowseType.ARTIST }
-                            ?.let { id ->
-                                DownloadTarget(
-                                    id = id,
-                                    title = target.title,
-                                    subtitle = target.subtitle,
-                                    thumbnailUrl = target.thumbnailUrl,
-                                    playlist = target.type == BrowseType.PLAYLIST,
-                                )
-                            },
-                    )
-                }.takeIf { remote },
-                // Share music metadata until canonical, provider-neutral links exist.
-                onShare = if (target.type == BrowseType.ALBUM || target.type == BrowseType.PLAYLIST) {
-                    {
-                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, musicOnlyShareText(target.title, target.subtitle))
-                        }
-                        context.startActivity(Intent.createChooser(sendIntent, target.title))
-                        browseActions = null
-                    }
-                } else null,
-                isPinned = pinnableId != null && pinnableId in pinnedPlaylists,
-                onTogglePin = pinnableId?.let { id ->
-                    {
-                        val nowPinned = AppSettings.togglePinnedPlaylist(id)
-                        if (!nowPinned && id !in pinnedPlaylists) {
-                            Toast.makeText(
-                                context,
-                                context.getString(
-                                    R.string.pinned_playlist_limit,
-                                    AppSettings.MAX_PINNED_PLAYLISTS,
-                                ),
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                        }
-                        browseActions = null
+                onDismissBrowse = { browseActions = null },
+                withBrowseSongs = withBrowseSongs,
+                playSongsNext = playSongsNext,
+                addSongsToQueue = addSongsToQueue,
+                play = play,
+                startDownload = startDownload,
+                onBeginReorder = { p ->
+                    browseActions = null
+                    reorderTarget = p
+                    reorderEntries = UiState.Loading
+                    reorderSaving = false
+                    viewModel.loadPlaylistEntries(p) { result ->
+                        if (reorderTarget != p) return@loadPlaylistEntries
+                        reorderEntries = result.fold(
+                            onSuccess = { UiState.Success(it) },
+                            onFailure = { UiState.Error(context.getString(R.string.failed)) },
+                        )
                     }
                 },
-                onRename = playlist?.let { p ->
-                    { name: String ->
-                        browseActions = null
-                        viewModel.renamePlaylist(p, name)
-                    }
-                },
-                onReorder = playlist?.let { p ->
-                    {
-                        browseActions = null
-                        reorderTarget = p
-                        reorderEntries = UiState.Loading
-                        reorderSaving = false
-                        viewModel.loadPlaylistEntries(p) { result ->
-                            if (reorderTarget != p) return@loadPlaylistEntries
-                            reorderEntries = result.fold(
-                                onSuccess = { UiState.Success(it) },
-                                onFailure = { UiState.Error(context.getString(R.string.failed)) },
-                            )
-                        }
-                    }
-                },
-                onDelete = playlist?.let { p ->
-                    {
-                        browseActions = null
-                        viewModel.deletePlaylist(p)
-                    }
-                },
-                onDeleteDownload = target.downloadId?.let { id ->
-                    {
-                        browseActions = null
-                        scope.launch { Downloads.deleteCollection(context, id) }
-                    }
-                },
+                onDeleteDownload = { id -> scope.launch { Downloads.deleteCollection(context, id) } },
             )
         }
         browseActions?.takeIf { browseMenuOrigin == null }?.let { target ->
@@ -5669,6 +5550,164 @@ private fun ExternalAccountLoginOverlays(
         )
     }
 
+}
+
+@Composable
+private fun LegacyBrowseActionsMenuBody(
+    target: BrowseTarget,
+    presentation: SongActionsPresentation,
+    viewModel: MainViewModel,
+    context: Context,
+    signedIn: Boolean,
+    playlists: List<UserPlaylist>,
+    startRenaming: Boolean,
+    onBeginRename: () -> Unit,
+    onDismissBrowse: () -> Unit,
+    withBrowseSongs: (BrowseTarget, (List<Song>) -> Unit) -> Unit,
+    playSongsNext: (List<Song>) -> Unit,
+    addSongsToQueue: (List<Song>) -> Unit,
+    play: (List<Song>, Int) -> Unit,
+    startDownload: (List<Song>, DownloadTarget?) -> Unit,
+    onBeginReorder: (UserPlaylist) -> Unit,
+    onDeleteDownload: (String) -> Unit,
+) {
+    // Every row here closes the menu first: the tracks may still have to
+    // be fetched, and leaving the sheet up over a request nothing on it
+    // reports on reads as a tap that didn't land.
+    val act: ((List<Song>) -> Unit) -> () -> Unit = { action ->
+        {
+            onDismissBrowse()
+            withBrowseSongs(target, action)
+        }
+    }
+    // Whose playlist this is, asked here rather than carried in by
+    // whatever opened the sheet.
+    //
+    // Only the playlist's own page states it (see
+    // InnertubeParser.parsePlaylistOwned), so a card has to send for the
+    // answer and the sheet is already up by the time it lands — hence
+    // read as state rather than settled once when the target was built.
+    // Rename and Delete are absent until the answer says they apply, so
+    // the sheet's worst moment is a beat without them on the user's own
+    // playlist, rather than offering to delete a stranger's.
+    LaunchedEffect(target.browseId) {
+        viewModel.resolvePlaylistOwnership(target.browseId)
+    }
+    // Spelt out here rather than left to MainViewModel.editablePlaylist,
+    // which is the same rule over the same two lists: that reads them as
+    // plain values, which is right for a click handler and invisible to
+    // Compose. Both are read from collected state so this sheet actually
+    // recomposes when the answer arrives.
+    val ownedPlaylists by viewModel.playlistOwned.collectAsStateWithLifecycle()
+    val playlist = target.browseId
+        ?.takeIf { signedIn && ownedPlaylists[it] == true }
+        ?.let { id -> playlists.firstOrNull { it.browseId == id } }
+    val remote = target.browseId?.startsWith("local:") == false
+    val pinnedPlaylists by AppSettings.pinnedPlaylists.collectAsStateWithLifecycle()
+    val pinnableId = target.browseId?.takeIf { target.type == BrowseType.PLAYLIST }
+    BrowseActionsSheet(
+        // The live answer, not the one the target was built with.
+        target = target.copy(playlist = playlist),
+        presentation = presentation,
+        onRenameInSheet = {
+            onBeginRename()
+        },
+        startRenaming = startRenaming,
+        onPlayNext = act(playSongsNext),
+        onAddToQueue = act(addSongsToQueue),
+        onPlay = act { songs -> play(songs, 0) }.takeIf { target.fromCard },
+        onShuffle = act { songs ->
+            // As on a release page: shuffle goes on before the queue
+            // is built, so it is built shuffled rather than played
+            // out of order.
+            QueueShuffle.enableForNextQueue()
+            play(songs, songs.indices.random())
+        }.takeIf { target.fromCard },
+        onOpen = target.browseId
+            ?.takeIf { target.fromCard }
+            ?.let { id ->
+                {
+                    onDismissBrowse()
+                    viewModel.openDetail(
+                        browseId = id,
+                        title = target.title,
+                        subtitle = target.subtitle,
+                        thumbnailUrl = target.thumbnailUrl,
+                        type = target.type,
+                    )
+                }
+            },
+        // The one place a whole release is asked for, from a card and
+        // from the release's own page alike — its header spends that
+        // spot on the search now. Nothing on this device needs
+        // fetching to be on it, so a local page is the exception.
+        // What the target carries that the tracks don't is the
+        // release's own name and cover, which is exactly what the
+        // record wants.
+        onDownloadAll = act { songs ->
+            startDownload(
+                songs,
+                target.browseId
+                    ?.takeIf { target.type != BrowseType.ARTIST }
+                    ?.let { id ->
+                        DownloadTarget(
+                            id = id,
+                            title = target.title,
+                            subtitle = target.subtitle,
+                            thumbnailUrl = target.thumbnailUrl,
+                            playlist = target.type == BrowseType.PLAYLIST,
+                        )
+                    },
+            )
+        }.takeIf { remote },
+        // Share music metadata until canonical, provider-neutral links exist.
+        onShare = if (target.type == BrowseType.ALBUM || target.type == BrowseType.PLAYLIST) {
+            {
+                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, musicOnlyShareText(target.title, target.subtitle))
+                }
+                context.startActivity(Intent.createChooser(sendIntent, target.title))
+                onDismissBrowse()
+            }
+        } else null,
+        isPinned = pinnableId != null && pinnableId in pinnedPlaylists,
+        onTogglePin = pinnableId?.let { id ->
+            {
+                val nowPinned = AppSettings.togglePinnedPlaylist(id)
+                if (!nowPinned && id !in pinnedPlaylists) {
+                    Toast.makeText(
+                        context,
+                        context.getString(
+                            R.string.pinned_playlist_limit,
+                            AppSettings.MAX_PINNED_PLAYLISTS,
+                        ),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+                onDismissBrowse()
+            }
+        },
+        onRename = playlist?.let { p ->
+            { name: String ->
+                onDismissBrowse()
+                viewModel.renamePlaylist(p, name)
+            }
+        },
+        onReorder = playlist?.let { p -> { onBeginReorder(p) } },
+        onDelete = playlist?.let { p ->
+            {
+                onDismissBrowse()
+                viewModel.deletePlaylist(p)
+            }
+        },
+        onDeleteDownload = target.downloadId?.let { id ->
+            {
+                onDismissBrowse()
+                onDeleteDownload(id)
+            }
+        },
+    )
 }
 
 /** Shared status representation for the floating top bar. */
