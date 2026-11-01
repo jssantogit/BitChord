@@ -132,6 +132,12 @@ internal data class CanonicalRecordingOriginalReleaseDateRow(
     val firstReleaseDate: String?,
 )
 
+internal data class CanonicalRecordingDiscNumberRow(val recordingId: String, val discNumber: Int?)
+
+internal data class CanonicalRecordingReleaseGroupTypeRow(
+    val recordingId: String, val primaryType: String?,
+)
+
 internal data class CanonicalRecordingTrackPositionRow(
     val recordingId: String,
     val releaseId: String,
@@ -542,6 +548,31 @@ internal interface CanonicalCatalogDao {
     suspend fun recordingTrackPositionsByIds(
         recordingIds: List<String>,
     ): List<CanonicalRecordingTrackPositionRow>
+
+    /** Missing edition-specific MusicBrainz tracks remain unknown, not disc 1. */
+    @Query("""
+        SELECT rt.recordingId AS recordingId, track.mediumNumber AS discNumber
+        FROM catalog_release_track AS rt
+        LEFT JOIN catalog_musicbrainz_track AS track
+          ON track.recordingId = rt.recordingId AND track.releaseId = rt.releaseId
+        WHERE rt.recordingId IN (:recordingIds)
+        ORDER BY rt.recordingId, rt.releaseId, track.mediumNumber
+    """)
+    suspend fun recordingDiscNumbersByIds(recordingIds: List<String>):
+        List<CanonicalRecordingDiscNumberRow>
+
+    /** Never infer official release types from titles. */
+    @Query("""
+        SELECT rt.recordingId AS recordingId, grp.primaryType AS primaryType
+        FROM catalog_release_track AS rt
+        LEFT JOIN catalog_release_group_edition AS edition
+          ON edition.releaseId = rt.releaseId
+        LEFT JOIN catalog_release_group AS grp ON grp.id = edition.releaseGroupId
+        WHERE rt.recordingId IN (:recordingIds)
+        ORDER BY rt.recordingId, rt.releaseId, edition.releaseGroupId
+    """)
+    suspend fun recordingReleaseGroupTypesByIds(recordingIds: List<String>):
+        List<CanonicalRecordingReleaseGroupTypeRow>
 
     /**
      * A Recording can belong to multiple releases, each of which can have
