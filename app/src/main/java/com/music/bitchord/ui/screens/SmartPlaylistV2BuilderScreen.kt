@@ -973,11 +973,20 @@ internal fun SmartPlaylistV2BuilderScreen(
                     ) {
             if (manageTab == SmartPlaylistManageTab.FILTERS) {
             item(key = "v2-saved-filter-heading") {
-                Text("Filtros reutilizáveis", style = MaterialTheme.typography.titleMedium)
+                Text("Seus filtros", style = MaterialTheme.typography.titleMedium)
                 Text("Filtros guardam somente regras. Aplicar copia as regras; não vincula alterações futuras.",
                     style = MaterialTheme.typography.bodySmall)
-                if (filtersFailure) Text("Não foi possível ler os filtros salvos.")
-                else if (savedFilters.isEmpty()) Text("Nenhum filtro reutilizável salvo.")
+                if (filtersFailure) {
+                    Text("Não foi possível ler os filtros salvos.")
+                } else if (savedFilters.isEmpty()) {
+                    SettingsGroupSurface {
+                        SettingsRow(
+                            title = "Nenhum filtro salvo",
+                            subtitle = "Para criar um filtro, configure condições em uma nova playlist inteligente e escolha Salvar como filtro reutilizável na revisão.",
+                            reserveIconSpace = false,
+                        )
+                    }
+                }
             }
             items(savedFilters, key = { "v2-filter-" + it.id }) { filter ->
                 var more by remember(filter.id) { mutableStateOf(false) }
@@ -987,7 +996,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                 SettingsGroupSurface {
                     SettingsRow(
                         title = filter.name,
-                        subtitle = "${smartRuleLeafCount(filter.rules)} condições · Filtro reutilizável",
+                        subtitle = "${smartConditionCountLabel(smartRuleLeafCount(filter.rules))} · Filtro reutilizável",
                         reserveIconSpace = false,
                         onClick = { more = true },
                         trailing = {
@@ -1067,7 +1076,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                 SettingsGroupSurface {
                     SettingsRow(
                         title = item.name,
-                        subtitle = "${smartRuleLeafCount(item.query.rules)} condições · Inteligente",
+                        subtitle = "${smartConditionCountLabel(smartRuleLeafCount(item.query.rules))} · Inteligente",
                         reserveIconSpace = false,
                     )
                     Column(
