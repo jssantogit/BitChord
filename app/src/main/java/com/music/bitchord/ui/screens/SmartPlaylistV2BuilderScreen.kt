@@ -958,7 +958,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
                                 } catch (_: Exception) {
-                                    error = "Não foi possível excluir: outra playlist pode depender desta."
+                                    error = "Não foi possível excluir: outra playlist ou filtro pode depender desta."
                                 } finally {
                                     loading = false
                                 }
@@ -1308,7 +1308,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                             } catch (_: Exception) {
                                 error = if (pending.isFilter)
                                     "Não foi possível excluir o filtro."
-                                else "Não foi possível excluir: outra playlist pode depender desta."
+                                else "Não foi possível excluir: outra playlist ou filtro pode depender desta."
                             } finally { loading = false }
                         }
                     }
