@@ -2,6 +2,8 @@ package com.music.bitchord.data.catalog
 
 import java.nio.charset.Charset
 import java.io.ByteArrayOutputStream
+import java.io.ByteArrayInputStream
+import java.io.SequenceInputStream
 import java.io.InputStream
 
 /**
@@ -41,6 +43,9 @@ internal object LocalEmbeddedTagParser {
         val isId3 = first[0] == 73.toByte() &&
             first[1] == 68.toByte() && first[2] == 51.toByte()
         val isFlac = first.contentEquals("fLaC".toByteArray(Charsets.US_ASCII))
+        if (first.contentEquals("OggS".toByteArray(Charsets.US_ASCII))) {
+            return LocalOggTagParser.read(SequenceInputStream(ByteArrayInputStream(first), stream))
+        }
         if (isId3) {
             val rest = exact(6) ?: return null
             val prefix = first + rest
@@ -73,6 +78,9 @@ internal object LocalEmbeddedTagParser {
             header[0] == 102.toByte() && header[1] == 76.toByte() &&
                 header[2] == 97.toByte() && header[3] == 67.toByte() ->
                 parseFlac(header)
+            header[0] == 79.toByte() && header[1] == 103.toByte() &&
+                header[2] == 103.toByte() && header[3] == 83.toByte() ->
+                LocalOggTagParser.read(ByteArrayInputStream(header))
             else -> null
         }
     }
@@ -199,6 +207,9 @@ internal object LocalEmbeddedTagParser {
         }
         return null
     }
+
+    internal fun parseVorbisCommentBlock(data: ByteArray): LocalEmbeddedTags? =
+        parseVorbisComments(data, 0, data.size)
 
     private fun parseVorbisComments(bytes: ByteArray, start: Int, size: Int): LocalEmbeddedTags? {
         val end = start + size
