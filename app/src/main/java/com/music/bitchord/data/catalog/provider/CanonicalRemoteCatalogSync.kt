@@ -79,7 +79,9 @@ internal data class ProviderTrack(
     /** Null = field not returned by the provider, empty = explicitly supported but untagged. */
     val genres: List<String>? = null,
     val moods: List<String>? = null,
-)
+    /** Null: server omitted tempo; zero: supported but no BPM tag. */
+    val bpm: Int? = null,
+
 
 internal data class ProviderLibrarySnapshot(
     val tracks: List<ProviderTrack>,
@@ -455,6 +457,13 @@ internal object CanonicalRemoteCatalogSync {
                     mediaAssetId = mediaAssetId,
                     genresJson = track.genres?.let { Json.encodeToString(it) },
                     moodsJson = track.moods?.let { Json.encodeToString(it) },
+                    bpmsJson = track.bpm?.let { tempo ->
+                        when {
+                            tempo == 0 -> Json.encodeToString(emptyList<Double>())
+                            tempo in 1..999 -> Json.encodeToString(listOf(tempo.toDouble()))
+                            else -> null
+                        }
+                    },
                 ),
             )
         }
