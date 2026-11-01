@@ -1335,6 +1335,13 @@ object Downloads {
                             " runner_up=${evidence.runnerUpCoverage.coerceIn(0,64)}" +
                             " cohorts=${evidence.cohorts.coerceIn(0,512)}")
                     },
+                    onCacheEvidence={index,evidence ->
+                        Log.d(TAG,"soulseek_auto_cache slot=$index" +
+                            " action=${evidence.action.name}" +
+                            " observed=${evidence.observed.coerceIn(0,512)}" +
+                            " truncated=${evidence.truncated}" +
+                            " reason=${evidence.decisionReason?.name ?: "NONE"}")
+                    },
                     onSlotEvidence={index,observed ->
                         val entry=request.entries[index]
                         retained[index]=A0ManualReviewCandidatePolicy.retain(
