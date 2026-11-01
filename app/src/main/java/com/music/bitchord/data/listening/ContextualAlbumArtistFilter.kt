@@ -252,8 +252,15 @@ internal class CanonicalContextualFilterLibrary(
                 catalog.localAddedDatesByRecordingIds(providerKey, ids)
             }.groupBy({ it.recordingId }, { it.dateAddedSeconds })
         } else null
+        val tagRows = if (filter.rules.referencedFields().any {
+            it == SmartPlaylistRuleField.GENRE || it == SmartPlaylistRuleField.MOOD
+        }) {
+            snapshot.tracks.map { it.recordingId }.chunked(400).flatMap { ids ->
+                catalog.providerScopedTagRows(providerKey, ids)
+            }.groupBy { it.recordingId }
+        } else null
         return filterCanonicalBrowseSongs(
-            snapshot.tracks, filter, providerKey, localAdded,
+            snapshot.tracks, filter, providerKey, localAdded, tagRows,
         )
     }
 
