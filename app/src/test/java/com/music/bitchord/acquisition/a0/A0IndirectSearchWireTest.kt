@@ -113,6 +113,27 @@ class A0IndirectSearchWireTest {
         assertEquals(0,observed)
     }
 
+    @Test fun parsedCallbackReceivesValidatedIndirectReplyOnlyOnce() {
+        var observed=0
+        val answer=A0IndirectSearchWire.readIndirectReply(
+            ByteArrayInputStream(searchReply("peer",72,"Ringingsound.wav")),
+            72,"peer",onValidatedParsedReply={ parsed ->
+                observed++
+                assertEquals("peer",parsed.peerUsername)
+                assertEquals(72,parsed.token)
+                assertEquals(1,parsed.files.size)
+            })
+        assertEquals(1,observed)
+        assertEquals(1,answer.untrustedResultCount)
+        observed=0
+        reject {
+            A0IndirectSearchWire.readIndirectReply(
+                ByteArrayInputStream(searchReply("other",72,"Ringingsound.wav")),
+                72,"peer",onValidatedParsedReply={ observed++ })
+        }
+        assertEquals(0,observed)
+    }
+
     @Test fun legacyConnectToPeerWithoutExtendedFieldsRemainsDiscoverable() {
         // Older Soulseek clients advertise only the original five fields.
         val legacy = frame(18,
