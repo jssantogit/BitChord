@@ -411,6 +411,15 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
                 db.execSQL(
                     "ALTER TABLE `catalog_media_asset_tags` ADD COLUMN `bpmsJson` TEXT",
                 )
+                db.execSQL(
+                    "ALTER TABLE `catalog_media_asset_tags` ADD COLUMN `stylesJson` TEXT",
+                )
+                db.execSQL(
+                    "ALTER TABLE `catalog_media_asset_tags` ADD COLUMN `localSourceFingerprint` TEXT",
+                )
+                db.execSQL(
+                    "ALTER TABLE `catalog_media_asset_tags` ADD COLUMN `localParsedFingerprint` TEXT",
+                )
             }
         }
 
