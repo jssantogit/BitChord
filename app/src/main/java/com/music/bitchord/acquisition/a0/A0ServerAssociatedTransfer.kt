@@ -188,7 +188,7 @@ internal class A0ServerAssociatedTransfer(
                         onPhase(Phase.F_ESTABLISHED)
                         // Do not reuse the 15s P/F negotiation clock for bytes.
                         val receiveDeadline=A0TransferDeadlines.receive(System.nanoTime())
-                        f.soTimeout=4000
+                        f.soTimeout=A0TransferDeadlines.fTokenReadTimeoutMillis
                         if(!f.inetAddress.address.contentEquals(resolved.address.address)) {
                             throw IOException("A0 F peer does not match server-selected P address")
                         }
@@ -198,7 +198,12 @@ internal class A0ServerAssociatedTransfer(
                             isCancelled={shouldStop()||
                                 A0TransferDeadlines.isExpired(
                                     receiveDeadline,System.nanoTime())},
-                            onTokenValidated=onTokenValidated,
+                            onTokenValidated={
+                                // The slower initial F token has now passed;
+                                // keep the existing strict byte-stream idle cap.
+                                f.soTimeout=A0TransferDeadlines.streamIdleTimeoutMillis
+                                onTokenValidated()
+                            },
                             onProgress=onProgress,
                         )
                         onPhase(Phase.BYTES_RECEIVED)
