@@ -22,6 +22,47 @@ import org.robolectric.annotation.ConscryptMode
 @Config(application = Application::class, sdk = [35])
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class SmartPlaylistBatchEvidenceRoomTest {
+    @Test fun localPathEvidenceOnlyReadsMediaStoreAndDoesNotPromoteMissingPaths() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:one", "Song", "Artist", 200_000L))
+            dao.upsertRecording(RecordingEntity("rec:missing", "Other", "Artist", 200_000L))
+            dao.upsertMediaAsset(com.music.bitchord.data.catalog.MediaAssetEntity(
+                "asset:local", "rec:one", "local-mediastore", "local-1",
+                "content://media/external/audio/media/1",
+                "/storage/emulated/0/Music/Rock/Song.FLAC", null, null, null,
+            ))
+            dao.upsertMediaAsset(com.music.bitchord.data.catalog.MediaAssetEntity(
+                "asset:remote", "rec:one", "opensubsonic", "remote-1",
+                "https://music.example/stream", "/remote/somewhere/not-real.mp3",
+                null, null, null,
+            ))
+            dao.upsertMediaAsset(com.music.bitchord.data.catalog.MediaAssetEntity(
+                "asset:unknown", "rec:missing", "local-mediastore", "local-2",
+                "content://media/external/audio/media/2", null, null, null, null,
+            ))
+            val rows = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            ).read(listOf("rec:one", "rec:missing"), setOf(
+                SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleField.LOCAL_FILE_PATH,
+            ))
+            val known = rows.single { it.recordingId == "rec:one" }
+            assertEquals(listOf("/storage/emulated/0/music/rock/song.flac"), known.localFilePaths)
+            assertTrue(known.localFilePathsComplete)
+            val missing = rows.single { it.recordingId == "rec:missing" }
+            assertTrue(missing.localFilePaths.isEmpty())
+            assertTrue(!missing.localFilePathsComplete)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
     @Test fun realRoomBatchPreservesAudibleCompletionAndOneStarRating() = runTest {
         val context = RuntimeEnvironment.getApplication()
         val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
