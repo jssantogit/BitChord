@@ -633,75 +633,48 @@ internal fun SmartPlaylistV2WizardUi(
                                         label = "Descrição (opcional)",
                                         hint = "Exibida em Sobre a playlist · até 5.000 caracteres",
                                         multiline = true,
+                                        emphasized = true,
                                     )
                                 }
                             }
                         }
                         item {
-                            if (normalMode) {
-                                WizardCard(
-                                    "Fontes do catálogo",
-                                    "Escolha onde as músicas desta playlist serão encontradas.",
-                                ) {
-                                    if (availableSourceKeys.size > 1 ||
-                                        normalSourceProviderKey == null
-                                    ) {
-                                        PlaylistWizardSelectionRow(
-                                            label = "Todas as fontes",
-                                            selected = normalSourceProviderKey == null,
-                                            onClick = { onNormalSourceChange(null) },
-                                        )
-                                    }
-                                    availableSourceKeys.forEach { provider ->
-                                        val title = if (provider == "local-mediastore")
-                                            "Música local" else "Servidor (Navidrome)"
-                                        PlaylistWizardSelectionRow(
-                                            label = title,
-                                            selected = normalSourceProviderKey == provider,
-                                            onClick = { onNormalSourceChange(provider) },
-                                        )
-                                    }
-                                    if (normalSourceProviderKey != null &&
-                                        normalSourceProviderKey !in availableSourceKeys) {
-                                        Text(
-                                            "A fonte salva não está conectada. As músicas permanecem na playlist.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.error,
-                                        )
-                                    }
+                            WizardCard(
+                                "Fontes do catálogo",
+                                "Escolha onde procurar músicas. Toque para alterar.",
+                            ) {
+                                val selected = if (normalMode) normalSourceProviderKey
+                                    else if (hasConfiguredRules) smartRuleGlobalSource(rule)
+                                    else null
+                                val label = if (normalMode) when {
+                                    selected == null -> "Todas as fontes disponíveis"
+                                    selected == "local-mediastore" -> "Música local"
+                                    selected in availableSourceKeys -> "Navidrome"
+                                    else -> "Fonte desconectada"
+                                } else when (selected) {
+                                    "local" -> "Música local"
+                                    "opensubsonic" -> "Navidrome"
+                                    else -> "Todas as fontes disponíveis"
                                 }
-                            } else {
-                                WizardCard(
-                                    "Fontes do catálogo",
-                                    "Esta escolha limita todas as condições, inclusive grupos E/OU.",
-                                ) {
-                                    val selected = if (hasConfiguredRules)
-                                        smartRuleGlobalSource(rule) else null
-                                    PlaylistWizardSelectionRow(
-                                        label = "Todas as fontes",
-                                        selected = selected == null,
-                                        onClick = { onSmartSourceChange(null) },
+                                PlaylistWizardSecondaryAction(
+                                    label = "Origem: $label  ▾",
+                                    onClick = { picker = "source" },
+                                )
+                                if (normalMode && selected != null &&
+                                    selected !in availableSourceKeys) {
+                                    Text(
+                                        "A fonte salva está desconectada; as músicas continuam na playlist.",
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall,
                                     )
-                                    PlaylistWizardSelectionRow(
-                                        label = "Música local",
-                                        selected = selected == "local",
-                                        onClick = { onSmartSourceChange("local") },
+                                }
+                                if (!normalMode && selected == "opensubsonic" &&
+                                    availableSourceKeys.none { it.startsWith("opensubsonic:") }) {
+                                    Text(
+                                        "Nenhum servidor Navidrome está conectado.",
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall,
                                     )
-                                    if (availableSourceKeys.any {
-                                        it.startsWith("opensubsonic:")
-                                    }) {
-                                        PlaylistWizardSelectionRow(
-                                            label = "Servidor (Navidrome)",
-                                            selected = selected == "opensubsonic",
-                                            onClick = { onSmartSourceChange("opensubsonic") },
-                                        )
-                                    } else if (selected == "opensubsonic") {
-                                        Text(
-                                            "Servidor selecionado, mas nenhuma conta está conectada.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.error,
-                                        )
-                                    }
                                 }
                             }
                         }
@@ -1481,6 +1454,30 @@ internal fun SmartPlaylistV2WizardUi(
                 onDeleteSmart()
             },
             onDismiss = { confirmDeleteSmart = false },
+        )
+    }
+    if (picker == "source") {
+        val normalOptions: List<Pair<String?, String>> =
+            listOf(null to "Todas as fontes disponíveis") +
+                availableSourceKeys.distinct().mapIndexed { index, provider ->
+                    provider to if (provider == "local-mediastore") "Música local"
+                        else if (availableSourceKeys.count { it.startsWith("opensubsonic:") } > 1)
+                            "Navidrome ${index + 1}"
+                        else "Navidrome"
+                }
+        val smartOptions: List<Pair<String?, String>> =
+            listOf(null to "Todas as fontes disponíveis", "local" to "Música local") +
+                if (availableSourceKeys.any { it.startsWith("opensubsonic:") })
+                    listOf("opensubsonic" to "Navidrome") else emptyList()
+        WizardChoiceDialog(
+            title = "Origem das músicas",
+            options = if (normalMode) normalOptions else smartOptions,
+            label = { it.second },
+            onChosen = { (source, _) ->
+                if (normalMode) onNormalSourceChange(source)
+                else onSmartSourceChange(source)
+            },
+            onClose = { picker = null },
         )
     }
     if (picker == "sort") {
