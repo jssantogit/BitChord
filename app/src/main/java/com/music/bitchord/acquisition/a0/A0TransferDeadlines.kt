@@ -14,6 +14,11 @@ import java.util.concurrent.TimeUnit
 internal object A0TransferDeadlines {
     private val negotiationNanos=TimeUnit.SECONDS.toNanos(15)
     private val receiveNanos=TimeUnit.SECONDS.toNanos(180)
+    // Some peers establish F promptly but delay FileTransferInit. Give the
+    // initial token one bounded grace window without changing byte-stream
+    // idle limits or allowing a second post-acceptance attempt.
+    const val fTokenReadTimeoutMillis=8000
+    const val streamIdleTimeoutMillis=4000
 
     fun negotiate(startedAtNanos:Long):Long=startedAtNanos+negotiationNanos
 
