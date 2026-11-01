@@ -95,6 +95,14 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                 CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, recordingIds,
             ).groupBy { it.recordingId }
         } else emptyMap()
+        val localPathsById = if (
+            SmartPlaylistRuleField.LOCAL_FOLDER in requiredFields ||
+            SmartPlaylistRuleField.LOCAL_FILE_PATH in requiredFields
+        ) {
+            catalog.localPathsByRecordingIds(
+                CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, recordingIds,
+            ).groupBy { it.recordingId }
+        } else emptyMap()
         // Missing canonical metadata means the Recording cannot be promoted
         // from a provider/native id; no fake row is synthesized.
         return recordingIds.distinct().mapNotNull { id ->
@@ -106,6 +114,10 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
             val trackPositionRows = trackPositionsById[id].orEmpty()
             val trackArtistRows = trackArtistsById[id].orEmpty()
             val addedRows = localAddedById[id].orEmpty()
+            val localPathRows = localPathsById[id].orEmpty()
+            val usablePaths = localPathRows.mapNotNull {
+                normalizeLocalSmartFilterPath(it.path)
+            }.distinct().sorted()
             val addedValues = addedRows.map { row ->
                 row.dateAddedSeconds?.takeIf { second ->
                     second > 0L && second <= Long.MAX_VALUE / 1000L
@@ -152,6 +164,9 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                 localAddedEpochMs = addedValues.filterNotNull().distinct().sorted(),
                 localAddedDateEvidenceUnknown = addedRows.isEmpty() ||
                     addedValues.any { it == null },
+                localFilePaths = usablePaths,
+                localFilePathsComplete = localPathRows.isNotEmpty() &&
+                    usablePaths.size == localPathRows.size,
                 canonicalReleaseIds = releaseMembershipsById[id].orEmpty()
                     .map { it.releaseId }.distinct().sorted(),
             )
