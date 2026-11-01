@@ -104,6 +104,14 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                 CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, recordingIds,
             ).groupBy { it.recordingId }
         } else emptyMap()
+        val localAudioTagsById = if (
+            SmartPlaylistRuleField.LOCAL_GENRE in requiredFields ||
+            SmartPlaylistRuleField.LOCAL_BITRATE_KBPS in requiredFields
+        ) {
+            catalog.localAudioTagsByRecordingIds(
+                CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, recordingIds,
+            ).groupBy { it.recordingId }
+        } else emptyMap()
         // Missing canonical metadata means the Recording cannot be promoted
         // from a provider/native id; no fake row is synthesized.
         return recordingIds.distinct().mapNotNull { id ->
@@ -116,6 +124,14 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
             val trackArtistRows = trackArtistsById[id].orEmpty()
             val addedRows = localAddedById[id].orEmpty()
             val localPathRows = localPathsById[id].orEmpty()
+            val audioTagRows = localAudioTagsById[id].orEmpty()
+            val trustedGenres = audioTagRows.mapNotNull {
+                it.localGenre?.trim()?.takeIf(String::isNotBlank)
+            }.distinct().sorted()
+            val trustedBitrates = audioTagRows.mapNotNull {
+                it.localBitrateBps?.takeIf { bitrate -> bitrate > 0L }
+                    ?.toDouble()?.div(1000.0)
+            }.distinct().sorted()
             val usablePaths = localPathRows.mapNotNull {
                 normalizeLocalSmartFilterPath(it.path)
             }.distinct().sorted()
@@ -168,6 +184,12 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                 localFilePaths = usablePaths,
                 localFilePathsComplete = localPathRows.isNotEmpty() &&
                     localPathRows.all { normalizeLocalSmartFilterPath(it.path) != null },
+                localGenres = trustedGenres,
+                localGenresComplete = audioTagRows.isNotEmpty() &&
+                    audioTagRows.all { !it.localGenre.isNullOrBlank() },
+                localBitratesKbps = trustedBitrates,
+                localBitrateEvidenceComplete = audioTagRows.isNotEmpty() &&
+                    audioTagRows.all { (it.localBitrateBps ?: 0L) > 0L },
                 canonicalReleaseIds = releaseMembershipsById[id].orEmpty()
                     .map { it.releaseId }.distinct().sorted(),
             )
