@@ -5513,85 +5513,14 @@ private fun BitChordApp(
             )
         }
 
-        // ---- Discord sign-in (full screen WebView) ----
-        if (showDiscordLogin) {
-            BackHandler { showDiscordLogin = false }
-            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                Column(Modifier.fillMaxSize()) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconButton(onClick = { showDiscordLogin = false }) {
-                            Icon(
-                                Icons.Rounded.Close,
-                                contentDescription = stringResource(R.string.close),
-                                tint = MaterialTheme.colorScheme.onBackground,
-                            )
-                        }
-                        Text(
-                            "Sign in to Discord",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onBackground,
-                        )
-                    }
-                    DiscordLoginScreen(
-                        onTokenCaptured = { token ->
-                            AppSettings.setDiscordToken(token)
-                            showDiscordLogin = false
-                        },
-                    )
-                }
-            }
-        }
-
-        // ---- Spotify sign-in (full screen WebView) ----
-        // Out here with Discord's rather than on the Spotify page itself: see
-        // SpotifyLoginScreen for what the blurred content tree does to a WebView.
-        if (showSpotifyLogin) {
-            BackHandler { showSpotifyLogin = false }
-            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                Column(Modifier.fillMaxSize()) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconButton(onClick = { showSpotifyLogin = false }) {
-                            Icon(
-                                Icons.Rounded.Close,
-                                contentDescription = stringResource(R.string.close),
-                                tint = MaterialTheme.colorScheme.onBackground,
-                            )
-                        }
-                        Text(
-                            stringResource(R.string.spotify_sign_in),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onBackground,
-                        )
-                    }
-                    SpotifyLoginScreen(
-                        modifier = Modifier.navigationBarsPadding(),
-                        onConnected = { token ->
-                            AppSettings.setSpotifySpdcToken(token)
-                            showSpotifyLogin = false
-                        },
-                    )
-                }
-            }
-        }
-
-        if (showSpotifyCanvasAuth) {
-            BackHandler { showSpotifyCanvasAuth = false }
-            SpotifyCanvasAuthScreen(
-                onNavigateUp = { showSpotifyCanvasAuth = false }
-            )
-        }
+        ExternalAccountLoginOverlays(
+            showDiscordLogin = showDiscordLogin,
+            onDismissDiscord = { showDiscordLogin = false },
+            showSpotifyLogin = showSpotifyLogin,
+            onDismissSpotify = { showSpotifyLogin = false },
+            showSpotifyCanvasAuth = showSpotifyCanvasAuth,
+            onDismissSpotifyCanvasAuth = { showSpotifyCanvasAuth = false },
+        )
 
         discordDialog?.let { which ->
             DiscordDialogHost(
@@ -5649,6 +5578,97 @@ private fun BitChordApp(
         }
 
     }
+}
+
+@Composable
+private fun ExternalAccountLoginOverlays(
+    showDiscordLogin: Boolean,
+    onDismissDiscord: () -> Unit,
+    showSpotifyLogin: Boolean,
+    onDismissSpotify: () -> Unit,
+    showSpotifyCanvasAuth: Boolean,
+    onDismissSpotifyCanvasAuth: () -> Unit,
+) {
+    // ---- Discord sign-in (full screen WebView) ----
+    if (showDiscordLogin) {
+        BackHandler { onDismissDiscord() }
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(Modifier.fillMaxSize()) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = { onDismissDiscord() }) {
+                        Icon(
+                            Icons.Rounded.Close,
+                            contentDescription = stringResource(R.string.close),
+                            tint = MaterialTheme.colorScheme.onBackground,
+                        )
+                    }
+                    Text(
+                        "Sign in to Discord",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                }
+                DiscordLoginScreen(
+                    onTokenCaptured = { token ->
+                        AppSettings.setDiscordToken(token)
+                        onDismissDiscord()
+                    },
+                )
+            }
+        }
+    }
+
+    // ---- Spotify sign-in (full screen WebView) ----
+    // Out here with Discord's rather than on the Spotify page itself: see
+    // SpotifyLoginScreen for what the blurred content tree does to a WebView.
+    if (showSpotifyLogin) {
+        BackHandler { onDismissSpotify() }
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(Modifier.fillMaxSize()) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = { onDismissSpotify() }) {
+                        Icon(
+                            Icons.Rounded.Close,
+                            contentDescription = stringResource(R.string.close),
+                            tint = MaterialTheme.colorScheme.onBackground,
+                        )
+                    }
+                    Text(
+                        stringResource(R.string.spotify_sign_in),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                }
+                SpotifyLoginScreen(
+                    modifier = Modifier.navigationBarsPadding(),
+                    onConnected = { token ->
+                        AppSettings.setSpotifySpdcToken(token)
+                        onDismissSpotify()
+                    },
+                )
+            }
+        }
+    }
+
+    if (showSpotifyCanvasAuth) {
+        BackHandler { onDismissSpotifyCanvasAuth() }
+        SpotifyCanvasAuthScreen(
+            onNavigateUp = { onDismissSpotifyCanvasAuth() }
+        )
+    }
+
 }
 
 /** Shared status representation for the floating top bar. */
