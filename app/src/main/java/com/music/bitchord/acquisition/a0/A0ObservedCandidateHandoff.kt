@@ -95,6 +95,9 @@ internal class A0ObservedCandidateHandoff(
     private val releaseShadowLimit=if(releaseQueries.size>1)1024 else 512
     private val releaseShadow=ArrayList<Choice>(releaseShadowLimit)
     private val releaseShadowPerPeer=HashMap<String,Int>()
+    private var shadowEvicted=0
+    private var shadowDroppedAtGlobalLimit=0
+    private var shadowDroppedAtPeerLimit=0
     // A later sample must not look complete after the bounded collector
     // discarded a competing edition or a relevant source.
     private val releaseShadowLostSlots=BooleanArray(releaseQueries.take(64).size)
@@ -423,6 +426,7 @@ internal class A0ObservedCandidateHandoff(
                     else -> null
                 }
                 if(victim!=null) {
+                    shadowEvicted=(shadowEvicted+1).coerceAtMost(100000)
                     releaseSlotHits(victim).forEach { releaseShadowLostSlots[it]=true }
                     releaseShadow.remove(victim)
                     val remainder=checkNotNull(releaseShadowPerPeer[victim.peerUsername])-1
@@ -434,6 +438,11 @@ internal class A0ObservedCandidateHandoff(
                     releaseShadow.add(observedChoice)
                     releaseShadowPerPeer[peer]=(releaseShadowPerPeer[peer] ?: 0)+1
                 } else {
+                    if(releaseShadow.size>=releaseShadowLimit)
+                        shadowDroppedAtGlobalLimit=
+                            (shadowDroppedAtGlobalLimit+1).coerceAtMost(100000)
+                    else shadowDroppedAtPeerLimit=
+                        (shadowDroppedAtPeerLimit+1).coerceAtMost(100000)
                     releaseSlotHits(observedChoice).forEach {
                         releaseShadowLostSlots[it]=true
                     }
@@ -614,6 +623,9 @@ internal class A0ObservedCandidateHandoff(
     data class ReleaseShadowSnapshot(
         val choices:List<Choice>,
         val truncatedSlots:Set<Int>,
+        val shadowEvicted:Int=0,
+        val shadowDroppedAtGlobalLimit:Int=0,
+        val shadowDroppedAtPeerLimit:Int=0,
     )
 
     @Synchronized
@@ -623,6 +635,7 @@ internal class A0ObservedCandidateHandoff(
         else ReleaseShadowSnapshot(
             releaseShadow.toList(),
             releaseShadowLostSlots.indices.filter { releaseShadowLostSlots[it] }.toSet(),
+            shadowEvicted,shadowDroppedAtGlobalLimit,shadowDroppedAtPeerLimit,
         )
 
     @Synchronized
