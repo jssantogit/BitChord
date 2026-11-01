@@ -96,6 +96,10 @@ internal data class RuleBasedRecordingCandidate(
     /** The ReleaseGroup first-release year; never an edition's releaseDate. */
     val originalReleaseYears: List<Int> = emptyList(),
     val originalReleaseYearEvidenceUnknown: Boolean = true,
+    val discNumbers: List<Int> = emptyList(),
+    val discNumberEvidenceUnknown: Boolean = true,
+    val releaseGroupTypes: List<String> = emptyList(),
+    val releaseGroupTypeEvidenceUnknown: Boolean = true,
 )
 
 internal data class RuleBasedSmartPlaylistQuery(
