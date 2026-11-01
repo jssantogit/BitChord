@@ -153,6 +153,11 @@ data class MediaAssetTagsEntity(
     val moodsJson: String?,
     /** JSON array of validated BPMs; NULL = unsupported, [] = known absent. */
     val bpmsJson: String? = null,
+    val stylesJson: String? = null,
+    /** Fingerprint from last MediaStore scan; no raw path or source ID embedded. */
+    val localSourceFingerprint: String? = null,
+    /** Versioned fingerprint of the completed bounded local header probe. */
+    val localParsedFingerprint: String? = null,
 )
 
 /**
