@@ -106,9 +106,13 @@ private fun newRule(): SmartPlaylistRule = SmartPlaylistRule.Comparison(
 )
 
 /** The visual group editor needs a root container even for a single leaf/NOT. */
-internal fun editableSmartPlaylistRuleRoot(rule: SmartPlaylistRule): SmartPlaylistRule =
-    if (rule is SmartPlaylistRule.Group) rule
-    else SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(rule))
+internal fun editableSmartPlaylistRuleRoot(rule: SmartPlaylistRule): SmartPlaylistRule {
+    if (rule is SmartPlaylistRule.Group) return rule
+    val wrapped = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(rule))
+    // Do not corrupt an otherwise valid maximally nested saved filter by
+    // inserting a ninth level. The original predicate remains intact.
+    return if (runCatching { SmartPlaylistV2Query(wrapped) }.isSuccess) wrapped else rule
+}
 
 /** A reusable smart filter cannot mutate a canonical manual playlist in place. */
 internal fun canApplySmartFilterToDraft(
