@@ -440,6 +440,8 @@ internal class OpenSubsonicProvider(
             moods = song.moods?.let { values ->
                 values.map(String::trim).takeIf { names -> names.none(String::isEmpty) }?.distinct()
             },
+            bpm = song.bpm,
+
             isrcs = IsrcNormalizer.normalizeDistinct(song.isrc.orEmpty()),
             remoteRating = ProviderRemoteRating(
                 numeric = parseNumericRating(song.userRating),
@@ -646,6 +648,7 @@ private data class SubsonicSong(
     val genre: String? = null,
     val genres: List<SubsonicGenre>? = null,
     val moods: List<String>? = null,
+    val bpm: Int? = null,
     val userRating: JsonElement? = null,
     val starred: JsonElement? = null,
 )
