@@ -265,15 +265,29 @@ object LocalMediaRepository {
             null
         }
         val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
+        val mandatoryProjection = projection.filterNot {
+            it == MediaStore.Audio.Media.GENRE || it == MediaStore.MediaColumns.BITRATE
+        }.toTypedArray()
 
         runCatching {
-            context.contentResolver.query(
+            // Older/OEM MediaStore implementations can reject metadata columns.
+            // Never hide the entire local library because optional tags failed.
+            val scanned = runCatching {
+                context.contentResolver.query(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    projection,
+                    selection,
+                    selectionArgs,
+                    sortOrder,
+                )
+            }.getOrNull() ?: context.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                projection,
+                mandatoryProjection,
                 selection,
                 selectionArgs,
                 sortOrder,
-            )?.use { cursor ->
+            )
+            scanned?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
                 val displayNameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
                 val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
