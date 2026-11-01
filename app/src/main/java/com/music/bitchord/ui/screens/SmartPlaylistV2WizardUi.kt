@@ -345,6 +345,7 @@ internal fun SmartPlaylistV2WizardUi(
     editingFilterId: String?,
     creatingFilter: Boolean = false,
     filterNotice: String? = null,
+    hasExportedFilter: Boolean = false,
     savedDefinitions: List<SavedSmartPlaylistV2Definition>,
     onNameChange: (String) -> Unit,
     description: String = "",
@@ -1409,8 +1410,8 @@ internal fun SmartPlaylistV2WizardUi(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         if (!normalMode) PlaylistWizardSecondaryAction(
-                            label = if (editingFilterId == null)
-                                "Salvar como filtro reutilizável" else "Atualizar filtro reutilizável",
+                            label = if (editingFilterId != null || hasExportedFilter)
+                                "Atualizar filtro reutilizável" else "Salvar como filtro reutilizável",
                             enabled = canReview && !loading,
                             onClick = onSaveFilter,
                         )
