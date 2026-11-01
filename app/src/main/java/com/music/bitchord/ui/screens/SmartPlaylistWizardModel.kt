@@ -38,11 +38,12 @@ internal val smartConditionCategories = listOf(
         SmartPlaylistRuleField.RELEASE_YEAR, SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
     )),
     SmartConditionCategory("library", "Biblioteca e origens", "Fontes comprovadas do catálogo", listOf(
-        SmartPlaylistRuleField.SOURCE_KIND,
+        SmartPlaylistRuleField.SOURCE_KIND, SmartPlaylistRuleField.LOCAL_GENRE,
         SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleField.LOCAL_FILE_PATH,
     )),
     SmartConditionCategory("audio", "Áudio", "Duração comprovada das faixas", listOf(
         SmartPlaylistRuleField.DURATION_MS, SmartPlaylistRuleField.LOCAL_FILE_EXTENSION,
+        SmartPlaylistRuleField.LOCAL_BITRATE_KBPS,
     )),
     SmartConditionCategory(
         "advanced", "Outros · avançado",
@@ -71,6 +72,8 @@ internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (
     SmartPlaylistRuleField.LOCAL_FOLDER -> "Pasta da música local"
     SmartPlaylistRuleField.LOCAL_FILE_PATH -> "Caminho do arquivo local"
     SmartPlaylistRuleField.LOCAL_FILE_EXTENSION -> "Extensão do arquivo local"
+    SmartPlaylistRuleField.LOCAL_GENRE -> "Gênero do arquivo local"
+    SmartPlaylistRuleField.LOCAL_BITRATE_KBPS -> "Bitrate do arquivo local (kbps)"
     SmartPlaylistRuleField.DURATION_MS -> "Duração da música"
 }
 
@@ -113,6 +116,10 @@ internal fun smartConditionDescription(field: SmartPlaylistRuleField): String = 
         "Compare o caminho real do arquivo local; caminhos de servidores não são inferidos."
     SmartPlaylistRuleField.LOCAL_FILE_EXTENSION ->
         "Compare a extensão do arquivo local (FLAC, MP3, M4A); não equivale ao codec."
+    SmartPlaylistRuleField.LOCAL_GENRE ->
+        "Gênero lido do MediaStore em arquivos locais. Não usa tags inferidas de álbuns."
+    SmartPlaylistRuleField.LOCAL_BITRATE_KBPS ->
+        "Taxa de bits lida do arquivo local, em kbps decimais; não é taxa de transcodificação."
     SmartPlaylistRuleField.DURATION_MS ->
         "Informe a duração total da música em segundos."
 }
@@ -135,6 +142,8 @@ internal fun smartConditionSearch(
             SmartPlaylistRuleField.LOCAL_FOLDER -> "pasta diretorio diretório local caminho mediastore"
             SmartPlaylistRuleField.LOCAL_FILE_PATH -> "arquivo caminho pasta filepath path mediastore"
             SmartPlaylistRuleField.LOCAL_FILE_EXTENSION -> "formato extensão extensao mp3 flac m4a arquivo"
+            SmartPlaylistRuleField.LOCAL_GENRE -> "genero gênero music style tag"
+            SmartPlaylistRuleField.LOCAL_BITRATE_KBPS -> "bitrate kbps qualidade taxa bits áudio"
             SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "capa artwork imagem album"
             SmartPlaylistRuleField.DURATION_MS -> "duracao segundos tempo audio"
             SmartPlaylistRuleField.AUDIBLE_COMPLETIONS -> "plays execucoes escutas"
