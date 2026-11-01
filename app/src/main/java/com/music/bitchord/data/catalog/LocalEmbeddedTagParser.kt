@@ -84,9 +84,14 @@ internal object LocalEmbeddedTagParser {
         val bpms = linkedSetOf<Double>()
 
         fun add(kind: String, raw: String): Boolean {
+            val normalized = kind.uppercase()
+            // Ignore arbitrary large artwork/custom Vorbis comments instead of
+            // failing all trustworthy genre/mood/tempo evidence in the file.
+            if (normalized !in setOf("GENRE", "TCON", "MOOD", "TMOO",
+                    "STYLE", "BPM", "TBPM")) return true
             val value = raw.trim().takeIf { it.length <= MAX_FIELD_LENGTH } ?: return false
             if (value.isEmpty()) return true
-            when (kind.uppercase()) {
+            when (normalized) {
                 "GENRE", "TCON" -> genres.add(value)
                 "MOOD", "TMOO" -> moods.add(value)
                 "STYLE" -> styles.add(value)
