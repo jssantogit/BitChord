@@ -3,6 +3,8 @@ package com.music.bitchord
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLocalLibrary
+import com.music.bitchord.data.catalog.MediaAssetEntity
+import com.music.bitchord.data.catalog.MediaAssetTagsEntity
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityRepository
 import com.music.bitchord.data.catalog.CanonicalLibraryProviderConfigurationReader
 import com.music.bitchord.data.catalog.RoomCanonicalLibraryAvailabilityStore
@@ -90,6 +92,28 @@ class CanonicalLocalTagsRoomTest {
                 globalGenres[assets.getValue("101").recordingId]?.genres)
             assertTrue(globalGenres[assets.getValue("103").recordingId]?.genreEvidenceUnknown == true)
 
+            // Same canonical Recording, different independent MediaAsset owner.
+            // Local rules and account selection must never inherit remote Jazz.
+            val sameRecording = assets.getValue("101").recordingId
+            val remote = "opensubsonic:work"
+            dao.upsertMediaAsset(MediaAssetEntity("remote:101", sameRecording, remote,
+                "native:101", "opensubsonic://asset/work", null, null, null, null))
+            dao.upsertMediaAssetTags(MediaAssetTagsEntity(
+                "remote:101", "[\\\"Jazz\\\"]", "[]",
+            ))
+            val jazz = filter(SmartPlaylistRuleField.GENRE,
+                SmartPlaylistRuleOperator.EQUAL, "jazz")
+            assertTrue(reader.songs(local, jazz).isEmpty())
+            assertEquals(listOf("Local 101"), reader.songs(remote, jazz).map { it.title })
+            assertEquals(listOf("Dream Pop", "K-Pop"),
+                global.availableRecordingTags(listOf(sameRecording)).single().genres)
+            val bothSources = CanonicalLibraryAvailabilityRepository(
+                RoomCanonicalLibraryAvailabilityStore(dao),
+                CanonicalLibraryProviderConfigurationReader { setOf(local, remote) },
+            )
+            assertEquals(listOf("Dream Pop", "K-Pop", "Jazz"),
+                bothSources.availableRecordingTags(listOf(sameRecording)).single().genres)
+
             // An actual rescan replaces the local owner's evidence, never a remote asset's.
             CanonicalLocalLibrary.syncWithDatabase(context, database, listOf(
                 tagged.copy(localGenres = emptyList(), localMoods = null), empty, unknown,
@@ -99,6 +123,7 @@ class CanonicalLocalTagsRoomTest {
             assertEquals("[]", after[assets.getValue("101").recordingId]?.genresJson)
             assertNull(after[assets.getValue("101").recordingId]?.moodsJson)
             assertTrue(reader.songs(local, pop).isEmpty())
+            assertEquals(listOf("Local 101"), reader.songs(remote, jazz).map { it.title })
         } finally { database.close() }
     }
 }
