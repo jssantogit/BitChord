@@ -25,6 +25,40 @@ class SmartPlaylistV2RuleEngineTest {
         value: Double? = null,
     ) = SmartPlaylistRule.Comparison(field, operator, value)
 
+    @Test fun localFolderAndFullPathEvaluateOnlyProvenMediaStoreAssets() {
+        val known = candidate("local").copy(
+            localFilePaths = listOf("/storage/emulated/0/Music/Kpop/Track.FLAC"),
+            localFilePathsComplete = true,
+        )
+        val unknown = candidate("unknown").copy(
+            localFilePaths = emptyList(), localFilePathsComplete = false,
+        )
+        val incomplete = candidate("mixed").copy(
+            localFilePaths = listOf("/storage/emulated/0/Music/Jazz/Track.mp3"),
+            localFilePathsComplete = false,
+        )
+        val rows = listOf(known, unknown, incomplete)
+        fun match(field: SmartPlaylistRuleField, op: SmartPlaylistRuleOperator, input: String) =
+            planner.preview(rows, SmartPlaylistV2Query(
+                SmartPlaylistRule.Comparison(field, op, textValue = input),
+                sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+            )).map { it.recordingId }
+        assertEquals(listOf("local"),
+            match(SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.CONTAINS, "music/kpop"))
+        assertEquals(listOf("local"),
+            match(SmartPlaylistRuleField.LOCAL_FILE_PATH, SmartPlaylistRuleOperator.ENDS_WITH, ".flac"))
+        assertEquals(listOf("local"),
+            match(SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.STARTS_WITH, "/storage/emulated/0/music"))
+        assertEquals(emptyList<String>(),
+            match(SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.DOES_NOT_CONTAIN, "jazz"))
+        assertEquals(emptyList<String>(), planner.preview(rows, SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.CONTAINS,
+                textValue = "music/jazz",
+            )),
+        )).map { it.recordingId }.filter { it == "unknown" || it == "mixed" })
+    }
+
     @Test fun nestedAllAnySelectsExactlyTheMatchingRecording() {
         val query = SmartPlaylistV2Query(
             rules = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
