@@ -717,13 +717,15 @@ internal fun SmartPlaylistV2BuilderScreen(
                     error = error,
                     editingId = editingId,
                     editingFilterId = editingFilterId,
-                    openingAsEdit = shouldOpenPlaylistAsEdit(
+                    openingAsEdit = creatingFilter || shouldOpenPlaylistAsEdit(
                         initialPlaylistId, initialNormalPlaylistId, editorEpoch,
                         editingId, editingNormalId, editingFilterId,
                     ),
+                    creatingFilter = creatingFilter,
+                    filterNotice = filterNotice,
                     startOnNormalSongs = startOnNormalSongs,
                     savedDefinitions = saved.filterNot { it.id == editingId },
-                    onNameChange = { name = it },
+                    onNameChange = { name = it; filterNotice = null },
                     description = description,
                     onDescriptionChange = { description = it },
                     coverUri = coverUri,
@@ -732,6 +734,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     onRuleChange = {
                         rule = it
                         hasConfiguredRules = true
+                        filterNotice = null
                         preview = null
                         previewQuery = null
                         error = null
@@ -929,20 +932,31 @@ internal fun SmartPlaylistV2BuilderScreen(
                         }
                     },
                     onSaveFilter = {
-                        if (!loading) {
+                        if (!loading && hasConfiguredRules && !normalMode) {
                             loading = true
                             scope.launch {
                                 try {
-                                    val parsed = query()
+                                    // A filter is only a rule fragment. Invalid sort/limit
+                                    // must never block saving otherwise valid filter rules.
+                                    SmartPlaylistV2Query(rules = rule)
+                                    val id = editingFilterId ?: exportedFilterId
+                                        ?: UUID.randomUUID().toString()
                                     withContext(Dispatchers.IO) {
-                                        filterRepo.save(SavedSmartPlaylistV2Filter(
-                                            editingFilterId ?: UUID.randomUUID().toString(),
-                                            name, parsed.rules,
-                                        ))
+                                        filterRepo.save(SavedSmartPlaylistV2Filter(id, name, rule))
                                     }
-                                    reset()
-                                    manageTab = SmartPlaylistManageTab.FILTERS
-                                    showWizard = false
+                                    if (shouldClosePlaylistDraftAfterSavingFilter(
+                                        editingFilterId, creatingFilter,
+                                    )) {
+                                        reset()
+                                        manageTab = SmartPlaylistManageTab.FILTERS
+                                        showWizard = false
+                                    } else {
+                                        // Export is non-destructive. The playlist's name,
+                                        // rules, sort, limit, cover and navigation survive.
+                                        exportedFilterId = id
+                                        filterNotice = "Filtro reutilizável salvo. Continue editando a playlist."
+                                        error = null
+                                    }
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
                                 } catch (_: Exception) {
