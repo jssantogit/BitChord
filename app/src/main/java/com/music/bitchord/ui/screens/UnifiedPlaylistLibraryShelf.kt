@@ -141,6 +141,7 @@ internal fun UnifiedPlaylistLibraryShelf(
     onNewSmartPlaylist: () -> Unit,
     onOpenSmartPlaylist: (String) -> Unit,
     onOpenCanonicalNormalPlaylist: (String) -> Unit,
+    onAddSongsToCanonicalNormalPlaylist: (String) -> Unit = onOpenCanonicalNormalPlaylist,
     onOpenNormalPlaylist: (ShelfItem) -> Unit,
     onSmartAction: (String, CanonicalCollectionIntent) -> Unit,
     onCanonicalNormalAction: (String, CanonicalCollectionIntent) -> Unit,
@@ -371,6 +372,16 @@ internal fun UnifiedPlaylistLibraryShelf(
                             selected.definition.id, recordingId, intent, false,
                         )
                     is LibraryPlaylistCard.Normal -> Unit
+                }
+            },
+            onAddSongs = {
+                if (selected is LibraryPlaylistCard.CanonicalNormal) {
+                    onAddSongsToCanonicalNormalPlaylist(selected.definition.id)
+                }
+            },
+            onEditRules = {
+                if (selected is LibraryPlaylistCard.Smart) {
+                    onOpenSmartPlaylist(selected.definition.id)
                 }
             },
             contentPadding = contentPadding,
