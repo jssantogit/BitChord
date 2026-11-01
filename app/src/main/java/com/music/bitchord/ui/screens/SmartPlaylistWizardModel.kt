@@ -34,7 +34,9 @@ internal val smartConditionCategories = listOf(
     )),
     SmartConditionCategory("history", "Reprodução e histórico", "Conclusões, pulos e última reprodução", listOf(
         SmartPlaylistRuleField.AUDIBLE_COMPLETIONS, SmartPlaylistRuleField.EARLY_SKIPS,
-        SmartPlaylistRuleField.LATE_SKIPS, SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE,
+        SmartPlaylistRuleField.LATE_SKIPS, SmartPlaylistRuleField.TOTAL_SKIPS,
+        SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE,
+        SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP,
     )),
     SmartConditionCategory("dates", "Datas e lançamentos", "Ano da edição e adição de arquivo local", listOf(
         SmartPlaylistRuleField.RELEASE_YEAR, SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR,
@@ -70,6 +72,8 @@ internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (
     SmartPlaylistRuleField.AUDIBLE_COMPLETIONS -> "Reproduções concluídas"
     SmartPlaylistRuleField.EARLY_SKIPS -> "Pulos antecipados"
     SmartPlaylistRuleField.LATE_SKIPS -> "Pulos tardios"
+    SmartPlaylistRuleField.TOTAL_SKIPS -> "Número de pulos"
+    SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP -> "Dias desde a última pulada"
     SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE -> "Dias desde última reprodução concluída"
     SmartPlaylistRuleField.RELEASE_YEAR -> "Ano de lançamento da edição"
     SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR -> "Ano do lançamento original"
@@ -113,6 +117,10 @@ internal fun smartConditionDescription(field: SmartPlaylistRuleField): String = 
         "Quantidade de vezes em que a música foi pulada no início."
     SmartPlaylistRuleField.LATE_SKIPS ->
         "Quantidade de vezes em que a música foi pulada perto do fim."
+    SmartPlaylistRuleField.TOTAL_SKIPS ->
+        "Soma dos pulos antecipados e tardios registrados neste dispositivo; não inclui interrupções."
+    SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP ->
+        "Dias desde o último pulo antecipado ou tardio registrado neste dispositivo."
     SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE ->
         "Tempo desde a última reprodução concluída registrada."
     SmartPlaylistRuleField.RELEASE_YEAR ->
@@ -165,6 +173,8 @@ internal fun smartConditionSearch(
             SmartPlaylistRuleField.LOCAL_BITRATE_KBPS -> "bitrate kbps qualidade taxa bits áudio"
             SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "capa artwork imagem album"
             SmartPlaylistRuleField.DURATION_MS -> "duracao segundos tempo audio"
+            SmartPlaylistRuleField.TOTAL_SKIPS -> "pulos puladas skips total quantidade"
+            SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP -> "ultima último pulada skip data dias"
             SmartPlaylistRuleField.AUDIBLE_COMPLETIONS -> "plays execucoes escutas"
             SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED -> "adicao dispositivo mediastore"
             else -> ""
@@ -284,6 +294,10 @@ internal fun smartRuleNewComparison(field: SmartPlaylistRuleField): SmartPlaylis
         )
         SmartPlaylistRuleField.RELEASE_GROUP_TYPE -> SmartPlaylistRule.Comparison(
             field, SmartPlaylistRuleOperator.EQUAL, textValue = "",
+        )
+        SmartPlaylistRuleField.TOTAL_SKIPS,
+        SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP -> SmartPlaylistRule.Comparison(
+            field, SmartPlaylistRuleOperator.EQUAL,
         )
         SmartPlaylistRuleField.DISC_NUMBER -> SmartPlaylistRule.Comparison(
             field, SmartPlaylistRuleOperator.EQUAL,
