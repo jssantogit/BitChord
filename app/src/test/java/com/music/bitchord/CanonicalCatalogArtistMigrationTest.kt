@@ -63,6 +63,17 @@ class CanonicalCatalogArtistMigrationTest {
             assertTrue(cursor.moveToFirst())
             assertEquals(1, cursor.getInt(0))
         }
+        // v4→v5 must add nullable per-file tags without fabricating metadata
+        // for assets that were indexed before the migration.
+        sql.query("SELECT localGenre, localBitrateBps FROM catalog_media_asset WHERE id = 'asset-1'").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertTrue(cursor.isNull(0))
+            assertTrue(cursor.isNull(1))
+        }
+        sql.query("PRAGMA user_version").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(5, cursor.getInt(0))
+        }
         sql.query("SELECT COUNT(*) FROM catalog_artist").use { cursor ->
             assertTrue(cursor.moveToFirst())
             assertEquals(0, cursor.getInt(0))
