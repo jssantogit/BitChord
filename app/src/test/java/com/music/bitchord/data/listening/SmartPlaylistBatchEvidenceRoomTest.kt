@@ -373,9 +373,10 @@ class SmartPlaylistBatchEvidenceRoomTest {
         try {
             catalog.catalogDao().upsertRecording(RecordingEntity("rec:skip", "Skip", "Artist", 200_000L))
             var index = 0
+            var nowMs = 1_000_000L
             val playback = RoomListeningEventStore(
                 listening.listeningEventDao(),
-                clock = ListeningClock { 1_000_000L },
+                clock = ListeningClock { nowMs },
                 idGenerator = ListeningIdGenerator { "event-" + (++index) },
             )
             playback.recordPlaybackStarted(PlaybackStart(recordingId = "rec:skip"))
@@ -383,11 +384,13 @@ class SmartPlaylistBatchEvidenceRoomTest {
                 recordingId = "rec:skip", listenedDurationMs = 10_000L,
                 recordingDurationMs = 200_000L, endCause = PlaybackEndCause.NEXT,
             ))
+            nowMs = 2_000_000L
             playback.recordPlaybackStarted(PlaybackStart(recordingId = "rec:skip"))
             playback.recordPlaybackEnded(PlaybackEnd(
                 recordingId = "rec:skip", listenedDurationMs = 100_000L,
                 recordingDurationMs = 200_000L, endCause = PlaybackEndCause.MANUAL_CHANGE,
             ))
+            nowMs = 3_000_000L
             playback.recordPlaybackStarted(PlaybackStart(recordingId = "rec:skip"))
             playback.recordPlaybackEnded(PlaybackEnd(
                 recordingId = "rec:skip", listenedDurationMs = 10_000L,
@@ -399,7 +402,7 @@ class SmartPlaylistBatchEvidenceRoomTest {
             assertEquals(1L, row.earlySkips)
             assertEquals(1L, row.lateSkips)
             assertEquals(2L, row.earlySkips + row.lateSkips)
-            assertEquals(1_000_000L, row.lastSkippedAtEpochMs)
+            assertEquals(2_000_000L, row.lastSkippedAtEpochMs)
             assertEquals(0L, row.audibleCompletions)
         } finally {
             catalog.close()
