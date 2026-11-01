@@ -37,6 +37,7 @@ internal fun smartPlaylistEvidenceChanges(
         "musicbrainz_release_enrichment",
         "catalog_external_identity", // Release dates depend on a verified MusicBrainz alias.
         "catalog_media_asset",
+        "catalog_media_asset_tags", // Async file-tag enrichment refreshes live previews.
         "catalog_remote_rating_evidence",
         "catalog_remote_rating_coverage",
     ),
