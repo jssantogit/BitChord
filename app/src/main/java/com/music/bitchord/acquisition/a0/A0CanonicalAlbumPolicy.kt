@@ -72,7 +72,14 @@ internal object A0CanonicalAlbumPolicy {
         // evidence of an exact edition or acoustic master.
         val singleDescriptor = claim.source == ClaimSource.DIRECTORY_HINT &&
             observed == "$expected single"
-        if (observed != expected && !singleDescriptor) {
+        // "ILLIT - BREAK EVEN" names the exact requested artist and album,
+        // without year, codec, alternate edition or other extra labels.
+        // It is the same UNVERIFIED hint as a plain "BREAK EVEN" folder,
+        // never an authenticated release/master identity.
+        val artist=normalize(target.expectedArtist)
+        val exactArtistAlbum=claim.source == ClaimSource.DIRECTORY_HINT &&
+            artist.isNotEmpty() && observed == "$artist $expected"
+        if (observed != expected && !singleDescriptor && !exactArtistAlbum) {
             // A peer's folder often combines artist, release, year and codec,
             // e.g. "ILLIT - BREAK EVEN [FLAC]". Exact album matching must
             // remain STRICT, but the composite hint cannot prove a conflict.
