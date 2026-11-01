@@ -142,10 +142,10 @@ internal fun shouldConfirmReplacingDraft(
 ): Boolean = editing || name.isNotBlank() || description.isNotBlank() ||
     coverUri != null || selectedCount > 0 || hasConfiguredRules
 
-private enum class FilterEditorDestination { EDIT_FILTER, CREATE_PLAYLIST }
-private data class PendingFilterNavigation(
-    val filterId: String,
-    val destination: FilterEditorDestination,
+private enum class EditorDestination { EDIT_FILTER, CREATE_FROM_FILTER, EDIT_SMART, COPY_CLASSIC }
+private data class PendingEditorNavigation(
+    val id: String,
+    val destination: EditorDestination,
 )
 
 private enum class SmartPlaylistManageTab { PLAYLISTS, FILTERS, CLASSIC }
@@ -260,7 +260,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     var showWizard by remember { mutableStateOf(true) }
     var manageTab by remember { mutableStateOf(SmartPlaylistManageTab.PLAYLISTS) }
     var pendingDeletion by remember { mutableStateOf<PendingSmartDeletion?>(null) }
-    var pendingFilterNavigation by remember { mutableStateOf<PendingFilterNavigation?>(null) }
+    var pendingEditorNavigation by remember { mutableStateOf<PendingEditorNavigation?>(null) }
     // Selecting a different library section starts at its own heading,
     // instead of inheriting the prior tab's last LazyColumn scroll index.
     val manageListState = remember(manageTab) { LazyListState() }
@@ -324,24 +324,64 @@ internal fun SmartPlaylistV2BuilderScreen(
         error = null
     }
 
-    fun openFilterDestination(target: PendingFilterNavigation) {
-        val filter = savedFilters.firstOrNull { it.id == target.filterId }
-        if (filter == null) {
-            error = "Filtro não encontrado. Atualize a lista de filtros."
-            return
-        }
+    fun openEditorDestination(target: PendingEditorNavigation) {
         when (target.destination) {
-            FilterEditorDestination.EDIT_FILTER -> {
+            EditorDestination.EDIT_FILTER -> {
+                val filter = savedFilters.firstOrNull { it.id == target.id }
+                if (filter == null) {
+                    error = "Filtro não encontrado. Atualize a lista de filtros."
+                    return
+                }
                 reset()
                 editingFilterId = filter.id
                 name = filter.name
                 rule = filter.rules
                 hasConfiguredRules = true
             }
-            FilterEditorDestination.CREATE_PLAYLIST -> {
+            EditorDestination.CREATE_FROM_FILTER -> {
+                val filter = savedFilters.firstOrNull { it.id == target.id }
+                if (filter == null) {
+                    error = "Filtro não encontrado. Atualize a lista de filtros."
+                    return
+                }
                 val copy = filter.toPlaylistCopy(UUID.randomUUID().toString(), filter.name)
                 reset()
                 name = copy.name
+                rule = copy.query.rules
+                hasConfiguredRules = true
+                sort = copy.query.sort
+                limit = copy.query.limit.toString()
+                seed = copy.query.randomSeed.toString()
+            }
+            EditorDestination.EDIT_SMART -> {
+                val item = saved.firstOrNull { it.id == target.id }
+                if (item == null) {
+                    error = "Playlist inteligente não encontrada."
+                    return
+                }
+                // Clear any canonical normal playlist mode before opening a V2 definition.
+                reset()
+                editingId = item.id
+                name = item.name
+                description = item.description
+                coverUri = item.coverUri
+                rule = item.query.rules
+                hasConfiguredRules = true
+                sort = item.query.sort
+                limit = item.query.limit.toString()
+                seed = item.query.randomSeed.toString()
+            }
+            EditorDestination.COPY_CLASSIC -> {
+                val original = legacySaved.firstOrNull { it.id == target.id }
+                if (original == null) {
+                    error = "Playlist clássica não encontrada."
+                    return
+                }
+                val copy = original.toV2Copy(UUID.randomUUID().toString())
+                reset()
+                // A new copy is a creation, not an edit of a non-existent ID.
+                name = copy.name
+                description = copy.description
                 rule = copy.query.rules
                 hasConfiguredRules = true
                 sort = copy.query.sort
@@ -352,7 +392,7 @@ internal fun SmartPlaylistV2BuilderScreen(
         showWizard = true
     }
 
-    fun requestFilterDestination(target: PendingFilterNavigation) {
+    fun requestEditorDestination(target: PendingEditorNavigation) {
         if (shouldConfirmReplacingDraft(
             editing = shouldOpenPlaylistAsEdit(
                 initialPlaylistId, initialNormalPlaylistId, editorEpoch,
@@ -364,9 +404,9 @@ internal fun SmartPlaylistV2BuilderScreen(
             selectedCount = normalSelectedIds.size,
             hasConfiguredRules = hasConfiguredRules,
         )) {
-            pendingFilterNavigation = target
+            pendingEditorNavigation = target
         } else {
-            openFilterDestination(target)
+            openEditorDestination(target)
         }
     }
 
@@ -994,13 +1034,13 @@ internal fun SmartPlaylistV2BuilderScreen(
                                     }
                                 }
                                 "Editar filtro" -> {
-                                    requestFilterDestination(PendingFilterNavigation(
-                                        filter.id, FilterEditorDestination.EDIT_FILTER,
+                                    requestEditorDestination(PendingEditorNavigation(
+                                        filter.id, EditorDestination.EDIT_FILTER,
                                     ))
                                 }
                                 "Criar playlist com este filtro" -> {
-                                    requestFilterDestination(PendingFilterNavigation(
-                                        filter.id, FilterEditorDestination.CREATE_PLAYLIST,
+                                    requestEditorDestination(PendingEditorNavigation(
+                                        filter.id, EditorDestination.CREATE_FROM_FILTER,
                                     ))
                                 }
                                 "Excluir filtro" -> {
@@ -1035,21 +1075,9 @@ internal fun SmartPlaylistV2BuilderScreen(
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             TextButton(onClick = {
-                                showWizard = true
-                                editorEpoch++
-                                editingId = item.id
-                                editingFilterId = null
-                                name = item.name
-                                description = item.description
-                                coverUri = item.coverUri
-                                rule = item.query.rules
-                            hasConfiguredRules = true
-                                sort = item.query.sort
-                                limit = item.query.limit.toString()
-                                seed = item.query.randomSeed.toString()
-                                preview = null
-                                previewQuery = null
-                                error = null
+                                requestEditorDestination(PendingEditorNavigation(
+                                    item.id, EditorDestination.EDIT_SMART,
+                                ))
                             }, enabled = !loading) { Text("Editar") }
                             RowMoreButton(
                                 onClick = { more = true },
@@ -1100,21 +1128,9 @@ internal fun SmartPlaylistV2BuilderScreen(
                     Text(original.name, modifier = Modifier.weight(1f).padding(top = 12.dp))
                     TextButton(
                         onClick = {
-                            val copy = original.toV2Copy(UUID.randomUUID().toString())
-                            showWizard = true
-                            editorEpoch++
-                            editingId = copy.id
-                            editingFilterId = null
-                            name = copy.name
-                            description = copy.description
-                            rule = copy.query.rules
-                            hasConfiguredRules = true
-                            sort = copy.query.sort
-                            limit = copy.query.limit.toString()
-                            seed = copy.query.randomSeed.toString()
-                            preview = null
-                            previewQuery = null
-                            error = null
+                            requestEditorDestination(PendingEditorNavigation(
+                                original.id, EditorDestination.COPY_CLASSIC,
+                            ))
                         },
                         enabled = !loading,
                     ) { Text("Converter cópia") }
@@ -1158,8 +1174,8 @@ internal fun SmartPlaylistV2BuilderScreen(
             )
         }
 
-        pendingFilterNavigation?.let { pending ->
-            BackHandler { pendingFilterNavigation = null }
+        pendingEditorNavigation?.let { pending ->
+            BackHandler { pendingEditorNavigation = null }
             ConfirmationAlert(
                 hazeState = null,
                 title = "Descartar alterações?",
@@ -1168,10 +1184,10 @@ internal fun SmartPlaylistV2BuilderScreen(
                 dismissLabel = "Continuar editando",
                 destructive = true,
                 onConfirm = {
-                    pendingFilterNavigation = null
-                    openFilterDestination(pending)
+                    pendingEditorNavigation = null
+                    openEditorDestination(pending)
                 },
-                onDismiss = { pendingFilterNavigation = null },
+                onDismiss = { pendingEditorNavigation = null },
             )
         }
     }
