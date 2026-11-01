@@ -68,6 +68,29 @@ class SmartPlaylistV2WizardComposeTest {
         assertEquals(pages[0], suggestedCanonicalPlaylistTracks(rows, emptySet(), 0, shuffleSeed = 42L))
     }
 
+    @Test fun suggestionsDoNotImmediatelyRepeatAcrossRandomCycleBoundaries() {
+        val rows = (1..24).map { index ->
+            V2DisplayRow(id = "recording-$index", title = "Faixa $index", artist = "Artista")
+        }
+        // 24 candidates: four full groups and one four-track final group.
+        // The last four songs must not immediately reappear on the next refresh.
+        for (seed in 0L..20L) {
+            val last = suggestedCanonicalPlaylistTracks(rows, emptySet(), 4, seed)
+                .map { it.id }.toSet()
+            val next = suggestedCanonicalPlaylistTracks(rows, emptySet(), 5, seed)
+                .map { it.id }.toSet()
+            assertEquals(emptySet<String>(), last.intersect(next))
+        }
+        val small = rows.take(6)
+        for (seed in 0L..20L) {
+            val last = suggestedCanonicalPlaylistTracks(small, emptySet(), 1, seed)
+                .map { it.id }.toSet()
+            val next = suggestedCanonicalPlaylistTracks(small, emptySet(), 2, seed)
+                .map { it.id }.toSet()
+            assertEquals(emptySet<String>(), last.intersect(next))
+        }
+    }
+
     @Test fun localGenreAsksForTextRatherThanSilentPresence() {
         val comparison = smartRuleNewComparison(SmartPlaylistRuleField.LOCAL_GENRE)
         assertEquals(SmartPlaylistRuleOperator.CONTAINS, comparison.operator)
