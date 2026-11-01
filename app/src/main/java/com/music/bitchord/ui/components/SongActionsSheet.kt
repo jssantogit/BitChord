@@ -524,6 +524,7 @@ internal fun ActionRow(
     tint: Color? = null,
     accent: Color = MaterialTheme.colorScheme.primary,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val menu = LocalActionRowStyle.current == ActionRowStyle.Menu
@@ -543,6 +544,7 @@ internal fun ActionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = enabled, onClick = onClick)
+            .then(modifier)
             .then(
                 if (menu) {
                     Modifier.heightIn(min = 46.dp).padding(horizontal = 18.dp, vertical = 11.dp)
