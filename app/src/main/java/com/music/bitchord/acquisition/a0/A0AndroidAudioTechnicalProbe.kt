@@ -57,6 +57,15 @@ internal object A0AndroidAudioTechnicalProbe {
         var timelineVerdict:A0FlacTimelineRecoveryPolicy.Verdict?=null
         var fixedFlacBlockAvailable=false
         var flacTotalSampleCountAvailable=false
+        var checkedFlacPackets=0
+        var flacCoveragePermille=-1
+        var flacFrameProblem:A0FlacFrameSequenceEvidence.Problem?=null
+        var flacPacketFault:A0FlacEncodedFrameEvidence.Fault?=null
+        var flacHeaderCrcFailures=0
+        var flacFooterCrcFailures=0
+        var flatPtsPackets=0
+        var zeroPtsPackets=0
+        var finalPtsMillis=-1L
         var termination:A0ProbeTermination.Reason?=null
         var fault:A0AcquisitionDiagnostics.Fault?=null
     }
@@ -72,6 +81,15 @@ internal object A0AndroidAudioTechnicalProbe {
                     " reset_events=${m.resetEvents.coerceIn(0,400000)}" +
                     " flac_fixed_block=${m.fixedFlacBlockAvailable}" +
                     " flac_total_samples=${m.flacTotalSampleCountAvailable}" +
+                    " flac_frame_packets=${m.checkedFlacPackets.coerceIn(0,400000)}" +
+                    " flac_pcm_coverage_pm=${m.flacCoveragePermille.coerceIn(-1,1000)}" +
+                    " flac_frame_problem=${m.flacFrameProblem?.name ?: "NONE"}" +
+                    " flac_packet_fault=${m.flacPacketFault?.name ?: "NONE"}" +
+                    " flac_header_crc_errors=${m.flacHeaderCrcFailures.coerceIn(0,400000)}" +
+                    " flac_footer_crc_errors=${m.flacFooterCrcFailures.coerceIn(0,400000)}" +
+                    " pts_flat=${m.flatPtsPackets.coerceIn(0,400000)}" +
+                    " pts_zero=${m.zeroPtsPackets.coerceIn(0,400000)}" +
+                    " pts_final_ms=${m.finalPtsMillis.coerceIn(-1L,7200000L)}" +
                     " timeline=${m.timelineVerdict?.name ?: "NONE"}" +
                     " end_gap_ms=${m.endGapMillis.coerceIn(-1L,7200000L)}" +
                     " termination=${m.termination?.name ?: "NONE"}" +
@@ -216,6 +234,8 @@ internal object A0AndroidAudioTechnicalProbe {
             var toleratedTimestampBacksteps=0
             var largeFlacTimestampResets=0
             var maximumFlacResetMillis=0L
+            val flacFrames=A0FlacFrameSequenceEvidence()
+            var firstFlacPacketFault:A0FlacEncodedFrameEvidence.Fault?=null
             var reachedEos=false
             while(samples<MAX_SAMPLES &&
                 SystemClock.elapsedRealtime()<endBy &&
@@ -254,8 +274,27 @@ internal object A0AndroidAudioTechnicalProbe {
                 }
                 if(reportedTrack!=audioIndex)
                     return denied(Failure.WRONG_SAMPLE_TRACK,metrics)
-                val timestamp=extractor.sampleTime
                 val flac=header.codec==A0CanonicalAcquisitionIntent.Codec.FLAC
+                // MediaExtractor packets are NOT assumed equal to FLAC
+                // frames. Independently check frame header CRC, footer
+                // CRC, block size and numbering if the packet contains a
+                // single whole encoded FLAC frame. Other packet layouts
+                // remain review-only until explicitly supported.
+                val fixedBlock=header.flacBlockSize
+                val totalPcm=header.flacTotalSamples
+                if(flac && fixedBlock!=null && totalPcm!=null &&
+                    flacFrames.problem==A0FlacFrameSequenceEvidence.Problem.NONE) {
+                    val inspected=A0FlacEncodedFrameEvidence.inspect(input,amount)
+                    if(firstFlacPacketFault==null &&
+                        inspected.fault!=A0FlacEncodedFrameEvidence.Fault.NONE)
+                        firstFlacPacketFault=inspected.fault
+                    flacFrames.observe(inspected,fixedBlock,fixedBlock,totalPcm)
+                }
+                val timestamp=extractor.sampleTime
+                if(timestamp==0L)metrics.zeroPtsPackets++
+                if(previousUs>=0 && timestamp==previousUs)
+                    metrics.flatPtsPackets++
+                metrics.finalPtsMillis=timestamp/1000L
                 // Compare adjacent presentations, NOT with the highest
                 // timestamp: after a device reset, subsequent increasing
                 // samples must not each count as another regression.
@@ -292,6 +331,16 @@ internal object A0AndroidAudioTechnicalProbe {
                 }
             }
             metrics.samples=samples
+            metrics.checkedFlacPackets=flacFrames.packets
+            metrics.flacFrameProblem=flacFrames.problem
+            metrics.flacPacketFault=firstFlacPacketFault
+            metrics.flacHeaderCrcFailures=flacFrames.headerCrcFailures
+            metrics.flacFooterCrcFailures=flacFrames.footerCrcFailures
+            val flacTotal=header.flacTotalSamples
+            if(flacTotal!=null && flacTotal>0)
+                metrics.flacCoveragePermille=
+                    ((flacFrames.pcmSamples*1000L/flacTotal)
+                        .coerceIn(0,1000)).toInt()
             metrics.step=Step.FINAL
             metrics.endGapMillis=if(lastUs>=0)
                 abs(duration-lastUs/1000L) else -1L
@@ -302,7 +351,9 @@ internal object A0AndroidAudioTechnicalProbe {
                 totalPcmSamples=header.flacTotalSamples,
                 sampleRateHz=header.sampleRateHz,
                 durationMillis=duration,
-                positiveDemuxPackets=samples,
+                frameProblem=flacFrames.problem,
+                frameSamples=flacFrames.pcmSamples,
+                frameCount=flacFrames.packets,
                 demuxedBytes=bytes,
                 fileBytes=size)
             metrics.timelineVerdict=timeline
@@ -310,7 +361,7 @@ internal object A0AndroidAudioTechnicalProbe {
             // strict EOS, full packet count, encoded bytes and duration
             // corroboration are required before discarding broken PTS.
             val recoveryAllowed=timeline==
-                A0FlacTimelineRecoveryPolicy.Verdict.VERIFIED_FIXED_BLOCK_COUNT
+                A0FlacTimelineRecoveryPolicy.Verdict.VERIFIED_ENCODED_FRAME_SEQUENCE
             if(largeFlacTimestampResets>0 && !recoveryAllowed)
                 return denied(Failure.FLAC_TIMELINE_UNVERIFIED,metrics)
             val endTimestamp=if(recoveryAllowed)duration*1000L else lastUs
@@ -328,7 +379,7 @@ internal object A0AndroidAudioTechnicalProbe {
             if(recoveryAllowed)
                 runCatching {
                     Log.d("BitChord",
-                        "soulseek_audio_probe accepted=FLAC_STREAMINFO_RECONCILED" +
+                        "soulseek_audio_probe accepted=FLAC_CRC_FRAME_SEQUENCE_RECONCILED" +
                             " reset_events=${metrics.resetEvents}" +
                             " samples=${samples.coerceIn(0,400000)}" +
                             " scope=$traceScope")
