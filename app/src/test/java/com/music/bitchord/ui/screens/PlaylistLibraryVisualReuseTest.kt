@@ -73,7 +73,7 @@ class PlaylistLibraryVisualReuseTest {
                 onBack = { backs++ },
             )
         }
-        compose.onNodeWithText("Filtros reutilizáveis").assertExists()
+        compose.onNodeWithText("Gerenciar coleções").assertExists()
         compose.onNodeWithText("Clássicas").performClick()
         compose.onNodeWithContentDescription(
             org.robolectric.RuntimeEnvironment.getApplication()
@@ -83,6 +83,21 @@ class PlaylistLibraryVisualReuseTest {
             assertEquals(2, page)
             assertEquals(1, backs)
         }
+    }
+
+    @Test fun localRecentSnapshotRestoresBothModesWithoutRepeatedQueries() {
+        RecentLocalAdditionsSnapshot.clear()
+        assertEquals(null, RecentLocalAdditionsSnapshot.get(false))
+        assertEquals(null, RecentLocalAdditionsSnapshot.get(true))
+        val first = listOf(V2DisplayRow("recording-a", "A", "Artista"))
+        RecentLocalAdditionsSnapshot.put(false, first)
+        assertEquals(first, RecentLocalAdditionsSnapshot.get(false))
+        assertEquals(null, RecentLocalAdditionsSnapshot.get(true))
+        val all = (1..12).map { V2DisplayRow("recording-$it", "Faixa $it", "Artista") }
+        RecentLocalAdditionsSnapshot.put(true, all)
+        assertEquals(all, RecentLocalAdditionsSnapshot.get(true))
+        assertEquals(all.take(6), RecentLocalAdditionsSnapshot.get(false))
+        RecentLocalAdditionsSnapshot.clear()
     }
 
     @Test fun playlistLibrarySearchAndSortWorkOnActualLibraryCardIdentity() {
