@@ -241,7 +241,7 @@ internal class A0FreshAutoSearchTransport(
             // Unlike the manual path, the authenticated server socket is
             // NEVER handed to P/F; still drain readers before taking a
             // complete immutable snapshot of observations.
-            val joined=runCatching {
+            val readerJoined=runCatching {
                 A0SearchReaderHandoff.stop(
                     executor,
                     closeSearchSockets={
@@ -249,18 +249,36 @@ internal class A0FreshAutoSearchTransport(
                         directCollector.closeSockets()
                         activePeers.toList().forEach {runCatching{it.close()}}
                     },timeoutMillis=5000)
-                directCollector.stop(4500) && peerWorkers.stop(4500)
+                true
             }.getOrDefault(false)
+            // Always join BOTH peer pools: short-circuiting on a slow direct
+            // pool used to skip indirect cleanup and strand the next slots.
+            val directJoined=directCollector.stop(4500)
+            val indirectJoined=peerWorkers.stop(4500)
+            val joined=readerJoined && directJoined && indirectJoined
             if(!joined || readerFailed.get() || stopped()) {
+                val revoked=stopped()
+                val peerStats=peerWorkers.snapshot()
+                val directStats=directCollector.workerSnapshot()
                 A0AcquisitionDiagnostics.emit(traceScope,
                     A0AcquisitionDiagnostics.Phase.SEARCH_STOP,
-                    reason=if(stopped()) A0AcquisitionDiagnostics.Fault.CANCELLED
+                    reason=if(revoked) A0AcquisitionDiagnostics.Fault.CANCELLED
                         else A0AcquisitionDiagnostics.Fault.STATE,
                     elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart)
                 Log.d("BitChord","soulseek_auto_search stopped " +
-                    "joined=$joined readerFailed=${readerFailed.get()} " +
-                    "revoked=${stopped()}")
-                return A0AutoDiscoveryCoordinator.SearchResult.Stop
+                    "joined=$joined reader_joined=$readerJoined " +
+                    "direct_joined=$directJoined indirect_joined=$indirectJoined" +
+                    " direct_active=${directStats.activeNow.coerceIn(0,12)}" +
+                    " direct_queued=${directStats.queuedNow.coerceIn(0,128)}" +
+                    " indirect_active=${peerStats.activeNow.coerceIn(0,12)}" +
+                    " indirect_queued=${peerStats.queuedNow.coerceIn(0,128)}" +
+                    " readerFailed=${readerFailed.get()} revoked=$revoked")
+                // Failed peer-pool drain is not necessarily a protocol or
+                // account failure. Discard its incomplete snapshot while
+                // allowing other slots to start a FRESH authenticated search.
+                return if(!joined && !readerFailed.get() && !revoked)
+                    A0AutoDiscoveryCoordinator.SearchResult.TeardownIncomplete
+                else A0AutoDiscoveryCoordinator.SearchResult.Stop
             }
             holder.markReadersStopped()
             val snapshot=holder.releaseShadowSnapshot()
