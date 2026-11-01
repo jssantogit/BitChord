@@ -79,9 +79,16 @@ class A0AutoDiscoveryCoordinatorTest {
             A0AutoDiscoveryCoordinator.SearchResult.Found(claims(entries))
         }
         val done=mutableListOf<String>()
+        val actions=mutableListOf<A0AutoDiscoveryCoordinator.CacheAction>()
         val result=A0AutoDiscoveryCoordinator(search,batch(done)).run(
             entries,quality,userRequested=true,optedIn=true,
-            isCancelled={false},stillAuthorized={true})
+            isCancelled={false},stillAuthorized={true},
+            onCacheEvidence={_,evidence -> actions.add(evidence.action)})
+        assertEquals(listOf(
+            A0AutoDiscoveryCoordinator.CacheAction.SEARCH_REQUIRED,
+            A0AutoDiscoveryCoordinator.CacheAction.REUSED,
+            A0AutoDiscoveryCoordinator.CacheAction.REUSED,
+            A0AutoDiscoveryCoordinator.CacheAction.REUSED),actions)
         assertEquals(1,result.searches)
         assertEquals(listOf("one"),search.requests)
         assertEquals(4,result.batch.published)
