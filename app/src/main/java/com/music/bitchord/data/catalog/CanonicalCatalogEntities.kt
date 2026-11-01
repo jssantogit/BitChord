@@ -134,6 +134,26 @@ data class MediaAssetEntity(
 )
 
 /**
+ * Provider-owned OpenSubsonic tags, never Recording-wide truth. NULL means the
+ * server did not advertise this field; "[]" means explicitly supported but empty.
+ * Cascade removal prevents deleted account assets leaving stale tag evidence.
+ */
+@Entity(
+    tableName = "catalog_media_asset_tags",
+    foreignKeys = [ForeignKey(
+        entity = MediaAssetEntity::class,
+        parentColumns = ["id"],
+        childColumns = ["mediaAssetId"],
+        onDelete = ForeignKey.CASCADE,
+    )],
+)
+data class MediaAssetTagsEntity(
+    @androidx.room.PrimaryKey val mediaAssetId: String,
+    val genresJson: String?,
+    val moodsJson: String?,
+)
+
+/**
  * Provider/native identifiers are aliases of our entities, never their primary
  * keys. `entityId` is intentionally polymorphic in v1, so it cannot carry a
  * Room foreign key until identity tables are split by canonical entity type.
