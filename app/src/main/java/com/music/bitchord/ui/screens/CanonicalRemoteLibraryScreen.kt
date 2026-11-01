@@ -189,10 +189,18 @@ internal fun CanonicalRemoteLibraryScreen(
         }
     }
     val selected = filters.firstOrNull { it.id == selectedFilterId }
+    // Genre/mood metadata may change while Recording display rows stay equal.
+    // Listen to the tags table directly; all reads still use provider-scoped SQL.
+    val tagEvidenceRevision by produceState(initialValue = 0L, key1 = catalogDb) {
+        catalogDb.invalidationTracker.createFlow("catalog_media_asset_tags").collect {
+            value += 1L
+        }
+    }
     val filteredState by produceState<CanonicalSongFilterState>(
         initialValue = CanonicalSongFilterState.Loading,
         key1 = library.tracks, key2 = selectedFilterId,
         key3 = Triple(selectedContext, selected, filtersUnavailable),
+        key4 = tagEvidenceRevision,
     ) {
         value = try {
             when {
