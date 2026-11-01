@@ -11,6 +11,9 @@ internal class A0AutoRetrySequencer(
     alternativeCount:Int,
     private val optIn:Boolean=false,
     private val equivalentClaimsConfirmed:Boolean=false,
+    /** Also permits exact-score individually validated alternatives, but ONLY
+     * when the transport explicitly returned pre-acceptance retryable. */
+    private val independentlyEligibleExactScore:Boolean=false,
 ) {
     init { require(alternativeCount in 0..3) }
     private val alternatives=alternativeCount
@@ -34,8 +37,9 @@ internal class A0AutoRetrySequencer(
 
     @Synchronized
     fun begin():Attempt? {
-        if(!optIn || !equivalentClaimsConfirmed || cancelled || succeeded ||
-            inFlight!=null || attempted>=alternatives)return null
+        if(!optIn || !(equivalentClaimsConfirmed || independentlyEligibleExactScore) ||
+            cancelled || succeeded || inFlight!=null ||
+            attempted>=alternatives)return null
         val attempt=Attempt(attempted,++serial)
         inFlight=attempt
         attempted++
