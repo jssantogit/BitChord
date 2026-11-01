@@ -34,6 +34,8 @@ internal data class CanonicalAvailableRecordingTags(
     val genreEvidenceUnknown: Boolean = true,
     val moods: List<String> = emptyList(),
     val moodEvidenceUnknown: Boolean = true,
+    val styles: List<String> = emptyList(),
+    val styleEvidenceUnknown: Boolean = true,
     val bpms: List<Double> = emptyList(),
     val bpmEvidenceUnknown: Boolean = true,
 )
@@ -145,9 +147,11 @@ internal class CanonicalLibraryAvailabilityRepository(
         data class MutableTagEvidence(
             val genres: MutableSet<String> = linkedSetOf(),
             val moods: MutableSet<String> = linkedSetOf(),
+            val styles: MutableSet<String> = linkedSetOf(),
             val bpms: MutableSet<Double> = linkedSetOf(),
             var genreUnknown: Boolean = false,
             var moodUnknown: Boolean = false,
+            var styleUnknown: Boolean = false,
             var bpmUnknown: Boolean = false,
             var hasAsset: Boolean = false,
         )
@@ -159,9 +163,11 @@ internal class CanonicalLibraryAvailabilityRepository(
                     target.hasAsset = true
                     val genres = parseAvailableTagList(row.genresJson)
                     val moods = parseAvailableTagList(row.moodsJson)
+                    val styles = parseAvailableTagList(row.stylesJson)
                     val bpms = parseAvailableBpms(row.bpmsJson)
                     if (genres == null) target.genreUnknown = true else target.genres.addAll(genres)
                     if (moods == null) target.moodUnknown = true else target.moods.addAll(moods)
+                    if (styles == null) target.styleUnknown = true else target.styles.addAll(styles)
                     if (bpms == null) target.bpmUnknown = true else target.bpms.addAll(bpms)
                 }
             }
@@ -174,6 +180,8 @@ internal class CanonicalLibraryAvailabilityRepository(
                 moods = value.moods.toList(),
                 genreEvidenceUnknown = !value.hasAsset || value.genreUnknown,
                 moodEvidenceUnknown = !value.hasAsset || value.moodUnknown,
+                styles = value.styles.toList(),
+                styleEvidenceUnknown = !value.hasAsset || value.styleUnknown,
                 bpms = value.bpms.toList(),
                 bpmEvidenceUnknown = !value.hasAsset || value.bpmUnknown,
             )
