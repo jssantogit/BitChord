@@ -44,12 +44,12 @@ internal object A0ManualReviewCandidatePolicy {
                 declaredDurationSeconds=claim.durationSeconds,
                 expectedDurationSeconds=entry.durationSeconds,
                 declaredSampleRateHz=claim.sampleRateHz,
-                declaredBitDepth=claim.bitDepth,sizeBytes=claim.sizeBytes)
+                declaredBitDepth=claim.bitDepth,sizeBytes=claim.sizeBytes,
+                expectedAlbum=entry.album)
             if(rank.match!=A0CandidateRank.Match.ALL_TERMS ||
                 rank.score<65 ||
                 A0CandidateRank.Warning.ARTIST_CONFLICT in rank.warnings ||
                 A0CandidateRank.Warning.VERSION_MISMATCH in rank.warnings ||
-                A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in rank.warnings ||
                 !A0AutoTransportAdmission.accepts(choice))
                 return@mapNotNull null
             val risk=A0CandidatePreflight.assess(entry.query,rank,
