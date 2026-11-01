@@ -398,6 +398,8 @@ class SmartPlaylistBatchEvidenceRoomTest {
             ).read(listOf("rec:skip")).single()
             assertEquals(1L, row.earlySkips)
             assertEquals(1L, row.lateSkips)
+            assertEquals(2L, row.earlySkips + row.lateSkips)
+            assertEquals(1_000_000L, row.lastSkippedAtEpochMs)
             assertEquals(0L, row.audibleCompletions)
         } finally {
             catalog.close()
