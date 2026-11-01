@@ -274,3 +274,13 @@ Não afirmar que o APK está pronto até o workflow e o upload concluírem.
 - Gerenciador de filtros: Editar, Play/Fila, editor clássico, converter cópia, seleção de filtros inteligentes e normais, todos com botões neutros e sem sobreposições.
 
 **Restrições:** não realizar merge de #202/#193, não alterar main, não produzir release, não encerrar issues. O APK só deve ser tratado como disponível depois da conclusão SUCCESS e upload do artifact.
+
+## 01/11/2026 — Smoke da integração funcional PR #202/#193 (Catalog Room v12)
+
+O pedido atual de **concluir as pendências de Playlists** inclui avançar nos gates técnicos e na preparação do teste Android; este registro permite **somente** o APK `devDebug` da PR draft #202, sem merge, release pública ou fechamento da issue.
+
+Código integrado `fcc8f5a3616b41955d2d242a7134ba7e527a4ed1` aprovado em [Android CI #41331462239](https://github.com/jssantogit/BitChord/actions/runs/41331462239) (`completed / SUCCESS`). A presente revisão é **documental**, limitada à matriz de evidência e a este marcador. O workflow de APK repete testes e compila `:app:assembleDevDebug` antes de publicar o ZIP.
+
+No Galaxy A54, testar principalmente: instalar sobre versão com Catalog Room v11 e reabrir garantindo migração v11→v12 sem perda; confirmar `LOCAL_FOLDER`, `LOCAL_FILE_PATH`, extensões, gênero e bitrate em MediaStore real (incluindo `ILLIT` versus `ILLIT-Backup`, caminho ausente e negação); fonte remota nunca herda metadados locais; criar, editar, salvar, reaplicar, combinar E/OU e excluir filtros; playlist normal vazia e sugestões, arte persistida, editar smart com referência, Play e Fila com revalidação de conta e até 500 itens. Capturar diagnóstico de qualquer falha.
+
+**Limite explícito:** a build e o smoke não certificam paridade integral com Symfonium; os critérios externos ainda sem proveniência canônica continuam pendentes. Não mesclar #193/#202 nem encerrar #192 somente porque o APK compilou.
