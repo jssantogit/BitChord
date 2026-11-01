@@ -45,6 +45,19 @@ class A0FlacWholeFileEvidenceTest {
         assertEquals(3,r.frames)
         assertEquals(560L,r.pcmSamples)
     }
+    @Test fun embeddedChecksumValidSyncInAudioPayloadIsNotARealFrameBoundary() {
+        // The first CRC-valid encoded frame contains a header-shaped byte
+        // pattern with a genuine header CRC8 inside its payload. The
+        // outer frame CRC16 remains valid; only a frame-boundary CRC16==0
+        // may turn a header candidate into a new frame.
+        val withEmbeddedHeader=bytes(
+            "fff81408002b00fff81408012c0000d228")
+        val result=check(stream(withEmbeddedHeader,frames[1],frames[2]))
+        assertEquals(A0FlacWholeFileEvidence.Status.VERIFIED,result.status)
+        assertEquals(3,result.frames)
+        assertEquals(560L,result.pcmSamples)
+    }
+
     @Test fun truncatedFileAndAlteredFrameDataNeverApprove() {
         val valid=stream(*frames.toTypedArray())
         assertNotEquals(A0FlacWholeFileEvidence.Status.VERIFIED,
