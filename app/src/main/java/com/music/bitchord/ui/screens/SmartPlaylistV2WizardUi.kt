@@ -96,6 +96,13 @@ import org.jetbrains.compose.resources.stringResource
 // Respect DESIGN.md: SF Pro Display and semantic ColorScheme from BitChordTheme,
 // the shared 16.dp PAGE_GUTTER, and locally rounded neutral cards.
 // Do not invent new global color or shape tokens for this flow.
+/** Shared singular/plural copy for the editor and saved-filter manager. */
+internal fun smartConditionCountLabel(count: Int, configured: Boolean = false): String {
+    val label = "$count ${if (count == 1) "condição" else "condições"}"
+    return if (configured) "$label ${if (count == 1) "configurada" else "configuradas"}"
+    else label
+}
+
 private enum class WizardStep { IDENTITY, EDIT, SONGS, RULES, GROUP, CATEGORIES, FIELDS, EDITOR, REVIEW }
 
 private fun operatorUiLabel(operator: SmartPlaylistRuleOperator): String = when (operator) {
@@ -533,7 +540,7 @@ internal fun SmartPlaylistV2WizardUi(
                                     title = if (normalMode) "Editar músicas" else "Editar regras",
                                     subtitle = if (normalMode)
                                         "${normalSelectedIds.size} músicas selecionadas"
-                                    else "${smartRuleLeafCount(rule)} condições configuradas",
+                                    else smartConditionCountLabel(smartRuleLeafCount(rule), configured = true),
                                     onClick = {
                                         page = if (normalMode) WizardStep.SONGS else WizardStep.RULES
                                     },
@@ -814,7 +821,7 @@ internal fun SmartPlaylistV2WizardUi(
                                     page = WizardStep.GROUP
                                 },
                             ) {
-                                Text("${smartRuleLeafCount(child)} condição(ões)",
+                                Text(smartConditionCountLabel(smartRuleLeafCount(child)),
                                     style = MaterialTheme.typography.labelMedium)
                             }
                         }
