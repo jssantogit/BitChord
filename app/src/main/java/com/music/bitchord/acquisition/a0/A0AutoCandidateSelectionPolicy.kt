@@ -198,7 +198,8 @@ internal object A0AutoCandidateSelectionPolicy {
                 expectedDurationSeconds=expected,
                 declaredSampleRateHz=claim.sampleRateHz,
                 declaredBitDepth=claim.bitDepth,
-                sizeBytes=claim.sizeBytes
+                sizeBytes=claim.sizeBytes,
+                expectedAlbum=target.album
             )
             if(ranked.match!=A0CandidateRank.Match.ALL_TERMS ||
                 ranked.score<65 ||
