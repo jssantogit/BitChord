@@ -135,6 +135,13 @@ data class Song(
     val playbackSourceType: PlaybackSourceType? = null,
     /** Browse id for an album, playlist, or other source page. */
     val playbackSourceId: String? = null,
+    /**
+     * Optional source-authored local file tags, not Recording-wide labels.
+     * Null = unobserved/unsupported; empty = observed and explicitly empty.
+     * Remote rows never inherit these from a local copy of the Recording.
+     */
+    val localGenres: List<String>? = null,
+    val localMoods: List<String>? = null,
 ) {
     /** Legacy derived property: true if and only if [queueTier] is [QueueTier.AUTOPLAY]. */
     val fromAutoplay: Boolean get() = queueTier == QueueTier.AUTOPLAY
