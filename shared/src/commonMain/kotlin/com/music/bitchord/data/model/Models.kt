@@ -135,6 +135,10 @@ data class Song(
     val playbackSourceType: PlaybackSourceType? = null,
     /** Browse id for an album, playlist, or other source page. */
     val playbackSourceId: String? = null,
+    /** Verified MediaStore per-file genre, not an inferred recording genre. */
+    val localGenre: String? = null,
+    /** MediaStore bitrate in bits per second, when valid and positive. */
+    val localBitrateBps: Long? = null,
 ) {
     /** Legacy derived property: true if and only if [queueTier] is [QueueTier.AUTOPLAY]. */
     val fromAutoplay: Boolean get() = queueTier == QueueTier.AUTOPLAY
@@ -166,6 +170,8 @@ data class Song(
         playbackSource: String? = null,
         playbackSourceType: PlaybackSourceType? = null,
         playbackSourceId: String? = null,
+        localGenre: String? = null,
+        localBitrateBps: Long? = null,
     ) : this(
         videoId = videoId,
         title = title,
@@ -193,6 +199,8 @@ data class Song(
         playbackSource = playbackSource,
         playbackSourceType = playbackSourceType,
         playbackSourceId = playbackSourceId,
+        localGenre = localGenre,
+        localBitrateBps = localBitrateBps,
     )
 }
 
