@@ -2429,6 +2429,8 @@ internal fun SettingsRow(
     iconPainter: Painter? = null,
     onClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
+    /** Opt-in native leading slot for larger artwork/glyph badges without a new row. */
+    leading: (@Composable () -> Unit)? = null,
     /** Compact catalog rows have no leading glyph column. Existing settings keep theirs. */
     reserveIconSpace: Boolean = true,
     iconTint: Color = MaterialTheme.colorScheme.onBackground,
@@ -2444,7 +2446,9 @@ internal fun SettingsRow(
             .padding(horizontal = ROW_INSET, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (iconPainter != null) {
+        if (leading != null) {
+            leading()
+        } else if (iconPainter != null) {
             Icon(
                 painter = iconPainter,
                 contentDescription = null,
@@ -2459,7 +2463,7 @@ internal fun SettingsRow(
                 modifier = Modifier.size(ICON_SIZE),
             )
         }
-        if (reserveIconSpace || icon != null || iconPainter != null) {
+        if (leading != null || reserveIconSpace || icon != null || iconPainter != null) {
             Spacer(Modifier.width(ICON_GAP))
         }
         Column(Modifier.weight(1f)) {
