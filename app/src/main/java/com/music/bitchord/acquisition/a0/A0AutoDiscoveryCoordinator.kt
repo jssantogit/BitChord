@@ -31,6 +31,10 @@ internal class A0AutoDiscoveryCoordinator(
             val truncatedSlots:Set<Int> = emptySet(),
         ):SearchResult
         data object NoReply:SearchResult
+        /** A finished search couldn't drain its peer readers. Its observation
+         * is discarded, but this is NOT an auth/protocol/account stop; fresh
+         * sibling searches may proceed with independent closed sessions. */
+        data object TeardownIncomplete:SearchResult
         /** Auth/account/protocol failure: do NOT automatically reconnect. */
         data object Stop:SearchResult
     }
@@ -169,6 +173,13 @@ internal class A0AutoDiscoveryCoordinator(
                         is SearchResult.Found ->
                             pooled.add(result.choices,result.truncatedSlots)
                         SearchResult.NoReply -> Unit
+                        SearchResult.TeardownIncomplete -> {
+                            // The failing search's observation is unusable.
+                            // Do not retry the slot or resurrect it from later
+                            // evidence; never strand untouched siblings.
+                            append(index,A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW)
+                            continue
+                        }
                         SearchResult.Stop -> {
                             mayRescueLateSlots=false
                             append(index,A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW)
