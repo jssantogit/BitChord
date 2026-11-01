@@ -143,13 +143,12 @@ internal class A0AutoDiscoveryCoordinator(
                 // Observable per-track state, never network authority.
                 try {onSlotSearching(index)}catch(_:Exception){}
                 val proposals=pooled.selectionPreview()
-                val (cached,_) = select(index,
+                val (_,cachedDecision) = select(index,
                     checkNotNull(pooled.slotEvidence(index)).first,
                     checkNotNull(pooled.slotEvidence(index)).second,false)
                 if(proposals.getOrNull(index)?.status!=
                     A0AutoCandidateSelectionPolicy.Status.PROVISIONAL &&
-                    A0AutoCandidateSelectionPolicy.preview(
-                        entries[index],cached,quality).status!=
+                    cachedDecision.status!=
                     A0AutoCandidateSelectionPolicy.Status.PROVISIONAL) {
                     searches++
                     val result=try {

@@ -59,10 +59,13 @@ internal object A0ReleaseCohesionPolicy {
         if(truncatedSlots.isNotEmpty() ||
             observedBySlot.any { it.size>512 })
             return Assessment(Reason.INCOMPLETE_SAMPLE)
-        val unspent=observedBySlot.map { choices ->
-            choices.filterNot {
+        val unspent=observedBySlot.mapIndexed { index,choices ->
+            // Previously PUBLISHED siblings are valuable corroboration
+            // of the same release. Never reuse a spent physical path for
+            // the CURRENT canonical slot, however.
+            if(index==slot)choices.filterNot {
                 (it.peerUsername to it.remotePath) in publishedSources
-            }
+            } else choices
         }
         val current=unspent[slot]
         if(current.isEmpty())return Assessment(Reason.NO_ELIGIBLE_COHORT)

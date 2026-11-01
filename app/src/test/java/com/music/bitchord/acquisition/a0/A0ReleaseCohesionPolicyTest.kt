@@ -77,6 +77,19 @@ class A0ReleaseCohesionPolicyTest {
             entries,0,pool(3,1,badSibling=1),emptySet(),emptySet(),profile)
         assertEquals(A0ReleaseCohesionPolicy.Reason.INSUFFICIENT_COVERAGE,bad.reason)
     }
+    @Test fun previouslyPublishedSiblingsStillCorroborateUnspentSlot() {
+        val sample=pool()
+        val used=setOf("full" to sample[0][0].remotePath,
+            "full" to sample[1][0].remotePath)
+        val result=A0ReleaseCohesionPolicy.evaluate(
+            entries,2,sample,emptySet(),used,profile)
+        assertEquals(A0ReleaseCohesionPolicy.Reason.UNIQUE_RELEASE_COHORT,
+            result.reason)
+        assertEquals(4,result.coverage)
+        assertTrue(result.choices.none {
+            (it.peerUsername to it.remotePath) in used })
+    }
+
     @Test fun truncatedEvidenceAndAlreadyPublishedSourceNeverAuthorizes() {
         val sample=pool()
         val truncated=A0ReleaseCohesionPolicy.evaluate(
