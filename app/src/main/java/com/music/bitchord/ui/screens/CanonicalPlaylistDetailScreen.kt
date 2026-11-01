@@ -28,6 +28,8 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.AddCircleOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -44,6 +46,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
@@ -54,6 +57,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.playback.CanonicalCollectionIntent
+import com.music.bitchord.data.listening.SavedCanonicalStaticPlaylist
+import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
+import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
@@ -65,6 +71,28 @@ import com.music.bitchord.ui.icons.BitChordIcons
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+
+/** Only catalog-backed, currently available and unsaved RecordingIds can be suggested. */
+internal fun suggestedCanonicalPlaylistTracks(
+    available: List<V2DisplayRow>,
+    selectedIds: Set<String>,
+    page: Int,
+): List<V2DisplayRow> {
+    val candidates = available.distinctBy { it.id }
+        .filter { it.id !in selectedIds && it.isAvailablePlaylistMember() }
+    val pages = candidates.chunked(5)
+    if (pages.isEmpty()) return emptyList()
+    return pages[Math.floorMod(page, pages.size)]
+}
+
+/** Preserve the playlist's original ID, source, description and user-picked cover. */
+internal fun appendSuggestedRecording(
+    playlist: SavedCanonicalStaticPlaylist,
+    recordingId: String,
+): SavedCanonicalStaticPlaylist =
+    if (recordingId in playlist.recordingIds) playlist
+    else playlist.copy(recordingIds = playlist.recordingIds + recordingId)
 
 /** Explicit user cover always takes priority over generated recording collages. */
 internal fun LibraryPlaylistCard.explicitCoverUri(): String? = when (this) {
@@ -251,6 +279,8 @@ internal fun CanonicalPlaylistDetailScreen(
     onShuffle: () -> Unit,
     onTrackClick: (String) -> Unit,
     onTrackQueue: (String, CanonicalCollectionIntent) -> Unit,
+    onAddSongs: () -> Unit = {},
+    onEditRules: () -> Unit = {},
     contentPadding: PaddingValues,
     searching: Boolean = false,
     onSearchingChange: (Boolean) -> Unit = {},
@@ -262,8 +292,63 @@ internal fun CanonicalPlaylistDetailScreen(
 ) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current.applicationContext
+    val normalRepository = remember(context) {
+        CanonicalStaticPlaylistRepository(
+            SmartPlaylistDefinitionDatabase.get(context).staticPlaylistDao(),
+        )
+    }
+    val scope = rememberCoroutineScope()
+    var suggestionPage by remember(card.id) { mutableStateOf(0) }
+    var pendingSuggestionId by remember(card.id) { mutableStateOf<String?>(null) }
+    var suggestionError by remember(card.id) { mutableStateOf(false) }
+    var trackLoadFailed by remember(card.id) { mutableStateOf(false) }
+    val source = (card as? LibraryPlaylistCard.CanonicalNormal)?.definition?.sourceProviderKey
+    val availableSuggestions by produceState(
+        initialValue = emptyList<V2DisplayRow>(), key1 = card.id, key2 = source,
+    ) {
+        if (card is LibraryPlaylistCard.CanonicalNormal) {
+            value = try {
+                canonicalNormalPlaylistSearch(context, "", source)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
+    }
+    val suggestions = suggestedCanonicalPlaylistTracks(
+        availableSuggestions,
+        (card as? LibraryPlaylistCard.CanonicalNormal)
+            ?.definition?.recordingIds.orEmpty().toSet(),
+        suggestionPage,
+    )
+    fun addSuggested(id: String) {
+        val playlist = card as? LibraryPlaylistCard.CanonicalNormal ?: return
+        if (pendingSuggestionId != null || id !in suggestions.map { it.id }) return
+        pendingSuggestionId = id
+        suggestionError = false
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    // Reload at tap time: never overwrite a concurrent edit of
+                    // the same canonical playlist with a stale detail snapshot.
+                    val current = normalRepository.list().firstOrNull {
+                        it.id == playlist.definition.id
+                    } ?: error("Playlist indisponível")
+                    normalRepository.save(appendSuggestedRecording(current, id))
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                suggestionError = true
+            } finally {
+                pendingSuggestionId = null
+            }
+        }
+    }
     val rows by produceState<List<V2DisplayRow>?>(initialValue = null, key1 = card.id, key2 = card) {
         value = try {
+            trackLoadFailed = false
             when (card) {
                 is LibraryPlaylistCard.CanonicalNormal ->
                     canonicalNormalPlaylistSelectedRows(
@@ -284,6 +369,7 @@ internal fun CanonicalPlaylistDetailScreen(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
+            trackLoadFailed = true
             emptyList()
         }
     }
@@ -392,13 +478,97 @@ internal fun CanonicalPlaylistDetailScreen(
             }
         }
         if (rows?.isEmpty() == true) {
-            item(key = "playlist-detail-empty") {
-                Text(
-                    "Esta playlist está vazia ou não foi possível consultar as fontes.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = PAGE_GUTTER),
-                )
+            if (trackLoadFailed) {
+                item(key = "playlist-detail-load-error") {
+                    Text(
+                        "Não foi possível consultar as músicas desta playlist.",
+                        modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else if (card is LibraryPlaylistCard.CanonicalNormal) {
+                item(key = "playlist-detail-empty-add-and-suggestions") {
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(horizontal = PAGE_GUTTER, vertical = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        PlaylistWizardSecondaryAction(
+                            label = "Adicionar músicas",
+                            onClick = onAddSongs,
+                        )
+                        if (availableSuggestions.isNotEmpty()) {
+                            SettingsGroupSurface {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(
+                                        start = 16.dp, end = 8.dp, top = 12.dp, bottom = 8.dp,
+                                    ),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            "Músicas sugeridas",
+                                            style = MaterialTheme.typography.titleMedium,
+                                        )
+                                        Text(
+                                            "Adicione faixas da biblioteca à playlist",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { suggestionPage++ },
+                                        enabled = availableSuggestions.size > 5,
+                                    ) {
+                                        Icon(Icons.Rounded.Refresh, contentDescription = "Atualizar sugestões")
+                                    }
+                                }
+                                suggestions.forEach { suggested ->
+                                    LibraryRow(
+                                        title = suggested.title,
+                                        subtitle = suggested.artist,
+                                        imageUrl = null,
+                                        artwork = {
+                                            SmartPlaylistPreviewArtwork(
+                                                suggested, Modifier.fillMaxSize(),
+                                            )
+                                        },
+                                        horizontalPadding = 16.dp,
+                                        trailing = {
+                                            IconButton(
+                                                onClick = { addSuggested(suggested.id) },
+                                                enabled = pendingSuggestionId == null,
+                                            ) {
+                                                Icon(
+                                                    Icons.Rounded.AddCircleOutline,
+                                                    contentDescription = "Adicionar ${suggested.title}",
+                                                )
+                                            }
+                                        },
+                                    )
+                                }
+                                if (suggestionError) {
+                                    Text(
+                                        "Não foi possível adicionar a música.",
+                                        modifier = Modifier.padding(16.dp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (card is LibraryPlaylistCard.Smart) {
+                // Smart membership is rule-driven, never mutate an invented
+                // manual track list. The native rule editor is the only action.
+                item(key = "playlist-detail-empty-smart-edit") {
+                    Box(Modifier.padding(horizontal = PAGE_GUTTER, vertical = 16.dp)) {
+                        PlaylistWizardSecondaryAction(
+                            label = "Editar regras",
+                            onClick = onEditRules,
+                        )
+                    }
+                }
             }
         }
         items(visibleRows, key = { it.id }) { track ->
