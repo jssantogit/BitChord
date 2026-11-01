@@ -35,6 +35,7 @@ class MusicBrainzEnrichmentMigrationTest {
                 CanonicalCatalogDatabase.MIGRATION_8_9,
                 CanonicalCatalogDatabase.MIGRATION_9_10,
                 CanonicalCatalogDatabase.MIGRATION_10_11,
+                CanonicalCatalogDatabase.MIGRATION_11_12,
             )
             .allowMainThreadQueries()
             .build()
