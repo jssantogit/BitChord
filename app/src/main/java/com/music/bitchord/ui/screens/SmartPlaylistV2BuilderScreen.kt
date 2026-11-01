@@ -119,6 +119,35 @@ internal fun savedFilterActionsForDraft(
     add("Excluir filtro")
 }
 
+
+/** A nested create flow must not inherit the parent Library edit intent. */
+internal fun shouldOpenPlaylistAsEdit(
+    initialPlaylistId: String?,
+    initialNormalPlaylistId: String?,
+    editorEpoch: Int,
+    editingId: String?,
+    editingNormalId: String?,
+    editingFilterId: String?,
+): Boolean = editingId != null || editingNormalId != null || editingFilterId != null ||
+    (editorEpoch == 0 && (initialPlaylistId != null || initialNormalPlaylistId != null))
+
+/** Switching editor contexts cannot silently discard an existing or populated draft. */
+internal fun shouldConfirmReplacingDraft(
+    editing: Boolean,
+    name: String,
+    description: String,
+    coverUri: String?,
+    selectedCount: Int,
+    hasConfiguredRules: Boolean,
+): Boolean = editing || name.isNotBlank() || description.isNotBlank() ||
+    coverUri != null || selectedCount > 0 || hasConfiguredRules
+
+private enum class FilterEditorDestination { EDIT_FILTER, CREATE_PLAYLIST }
+private data class PendingFilterNavigation(
+    val filterId: String,
+    val destination: FilterEditorDestination,
+)
+
 private enum class SmartPlaylistManageTab { PLAYLISTS, FILTERS, CLASSIC }
 private data class PendingSmartDeletion(val id: String, val name: String, val isFilter: Boolean)
 
@@ -231,6 +260,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     var showWizard by remember { mutableStateOf(true) }
     var manageTab by remember { mutableStateOf(SmartPlaylistManageTab.PLAYLISTS) }
     var pendingDeletion by remember { mutableStateOf<PendingSmartDeletion?>(null) }
+    var pendingFilterNavigation by remember { mutableStateOf<PendingFilterNavigation?>(null) }
     // Selecting a different library section starts at its own heading,
     // instead of inheriting the prior tab's last LazyColumn scroll index.
     val manageListState = remember(manageTab) { LazyListState() }
@@ -293,6 +323,53 @@ internal fun SmartPlaylistV2BuilderScreen(
         previewQuery = null
         error = null
     }
+
+    fun openFilterDestination(target: PendingFilterNavigation) {
+        val filter = savedFilters.firstOrNull { it.id == target.filterId }
+        if (filter == null) {
+            error = "Filtro não encontrado. Atualize a lista de filtros."
+            return
+        }
+        when (target.destination) {
+            FilterEditorDestination.EDIT_FILTER -> {
+                reset()
+                editingFilterId = filter.id
+                name = filter.name
+                rule = filter.rules
+                hasConfiguredRules = true
+            }
+            FilterEditorDestination.CREATE_PLAYLIST -> {
+                val copy = filter.toPlaylistCopy(UUID.randomUUID().toString(), filter.name)
+                reset()
+                name = copy.name
+                rule = copy.query.rules
+                hasConfiguredRules = true
+                sort = copy.query.sort
+                limit = copy.query.limit.toString()
+                seed = copy.query.randomSeed.toString()
+            }
+        }
+        showWizard = true
+    }
+
+    fun requestFilterDestination(target: PendingFilterNavigation) {
+        if (shouldConfirmReplacingDraft(
+            editing = shouldOpenPlaylistAsEdit(
+                initialPlaylistId, initialNormalPlaylistId, editorEpoch,
+                editingId, editingNormalId, editingFilterId,
+            ),
+            name = name,
+            description = description,
+            coverUri = coverUri,
+            selectedCount = normalSelectedIds.size,
+            hasConfiguredRules = hasConfiguredRules,
+        )) {
+            pendingFilterNavigation = target
+        } else {
+            openFilterDestination(target)
+        }
+    }
+
     // Opening a saved card from the Library edits exactly that definition.
     // This does not infer an ID from its visible name or create a duplicate.
     LaunchedEffect(initialPlaylistId, repo) {
@@ -578,7 +655,10 @@ internal fun SmartPlaylistV2BuilderScreen(
                     error = error,
                     editingId = editingId,
                     editingFilterId = editingFilterId,
-                    openingAsEdit = initialPlaylistId != null || initialNormalPlaylistId != null,
+                    openingAsEdit = shouldOpenPlaylistAsEdit(
+                        initialPlaylistId, initialNormalPlaylistId, editorEpoch,
+                        editingId, editingNormalId, editingFilterId,
+                    ),
                     savedDefinitions = saved.filterNot { it.id == editingId },
                     onNameChange = { name = it },
                     description = description,
@@ -914,25 +994,14 @@ internal fun SmartPlaylistV2BuilderScreen(
                                     }
                                 }
                                 "Editar filtro" -> {
-                                    reset()
-                                    editingFilterId = filter.id
-                                    name = filter.name
-                                    rule = filter.rules
-                                    hasConfiguredRules = true
-                                    showWizard = true
+                                    requestFilterDestination(PendingFilterNavigation(
+                                        filter.id, FilterEditorDestination.EDIT_FILTER,
+                                    ))
                                 }
                                 "Criar playlist com este filtro" -> {
-                                    val copy = filter.toPlaylistCopy(
-                                        UUID.randomUUID().toString(), filter.name,
-                                    )
-                                    reset()
-                                    name = copy.name
-                                    rule = copy.query.rules
-                                    hasConfiguredRules = true
-                                    sort = copy.query.sort
-                                    limit = copy.query.limit.toString()
-                                    seed = copy.query.randomSeed.toString()
-                                    showWizard = true
+                                    requestFilterDestination(PendingFilterNavigation(
+                                        filter.id, FilterEditorDestination.CREATE_PLAYLIST,
+                                    ))
                                 }
                                 "Excluir filtro" -> {
                                     pendingDeletion = PendingSmartDeletion(
@@ -1086,6 +1155,23 @@ internal fun SmartPlaylistV2BuilderScreen(
                         }
                     }
                 },
+            )
+        }
+
+        pendingFilterNavigation?.let { pending ->
+            BackHandler { pendingFilterNavigation = null }
+            ConfirmationAlert(
+                hazeState = null,
+                title = "Descartar alterações?",
+                description = "Abrir outro editor descartará as alterações não salvas deste rascunho.",
+                confirmLabel = "Descartar e continuar",
+                dismissLabel = "Continuar editando",
+                destructive = true,
+                onConfirm = {
+                    pendingFilterNavigation = null
+                    openFilterDestination(pending)
+                },
+                onDismiss = { pendingFilterNavigation = null },
             )
         }
     }
