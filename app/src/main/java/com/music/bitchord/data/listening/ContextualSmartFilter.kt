@@ -1,6 +1,8 @@
 package com.music.bitchord.data.listening
 
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
+import com.music.bitchord.data.catalog.CanonicalScopedTagRow
+import kotlinx.serialization.json.Json
 import com.music.bitchord.data.catalog.CanonicalLocalLibrary
 
 /**
@@ -34,6 +36,8 @@ internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalSongBrowse(
                 rule.field == SmartPlaylistRuleField.ARTIST_DISPLAY ||
                 rule.field == SmartPlaylistRuleField.DURATION_MS ||
                 rule.field == SmartPlaylistRuleField.SOURCE_KIND ||
+                (rule.field in setOf(SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD) &&
+                    verifiedContextualSourceKind(providerKey) == SmartPlaylistSourceKind.OPENSUBSONIC) ||
                 (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED &&
                     providerKey == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
         is SmartPlaylistRule.Group -> rule.children.isNotEmpty() &&
@@ -51,11 +55,21 @@ internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalSongBrowse(
  * implicit 100/10,000-song cap. The result retains the provider browse order,
  * canonical Recordings and playback assets from its input unchanged.
  */
+/** Invalid JSON, an absent optional field, or a malformed value remains UNKNOWN. */
+private fun parseServerTagValues(json: String?): List<String>? =
+    json?.let { serialized ->
+        runCatching { Json.decodeFromString<List<String>>(serialized) }
+            .getOrNull()?.map(String::trim)
+            ?.takeIf { items -> items.all(String::isNotBlank) }
+            ?.distinct()
+    }
+
 internal fun filterCanonicalBrowseSongs(
     tracks: List<CanonicalBrowseTrack>,
     filter: SavedSmartPlaylistV2Filter,
     providerKey: String,
     localAddedDatesByRecording: Map<String, List<Long?>>? = null,
+    scopedTagRowsByRecording: Map<String, List<CanonicalScopedTagRow>>? = null,
 ): List<CanonicalBrowseTrack> {
     require(providerKey.isNotBlank()) { "A configured provider identity is required" }
     require(filter.isSupportedForCanonicalSongBrowse(providerKey)) {
@@ -77,6 +91,12 @@ internal fun filterCanonicalBrowseSongs(
             "Local-file-added date requires persisted MediaStore evidence"
         }
     }
+    val needsTags = filter.rules.referencedFields().any {
+        it == SmartPlaylistRuleField.GENRE || it == SmartPlaylistRuleField.MOOD
+    }
+    if (needsTags) require(scopedTagRowsByRecording != null) {
+        "Provider tag rules require a current scoped Room snapshot"
+    }
     val nowMs = System.currentTimeMillis()
     val sourceKind = verifiedContextualSourceKind(providerKey)
     val query = SmartPlaylistV2Query(
@@ -95,6 +115,14 @@ internal fun filterCanonicalBrowseSongs(
             val timestampsUnknown = timestamps == null ||
                 timestamps.size != validTimestamps.size ||
                 validTimestamps.any { it > nowMs }
+            val tagRows = scopedTagRowsByRecording?.get(song.recordingId).orEmpty()
+            val visibleAssetIds = song.availableAssets.map { it.mediaAssetId }.toSet()
+            val validRows = tagRows.filter { it.mediaAssetId in visibleAssetIds }
+            val completeRows = tagRows.size == visibleAssetIds.size &&
+                validRows.size == visibleAssetIds.size &&
+                validRows.map { it.mediaAssetId }.toSet() == visibleAssetIds
+            val genres = validRows.map { parseServerTagValues(it.genresJson) }
+            val moods = validRows.map { parseServerTagValues(it.moodsJson) }
             RuleBasedRecordingCandidate(
                 recordingId = song.recordingId,
                 explicitRating = null,
@@ -105,6 +133,10 @@ internal fun filterCanonicalBrowseSongs(
                 title = song.title,
                 artistDisplay = song.artistDisplay,
                 sourceKinds = sourceKind?.let(::setOf),
+                genres = genres.filterNotNull().flatten().distinct(),
+                genreEvidenceUnknown = !completeRows || genres.any { it == null },
+                moods = moods.filterNotNull().flatten().distinct(),
+                moodEvidenceUnknown = !completeRows || moods.any { it == null },
                 localAddedEpochMs = validTimestamps,
                 localAddedDateEvidenceUnknown = timestampsUnknown,
             )
