@@ -360,6 +360,7 @@ internal fun SmartPlaylistV2WizardUi(
     normalMode: Boolean = false,
     editingNormalId: String? = null,
     openingAsEdit: Boolean = false,
+    startOnNormalSongs: Boolean = false,
     normalRows: List<V2DisplayRow> = emptyList(),
     normalSelectedRows: List<V2DisplayRow> = emptyList(),
     normalSelectedIds: List<String> = emptyList(),
@@ -392,7 +393,13 @@ internal fun SmartPlaylistV2WizardUi(
 ) {
     val isEditing = openingAsEdit ||
         editingId != null || editingNormalId != null || editingFilterId != null
-    var page by remember { mutableStateOf(if (isEditing) WizardStep.EDIT else WizardStep.IDENTITY) }
+    var page by remember {
+        mutableStateOf(when {
+            isEditing && normalMode && startOnNormalSongs -> WizardStep.SONGS
+            isEditing -> WizardStep.EDIT
+            else -> WizardStep.IDENTITY
+        })
+    }
     var selectedPath by remember { mutableStateOf<List<Int>>(emptyList()) }
     var targetGroupPath by remember { mutableStateOf<List<Int>>(emptyList()) }
     var selectedCategory by remember { mutableStateOf(smartConditionCategories.first()) }
