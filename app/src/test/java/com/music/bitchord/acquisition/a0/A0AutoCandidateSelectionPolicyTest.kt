@@ -86,7 +86,7 @@ class A0AutoCandidateSelectionPolicyTest {
         assertEquals(2,choice.sequentialAlternatives.size)
     }
 
-    @Test fun conflictingExplicitTrackNumbersNeverBecomeOneGroupThroughUnnumberedPeer() {
+    @Test fun tiedStrongTrackNumberClaimsChooseFirstWithoutMergingConflictingGroups() {
         val first=offers("unnumbered")
         val second=offers("one",name="01 ILLIT - Magnetic.mp3")
         val third=offers("two",name="02 ILLIT - Magnetic.mp3")
@@ -95,28 +95,56 @@ class A0AutoCandidateSelectionPolicyTest {
         val b=A0AutoCandidateSelectionPolicy.preview(
             target,second+first+third,profile)
         for(decision in listOf(a,b)) {
-            assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,
+            assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,
                 decision.status)
+            assertEquals(1,decision.sequentialAlternatives.size)
+            assertEquals(A0AutoCandidateSelectionPolicy.TieResolution.FIRST_READY,
+                decision.tieResolution)
+        }
+        assertEquals("unnumbered",a.sequentialAlternatives.single().peerUsername)
+        assertEquals("one",b.sequentialAlternatives.single().peerUsername)
+    }
+
+    @Test fun differentSizesWithEqualRankChooseFirstReadySourceOnly() {
+        val first=offers("one")
+        val second=offers("two",sizeBytes=161*40_000L+1024L)
+        for((candidates,expectedPeer) in listOf(
+            (first+second) to "one",
+            (second+first) to "two"
+        )) {
+            val choice=A0AutoCandidateSelectionPolicy.preview(
+                target,candidates,profile)
+            assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,choice.status)
+            assertEquals(A0AutoCandidateSelectionPolicy.TieResolution.FIRST_READY,
+                choice.tieResolution)
+            assertEquals(2,choice.tieGroups)
+            assertEquals(1,choice.sequentialAlternatives.size)
+            assertEquals(expectedPeer,choice.sequentialAlternatives.single().peerUsername)
+            assertFalse(choice.canTransfer)
+            assertFalse(choice.toString().contains(expectedPeer))
+            val conservative=A0AutoCandidateSelectionPolicy.preview(
+                target,candidates,profile,resolveExactTies=false)
             assertEquals(A0AutoCandidateSelectionPolicy.Reason.AMBIGUOUS_EDITION,
-                decision.reason)
+                conservative.reason)
         }
     }
 
-    @Test fun differentFileSizesStillForceReviewDespiteIdenticalTrackNames() {
-        val a=offers("one")
-        val b=offers("two",sizeBytes=161*40_000L+1024L)
-        val choice=A0AutoCandidateSelectionPolicy.preview(target,a+b,profile)
-        assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,choice.status)
-        assertEquals(A0AutoCandidateSelectionPolicy.Reason.AMBIGUOUS_EDITION,choice.reason)
-        assertTrue(choice.sequentialAlternatives.isEmpty())
-        assertEquals(2,choice.ambiguity?.clusterCount)
-        assertEquals(1,choice.ambiguity?.leadingSources)
-        assertEquals(1,choice.ambiguity?.competingSources)
-        assertEquals(0,choice.ambiguity?.scoreGap)
-        assertEquals(2,choice.ambiguity?.distinctByteSizes)
-        assertEquals(setOf(A0AutoCandidateSelectionPolicy.ClaimDifference.BYTE_SIZE),
-            choice.ambiguity?.leadingClaimDifferences)
-        assertFalse(choice.toString().contains("peer"))
+    @Test fun tiedStrongScoresSkipCongestedOrRejectedSources() {
+        val congested=offers("congested",queue=40)
+        val eligible=offers("ready",sizeBytes=161*40_000L+1024L)
+        val choice=A0AutoCandidateSelectionPolicy.preview(
+            target,congested+eligible,profile)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,choice.status)
+        assertEquals("ready",choice.sequentialAlternatives.first().peerUsername)
+        val invalid=offers("wrong-album",album="Another Album")
+        val filtered=A0AutoCandidateSelectionPolicy.preview(
+            target,invalid+eligible,profile)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,filtered.status)
+        assertEquals("ready",filtered.sequentialAlternatives.first().peerUsername)
+        val truncated=A0AutoCandidateSelectionPolicy.preview(
+            target,congested+eligible,profile,sampleTruncated=true)
+        assertEquals(A0AutoCandidateSelectionPolicy.Reason.INCOMPLETE_SAMPLE,
+            truncated.reason)
     }
 
     @Test fun exactAlbumWithinOneGenericAudioSubfolderIsStillEligible() {
