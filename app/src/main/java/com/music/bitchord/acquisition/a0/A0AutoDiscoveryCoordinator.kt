@@ -39,7 +39,9 @@ internal class A0AutoDiscoveryCoordinator(
         data object Stop:SearchResult
     }
 
-    enum class CacheAction { REUSED, SEARCH_REQUIRED, SIBLING_RESCUE }
+    enum class CacheAction {
+        REUSED, SEARCH_REQUIRED, SIBLING_RESCUE, SIBLING_RESCUE_SKIPPED
+    }
     /** Aggregate-only evidence: never exposes a filename, peer or path. */
     data class CacheEvidence(
         val action:CacheAction,
@@ -271,10 +273,21 @@ internal class A0AutoDiscoveryCoordinator(
                     val lateOffers=if(truncated)unspent.filter {
                         (it.peerUsername to parent(it.remotePath)) in publishedFolders
                     } else unspent
-                    if(lateOffers.isEmpty())continue
-                    val (selected,late)=select(index,lateOffers,false,true)
-                    if(late.status!=A0AutoCandidateSelectionPolicy.Status.PROVISIONAL)
+                    if(lateOffers.isEmpty()) {
+                        if(truncated)try { onCacheEvidence(index,CacheEvidence(
+                            CacheAction.SIBLING_RESCUE_SKIPPED,0,true,
+                            A0AutoCandidateSelectionPolicy.Reason.INCOMPLETE_SAMPLE
+                        )) }catch(_:Exception) {}
                         continue
+                    }
+                    val (selected,late)=select(index,lateOffers,false,true)
+                    if(late.status!=A0AutoCandidateSelectionPolicy.Status.PROVISIONAL) {
+                        if(truncated)try { onCacheEvidence(index,CacheEvidence(
+                            CacheAction.SIBLING_RESCUE_SKIPPED,
+                            lateOffers.size.coerceIn(0,512),true,late.reason
+                        )) }catch(_:Exception) {}
+                        continue
+                    }
                     if(truncated)try { onCacheEvidence(index,CacheEvidence(
                         CacheAction.SIBLING_RESCUE,lateOffers.size.coerceIn(0,512),
                         true,late.reason
