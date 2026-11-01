@@ -96,7 +96,7 @@ internal object LocalEmbeddedTagEnricher {
                     val currentAsset = dao.mediaAssetById(row.mediaAssetId)
                     val current = dao.mediaAssetTagsById(row.mediaAssetId)
                     if (currentAsset?.provider != CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER ||
-                        currentAsset.uri != row.uri ||
+                        currentAsset?.uri != row.uri ||
                         current == null ||
                         current.localSourceFingerprint != row.sourceFingerprint ||
                         current.localParsedFingerprint == row.sourceFingerprint
