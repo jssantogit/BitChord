@@ -142,6 +142,8 @@ data class Song(
      */
     val localGenres: List<String>? = null,
     val localMoods: List<String>? = null,
+    /** Optional tempo tag(s) from the local file, never inferred from playback. */
+    val localBpms: List<Double>? = null,
 ) {
     /** Legacy derived property: true if and only if [queueTier] is [QueueTier.AUTOPLAY]. */
     val fromAutoplay: Boolean get() = queueTier == QueueTier.AUTOPLAY
