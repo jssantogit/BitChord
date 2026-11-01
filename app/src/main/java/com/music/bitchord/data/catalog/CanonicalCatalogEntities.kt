@@ -131,6 +131,9 @@ data class MediaAssetEntity(
     val dateAddedSeconds: Long?,
     val dateModifiedSeconds: Long?,
     val artworkUri: String?,
+    /** Origin-tagged MediaStore values; null for unproven or remote data. */
+    val localGenre: String? = null,
+    val localBitrateBps: Long? = null,
 )
 
 /**
