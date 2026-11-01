@@ -42,6 +42,10 @@ internal class SoulseekAutoReviewPlan private constructor(
     val needsManualReview:Int = rows.count {
         it.status==A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW
     }
+    /** A P/F attempt began; A3 will refuse a second review transfer. */
+    val attemptFailures:Int = rows.count {
+        it.status==A0AutoBatchExecutor.TrackStatus.ATTEMPT_FAILED
+    }
     val needsReconciliation:Int = rows.count {
         it.status==A0AutoBatchExecutor.TrackStatus.RECONCILE
     }
