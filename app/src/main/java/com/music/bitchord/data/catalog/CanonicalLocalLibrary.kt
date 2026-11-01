@@ -71,6 +71,8 @@ internal object CanonicalLocalLibrary {
                         dateAddedSeconds = candidate.dateAddedSeconds,
                         dateModifiedSeconds = candidate.dateModifiedSeconds,
                         artworkUri = candidate.artworkUri,
+                        localGenre = candidate.localGenre,
+                        localBitrateBps = candidate.localBitrateBps,
                     ),
                 )
 
@@ -166,6 +168,8 @@ internal object CanonicalLocalLibrary {
             artworkUri = song.thumbnailUrl,
             uri = uri,
             path = song.localPath,
+            localGenre = song.localGenre,
+            localBitrateBps = song.localBitrateBps,
             dateAddedSeconds = song.localDateAddedSeconds,
             dateModifiedSeconds = song.localDateModifiedSeconds,
             trackNumber = song.trackNumber,
@@ -334,6 +338,8 @@ internal data class LocalMediaCandidate(
     val dateModifiedSeconds: Long?,
     val trackNumber: Int?,
     val youtubeVideoId: String?,
+    val localGenre: String? = null,
+    val localBitrateBps: Long? = null,
 )
 
 internal data class MediaStoreSourceLookup(
