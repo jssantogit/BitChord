@@ -81,7 +81,7 @@ internal data class ProviderTrack(
     val moods: List<String>? = null,
     /** Null: server omitted tempo; zero: supported but no BPM tag. */
     val bpm: Int? = null,
-
+)
 
 internal data class ProviderLibrarySnapshot(
     val tracks: List<ProviderTrack>,
