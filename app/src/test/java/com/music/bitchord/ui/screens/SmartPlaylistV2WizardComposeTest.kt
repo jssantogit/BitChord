@@ -53,7 +53,11 @@ class SmartPlaylistV2WizardComposeTest {
                 ),
             ))
         }
-        compose.onNodeWithTag("playlist-category-icon-badge").assertExists()
+        // The native clickable SettingsRow merges its descendants for accessibility.
+        // Inspect the unmerged tree to assert the actual icon badge is rendered.
+        compose.onNodeWithTag(
+            "playlist-category-icon-badge", useUnmergedTree = true,
+        ).assertExists()
         compose.onNodeWithText("Músicas e metadados").performClick()
         compose.runOnIdle { assertEquals(1, pressed) }
     }
