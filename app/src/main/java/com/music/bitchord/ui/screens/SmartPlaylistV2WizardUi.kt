@@ -312,7 +312,7 @@ internal fun <T> WizardChoiceDialog(
             ) {
                 Text(title, style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onBackground)
-                TextButton(onClick = onClose) { Text("Fechar") }
+                PlaylistWizardCompactAction(label = "Fechar", onClick = onClose)
             }
             SettingsGroupSurface(modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
                 LazyColumn(Modifier.heightIn(max = 480.dp)) {
@@ -842,9 +842,8 @@ internal fun SmartPlaylistV2WizardUi(
                         if (editingFilterId == null) item {
                             WizardCard("Limite e ordenação",
                                 "Aplicados depois de avaliar todas as condições") {
-                                PlaylistWizardSelectionRow(
+                                PlaylistWizardSecondaryAction(
                                     label = "Ordenar: " + sortUiLabel(sort),
-                                    selected = false,
                                     onClick = { picker = "sort" },
                                 )
                                 PlaylistWizardTextEntry(
@@ -853,6 +852,7 @@ internal fun SmartPlaylistV2WizardUi(
                                     label = "Máximo de músicas",
                                     hint = "De 1 a 10.000",
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    emphasized = true,
                                 )
                                 if (sort == SmartPlaylistV2Sort.STABLE_RANDOM ||
                                     sort == SmartPlaylistV2Sort.STABLE_RANDOM_ALBUMS) {
@@ -861,6 +861,7 @@ internal fun SmartPlaylistV2WizardUi(
                                         onValueChange = onSeedChange,
                                         label = "Semente aleatória",
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        emphasized = true,
                                     )
                                 }
                             }
@@ -895,9 +896,10 @@ internal fun SmartPlaylistV2WizardUi(
                                         horizontalArrangement = Arrangement.End,
                                     ) {
                                         Box {
-                                            TextButton(onClick = { actionsOpen = true }) {
-                                                Text("Opções")
-                                            }
+                                            PlaylistWizardCompactAction(
+                                                label = "Opções",
+                                                onClick = { actionsOpen = true },
+                                            )
                                             androidx.compose.material3.DropdownMenu(
                                                 expanded = actionsOpen,
                                                 onDismissRequest = { actionsOpen = false },
@@ -965,14 +967,18 @@ internal fun SmartPlaylistV2WizardUi(
                                 )
                             }
                             if (savedDefinitions.isNotEmpty()) item {
-                                TextButton(onClick = { picker = "reference" }) {
-                                    Text("+ Usar playlist salva como condição")
-                                }
+                                PlaylistWizardSecondaryAction(
+                                    label = "Usar playlist salva como condição",
+                                    onClick = { picker = "reference" },
+                                )
                             }
                             if (selected is SmartPlaylistRule.Not) item {
-                                TextButton(onClick = {
-                                    onRuleChange(smartRuleReplaceAt(rule, selectedPath, selected.child))
-                                }) { Text("Retirar NÃO deste grupo") }
+                                PlaylistWizardSecondaryAction(
+                                    label = "Retirar NÃO deste grupo",
+                                    onClick = {
+                                        onRuleChange(smartRuleReplaceAt(rule, selectedPath, selected.child))
+                                    },
+                                )
                             }
                         } else if (selected != null) {
                             item {
@@ -991,14 +997,18 @@ internal fun SmartPlaylistV2WizardUi(
                                 )
                             }
                             if (selected is SmartPlaylistRule.Not) item {
-                                TextButton(onClick = {
-                                    onRuleChange(smartRuleReplaceAt(rule, selectedPath, selected.child))
-                                }) { Text("Remover negação") }
+                                PlaylistWizardSecondaryAction(
+                                    label = "Remover negação",
+                                    onClick = {
+                                        onRuleChange(smartRuleReplaceAt(rule, selectedPath, selected.child))
+                                    },
+                                )
                             }
                             if (core is SmartPlaylistRule.Reference) item {
-                                TextButton(onClick = { picker = "replaceReference" }) {
-                                    Text("Trocar playlist referenciada")
-                                }
+                                PlaylistWizardSecondaryAction(
+                                    label = "Trocar playlist referenciada",
+                                    onClick = { picker = "replaceReference" },
+                                )
                             }
                         }
                     }
@@ -1283,16 +1293,14 @@ internal fun SmartPlaylistV2WizardUi(
                         if (editingFilterId == null &&
                             (editingNormalId != null || editingId != null)
                         ) {
-                            TextButton(
+                            PlaylistWizardSecondaryAction(
+                                label = "Excluir playlist",
+                                enabled = !loading,
                                 onClick = {
                                     if (normalMode) confirmDeleteNormal = true
                                     else confirmDeleteSmart = true
                                 },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !loading,
-                            ) {
-                                Text("Excluir playlist", color = MaterialTheme.colorScheme.error)
-                            }
+                            )
                         }
                     }
                     WizardStep.IDENTITY -> PlaylistWizardPrimaryAction(
@@ -1361,11 +1369,12 @@ internal fun SmartPlaylistV2WizardUi(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        if (!normalMode) TextButton(onClick = onSaveFilter, enabled = canReview && !loading,
-                            modifier = Modifier.fillMaxWidth()) {
-                            Text(if (editingFilterId == null) "Salvar como filtro reutilizável"
-                                else "Atualizar filtro reutilizável")
-                        }
+                        if (!normalMode) PlaylistWizardSecondaryAction(
+                            label = if (editingFilterId == null)
+                                "Salvar como filtro reutilizável" else "Atualizar filtro reutilizável",
+                            enabled = canReview && !loading,
+                            onClick = onSaveFilter,
+                        )
                     }
                     WizardStep.CATEGORIES, WizardStep.FIELDS -> Unit
                 }
