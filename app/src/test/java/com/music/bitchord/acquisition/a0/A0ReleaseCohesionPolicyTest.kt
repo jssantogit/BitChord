@@ -51,7 +51,8 @@ class A0ReleaseCohesionPolicyTest {
     @Test fun completePeerReleaseBreaksPureByteSizeTie() {
         val evidence=pool()
         assertEquals(A0AutoCandidateSelectionPolicy.Reason.AMBIGUOUS_EDITION,
-            A0AutoCandidateSelectionPolicy.preview(entries[0],evidence[0],profile).reason)
+            A0AutoCandidateSelectionPolicy.preview(
+                entries[0],evidence[0],profile,resolveExactTies=false).reason)
         val result=A0ReleaseCohesionPolicy.evaluate(
             entries,0,evidence,emptySet(),emptySet(),profile)
         assertEquals(A0ReleaseCohesionPolicy.Reason.UNIQUE_RELEASE_COHORT,result.reason)
