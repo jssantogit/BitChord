@@ -114,6 +114,7 @@ internal data class CanonicalScopedTagRow(
     val mediaAssetId: String,
     val genresJson: String?,
     val moodsJson: String?,
+    val bpmsJson: String?,
 )
 
 @Dao
@@ -127,7 +128,8 @@ internal interface CanonicalCatalogDao {
         SELECT asset.recordingId AS recordingId,
                asset.id AS mediaAssetId,
                tags.genresJson AS genresJson,
-               tags.moodsJson AS moodsJson
+               tags.moodsJson AS moodsJson,
+               tags.bpmsJson AS bpmsJson
         FROM catalog_media_asset AS asset
         LEFT JOIN catalog_media_asset_tags AS tags ON tags.mediaAssetId = asset.id
         WHERE asset.provider = :providerKey AND asset.recordingId IN (:recordingIds)
