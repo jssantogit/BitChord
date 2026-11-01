@@ -8,6 +8,7 @@ import com.music.bitchord.diagnostics.DiagnosticRecoveryOutcome
 import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.ExternalIdentityEntity
 import com.music.bitchord.data.catalog.MediaAssetEntity
+import com.music.bitchord.data.catalog.MediaAssetTagsEntity
 import com.music.bitchord.data.catalog.RecordingArtistCreditEntity
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.ReleaseArtistCreditEntity
@@ -16,6 +17,8 @@ import com.music.bitchord.data.catalog.ReleaseTrackEntity
 import com.music.bitchord.data.catalog.identity.IsrcNormalizer
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 internal data class ProviderCapabilities(
     val librarySync: Boolean,
@@ -69,6 +72,9 @@ internal data class ProviderTrack(
     val bitDepth: Int?,
     val samplingRateHz: Int?,
     val artists: List<ProviderArtist> = emptyList(),
+    /** Null = field not returned by the provider, empty = explicitly supported but untagged. */
+    val genres: List<String>? = null,
+    val moods: List<String>? = null,
     /** Strong Recording-level external identity evidence, never playback identity. */
     val isrcs: List<String> = emptyList(),
     /** Protocol evidence; identity is resolved by the canonical sync transaction. */
@@ -159,6 +165,9 @@ internal interface CanonicalCatalogSyncStore {
     }
 
     suspend fun upsertMediaAsset(mediaAsset: MediaAssetEntity)
+
+    /** Optional for legacy fakes; production Room must persist this within the sync transaction. */
+    suspend fun upsertMediaAssetTags(tags: MediaAssetTagsEntity) { }
 
     suspend fun upsertExternalIdentity(identity: ExternalIdentityEntity)
 
@@ -439,6 +448,13 @@ internal object CanonicalRemoteCatalogSync {
                     dateAddedSeconds = track.dateAddedSeconds,
                     dateModifiedSeconds = null,
                     artworkUri = track.artworkUri ?: track.album?.artworkUri,
+                ),
+            )
+            store.upsertMediaAssetTags(
+                MediaAssetTagsEntity(
+                    mediaAssetId = mediaAssetId,
+                    genresJson = track.genres?.let { Json.encodeToString(it) },
+                    moodsJson = track.moods?.let { Json.encodeToString(it) },
                 ),
             )
         }
