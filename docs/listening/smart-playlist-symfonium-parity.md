@@ -294,3 +294,26 @@ Prioritize typed rule semantics, canonical Song/Release/Artist scopes, metadata 
 - **Local-only added date:** `CanonicalContextualFilterLibrary.songs(local-mediastore, filter)` can now evaluate `DAYS_SINCE_LOCAL_FILE_ADDED` from **actual MediaStore `catalog_media_asset.dateAddedSeconds`** with indexed DAO reads in chunks of at most 400 IDs. No import/network/derived Spotify/Apple Music timestamps. Multiple local MediaAssets can contribute dates; absent, invalid, overflow or future values mark incomplete evidence, never known zero. The same rule is incompatible with a remote Song context and throws rather than falling back to every Song; direct pure evaluator refuses to accept it without the persisted date evidence. This field is not exposed by the provisional Navidrome-only Songs tab.
 - **Regressions:** source-rule truth across local and OpenSubsonic Songs/Releases/Artists, UNKNOWN under NOT and NOT_EQUAL on unrecognized providers, Room cross-account shared-Recording isolation, local asset removal, blank title/name UNKNOWN and a **50,123-Recording** whole-list filter preserving all matches, source assets and original order without the 10k playlist limit. This 50k unit fixture verifies semantics but is **not** the physical A54 runtime/memory benchmark (still open).
 - **Next functional work:** authoritative metadata-backed genre/composer/original release date, richer independent Album/Artist fields and operators where the Catalog can prove them, scoped rule reads and playback revalidation under concurrent catalog changes, physical 50k load testing. The final UI remains deferred explicitly by product decision.
+
+
+## 2026-11-01 — Local folder/path/extension and per-file audio evidence (PR #202)
+
+**State:** implemented in draft code; final Android CI and physical Galaxy A54 smoke are distinct and required. This section overrides the older draft checklist for the individual fields described here, but does **not** claim whole-Symfonium parity.
+
+| Current rule | Evidence in BitChord | Deliberate limitation |
+| --- | --- | --- |
+| **Pasta do arquivo local** (`LOCAL_FOLDER`) | `MediaAsset.path` of currently indexed `local-mediastore` assets; filtered by canonical RecordingId | Source-scoped filesystem paths only; unknown path/opaque URI produces UNKNOWN; no invented OpenSubsonic directory |
+| **Caminho do arquivo local** (`LOCAL_FILE_PATH`) | Same provenance; supports typed contains/equality/prefix/suffix/presence operators | Unknown in remote-only source and when Android denies filesystem path metadata |
+| **Extensão do arquivo local** (`LOCAL_FILE_EXTENSION`) | Last extension from verified filename, e.g. FLAC, MP3, M4A | It is **not** proof of codec or losslessness; MIME tags still need their own provenance |
+| **Gênero do arquivo local** (`LOCAL_GENRE`) | `MediaStore.Audio.Media.GENRE` where Android API >= 30 and provider supplies the tag; persisted on individual MediaAsset via Catalog Room v5 | Not a canonical global Recording genre or OpenSubsonic genre; unavailable/unknown tags are not negative evidence |
+| **Bitrate do arquivo local** (`LOCAL_BITRATE_KBPS`) | `MediaStore.MediaColumns.BITRATE` where API >= 29, positive bits/s stored per local asset and compared as decimal kbps | Not a stream/transcode bitrate; an absent provider field means UNKNOWN, not zero |
+
+**Safety & compatibility:** Room v4→v5 adds nullable `localGenre` and `localBitrateBps` to MediaAsset; existing assets and RecordingIds survive unchanged. All path and tag reads are bounded by 400 RecordingIds and only triggered when an AST field requires them. The native scan falls back to the mandatory projection if Android/OEM MediaStore rejects optional GENRE or BITRATE columns, rather than dropping the library. Positive path/genre/bitrate matches require actual local asset evidence. Negative comparisons and `NOT` do not promote absent or partly unknown source metadata to true. No filesystem paths/tags are added to diagnostics.
+
+**Outstanding release-parity blockers** (do not close #192 or merge based only on green CI):
+
+1. **Full Symfonium reference inventory:** capture the currently installed Android reference build's Song, Album and Artist fields, operators, sorts and provider scope. The official wiki is explanatory, not an exhaustive field matrix. Genre/bitrate here are local-only subsets.
+2. **Source/media semantics:** OpenSubsonic path/genre/audio information require credential-scoped, provider-authenticated source fields; do not derive remote paths from URLs or guess codec from filename.
+3. **Missing canonical metadata:** composers and roles, original release dates versus edition dates, mood/style/labels, tags, playable offline presence/cache, actual codec/sample rate/bit depth, thumbnail provenance and visibility-inheritance require distinct proven data paths and tests.
+4. **Media type:** filters for Albums and Artists remain separate from the Recording-only V2 engine; a similarly named field is not evidence that album/artist-targeted rules exist.
+5. **Final integration:** base PR #193 is currently `mergeable_state=dirty` against main. Resolve those conflicts without losing parallel changes, validate integrated SHA and migration on Android, then perform physical test of folder, path, asset tags, room upgrade, source switching and saved-filter workflows before merge.
