@@ -58,6 +58,8 @@ internal data class RuleBasedRecordingCandidate(
     val artistDisplay: String? = null,
     val earlySkips: Long = 0,
     val lateSkips: Long = 0,
+    /** Last real early/late skip in first-party Listening, not an interruption. */
+    val lastSkippedAtEpochMs: Long? = null,
     val releaseTitles: List<String> = emptyList(),
     /** Null = unavailable provenance; never treat it as a negative match. */
     val sourceKinds: Set<SmartPlaylistSourceKind>? = null,
