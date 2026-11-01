@@ -25,8 +25,8 @@ class OpenSubsonicTagMappingTest {
                             "id":"album-1","name":"Test","songCount":4,"song":[
                                 {"id":"song-1","title":"Tagged","genres":[
                                     {"name":"Dream Pop"},{"name":"K-Pop"}],
-                                    "moods":["Calm","Bright"]},
-                                {"id":"song-2","title":"Untagged","genres":[],"moods":[]},
+                                    "moods":["Calm","Bright"],"bpm":134},
+                                {"id":"song-2","title":"Untagged","genres":[],"moods":[],"bpm":0},
                                 {"id":"song-3","title":"Unsupported"},
                                 {"id":"song-4","title":"Legacy","genre":"Rock"}
                             ]
@@ -44,6 +44,9 @@ class OpenSubsonicTagMappingTest {
         val tracks = provider.librarySnapshot().tracks.associateBy { it.externalTrackId }
         assertEquals(listOf("Dream Pop", "K-Pop"), tracks.getValue("song-1").genres)
         assertEquals(listOf("Calm", "Bright"), tracks.getValue("song-1").moods)
+        assertEquals(134, tracks.getValue("song-1").bpm)
+        assertEquals(0, tracks.getValue("song-2").bpm)
+        assertNull(tracks.getValue("song-3").bpm)
         assertEquals(emptyList<String>(), tracks.getValue("song-2").genres)
         assertEquals(emptyList<String>(), tracks.getValue("song-2").moods)
         assertNull(tracks.getValue("song-3").genres)
