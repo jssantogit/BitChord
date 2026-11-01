@@ -210,7 +210,8 @@ internal fun CanonicalRemoteLibraryScreen(
                 selected == null -> CanonicalSongFilterState.Failed
                 else -> {
                     val tagRows = if (selected.rules.referencedFields().any {
-                        it == SmartPlaylistRuleField.GENRE || it == SmartPlaylistRuleField.MOOD
+                        it == SmartPlaylistRuleField.GENRE || it == SmartPlaylistRuleField.MOOD ||
+                            it == SmartPlaylistRuleField.BPM
                     }) withContext(Dispatchers.IO) {
                         library.tracks.map { it.recordingId }.chunked(400).flatMap { ids ->
                             catalogDao.providerScopedTagRows(providerKey, ids)
