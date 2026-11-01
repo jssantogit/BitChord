@@ -36,7 +36,8 @@ internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalSongBrowse(
                 rule.field == SmartPlaylistRuleField.ARTIST_DISPLAY ||
                 rule.field == SmartPlaylistRuleField.DURATION_MS ||
                 rule.field == SmartPlaylistRuleField.SOURCE_KIND ||
-                (rule.field in setOf(SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD) &&
+                (rule.field in setOf(SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD,
+                    SmartPlaylistRuleField.BPM) &&
                     verifiedContextualSourceKind(providerKey) != null) ||
                 (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED &&
                     providerKey == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
@@ -56,6 +57,12 @@ internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalSongBrowse(
  * canonical Recordings and playback assets from its input unchanged.
  */
 /** Invalid JSON, an absent optional field, or a malformed value remains UNKNOWN. */
+private fun parseScopedBpmValues(raw: String?): List<Double>? = raw?.let {
+    runCatching { Json.decodeFromString<List<Double>>(it) }.getOrNull()?.takeIf { xs ->
+        xs.all { x -> x.isFinite() && x > 0.0 && x <= 999.0 }
+    }?.distinct()
+}
+
 private fun parseScopedAssetTags(json: String?): List<String>? =
     json?.let { serialized ->
         runCatching { Json.decodeFromString<List<String>>(serialized) }
@@ -92,7 +99,8 @@ internal fun filterCanonicalBrowseSongs(
         }
     }
     val needsTags = filter.rules.referencedFields().any {
-        it == SmartPlaylistRuleField.GENRE || it == SmartPlaylistRuleField.MOOD
+        it == SmartPlaylistRuleField.GENRE || it == SmartPlaylistRuleField.MOOD ||
+            it == SmartPlaylistRuleField.BPM
     }
     if (needsTags) require(scopedTagRowsByRecording != null) {
         "Provider tag rules require a current scoped Room snapshot"
@@ -123,6 +131,7 @@ internal fun filterCanonicalBrowseSongs(
                 validRows.map { it.mediaAssetId }.toSet() == visibleAssetIds
             val genres = validRows.map { parseScopedAssetTags(it.genresJson) }
             val moods = validRows.map { parseScopedAssetTags(it.moodsJson) }
+            val bpms = validRows.map { parseScopedBpmValues(it.bpmsJson) }
             RuleBasedRecordingCandidate(
                 recordingId = song.recordingId,
                 explicitRating = null,
@@ -137,6 +146,8 @@ internal fun filterCanonicalBrowseSongs(
                 genreEvidenceUnknown = !completeRows || genres.any { it == null },
                 moods = moods.filterNotNull().flatten().distinct(),
                 moodEvidenceUnknown = !completeRows || moods.any { it == null },
+                bpms = bpms.filterNotNull().flatten().distinct(),
+                bpmEvidenceUnknown = !completeRows || bpms.any { it == null },
                 localAddedEpochMs = validTimestamps,
                 localAddedDateEvidenceUnknown = timestampsUnknown,
             )
