@@ -554,39 +554,50 @@ internal fun SmartPlaylistV2WizardUi(
                             ) {
                                 // Preview real canonical member art when available,
                                 // as the Library's own playlist page does.
-                                val coverDimension = if (page == WizardStep.EDIT) 180.dp else 224.dp
                                 val automaticCoverRows = if (normalMode)
                                     normalSelectedRows else preview.orEmpty()
-                                Box(
-                                    modifier = Modifier.size(coverDimension)
-                                        .clip(RoundedCornerShape(12.dp)),
-                                ) {
-                                    if (automaticCoverRows.isNotEmpty()) {
-                                        CanonicalPlaylistCoverArt(
-                                            rows = automaticCoverRows,
-                                            modifier = Modifier.fillMaxSize(),
-                                        )
-                                    } else {
-                                        PlaylistWizardArtworkPlaceholder(coverDimension)
-                                    }
-                                    if (coverUri != null) {
-                                        AsyncImage(
-                                            model = coverUri,
-                                            contentDescription = "Capa escolhida da playlist",
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop,
-                                        )
+                                // Mirror the native Detail release hero (76% of available
+                                // width). The sleeve is measured independently of action
+                                // buttons, so adding "Remover capa" cannot shrink it.
+                                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                                    val coverDimension = maxWidth * 0.76f
+                                    Box(
+                                        modifier = Modifier.size(coverDimension)
+                                            .align(Alignment.Center)
+                                            .clip(RoundedCornerShape(12.dp)),
+                                    ) {
+                                        if (automaticCoverRows.isNotEmpty()) {
+                                            CanonicalPlaylistCoverArt(
+                                                rows = automaticCoverRows,
+                                                modifier = Modifier.fillMaxSize(),
+                                            )
+                                        } else {
+                                            PlaylistWizardArtworkPlaceholder(coverDimension)
+                                        }
+                                        if (coverUri != null) {
+                                            AsyncImage(
+                                                model = coverUri,
+                                                contentDescription = "Capa escolhida da playlist",
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop,
+                                            )
+                                        }
                                     }
                                 }
-                                PlaylistWizardSecondaryAction(
-                                    label = "Escolher capa",
-                                    onClick = onChooseCover,
-                                )
-                                if (coverUri != null) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
                                     PlaylistWizardSecondaryAction(
-                                        label = "Remover capa personalizada",
-                                        onClick = onClearCover,
+                                        label = "Escolher capa",
+                                        onClick = onChooseCover,
                                     )
+                                    if (coverUri != null) {
+                                        PlaylistWizardSecondaryAction(
+                                            label = "Remover capa",
+                                            onClick = onClearCover,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1075,9 +1086,8 @@ internal fun SmartPlaylistV2WizardUi(
                     WizardStep.EDITOR -> {
                         item {
                             WizardCard("Condição", smartConditionLabel(draft.field)) {
-                                PlaylistWizardSelectionRow(
-                                    label = operatorUiLabel(draft.operator),
-                                    selected = false,
+                                PlaylistWizardSecondaryAction(
+                                    label = "Comparação: " + operatorUiLabel(draft.operator),
                                     onClick = { picker = "operator" },
                                 )
                                 val presence = draft.operator == SmartPlaylistRuleOperator.IS_PRESENT ||
@@ -1103,6 +1113,7 @@ internal fun SmartPlaylistV2WizardUi(
                                                 draft = draft.copy(textValue = it, value = null)
                                             },
                                             label = "Texto a comparar",
+                                            emphasized = true,
                                         )
                                     } else {
                                         var numericText by remember(draft.field, editingPath) {
@@ -1123,6 +1134,7 @@ internal fun SmartPlaylistV2WizardUi(
                                             label = if (draft.field == SmartPlaylistRuleField.DURATION_MS)
                                                 "Duração (segundos)" else "Valor numérico",
                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                            emphasized = true,
                                         )
                                     }
                                 }
@@ -1131,9 +1143,9 @@ internal fun SmartPlaylistV2WizardUi(
                         item {
                             WizardCard("Inverter condição",
                                 "Exclui músicas que correspondem; dados desconhecidos continuam excluídos da prévia.") {
-                                PlaylistWizardSelectionRow(
-                                    label = if (negated) "Negação ativa" else "Inverter resultado",
-                                    selected = negated,
+                                PlaylistWizardSecondaryAction(
+                                    label = if (negated) "Inverter resultado · Ativado"
+                                        else "Inverter resultado · Desativado",
                                     onClick = { negated = !negated },
                                 )
                             }
