@@ -391,3 +391,11 @@ escopo restante.
 - **Faixa → Disco:** `DISC_NUMBER` usa `catalog_musicbrainz_track.mediumNumber` do par canônico RecordingId+ReleaseId. Uma edição sem Track oficial produz UNKNOWN, mesmo sob NOT e comparações negativas. Exige inteiro positivo.
 - **Faixa → Tipo de lançamento / É um single:** `RELEASE_GROUP_TYPE` usa `catalog_release_group.primaryType` via vínculos canônicos da edição. Exemplos: Album, Single e EP. Sem vinculação oficial ou com tipo ausente: UNKNOWN; não inferir pelo título nem confundir com o filtro contextual de um álbum inteiro.
 - Engine e Room possuem testes para correspondência positiva, valores inválidos e dados desconhecidos. BPM, humor, estilo, idioma, codecs, offline/cache e demais alvos/operadores da captura ainda exigem proveniência e implementação específica. CI do HEAD e smoke Galaxy A54 continuam obrigatórios antes do merge de #193/#202.
+
+
+## 2026-11-01 — Histórico real de pulos (referência Symfonium)
+
+- **Faixa → Número de pulos:** `TOTAL_SKIPS` soma somente `PLAYBACK_SKIPPED_EARLY` e `PLAYBACK_SKIPPED_LATE` do histórico nativo `Listening`. Não inclui `PLAYBACK_INTERRUPTED`, erros ou somente início da reprodução. Contagem zero com ausência de eventos é válida apenas para histórico deste dispositivo; não promete histórico remoto completo. Operadores numéricos usam inteiros não negativos; comparações de ausência não são oferecidas.
+- **Faixa → Última pulada:** `DAYS_SINCE_LAST_SKIP` lê `MAX(occurredAtEpochMs)` dos mesmos eventos classificados. A idade é calculada no momento de avaliar. Sem evento, timestamp inválido ou futuro retorna UNKNOWN e não satisfaz `NOT`. Não confundir com data da última reprodução concluída.
+- **Sem migração Room:** a mesma consulta agregada já utilizada para pulos foi ampliada com a última data. Busca apenas quando o AST requer histórico; não adiciona leitura por música, nem busca remota implícita.
+- Testes de motor e Room devem ser aprovados na CI do SHA final, e tela/ações precisam de smoke no Galaxy A54 antes de merge. BPM, humor, estilo, idioma e filtros próprios de álbum/artista continuam pendentes até metadados canônicos comprováveis.
