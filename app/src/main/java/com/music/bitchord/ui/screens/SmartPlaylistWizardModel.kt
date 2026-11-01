@@ -39,6 +39,7 @@ internal val smartConditionCategories = listOf(
     )),
     SmartConditionCategory("library", "Biblioteca e origens", "Fontes comprovadas do catálogo", listOf(
         SmartPlaylistRuleField.SOURCE_KIND,
+        SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleField.LOCAL_FILE_PATH,
     )),
     SmartConditionCategory("audio", "Áudio", "Duração comprovada das faixas", listOf(
         SmartPlaylistRuleField.DURATION_MS,
@@ -67,6 +68,8 @@ internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (
     SmartPlaylistRuleField.RELEASE_YEAR -> "Ano de lançamento da edição"
     SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED -> "Dias desde adição ao dispositivo"
     SmartPlaylistRuleField.SOURCE_KIND -> "Origem disponível"
+    SmartPlaylistRuleField.LOCAL_FOLDER -> "Pasta da música local"
+    SmartPlaylistRuleField.LOCAL_FILE_PATH -> "Caminho do arquivo local"
     SmartPlaylistRuleField.DURATION_MS -> "Duração da música"
 }
 
@@ -103,6 +106,10 @@ internal fun smartConditionDescription(field: SmartPlaylistRuleField): String = 
         "Tempo desde a adição de um arquivo local com data confiável."
     SmartPlaylistRuleField.SOURCE_KIND ->
         "Compare músicas locais ou OpenSubsonic da conta ativa, com origem comprovada."
+    SmartPlaylistRuleField.LOCAL_FOLDER ->
+        "Compare a pasta real do arquivo MediaStore (ex.: Music/Kpop); outros servidores são desconhecidos."
+    SmartPlaylistRuleField.LOCAL_FILE_PATH ->
+        "Compare o caminho real do arquivo local; caminhos de servidores não são inferidos."
     SmartPlaylistRuleField.DURATION_MS ->
         "Informe a duração total da música em segundos."
 }
@@ -122,6 +129,8 @@ internal fun smartConditionSearch(
         val cat = smartConditionCategories.first { field in it.fields }
         val aliases = when (field) {
             SmartPlaylistRuleField.SOURCE_KIND -> "fonte catalogo navidrome local biblioteca"
+            SmartPlaylistRuleField.LOCAL_FOLDER -> "pasta diretorio diretório local caminho mediastore"
+            SmartPlaylistRuleField.LOCAL_FILE_PATH -> "arquivo caminho pasta filepath path mediastore"
             SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "capa artwork imagem album"
             SmartPlaylistRuleField.DURATION_MS -> "duracao segundos tempo audio"
             SmartPlaylistRuleField.AUDIBLE_COMPLETIONS -> "plays execucoes escutas"
