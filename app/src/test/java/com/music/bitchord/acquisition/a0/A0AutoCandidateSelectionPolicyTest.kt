@@ -176,6 +176,17 @@ class A0AutoCandidateSelectionPolicyTest {
             A0AutoCandidateSelectionPolicy.preview(target,wrong,profile).status)
     }
 
+    @Test fun exactArtistAndAlbumFolderAllowsIndividuallyGatedAutoCandidate() {
+        val offer=offers("artist-album",
+            album="ILLIT - SUPER REAL ME")
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,
+            A0AutoCandidateSelectionPolicy.preview(target,offer,profile).status)
+        val decorated=offers("decorated",
+            album="ILLIT - SUPER REAL ME [FLAC]")
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,
+            A0AutoCandidateSelectionPolicy.preview(target,decorated,profile).status)
+    }
+
     @Test fun newCodecFolderUnderWrongReleaseRemainsManual() {
         for(folder in listOf("AAC","Opus","Ogg","Ogg Vorbis","Vorbis")) {
             val selection=A0AutoCandidateSelectionPolicy.preview(
