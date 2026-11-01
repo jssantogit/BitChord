@@ -109,9 +109,15 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
             if(choice.status!=A0AutoCandidateSelectionPolicy.Status.PROVISIONAL ||
                 choice.sequentialAlternatives.isEmpty())
                 return manual(Reason.NO_STRONG_CANDIDATE)
-            val order=choice.sequentialAlternatives
+            // Exact-score alternative editions may only follow an explicit
+            // pre-acceptance RetryableConnectionFailure, NEVER a receipt,
+            // failed technical inspection or uncertain A3 publication.
+            val order=(choice.sequentialAlternatives+
+                choice.preByteFallbacks).take(3)
             val sequence=A0AutoRetrySequencer(order.size,
-                optIn=true,equivalentClaimsConfirmed=true)
+                optIn=true,
+                equivalentClaimsConfirmed=choice.preByteFallbacks.isEmpty(),
+                independentlyEligibleExactScore=choice.preByteFallbacks.isNotEmpty())
             while(true) {
                 if(revoked()) {
                     sequence.cancel()
