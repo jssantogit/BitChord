@@ -89,7 +89,11 @@ internal class A0ObservedCandidateHandoff(
     private val candidates=ArrayList<Choice>(384)
     // Separate bounded observation cache: long releases need up to 64 tracks
     // from the same peer, but the actual manual selector retains max 10/peer.
-    private val releaseShadow=ArrayList<Choice>(512)
+    // Album searches may contain hundreds of distinct, plausible responses
+    // across multiple titles. Give the album query twice the total budget,
+    // keeping per-peer 64 and per-slot 512 safety caps unchanged.
+    private val releaseShadowLimit=if(releaseQueries.size>1)1024 else 512
+    private val releaseShadow=ArrayList<Choice>(releaseShadowLimit)
     private val releaseShadowPerPeer=HashMap<String,Int>()
     // A later sample must not look complete after the bounded collector
     // discarded a competing edition or a relevant source.
@@ -408,7 +412,7 @@ internal class A0ObservedCandidateHandoff(
                     // Previously, 64 unrelated files from one peer forever
                     // hid later tracks from that same release and source.
                     peerCount>=64 -> releaseSamePeerVictim(peer,observedChoice)
-                    releaseShadow.size==512 -> {
+                    releaseShadow.size==releaseShadowLimit -> {
                         // Retain prior cross-peer fairness: only replace
                         // an entry from a more heavily represented peer.
                         val maxCount=releaseShadowPerPeer.values.maxOrNull() ?: 0
@@ -425,7 +429,7 @@ internal class A0ObservedCandidateHandoff(
                     if(remainder==0)releaseShadowPerPeer.remove(victim.peerUsername)
                     else releaseShadowPerPeer[victim.peerUsername]=remainder
                 }
-                if(releaseShadow.size<512 &&
+                if(releaseShadow.size<releaseShadowLimit &&
                     (releaseShadowPerPeer[peer] ?: 0)<64) {
                     releaseShadow.add(observedChoice)
                     releaseShadowPerPeer[peer]=(releaseShadowPerPeer[peer] ?: 0)+1
