@@ -343,6 +343,8 @@ internal fun SmartPlaylistV2WizardUi(
     error: String?,
     editingId: String?,
     editingFilterId: String?,
+    creatingFilter: Boolean = false,
+    filterNotice: String? = null,
     savedDefinitions: List<SavedSmartPlaylistV2Definition>,
     onNameChange: (String) -> Unit,
     description: String = "",
@@ -391,8 +393,9 @@ internal fun SmartPlaylistV2WizardUi(
     onManage: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val filterMode = editingFilterId != null || creatingFilter
     val isEditing = openingAsEdit ||
-        editingId != null || editingNormalId != null || editingFilterId != null
+        editingId != null || editingNormalId != null || filterMode
     var page by remember {
         mutableStateOf(when {
             isEditing && normalMode && startOnNormalSongs -> WizardStep.SONGS
@@ -443,7 +446,7 @@ internal fun SmartPlaylistV2WizardUi(
                 WizardStep.EDIT
             }
             WizardStep.IDENTITY -> {
-                if (name.isNotBlank() || description.isNotBlank() || editingId != null || editingFilterId != null) {
+                if (name.isNotBlank() || description.isNotBlank() || editingId != null || filterMode) {
                     confirmDiscard = true
                 } else {
                     onBack()
@@ -464,9 +467,11 @@ internal fun SmartPlaylistV2WizardUi(
 
     val header = when (page) {
         WizardStep.IDENTITY -> "Nova playlist"
-        WizardStep.EDIT -> if (editingFilterId != null) "Editar filtro" else "Editar playlist"
+        WizardStep.EDIT -> if (filterMode) {
+            if (editingFilterId != null) "Editar filtro" else "Novo filtro"
+        } else "Editar playlist"
         WizardStep.SONGS -> if (isEditing) "Editar músicas" else "Adicionar músicas"
-        WizardStep.RULES -> if (editingFilterId != null) "Regras do filtro" else "Regras da playlist"
+        WizardStep.RULES -> if (filterMode) "Regras do filtro" else "Regras da playlist"
         WizardStep.GROUP -> "Editar grupo de regras"
         WizardStep.CATEGORIES -> "Adicionar condição"
         WizardStep.FIELDS -> selectedCategory.title
@@ -523,8 +528,8 @@ internal fun SmartPlaylistV2WizardUi(
                 item {
                     val headingDetail = when (page) {
                         WizardStep.IDENTITY -> "Dê um nome e escolha como a biblioteca será organizada."
-                        WizardStep.EDIT -> if (editingFilterId != null)
-                            "Atualize o nome e as regras deste filtro reutilizável."
+                        WizardStep.EDIT -> if (filterMode)
+                            "Configure o nome e as regras deste filtro reutilizável."
                         else "Atualize a capa, a descrição e as faixas ou regras desta playlist."
                         WizardStep.SONGS -> "Escolha as faixas que farão parte desta playlist, na ordem desejada."
                         WizardStep.RULES -> "Organize condições em grupos. As opções avançadas ficam dentro de cada grupo."
@@ -554,7 +559,7 @@ internal fun SmartPlaylistV2WizardUi(
                                 )
                             }
                         }
-                        if (editingFilterId == null) item {
+                        if (!filterMode) item {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -613,12 +618,12 @@ internal fun SmartPlaylistV2WizardUi(
                                 PlaylistWizardTextEntry(
                                     value = name,
                                     onValueChange = onNameChange,
-                                    label = if (editingFilterId != null) "Nome do filtro"
+                                    label = if (filterMode) "Nome do filtro"
                                         else "Nome da playlist",
                                     hint = "Obrigatório · até 80 caracteres",
                                     error = name.length > 80,
                                 )
-                                if (editingFilterId == null) {
+                                if (!filterMode) {
                                     PlaylistWizardTextEntry(
                                         value = description,
                                         onValueChange = {
@@ -701,7 +706,7 @@ internal fun SmartPlaylistV2WizardUi(
                         }
                         if (page == WizardStep.IDENTITY) item {
                             WizardCard("Tipo de playlist", "Normal: escolha manual de músicas. Inteligente: seleção por regras.") {
-                                if (editingId != null || editingFilterId != null || editingNormalId != null) {
+                                if (editingId != null || filterMode || editingNormalId != null) {
                                     Text(if (normalMode) "Normal" else "Inteligente",
                                         style = MaterialTheme.typography.bodyMedium)
                                 } else {
@@ -857,7 +862,7 @@ internal fun SmartPlaylistV2WizardUi(
                                 },
                             )
                         }
-                        if (editingFilterId == null) item {
+                        if (!filterMode) item {
                             WizardCard("Limite e ordenação",
                                 "Aplicados depois de avaliar todas as condições") {
                                 PlaylistWizardSecondaryAction(
@@ -1295,6 +1300,10 @@ internal fun SmartPlaylistV2WizardUi(
                         }
                     }
                 }
+                if (filterNotice != null) item {
+                    Text(filterNotice, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium)
+                }
                 if (error != null) item {
                     Text(error, color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodyMedium)
@@ -1313,14 +1322,14 @@ internal fun SmartPlaylistV2WizardUi(
                 when (page) {
                     WizardStep.EDIT -> {
                         PlaylistWizardPrimaryAction(
-                            label = if (editingFilterId != null) "Salvar filtro" else "Salvar alterações",
+                            label = if (filterMode) "Salvar filtro" else "Salvar alterações",
                             enabled = canContinue && !loading &&
                                 (normalMode || canReview) &&
                                 !normalLoading && normalAddingAlbumId == null,
-                            onClick = if (editingFilterId != null) onSaveFilter
+                            onClick = if (filterMode) onSaveFilter
                                 else if (normalMode) onSaveNormal else onSave,
                         )
-                        if (editingFilterId == null &&
+                        if (!filterMode &&
                             (editingNormalId != null || editingId != null)
                         ) {
                             PlaylistWizardSecondaryAction(
