@@ -55,6 +55,8 @@ internal enum class SmartPlaylistRuleField {
     ALBUM_ARTIST,
     TRACK_NUMBER,
     TRACK_ARTIST,
+    GENRE,
+    MOOD,
     DAYS_SINCE_LOCAL_RATING,
     RELEASE_ARTWORK_REFERENCE,
     DAYS_SINCE_LOCAL_FILE_ADDED,
@@ -86,7 +88,9 @@ internal fun SmartPlaylistRuleField.isTextField(): Boolean =
         this == SmartPlaylistRuleField.RELEASE_TITLE ||
         this == SmartPlaylistRuleField.SOURCE_KIND ||
         this == SmartPlaylistRuleField.ALBUM_ARTIST ||
-        this == SmartPlaylistRuleField.TRACK_ARTIST
+        this == SmartPlaylistRuleField.TRACK_ARTIST ||
+        this == SmartPlaylistRuleField.GENRE ||
+        this == SmartPlaylistRuleField.MOOD
 
 internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOperator> =
     if (this == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) listOf(
@@ -669,6 +673,8 @@ internal class SmartPlaylistV2RuleEngine(
                 SmartPlaylistRuleField.TITLE -> listOfNotNull(row.title)
                 SmartPlaylistRuleField.ARTIST_DISPLAY -> listOfNotNull(row.artistDisplay)
                 SmartPlaylistRuleField.RELEASE_TITLE -> row.releaseTitles
+                SmartPlaylistRuleField.GENRE -> row.genres
+                SmartPlaylistRuleField.MOOD -> row.moods
                 SmartPlaylistRuleField.ALBUM_ARTIST,
                 SmartPlaylistRuleField.TRACK_ARTIST,
                 SmartPlaylistRuleField.SOURCE_KIND -> emptyList()
@@ -679,6 +685,10 @@ internal class SmartPlaylistV2RuleEngine(
             }.distinct()
             val incomplete = rawValues.size != rawValues.count {
                 it.normalizedSmartPlaylistText() != null
+            } || when (rule.field) {
+                SmartPlaylistRuleField.GENRE -> row.genreEvidenceUnknown
+                SmartPlaylistRuleField.MOOD -> row.moodEvidenceUnknown
+                else -> false
             }
             if ((rule.field == SmartPlaylistRuleField.TITLE ||
                     rule.field == SmartPlaylistRuleField.ARTIST_DISPLAY) &&
@@ -747,6 +757,7 @@ internal class SmartPlaylistV2RuleEngine(
             SmartPlaylistRuleField.ALBUM_ARTIST,
             SmartPlaylistRuleField.TRACK_NUMBER,
             SmartPlaylistRuleField.TRACK_ARTIST,
+            SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD,
             SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
             SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED -> null
         }
