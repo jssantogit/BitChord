@@ -26,6 +26,41 @@ class A0MultiSearchCandidateEvidenceTest {
         return handoff.releaseShadowChoices()
     }
 
+    @Test(timeout=16000)
+    fun multiTrackDiscoveryRetainsEightHundredDistributedOffersWithoutFalseTruncation() {
+        val release=listOf(
+            SoulseekBatchPlan.Entry("a","ILLIT - Alpha Bloom","BREAK EVEN",161),
+            SoulseekBatchPlan.Entry("b","ILLIT - Midnight Sun","BREAK EVEN",161),
+            SoulseekBatchPlan.Entry("c","ILLIT - Winter Rose","BREAK EVEN",161),
+            SoulseekBatchPlan.Entry("d","ILLIT - Golden Hour","BREAK EVEN",161),
+        )
+        val handoff=A0ObservedCandidateHandoff(
+            Socket(),"local",177,true,searchPhrase=release.first().query,
+            requestedAlbum="BREAK EVEN",expectedDurationSeconds=161,
+            qualityProfile=quality,collectReleaseShadow=true,
+            releaseQueries=release.map { it.query })
+        repeat(16) { peer ->
+            val files=(0 until 50).map { number ->
+                val entry=release[(peer*50+number)%release.size]
+                A0SoulseekSearchFile(
+                    "Music\\ILLIT\\BREAK EVEN\\${entry.query} - take ${peer*50+number}.mp3",
+                    6_440_000L,"mp3",mapOf(0 to 320,1 to 161))
+            }
+            assertTrue(handoff.offerParsed(A0SoulseekSearchResponse(
+                "peer-$peer",177,files,emptyList(),true,128_000,0),"peer-$peer"))
+        }
+        val shadow=handoff.releaseShadowSnapshot()
+        assertEquals(800,shadow.choices.size)
+        assertTrue(shadow.truncatedSlots.isEmpty())
+        val portfolio=A0MultiSearchCandidateEvidence(release,quality)
+        portfolio.add(shadow.choices,shadow.truncatedSlots)
+        for(i in release.indices) {
+            val (observed,truncated)=checkNotNull(portfolio.slotEvidence(i))
+            assertEquals(200,observed.size)
+            assertFalse("slot $i must not be marked clipped",truncated)
+        }
+    }
+
     @Test fun separateSearchesAccumulateCoverageForBothAlbumSlots() {
         val state=A0MultiSearchCandidateEvidence(entries,quality)
         state.add(choices("peer-a","Magnetic",161))
