@@ -70,6 +70,13 @@ internal data class CanonicalRecordingLocalPathRow(
     val path: String?,
 )
 
+/** Real per-file audio tags from currently scanned MediaStore assets only. */
+internal data class CanonicalRecordingLocalAudioTagRow(
+    val recordingId: String,
+    val localGenre: String?,
+    val localBitrateBps: Long?,
+)
+
 internal data class CanonicalRecordingReleaseArtworkRow(
     val recordingId: String,
     val releaseId: String,
@@ -331,6 +338,20 @@ internal interface CanonicalCatalogDao {
         localProvider: String,
         recordingIds: List<String>,
     ): List<CanonicalRecordingLocalPathRow>
+
+    @Query(
+        """
+        SELECT recordingId AS recordingId, localGenre AS localGenre,
+               localBitrateBps AS localBitrateBps
+        FROM catalog_media_asset
+        WHERE provider = :localProvider AND recordingId IN (:recordingIds)
+        ORDER BY recordingId ASC, id ASC
+        """,
+    )
+    suspend fun localAudioTagsByRecordingIds(
+        localProvider: String,
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingLocalAudioTagRow>
 
     /** Bounded, factual local additions: actual MediaStore dates, never fake releases. */
     @Query(
