@@ -71,6 +71,11 @@ internal data class RuleBasedRecordingCandidate(
     val trackNumberEvidenceUnknown: Boolean = true,
     val trackArtistNames: List<String> = emptyList(),
     val trackArtistEvidenceUnknown: Boolean = true,
+    /** Provider-scoped tags: a known empty list means the server reported no values. */
+    val genres: List<String> = emptyList(),
+    val genreEvidenceUnknown: Boolean = true,
+    val moods: List<String> = emptyList(),
+    val moodEvidenceUnknown: Boolean = true,
     val localRatingUpdatedAtEpochMs: Long? = null,
     /** An absent first-party rating is only known after the local store was queried. */
     val localRatingDateEvidenceKnown: Boolean = false,
