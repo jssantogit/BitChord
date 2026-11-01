@@ -80,9 +80,11 @@ internal class A0ServerAssociatedTransfer(
         privateDirectory: File,
         externalCancelled:()->Boolean={false},
         onPhase:(Phase)->Unit={},
+        onTokenValidated:()->Unit={},
+        onProgress:(Long)->Unit={},
     ): A0VerifiedByteStager.Receipt = runInternal(
         authenticatedServer,localUsername,peerUsername,null,listing,privateDirectory,
-        onPhase,externalCancelled)
+        onPhase,externalCancelled,onTokenValidated,onProgress)
 
     private fun runInternal(
         authenticatedServer: Socket,
@@ -93,6 +95,8 @@ internal class A0ServerAssociatedTransfer(
         privateDirectory: File,
         onPhase:(Phase)->Unit,
         externalCancelled:()->Boolean,
+        onTokenValidated:()->Unit={},
+        onProgress:(Long)->Unit={},
     ): A0VerifiedByteStager.Receipt {
         check(used.compareAndSet(false,true)){"A0 server peer transfer already attempted"}
         this.externalCancelled=externalCancelled
@@ -193,7 +197,9 @@ internal class A0ServerAssociatedTransfer(
                             f.getInputStream(),f.getOutputStream(),privateDirectory,
                             isCancelled={shouldStop()||
                                 A0TransferDeadlines.isExpired(
-                                    receiveDeadline,System.nanoTime())}
+                                    receiveDeadline,System.nanoTime())},
+                            onTokenValidated=onTokenValidated,
+                            onProgress=onProgress,
                         )
                         onPhase(Phase.BYTES_RECEIVED)
                         if(shouldStop()||
