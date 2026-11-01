@@ -27,7 +27,7 @@ internal val smartConditionCategories = listOf(
         SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleField.ALBUM_ARTIST,
         SmartPlaylistRuleField.TRACK_ARTIST, SmartPlaylistRuleField.TRACK_NUMBER,
         SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD,
-        SmartPlaylistRuleField.BPM,
+        SmartPlaylistRuleField.BPM, SmartPlaylistRuleField.STYLE,
     )),
     SmartConditionCategory("ratings", "Avaliações", "Notas em estrelas e data da nota local", listOf(
         SmartPlaylistRuleField.EXPLICIT_RATING, SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING,
@@ -61,6 +61,7 @@ internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (
     SmartPlaylistRuleField.GENRE -> "Gênero musical"
     SmartPlaylistRuleField.MOOD -> "Clima / mood"
     SmartPlaylistRuleField.BPM -> "Ritmo (BPM)"
+    SmartPlaylistRuleField.STYLE -> "Estilo musical"
     SmartPlaylistRuleField.TRACK_NUMBER -> "Número da faixa"
     SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "Álbum com referência de capa"
     SmartPlaylistRuleField.EXPLICIT_RATING -> "Avaliação em estrelas"
@@ -92,6 +93,8 @@ internal fun smartConditionDescription(field: SmartPlaylistRuleField): String = 
         "Filtra climas informados pelas fontes disponíveis; valores desconhecidos não contam como ausentes."
     SmartPlaylistRuleField.BPM ->
         "Compara o ritmo informado em batidas por minuto, sem supor BPM zero para tags ausentes."
+    SmartPlaylistRuleField.STYLE ->
+        "Filtra o estilo informado pela biblioteca local ou fonte remota, sem adivinhar tags ausentes."
     SmartPlaylistRuleField.TRACK_NUMBER ->
         "Compare a posição conhecida da música no lançamento."
     SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE ->
