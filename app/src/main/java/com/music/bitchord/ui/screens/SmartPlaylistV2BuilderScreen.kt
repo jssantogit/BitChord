@@ -748,6 +748,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     ),
                     creatingFilter = creatingFilter,
                     filterNotice = filterNotice,
+                    hasExportedFilter = exportedFilterId != null,
                     startOnNormalSongs = startOnNormalSongs,
                     savedDefinitions = saved.filterNot { it.id == editingId },
                     onNameChange = { name = it; filterNotice = null },
@@ -1051,7 +1052,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     SettingsGroupSurface {
                         SettingsRow(
                             title = "Nenhum filtro salvo",
-                            subtitle = "Para criar um filtro, configure condições em uma nova playlist inteligente e escolha Salvar como filtro reutilizável na revisão.",
+                            subtitle = "Use Criar filtro acima para configurar e guardar suas primeiras regras.",
                             reserveIconSpace = false,
                         )
                     }
@@ -1236,6 +1237,10 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 }
                                 if (pending.isFilter && editingFilterId == pending.id)
                                     editingFilterId = null
+                                if (pending.isFilter && exportedFilterId == pending.id) {
+                                    exportedFilterId = null
+                                    filterNotice = null
+                                }
                                 if (!pending.isFilter && editingId == pending.id) reset()
                                 error = null
                             } catch (cancelled: CancellationException) {
