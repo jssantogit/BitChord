@@ -1,0 +1,129 @@
+name: Catalog #178 — Android Smoke APK
+
+# APK candidate from the exact #178 PR HEAD. Pull-request path filters
+# use the cumulative PR diff, so a cheap commit-delta gate prevents repeated
+# 300+ MB builds on unrelated later code pushes.
+# Candidate: 2026-10-28 authorized A54 smoke for HEAD d1256e0: inherited group/release sleeves, filled-500px detail correction and official retail-edition rejection.
+# Trigger: explicit user authorization after final CI/code review; no merge, no new cover providers.
+# The APK job runs JVM regressions on the exact checked-out HEAD before packaging.
+on:
+  workflow_dispatch:
+  # The smoke workflow is intentionally isolated to PR #183 and does not
+  # exist on main yet; push-to-self is the reliable explicit APK trigger.
+  push:
+    branches: [fix/178-musicbrainz-canonical-foundation]
+    paths:
+      - .github/workflows/catalog-178-smoke-apk.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-178-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect_candidate:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.delta.outputs.should_build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+      - name: Check last commit instead of cumulative PR diff
+        id: delta
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] ||
+             git diff --name-only HEAD^ HEAD | grep -Fxq ".github/workflows/catalog-178-smoke-apk.yml"; then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          fi
+  android-smoke-apk:
+    needs: detect_candidate
+    if: needs.detect_candidate.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout exact candidate SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure local build environment
+        run: |
+          echo "LASTFM_API_KEY=" > local.properties
+          echo "LASTFM_SECRET=" >> local.properties
+          echo "sdk.dir=$ANDROID_HOME" >> local.properties
+          chmod +x gradlew
+
+      # A transient/non-ZIP SDK mirror response broke run #40205530200 before
+      # compilation. Install the exact NDK explicitly and check its package
+      # metadata; never let Gradle silently accept an incomplete download.
+      - name: Install verified Android NDK (bounded retry)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ndk_version="27.0.12077973"
+          ndk_path="${ANDROID_HOME}/ndk/${ndk_version}"
+          sdkmanager="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$sdkmanager" ]]; then
+            sdkmanager="$(command -v sdkmanager)"
+          fi
+
+          ndk_ready() {
+            [[ -s "$ndk_path/source.properties" ]] &&
+              grep -Eq "^Pkg.Revision *= *${ndk_version}$" "$ndk_path/source.properties"
+          }
+
+          for attempt in 1 2 3; do
+            if ndk_ready; then
+              echo "Verified NDK ${ndk_version}"
+              exit 0
+            fi
+            # Remove only this candidate SDK component, not other cached SDKs.
+            rm -rf "$ndk_path"
+            echo "NDK install attempt ${attempt}/3"
+            if "$sdkmanager" --install "ndk;${ndk_version}" && ndk_ready; then
+              echo "Verified NDK ${ndk_version}"
+              exit 0
+            fi
+            if (( attempt < 3 )); then sleep $(( 5 * attempt )); fi
+          done
+          echo "::error::Could not install/verify Android NDK ${ndk_version}"
+          exit 1
+
+      - name: Gate APK with exact-commit Android unit tests
+        run: ./gradlew --no-daemon --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+
+      - name: Build installable dev debug APK
+        run: ./gradlew --no-daemon --build-cache -Pbitchord.bundleWear=false :app:assembleDevDebug
+
+      - name: Record APK checksum and exact commit
+        run: |
+          printf 'commit=%s\n' "$(git rev-parse HEAD)" > catalog-178-build.txt
+          printf 'candidate=178-a54-front-v5-album-inheritance-500px-editorial-covers-smoke\n' >> catalog-178-build.txt
+          printf 'validation_focus=get-up-twice-front-v5-exact-edition-artist-album-track-500px-cache-coil-memory-disk-network-restart-caa-p95-stalls\n' >> catalog-178-build.txt
+          find app/build/outputs/apk/dev/debug -name '*.apk' -print -exec sha256sum '{}' \; >> catalog-178-build.txt
+
+      - name: Upload smoke candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-178-android-dev-debug
+          path: |
+            app/build/outputs/apk/dev/debug/*.apk
+            catalog-178-build.txt
+          if-no-files-found: error
+          retention-days: 14

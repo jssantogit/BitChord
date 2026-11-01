@@ -59,6 +59,7 @@ class DiagnosticFileStore(
         includeJsonl: Boolean = false,
         incidentReport: DiagnosticIncidentTriage? = null,
         performanceReport: List<DiagnosticBottleneckSummary> = emptyList(),
+        catalogCoverReport: List<String> = emptyList(),
     ): File = synchronized(lock) {
         ensureRoot()
         val exports = exportsDir().apply { mkdirs() }
@@ -121,6 +122,11 @@ class DiagnosticFileStore(
                 report.toJsonl().lineSequence().filter(String::isNotBlank).forEach {
                     writer.appendLine(safeSharedText(it))
                 }
+            }
+            if (catalogCoverReport.isNotEmpty()) {
+                writer.appendLine()
+                writer.appendLine("[catalog-cover-art-v1]")
+                catalogCoverReport.take(12).forEach { writer.appendLine(safeSharedText(it)) }
             }
             if (performanceReport.isNotEmpty()) {
                 writer.appendLine()

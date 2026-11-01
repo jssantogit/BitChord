@@ -1,0 +1,32 @@
+<resources>
+    <string name="settings_nav_group_account">TÀI KHOẢN</string>
+    <string name="settings_nav_group_music">ÂM NHẠC</string>
+    <string name="settings_nav_group_experience">TRẢI NGHIỆM</string>
+    <string name="settings_nav_group_data">DỮ LIỆU VÀ TẢI XUỐNG</string>
+    <string name="settings_nav_group_system">HỆ THỐNG</string>
+    <string name="settings_nav_group_about">GIỚI THIỆU</string>
+    <string name="settings_nav_lyrics">Lời bài hát</string>
+    <string name="settings_nav_about">Giới thiệu</string>
+    <string name="settings_nav_filtered">Kết quả cho: %1$s</string>
+    <string name="settings_nav_show_all">Xem tất cả</string>
+    <string name="settings_nav_controls">Điều khiển và hành vi</string>
+    <string name="settings_nav_advanced">Nâng cao</string>
+    <string name="settings_nav_desc_account">Tài khoản và tích hợp âm nhạc</string>
+    <string name="settings_nav_desc_audio">Nguồn, Wi-Fi và dữ liệu di động</string>
+    <string name="settings_nav_desc_playback">Đầu ra âm thanh, chuyển tiếp và hàng đợi</string>
+    <string name="settings_nav_desc_local">Thư mục và bộ lọc âm thanh cục bộ</string>
+    <string name="settings_nav_desc_appearance">Chủ đề, ảnh bìa và hiệu ứng</string>
+    <string name="settings_nav_desc_lyrics">Đồng bộ, nguồn lời và bản dịch</string>
+    <string name="settings_nav_desc_downloads">Soulseek, chất lượng và nơi lưu</string>
+    <string name="settings_nav_desc_storage">Bộ nhớ đệm âm thanh và dung lượng</string>
+    <string name="settings_nav_desc_data">Replay, sao lưu và nhập dữ liệu</string>
+    <string name="settings_nav_desc_performance">Tần số quét và pin</string>
+    <string name="settings_nav_desc_misc">Cử chỉ và hành vi phát nhạc</string>
+    <string name="settings_nav_desc_language">Ngôn ngữ giao diện</string>
+    <string name="settings_nav_desc_advanced">Chẩn đoán và điều khiển kỹ thuật</string>
+    <string name="settings_nav_desc_wear">Tích hợp đồng hồ</string>
+    <string name="settings_nav_desc_about">Phiên bản và thông tin dự án</string>
+    <string name="settings_nav_desc_sources">Nhà cung cấp nhạc và tiện ích mở rộng</string>
+    <string name="settings_nav_diagnostics_title">Chẩn đoán</string>
+    <string name="settings_nav_diagnostics_subtitle">Ghi, xem và chia sẻ báo cáo chẩn đoán</string>
+</resources>

@@ -110,7 +110,6 @@ private fun bitExactVerdict(
     loudnessActive: Boolean,
     eqActive: Boolean,
     spatialActive: Boolean,
-    routeActuallyObserved: Boolean,
 ): String = when {
     // Not a fault to fix: there is no DSD output path (native DSD or DoP)
     // here, so the PCM conversion is a deviation every DSD track carries,
@@ -119,10 +118,10 @@ private fun bitExactVerdict(
     loudnessActive -> "No — loudness normalization"
     eqActive -> "No — equalizer"
     spatialActive -> "No — spatial audio"
-    else -> when (AudioFidelityTruth.classify(outputExact, anyDsp = false, routeActuallyObserved = routeActuallyObserved)) {
+    else -> when (AudioFidelityTruth.classify(outputExact, anyDsp = false)) {
         FidelityTruth.ALTERED -> "No — ${outputExactDetail ?: "converted downstream"}"
-        FidelityTruth.PCM_EXACT_ROUTE_NOT_PROVEN -> "Not proven — PCM exact to AudioTrack; output route not verified"
-        FidelityTruth.END_TO_END_VERIFIED -> "Yes${outputExactDetail?.let { " ($it)" }.orEmpty()}"
+        FidelityTruth.PCM_EXACT_ROUTE_NOT_PROVEN ->
+            "PCM preserved to AudioTrack — Android output not verified"
     }
 }
 
@@ -413,10 +412,12 @@ fun AudioPipelineDialog(
             ) {
                 PipelineRow(stringResource(R.string.pipeline_pcm_format), pcmFormat)
                 PipelineRow(stringResource(R.string.pipeline_sample_rate), dspRateText)
-                PipelineRow(stringResource(R.string.pipeline_loudness_gain), loudnessGainText)
-                PipelineRow(stringResource(R.string.pipeline_loudness_measured), loudnessMeasuredText)
-                PipelineRow(stringResource(R.string.pipeline_eq_preset), eqPresetText)
-                PipelineRow(stringResource(R.string.pipeline_stereo_expand), stereoExpandText)
+                if (outputStatus.dspAvailable) {
+                    PipelineRow(stringResource(R.string.pipeline_loudness_gain), loudnessGainText)
+                    PipelineRow(stringResource(R.string.pipeline_loudness_measured), loudnessMeasuredText)
+                    PipelineRow(stringResource(R.string.pipeline_eq_preset), eqPresetText)
+                    PipelineRow(stringResource(R.string.pipeline_stereo_expand), stereoExpandText)
+                }
                 PipelineRow(stringResource(R.string.pipeline_buffers), buffersText)
                 PipelineRow(stringResource(R.string.pipeline_output_api), outputStatus.sink.ifBlank { "AAudio" })
                 // The verdict, rather than the settings. Names whichever
@@ -430,10 +431,10 @@ fun AudioPipelineDialog(
                         dsd = dsdRateHz != null,
                         outputExact = outputStatus.outputExact,
                         outputExactDetail = outputStatus.outputExactDetail,
-                        loudnessActive = loudnessNormalization && outputStatus.loudnessGainDb != null,
-                        eqActive = eqEnabled,
-                        spatialActive = spatialAudio,
-                        routeActuallyObserved = outputStatus.directPlaybackActual,
+                        loudnessActive = outputStatus.dspAvailable &&
+                            loudnessNormalization && outputStatus.loudnessGainDb != null,
+                        eqActive = outputStatus.dspAvailable && eqEnabled,
+                        spatialActive = outputStatus.dspAvailable && spatialAudio,
                     ),
                 )
             }

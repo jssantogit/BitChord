@@ -525,13 +525,6 @@ private fun SongRowContent(
             ) {
                 if (searchPlayingStyle && isCurrent && isPlaying) {
                     SearchPlayingBars()
-                } else if (isCurrent) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Rounded.GraphicEq else Icons.Rounded.PlayArrow,
-                        contentDescription = stringResource(Res.string.now_playing),
-                        tint = activeTint,
-                        modifier = Modifier.size(22.dp),
-                    )
                 } else {
                     Text(
                         text = "$trackNumber",
@@ -602,30 +595,28 @@ private fun SongRowContent(
                 modifier = Modifier.size(20.dp),
             )
         }
-        if (isCurrent && trackNumber == null && !(searchPlayingStyle && isPlaying)) {
-            Spacer(Modifier.width(8.dp))
-            Icon(
-                imageVector = if (isPlaying) Icons.Rounded.GraphicEq else Icons.Rounded.PlayArrow,
-                contentDescription = stringResource(Res.string.now_playing),
-                tint = activeTint,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        if (matching) {
-            Spacer(Modifier.width(8.dp))
-            CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
-                strokeWidth = 2.dp,
-                color = subtitleColor,
-            )
-        } else {
-            song.durationText?.let {
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.labelMedium,
+        // Rating occupies the trailing strip; title/artist ellipsize to leave
+        // space for it. Duration sits *under* the stars, not beside them.
+        // Unrated tracks keep their existing trailing duration slot.
+        Column(
+            modifier = Modifier.padding(start = 8.dp),
+            horizontalAlignment = Alignment.End,
+        ) {
+            CanonicalSongRatingStars(song, color = MaterialTheme.colorScheme.onSurface)
+            if (matching) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
                     color = subtitleColor,
                 )
+            } else {
+                song.durationText?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = subtitleColor,
+                    )
+                }
             }
         }
         // Same sheet the long-press opens, for anyone who doesn't think to hold.

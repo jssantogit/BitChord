@@ -61,6 +61,7 @@
     </plurals>
     <string name="songs">เพลง</string>
     <string name="artists">ศิลปิน</string>
+    <string name="canonical_singles_eps">ซิงเกิลและอีพี</string>
     <string name="albums">อัลบั้ม</string>
     <string name="no_album_metadata">ไม่มีแทร็กใดระบุว่ามาจากอัลบั้มไหน</string>
     <string name="search_empty">ค้นหาเพลงหลายล้านเพลงบน YouTube Music</string>
@@ -1343,4 +1344,31 @@
     <string name="playback_recovery_retry">ลองอีกครั้ง</string>
     <string name="playback_recovery_retrying">กำลังลองอีกครั้ง…</string>
     <string name="playback_recovery_dismiss">ปิด</string>
+    <string name="canonical_discovery_header">สำรวจแค็ตตาล็อก</string>
+    <string name="canonical_discovery_setting_title">หน้าหลักและสำรวจด้วยแค็ตตาล็อก</string>
+    <string name="canonical_discovery_setting_subtitle">ใช้เพลงที่บันทึกไว้และ MusicBrainz ในหน้าหลักและสำรวจ ระบบจะใช้โหมดนี้เมื่อปิด YouTube Music ด้วย</string>
+    <string name="canonical_discovery_home_title">เพลงของคุณ</string>
+    <string name="canonical_discovery_explore_title">สำรวจแค็ตตาล็อก</string>
+    <string name="canonical_discovery_description">เรียกดูคอลเล็กชันที่บันทึกไว้ในอุปกรณ์หรือค้นหา MusicBrainz ข้อมูลเมตาไม่ได้รับประกันว่าจะมีเสียงให้เล่น</string>
+    <string name="canonical_discovery_search">ค้นหา MusicBrainz</string>
+    <string name="canonical_discovery_open_library">เปิดคลังเพลง</string>
+    <string name="canonical_discovery_downloaded_collections">คอลเล็กชันที่ดาวน์โหลด</string>
+    <string name="canonical_discovery_local_playlists">เพลย์ลิสต์ที่บันทึกในอุปกรณ์</string>
+    <string name="canonical_discovery_empty_collections">ยังไม่มีคอลเล็กชันที่บันทึกไว้ในอุปกรณ์นี้</string>
+    <string name="canonical_discovery_catalog_cache">แค็ตตาล็อกที่บันทึกในอุปกรณ์</string>
+    <string name="canonical_discovery_cache_loading">กำลังโหลดแค็ตตาล็อกที่บันทึกไว้…</string>
+    <string name="canonical_discovery_cache_error">ไม่สามารถอ่านแค็ตตาล็อก MusicBrainz ที่บันทึกไว้ได้</string>
+    <string name="canonical_discovery_cache_empty">ยังไม่มีรายการ MusicBrainz ที่บันทึกไว้ ค้นหาเพื่อดูข้อมูลเมตาสาธารณะ</string>
+    <string name="canonical_discovery_metadata_only">เฉพาะข้อมูลเมตา · ไม่มีไฟล์เสียงในแค็ตตาล็อก</string>
+    <string name="canonical_discovery_asset_available">มีเสียงในแค็ตตาล็อก · จะตรวจสอบสิทธิ์เมื่อเล่น</string>
+    <string name="canonical_discovery_cached_offline">บันทึกไว้แบบออฟไลน์</string>
+    <string name="canonical_discovery_retry">ลองอีกครั้ง</string>
+    <string name="canonical_discovery_refresh">รีเฟรชแค็ตตาล็อกที่บันทึกไว้</string>
+    <string name="legacy_library_youtube_disabled">เปิด YouTube Music ในการตั้งค่าเพื่อโหลดคลังเพลงออนไลน์นี้ เพลย์ลิสต์และคอลเล็กชันในเครื่องยังใช้งานได้</string>
+    <string name="spotify_import_youtube_required">การนำเข้าเพลย์ลิสต์ Spotify ยังต้องอาศัยการจับคู่ผ่าน YouTube Music เปิดใช้ YouTube Music และปิดการค้นพบจากแค็ตตาล็อกก่อนนำเข้า</string>
+    <string name="search_origin_general">ทั่วไป</string>
+    <string name="search_origin_server">เซิร์ฟเวอร์</string>
+    <string name="search_origin_local">ในเครื่อง</string>
+    <string name="pause_resume_fade">เฟดเมื่อหยุดชั่วคราวและเล่นต่อ</string>
+    <string name="pause_resume_fade_subtitle">ค่อย ๆ ลดเสียงเมื่อหยุดชั่วคราวและเพิ่มเสียงเมื่อเล่นต่อ</string>
 </resources>

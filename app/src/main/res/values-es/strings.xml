@@ -63,6 +63,7 @@
     </plurals>
     <string name="songs">Canciones</string>
     <string name="artists">Artistas</string>
+    <string name="canonical_singles_eps">Sencillos y EP</string>
     <string name="albums">Álbumes</string>
     <string name="no_album_metadata">Ninguna de estas pistas indica a qué álbum pertenece.</string>
     <string name="search_empty">Busca millones de canciones en YouTube Music.</string>
@@ -1332,4 +1333,31 @@
     <string name="playback_recovery_retry">Reintentar</string>
     <string name="playback_recovery_retrying">Reintentando…</string>
     <string name="playback_recovery_dismiss">Descartar</string>
+    <string name="canonical_discovery_header">Descubrimiento del catálogo</string>
+    <string name="canonical_discovery_setting_title">Inicio y Explorar con catálogo</string>
+    <string name="canonical_discovery_setting_subtitle">Usa música guardada y MusicBrainz en Inicio y Explorar. También se utiliza cuando YouTube Music está desactivado.</string>
+    <string name="canonical_discovery_home_title">Tu música</string>
+    <string name="canonical_discovery_explore_title">Explorar el catálogo</string>
+    <string name="canonical_discovery_description">Explora colecciones guardadas en el dispositivo o busca en MusicBrainz. Los metadatos no garantizan audio reproducible.</string>
+    <string name="canonical_discovery_search">Buscar en MusicBrainz</string>
+    <string name="canonical_discovery_open_library">Abrir biblioteca</string>
+    <string name="canonical_discovery_downloaded_collections">Colecciones descargadas</string>
+    <string name="canonical_discovery_local_playlists">Listas guardadas en el dispositivo</string>
+    <string name="canonical_discovery_empty_collections">Aún no hay colecciones guardadas en este dispositivo.</string>
+    <string name="canonical_discovery_catalog_cache">Catálogo guardado en el dispositivo</string>
+    <string name="canonical_discovery_cache_loading">Cargando el catálogo guardado…</string>
+    <string name="canonical_discovery_cache_error">No se pudo leer el catálogo MusicBrainz guardado.</string>
+    <string name="canonical_discovery_cache_empty">Aún no hay elementos de MusicBrainz guardados. Busca para explorar metadatos públicos.</string>
+    <string name="canonical_discovery_metadata_only">Solo metadatos · sin audio catalogado</string>
+    <string name="canonical_discovery_asset_available">Audio catalogado · se verificará el acceso al reproducir</string>
+    <string name="canonical_discovery_cached_offline">Guardado sin conexión</string>
+    <string name="canonical_discovery_retry">Reintentar</string>
+    <string name="canonical_discovery_refresh">Actualizar catálogo guardado</string>
+    <string name="legacy_library_youtube_disabled">Activa YouTube Music en Ajustes para cargar esta biblioteca en línea. Las listas y colecciones locales siguen disponibles.</string>
+    <string name="spotify_import_youtube_required">La importación de listas de Spotify aún necesita buscar coincidencias en YouTube Music. Activa YouTube Music y desactiva la exploración basada en el catálogo.</string>
+    <string name="search_origin_general">General</string>
+    <string name="search_origin_server">Servidor</string>
+    <string name="search_origin_local">Local</string>
+    <string name="pause_resume_fade">Fundido al pausar y reanudar</string>
+    <string name="pause_resume_fade_subtitle">Reduce suavemente el volumen al pausar y lo aumenta al reanudar</string>
 </resources>

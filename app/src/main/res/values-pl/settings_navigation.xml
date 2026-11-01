@@ -1,0 +1,32 @@
+<resources>
+    <string name="settings_nav_group_account">KONTO</string>
+    <string name="settings_nav_group_music">MUZYKA</string>
+    <string name="settings_nav_group_experience">DOŚWIADCZENIE</string>
+    <string name="settings_nav_group_data">DANE I POBRANIA</string>
+    <string name="settings_nav_group_system">SYSTEM</string>
+    <string name="settings_nav_group_about">O APLIKACJI</string>
+    <string name="settings_nav_lyrics">Teksty utworów</string>
+    <string name="settings_nav_about">O aplikacji</string>
+    <string name="settings_nav_filtered">Wyniki dla: %1$s</string>
+    <string name="settings_nav_show_all">Pokaż wszystko</string>
+    <string name="settings_nav_controls">Sterowanie i zachowanie</string>
+    <string name="settings_nav_advanced">Zaawansowane</string>
+    <string name="settings_nav_desc_account">Konta i integracje muzyczne</string>
+    <string name="settings_nav_desc_audio">Źródła, Wi-Fi i dane mobilne</string>
+    <string name="settings_nav_desc_playback">Wyjście audio, przejścia i kolejka</string>
+    <string name="settings_nav_desc_local">Foldery i filtry lokalnego audio</string>
+    <string name="settings_nav_desc_appearance">Motyw, okładki i efekty wizualne</string>
+    <string name="settings_nav_desc_lyrics">Synchronizacja, źródła i tłumaczenie</string>
+    <string name="settings_nav_desc_downloads">Soulseek, jakość i miejsce zapisu</string>
+    <string name="settings_nav_desc_storage">Pamięć podręczna audio i miejsce na dysku</string>
+    <string name="settings_nav_desc_data">Replay, kopie zapasowe i importowanie</string>
+    <string name="settings_nav_desc_performance">Częstotliwość odświeżania i bateria</string>
+    <string name="settings_nav_desc_misc">Gesty i zachowanie odtwarzania</string>
+    <string name="settings_nav_desc_language">Język interfejsu</string>
+    <string name="settings_nav_desc_advanced">Diagnostyka i ustawienia techniczne</string>
+    <string name="settings_nav_desc_wear">Integracja z zegarkiem</string>
+    <string name="settings_nav_desc_about">Wersja i informacje o projekcie</string>
+    <string name="settings_nav_desc_sources">Dostawcy i rozszerzenia muzyczne</string>
+    <string name="settings_nav_diagnostics_title">Diagnostyka</string>
+    <string name="settings_nav_diagnostics_subtitle">Zapisuj, przeglądaj i udostępniaj raporty diagnostyczne</string>
+</resources>

@@ -66,6 +66,7 @@
     </plurals>
     <string name="songs">Şarkılar</string>
     <string name="artists">Sanatçılar</string>
+    <string name="canonical_singles_eps">Single\'lar ve EP\'ler</string>
     <string name="albums">Albümler</string>
     <string name="no_album_metadata">Bu parçaların hiçbiri hangi albümden geldiğini belirtmiyor.</string>
     <string name="search_empty">YouTube Music\'te milyonlarca şarkı arayın.</string>
@@ -1317,4 +1318,31 @@
     <string name="playback_recovery_retry">Tekrar dene</string>
     <string name="playback_recovery_retrying">Yeniden deneniyor…</string>
     <string name="playback_recovery_dismiss">Kapat</string>
+    <string name="canonical_discovery_header">Katalog keşfi</string>
+    <string name="canonical_discovery_setting_title">Katalog tabanlı Ana Sayfa ve Keşfet</string>
+    <string name="canonical_discovery_setting_subtitle">Ana Sayfa ve Keşfet bölümünde kayıtlı müzikleri ve MusicBrainz verilerini kullanın. YouTube Music devre dışıyken de bu mod kullanılır.</string>
+    <string name="canonical_discovery_home_title">Müziğiniz</string>
+    <string name="canonical_discovery_explore_title">Kataloğu keşfet</string>
+    <string name="canonical_discovery_description">Cihazdaki kayıtlı koleksiyonları inceleyin veya MusicBrainz üzerinde arama yapın. Katalog verileri çalınabilir ses garantisi vermez.</string>
+    <string name="canonical_discovery_search">MusicBrainz ara</string>
+    <string name="canonical_discovery_open_library">Kitaplığı aç</string>
+    <string name="canonical_discovery_downloaded_collections">İndirilen koleksiyonlar</string>
+    <string name="canonical_discovery_local_playlists">Cihaza kaydedilen çalma listeleri</string>
+    <string name="canonical_discovery_empty_collections">Bu cihaza henüz koleksiyon kaydedilmedi.</string>
+    <string name="canonical_discovery_catalog_cache">Cihaza kaydedilen katalog</string>
+    <string name="canonical_discovery_cache_loading">Kayıtlı katalog yükleniyor…</string>
+    <string name="canonical_discovery_cache_error">Kayıtlı MusicBrainz kataloğu okunamadı.</string>
+    <string name="canonical_discovery_cache_empty">Henüz kayıtlı MusicBrainz kaydı yok. Açık meta verileri keşfetmek için arama yapın.</string>
+    <string name="canonical_discovery_metadata_only">Yalnızca meta veri · katalogda ses yok</string>
+    <string name="canonical_discovery_asset_available">Ses katalogda · erişim çalmadan önce doğrulanacak</string>
+    <string name="canonical_discovery_cached_offline">Çevrimdışı kaydedildi</string>
+    <string name="canonical_discovery_retry">Yeniden dene</string>
+    <string name="canonical_discovery_refresh">Kayıtlı kataloğu yenile</string>
+    <string name="legacy_library_youtube_disabled">Bu çevrimiçi kitaplığı yüklemek için Ayarlar kısmından YouTube Music uygulamasını etkinleştirin. Yerel çalma listeleri ve koleksiyonlar kullanılabilir.</string>
+    <string name="spotify_import_youtube_required">Spotify çalma listelerini içe aktarmak hâlâ YouTube Music üzerinden eşleştirme gerektiriyor. YouTube Music uygulamasını etkinleştirin ve katalog odaklı keşfi kapatın.</string>
+    <string name="search_origin_general">Genel</string>
+    <string name="search_origin_server">Sunucu</string>
+    <string name="search_origin_local">Yerel</string>
+    <string name="pause_resume_fade">Duraklatma ve devam ettirmede ses geçişi</string>
+    <string name="pause_resume_fade_subtitle">Duraklatırken sesi kademeli azaltır, devam ettirirken artırır</string>
 </resources>

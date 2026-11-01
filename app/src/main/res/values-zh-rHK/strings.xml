@@ -1269,4 +1269,5 @@
     <string name="spotify_library_subtitle">你的 Spotify 播放列表</string>
     <string name="spotify_sign_in">使用 Spotify 登入</string>
     <string name="spotify_track_unavailable">在 YouTube Music 上找不到該歌曲</string>
+    <string name="spotify_import_youtube_required">匯入 Spotify 播放清單目前仍需要透過 YouTube Music 比對歌曲。請啟用 YouTube Music 並關閉以目錄為優先的探索模式。</string>
 </resources>

@@ -64,6 +64,7 @@
     </plurals>
     <string name="songs">שירים</string>
     <string name="artists">אמנים</string>
+    <string name="canonical_singles_eps">סינגלים ומיני-אלבומים</string>
     <string name="albums">אלבומים</string>
     <string name="no_album_metadata">אף אחת מהרצועות האלה לא מציינת מאיזה אלבום היא.</string>
     <string name="search_empty">חפשו מיליוני שירים ב-YouTube Music.</string>
@@ -1365,4 +1366,31 @@
     <string name="playback_recovery_retry">לנסות שוב</string>
     <string name="playback_recovery_retrying">מנסה שוב…</string>
     <string name="playback_recovery_dismiss">סגירה</string>
+    <string name="canonical_discovery_header">גילוי קטלוג</string>
+    <string name="canonical_discovery_setting_title">דף הבית וגילוי מבוססי קטלוג</string>
+    <string name="canonical_discovery_setting_subtitle">השתמשו במוזיקה שמורה וב-MusicBrainz בדף הבית ובגילוי. מצב זה מופעל גם כאשר YouTube Music מושבת.</string>
+    <string name="canonical_discovery_home_title">המוזיקה שלך</string>
+    <string name="canonical_discovery_explore_title">עיון בקטלוג</string>
+    <string name="canonical_discovery_description">עיינו באוספים השמורים במכשיר או חפשו ב-MusicBrainz. נתוני קטלוג אינם מבטיחים שמע שניתן לנגן.</string>
+    <string name="canonical_discovery_search">חיפוש ב-MusicBrainz</string>
+    <string name="canonical_discovery_open_library">פתיחת הספרייה</string>
+    <string name="canonical_discovery_downloaded_collections">אוספים שהורדו</string>
+    <string name="canonical_discovery_local_playlists">רשימות השמעה שמורות במכשיר</string>
+    <string name="canonical_discovery_empty_collections">עדיין לא נשמרו אוספים במכשיר הזה.</string>
+    <string name="canonical_discovery_catalog_cache">קטלוג שמור במכשיר</string>
+    <string name="canonical_discovery_cache_loading">טוען קטלוג שמור…</string>
+    <string name="canonical_discovery_cache_error">לא ניתן לקרוא את קטלוג MusicBrainz השמור.</string>
+    <string name="canonical_discovery_cache_empty">עדיין אין פריטי MusicBrainz שמורים. חפשו בקטלוג כדי לעיין בנתונים ציבוריים.</string>
+    <string name="canonical_discovery_metadata_only">נתוני קטלוג בלבד · אין שמע מקוטלג</string>
+    <string name="canonical_discovery_asset_available">שמע מקוטלג · הגישה תיבדק בעת הניגון</string>
+    <string name="canonical_discovery_cached_offline">נשמר במצב לא מקוון</string>
+    <string name="canonical_discovery_retry">לנסות שוב</string>
+    <string name="canonical_discovery_refresh">רענון קטלוג שמור</string>
+    <string name="legacy_library_youtube_disabled">הפעילו את YouTube Music בהגדרות כדי לטעון את הספרייה המקוונת. רשימות השמעה ואוספים מקומיים נשארים זמינים.</string>
+    <string name="spotify_import_youtube_required">ייבוא רשימות השמעה מ-Spotify עדיין דורש התאמה דרך YouTube Music. יש להפעיל את YouTube Music ולכבות את גילוי הקטלוג.</string>
+    <string name="search_origin_general">כללי</string>
+    <string name="search_origin_server">שרת</string>
+    <string name="search_origin_local">מקומי</string>
+    <string name="pause_resume_fade">עמעום בהשהיה ובחידוש</string>
+    <string name="pause_resume_fade_subtitle">מנמיך בהדרגה את עוצמת הקול בהשהיה ומגביר אותה בחידוש</string>
 </resources>

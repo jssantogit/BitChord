@@ -76,14 +76,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
-import com.music.bitchord.data.model.LikeStatus
 import com.music.bitchord.data.model.ROW_ART_PX
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.data.webdav.WebDavUploads
 import com.music.bitchord.download.DownloadState
 import com.music.bitchord.download.Downloads
-import com.music.bitchord.playback.SleepTimer
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.theme.ArtworkPalette
@@ -99,32 +97,17 @@ import java.util.Locale
  * what the menu is opened for; the queue and navigation rows below it were
  * always the fallback for "I meant to do something with this song".
  *
- * Everything that writes to the account is hidden outright when [signedIn] is
- * false rather than shown and refused. The same goes for a track that is
- * playing from a local file or a finished download (`song.localUri != null`):
- * rating, playlists, downloading it again and sharing all assume a YouTube
- * identity the file doesn't carry, so those rows drop out regardless of
- * [signedIn].
+ * The only track rating exposed here is the canonical star editor, when an
+ * exact Recording identity is available. Legacy provider reactions are not
+ * shown. Playlist operations still depend on the account capabilities and
+ * local files can be shared as plain song metadata.
  *
- * [showSleepTimer] and [onShare] are the player's extras: a sleep timer isn't a
- * property of some row in a list, so it only appears where it means something.
- *
- * [onDownload] is only the *start* of a download — cancelling one and deleting
- * a saved file are answered here, because neither needs anything the caller
- * has. Starting one might: below API 29 it needs a storage permission that only
- * an Activity can ask for.
- *
- * The sheet is painted in the track's own colours, the same way its album page
- * is — it is opened *from* that artwork, usually with it still on screen behind
- * the scrim, and a slab of flat grey in front of a coloured page reads as
- * something borrowed from another app. The host supplies no container colour
- * and no drag handle; both are drawn here, over the tint.
+ * The playback engine and diagnostics are independent from this action menu.
  */
 @Composable
 fun SongActionsSheet(
     song: Song,
     signedIn: Boolean,
-    likeStatus: LikeStatus,
     onPlayNext: () -> Unit,
     onAddToQueue: () -> Unit,
     onStartRadio: () -> Unit,
@@ -136,48 +119,12 @@ fun SongActionsSheet(
      * re-runs it; the conflict dialog keeps that idempotent.
      */
     onUploadToWebDav: (() -> Unit)? = null,
-    onToggleLike: () -> Unit,
-    onToggleDislike: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onOpenAlbum: (String) -> Unit,
     onOpenArtist: (String) -> Unit,
     modifier: Modifier = Modifier,
     onRemoveFromPlaylist: (() -> Unit)? = null,
-    showSleepTimer: Boolean = false,
-    /**
-     * Sends the playing track back to YouTube's own upload, and keeps it there.
-     * Offered for any player item that has one behind it — a substituted copy
-     * can be the wrong recording from the first second, not only after a
-     * visible upgrade. See
-     * [com.music.bitchord.playback.hasYouTubeOriginal].
-     */
-    onRollbackToOriginal: (() -> Unit)? = null,
-    /**
-     * The way back from a revert: available only for a player item the listener
-     * has pinned to YouTube's own upload, where nothing will go looking for a
-     * better copy again until they ask.
-     * See [com.music.bitchord.playback.OriginalVersion].
-     */
-    onUpgradeQuality: (() -> Unit)? = null,
-    /** Keeps the upgrade row visible but untappable while its lookup is running. */
-    upgradeQualityInProgress: Boolean = false,
-    /**
-     * Switches the playing track between its video and audio-only cuts. Null
-     * hides the row — offered only from the player, and only once an
-     * alternate cut is known to exist. See
-     * [com.music.bitchord.playback.PlaybackService.smoothSwapCurrentTrackVersion].
-     */
-    onToggleAudioVersion: (() -> Unit)? = null,
-    /** Which cut is playing now, so the row can offer the other one. */
-    isAudioVersion: Boolean = false,
     onShare: (() -> Unit)? = null,
-    /**
-     * Copies what the app logged while starting this track. Null everywhere
-     * except the player, where "this track" means something.
-     */
-    onCopyLog: (() -> Unit)? = null,
-    /** Opens the timing control offered only by the main player's menu. */
-    onLyricsOffset: (() -> Unit)? = null,
     /**
      * True while a lookup for this track's album/artist ids is still in
      * flight, so it isn't yet known whether "Open album" and "Open artist"
@@ -196,10 +143,9 @@ fun SongActionsSheet(
     presentation: SongActionsPresentation = SongActionsPresentation.Sheet,
     /** The image already displayed in Now Playing when its ⋯ menu was opened. */
     preloadedArtworkModel: Any? = null,
-    /** First-party canonical rating UI; independent from account Likes. */
+    /** The only rating action shown: canonical stars by Recording identity. */
     canonicalRatingContent: (@Composable () -> Unit)? = null,
 ) {
-    var pickingSleepTimer by remember { mutableStateOf(false) }
     val menu = presentation == SongActionsPresentation.Menu
     // Read from the thumbnail the row that opened this sheet was already
     // showing, not a larger copy of it: the tint is a blur and a handful of
@@ -214,73 +160,11 @@ fun SongActionsSheet(
     } else {
         rememberArtworkPalette(song.thumbnailUrl, artPx = ROW_ART_PX)
     }
-    val liked = likeStatus == LikeStatus.LIKE
-    val disliked = likeStatus == LikeStatus.DISLIKE
-    // A local file or a finished download has no YouTube identity behind it to
-    // rate, save, queue into a playlist, fetch again, or share a link for.
+    // A local file may not have a provider-managed playlist entry.
     val isOffline = song.localUri != null
 
     val rows: @Composable ColumnScope.() -> Unit = {
-        // Leads the list whenever it's available: which recording is playing
-        // is the one question that has to be answered before any of the rows
-        // below mean anything — there is no point rating, queueing or
-        // downloading the wrong version of a song.
-        //
-        // The two are never both present — one is offered for a track playing
-        // a substituted copy, the other for a track held on YouTube's own —
-        // and between them they are the whole of the choice, which is why they
-        // sit in the same place under the same divider.
-        if (onRollbackToOriginal != null || onUpgradeQuality != null || onToggleAudioVersion != null) {
-            (onRollbackToOriginal ?: onUpgradeQuality)?.let {
-                ActionRow(
-                    icon = if (onRollbackToOriginal != null) {
-                        Icons.AutoMirrored.Rounded.Undo
-                    } else {
-                        Icons.Rounded.HighQuality
-                    },
-                    label = stringResource(
-                        if (onRollbackToOriginal != null) {
-                            R.string.revert_to_original
-                        } else {
-                            R.string.upgrade_quality
-                        },
-                    ),
-                    accent = palette.accent,
-                    enabled = onRollbackToOriginal != null || !upgradeQualityInProgress,
-                    onClick = it,
-                )
-            }
-            // Which recording, not which quality — a different question from
-            // the row above, so it sits right under it rather than merged
-            // into it, but still ahead of the divider both share.
-            onToggleAudioVersion?.let {
-                ActionRow(
-                    icon = if (isAudioVersion) Icons.Rounded.Videocam else BitChordIcons.MusicNote,
-                    label = stringResource(
-                        if (isAudioVersion) R.string.convert_to_video else R.string.convert_to_audio,
-                    ),
-                    accent = palette.accent,
-                    onClick = it,
-                )
-            }
-            GroupSeparator(palette)
-        }
-
         if (signedIn && !isOffline) {
-            ActionRow(
-                icon = if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                label = if (liked) stringResource(R.string.remove_from_liked) else stringResource(R.string.like),
-                tint = if (liked) palette.accent else null,
-                accent = palette.accent,
-                onClick = onToggleLike,
-            )
-            ActionRow(
-                icon = if (disliked) Icons.Rounded.ThumbDown else Icons.Rounded.ThumbDownOffAlt,
-                label = if (disliked) stringResource(R.string.undo_dislike) else stringResource(R.string.dislike),
-                tint = if (disliked) palette.accent else null,
-                accent = palette.accent,
-                onClick = onToggleDislike,
-            )
             ActionRow(
                 icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
                 label = stringResource(R.string.add_to_playlist),
@@ -341,36 +225,8 @@ fun SongActionsSheet(
                 accent = palette.accent,
             ) { onOpenArtist(id) }
         }
-        if (showSleepTimer) {
-            ActionRow(
-                icon = Icons.Rounded.Bedtime,
-                label = stringResource(R.string.sleep_timer),
-                value = sleepTimerStatus(),
-                accent = palette.accent,
-            ) { pickingSleepTimer = true }
-        }
-        // Deliberately outside the online-only block below. Local files and
-        // completed downloads use the same player lyric clock (including
-        // embedded synced lyrics), so they need this control just as much as
-        // streamed songs do.
-        onLyricsOffset?.let {
-            ActionRow(
-                icon = Icons.Rounded.Tune,
-                label = stringResource(R.string.lyrics_offset),
-                accent = palette.accent,
-                onClick = it,
-            )
-        }
-        if (!isOffline) {
-            onShare?.let {
-                ActionRow(Icons.Rounded.Share, stringResource(R.string.share), accent = palette.accent, onClick = it)
-            }
-        }
-        // Last, and only from the player: it is about the track playing right
-        // now rather than about the song as a thing in a library, and it is
-        // the one row here nobody reaches for by accident.
-        onCopyLog?.let {
-            ActionRow(Icons.Rounded.BugReport, stringResource(R.string.copy_log), accent = palette.accent, onClick = it)
+        onShare?.let {
+            ActionRow(Icons.Rounded.Share, stringResource(R.string.share), accent = palette.accent, onClick = it)
         }
     }
 
@@ -382,11 +238,6 @@ fun SongActionsSheet(
     }
 
     TintedSheet(palette = palette, imageUrl = song.thumbnailUrl, modifier = modifier) {
-        if (pickingSleepTimer) {
-            SleepTimerPicker(palette = palette, onBack = { pickingSleepTimer = false })
-            return@TintedSheet
-        }
-
         SheetTrackHeader(
             song,
             subtitleColor = palette.onBackgroundVariant,
@@ -651,135 +502,6 @@ private fun WebDavUploadRow(
             accent = palette.accent,
             onClick = onUpload,
         )
-    }
-}
-
-/** End of track or a duration, plus a way out once one is running. */
-@Composable
-private fun SleepTimerPicker(palette: ArtworkPalette, onBack: () -> Unit) {
-    val chosen by SleepTimer.minutes.collectAsStateWithLifecycle()
-    val afterTrack by SleepTimer.afterTrack.collectAsStateWithLifecycle()
-    val countdown = sleepTimerCountdown()
-
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 8.dp, end = 22.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = stringResource(R.string.back),
-                    tint = MaterialTheme.colorScheme.onBackground,
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.sleep_timer),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Text(
-                    text = when {
-                        countdown != null -> stringResource(R.string.pause_countdown, countdown)
-                        afterTrack -> stringResource(R.string.pause_after_song)
-                        else -> stringResource(R.string.pause_after_a_while)
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        HorizontalDivider(thickness = 0.5.dp, color = palette.divider)
-
-        // Finishing the song is the one people reach for at the end of a
-        // listen, so it leads rather than sitting under the durations.
-        SleepOption(
-            label = stringResource(R.string.after_this_song),
-            selected = afterTrack,
-            accent = palette.accent,
-        ) {
-            SleepTimer.startAfterTrack()
-            onBack()
-        }
-        SleepTimer.PRESETS.forEach { minutes ->
-            SleepOption(
-                label = if (minutes == 60) {
-                    stringResource(R.string.one_hour)
-                } else {
-                    pluralStringResource(R.plurals.minute_count, minutes, minutes)
-                },
-                selected = minutes == chosen,
-                accent = palette.accent,
-            ) {
-                SleepTimer.start(minutes)
-                onBack()
-            }
-        }
-        if (chosen != null || afterTrack) {
-            ActionRow(Icons.Rounded.Close, stringResource(R.string.turn_off_timer), accent = palette.accent) {
-                SleepTimer.cancel()
-                onBack()
-            }
-        }
-        Spacer(Modifier.height(24.dp))
-    }
-}
-
-@Composable
-private fun SleepOption(
-    label: String,
-    selected: Boolean,
-    accent: Color,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 22.dp, vertical = 15.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.weight(1f),
-        )
-        if (selected) {
-            Icon(
-                Icons.Rounded.Check,
-                contentDescription = stringResource(R.string.running),
-                tint = accent,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-    }
-}
-
-/** What the sleep timer row shows on the right, or null when none is armed. */
-@Composable
-private fun sleepTimerStatus(): String? {
-    val afterTrack by SleepTimer.afterTrack.collectAsStateWithLifecycle()
-    return sleepTimerCountdown() ?: stringResource(R.string.after_this_song).takeIf { afterTrack }
-}
-
-/** Live "m:ss" until the sleep timer fires, or null when none is running. */
-@Composable
-private fun sleepTimerCountdown(): String? {
-    val deadline by SleepTimer.deadline.collectAsStateWithLifecycle()
-    val remaining by produceState<Long?>(initialValue = SleepTimer.remainingMs(), deadline) {
-        while (deadline != null) {
-            value = SleepTimer.remainingMs()
-            delay(1_000)
-        }
-        value = null
-    }
-    return remaining?.let {
-        val seconds = it / 1000
-        "%d:%02d".format(Locale.ROOT, seconds / 60, seconds % 60)
     }
 }
 

@@ -58,6 +58,7 @@
     </plurals>
     <string name="songs">Lagu</string>
     <string name="artists">Artis</string>
+    <string name="canonical_singles_eps">Singel dan EP</string>
     <string name="albums">Album</string>
     <string name="no_album_metadata">Tidak ada trek ini yang menunjukkan asal albumnya.</string>
     <string name="search_empty">Cari jutaan lagu di YouTube Music.</string>
@@ -1337,4 +1338,31 @@
     <string name="playback_recovery_retry">Coba lagi</string>
     <string name="playback_recovery_retrying">Mencoba lagi…</string>
     <string name="playback_recovery_dismiss">Tutup</string>
+    <string name="canonical_discovery_header">Penjelajahan katalog</string>
+    <string name="canonical_discovery_setting_title">Beranda dan Jelajahi berbasis katalog</string>
+    <string name="canonical_discovery_setting_subtitle">Gunakan musik tersimpan dan MusicBrainz di Beranda dan Jelajahi. Mode ini juga digunakan saat YouTube Music dinonaktifkan.</string>
+    <string name="canonical_discovery_home_title">Musik Anda</string>
+    <string name="canonical_discovery_explore_title">Jelajahi katalog</string>
+    <string name="canonical_discovery_description">Jelajahi koleksi yang tersimpan di perangkat atau cari di MusicBrainz. Metadata tidak menjamin audio dapat diputar.</string>
+    <string name="canonical_discovery_search">Cari di MusicBrainz</string>
+    <string name="canonical_discovery_open_library">Buka pustaka</string>
+    <string name="canonical_discovery_downloaded_collections">Koleksi yang diunduh</string>
+    <string name="canonical_discovery_local_playlists">Daftar putar tersimpan di perangkat</string>
+    <string name="canonical_discovery_empty_collections">Belum ada koleksi yang tersimpan di perangkat ini.</string>
+    <string name="canonical_discovery_catalog_cache">Katalog tersimpan di perangkat</string>
+    <string name="canonical_discovery_cache_loading">Memuat katalog tersimpan…</string>
+    <string name="canonical_discovery_cache_error">Tidak dapat membaca katalog MusicBrainz yang tersimpan.</string>
+    <string name="canonical_discovery_cache_empty">Belum ada entri MusicBrainz tersimpan. Cari di katalog untuk menjelajahi metadata publik.</string>
+    <string name="canonical_discovery_metadata_only">Hanya metadata · tidak ada audio terdaftar</string>
+    <string name="canonical_discovery_asset_available">Audio terdaftar · akses akan diperiksa saat diputar</string>
+    <string name="canonical_discovery_cached_offline">Tersimpan offline</string>
+    <string name="canonical_discovery_retry">Coba lagi</string>
+    <string name="canonical_discovery_refresh">Segarkan katalog tersimpan</string>
+    <string name="legacy_library_youtube_disabled">Aktifkan YouTube Music di Pengaturan untuk memuat pustaka online ini. Daftar putar dan koleksi lokal tetap tersedia.</string>
+    <string name="spotify_import_youtube_required">Impor playlist Spotify saat ini masih memerlukan pencocokan lewat YouTube Music. Aktifkan YouTube Music dan nonaktifkan penemuan berbasis katalog.</string>
+    <string name="search_origin_general">Umum</string>
+    <string name="search_origin_server">Server</string>
+    <string name="search_origin_local">Lokal</string>
+    <string name="pause_resume_fade">Fade saat jeda dan lanjut</string>
+    <string name="pause_resume_fade_subtitle">Mengecilkan volume secara halus saat dijeda dan menaikkannya saat dilanjutkan</string>
 </resources>

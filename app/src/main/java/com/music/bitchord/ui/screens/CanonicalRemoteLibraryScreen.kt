@@ -24,6 +24,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -77,6 +79,12 @@ import com.music.bitchord.playback.CanonicalRemotePlaybackMetadata
 import com.music.bitchord.playback.CanonicalRemotePlaybackRequest
 import com.music.bitchord.playback.playCanonicalRemote
 import com.music.bitchord.playback.rememberMediaController
+import com.music.bitchord.ui.components.CanonicalRatingStars
+import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
+import com.music.bitchord.sharedui.resources.Res
+import com.music.bitchord.sharedui.resources.canonical_rating_song_options
+import com.music.bitchord.sharedui.resources.recording_feedback_edit
+import org.jetbrains.compose.resources.stringResource as sharedStringResource
 import com.music.bitchord.ui.player.awaitRecoverableCanonicalArtwork
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -138,6 +146,8 @@ internal fun CanonicalRemoteLibraryScreen(
     }
     val libraryFlow = remember(repository, providerKey) { repository.observe(providerKey) }
     val library by libraryFlow.collectAsStateWithLifecycle(initialValue = CanonicalBrowseLibrary.EMPTY)
+    // Preserve native RecordingId-scoped rating edits from the main branch.
+    var editingRecordingId by remember { mutableStateOf<String?>(null) }
     val filterRepo = remember(context.applicationContext) {
         SmartPlaylistV2FilterRepository(
             SmartPlaylistDefinitionDatabase.get(context.applicationContext).v2FilterDao(),
@@ -291,6 +301,12 @@ internal fun CanonicalRemoteLibraryScreen(
         }
     }
 
+    val editRating: (CanonicalBrowseTrack) -> Unit = { track ->
+        if (track.availableAssets.any { it.providerKey == providerKey }) {
+            editingRecordingId = track.recordingId
+        }
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
@@ -321,7 +337,7 @@ internal fun CanonicalRemoteLibraryScreen(
                         TrackList(
                             tracks = scopedDetailTracks,
                             artworkLoader = artworkLoader,
-                            onTrackPlay = playTrack,
+                            onTrackPlay = playTrack,                            onTrackEditRating = editRating,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -356,7 +372,7 @@ internal fun CanonicalRemoteLibraryScreen(
                                 TrackList(
                                     tracks = displayedTracks,
                                     artworkLoader = artworkLoader,
-                                    onTrackPlay = playTrack,
+                                    onTrackPlay = playTrack,                                    onTrackEditRating = editRating,
                                     modifier = Modifier.fillMaxSize(),
                                 )
                             }
@@ -399,6 +415,12 @@ internal fun CanonicalRemoteLibraryScreen(
                     }
                 }
             }
+        }
+        editingRecordingId?.let { id ->
+            CanonicalRecordingRatingDialog(
+                recordingId = id,
+                onDismiss = { editingRecordingId = null },
+            )
         }
     }
 }
@@ -575,6 +597,7 @@ private fun TrackList(
     tracks: List<CanonicalBrowseTrack>,
     artworkLoader: OpenSubsonicArtworkLoader,
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
+    onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (tracks.isEmpty()) {
@@ -593,6 +616,7 @@ private fun TrackList(
                 track = track,
                 artworkLoader = artworkLoader,
                 onClick = { onTrackPlay(track) },
+                onEditRating = { onTrackEditRating(track) },
             )
             HorizontalDivider(
                 modifier = Modifier.padding(start = 84.dp),
@@ -608,6 +632,7 @@ private fun CanonicalTrackRow(
     track: CanonicalBrowseTrack,
     artworkLoader: OpenSubsonicArtworkLoader,
     onClick: () -> Unit,
+    onEditRating: () -> Unit,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -641,12 +666,52 @@ private fun CanonicalTrackRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        formatDuration(track.durationMs)?.let { duration ->
-            Spacer(Modifier.width(12.dp))
-            Text(
-                text = duration,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Column(
+            modifier = Modifier.padding(start = 8.dp),
+            horizontalAlignment = Alignment.End,
+        ) {
+            CanonicalRatingStars(
+                track.availableAssets.firstOrNull()?.mediaAssetId?.let {
+                    LocalCanonicalRatingDisplay.current.byMediaAssetId[it]
+                },
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            formatDuration(track.durationMs)?.let { duration ->
+                Text(
+                    text = duration,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        CanonicalCatalogRatingMenu(onEdit = onEditRating)
+    }
+}
+
+/**
+ * Preserve main-branch rating menu alongside the canonical filter tabs.
+ */
+@Composable
+internal fun CanonicalCatalogRatingMenu(onEdit: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                Icons.Rounded.MoreVert,
+                contentDescription = sharedStringResource(Res.string.canonical_rating_song_options),
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            DropdownMenuItem(
+                text = { Text(sharedStringResource(Res.string.recording_feedback_edit)) },
+                leadingIcon = { Icon(Icons.Rounded.Star, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onEdit()
+                },
             )
         }
     }

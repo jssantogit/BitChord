@@ -906,6 +906,12 @@ object AudioCache {
      * of skips only wherever the listener actually lands is worth chasing.
      */
     fun prefetchQueue(upcoming: List<Upcoming>) {
+        // Queue warm-up calls StreamResolver directly, bypassing Media3's
+        // resolver policy. A YT opt-out must cancel previous warm-up work too.
+        if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
+            cancel()
+            return
+        }
         val mediaIds = upcoming.map { it.mediaId }
         if (mediaIds == pendingQueue) return
         android.util.Log.d("BCFetchDebug", "prefetchQueue: head ${pendingQueue.firstOrNull()} -> ${mediaIds.firstOrNull()}")
@@ -953,6 +959,9 @@ object AudioCache {
             // reverted track resolves through YouTube, which is what it warms.
             val pinnedToYouTube = OriginalVersion.isPinned(next)
             scope.launch {
+                if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
+                    return@launch
+                }
                 // With substitution on, the *bytes* half above used to be
                 // switched off outright, and the paragraph explaining why is
                 // still correct as far as it goes: read-ahead resolving to
@@ -987,8 +996,13 @@ object AudioCache {
                 if (cacheBytes) {
                     launch(TrackLog.about(next)) {
                         delay(PREFETCH_DELAY_MS)
+                        if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
+                            return@launch
+                        }
                         fetch(next, 0, PRELOAD_BYTES)
-                        fetchWhole(next)
+                        if (SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
+                            fetchWhole(next)
+                        }
                     }
                 }
                 launch {
@@ -999,6 +1013,9 @@ object AudioCache {
                         // minting it spends a client walk to fill a cache entry
                         // that is never read.
                         if (id == next && warmed != null) continue
+                        if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
+                            break
+                        }
                         runCatching { StreamResolver.resolve(id) }
                             .onFailure { TrackLog.d(TAG, "queue warm-up skipped $id: ${it.message}", about = id) }
                         delay(QUEUE_RESOLVE_STAGGER_MS)

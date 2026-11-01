@@ -21,6 +21,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import com.music.bitchord.ui.player.AndroidPlayerHost
 import com.music.bitchord.ui.player.PlayerPlatform
 import com.music.bitchord.data.canvas.CanvasCache
+import com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry
 import com.music.bitchord.data.smb.SmbCoverFetcher
 import com.music.bitchord.data.webdav.WebDavCoilAuth
 import com.music.bitchord.data.canvas.SpotifyToken
@@ -39,6 +40,7 @@ import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.SearchHistory
 import com.music.bitchord.data.sources.SourceRegistry
+import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.data.sources.SourceResolver
 import com.music.bitchord.data.sources.StructuredSourceResolutionTraceReporter
 import com.music.bitchord.data.stats.ArtistFacts
@@ -155,7 +157,6 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
                 // first would restore it into the value about to be wiped.
                 restoredSession.profiles.firstOrNull { it.profileId == restoredSession.activeProfileId }
                     ?.let { Innertube.selectChannel(it.pageId, it.dataSyncId, it.authUser) }
-                CoroutineScope(Dispatchers.IO).launch { Innertube.ensureSessionScope() }
             }
         }
         Diagnostics.span(DiagnosticCategory.STARTUP, "app_settings_init") {
@@ -224,18 +225,17 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         Diagnostics.span(DiagnosticCategory.STARTUP, "spotify_token_init") {
             SpotifyToken.init(this)
         }
-        // A sideloaded update is just a new APK over the old one, so app data —
-        // including whatever the old build left in these caches — survives it
-        // untouched. Wipe both on the first launch of a higher versionCode so a
-        // format or key change between builds can't serve stale or mismatched
-        // bytes from a cache the new code didn't write.
+        // The decoded Coil memory cache is process-local and starts empty
+        // after an APK update. Clearing the *disk* cache on every versionCode
+        // increase was forcing re-downloads of unchanged 500px album sleeves
+        // on the Galaxy A54. Keep the bounded disk LRU across updates:
+        // Front-v5 verification is in versioned Room keys and different
+        // validated CAA URLs remain distinct Coil keys. Only AudioCache still
+        // requires its historical version-sensitive format invalidation.
         if (AppSettings.consumeVersionUpdate(BuildConfig.VERSION_CODE)) {
-            Diagnostics.span(DiagnosticCategory.STARTUP, "version_update_cache_clear") {
+            CatalogCoverTelemetry.process.recordImageDiskCachePreservedOnUpgrade()
+            Diagnostics.span(DiagnosticCategory.STARTUP, "version_update_audio_cache_clear") {
                 AudioCache.clear()
-                SingletonImageLoader.get(this).let { loader ->
-                    loader.memoryCache?.clear()
-                    loader.diskCache?.clear()
-                }
             }
         }
         // Initialize LastFM with saved settings if available
@@ -248,6 +248,19 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         }
         Diagnostics.span(DiagnosticCategory.STARTUP, "background_join_wait") {
             backgroundInit.join()
+        }
+        // Warming YouTube's account scope is a discovery request. Wait until
+        // persisted settings and source opt-outs are loaded, and skip it when
+        // the app is configured for independent discovery. Cookie/channel
+        // restoration above still happens so explicit playback keeps its gate.
+        val youtubeDisabled = SourceRegistry.configs.value.any {
+            it.kind == SourceKind.YOUTUBE && !it.enabled
+        }
+        if (restoredSession != null &&
+            !AppSettings.canonicalDiscoveryEnabled.value &&
+            !youtubeDisabled
+        ) {
+            CoroutineScope(Dispatchers.IO).launch { Innertube.ensureSessionScope() }
         }
         Diagnostics.event(
             category = DiagnosticCategory.STARTUP,
@@ -314,7 +327,18 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
                     .maxSizeBytes(100L * 1024 * 1024)
-                    .build()
+                    .build().also { disk ->
+                        // DiskCache.size can inspect its journal. Never read it
+                        // on the image-loading UI thread. One process baseline,
+                        // no user, URL or image identifiers in diagnostics.
+                        CoroutineScope(Dispatchers.IO).launch {
+                            runCatching {
+                                CatalogCoverTelemetry.process.recordCoilDiskCacheInitialization(
+                                    disk.size, disk.maxSize,
+                                )
+                            }
+                        }
+                    }
             }
             // Covers arriving with a hard cut read as the list flickering as
             // it scrolls; a short fade reads as them developing.
