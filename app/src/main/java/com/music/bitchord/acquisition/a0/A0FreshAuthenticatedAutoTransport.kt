@@ -63,6 +63,18 @@ internal class A0FreshAuthenticatedAutoTransport(
         var session:A0AutoAuthenticatedServer.Session?=null
         var current:A0ServerAssociatedTransfer?=null
         var lastPhase:A0ServerAssociatedTransfer.Phase?=null
+        var fTokenValidated=false
+        var receivedBytes=0L
+        var firstByteElapsedMs=-1L
+        fun receiveCheckpoint(status:String) {
+            // Aggregates only: never emit peer identity, filename or raw bytes.
+            com.music.bitchord.data.DebugLog.d("BitChord",
+                "soulseek_auto_receive_checkpoint status=$status" +
+                    " token_validated=$fTokenValidated" +
+                    " received_kib=${(receivedBytes/1024).coerceIn(0,262144)}" +
+                    " first_byte_elapsed_ms=$firstByteElapsedMs" +
+                    " scope=$diagnosticScope")
+        }
         try {
             session=A0AutoAuthenticatedServer.open(
                 app,expectedGeneration,
@@ -105,6 +117,12 @@ internal class A0FreshAuthenticatedAutoTransport(
                 externalCancelled={
                     cancelled.get() || isCancelled() ||
                         !SoulseekActiveSession.isCurrent(expectedGeneration)
+                },
+                onTokenValidated={ fTokenValidated=true },
+                onProgress={ count ->
+                    if(count>0 && firstByteElapsedMs<0)
+                        firstByteElapsedMs=android.os.SystemClock.elapsedRealtime()-start
+                    receivedBytes=count
                 }
             )
             if(cancelled.get() || isCancelled() ||
@@ -112,6 +130,7 @@ internal class A0FreshAuthenticatedAutoTransport(
                 runCatching {receipt.file.delete()}
                 throw IOException("Soulseek auto transfer revoked after receiving bytes")
             }
+            receiveCheckpoint("COMPLETE")
             A0AcquisitionDiagnostics.emit(diagnosticScope,
                 A0AcquisitionDiagnostics.Phase.TRANSPORT_RECEIPT,
                 reason=lastPhase,
@@ -138,6 +157,9 @@ internal class A0FreshAuthenticatedAutoTransport(
                 reason=A0AcquisitionDiagnostics.fault(error),
                 elapsedMillis=android.os.SystemClock.elapsedRealtime()-start,
                 count=lastPhase?.ordinal ?: -1)
+            if(lastPhase==A0ServerAssociatedTransfer.Phase.F_ESTABLISHED ||
+                lastPhase==A0ServerAssociatedTransfer.Phase.BYTES_RECEIVED)
+                receiveCheckpoint("FAILED")
             if(retryable) {
                 // No upload accepted, no F opened, no receipt received.
                 // The executor may try only the NEXT metadata-equivalent
