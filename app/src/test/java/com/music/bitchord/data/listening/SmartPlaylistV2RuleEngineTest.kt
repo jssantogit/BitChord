@@ -25,6 +25,44 @@ class SmartPlaylistV2RuleEngineTest {
         value: Double? = null,
     ) = SmartPlaylistRule.Comparison(field, operator, value)
 
+    @Test fun musicBrainzArtistCountryUsesProvenCreditsNotArtistDisplay() {
+        val rows = listOf(
+            candidate("kr").copy(artistCountryCodes = listOf("KR"),
+                artistCountryEvidenceUnknown = false),
+            candidate("us").copy(artistCountryCodes = listOf("US"),
+                artistCountryEvidenceUnknown = false),
+            candidate("unknown").copy(artistDisplay = "Korean Star"),
+            candidate("partial").copy(artistCountryCodes = listOf("US"),
+                artistCountryEvidenceUnknown = true),
+        )
+        val country = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.ARTIST_COUNTRY,
+            SmartPlaylistRuleOperator.EQUAL, textValue = "KR",
+        )
+        assertEquals(listOf("kr"), planner.preview(rows, SmartPlaylistV2Query(country))
+            .map { it.recordingId })
+        assertEquals(listOf("us"), planner.preview(rows, SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(country))).map { it.recordingId })
+    }
+
+    @Test fun firstReleaseGroupYearDoesNotBorrowAnEditionDate() {
+        val rows = listOf(
+            candidate("first").copy(originalReleaseYears = listOf(2018),
+                originalReleaseYearEvidenceUnknown = false, releaseYears = listOf(2024)),
+            candidate("reissue").copy(originalReleaseYears = listOf(2017),
+                originalReleaseYearEvidenceUnknown = false, releaseYears = listOf(2024)),
+            candidate("unknown").copy(releaseYears = listOf(2018)),
+        )
+        val originalYear = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR,
+            SmartPlaylistRuleOperator.EQUAL, value = 2018.0,
+        )
+        assertEquals(listOf("first"), planner.preview(rows, SmartPlaylistV2Query(originalYear))
+            .map { it.recordingId })
+        assertEquals(listOf("reissue"), planner.preview(rows, SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(originalYear))).map { it.recordingId })
+    }
+
     @Test fun localGenreIsPositiveOnlyWhenSourceTagIsProven() {
         val known = candidate("known").copy(localGenres = listOf("Synthpop"),
             localGenresComplete = true)
