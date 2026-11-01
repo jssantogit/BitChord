@@ -509,6 +509,25 @@ class SmartPlaylistV2WizardComposeTest {
         compose.runOnIdle { assertEquals(1, saves) }
     }
 
+    @Test fun singleConditionOrNegatedFilterGetsEditableRootWithoutChangingMeaning() {
+        val condition = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+        )
+        val negated = SmartPlaylistRule.Not(condition)
+        assertEquals(
+            SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(condition)),
+            editableSmartPlaylistRuleRoot(condition),
+        )
+        assertEquals(
+            SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(negated)),
+            editableSmartPlaylistRuleRoot(negated),
+        )
+        val grouped = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(
+            condition, negated,
+        ))
+        assertEquals(grouped, editableSmartPlaylistRuleRoot(grouped))
+    }
+
     @Test fun savedFilterActionsIncludeIntersectionUnionAndSafeNormalMode() {
         assertEquals(listOf(
             "Aplicar regras ao rascunho",
