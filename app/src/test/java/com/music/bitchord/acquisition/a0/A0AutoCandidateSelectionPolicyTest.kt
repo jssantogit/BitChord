@@ -163,6 +163,19 @@ class A0AutoCandidateSelectionPolicyTest {
         }
     }
 
+    @Test fun exactReleaseLabelInFilenameDoesNotFakeAnotherRecording() {
+        val includingRelease=offers("album-prefixed",
+            name="ILLIT - SUPER REAL ME - 01 - Magnetic.mp3")
+        val picked=A0AutoCandidateSelectionPolicy.preview(
+            target,includingRelease,profile)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,picked.status)
+        val wrong=offers("wrong-folder",
+            name="ILLIT - SUPER REAL ME - 01 - Magnetic.mp3",
+            album="Other Album")
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,
+            A0AutoCandidateSelectionPolicy.preview(target,wrong,profile).status)
+    }
+
     @Test fun newCodecFolderUnderWrongReleaseRemainsManual() {
         for(folder in listOf("AAC","Opus","Ogg","Ogg Vorbis","Vorbis")) {
             val selection=A0AutoCandidateSelectionPolicy.preview(
