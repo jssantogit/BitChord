@@ -228,6 +228,7 @@ object LocalMediaRepository {
             MediaStore.Audio.Media.DATE_ADDED,
                 MediaStore.Audio.Media.DATE_MODIFIED,
                 MediaStore.Audio.Media.TRACK,
+                MediaStore.Audio.Media.SIZE,
             ))
             // Android 11+ provides an indexed genre without opening every file.
             // Keep this a one-query scan at 50k tracks; other tags need their
@@ -302,6 +303,7 @@ object LocalMediaRepository {
                 val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
                 val dateModifiedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
                 val trackCol = cursor.getColumnIndex(MediaStore.Audio.Media.TRACK)
+                val sizeCol = cursor.getColumnIndex(MediaStore.Audio.Media.SIZE)
                 val genreCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     cursor.getColumnIndex(MediaStore.Audio.Media.GENRE)
                 } else -1
@@ -356,6 +358,8 @@ object LocalMediaRepository {
                             localDateModifiedSeconds = cursor.getLong(dateModifiedCol),
                             trackNumber = trackNumber,
                             localGenres = genres,
+                            localSizeBytes = if (sizeCol >= 0 && !cursor.isNull(sizeCol))
+                                cursor.getLong(sizeCol).takeIf { it >= 0L } else null,
                         )
                     )
                 }
