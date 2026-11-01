@@ -1,6 +1,8 @@
 package com.music.bitchord.data.catalog
 
 import java.nio.charset.Charset
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 
 /**
  * Strict, bounded header parser; never parses audio frames or guesses missing tags.
@@ -18,6 +20,49 @@ internal object LocalEmbeddedTagParser {
     const val MAX_HEADER_BYTES = 1_048_576
     private const val MAX_VALUES = 128
     private const val MAX_FIELD_LENGTH = 512
+
+    /**
+     * Read ONLY tag headers: 10-byte sniff for unknown formats, one ID3 tag,
+     * or FLAC metadata blocks up to the Vorbis comments. No full-file reads.
+     */
+    fun readStream(stream: InputStream): LocalEmbeddedTags? {
+        fun exact(count: Int): ByteArray? {
+            if (count < 0 || count > MAX_HEADER_BYTES) return null
+            val bytes = ByteArray(count)
+            var read = 0
+            while (read < count) {
+                val got = stream.read(bytes, read, count - read)
+                if (got <= 0) return null
+                read += got
+            }
+            return bytes
+        }
+        val first = exact(4) ?: return null
+        val isId3 = first[0] == 73.toByte() &&
+            first[1] == 68.toByte() && first[2] == 51.toByte()
+        val isFlac = first.contentEquals("fLaC".toByteArray(Charsets.US_ASCII))
+        if (isId3) {
+            val rest = exact(6) ?: return null
+            val prefix = first + rest
+            val length = syncSafe(prefix, 6)?.toInt() ?: return null
+            if (length > MAX_HEADER_BYTES - 10) return null
+            return parse(prefix + (exact(length) ?: return null))
+        }
+        if (!isFlac) return null
+        val out = ByteArrayOutputStream()
+        out.write(first)
+        while (out.size() < MAX_HEADER_BYTES - 4) {
+            val head = exact(4) ?: return null
+            val last = u(head, 0) and 128 != 0
+            val type = u(head, 0) and 127
+            val length = (u(head, 1) shl 16) or (u(head, 2) shl 8) or u(head, 3)
+            if (length > MAX_HEADER_BYTES - out.size() - 4) return null
+            out.write(head)
+            out.write(exact(length) ?: return null)
+            if (type == 4 || last) return parse(out.toByteArray())
+        }
+        return null
+    }
 
     fun parse(header: ByteArray): LocalEmbeddedTags? {
         if (header.size < 4 || header.size > MAX_HEADER_BYTES) return null
