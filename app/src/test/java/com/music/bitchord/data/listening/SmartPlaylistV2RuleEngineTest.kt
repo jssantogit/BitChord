@@ -48,6 +48,18 @@ class SmartPlaylistV2RuleEngineTest {
         }
     }
 
+    @Test fun localBitrateRejectsNegativeAndNonnumericRateValues() {
+        for (invalid in listOf(-1.0, 0.0, Double.NaN, Double.POSITIVE_INFINITY)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.LOCAL_BITRATE_KBPS,
+                    SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+                    value = invalid,
+                ))
+            }
+        }
+    }
+
     @Test fun localBitrateUsesKbpsWithUnknownFailClosedAcrossAssets() {
         val known = candidate("known").copy(localBitratesKbps = listOf(320.0),
             localBitrateEvidenceComplete = true)
