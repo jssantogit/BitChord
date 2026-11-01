@@ -151,6 +151,8 @@ data class MediaAssetTagsEntity(
     @androidx.room.PrimaryKey val mediaAssetId: String,
     val genresJson: String?,
     val moodsJson: String?,
+    /** JSON array of validated BPMs; NULL = unsupported, [] = known absent. */
+    val bpmsJson: String? = null,
 )
 
 /**
