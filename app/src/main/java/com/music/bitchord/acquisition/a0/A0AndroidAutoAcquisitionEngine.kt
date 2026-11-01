@@ -67,6 +67,7 @@ internal object A0AndroidAutoAcquisitionEngine {
         onSlotTransferring:(Int)->Unit={},
         onCandidateDecision:(Int,A0AutoCandidateSelectionPolicy.Decision)->Unit={ _,_ -> },
         onCohesionEvidence:(Int,A0ReleaseCohesionPolicy.Assessment)->Unit={ _,_ -> },
+        onCacheEvidence:(Int,A0AutoDiscoveryCoordinator.CacheEvidence)->Unit={ _,_ -> },
         /** Ephemeral, read-only search offers for explicit manual review. */
         onSlotEvidence:(Int,List<A0ObservedCandidateHandoff.Choice>)->Unit={ _,_ -> },
         /** Only invoked AFTER A3 durably proves zero P/F for the whole album. */
@@ -200,6 +201,7 @@ internal object A0AndroidAutoAcquisitionEngine {
                     onSlotSearching=onSlotSearching,
                     onCandidateDecision=onCandidateDecision,
                     onCohesionEvidence=onCohesionEvidence,
+                    onCacheEvidence=onCacheEvidence,
                     onSlotEvidence=onSlotEvidence)
             }
         }
