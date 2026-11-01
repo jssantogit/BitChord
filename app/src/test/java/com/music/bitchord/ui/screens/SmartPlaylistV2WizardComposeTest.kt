@@ -451,6 +451,38 @@ class SmartPlaylistV2WizardComposeTest {
     }
 
 
+    @Test fun newReusableFilterUsesExistingRuleEditorAndSavesWithoutPlaylistControls() {
+        var saves = 0
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ))
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Só músicas",
+                rule = rule, creatingFilter = true, hasConfiguredRules = true,
+                sort = SmartPlaylistV2Sort.RATING_DESC,
+                limit = "100", seed = "0", preview = null, loading = false,
+                error = null, editingId = null, editingFilterId = null,
+                savedDefinitions = emptyList(), onNameChange = {},
+                onRuleChange = {}, onSortChange = {}, onLimitChange = {},
+                onSeedChange = {}, onPreview = {}, onSave = {},
+                onSaveFilter = { saves++ }, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Novo filtro").assertExists()
+        compose.onNodeWithText("Nome do filtro").assertExists()
+        compose.onNodeWithText("Nome da playlist").assertDoesNotExist()
+        compose.onNodeWithText("Descrição (opcional)").assertDoesNotExist()
+        compose.onNodeWithText("Editar regras").performClick()
+        compose.onNodeWithText("Regras do filtro").assertExists()
+        compose.onNodeWithText("Concluir regras").performClick()
+        compose.onNodeWithText("Salvar filtro").performClick()
+        compose.runOnIdle { assertEquals(1, saves) }
+    }
+
     @Test fun savedFilterActionsIncludeIntersectionUnionAndSafeNormalMode() {
         assertEquals(listOf(
             "Aplicar regras ao rascunho",
