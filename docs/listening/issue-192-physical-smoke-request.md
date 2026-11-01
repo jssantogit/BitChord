@@ -215,3 +215,43 @@ miniplayer, rolagem e diagnósticos.
 da PR #202 ou #193, sem alterar a main, sem publicação release e sem
 fechar a issue. Não declarar o APK disponível antes da conclusão do
 workflow e upload do artefato.
+
+
+## PR #202 — smoke físico do editor e filtros após CI verde (31/10/2026)
+
+**Autorização explícita do usuário:** “Sim”, em resposta direta à pergunta
+“Posso disparar o APK agora?”, depois da validação verde da PR #202.
+
+O último HEAD funcional é `e21c58f639f6d027a68480c67449f10e01870438`; a
+[Android CI #41257436315](https://github.com/jssantogit/BitChord/actions/runs/41257436315)
+terminou com **SUCCESS** no SHA exato e no job `Android · test and build`.
+A falha anterior de compilação (`ConfirmationAlert` não importado) foi
+corrigida usando o componente nativo já existente.
+
+**Disparo autorizado:** um único APK **Dev Debug** para smoke físico no Samsung
+Galaxy A54, sobre a branch `ui/library-playlists-alignment-20261030`. O commit desta solicitação
+altera **somente este documento**, acionando por `push` o workflow
+`Android Physical Smoke APK`, que repete os testes Android,
+executa `:app:assembleDevDebug` e disponibiliza o APK como artifact
+somente após `SUCCESS`.
+
+**Checklist específico do smoke:**
+- Abrir playlist **normal existente** → Editar playlist; garantir tela de edição,
+  nome/descrição/músicas/capa atuais, salvar preservando o mesmo ID;
+  reabrir e conferir persistência e exclusão confirmada.
+- Abrir playlist **inteligente existente** → Editar playlist; conferir regras,
+  E/OU/NÃO, fontes, ordenação, limite, capa, atualização sem duplicação de ID.
+- Na aba de filtros, criar/editar filtro salvo, aplicar/combinar, criar playlist
+  com filtro, converter cópia clássica; confirmar que o novo derivado abre como
+  **Nova playlist**, sem herdar identidade do item anterior.
+- Com rascunho preenchido, mudar entre Editar filtro, Criar playlist com filtro,
+  Editar inteligente salva e Converter cópia clássica; exigir confirmação
+  antes de descartar, cancelar preservando todo o rascunho; verificar Back.
+- Seleção de capa pelo seletor Android, concessão de URI persistida, imagem após
+  fechar/reabrir app, ausência de erro ao excluir e reproduzir playlist.
+- Reutilização visual: componentes nativos, botões e listas, biblioteca,
+  detalhe de playlist, busca, menus, scroll, mini-player, temas e logs.
+
+**Limites:** não autoriza merge da PR #202 nem da #193, alterar `main`,
+release de produção, exclusão de dados ou encerrar issues.
+Não afirmar que o APK está pronto até o workflow e o upload concluírem.
