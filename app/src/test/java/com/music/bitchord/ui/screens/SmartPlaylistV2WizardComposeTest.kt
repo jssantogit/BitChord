@@ -39,6 +39,33 @@ class SmartPlaylistV2WizardComposeTest {
         assertEquals("2 condições configuradas", smartConditionCountLabel(2, configured = true))
     }
 
+    @Test fun categoryRowsUseReadableNativeIconBadgesAndKeepTheirClickTarget() {
+        var pressed = 0
+        compose.setContent {
+            PlaylistWizardNavigationList(listOf(
+                PlaylistWizardNavOption(
+                    title = "Músicas e metadados",
+                    description = "Título e artista",
+                    icon = androidx.compose.material.icons.Icons.Rounded.MusicNote,
+                    onClick = { pressed++ },
+                ),
+            ))
+        }
+        compose.onNodeWithTag("playlist-category-icon-badge").assertExists()
+        compose.onNodeWithText("Músicas e metadados").performClick()
+        compose.runOnIdle { assertEquals(1, pressed) }
+    }
+
+    @Test fun secondaryPlaylistActionsAreExplicitNativeButtonsNotBareText() {
+        var clicked = 0
+        compose.setContent {
+            PlaylistWizardSecondaryAction(label = "Escolher capa", onClick = { clicked++ })
+        }
+        compose.onNodeWithTag("playlist-wizard-secondary-button").assertExists()
+        compose.onNodeWithText("Escolher capa").performClick()
+        compose.runOnIdle { assertEquals(1, clicked) }
+    }
+
     @Test fun playlistWizardUsesNativeSettingsContainersAndSearchSurface() {
         val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
             SmartPlaylistRule.Comparison(
