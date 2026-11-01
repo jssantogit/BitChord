@@ -257,8 +257,8 @@ class PlaylistLibraryVisualReuseTest {
         }
         compose.onNodeWithContentDescription("Ações da música").performClick()
         compose.waitForIdle()
-        // ActionRow owns the click target. The label is not itself clickable.
-        compose.onNodeWithText("Adicionar à fila").onParent().performClick()
+        // Target the clickable ActionRow, never the label or sheet container.
+        compose.onNodeWithTag("canonical-track-queue-action").performClick()
         compose.runOnIdle {
             assertEquals(
                 "recording:verified-28" to
