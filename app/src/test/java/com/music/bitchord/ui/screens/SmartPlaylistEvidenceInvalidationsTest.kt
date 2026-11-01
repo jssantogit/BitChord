@@ -5,6 +5,8 @@ import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.ExternalIdentityEntity
+import com.music.bitchord.data.catalog.MediaAssetEntity
+import com.music.bitchord.data.catalog.MediaAssetTagsEntity
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
@@ -87,6 +89,39 @@ class SmartPlaylistEvidenceInvalidationsTest {
                 entityType = "release",
                 externalId = "00000000-0000-0000-0000-000000000001",
                 entityId = "release:example",
+            ))
+            assertEquals(2, changes.await().size)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
+    @Test fun backgroundEmbeddedTagWriteRefreshesAlreadyVisibleSmartPlaylist() = runBlocking {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("tagged", "Local song", "Artist", 180_000L))
+            dao.upsertMediaAsset(MediaAssetEntity(
+                "asset", "tagged", "local-mediastore", "local:1",
+                "content://media/audio/1", null, null, 1L, null))
+            val ready = CompletableDeferred<Unit>()
+            val changes = async(Dispatchers.Default) {
+                withTimeout(10_000) {
+                    var emissions = 0
+                    smartPlaylistEvidenceChanges(catalog, listening)
+                        .onEach { if (++emissions == 1) ready.complete(Unit) }
+                        .take(2).toList()
+                }
+            }
+            withTimeout(10_000) { ready.await() }
+            dao.upsertMediaAssetTags(MediaAssetTagsEntity(
+                "asset", "[\"Shoegaze\"]", "[\"Calm\"]",
+                bpmsJson = "[128.5]", stylesJson = "[\"Dream Pop\"]",
             ))
             assertEquals(2, changes.await().size)
         } finally {
