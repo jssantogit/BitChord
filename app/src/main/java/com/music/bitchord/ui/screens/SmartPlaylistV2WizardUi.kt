@@ -1108,6 +1108,8 @@ internal fun SmartPlaylistV2WizardUi(
                                                 draft = draft.copy(textValue = it, value = null)
                                             },
                                             label = when (draft.field) {
+                                                SmartPlaylistRuleField.RELEASE_GROUP_TYPE ->
+                                                    "Tipo (ex.: Single, Album, EP)"
                                                 SmartPlaylistRuleField.LOCAL_GENRE ->
                                                     "Gênero da música (ex.: K-pop)"
                                                 SmartPlaylistRuleField.ARTIST_COUNTRY ->
@@ -1146,6 +1148,8 @@ internal fun SmartPlaylistV2WizardUi(
                                                     "Ano do primeiro lançamento (ex.: 2018)"
                                                 SmartPlaylistRuleField.RELEASE_YEAR ->
                                                     "Ano desta edição (ex.: 2024)"
+                                                SmartPlaylistRuleField.DISC_NUMBER ->
+                                                    "Número do disco (ex.: 2)"
                                                 SmartPlaylistRuleField.LOCAL_BITRATE_KBPS ->
                                                     "Bitrate (kbps)"
                                                 else -> "Valor numérico"
