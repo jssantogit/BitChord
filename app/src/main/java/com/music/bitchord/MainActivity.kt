@@ -3867,6 +3867,7 @@ private fun BitChordApp(
                             navigationHome = true,
                             localAdditions = {
                                 com.music.bitchord.ui.screens.CanonicalLocalRecentAdditions(
+                                    refreshRequested = MainViewModel.Feed.LIBRARY in refreshing,
                                     onSeeAll = { showAllLocalRecentAdditions = true },
                                     onOpenSongs = {
                                         localFolderStates.getOrPut("local:all") { LocalFolderState() }
