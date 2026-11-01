@@ -25,6 +25,34 @@ class SmartPlaylistV2RuleEngineTest {
         value: Double? = null,
     ) = SmartPlaylistRule.Comparison(field, operator, value)
 
+    @Test fun fileExtensionUsesActualLocalAssetNameNotGuessedCodec() {
+        val rows = listOf(
+            candidate("flac").copy(
+                localFilePaths = listOf("/sdcard/Music/Track.FLAC"),
+                localFilePathsComplete = true,
+            ),
+            candidate("no_extension").copy(
+                localFilePaths = listOf("/sdcard/Music/Track"),
+                localFilePathsComplete = true,
+            ),
+            candidate("unverified").copy(localFilePathsComplete = false),
+        )
+        val query = SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.LOCAL_FILE_EXTENSION,
+            SmartPlaylistRuleOperator.EQUAL, textValue = "FLAC",
+        ), sort = SmartPlaylistV2Sort.RECORDING_ID_ASC)
+        assertEquals(listOf("flac"),
+            planner.preview(rows, query).map { it.recordingId })
+        val inverse = SmartPlaylistV2Query(SmartPlaylistRule.Not(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.LOCAL_FILE_EXTENSION,
+                SmartPlaylistRuleOperator.EQUAL, textValue = "flac",
+            ),
+        ), sort = SmartPlaylistV2Sort.RECORDING_ID_ASC)
+        assertEquals(listOf("no_extension"),
+            planner.preview(rows, inverse).map { it.recordingId })
+    }
+
     @Test fun localFolderAndFullPathEvaluateOnlyProvenMediaStoreAssets() {
         val known = candidate("local").copy(
             localFilePaths = listOf("/storage/emulated/0/Music/Kpop/Track.FLAC"),
