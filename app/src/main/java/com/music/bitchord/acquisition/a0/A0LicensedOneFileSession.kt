@@ -90,14 +90,17 @@ internal object A0LicensedOneFileSession {
             incomingF: InputStream,
             outgoingF: OutputStream,
             appPrivateDirectory: File,
-            isCancelled: () -> Boolean = { false }
+            isCancelled: () -> Boolean = { false },
+            onTokenValidated: () -> Unit = {},
+            onProgress: (Long) -> Unit = {},
         ): A0VerifiedByteStager.Receipt {
             check(stage == Stage.UPLOAD_ACCEPTED) { "A0 upload ticket not accepted" }
             stage = Stage.CONSUMED // even timeout/hash mismatch blocks replay
             val accepted = checkNotNull(ticket)
             ticket = null
             return A0ModernIncomingTransfer.receiveAfterFConnection(
-                incomingF, outgoingF, accepted, appPrivateDirectory, isCancelled
+                incomingF, outgoingF, accepted, appPrivateDirectory,
+                isCancelled,onTokenValidated,onProgress
             )
         }
     }
