@@ -69,6 +69,16 @@ class A0ManualReviewCandidatePolicyTest {
                 A0AutoCandidateSelectionPolicy.Status.PROVISIONAL)
     }
 
+    @Test fun uncertainFilenameCanBeShownForExplicitHumanChoiceNotAuto() {
+        val ambiguous=offer("prefix","BREAK EVEN - 01 - Magnetic")
+        val retained=A0ManualReviewCandidatePolicy.retain(
+            target,listOf(ambiguous),profile)
+        assertEquals(listOf(ambiguous),retained)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,
+            A0AutoCandidateSelectionPolicy.preview(
+                target,listOf(ambiguous),profile).status)
+    }
+
     @Test fun losslessProfileNeverPresentsMP3EvenIfProfileIsNonStrict() {
         val lossless=A0SoulseekQualityProfiles.snapshot(
             DownloadQualityProfile.LOSSLESS)
