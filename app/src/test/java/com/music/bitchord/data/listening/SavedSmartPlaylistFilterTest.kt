@@ -129,6 +129,33 @@ class SavedSmartPlaylistFilterTest {
         assertEquals(cleanRule, template.rules)
     }
 
+    @Test fun referencedFiltersRequireSavedSmartPlaylistAndBlockOrphaningDeletion() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val db = Room.inMemoryDatabaseBuilder(context, SmartPlaylistDefinitionDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val playlistRepo = SmartPlaylistV2DefinitionRepository(db.v2DefinitionDao())
+            val filterRepo = SmartPlaylistV2FilterRepository(
+                db.v2FilterDao(), savedDefinitions = { playlistRepo.list() },
+            )
+            val rule = SmartPlaylistRule.Reference("referenced:1")
+            val dependent = SavedSmartPlaylistV2Filter("filter:ref", "Referência", rule)
+            assertTrue(runCatching { filterRepo.save(dependent) }.isFailure)
+            assertTrue(filterRepo.list().isEmpty())
+            playlistRepo.save(SavedSmartPlaylistV2Definition(
+                "referenced:1", "Origem", SmartPlaylistV2Query(cleanRule),
+            ))
+            filterRepo.save(dependent)
+            assertEquals(dependent, filterRepo.list().single())
+            assertThrows(IllegalArgumentException::class.java) {
+                validateSmartPlaylistDeletionAgainstFilters("referenced:1", listOf(dependent))
+            }
+            validateSmartPlaylistDeletionAgainstFilters("other", listOf(dependent))
+        } finally {
+            db.close()
+        }
+    }
+
     @Test fun invalidAndFutureFilterPayloadsFailClosed() = runTest {
         val context = RuntimeEnvironment.getApplication()
         val db = Room.inMemoryDatabaseBuilder(context, SmartPlaylistDefinitionDatabase::class.java)
