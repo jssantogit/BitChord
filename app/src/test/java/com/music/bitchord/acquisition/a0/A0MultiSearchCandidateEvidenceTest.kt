@@ -54,6 +54,7 @@ class A0MultiSearchCandidateEvidenceTest {
         assertTrue(shadow.truncatedSlots.isEmpty())
         val portfolio=A0MultiSearchCandidateEvidence(release,quality)
         portfolio.add(shadow.choices,shadow.truncatedSlots)
+        assertEquals(800,portfolio.snapshot().preview!!.intake.observedOffers)
         for(i in release.indices) {
             val (observed,truncated)=checkNotNull(portfolio.slotEvidence(i))
             assertEquals(200,observed.size)
