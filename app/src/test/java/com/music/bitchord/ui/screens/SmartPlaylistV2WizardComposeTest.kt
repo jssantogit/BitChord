@@ -31,6 +31,14 @@ import org.robolectric.annotation.ConscryptMode
 class SmartPlaylistV2WizardComposeTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun countOfSmartConditionsUsesNaturalPortugueseForZeroOneAndPlural() {
+        assertEquals("0 condições", smartConditionCountLabel(0))
+        assertEquals("1 condição", smartConditionCountLabel(1))
+        assertEquals("2 condições", smartConditionCountLabel(2))
+        assertEquals("1 condição configurada", smartConditionCountLabel(1, configured = true))
+        assertEquals("2 condições configuradas", smartConditionCountLabel(2, configured = true))
+    }
+
     @Test fun playlistWizardUsesNativeSettingsContainersAndSearchSurface() {
         val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
             SmartPlaylistRule.Comparison(
