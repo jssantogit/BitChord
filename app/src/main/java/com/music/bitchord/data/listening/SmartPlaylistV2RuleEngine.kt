@@ -57,6 +57,7 @@ internal enum class SmartPlaylistRuleField {
     TRACK_ARTIST,
     GENRE,
     MOOD,
+    BPM,
     DAYS_SINCE_LOCAL_RATING,
     RELEASE_ARTWORK_REFERENCE,
     DAYS_SINCE_LOCAL_FILE_ADDED,
@@ -563,6 +564,43 @@ internal class SmartPlaylistV2RuleEngine(
         if (rule.field == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) {
             return if (row.hasReleaseArtworkReference) RuleTruth.TRUE else RuleTruth.UNKNOWN
         }
+        if (rule.field == SmartPlaylistRuleField.BPM) {
+            val values = row.bpms.filter { it.isFinite() && it > 0.0 && it <= 999.0 }
+            val unknown = row.bpmEvidenceUnknown || values.size != row.bpms.size
+            when (rule.operator) {
+                SmartPlaylistRuleOperator.IS_PRESENT -> return when {
+                    values.isNotEmpty() -> RuleTruth.TRUE
+                    unknown -> RuleTruth.UNKNOWN
+                    else -> RuleTruth.FALSE
+                }
+                SmartPlaylistRuleOperator.IS_MISSING -> return when {
+                    values.isNotEmpty() -> RuleTruth.FALSE
+                    unknown -> RuleTruth.UNKNOWN
+                    else -> RuleTruth.TRUE
+                }
+                else -> Unit
+            }
+            val wanted = rule.value ?: return RuleTruth.UNKNOWN
+            if (values.isEmpty()) return RuleTruth.UNKNOWN
+            val anyMatching = values.any { n -> when (rule.operator) {
+                SmartPlaylistRuleOperator.EQUAL, SmartPlaylistRuleOperator.NOT_EQUAL -> n == wanted
+                SmartPlaylistRuleOperator.GREATER_THAN -> n > wanted
+                SmartPlaylistRuleOperator.GREATER_OR_EQUAL -> n >= wanted
+                SmartPlaylistRuleOperator.LESS_THAN -> n < wanted
+                SmartPlaylistRuleOperator.LESS_OR_EQUAL -> n <= wanted
+                else -> return RuleTruth.UNKNOWN
+            } }
+            if (rule.operator == SmartPlaylistRuleOperator.NOT_EQUAL) return when {
+                anyMatching -> RuleTruth.FALSE
+                unknown -> RuleTruth.UNKNOWN
+                else -> RuleTruth.TRUE
+            }
+            return when {
+                anyMatching -> RuleTruth.TRUE
+                unknown -> RuleTruth.UNKNOWN
+                else -> RuleTruth.FALSE
+            }
+        }
         if (rule.field == SmartPlaylistRuleField.RELEASE_YEAR ||
             rule.field == SmartPlaylistRuleField.TRACK_NUMBER) {
             val numbers = if (rule.field == SmartPlaylistRuleField.RELEASE_YEAR)
@@ -758,6 +796,7 @@ internal class SmartPlaylistV2RuleEngine(
             SmartPlaylistRuleField.TRACK_NUMBER,
             SmartPlaylistRuleField.TRACK_ARTIST,
             SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD,
+            SmartPlaylistRuleField.BPM,
             SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
             SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED -> null
         }
