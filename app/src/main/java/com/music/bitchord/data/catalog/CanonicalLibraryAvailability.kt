@@ -5,6 +5,7 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.AndroidKeystoreOpen
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountRepository
 import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.catalog.provider.opensubsonic.openSubsonicProviderKey
+import kotlinx.serialization.json.Json
 
 /**
  * Provider-neutral Catalog -> Recommendation seam for Library Mode.
@@ -26,8 +27,22 @@ internal data class CanonicalAvailableRecordingSources(
     val kindsComplete: Boolean = true,
 )
 
+/** Safe provider-aggregated metadata: canonical ID and tag values only. */
+internal data class CanonicalAvailableRecordingTags(
+    val recordingId: String,
+    val genres: List<String> = emptyList(),
+    val genreEvidenceUnknown: Boolean = true,
+    val moods: List<String> = emptyList(),
+    val moodEvidenceUnknown: Boolean = true,
+)
+
 internal fun interface CanonicalLibraryAvailabilityReader {
     suspend fun availableRecordingIds(): List<String>
+
+    /** Old readers cannot prove remote tags, so their default stays unknown. */
+    suspend fun availableRecordingTags(
+        recordingIds: List<String>,
+    ): List<CanonicalAvailableRecordingTags> = emptyList()
 
     /**
      * Old injected readers do not have reliable source provenance. The default
@@ -40,6 +55,11 @@ internal fun interface CanonicalLibraryAvailabilityReader {
 /** Catalog-internal read projection used by the availability repository. */
 internal fun interface CanonicalLibraryAvailabilityStore {
     suspend fun recordingIdsForProviders(providerKeys: List<String>): List<String>
+
+    /** Current provider assets only; tag presence never leaves Catalog as an ID. */
+    suspend fun tagsForProvider(
+        providerKey: String, recordingIds: List<String>,
+    ): List<CanonicalScopedTagRow> = emptyList()
 }
 
 /** Catalog-internal configuration view. This is not exposed to Recommendation. */
@@ -78,15 +98,73 @@ internal class RoomCanonicalLibraryAvailabilityStore(
         providerKeys.flatMap { providerKey ->
             dao.availableRecordingIdsForProvider(providerKey)
         }
+
+    override suspend fun tagsForProvider(
+        providerKey: String, recordingIds: List<String>,
+    ): List<CanonicalScopedTagRow> =
+        dao.providerScopedTagRows(providerKey, recordingIds)
 }
 
 /**
  * Catalog owns eligibility; Recommendation receives only deterministic canonical IDs.
  */
+private fun parseAvailableTagList(raw: String?): List<String>? =
+    raw?.let {
+        runCatching { Json.decodeFromString<List<String>>(it) }.getOrNull()
+            ?.map(String::trim)
+            ?.takeIf { tags -> tags.all(String::isNotBlank) }
+            ?.distinct()
+    }
+
 internal class CanonicalLibraryAvailabilityRepository(
     private val store: CanonicalLibraryAvailabilityStore,
     private val providerConfiguration: CanonicalLibraryProviderConfigurationReader,
 ) : CanonicalLibraryAvailabilityReader {
+    /**
+     * Return only tags associated with the currently configured accounts.
+     * An unclassified/local asset remains UNKNOWN for genre/mood, but an
+     * OpenSubsonic positive tag is usable even alongside unknown copies.
+     */
+    override suspend fun availableRecordingTags(
+        recordingIds: List<String>,
+    ): List<CanonicalAvailableRecordingTags> {
+        val ids = recordingIds.distinct()
+        require(ids.all(String::isNotBlank))
+        if (ids.isEmpty()) return emptyList()
+        val configured = providerConfiguration.configuredProviderKeys().toList().sorted()
+        require(configured.all(String::isNotBlank))
+        data class MutableTagEvidence(
+            val genres: MutableSet<String> = linkedSetOf(),
+            val moods: MutableSet<String> = linkedSetOf(),
+            var genreUnknown: Boolean = false,
+            var moodUnknown: Boolean = false,
+            var hasAsset: Boolean = false,
+        )
+        val byRecording = ids.associateWith { MutableTagEvidence() }
+        for (provider in configured) {
+            for (batch in ids.chunked(400)) {
+                for (row in store.tagsForProvider(provider, batch)) {
+                    val target = byRecording[row.recordingId] ?: continue
+                    target.hasAsset = true
+                    val genres = parseAvailableTagList(row.genresJson)
+                    val moods = parseAvailableTagList(row.moodsJson)
+                    if (genres == null) target.genreUnknown = true else target.genres.addAll(genres)
+                    if (moods == null) target.moodUnknown = true else target.moods.addAll(moods)
+                }
+            }
+        }
+        return ids.map { id ->
+            val value = byRecording.getValue(id)
+            CanonicalAvailableRecordingTags(
+                recordingId = id,
+                genres = value.genres.toList(),
+                moods = value.moods.toList(),
+                genreEvidenceUnknown = !value.hasAsset || value.genreUnknown,
+                moodEvidenceUnknown = !value.hasAsset || value.moodUnknown,
+            )
+        }
+    }
+
     override suspend fun availableRecordingSources(): List<CanonicalAvailableRecordingSources> {
         // Read configured provider identity at the request boundary. Only the
         // current account's verified provider key is eligible for remote claims.
