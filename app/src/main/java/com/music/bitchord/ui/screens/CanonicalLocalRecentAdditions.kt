@@ -128,6 +128,7 @@ internal fun CanonicalLocalRecentAdditions(
     onSeeAll: () -> Unit = {},
     showAll: Boolean = false,
     contentPadding: PaddingValues = PaddingValues(),
+    refreshRequested: Boolean = false,
 ) {
     val context = LocalContext.current.applicationContext
     val database = remember(context) { CanonicalCatalogDatabase.get(context) }
@@ -137,10 +138,10 @@ internal fun CanonicalLocalRecentAdditions(
     var loadFailed by remember { mutableStateOf(false) }
     val recent by produceState<List<V2DisplayRow>?>(
         initialValue = RecentLocalAdditionsSnapshot.get(showAll),
-        key1 = dao, key2 = showAll, key3 = refreshSerial,
+        key1 = dao, key2 = showAll, key3 = refreshSerial to refreshRequested,
     ) {
         val prior = RecentLocalAdditionsSnapshot.get(showAll)
-        if (refreshSerial == 0 && prior != null) {
+        if (refreshSerial == 0 && !refreshRequested && prior != null) {
             value = prior
             return@produceState
         }
