@@ -115,6 +115,14 @@ internal data class CanonicalScopedTagRow(
     val genresJson: String?,
     val moodsJson: String?,
     val bpmsJson: String?,
+    val stylesJson: String?,
+)
+
+internal data class CanonicalLocalTagScanRow(
+    val mediaAssetId: String,
+    val uri: String,
+    val sourceFingerprint: String?,
+    val parsedFingerprint: String?,
 )
 
 @Dao
@@ -123,13 +131,30 @@ internal interface CanonicalCatalogDao {
     @Upsert
     suspend fun upsertMediaAssetTags(tags: MediaAssetTagsEntity)
 
+    @Query("SELECT * FROM catalog_media_asset_tags WHERE mediaAssetId = :mediaAssetId LIMIT 1")
+    suspend fun mediaAssetTagsById(mediaAssetId: String): MediaAssetTagsEntity?
+
+    @Query(
+        """
+        SELECT asset.id AS mediaAssetId, asset.uri AS uri,
+               tags.localSourceFingerprint AS sourceFingerprint,
+               tags.localParsedFingerprint AS parsedFingerprint
+        FROM catalog_media_asset AS asset
+        INNER JOIN catalog_media_asset_tags AS tags ON tags.mediaAssetId = asset.id
+        WHERE asset.provider = :providerKey AND tags.localSourceFingerprint IS NOT NULL
+        ORDER BY asset.id
+        """,
+    )
+    suspend fun pendingLocalEmbeddedTags(providerKey: String): List<CanonicalLocalTagScanRow>
+
     @Query(
         """
         SELECT asset.recordingId AS recordingId,
                asset.id AS mediaAssetId,
                tags.genresJson AS genresJson,
                tags.moodsJson AS moodsJson,
-               tags.bpmsJson AS bpmsJson
+               tags.bpmsJson AS bpmsJson,
+               tags.stylesJson AS stylesJson
         FROM catalog_media_asset AS asset
         LEFT JOIN catalog_media_asset_tags AS tags ON tags.mediaAssetId = asset.id
         WHERE asset.provider = :providerKey AND asset.recordingId IN (:recordingIds)
