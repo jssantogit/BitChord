@@ -39,6 +39,15 @@ internal class A0AutoDiscoveryCoordinator(
         data object Stop:SearchResult
     }
 
+    enum class CacheAction { REUSED, SEARCH_REQUIRED }
+    /** Aggregate-only evidence: never exposes a filename, peer or path. */
+    data class CacheEvidence(
+        val action:CacheAction,
+        val observed:Int,
+        val truncated:Boolean,
+        val decisionReason:A0AutoCandidateSelectionPolicy.Reason?,
+    )
+
     class Report(
         val searches:Int,
         val batch:A0AutoBatchExecutor.Report,
@@ -71,6 +80,7 @@ internal class A0AutoDiscoveryCoordinator(
         onSlotSearching:(Int)->Unit={},
         onCandidateDecision:(Int,A0AutoCandidateSelectionPolicy.Decision)->Unit={ _,_ -> },
         onCohesionEvidence:(Int,A0ReleaseCohesionPolicy.Assessment)->Unit={ _,_ -> },
+        onCacheEvidence:(Int,CacheEvidence)->Unit={ _,_ -> },
         /** Observed, never transfer-authorized; consumer may retain in RAM
          * for one explicit human review after this search closes.
          */
@@ -152,13 +162,17 @@ internal class A0AutoDiscoveryCoordinator(
                 // Observable per-track state, never network authority.
                 try {onSlotSearching(index)}catch(_:Exception){}
                 val proposals=pooled.selectionPreview()
-                val (_,cachedDecision) = select(index,
-                    checkNotNull(pooled.slotEvidence(index)).first,
-                    checkNotNull(pooled.slotEvidence(index)).second,false)
-                if(proposals.getOrNull(index)?.status!=
-                    A0AutoCandidateSelectionPolicy.Status.PROVISIONAL &&
-                    cachedDecision.status!=
-                    A0AutoCandidateSelectionPolicy.Status.PROVISIONAL) {
+                val (cached,cacheTruncated)=checkNotNull(pooled.slotEvidence(index))
+                val (_,cachedDecision)=select(index,cached,cacheTruncated,false)
+                val readyInCache=proposals.getOrNull(index)?.status==
+                    A0AutoCandidateSelectionPolicy.Status.PROVISIONAL ||
+                    cachedDecision.status==
+                    A0AutoCandidateSelectionPolicy.Status.PROVISIONAL
+                try { onCacheEvidence(index,CacheEvidence(
+                    if(readyInCache) CacheAction.REUSED else CacheAction.SEARCH_REQUIRED,
+                    cached.size.coerceIn(0,512),cacheTruncated,cachedDecision.reason
+                )) }catch(_:Exception) {}
+                if(!readyInCache) {
                     searches++
                     val result=try {
                         discovery.search(entries[index],entries,::shouldStop)
