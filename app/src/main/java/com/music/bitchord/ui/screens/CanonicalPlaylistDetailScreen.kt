@@ -84,14 +84,30 @@ internal fun suggestedCanonicalPlaylistTracks(
     val candidates = available.distinctBy { it.id }
         .filter { it.id !in selectedIds && it.isAvailablePlaylistMember() }
     if (candidates.isEmpty()) return emptyList()
-    // Complete one randomized pass before allowing any earlier recording to
-    // reappear. Shuffle per cycle instead of advancing alphabetically.
+    // A shuffled bag is exhausted before any song repeats. Adjacent cycles
+    // must also avoid replaying the final (possibly partial) page immediately.
     val pageCount = (candidates.size + 4) / 5
-    val cycle = Math.floorDiv(page, pageCount)
-    val shuffled = candidates.shuffled(kotlin.random.Random(
-        shuffleSeed xor (cycle.toLong() * -7046029254386353131L),
-    ))
-    return shuffled.drop(Math.floorMod(page, pageCount) * 5).take(5)
+    val cycle = Math.floorDiv(page.coerceAtLeast(0), pageCount)
+    val finalPageSize = ((candidates.size - 1) % 5) + 1
+    var previousTail = emptySet<String>()
+    var ordered = candidates
+    for (index in 0..cycle) {
+        val roundSeed = shuffleSeed xor (index.toLong() * -7046029254386353131L)
+        val randomized = candidates.shuffled(kotlin.random.Random(roundSeed))
+        ordered = if (index == 0 || candidates.size <= 5) {
+            randomized
+        } else {
+            // Enough other recordings always exist for five new suggestions
+            // when there are at least six candidates.
+            val eligible = randomized.filterNot { it.id in previousTail }
+            val deferred = randomized.filter { it.id in previousTail }
+            eligible.take(5) + (eligible.drop(5) + deferred).shuffled(
+                kotlin.random.Random(roundSeed xor -4658895280553007687L),
+            )
+        }
+        previousTail = ordered.takeLast(finalPageSize).mapTo(HashSet()) { it.id }
+    }
+    return ordered.drop(Math.floorMod(page, pageCount) * 5).take(5)
 }
 
 /** Preserve the playlist's original ID, source, description and user-picked cover. */
