@@ -79,6 +79,15 @@ class CanonicalCatalogIncrementalMigrationTest {
                 while (columns.moveToNext()) names += columns.getString(1)
                 assertEquals(listOf("mediaAssetId", "genresJson", "moodsJson"), names)
             }
+            CanonicalCatalogDatabase.MIGRATION_12_13.migrate(migrationDb)
+            raw.rawQuery("PRAGMA table_info(catalog_media_asset_tags)", null).use { columns ->
+                val names = mutableListOf<String>()
+                while (columns.moveToNext()) names += columns.getString(1)
+                assertEquals(listOf(
+                    "mediaAssetId", "genresJson", "moodsJson", "bpmsJson",
+                    "stylesJson", "localSourceFingerprint", "localParsedFingerprint",
+                ), names)
+            }
 
             raw.rawQuery(
                 "SELECT title,hasOfficialAudioRelease,isVideo FROM musicbrainz_recording_enrichment WHERE recordingId='old-recording'",
