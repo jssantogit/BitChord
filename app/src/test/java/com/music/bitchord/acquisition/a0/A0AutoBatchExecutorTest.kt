@@ -226,6 +226,38 @@ class A0AutoBatchExecutorTest {
         assertFalse(observed.toString().contains("album-peer"))
     }
 
+    @Test fun attemptedTimeoutIsNotOfferedAsFalseManualRecoveryOrAbortSiblings() {
+        val attempts=mutableListOf<String>()
+        val source=candidates()
+        val portFactory:(SoulseekBatchPlan.Entry)->A0AutoAcquisitionExecutor.Port =
+            { entry ->
+                if(entry.trackId=="1")object:A0AutoAcquisitionExecutor.Port {
+                    override fun fetch(
+                        candidate:A0ObservedCandidateHandoff.Choice,
+                        isCancelled:()->Boolean,
+                    ):A0AutoAcquisitionExecutor.FetchResult {
+                        attempts.add(entry.trackId)
+                        throw java.net.SocketTimeoutException("Peer did not answer")
+                    }
+                    override fun inspect(receipt:A0VerifiedByteStager.Receipt,
+                        expectedExtension:String,isCancelled:()->Boolean)=null
+                    override fun publish(receipt:A0VerifiedByteStager.Receipt,
+                        safeName:String,isCancelled:()->Boolean)=
+                        A0AutoAcquisitionExecutor.PublishResult.ROLLED_BACK
+                    override fun cleanup(receipt:A0VerifiedByteStager.Receipt) {}
+                } else factory(attempts)(entry)
+            }
+        val report=A0AutoBatchExecutor(portFactory).run(
+            entries.take(2),entries.take(2).map { source },emptySet(),profile,
+            userRequested=true,optedIn=true,isCancelled={false},stillAuthorized={true})
+        assertEquals(listOf(
+            A0AutoBatchExecutor.TrackStatus.ATTEMPT_FAILED,
+            A0AutoBatchExecutor.TrackStatus.PUBLISHED),report.results)
+        assertEquals(1,report.attemptFailures)
+        assertEquals(0,report.manualReview)
+        assertEquals(listOf("1","2"),attempts)
+    }
+
     @Test fun truncatedSlotIsNotAutomaticallyDownloaded() {
         val done=mutableListOf<String>()
         val report=A0AutoBatchExecutor(factory(done)).run(
