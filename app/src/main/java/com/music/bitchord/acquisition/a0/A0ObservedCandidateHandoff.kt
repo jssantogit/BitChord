@@ -97,22 +97,28 @@ internal class A0ObservedCandidateHandoff(
     // Only an already-requested release may influence this read-only cache.
     // Matching a file's title is a DISCOVERY hint, not identity proof or
     // permission to transfer. No peer names or paths enter diagnostics.
+    // Keep the SAME indices as releaseQueries, including untokenizable
+    // titles. Filtering empty tokens shifts lost-evidence flags to the wrong
+    // canonical track and can hide truncated peer observations.
     private val releaseSlotTokens=releaseQueries.take(64)
         .map(A0ReleaseDiscoveryShadowAdapter::titleTokens)
-        .filter { it.isNotEmpty() }
 
     private fun markLostName(name:String) {
         if(!collectReleaseShadow)return
         val file=A0ReleaseDiscoveryShadowAdapter.fileTokens(name)
         releaseSlotTokens.forEachIndexed { index,title ->
-            if(file.containsAll(title))releaseShadowLostSlots[index]=true
+            if(title.isNotEmpty() && file.containsAll(title))
+                releaseShadowLostSlots[index]=true
         }
     }
 
     private fun releaseSlotHits(choice:Choice):List<Int> {
         if(releaseSlotTokens.isEmpty())return emptyList()
         val file=A0ReleaseDiscoveryShadowAdapter.fileTokens(choice.claim.filename)
-        return releaseSlotTokens.indices.filter { file.containsAll(releaseSlotTokens[it]) }
+        return releaseSlotTokens.indices.filter { index ->
+            releaseSlotTokens[index].isNotEmpty() &&
+                file.containsAll(releaseSlotTokens[index])
+        }
     }
 
     /**
