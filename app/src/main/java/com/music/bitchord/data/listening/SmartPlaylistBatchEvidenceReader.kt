@@ -60,7 +60,9 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
             it == SmartPlaylistRuleField.AUDIBLE_COMPLETIONS ||
                 it == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE ||
                 it == SmartPlaylistRuleField.EARLY_SKIPS ||
-                it == SmartPlaylistRuleField.LATE_SKIPS
+                it == SmartPlaylistRuleField.LATE_SKIPS ||
+                it == SmartPlaylistRuleField.TOTAL_SKIPS ||
+                it == SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP
         }
         val needsRatings = SmartPlaylistRuleField.EXPLICIT_RATING in requiredFields ||
             SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING in requiredFields
@@ -172,6 +174,7 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                 artistDisplay = recording.artistDisplay,
                 earlySkips = events?.earlySkips ?: 0L,
                 lateSkips = events?.lateSkips ?: 0L,
+                lastSkippedAtEpochMs = events?.lastSkippedAtEpochMs,
                 releaseTitles = releaseMembershipsById[id].orEmpty()
                     .map { it.releaseTitle }.distinct().sorted(),
                 releaseYears = parsedYears.filterNotNull().distinct().sorted(),
