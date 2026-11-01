@@ -226,6 +226,12 @@ internal data class SmartPlaylistV2Query(
                                 "Days since local rating must be a nonnegative whole number"
                             }
                         }
+                        if (node.field == SmartPlaylistRuleField.LOCAL_BITRATE_KBPS &&
+                            !presence) {
+                            require(node.value!! > 0.0) {
+                                "Local bitrate threshold must be positive kbps"
+                            }
+                        }
                         if (node.field == SmartPlaylistRuleField.TRACK_NUMBER && !presence) {
                             require(node.value!! in 1.0..99_999.0 &&
                                 node.value % 1.0 == 0.0) {
