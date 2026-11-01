@@ -70,7 +70,7 @@ internal fun PlaylistManagerChrome(
         ) {
             ArtworkPageBackButton(onClick = onBack, hazeState = null)
             Text(
-                "Filtros reutilizáveis",
+                "Gerenciar coleções",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.weight(1f).padding(start = 12.dp),
@@ -80,6 +80,15 @@ internal fun PlaylistManagerChrome(
             options = listOf("Filtros", "Inteligentes", "Clássicas"),
             selectedIndex = selectedIndex,
             onSelect = onSelect,
+        )
+        Text(
+            when (selectedIndex) {
+                0 -> "Filtros: regras salvas para reutilizar. Uma mudança aqui não altera playlists já criadas."
+                1 -> "Inteligentes: playlists atualizadas conforme suas condições."
+                else -> "Clássicas: playlists antigas que podem ser copiadas para o editor atual."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
