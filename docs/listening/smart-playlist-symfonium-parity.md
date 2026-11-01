@@ -323,3 +323,64 @@ Prioritize typed rule semantics, canonical Song/Release/Artist scopes, metadata 
 - PR #202 reconciliada com PR #193 atualizada; `mergeable=true`, sem alterações na `main` (HEAD de código `fcc8f5a3616b41955d2d242a7134ba7e527a4ed1`). [Android CI #41331462239](https://github.com/jssantogit/BitChord/actions/runs/41331462239) concluiu `SUCCESS`, após reduzir o composable `BitChordApp` que excedia o limite de bytecode JVM.
 - A migração `MIGRATION_11_12` mantém versões v1–v11 e acrescenta `localGenre` e `localBitrateBps` nullable, sem elevar evidência desconhecida a valores falsos. Os caminhos locais são avaliados por segmentos completos de diretório (não confundir `Kpop` e `Kpop-Backup`).
 - A CI automatizada não substitui smoke físico Galaxy A54, nem constitui inventário Android completo do Symfonium 15.1.0. OpenSubsonic ainda não persiste critérios remotos equivalentes de gênero/caminho/bitrate no modelo do filtro; compositor, Favorite Date, data original, presença realmente comprovada de thumbnail, offline/cache e qualidade de áudio plena precisam de dados verificáveis por origem. **Issue #192 e PRs draft abertas; não declarar 100% nem mesclar.**
+
+
+## 2026-11-01 — Inventário visual de referência recebido: Symfonium e smoke BitChord
+
+**Origem:** capturas fornecidas pelo usuário do Symfonium e do APK Android do fork.
+Esta é uma **lista de alvos observados**, não uma alegação de paridade nem uma
+validação de qualidade dos metadados. Versão exata da instalação do Symfonium
+continua a ser conferida no dispositivo.
+
+| Alvo da referência | Critérios visíveis no menu enviado |
+| --- | --- |
+| Faixa | Agrupamento, Ano, Artista de exibição, Artista original, Avaliação, Avaliação do usuário, BPM, Bits por amostra, Caminho e arquivo, Codec, Com ponto de retomada, Comentário, Data de adição, Data de favorito, Disco, Duração, Estilo, Excluídos das mixagens, Exibir artista do álbum, Exibir compositor, Explícito, Favorito, Gênero, Humor, Idioma, Miniatura, Miniatura da faixa, Miniatura local, Nome do movimento, Número da faixa, Número de canais, Número de pulos, Número de reproduções, Número do movimento, Ocasião, Porcentagem reproduzida, Reproduzido pela última vez, Status offline, Tag, Taxa de amostragem, Taxa de bits, Tipo de mídia, Trabalho, Título, Álbum original, É um single, Última pulada |
+| Álbum | Agrupamento, Avaliação, Avaliação do usuário, Compilação, Estilo, Favorito, Gênero, Humor, Ocasião, País, Rótulo, Tag, Tipo, Tipo de mídia, Título |
+| Artista | Estilo, Favorito, Gênero, Humor, Instrumento, Nome, Sexo, Tag, Tipo |
+| Playlist | Na playlist, Na playlist inteligente |
+
+A referência de edição do critério **Tag** também mostra os operadores
+É, Não é, Contém, Não contém, Começa com, Termina com, Ausente e Presente;
+campos que não exigem entrada textual precisam explicar explicitamente
+que verificam presença do metadado, e os operadores variam por tipo.
+
+### O que já tem implementação concreta nesta rodada
+
+- **Gênero local:** movido para *Músicas e metadados*; ao inserir uma nova
+  regra, abre por padrão uma comparação com valor textual solicitado. Presença
+  do campo continua opcional como operador explicitamente explicado.
+- **País do artista (FAIXA):** código de país de dois caracteres da
+  `musicbrainz_artist_enrichment` ligado a créditos canônicos da gravação.
+  Não deduz nacionalidade por nome ou idioma; vários créditos podem contribuir.
+  Falta um seletor localizado de países. Independente do critério de país de
+  um **Álbum**, que continua aberto.
+- **Ano do lançamento original:** `catalog_release_group.firstReleaseDate`
+  via `catalog_release_group_edition` e `catalog_release_track`, interpretado
+  por parser estrito para ano. **Não** é filtro de data completa nem data de uma
+  edição ou timestamp de arquivo. Ligação ou data ausente continua UNKNOWN.
+- **Fonte:** escolha por controle nativo de uma linha com lista de opções
+  autorizadas. Playlists normais selecionam providerKey exato; inteligentes
+  continuam limitadas à categoria local/OpenSubsonic, sem afirmar escolha
+  independente entre múltiplas contas em uma única regra.
+- **Sugestões:** ordem pseudoaleatória por ciclo com semente guardada enquanto
+  a tela está aberta; cinco por página, sem repetir ID até consumir o conjunto.
+  Depois disso o ciclo pode reutilizar gravações com outra mistura.
+- **Avaliação nativa:** apresentação migrou de AlertDialog Material3 para
+  superfície Settings do fork; 1–5 estrelas, meios, confirmação e sem gravação
+  implícita continuam os contratos funcionais.
+
+### Ainda faltante: não mascarar como implementado
+
+| Família | Lacuna de evidência/integração |
+| --- | --- |
+| Faixa: BPM, estilos, humor, idioma, ocasião, comentário, compositor, explícito, álbum original e tags | Não há projeção canônica completa com proveniência para todas as origens; requer leitura real das tags/provedores e regra typed com UNKNOWN |
+| Faixa: codec, amostragem, bits por amostra, canais, status offline, percentual reproduzido, favorito e data do favorito | Exigem dados técnicos distintos do nome/extensão/bitrate e evidência de playback/cache/uso; não inferir de arquivos ou timestamps não equivalentes |
+| Álbum: tipos, país, rótulo, tags, moods/estilos e avaliação/favorito por alvo | Alvo é Release/ReleaseGroup, não um Recording fabricado por título; precisa campo e UI contextual realmente associados |
+| Artista: estilo, gênero, humor, instrumento, sexo, tipo e favorito | Dados e identidade do ArtistEntity com proveniência; não copiar tags de um álbum ou gravação |
+| Playlist e ações contextuais | Paridade entre filtros salvos, suas aplicações por alvo e referências, inclusive controles de operação e configuração de limites |
+| Matrizes de operadores/ordenação | Inventário detalhado campo a campo contra a versão do Symfonium instalada, casos de ausência e limites de múltiplos provedores |
+
+**Gate:** CI verde do HEAD integrado e smoke físico Galaxy A54 do código
+final; histórico de CI de commits anteriores não atesta esta rodada.
+As PRs #193/#202 permanecem sem merge até validar regressões e decidir o
+escopo restante. 
