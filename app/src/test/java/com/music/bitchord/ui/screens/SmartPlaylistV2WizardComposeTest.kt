@@ -509,6 +509,15 @@ class SmartPlaylistV2WizardComposeTest {
         compose.runOnIdle { assertEquals(1, saves) }
     }
 
+    @Test fun maximalDepthFilterRemainsValidWhenOpeningItsEditor() {
+        var deep: SmartPlaylistRule = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+        )
+        repeat(8) { deep = SmartPlaylistRule.Not(deep) }
+        SmartPlaylistV2Query(deep)
+        assertEquals(deep, editableSmartPlaylistRuleRoot(deep))
+    }
+
     @Test fun singleConditionOrNegatedFilterGetsEditableRootWithoutChangingMeaning() {
         val condition = SmartPlaylistRule.Comparison(
             SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
