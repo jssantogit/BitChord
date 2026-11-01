@@ -1232,15 +1232,26 @@ internal fun SmartPlaylistV2WizardUi(
                                 if (onPreviewAction != null && currentPreviewQuery != null &&
                                     preview != null && preview.isNotEmpty() &&
                                     preview.size <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        TextButton(onClick = {
-                                            onPreviewAction(currentPreviewQuery, editingId,
-                                                CanonicalCollectionIntent.PLAY_NOW)
-                                        }) { Text(stringResource(Res.string.smart_collection_batch_play)) }
-                                        TextButton(onClick = {
-                                            onPreviewAction(currentPreviewQuery, editingId,
-                                                CanonicalCollectionIntent.ADD_TO_QUEUE)
-                                        }) { Text(stringResource(Res.string.smart_collection_batch_queue)) }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        PlaylistWizardCompactAction(
+                                            label = stringResource(Res.string.smart_collection_batch_play),
+                                            modifier = Modifier.weight(1f),
+                                            onClick = {
+                                                onPreviewAction(currentPreviewQuery, editingId,
+                                                    CanonicalCollectionIntent.PLAY_NOW)
+                                            },
+                                        )
+                                        PlaylistWizardCompactAction(
+                                            label = stringResource(Res.string.smart_collection_batch_queue),
+                                            modifier = Modifier.weight(1f),
+                                            onClick = {
+                                                onPreviewAction(currentPreviewQuery, editingId,
+                                                    CanonicalCollectionIntent.ADD_TO_QUEUE)
+                                            },
+                                        )
                                     }
                                 }
                             }
