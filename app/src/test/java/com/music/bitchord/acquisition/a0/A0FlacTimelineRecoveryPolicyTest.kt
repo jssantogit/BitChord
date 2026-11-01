@@ -12,21 +12,31 @@ class A0FlacTimelineRecoveryPolicyTest {
         resets:Int=5,regressionMs:Long=22_662L,
         fixed:Int?=block,totalSamples:Long?=total,
         rate:Int?=44_100,actualDuration:Long=duration,
-        packets:Int=frames,demuxBytes:Long=11_000_000L,
-        sourceBytes:Long=12_000_000L,
+        frameProblem:A0FlacFrameSequenceEvidence.Problem=
+            A0FlacFrameSequenceEvidence.Problem.NONE,
+        frameSamples:Long=total,packets:Int=frames,
+        demuxBytes:Long=11_000_000L,sourceBytes:Long=12_000_000L,
     )=A0FlacTimelineRecoveryPolicy.assess(
         resets,regressionMs,fixed,totalSamples,rate,actualDuration,
-        packets,demuxBytes,sourceBytes)
+        frameProblem,frameSamples,packets,demuxBytes,sourceBytes)
 
-    @Test fun recurring22SecondAndroidFlacResetNeedsFullIndependentEvidence() {
-        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.VERIFIED_FIXED_BLOCK_COUNT,
+    @Test fun recoveredTimestampNeedsChecksummedWholeStreamEvidence() {
+        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.VERIFIED_ENCODED_FRAME_SEQUENCE,
             check())
         assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.NOT_NEEDED,
             check(resets=0))
     }
-    @Test fun neverApproveShortIncompleteOrVariableFrameAudio() {
-        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.FRAME_COUNT_MISMATCH,
-            check(packets=245))
+    @Test fun packetsAreNotFramesAndCountAloneDoesNotAuthorise() {
+        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.FRAME_SAMPLE_COVERAGE_MISMATCH,
+            check(frameSamples=total-4096))
+        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.FRAME_SAMPLE_COVERAGE_MISMATCH,
+            check(packets=0))
+        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.ENCODED_FRAME_PACKET_UNREADABLE,
+            check(frameProblem=A0FlacFrameSequenceEvidence.Problem.PACKET_UNREADABLE))
+        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.ENCODED_FRAME_SEQUENCE_INVALID,
+            check(frameProblem=A0FlacFrameSequenceEvidence.Problem.NUMBERING_INCONSISTENT))
+    }
+    @Test fun incompleteOrContradictoryLocalAudioNeverApproved() {
         assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.NO_INDEPENDENT_STREAMINFO,
             check(fixed=null))
         assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.NO_INDEPENDENT_STREAMINFO,
