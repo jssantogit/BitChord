@@ -58,7 +58,8 @@ import com.music.bitchord.data.listening.SavedCanonicalStaticPlaylist
 import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Filter
 import com.music.bitchord.data.listening.SmartPlaylistV2FilterRepository
-import com.music.bitchord.data.listening.andSavedFilter
+import com.music.bitchord.data.listening.applySavedFilterToDraft
+import com.music.bitchord.data.listening.SavedFilterApplication
 import com.music.bitchord.data.listening.toPlaylistCopy
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.SavedSmartPlaylistDefinition
@@ -114,6 +115,7 @@ internal fun savedFilterActionsForDraft(
     if (canApplySmartFilterToDraft(normalMode, editingNormalId)) {
         add("Aplicar regras ao rascunho")
         add("Combinar com o rascunho (E)")
+        add("Combinar com o rascunho (OU)")
     }
     add("Editar filtro")
     add("Criar playlist com este filtro")
@@ -143,7 +145,13 @@ internal fun shouldConfirmReplacingDraft(
 ): Boolean = editing || name.isNotBlank() || description.isNotBlank() ||
     coverUri != null || selectedCount > 0 || hasConfiguredRules
 
-private enum class EditorDestination { EDIT_FILTER, CREATE_FROM_FILTER, EDIT_SMART, COPY_CLASSIC }
+/** Exporting a filter from a playlist must not close that playlist's draft. */
+internal fun shouldClosePlaylistDraftAfterSavingFilter(
+    editingFilterId: String?,
+    creatingFilter: Boolean,
+): Boolean = editingFilterId != null || creatingFilter
+
+private enum class EditorDestination { CREATE_FILTER, EDIT_FILTER, CREATE_FROM_FILTER, EDIT_SMART, COPY_CLASSIC }
 private data class PendingEditorNavigation(
     val id: String,
     val destination: EditorDestination,
@@ -230,6 +238,10 @@ internal fun SmartPlaylistV2BuilderScreen(
     var normalGroupMembers by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var editingId by remember { mutableStateOf<String?>(null) }
     var editingFilterId by remember { mutableStateOf<String?>(null) }
+    var creatingFilter by remember { mutableStateOf(false) }
+    var exportedFilterId by remember { mutableStateOf<String?>(null) }
+    var filterNotice by remember { mutableStateOf<String?>(null) }
+    var pendingFilterReplacementId by remember { mutableStateOf<String?>(null) }
     var rule by remember { mutableStateOf<SmartPlaylistRule>(
         SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(newRule())),
     ) }
@@ -302,6 +314,10 @@ internal fun SmartPlaylistV2BuilderScreen(
         editorEpoch++
         editingId = null
         editingFilterId = null
+        creatingFilter = false
+        exportedFilterId = null
+        filterNotice = null
+        pendingFilterReplacementId = null
         editingNormalId = null
         normalMode = false
         normalSearch = ""
@@ -328,6 +344,10 @@ internal fun SmartPlaylistV2BuilderScreen(
 
     fun openEditorDestination(target: PendingEditorNavigation) {
         when (target.destination) {
+            EditorDestination.CREATE_FILTER -> {
+                reset()
+                creatingFilter = true
+            }
             EditorDestination.EDIT_FILTER -> {
                 val filter = savedFilters.firstOrNull { it.id == target.id }
                 if (filter == null) {
