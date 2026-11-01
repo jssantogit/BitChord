@@ -84,6 +84,7 @@ internal class A0FreshAutoSearchTransport(
         var readers:ExecutorService?=null
         val readerGate=A0SearchReaderGate()
         val readerFailed=AtomicBoolean(false)
+        val workerStages=A0PeerWorkStageCounts()
         try {
             session=A0AutoAuthenticatedServer.open(
                 app,generation,::stopped,onSocketReady={activeServer=it},
@@ -182,20 +183,29 @@ internal class A0FreshAutoSearchTransport(
                                 Socket().use { peer ->
                                     activePeers.add(peer)
                                     try {
-                                        peer.connect(InetSocketAddress(
-                                            offer.address,offer.port),1800)
-                                        peer.soTimeout=2300
-                                        peer.getOutputStream().apply {
-                                            write(A0IndirectSearchWire.pierceFirewall(offer.token))
-                                            flush()
-                                        }
-                                        A0IndirectSearchWire.readIndirectReply(
-                                            peer.getInputStream(),token,offer.username,
-                                            onValidatedParsedReply={ parsed ->
-                                                if(!holder.offerParsed(parsed,offer.username))
-                                                    throw IOException("Invalid Soulseek indirect reply")
+                                        workerStages.inStage(
+                                            A0PeerWorkStageCounts.Stage.CONNECTING) {
+                                            peer.connect(InetSocketAddress(
+                                                offer.address,offer.port),1800)
+                                            peer.soTimeout=2300
+                                            peer.getOutputStream().apply {
+                                                write(A0IndirectSearchWire.pierceFirewall(offer.token))
+                                                flush()
                                             }
-                                        )
+                                        }
+                                        workerStages.inStage(
+                                            A0PeerWorkStageCounts.Stage.READING) {
+                                            A0IndirectSearchWire.readIndirectReply(
+                                                peer.getInputStream(),token,offer.username,
+                                                onValidatedParsedReply={ parsed ->
+                                                    workerStages.inStage(
+                                                        A0PeerWorkStageCounts.Stage.PUBLISHING) {
+                                                        if(!holder.offerParsed(parsed,offer.username))
+                                                            throw IOException("Invalid Soulseek indirect reply")
+                                                    }
+                                                }
+                                            )
+                                        }
                                     }catch(_:IOException) {
                                         // Ignore one peer; retain validated replies.
                                     }finally {
@@ -274,6 +284,8 @@ internal class A0FreshAutoSearchTransport(
                     " direct_queued=${directStats.queuedNow.coerceIn(0,128)}" +
                     " indirect_active=${peerStats.activeNow.coerceIn(0,12)}" +
                     " indirect_queued=${peerStats.queuedNow.coerceIn(0,128)}" +
+                    " indirect_open_sockets=${activePeers.count { !it.isClosed }.coerceIn(0,12)}" +
+                    " indirect_stages=${workerStages.summary()}" +
                     " readerFailed=${readerFailed.get()} revoked=$revoked")
                 // Failed peer-pool drain is not necessarily a protocol or
                 // account failure. Discard its incomplete snapshot while
