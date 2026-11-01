@@ -129,11 +129,25 @@ internal class A0FreshAuthenticatedAutoTransport(
                 return A0AutoAcquisitionExecutor.FetchResult.RetryableConnectionFailure
             throw IOException("Soulseek auto peer lookup failed",error)
         }catch(error:Exception) {
+            val retryable=A0PreByteTransportRetryPolicy.canRetry(
+                lastPhase,error,
+                cancelled=cancelled.get() || isCancelled(),
+                sameGeneration=SoulseekActiveSession.isCurrent(expectedGeneration))
             A0AcquisitionDiagnostics.emit(diagnosticScope,
                 A0AcquisitionDiagnostics.Phase.TRANSPORT_FAILURE,
                 reason=A0AcquisitionDiagnostics.fault(error),
                 elapsedMillis=android.os.SystemClock.elapsedRealtime()-start,
                 count=lastPhase?.ordinal ?: -1)
+            if(retryable) {
+                // No upload accepted, no F opened, no receipt received.
+                // The executor may try only the NEXT metadata-equivalent
+                // source and will never switch to another edition on a tie.
+                com.music.bitchord.data.DebugLog.d("BitChord",
+                    "soulseek_auto_retry decision=EQUIVALENT_ONLY" +
+                        " cause=PRE_ACCEPT_TIMEOUT" +
+                        " phase=${lastPhase?.name ?: "NONE"}")
+                return A0AutoAcquisitionExecutor.FetchResult.RetryableConnectionFailure
+            }
             throw error
         }finally {
             A0AcquisitionDiagnostics.emit(diagnosticScope,
