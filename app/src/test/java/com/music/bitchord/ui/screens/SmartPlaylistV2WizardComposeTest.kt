@@ -380,6 +380,45 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Limite e ordenação").assertDoesNotExist()
     }
 
+
+    @Test fun derivedPlaylistFromSavedFilterDoesNotInheritOriginalEditMode() {
+        assertEquals(true, shouldOpenPlaylistAsEdit(
+            initialPlaylistId = null, initialNormalPlaylistId = "normal-1",
+            editorEpoch = 0, editingId = null, editingNormalId = null, editingFilterId = null,
+        ))
+        assertEquals(true, shouldOpenPlaylistAsEdit(
+            initialPlaylistId = null, initialNormalPlaylistId = "normal-1",
+            editorEpoch = 1, editingId = null, editingNormalId = "normal-1", editingFilterId = null,
+        ))
+        assertEquals(false, shouldOpenPlaylistAsEdit(
+            initialPlaylistId = null, initialNormalPlaylistId = "normal-1",
+            editorEpoch = 2, editingId = null, editingNormalId = null, editingFilterId = null,
+        ))
+        assertEquals(true, shouldOpenPlaylistAsEdit(
+            initialPlaylistId = "smart-1", initialNormalPlaylistId = null,
+            editorEpoch = 3, editingId = null, editingNormalId = null, editingFilterId = "filter-2",
+        ))
+    }
+
+    @Test fun switchingEditorsRequiresConfirmationForExistingOrPopulatedDraft() {
+        assertEquals(true, shouldConfirmReplacingDraft(
+            editing = true, name = "", description = "", coverUri = null,
+            selectedCount = 0, hasConfiguredRules = false,
+        ))
+        assertEquals(true, shouldConfirmReplacingDraft(
+            editing = false, name = "", description = "", coverUri = null,
+            selectedCount = 1, hasConfiguredRules = false,
+        ))
+        assertEquals(true, shouldConfirmReplacingDraft(
+            editing = false, name = "", description = "", coverUri = "content://covers/1",
+            selectedCount = 0, hasConfiguredRules = false,
+        ))
+        assertEquals(false, shouldConfirmReplacingDraft(
+            editing = false, name = "", description = "", coverUri = null,
+            selectedCount = 0, hasConfiguredRules = false,
+        ))
+    }
+
     @Test fun newPlaylistDoesNotClaimAnAutomaticPlaybackRule() {
         val placeholder = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
             SmartPlaylistRule.Comparison(
