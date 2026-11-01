@@ -76,6 +76,9 @@ internal data class RuleBasedRecordingCandidate(
     val genreEvidenceUnknown: Boolean = true,
     val moods: List<String> = emptyList(),
     val moodEvidenceUnknown: Boolean = true,
+    /** Each source-owned tempo is independent; no averaging across copies. */
+    val bpms: List<Double> = emptyList(),
+    val bpmEvidenceUnknown: Boolean = true,
     val localRatingUpdatedAtEpochMs: Long? = null,
     /** An absent first-party rating is only known after the local store was queried. */
     val localRatingDateEvidenceKnown: Boolean = false,
@@ -367,7 +370,8 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
             }
         }
         val tagEvidence = if (requiredFields.any {
-            it == SmartPlaylistRuleField.GENRE || it == SmartPlaylistRuleField.MOOD
+            it == SmartPlaylistRuleField.GENRE || it == SmartPlaylistRuleField.MOOD ||
+                it == SmartPlaylistRuleField.BPM
         }) availability.availableRecordingTags(ids).associateBy { it.recordingId }
         else emptyMap()
         val taggedRows = if (tagEvidence.isEmpty()) rows else rows.map { row ->
@@ -377,6 +381,8 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
                 genreEvidenceUnknown = tags.genreEvidenceUnknown,
                 moods = tags.moods,
                 moodEvidenceUnknown = tags.moodEvidenceUnknown,
+                bpms = tags.bpms,
+                bpmEvidenceUnknown = tags.bpmEvidenceUnknown,
             )
         }
         val sourceBound = if (includeSourceEvidence) taggedRows.map { row ->
