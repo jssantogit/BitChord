@@ -451,6 +451,24 @@ class SmartPlaylistV2WizardComposeTest {
     }
 
 
+    @Test fun savedFilterActionsIncludeIntersectionUnionAndSafeNormalMode() {
+        assertEquals(listOf(
+            "Aplicar regras ao rascunho",
+            "Combinar com o rascunho (E)",
+            "Combinar com o rascunho (OU)",
+            "Editar filtro", "Criar playlist com este filtro", "Excluir filtro",
+        ), savedFilterActionsForDraft(false, null))
+        assertEquals(listOf(
+            "Editar filtro", "Criar playlist com este filtro", "Excluir filtro",
+        ), savedFilterActionsForDraft(true, "normal-id"))
+    }
+
+    @Test fun savingExportedFilterKeepsPlaylistDraftWhileEditingFilterReturnsToManager() {
+        assertEquals(false, shouldClosePlaylistDraftAfterSavingFilter(null, false))
+        assertEquals(true, shouldClosePlaylistDraftAfterSavingFilter("filter-existing", false))
+        assertEquals(true, shouldClosePlaylistDraftAfterSavingFilter(null, true))
+    }
+
     @Test fun derivedPlaylistFromSavedFilterDoesNotInheritOriginalEditMode() {
         assertEquals(true, shouldOpenPlaylistAsEdit(
             initialPlaylistId = null, initialNormalPlaylistId = "normal-1",
