@@ -25,8 +25,14 @@ internal object CanonicalLocalLibrary {
      * reads Local Music back from Room. The existing UI/player sees only the
      * legacy adapter output; Room is the source of truth after this boundary.
      */
-    suspend fun sync(context: Context, scannedSongs: List<Song>): List<Song> =
-        syncWithDatabase(context, CanonicalCatalogDatabase.get(context), scannedSongs)
+    suspend fun sync(context: Context, scannedSongs: List<Song>): List<Song> {
+        val database = CanonicalCatalogDatabase.get(context)
+        val result = syncWithDatabase(context, database, scannedSongs)
+        // Header probes are incremental and asynchronous: no file decoding or
+        // tag I/O while Room holds the local-library transaction.
+        LocalEmbeddedTagEnricher.schedule(context.applicationContext, database)
+        return result
+    }
 
     /** Real Room test seam; retains the exact production transaction and prune guard. */
     internal suspend fun syncWithDatabase(
@@ -81,15 +87,28 @@ internal object CanonicalLocalLibrary {
                         artworkUri = candidate.artworkUri,
                     ),
                 )
-                // Use the same per-MediaAsset provenance table as OpenSubsonic.
-                // Null is UNKNOWN, [] is an explicit empty tag set from a source
-                // that actually verified absence. Never borrow other copies.
+                // Preserve completed embedded-tag evidence only if the source
+                // timestamp+size and extractor schema revision still match.
+                // A changed file immediately invalidates old positive tags.
+                val previousTags = dao.mediaAssetTagsById(mediaAssetId)
+                val fingerprint = candidate.sourceFingerprint
+                val reuse = fingerprint != null &&
+                    previousTags?.localParsedFingerprint == fingerprint
                 dao.upsertMediaAssetTags(
                     MediaAssetTagsEntity(
                         mediaAssetId = mediaAssetId,
-                        genresJson = candidate.genres?.let { Json.encodeToString(it) },
-                        moodsJson = candidate.moods?.let { Json.encodeToString(it) },
-                        bpmsJson = candidate.bpms?.let { Json.encodeToString(it) },
+                        genresJson = mergedLocalTagJson(
+                            candidate.genres, previousTags?.genresJson.takeIf { reuse },
+                        ),
+                        moodsJson = mergedLocalTagJson(
+                            candidate.moods, previousTags?.moodsJson.takeIf { reuse },
+                        ),
+                        bpmsJson = mergedLocalBpmJson(
+                            candidate.bpms, previousTags?.bpmsJson.takeIf { reuse },
+                        ),
+                        stylesJson = if (reuse) previousTags?.stylesJson else null,
+                        localSourceFingerprint = fingerprint,
+                        localParsedFingerprint = if (reuse) fingerprint else null,
                     ),
                 )
 
@@ -196,6 +215,8 @@ internal object CanonicalLocalLibrary {
             genres = normalizedLocalTagList(song.localGenres),
             moods = normalizedLocalTagList(song.localMoods),
             bpms = normalizedLocalBpmList(song.localBpms),
+            sourceFingerprint = song.localDateModifiedSeconds?.takeIf { it > 0L }
+                ?.let { modified -> "v1:$modified:${song.localSizeBytes ?: -1L}" },
             youtubeVideoId = song.videoId.takeIf { id ->
                 id != uri &&
                     !id.startsWith("content://", ignoreCase = true) &&
@@ -348,6 +369,35 @@ internal object CanonicalLocalLibrary {
         this?.trim()?.takeIf { it.isNotEmpty() && !it.equals("<unknown>", ignoreCase = true) }
 
     /** Never turn a failed/blank tag read into a verified empty field. */
+    /** Preserve trusted embedded values during an unchanged MediaStore rescan. */
+    private fun mergedLocalTagJson(
+        fresh: List<String>?, previousJson: String?,
+    ): String? {
+        val old = previousJson?.let {
+            runCatching { Json.decodeFromString<List<String>>(it) }.getOrNull()
+        }
+        val values = when {
+            fresh != null && old != null -> (fresh + old).distinct()
+            fresh != null -> fresh
+            else -> old
+        }
+        return values?.let { Json.encodeToString(it) }
+    }
+
+    private fun mergedLocalBpmJson(
+        fresh: List<Double>?, previousJson: String?,
+    ): String? {
+        val old = previousJson?.let {
+            runCatching { Json.decodeFromString<List<Double>>(it) }.getOrNull()
+        }
+        val values = when {
+            fresh != null && old != null -> (fresh + old).distinct()
+            fresh != null -> fresh
+            else -> old
+        }
+        return values?.let { Json.encodeToString(it) }
+    }
+
     private fun normalizedLocalBpmList(values: List<Double>?): List<Double>? =
         values?.takeIf { it.size <= 16 && it.all { v -> v.isFinite() && v > 0.0 && v <= 999.0 } }
             ?.distinct()
@@ -376,6 +426,7 @@ internal data class LocalMediaCandidate(
     val genres: List<String>? = null,
     val moods: List<String>? = null,
     val bpms: List<Double>? = null,
+    val sourceFingerprint: String? = null,
 )
 
 internal data class MediaStoreSourceLookup(
