@@ -2,7 +2,9 @@ package com.music.bitchord.data.catalog
 
 import android.content.Context
 import android.net.Uri
-import android.util.Log
+import com.music.bitchord.diagnostics.Diagnostics
+import com.music.bitchord.diagnostics.DiagnosticCategory
+import com.music.bitchord.diagnostics.DiagnosticLevel
 import androidx.room.withTransaction
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
@@ -41,6 +43,7 @@ internal object LocalEmbeddedTagEnricher {
     fun schedule(context: Context, db: CanonicalCatalogDatabase) {
         activeJob?.cancel()
         activeJob = scope.launch {
+            val startedAt = System.nanoTime()
             val stats = processPending(db) { rawUri ->
                 val uri = Uri.parse(rawUri)
                 require(uri.scheme?.lowercase(Locale.ROOT) in setOf("content", "file")) {
@@ -50,10 +53,21 @@ internal object LocalEmbeddedTagEnricher {
                     ?: error("Local audio header unavailable")
                 input.use(LocalEmbeddedTagParser::readStream)
             }
-            // Aggregate counts only, never a path, file name, credential or URI.
-            Log.i(TAG, "local-tag-index v1 attempted=" + stats.attempted +
-                " updated=" + stats.updated + " unsupported=" + stats.unsupported +
-                " access_errors=" + stats.accessErrors + " superseded=" + stats.superseded)
+            // Bounded privacy-safe evidence exported in the app's Diagnostics.
+            // No file paths, URIs, raw tag values, or credentials ever leave here.
+            Diagnostics.event(
+                category = DiagnosticCategory.CATALOG,
+                name = "local_tag_enrichment_v1",
+                level = if (stats.accessErrors > 0) DiagnosticLevel.WARN else DiagnosticLevel.INFO,
+                metadata = mapOf(
+                    "attempted" to stats.attempted.toString(),
+                    "updated" to stats.updated.toString(),
+                    "unsupported" to stats.unsupported.toString(),
+                    "accessErrors" to stats.accessErrors.toString(),
+                    "superseded" to stats.superseded.toString(),
+                ),
+                durationNanos = System.nanoTime() - startedAt,
+            )
         }
     }
 
