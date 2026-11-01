@@ -1084,11 +1084,15 @@ internal fun SmartPlaylistV2BuilderScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            TextButton(onClick = {
-                                requestEditorDestination(PendingEditorNavigation(
-                                    item.id, EditorDestination.EDIT_SMART,
-                                ))
-                            }, enabled = !loading) { Text("Editar") }
+                            PlaylistWizardCompactAction(
+                                label = "Editar",
+                                enabled = !loading,
+                                onClick = {
+                                    requestEditorDestination(PendingEditorNavigation(
+                                        item.id, EditorDestination.EDIT_SMART,
+                                    ))
+                                },
+                            )
                             RowMoreButton(
                                 onClick = { more = true },
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1109,16 +1113,20 @@ internal fun SmartPlaylistV2BuilderScreen(
                         }
                         if (onSavedAction != null) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                TextButton(onClick = {
-                                    onSavedAction(item.id, CanonicalCollectionIntent.PLAY_NOW)
-                                }, enabled = !loading) {
-                                    Text(stringResource(Res.string.smart_collection_batch_play))
-                                }
-                                TextButton(onClick = {
-                                    onSavedAction(item.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
-                                }, enabled = !loading) {
-                                    Text(stringResource(Res.string.smart_collection_batch_queue))
-                                }
+                                PlaylistWizardCompactAction(
+                                    label = stringResource(Res.string.smart_collection_batch_play),
+                                    enabled = !loading,
+                                    onClick = {
+                                        onSavedAction(item.id, CanonicalCollectionIntent.PLAY_NOW)
+                                    },
+                                )
+                                PlaylistWizardCompactAction(
+                                    label = stringResource(Res.string.smart_collection_batch_queue),
+                                    enabled = !loading,
+                                    onClick = {
+                                        onSavedAction(item.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
+                                    },
+                                )
                             }
                         }
                     }
@@ -1127,7 +1135,10 @@ internal fun SmartPlaylistV2BuilderScreen(
             }
             if (manageTab == SmartPlaylistManageTab.CLASSIC) {
             item(key = "v2-classic-heading") {
-                TextButton(onClick = onClassic) { Text("Abrir editor clássico") }
+                PlaylistWizardSecondaryAction(
+                    label = "Abrir editor clássico",
+                    onClick = onClassic,
+                )
                 Text("Playlists clássicas", style = MaterialTheme.typography.titleMedium)
                 Text("Você pode converter uma cópia sem alterar a playlist original.",
                     style = MaterialTheme.typography.bodySmall)
@@ -1136,14 +1147,15 @@ internal fun SmartPlaylistV2BuilderScreen(
             items(legacySaved, key = { "v2-classic-" + it.id }) { original ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(original.name, modifier = Modifier.weight(1f).padding(top = 12.dp))
-                    TextButton(
+                    PlaylistWizardCompactAction(
+                        label = "Converter cópia",
+                        enabled = !loading,
                         onClick = {
                             requestEditorDestination(PendingEditorNavigation(
                                 original.id, EditorDestination.COPY_CLASSIC,
                             ))
                         },
-                        enabled = !loading,
-                    ) { Text("Converter cópia") }
+                    )
                 }
             }
             }
