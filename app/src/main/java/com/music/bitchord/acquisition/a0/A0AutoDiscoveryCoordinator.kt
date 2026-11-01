@@ -39,7 +39,7 @@ internal class A0AutoDiscoveryCoordinator(
         data object Stop:SearchResult
     }
 
-    enum class CacheAction { REUSED, SEARCH_REQUIRED }
+    enum class CacheAction { REUSED, SEARCH_REQUIRED, SIBLING_RESCUE }
     /** Aggregate-only evidence: never exposes a filename, peer or path. */
     data class CacheEvidence(
         val action:CacheAction,
@@ -234,7 +234,8 @@ internal class A0AutoDiscoveryCoordinator(
                     decision.status==A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW &&
                     decision.reason in setOf(
                         A0AutoCandidateSelectionPolicy.Reason.NO_STRONG_CANDIDATE,
-                        A0AutoCandidateSelectionPolicy.Reason.AMBIGUOUS_EDITION) &&
+                        A0AutoCandidateSelectionPolicy.Reason.AMBIGUOUS_EDITION,
+                        A0AutoCandidateSelectionPolicy.Reason.INCOMPLETE_SAMPLE) &&
                     outcome.attempts==0)
                     reviewWithoutTransfer.add(index)
                 if(status in setOf(
@@ -254,13 +255,30 @@ internal class A0AutoDiscoveryCoordinator(
                 for(index in reviewWithoutTransfer) {
                     if(shouldStop())break
                     val (choices,truncated)=checkNotNull(pooled.slotEvidence(index))
-                    if(truncated)continue
                     val unspent=choices.filterNot {
                         (it.peerUsername to it.remotePath) in publishedPaths
                     }
-                    val (selected,late)=select(index,unspent,false,true)
+                    // A clipped global sample is NOT evidence of a unique
+                    // winner. Only an already durably published sibling's
+                    // exact peer AND directory permits a bounded second
+                    // look at individually revalidated candidates. No
+                    // guessed folder names or cross-peer promotion.
+                    fun parent(path:String)=path.replace('\\','/')
+                        .substringBeforeLast('/')
+                    val publishedFolders=publishedPaths.map {
+                        it.first to parent(it.second)
+                    }.toSet()
+                    val lateOffers=if(truncated)unspent.filter {
+                        (it.peerUsername to parent(it.remotePath)) in publishedFolders
+                    } else unspent
+                    if(lateOffers.isEmpty())continue
+                    val (selected,late)=select(index,lateOffers,false,true)
                     if(late.status!=A0AutoCandidateSelectionPolicy.Status.PROVISIONAL)
                         continue
+                    if(truncated)try { onCacheEvidence(index,CacheEvidence(
+                        CacheAction.SIBLING_RESCUE,lateOffers.size.coerceIn(0,512),
+                        true,late.reason
+                    )) }catch(_:Exception) {}
                     try {onCandidateDecision(index,late)}catch(_:Exception){}
                     try {onSlotEvidence(index,unspent.toList())}catch(_:Exception){}
                     val recovery=batchExecutor.run(
