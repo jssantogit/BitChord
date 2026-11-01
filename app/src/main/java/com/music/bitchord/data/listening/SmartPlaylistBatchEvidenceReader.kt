@@ -97,7 +97,8 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
         } else emptyMap()
         val localPathsById = if (
             SmartPlaylistRuleField.LOCAL_FOLDER in requiredFields ||
-            SmartPlaylistRuleField.LOCAL_FILE_PATH in requiredFields
+            SmartPlaylistRuleField.LOCAL_FILE_PATH in requiredFields ||
+            SmartPlaylistRuleField.LOCAL_FILE_EXTENSION in requiredFields
         ) {
             catalog.localPathsByRecordingIds(
                 CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, recordingIds,
