@@ -33,6 +33,35 @@ import org.robolectric.annotation.ConscryptMode
 class SmartPlaylistV2WizardComposeTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun emptyPlaylistSuggestionsShowFiveDistinctAvailableTracksAndRotateWithoutFabrication() {
+        val rows = (1..12).map { index ->
+            V2DisplayRow(id = "recording-$index", title = "Faixa $index", artist = "Artista")
+        }
+        val selected = setOf("recording-1", "recording-3")
+        val first = suggestedCanonicalPlaylistTracks(rows, selected, page = 0)
+        val second = suggestedCanonicalPlaylistTracks(rows, selected, page = 1)
+        assertEquals(5, first.size)
+        assertEquals(5, second.size)
+        assertEquals(5, first.map { it.id }.distinct().size)
+        assertEquals(0, first.count { it.id in selected })
+        assertEquals(0, first.map { it.id }.intersect(second.map { it.id }.toSet()).size)
+        assertEquals(first.map { it.id }, suggestedCanonicalPlaylistTracks(rows, selected, page = 2).map { it.id })
+    }
+
+    @Test fun addingSuggestedRecordingPreservesMetadataAndPreventsDuplicates() {
+        val existing = com.music.bitchord.data.listening.SavedCanonicalStaticPlaylist(
+            id = "saved-1", name = "Minha playlist", recordingIds = listOf("rec-1"),
+            description = "Descrição", sourceProviderKey = "local-mediastore",
+            coverUri = "content://media/example",
+        )
+        val appended = appendSuggestedRecording(existing, "rec-2")
+        assertEquals(listOf("rec-1", "rec-2"), appended.recordingIds)
+        assertEquals(existing.description, appended.description)
+        assertEquals(existing.coverUri, appended.coverUri)
+        assertEquals(existing.sourceProviderKey, appended.sourceProviderKey)
+        assertEquals(appended, appendSuggestedRecording(appended, "rec-2"))
+    }
+
     @Test fun countOfSmartConditionsUsesNaturalPortugueseForZeroOneAndPlural() {
         assertEquals("0 condições", smartConditionCountLabel(0))
         assertEquals("1 condição", smartConditionCountLabel(1))
