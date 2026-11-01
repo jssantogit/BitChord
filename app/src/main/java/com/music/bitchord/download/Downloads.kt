@@ -1326,6 +1326,13 @@ object Downloads {
                                 ?: "NONE"}" +
                             " ${decision.rejectionDetails.summary()}")
                     },
+                    onCohesionEvidence={index,evidence ->
+                        Log.d(TAG,"soulseek_auto_cohesion slot=$index" +
+                            " verdict=${evidence.reason.name}" +
+                            " covered=${evidence.coverage.coerceIn(0,64)}" +
+                            " runner_up=${evidence.runnerUpCoverage.coerceIn(0,64)}" +
+                            " cohorts=${evidence.cohorts.coerceIn(0,512)}")
+                    },
                     onSlotEvidence={index,observed ->
                         val entry=request.entries[index]
                         retained[index]=A0ManualReviewCandidatePolicy.retain(

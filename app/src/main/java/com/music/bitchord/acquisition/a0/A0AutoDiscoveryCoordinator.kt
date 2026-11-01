@@ -66,6 +66,7 @@ internal class A0AutoDiscoveryCoordinator(
         onSlotResolved:(Int,A0AutoBatchExecutor.TrackStatus)->Unit={ _,_ -> },
         onSlotSearching:(Int)->Unit={},
         onCandidateDecision:(Int,A0AutoCandidateSelectionPolicy.Decision)->Unit={ _,_ -> },
+        onCohesionEvidence:(Int,A0ReleaseCohesionPolicy.Assessment)->Unit={ _,_ -> },
         /** Observed, never transfer-authorized; consumer may retain in RAM
          * for one explicit human review after this search closes.
          */
@@ -98,6 +99,35 @@ internal class A0AutoDiscoveryCoordinator(
         fun finish():Report=Report(searches,
             A0AutoBatchExecutor.Report(statuses.toList(),attempts,
                 publishedPaths.toSet()))
+        // Only an ambiguous, fully observed slot may use independent
+        // release-wide sibling coverage to break a peer-claim tie.
+        // The executor still re-runs the unchanged per-track preview on
+        // the restricted candidates, then requires full A3 gates.
+        fun select(index:Int,offers:List<A0ObservedCandidateHandoff.Choice>,
+            truncated:Boolean,notify:Boolean):
+            Pair<List<A0ObservedCandidateHandoff.Choice>,
+                A0AutoCandidateSelectionPolicy.Decision> {
+            val baseline=A0AutoCandidateSelectionPolicy.preview(
+                entries[index],offers,quality,sampleTruncated=truncated)
+            if(baseline.reason!=A0AutoCandidateSelectionPolicy.Reason.AMBIGUOUS_EDITION)
+                return offers to baseline
+            val snapshots=entries.indices.map {
+                checkNotNull(pooled.slotEvidence(it))
+            }
+            val outcome=A0ReleaseCohesionPolicy.evaluate(
+                entries,index,snapshots.map {it.first},
+                snapshots.indices.filter {snapshots[it].second}.toSet(),
+                publishedPaths,quality)
+            if(notify)try {onCohesionEvidence(index,outcome)}catch(_:Exception){}
+            if(outcome.reason!=A0ReleaseCohesionPolicy.Reason.UNIQUE_RELEASE_COHORT)
+                return offers to baseline
+            val filtered=A0AutoCandidateSelectionPolicy.preview(
+                entries[index],outcome.choices,quality)
+            // The policy's cached evidence is not permission to bypass
+            // any manual-review or invalid-target rule.
+            return if(filtered.status==A0AutoCandidateSelectionPolicy.Status.PROVISIONAL)
+                outcome.choices to filtered else offers to baseline
+        }
         try {
             // Each search() shuts down its readers and sockets before
             // returning. Publish this slot NOW, rather than searching an
@@ -113,7 +143,13 @@ internal class A0AutoDiscoveryCoordinator(
                 // Observable per-track state, never network authority.
                 try {onSlotSearching(index)}catch(_:Exception){}
                 val proposals=pooled.selectionPreview()
+                val (cached,_) = select(index,
+                    checkNotNull(pooled.slotEvidence(index)).first,
+                    checkNotNull(pooled.slotEvidence(index)).second,false)
                 if(proposals.getOrNull(index)?.status!=
+                    A0AutoCandidateSelectionPolicy.Status.PROVISIONAL &&
+                    A0AutoCandidateSelectionPolicy.preview(
+                        entries[index],cached,quality).status!=
                     A0AutoCandidateSelectionPolicy.Status.PROVISIONAL) {
                     searches++
                     val result=try {
@@ -148,13 +184,12 @@ internal class A0AutoDiscoveryCoordinator(
                 // review screens must not force a second identical search.
                 // Callback is observational, not a transport command.
                 try {onSlotEvidence(index,unique.toList())}catch(_:Exception){}
-                val decision=A0AutoCandidateSelectionPolicy.preview(
-                    entries[index],unique,quality,sampleTruncated=truncated)
+                val (selected,decision)=select(index,unique,truncated,true)
                 // Counts and reason only: never expose peer/user/path to logs.
                 try { onCandidateDecision(index,decision) }catch(_:Exception){}
                 val outcome=batchExecutor.run(
                     entries=listOf(entries[index]),
-                    observedBySlot=listOf(unique),
+                    observedBySlot=listOf(selected),
                     truncatedSlots=if(truncated)setOf(0) else emptySet(),
                     profile=quality,userRequested=true,optedIn=true,
                     isCancelled=isCancelled,stillAuthorized=stillAuthorized,
@@ -168,7 +203,9 @@ internal class A0AutoDiscoveryCoordinator(
                 statuses.add(status)
                 if(status==A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW &&
                     decision.status==A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW &&
-                    decision.reason==A0AutoCandidateSelectionPolicy.Reason.NO_STRONG_CANDIDATE &&
+                    decision.reason in setOf(
+                        A0AutoCandidateSelectionPolicy.Reason.NO_STRONG_CANDIDATE,
+                        A0AutoCandidateSelectionPolicy.Reason.AMBIGUOUS_EDITION) &&
                     outcome.attempts==0)
                     reviewWithoutTransfer.add(index)
                 if(status in setOf(
@@ -192,15 +229,14 @@ internal class A0AutoDiscoveryCoordinator(
                     val unspent=choices.filterNot {
                         (it.peerUsername to it.remotePath) in publishedPaths
                     }
-                    val late=A0AutoCandidateSelectionPolicy.preview(
-                        entries[index],unspent,quality)
+                    val (selected,late)=select(index,unspent,false,true)
                     if(late.status!=A0AutoCandidateSelectionPolicy.Status.PROVISIONAL)
                         continue
                     try {onCandidateDecision(index,late)}catch(_:Exception){}
                     try {onSlotEvidence(index,unspent.toList())}catch(_:Exception){}
                     val recovery=batchExecutor.run(
                         entries=listOf(entries[index]),
-                        observedBySlot=listOf(unspent),
+                        observedBySlot=listOf(selected),
                         truncatedSlots=emptySet(),
                         profile=quality,userRequested=true,optedIn=true,
                         isCancelled=isCancelled,stillAuthorized=stillAuthorized,
