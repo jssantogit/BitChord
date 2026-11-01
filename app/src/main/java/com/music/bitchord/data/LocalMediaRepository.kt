@@ -215,19 +215,25 @@ object LocalMediaRepository {
         // for — a content URI fails its id check on purpose, since most rows
         // here really are just local files with nothing to sync.
         val videoIdByUri = Downloads.saved.value.entries.associate { (id, uri) -> uri to id }
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.DISPLAY_NAME,
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.ALBUM,
-            MediaStore.Audio.Media.ALBUM_ID,
-            MediaStore.Audio.Media.DURATION,
-            MediaStore.Audio.Media.DATA,
-            MediaStore.Audio.Media.DATE_ADDED,
-            MediaStore.Audio.Media.DATE_MODIFIED,
-            MediaStore.Audio.Media.TRACK,
-        )
+        val projection = buildList {
+            add(MediaStore.Audio.Media._ID)
+            add(MediaStore.Audio.Media.DISPLAY_NAME)
+            add(MediaStore.Audio.Media.TITLE)
+            add(MediaStore.Audio.Media.ARTIST)
+            add(MediaStore.Audio.Media.ALBUM)
+            add(MediaStore.Audio.Media.ALBUM_ID)
+            add(MediaStore.Audio.Media.DURATION)
+            add(MediaStore.Audio.Media.DATA)
+            add(MediaStore.Audio.Media.DATE_ADDED)
+            add(MediaStore.Audio.Media.DATE_MODIFIED)
+            add(MediaStore.Audio.Media.TRACK)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                add(MediaStore.Audio.Media.GENRE)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                add(MediaStore.MediaColumns.BITRATE)
+            }
+        }.toTypedArray()
 
         val filterNonMusic = AppSettings.filterNonMusicAudio.value
         val selection = if (filterNonMusic) {
@@ -279,6 +285,12 @@ object LocalMediaRepository {
                 val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
                 val dateModifiedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
                 val trackCol = cursor.getColumnIndex(MediaStore.Audio.Media.TRACK)
+                val genreCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    cursor.getColumnIndex(MediaStore.Audio.Media.GENRE)
+                } else -1
+                val bitrateCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    cursor.getColumnIndex(MediaStore.MediaColumns.BITRATE)
+                } else -1
 
                 val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
 
@@ -291,6 +303,12 @@ object LocalMediaRepository {
                     val albumId = cursor.getLong(albumIdCol)
                     val durationMs = cursor.getLong(durationCol)
                     val path = cursor.getString(dataCol)
+                    val localGenre = if (genreCol >= 0 && !cursor.isNull(genreCol)) {
+                        cursor.getString(genreCol)?.trim()?.takeIf(String::isNotBlank)
+                    } else null
+                    val localBitrateBps = if (bitrateCol >= 0 && !cursor.isNull(bitrateCol)) {
+                        cursor.getLong(bitrateCol).takeIf { it > 0L }
+                    } else null
 
                     if (filterNonMusic && !isEligibleLocalMusic(durationMs, displayName, path)) continue
                     if (!isInSelectedFolder(path, AppSettings.localMusicFolderUri.value)) continue
@@ -319,6 +337,8 @@ object LocalMediaRepository {
                             albumName = albumName,
                             localUri = contentUri,
                             localPath = path,
+                            localGenre = localGenre,
+                            localBitrateBps = localBitrateBps,
                             localDateAddedSeconds = cursor.getLong(dateAddedCol),
                             localDateModifiedSeconds = cursor.getLong(dateModifiedCol),
                             trackNumber = trackNumber,
