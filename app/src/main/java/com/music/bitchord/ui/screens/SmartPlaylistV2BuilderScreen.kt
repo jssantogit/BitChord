@@ -60,6 +60,7 @@ import com.music.bitchord.data.listening.SavedSmartPlaylistV2Filter
 import com.music.bitchord.data.listening.SmartPlaylistV2FilterRepository
 import com.music.bitchord.data.listening.applySavedFilterToDraft
 import com.music.bitchord.data.listening.SavedFilterApplication
+import com.music.bitchord.data.listening.validateSmartPlaylistDeletionAgainstFilters
 import com.music.bitchord.data.listening.toPlaylistCopy
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.SavedSmartPlaylistDefinition
@@ -195,8 +196,11 @@ internal fun SmartPlaylistV2BuilderScreen(
     val normalRepo = remember(definitionDatabase) {
         CanonicalStaticPlaylistRepository(definitionDatabase.staticPlaylistDao())
     }
-    val filterRepo = remember(definitionDatabase) {
-        SmartPlaylistV2FilterRepository(definitionDatabase.v2FilterDao())
+    val filterRepo = remember(definitionDatabase, repo) {
+        SmartPlaylistV2FilterRepository(
+            definitionDatabase.v2FilterDao(),
+            savedDefinitions = { repo.list() },
+        )
     }
     val classicRepo = remember(context) {
         SmartPlaylistDefinitionRepository(
@@ -918,7 +922,12 @@ internal fun SmartPlaylistV2BuilderScreen(
                             loading = true
                             scope.launch {
                                 try {
-                                    withContext(Dispatchers.IO) { repo.remove(id) }
+                                    withContext(Dispatchers.IO) {
+                                        validateSmartPlaylistDeletionAgainstFilters(
+                                            id, filterRepo.list(),
+                                        )
+                                        repo.remove(id)
+                                    }
                                     reset()
                                     onBack()
                                 } catch (cancelled: CancellationException) {
@@ -1233,7 +1242,12 @@ internal fun SmartPlaylistV2BuilderScreen(
                             try {
                                 withContext(Dispatchers.IO) {
                                     if (pending.isFilter) filterRepo.remove(pending.id)
-                                    else repo.remove(pending.id)
+                                    else {
+                                        validateSmartPlaylistDeletionAgainstFilters(
+                                            pending.id, filterRepo.list(),
+                                        )
+                                        repo.remove(pending.id)
+                                    }
                                 }
                                 if (pending.isFilter && editingFilterId == pending.id)
                                     editingFilterId = null
