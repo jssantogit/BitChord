@@ -107,6 +107,28 @@ internal fun PlaylistWizardSecondaryAction(
     }
 }
 
+/** Compact variant of the same neutral outlined action for sheets and row tools. */
+@Composable
+internal fun PlaylistWizardCompactAction(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.heightIn(min = 42.dp),
+        shape = GroupShape,
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
 @Composable
 internal fun PlaylistWizardPrimaryAction(
     label: String,
