@@ -255,3 +255,22 @@ somente após `SUCCESS`.
 **Limites:** não autoriza merge da PR #202 nem da #193, alterar `main`,
 release de produção, exclusão de dados ou encerrar issues.
 Não afirmar que o APK está pronto até o workflow e o upload concluírem.
+
+
+## PR #202 — smoke visual pós-redesign dos controles e capas (01/11/2026)
+
+**Autorização explícita:** usuário solicitou “Ok, então agora sim. Smoke físico” depois da conclusão verde do redesign.
+
+**Código validado:** `9071b52e1439c85683e4a665eac12fe0124224ab` em [Android CI #41297110424](https://github.com/jssantogit/BitChord/actions/runs/41297110424), `completed / SUCCESS` no job Android · test and build. O commit que contém esta autorização modifica somente a documentação (gatilho de `push`); não modifica o aplicativo validado.
+
+**Ação permitida:** exatamente um **APK Dev Debug** para smoke físico no **Samsung Galaxy A54**, usando `:app:testDevDebugUnitTest` e `:app:assembleDevDebug`, com upload do artefato condicionado ao sucesso. Baixar o ZIP em *Artifacts*, extrair e instalar no dispositivo.
+
+**Checklist visual pós-redesign:**
+- Adicionar condição: categorias com badges circulares coloridos e ícones brancos grandes; cards mais baixos, sem seta/chevron, descrições com texto neutro, toque por card completo e busca preservada.
+- Grupo de regras: adicionar condição/grupo aninhado, ações de referência, remover negação, Opções — todas com controles nativos realmente clicáveis; grupos E/OU/NÃO e valores persistidos.
+- Limite e ordenação: seletor de ordenar com botão neutro evidente e campos Máximo de músicas e Semente aleatória contrastados, teclado numérico e validação preservados.
+- Revisão e edição: Escolher capa e Remover capa personalizada como botões reais, salvar alterações, excluir playlist com confirmação, sem perda silenciosa de rascunho; conteúdo/URI da capa após reinício.
+- Biblioteca → Playlists: uma coluna, capas ampliadas a 180 dp via `LibraryRow` existente, sem cortes ou desalinhamento de texto, toque para abrir detalhes e retorno mantendo scroll; avaliar tamanhos em tela real, navegação, miniplayer e barra inferior.
+- Gerenciador de filtros: Editar, Play/Fila, editor clássico, converter cópia, seleção de filtros inteligentes e normais, todos com botões neutros e sem sobreposições.
+
+**Restrições:** não realizar merge de #202/#193, não alterar main, não produzir release, não encerrar issues. O APK só deve ser tratado como disponível depois da conclusão SUCCESS e upload do artifact.
