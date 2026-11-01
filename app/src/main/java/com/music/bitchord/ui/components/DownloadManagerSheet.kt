@@ -395,7 +395,7 @@ private fun SoulseekAutoTrackList(
                         Downloads.AutoTrackStage.CANCELLED -> "Cancelada"
                         Downloads.AutoTrackStage.INTERRUPTED -> "Não iniciada · busca interrompida"
                         Downloads.AutoTrackStage.VERIFY_STORAGE ->
-                            "Verificar publicação na biblioteca"
+                            "Verificar biblioteca · tentativa protegida"
                     }
                     Row(verticalAlignment=Alignment.CenterVertically) {
                         if(track.stage in setOf(
@@ -563,6 +563,8 @@ private fun DownloadManagerRow(
                     "${review.published} salvas · ${review.needsManualReview} para revisão" +
                         (if(review.needsReconciliation>0)
                             " · ${review.needsReconciliation} incerta(s)" else "") +
+                        (if(review.attemptFailures>0)
+                            " · ${review.attemptFailures} tentativa(s) falha(s)" else "") +
                         (if(review.cancelled+review.notStarted>0)
                             " · ${review.cancelled+review.notStarted} interrompida(s)" else ""),
                     style = MaterialTheme.typography.bodySmall,
@@ -576,6 +578,7 @@ private fun DownloadManagerRow(
                         val state=when(row.status) {
                             A0AutoBatchExecutor.TrackStatus.PUBLISHED -> "Salva"
                             A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW -> "Revisão manual"
+                            A0AutoBatchExecutor.TrackStatus.ATTEMPT_FAILED -> "Tentativa falhou · conferir biblioteca"
                             A0AutoBatchExecutor.TrackStatus.RECONCILE -> "Verificar armazenamento"
                             A0AutoBatchExecutor.TrackStatus.CANCELLED -> "Cancelada"
                             A0AutoBatchExecutor.TrackStatus.NOT_STARTED -> "Não iniciada"
