@@ -1090,9 +1090,9 @@ internal fun SmartPlaylistV2WizardUi(
                         }
                         if (matches.isEmpty()) item { Text("Nenhuma condição encontrada.") }
                         if (selectedCategory.id == "library") item {
-                            Text("Pasta de origem, disponibilidade offline e caminho de arquivo " +
-                                "ainda não possuem o vínculo autorizado exigido pelo motor. " +
-                                "Não serão oferecidos como regras funcionais.",
+                            Text("Filtros de pasta e caminho consultam somente arquivos locais " +
+                                "com localização comprovada. Disponibilidade offline de fontes remotas " +
+                                "ainda requer evidência independente.",
                                 style = MaterialTheme.typography.bodySmall)
                         }
                     }
