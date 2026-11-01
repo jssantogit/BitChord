@@ -120,6 +120,18 @@ internal data class CanonicalRecordingTrackArtistRow(
     val artistName: String?,
 )
 
+/** A canonical credited artist's country, only when enriched by MusicBrainz. */
+internal data class CanonicalRecordingArtistCountryRow(
+    val recordingId: String,
+    val country: String?,
+)
+
+/** ReleaseGroup first release date, never a later edition's date. */
+internal data class CanonicalRecordingOriginalReleaseDateRow(
+    val recordingId: String,
+    val firstReleaseDate: String?,
+)
+
 internal data class CanonicalRecordingTrackPositionRow(
     val recordingId: String,
     val releaseId: String,
@@ -567,6 +579,38 @@ internal interface CanonicalCatalogDao {
     suspend fun recordingTrackArtistCreditsByIds(
         recordingIds: List<String>,
     ): List<CanonicalRecordingTrackArtistRow>
+
+    /** A LEFT JOIN keeps unknown country evidence UNKNOWN, including under NOT. */
+    @Query(
+        """
+        SELECT credit.recordingId AS recordingId, mb.country AS country
+        FROM catalog_recording_artist_credit AS credit
+        LEFT JOIN musicbrainz_artist_enrichment AS mb
+          ON mb.artistId = credit.artistId
+        WHERE credit.recordingId IN (:recordingIds)
+        ORDER BY credit.recordingId, credit.position
+        """,
+    )
+    suspend fun recordingArtistCountriesByIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingArtistCountryRow>
+
+    /** Only linked canonical releases and their actual ReleaseGroups may contribute. */
+    @Query(
+        """
+        SELECT rt.recordingId AS recordingId, grp.firstReleaseDate AS firstReleaseDate
+        FROM catalog_release_track AS rt
+        LEFT JOIN catalog_release_group_edition AS edition
+          ON edition.releaseId = rt.releaseId
+        LEFT JOIN catalog_release_group AS grp
+          ON grp.id = edition.releaseGroupId
+        WHERE rt.recordingId IN (:recordingIds)
+        ORDER BY rt.recordingId, rt.releaseId, edition.releaseGroupId
+        """,
+    )
+    suspend fun recordingOriginalReleaseDatesByIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingOriginalReleaseDateRow>
 
     /** Only MediaStore local asset added dates; never mix other provider timestamps. */
     @Query(
