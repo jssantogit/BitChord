@@ -142,6 +142,8 @@ internal interface CanonicalCatalogDao {
         FROM catalog_media_asset AS asset
         INNER JOIN catalog_media_asset_tags AS tags ON tags.mediaAssetId = asset.id
         WHERE asset.provider = :providerKey AND tags.localSourceFingerprint IS NOT NULL
+          AND (tags.localParsedFingerprint IS NULL OR
+               tags.localParsedFingerprint != tags.localSourceFingerprint)
         ORDER BY asset.id
         """,
     )
