@@ -25,7 +25,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MusicBrainzReleaseEnrichmentEntity::class,
         MusicBrainzReleaseArtistCreditEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
@@ -211,6 +211,14 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
             }
         }
 
+        /** Nullable fields preserve all preexisting canonical assets and identities. */
+        internal val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE catalog_media_asset ADD COLUMN localGenre TEXT")
+                db.execSQL("ALTER TABLE catalog_media_asset ADD COLUMN localBitrateBps INTEGER")
+            }
+        }
+
         @Volatile
         private var instance: CanonicalCatalogDatabase? = null
 
@@ -221,7 +229,7 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
                     CanonicalCatalogDatabase::class.java,
                     "canonical-catalog.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { instance = it }
             }
