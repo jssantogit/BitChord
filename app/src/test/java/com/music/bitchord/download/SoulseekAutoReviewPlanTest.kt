@@ -46,6 +46,24 @@ class SoulseekAutoReviewPlanTest {
         assertEquals(original.map { it.durationSeconds },plan.rows.map { it.entry.durationSeconds })
     }
 
+    @Test fun failedPhysicalAttemptCannotBeReselectedEvenWithRetainedCandidates() {
+        val attempt=A0AutoBatchExecutor.TrackStatus.ATTEMPT_FAILED
+        val all=entries(3)
+        val plan=SoulseekAutoReviewPlan.from(
+            all,listOf(done,attempt,review))!!
+        assertEquals(1,plan.attemptFailures)
+        assertEquals(1,plan.needsManualReview)
+        assertEquals(listOf(2),plan.manualIndices)
+        assertEquals(listOf(all[2]),plan.manualEntries)
+        assertFalse(plan.candidatesForManual(1).isNotEmpty())
+        assertNull(plan.withManualPublication(1,all[1].query))
+        assertTrue(plan.manualAllowed)
+        val onlyFailed=SoulseekAutoReviewPlan.from(
+            all.take(1),listOf(attempt))!!
+        assertFalse(onlyFailed.manualAllowed)
+        assertTrue(onlyFailed.manualEntries.isEmpty())
+    }
+
     @Test fun allPublishedNeverOpensManualSelector() {
         val plan=SoulseekAutoReviewPlan.from(entries(2),listOf(done,done))!!
         assertFalse(plan.manualAllowed)
