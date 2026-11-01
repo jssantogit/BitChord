@@ -1249,8 +1249,9 @@ internal fun SmartPlaylistV2BuilderScreen(
                                         repo.remove(pending.id)
                                     }
                                 }
-                                if (pending.isFilter && editingFilterId == pending.id)
-                                    editingFilterId = null
+                                // A deleted filter cannot remain the backing ID
+                                // of an open editor. Reset only if we were editing it.
+                                if (pending.isFilter && editingFilterId == pending.id) reset()
                                 if (pending.isFilter && exportedFilterId == pending.id) {
                                     exportedFilterId = null
                                     filterNotice = null
