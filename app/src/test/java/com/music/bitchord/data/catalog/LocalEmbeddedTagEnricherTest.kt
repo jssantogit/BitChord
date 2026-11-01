@@ -61,6 +61,69 @@ class LocalEmbeddedTagEnricherTest {
         } finally { db.close() }
     }
 
+    @Test fun rescanOfUnchangedFilePreservesParsedTagsButNewFingerprintInvalidatesThem() = runBlocking {
+        val context = RuntimeEnvironment.getApplication()
+        val db = Room.inMemoryDatabaseBuilder(context,
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val sourceUri = "content://media/external/audio/media/100"
+            val original = com.music.bitchord.data.model.Song(
+                videoId = sourceUri, title = "Test", artist = "Artist",
+                thumbnailUrl = null, durationText = "3:00", localUri = sourceUri,
+                localDateModifiedSeconds = 100L, localSizeBytes = 1000L,
+            )
+            CanonicalLocalLibrary.syncWithDatabase(context, db, listOf(original))
+            val dao = db.catalogDao()
+            val asset = requireNotNull(dao.mediaAsset(
+                CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, sourceUri))
+            dao.upsertMediaAssetTags(requireNotNull(dao.mediaAssetTagsById(asset.id)).copy(
+                moodsJson = "[\"Calm\"]", bpmsJson = "[120.0]",
+                stylesJson = "[\"House\"]", localParsedFingerprint = "v1:100:1000",
+            ))
+            CanonicalLocalLibrary.syncWithDatabase(context, db, listOf(original))
+            var after = requireNotNull(dao.mediaAssetTagsById(asset.id))
+            assertEquals("[\"Calm\"]", after.moodsJson)
+            assertEquals("[120.0]", after.bpmsJson)
+            assertEquals("[\"House\"]", after.stylesJson)
+            assertEquals("v1:100:1000", after.localParsedFingerprint)
+
+            CanonicalLocalLibrary.syncWithDatabase(context, db, listOf(
+                original.copy(localSizeBytes = 1001L),
+            ))
+            after = requireNotNull(dao.mediaAssetTagsById(asset.id))
+            assertNull(after.moodsJson)
+            assertNull(after.bpmsJson)
+            assertNull(after.stylesJson)
+            assertEquals("v1:100:1001", after.localSourceFingerprint)
+            assertNull(after.localParsedFingerprint)
+        } finally { db.close() }
+    }
+
+    @Test fun inaccessibleFileIsRetriedAndNeverRecordedAsKnownEmpty() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val dao = db.catalogDao()
+            dao.upsertRecording(RecordingEntity("r", "Test", "Artist", null))
+            dao.upsertMediaAsset(MediaAssetEntity("asset", "r",
+                CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER,
+                "local:1", "content://media/audio/1", null, null, 1L, null))
+            dao.upsertMediaAssetTags(MediaAssetTagsEntity(
+                "asset", null, null, localSourceFingerprint = "v1:1:10",
+            ))
+            val failed = LocalEmbeddedTagEnricher.processPending(db) {
+                error("Permission transiently denied")
+            }
+            assertEquals(1, failed.accessErrors)
+            assertNull(dao.mediaAssetTagsById("asset")?.localParsedFingerprint)
+            assertNull(dao.mediaAssetTagsById("asset")?.moodsJson)
+            assertEquals(1, LocalEmbeddedTagEnricher.processPending(db) {
+                LocalEmbeddedTags(emptyList(), emptyList(), emptyList(), emptyList())
+            }.updated)
+            assertEquals("[]", dao.mediaAssetTagsById("asset")?.moodsJson)
+        } finally { db.close() }
+    }
+
     @Test fun staleFingerprintIsNeverOverwrittenAfterConcurrentRescan() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
