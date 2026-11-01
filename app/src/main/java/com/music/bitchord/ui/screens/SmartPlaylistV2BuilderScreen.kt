@@ -432,6 +432,31 @@ internal fun SmartPlaylistV2BuilderScreen(
         }
     }
 
+    /** Only a valid smart draft may receive a copied, immutable filter tree. */
+    fun applyManagerFilter(
+        filter: SavedSmartPlaylistV2Filter,
+        application: SavedFilterApplication,
+    ) {
+        if (!canApplySmartFilterToDraft(normalMode, editingNormalId)) {
+            error = "Filtros inteligentes não podem alterar playlists normais."
+            return
+        }
+        try {
+            val updated = applySavedFilterToDraft(
+                rule, hasConfiguredRules, filter, application,
+            )
+            rule = updated
+            hasConfiguredRules = true
+            preview = null
+            previewQuery = null
+            filterNotice = null
+            error = null
+            showWizard = true
+        } catch (_: IllegalArgumentException) {
+            error = "As regras combinadas excedem os limites do motor."
+        }
+    }
+
     // Opening a saved card from the Library edits exactly that definition.
     // This does not infer an ID from its visible name or create a duplicate.
     LaunchedEffect(initialPlaylistId, repo) {
@@ -1012,6 +1037,14 @@ internal fun SmartPlaylistV2BuilderScreen(
                 Text("Seus filtros", style = MaterialTheme.typography.titleMedium)
                 Text("Filtros guardam somente regras. Aplicar copia as regras; não vincula alterações futuras.",
                     style = MaterialTheme.typography.bodySmall)
+                PlaylistWizardSecondaryAction(
+                    label = "Criar filtro",
+                    onClick = {
+                        requestEditorDestination(PendingEditorNavigation(
+                            "", EditorDestination.CREATE_FILTER,
+                        ))
+                    },
+                )
                 if (filtersFailure) {
                     Text("Não foi possível ler os filtros salvos.")
                 } else if (savedFilters.isEmpty()) {
@@ -1051,33 +1084,19 @@ internal fun SmartPlaylistV2BuilderScreen(
                         onChosen = { option ->
                             when (option) {
                                 "Aplicar regras ao rascunho" -> {
-                                    if (!canApplySmartFilterToDraft(normalMode, editingNormalId)) {
-                                        error = "Filtros inteligentes não podem alterar uma playlist normal. Use Criar playlist com este filtro."
+                                    if (hasConfiguredRules && rule != filter.rules) {
+                                        // Unlike E/OU, replacing existing predicates is
+                                        // destructive. Require explicit confirmation.
+                                        pendingFilterReplacementId = filter.id
                                     } else {
-                                        rule = filter.rules
-                                        hasConfiguredRules = true
-                                        preview = null
-                                        previewQuery = null
-                                        error = null
-                                        showWizard = true
+                                        applyManagerFilter(filter, SavedFilterApplication.REPLACE)
                                     }
                                 }
                                 "Combinar com o rascunho (E)" -> {
-                                    if (!canApplySmartFilterToDraft(normalMode, editingNormalId)) {
-                                        error = "A combinação de regras é exclusiva de playlists inteligentes."
-                                    } else {
-                                        try {
-                                            val combined = rule.andSavedFilter(filter)
-                                            rule = combined
-                                            hasConfiguredRules = true
-                                            preview = null
-                                            previewQuery = null
-                                            error = null
-                                            showWizard = true
-                                        } catch (_: IllegalArgumentException) {
-                                            error = "O conjunto de regras excede o limite permitido."
-                                        }
-                                    }
+                                    applyManagerFilter(filter, SavedFilterApplication.ALL)
+                                }
+                                "Combinar com o rascunho (OU)" -> {
+                                    applyManagerFilter(filter, SavedFilterApplication.ANY)
                                 }
                                 "Editar filtro" -> {
                                     requestEditorDestination(PendingEditorNavigation(
@@ -1229,6 +1248,28 @@ internal fun SmartPlaylistV2BuilderScreen(
                         }
                     }
                 },
+            )
+        }
+
+        pendingFilterReplacementId?.let { filterId ->
+            BackHandler { pendingFilterReplacementId = null }
+            ConfirmationAlert(
+                hazeState = null,
+                title = "Substituir regras atuais?",
+                description = "As condições atuais do rascunho serão substituídas pelas regras do filtro selecionado. Nome, capa e ordenação serão preservados.",
+                confirmLabel = "Substituir regras",
+                dismissLabel = "Manter condições",
+                destructive = true,
+                onConfirm = {
+                    pendingFilterReplacementId = null
+                    val current = savedFilters.firstOrNull { it.id == filterId }
+                    if (current != null) {
+                        applyManagerFilter(current, SavedFilterApplication.REPLACE)
+                    } else {
+                        error = "Filtro não encontrado. Atualize a lista."
+                    }
+                },
+                onDismiss = { pendingFilterReplacementId = null },
             )
         }
 
