@@ -39,8 +39,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -78,12 +76,19 @@ internal fun suggestedCanonicalPlaylistTracks(
     available: List<V2DisplayRow>,
     selectedIds: Set<String>,
     page: Int,
+    shuffleSeed: Long = 0L,
 ): List<V2DisplayRow> {
     val candidates = available.distinctBy { it.id }
         .filter { it.id !in selectedIds && it.isAvailablePlaylistMember() }
-    val pages = candidates.chunked(5)
-    if (pages.isEmpty()) return emptyList()
-    return pages[Math.floorMod(page, pages.size)]
+    if (candidates.isEmpty()) return emptyList()
+    // Complete one randomized pass before allowing any earlier recording to
+    // reappear. Shuffle per cycle instead of advancing alphabetically.
+    val pageCount = (candidates.size + 4) / 5
+    val cycle = Math.floorDiv(page, pageCount)
+    val shuffled = candidates.shuffled(kotlin.random.Random(
+        shuffleSeed xor (cycle.toLong() * -7046029254386353131L),
+    ))
+    return shuffled.drop(Math.floorMod(page, pageCount) * 5).take(5)
 }
 
 /** Preserve the playlist's original ID, source, description and user-picked cover. */
@@ -238,29 +243,26 @@ internal fun CanonicalPlaylistTrackRow(
                     onClick = { menuExpanded = true }, tint = subtitleColor,
                     contentDescription = "Ações da música",
                 )
-                DropdownMenu(
-                    expanded = menuExpanded, onDismissRequest = { menuExpanded = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Reproduzir daqui") },
-                        onClick = { menuExpanded = false; onPlay(track.id) },
+                if (menuExpanded) {
+                    // The same native Settings-row choice sheet used throughout
+                    // the BitChord playlist editor, never a floating M3 menu.
+                    val actions = if (onQueue == null) listOf("Reproduzir daqui")
+                        else listOf("Reproduzir daqui", "Reproduzir a seguir", "Adicionar à fila")
+                    WizardChoiceDialog(
+                        title = "Ações da música",
+                        options = actions,
+                        label = { it },
+                        onChosen = { action ->
+                            when (action) {
+                                "Reproduzir daqui" -> onPlay(track.id)
+                                "Reproduzir a seguir" ->
+                                    onQueue?.invoke(track.id, CanonicalCollectionIntent.ADD_NEXT)
+                                "Adicionar à fila" ->
+                                    onQueue?.invoke(track.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
+                            }
+                        },
+                        onClose = { menuExpanded = false },
                     )
-                    if (onQueue != null) {
-                        DropdownMenuItem(
-                            text = { Text("Reproduzir a seguir") },
-                            onClick = {
-                                menuExpanded = false
-                                onQueue(track.id, CanonicalCollectionIntent.ADD_NEXT)
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Adicionar à fila") },
-                            onClick = {
-                                menuExpanded = false
-                                onQueue(track.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
-                            },
-                        )
-                    }
                 }
             }
         }
@@ -299,6 +301,7 @@ internal fun CanonicalPlaylistDetailScreen(
     }
     val scope = rememberCoroutineScope()
     var suggestionPage by remember(card.id) { mutableStateOf(0) }
+    val suggestionShuffleSeed = remember(card.id) { kotlin.random.Random.nextLong() }
     var pendingSuggestionId by remember(card.id) { mutableStateOf<String?>(null) }
     var suggestionError by remember(card.id) { mutableStateOf(false) }
     var trackLoadFailed by remember(card.id) { mutableStateOf(false) }
@@ -321,6 +324,7 @@ internal fun CanonicalPlaylistDetailScreen(
         (card as? LibraryPlaylistCard.CanonicalNormal)
             ?.definition?.recordingIds.orEmpty().toSet(),
         suggestionPage,
+        shuffleSeed = suggestionShuffleSeed,
     )
     fun addSuggested(id: String) {
         val playlist = card as? LibraryPlaylistCard.CanonicalNormal ?: return
@@ -501,7 +505,7 @@ internal fun CanonicalPlaylistDetailScreen(
                             SettingsGroupSurface {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(
-                                        start = 16.dp, end = 8.dp, top = 12.dp, bottom = 8.dp,
+                                        start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp,
                                     ),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
@@ -509,6 +513,7 @@ internal fun CanonicalPlaylistDetailScreen(
                                         Text(
                                             "Músicas sugeridas",
                                             style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onSurface,
                                         )
                                         Text(
                                             "Adicione faixas da biblioteca à playlist",
@@ -520,7 +525,11 @@ internal fun CanonicalPlaylistDetailScreen(
                                         onClick = { suggestionPage++ },
                                         enabled = availableSuggestions.size > 5,
                                     ) {
-                                        Icon(Icons.Rounded.Refresh, contentDescription = "Atualizar sugestões")
+                                        Icon(
+                                            Icons.Rounded.Refresh,
+                                            contentDescription = "Atualizar sugestões",
+                                            tint = MaterialTheme.colorScheme.onSurface,
+                                        )
                                     }
                                 }
                                 suggestions.forEach { suggested ->
@@ -528,6 +537,8 @@ internal fun CanonicalPlaylistDetailScreen(
                                         title = suggested.title,
                                         subtitle = suggested.artist,
                                         imageUrl = null,
+                                        titleColor = MaterialTheme.colorScheme.onSurface,
+                                        subtitleColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                         artwork = {
                                             SmartPlaylistPreviewArtwork(
                                                 suggested, Modifier.fillMaxSize(),
@@ -542,6 +553,7 @@ internal fun CanonicalPlaylistDetailScreen(
                                                 Icon(
                                                     Icons.Rounded.AddCircleOutline,
                                                     contentDescription = "Adicionar ${suggested.title}",
+                                                    tint = MaterialTheme.colorScheme.onSurface,
                                                 )
                                             }
                                         },
