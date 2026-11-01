@@ -121,6 +121,8 @@ class A0AutoCandidateSelectionPolicyTest {
             assertEquals(2,choice.tieGroups)
             assertEquals(1,choice.sequentialAlternatives.size)
             assertEquals(expectedPeer,choice.sequentialAlternatives.single().peerUsername)
+            assertEquals(1,choice.preByteFallbacks.size)
+            assertNotEquals(expectedPeer,choice.preByteFallbacks.single().peerUsername)
             assertFalse(choice.canTransfer)
             assertFalse(choice.toString().contains(expectedPeer))
             val conservative=A0AutoCandidateSelectionPolicy.preview(
