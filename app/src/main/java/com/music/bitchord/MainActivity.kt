@@ -2190,6 +2190,7 @@ private fun BitChordApp(
     var showSmartPlaylistBuilder by rememberSaveable { mutableStateOf(false) }
     var editingSmartPlaylistId by remember { mutableStateOf<String?>(null) }
     var editingNormalPlaylistId by remember { mutableStateOf<String?>(null) }
+    var startNormalPlaylistSongPicker by remember { mutableStateOf(false) }
     val replayOpen = showReplay || replayStory != null || showReplayShare ||
         (selectedTab == TAB_LIBRARY && detail == null && !showSettings)
     val (replay, setReplayPeriod) = rememberReplayState(replayOpen)
@@ -2755,16 +2756,25 @@ private fun BitChordApp(
                         com.music.bitchord.ui.screens.UnifiedPlaylistLibraryShelf(
                             normalPlaylists = localPlaylistItems,
                             onNewSmartPlaylist = {
+                                startNormalPlaylistSongPicker = false
                                 editingSmartPlaylistId = null
                                 editingNormalPlaylistId = null
                                 showSmartPlaylistBuilder = true
                             },
                             onOpenSmartPlaylist = { id ->
+                                startNormalPlaylistSongPicker = false
                                 editingSmartPlaylistId = id
                                 editingNormalPlaylistId = null
                                 showSmartPlaylistBuilder = true
                             },
                             onOpenCanonicalNormalPlaylist = { id ->
+                                startNormalPlaylistSongPicker = false
+                                editingNormalPlaylistId = id
+                                editingSmartPlaylistId = null
+                                showSmartPlaylistBuilder = true
+                            },
+                            onAddSongsToCanonicalNormalPlaylist = { id ->
+                                startNormalPlaylistSongPicker = true
                                 editingNormalPlaylistId = id
                                 editingSmartPlaylistId = null
                                 showSmartPlaylistBuilder = true
@@ -2841,9 +2851,11 @@ private fun BitChordApp(
                                 showSmartPlaylistBuilder = false
                                 editingSmartPlaylistId = null
                                 editingNormalPlaylistId = null
+                                startNormalPlaylistSongPicker = false
                             },
                             initialV2Id = editingSmartPlaylistId,
                             initialNormalId = editingNormalPlaylistId,
+                            startOnNormalSongs = startNormalPlaylistSongPicker,
                             onSavedAction = { id, intent ->
                                 executeSmartCollection(SmartCollectionActionSource.SavedDefinition(id), intent)
                             },
