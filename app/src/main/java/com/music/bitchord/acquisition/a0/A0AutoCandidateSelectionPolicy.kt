@@ -81,6 +81,9 @@ internal object A0AutoCandidateSelectionPolicy {
         /** Aggregate only: never expose the chosen peer/path in diagnostics. */
         val tieResolution:TieResolution=TieResolution.NONE,
         val tieGroups:Int=0,
+        /** Only for a proven pre-acceptance transport failure; these fully
+         * vetted sources share the same top rank but NOT the same file claim. */
+        val preByteFallbacks:List<A0ObservedCandidateHandoff.Choice> = emptyList(),
     ) {
         val canTransfer:Boolean get()=false
         override fun toString()="AutoCandidateDecision(status=$status, reason=$reason)"
@@ -364,9 +367,19 @@ internal object A0AutoCandidateSelectionPolicy {
             }).take(3)
         if(handles.isEmpty())
             return review(Reason.NO_READY_SOURCE,observed.size,strong.size,funnel,details)
+        val preByteBackups=if(exactTie)strong.asSequence()
+            .filter { candidate ->
+                candidate.rank==topRank &&
+                    candidate.choice.peerAvailability.tier==A0PeerAvailability.Tier.READY &&
+                    topGroups.any { group -> group !== leading && candidate in group }
+            }.map { it.choice }
+            .filterNot { choice -> handles.any { it.peerUsername==choice.peerUsername } }
+            .distinctBy { it.peerUsername to it.remotePath }
+            .take((3-handles.size).coerceAtLeast(0))
+            .toList() else emptyList()
         return Decision(Status.PROVISIONAL,null,handles,observed.size,strong.size,
             funnel,rejectionDetails=details,
             tieResolution=if(exactTie)TieResolution.FIRST_READY else TieResolution.NONE,
-            tieGroups=topGroups.size)
+            tieGroups=topGroups.size,preByteFallbacks=preByteBackups)
     }
 }
