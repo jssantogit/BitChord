@@ -63,6 +63,53 @@ class SmartPlaylistV2RuleEngineTest {
             SmartPlaylistRule.Not(originalYear))).map { it.recordingId })
     }
 
+    @Test fun discNumberRequiresMusicBrainzMediumAndProtectsUnknownUnderNot() {
+        val rows = listOf(
+            candidate("d2").copy(discNumbers = listOf(2),
+                discNumberEvidenceUnknown = false, trackNumbers = listOf(1)),
+            candidate("d1").copy(discNumbers = listOf(1),
+                discNumberEvidenceUnknown = false),
+            candidate("unknown"),
+            candidate("partial").copy(discNumbers = listOf(2),
+                discNumberEvidenceUnknown = true),
+        )
+        val disc2 = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.DISC_NUMBER,
+            SmartPlaylistRuleOperator.EQUAL, value = 2.0,
+        )
+        assertEquals(listOf("d2", "partial"),
+            planner.preview(rows, SmartPlaylistV2Query(disc2)).map { it.recordingId })
+        assertEquals(listOf("d1"), planner.preview(rows, SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(disc2),
+        )).map { it.recordingId })
+        for (bad in listOf(0.0, -1.0, 1.5, 100_000.0)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                SmartPlaylistV2Query(disc2.copy(value = bad))
+            }
+        }
+    }
+
+    @Test fun releaseGroupSingleFilterNeverBorrowsUnknownTypes() {
+        val rows = listOf(
+            candidate("single").copy(releaseGroupTypes = listOf("Single"),
+                releaseGroupTypeEvidenceUnknown = false),
+            candidate("album").copy(releaseGroupTypes = listOf("Album"),
+                releaseGroupTypeEvidenceUnknown = false),
+            candidate("unknown"),
+            candidate("partial").copy(releaseGroupTypes = listOf("Album"),
+                releaseGroupTypeEvidenceUnknown = true),
+        )
+        val isSingle = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.RELEASE_GROUP_TYPE,
+            SmartPlaylistRuleOperator.EQUAL, textValue = "single",
+        )
+        assertEquals(listOf("single"), planner.preview(rows, SmartPlaylistV2Query(isSingle))
+            .map { it.recordingId })
+        assertEquals(listOf("album"), planner.preview(rows, SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(isSingle),
+        )).map { it.recordingId })
+    }
+
     @Test fun localGenreIsPositiveOnlyWhenSourceTagIsProven() {
         val known = candidate("known").copy(localGenres = listOf("Synthpop"),
             localGenresComplete = true)
