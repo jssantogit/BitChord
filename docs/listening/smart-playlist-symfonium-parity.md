@@ -384,3 +384,10 @@ que verificam presença do metadado, e os operadores variam por tipo.
 final; histórico de CI de commits anteriores não atesta esta rodada.
 As PRs #193/#202 permanecem sem merge até validar regressões e decidir o
 escopo restante. 
+
+
+## 2026-11-01 — Paridade visual: disco e tipo de lançamento
+
+- **Faixa → Disco:** `DISC_NUMBER` usa `catalog_musicbrainz_track.mediumNumber` do par canônico RecordingId+ReleaseId. Uma edição sem Track oficial produz UNKNOWN, mesmo sob NOT e comparações negativas. Exige inteiro positivo.
+- **Faixa → Tipo de lançamento / É um single:** `RELEASE_GROUP_TYPE` usa `catalog_release_group.primaryType` via vínculos canônicos da edição. Exemplos: Album, Single e EP. Sem vinculação oficial ou com tipo ausente: UNKNOWN; não inferir pelo título nem confundir com o filtro contextual de um álbum inteiro.
+- Engine e Room possuem testes para correspondência positiva, valores inválidos e dados desconhecidos. BPM, humor, estilo, idioma, codecs, offline/cache e demais alvos/operadores da captura ainda exigem proveniência e implementação específica. CI do HEAD e smoke Galaxy A54 continuam obrigatórios antes do merge de #193/#202.
