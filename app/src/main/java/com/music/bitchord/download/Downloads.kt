@@ -1316,6 +1316,8 @@ object Downloads {
                             " preflight_rejected=${decision.funnel.preflightRejected}" +
                             " album_rejected=${decision.funnel.albumRejected}" +
                             " quality_rejected=${decision.funnel.qualityRejected}" +
+                            " tie_break=${decision.tieResolution.name}" +
+                            " tie_groups=${decision.tieGroups.coerceIn(0,512)}" +
                             " ambiguity_clusters=${decision.ambiguity?.clusterCount ?: 0}" +
                             " leading_sources=${decision.ambiguity?.leadingSources ?: 0}" +
                             " competing_sources=${decision.ambiguity?.competingSources ?: 0}" +
