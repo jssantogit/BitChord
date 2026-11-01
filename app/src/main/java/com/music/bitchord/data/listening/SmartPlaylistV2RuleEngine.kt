@@ -49,6 +49,8 @@ internal enum class SmartPlaylistRuleField {
     ARTIST_DISPLAY,
     EARLY_SKIPS,
     LATE_SKIPS,
+    TOTAL_SKIPS,
+    DAYS_SINCE_LAST_SKIP,
     RELEASE_TITLE,
     SOURCE_KIND,
     RELEASE_YEAR,
@@ -105,6 +107,21 @@ internal fun SmartPlaylistRuleField.isTextField(): Boolean =
 
 internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOperator> =
     if (this == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) listOf(
+        SmartPlaylistRuleOperator.IS_PRESENT,
+    ) else if (this == SmartPlaylistRuleField.TOTAL_SKIPS) listOf(
+        SmartPlaylistRuleOperator.EQUAL,
+        SmartPlaylistRuleOperator.NOT_EQUAL,
+        SmartPlaylistRuleOperator.GREATER_THAN,
+        SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+        SmartPlaylistRuleOperator.LESS_THAN,
+        SmartPlaylistRuleOperator.LESS_OR_EQUAL,
+    ) else if (this == SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP) listOf(
+        SmartPlaylistRuleOperator.EQUAL,
+        SmartPlaylistRuleOperator.NOT_EQUAL,
+        SmartPlaylistRuleOperator.GREATER_THAN,
+        SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+        SmartPlaylistRuleOperator.LESS_THAN,
+        SmartPlaylistRuleOperator.LESS_OR_EQUAL,
         SmartPlaylistRuleOperator.IS_PRESENT,
     ) else if (this == SmartPlaylistRuleField.RELEASE_YEAR ||
         this == SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR ||
@@ -232,6 +249,7 @@ internal data class SmartPlaylistV2Query(
                         if (node.field in listOf(
                             SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING,
                             SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
+                            SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP,
                         ) && !presence) {
                             require(node.value!! in 0.0..100_000.0 &&
                                 node.value % 1.0 == 0.0) {
@@ -255,6 +273,7 @@ internal data class SmartPlaylistV2Query(
                             SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
                             SmartPlaylistRuleField.EARLY_SKIPS,
                             SmartPlaylistRuleField.LATE_SKIPS,
+                            SmartPlaylistRuleField.TOTAL_SKIPS,
                         ) && !presence) {
                             require(node.value!! >= 0.0 && node.value % 1.0 == 0.0) {
                                 "Completion count must be a nonnegative integer"
@@ -410,6 +429,7 @@ internal class SmartPlaylistV2RuleEngine(
                 if (item.recordingId.isBlank() ||
                     !item.available || item.audibleCompletions < 0 ||
                     item.earlySkips < 0 || item.lateSkips < 0 ||
+                    item.earlySkips > Long.MAX_VALUE - item.lateSkips ||
                     (item.explicitRating != null &&
                         (!item.explicitRating.isFinite() ||
                             item.explicitRating !in 1.0..5.0)) ||
@@ -900,6 +920,11 @@ internal class SmartPlaylistV2RuleEngine(
             SmartPlaylistRuleField.DURATION_MS -> row.durationMs?.toDouble()
             SmartPlaylistRuleField.EARLY_SKIPS -> row.earlySkips.toDouble()
             SmartPlaylistRuleField.LATE_SKIPS -> row.lateSkips.toDouble()
+            SmartPlaylistRuleField.TOTAL_SKIPS ->
+                (row.earlySkips + row.lateSkips).toDouble()
+            SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP ->
+                row.lastSkippedAtEpochMs?.takeIf { it in 0L..now }
+                    ?.let { ((now - it) / 86_400_000L).toDouble() }
             SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING ->
                 row.localRatingUpdatedAtEpochMs?.let { ((now - it) / 86_400_000L).toDouble() }
             SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE ->
@@ -924,6 +949,12 @@ internal class SmartPlaylistV2RuleEngine(
             SmartPlaylistRuleField.LOCAL_GENRE,
             SmartPlaylistRuleField.LOCAL_BITRATE_KBPS -> null
         }
+        // A missing or future skip timestamp is not proof of a negative match.
+        // Historical backfills must never turn an UNKNOWN into NOT(TRUE).
+        if (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP &&
+            (row.lastSkippedAtEpochMs == null ||
+                row.lastSkippedAtEpochMs !in 0L..now)
+        ) return RuleTruth.UNKNOWN
         if (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE &&
             row.audibleCompletions > 0 && row.lastAudibleAtEpochMs == null
         ) return RuleTruth.UNKNOWN
