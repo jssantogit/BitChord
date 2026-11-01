@@ -845,7 +845,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                             )
                             hasConfiguredRules = false
                         } else {
-                            rule = scoped
+                            rule = editableSmartPlaylistRuleRoot(scoped)
                             hasConfiguredRules = true
                         }
                         preview = null
