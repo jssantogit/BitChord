@@ -34,6 +34,8 @@ internal data class CanonicalAvailableRecordingTags(
     val genreEvidenceUnknown: Boolean = true,
     val moods: List<String> = emptyList(),
     val moodEvidenceUnknown: Boolean = true,
+    val bpms: List<Double> = emptyList(),
+    val bpmEvidenceUnknown: Boolean = true,
 )
 
 internal fun interface CanonicalLibraryAvailabilityReader {
@@ -116,6 +118,13 @@ private fun parseAvailableTagList(raw: String?): List<String>? =
             ?.distinct()
     }
 
+private fun parseAvailableBpms(raw: String?): List<Double>? =
+    raw?.let {
+        runCatching { Json.decodeFromString<List<Double>>(it) }.getOrNull()
+            ?.takeIf { values -> values.all { v -> v.isFinite() && v > 0.0 && v <= 999.0 } }
+            ?.distinct()
+    }
+
 internal class CanonicalLibraryAvailabilityRepository(
     private val store: CanonicalLibraryAvailabilityStore,
     private val providerConfiguration: CanonicalLibraryProviderConfigurationReader,
@@ -136,8 +145,10 @@ internal class CanonicalLibraryAvailabilityRepository(
         data class MutableTagEvidence(
             val genres: MutableSet<String> = linkedSetOf(),
             val moods: MutableSet<String> = linkedSetOf(),
+            val bpms: MutableSet<Double> = linkedSetOf(),
             var genreUnknown: Boolean = false,
             var moodUnknown: Boolean = false,
+            var bpmUnknown: Boolean = false,
             var hasAsset: Boolean = false,
         )
         val byRecording = ids.associateWith { MutableTagEvidence() }
@@ -148,8 +159,10 @@ internal class CanonicalLibraryAvailabilityRepository(
                     target.hasAsset = true
                     val genres = parseAvailableTagList(row.genresJson)
                     val moods = parseAvailableTagList(row.moodsJson)
+                    val bpms = parseAvailableBpms(row.bpmsJson)
                     if (genres == null) target.genreUnknown = true else target.genres.addAll(genres)
                     if (moods == null) target.moodUnknown = true else target.moods.addAll(moods)
+                    if (bpms == null) target.bpmUnknown = true else target.bpms.addAll(bpms)
                 }
             }
         }
@@ -161,6 +174,8 @@ internal class CanonicalLibraryAvailabilityRepository(
                 moods = value.moods.toList(),
                 genreEvidenceUnknown = !value.hasAsset || value.genreUnknown,
                 moodEvidenceUnknown = !value.hasAsset || value.moodUnknown,
+                bpms = value.bpms.toList(),
+                bpmEvidenceUnknown = !value.hasAsset || value.bpmUnknown,
             )
         }
     }
