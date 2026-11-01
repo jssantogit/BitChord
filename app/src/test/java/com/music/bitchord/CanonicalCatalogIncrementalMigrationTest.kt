@@ -71,6 +71,15 @@ class CanonicalCatalogIncrementalMigrationTest {
             CanonicalCatalogDatabase.MIGRATION_8_9.migrate(migrationDb)
             CanonicalCatalogDatabase.MIGRATION_9_10.migrate(migrationDb)
             CanonicalCatalogDatabase.MIGRATION_10_11.migrate(migrationDb)
+            CanonicalCatalogDatabase.MIGRATION_11_12.migrate(migrationDb)
+            // New server tags are additive, asset-scoped and nullable; legacy
+            // canonical recordings and MusicBrainz evidence remain unchanged.
+            raw.rawQuery("PRAGMA table_info(catalog_media_asset_tags)", null).use { columns ->
+                val names = mutableListOf<String>()
+                while (columns.moveToNext()) names += columns.getString(1)
+                assertEquals(listOf("mediaAssetId", "genresJson", "moodsJson"), names)
+            }
+
             raw.rawQuery(
                 "SELECT title,hasOfficialAudioRelease,isVideo FROM musicbrainz_recording_enrichment WHERE recordingId='old-recording'",
                 null,
