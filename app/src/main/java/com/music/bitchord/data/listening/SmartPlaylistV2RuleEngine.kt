@@ -61,6 +61,8 @@ internal enum class SmartPlaylistRuleField {
     LOCAL_FOLDER,
     LOCAL_FILE_PATH,
     LOCAL_FILE_EXTENSION,
+    LOCAL_GENRE,
+    LOCAL_BITRATE_KBPS,
 }
 
 internal enum class SmartPlaylistSourceKind { LOCAL, OPENSUBSONIC }
@@ -92,14 +94,16 @@ internal fun SmartPlaylistRuleField.isTextField(): Boolean =
         this == SmartPlaylistRuleField.TRACK_ARTIST ||
         this == SmartPlaylistRuleField.LOCAL_FOLDER ||
         this == SmartPlaylistRuleField.LOCAL_FILE_PATH ||
-        this == SmartPlaylistRuleField.LOCAL_FILE_EXTENSION
+        this == SmartPlaylistRuleField.LOCAL_FILE_EXTENSION ||
+        this == SmartPlaylistRuleField.LOCAL_GENRE
 
 internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOperator> =
     if (this == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) listOf(
         SmartPlaylistRuleOperator.IS_PRESENT,
     ) else if (this == SmartPlaylistRuleField.RELEASE_YEAR ||
         this == SmartPlaylistRuleField.TRACK_NUMBER ||
-        this == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED) listOf(
+        this == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED ||
+        this == SmartPlaylistRuleField.LOCAL_BITRATE_KBPS) listOf(
         SmartPlaylistRuleOperator.EQUAL,
         SmartPlaylistRuleOperator.NOT_EQUAL,
         SmartPlaylistRuleOperator.GREATER_THAN,
@@ -108,7 +112,8 @@ internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOp
         SmartPlaylistRuleOperator.LESS_OR_EQUAL,
         SmartPlaylistRuleOperator.IS_PRESENT,
     ) else if (this == SmartPlaylistRuleField.ALBUM_ARTIST ||
-        this == SmartPlaylistRuleField.TRACK_ARTIST) listOf(
+        this == SmartPlaylistRuleField.TRACK_ARTIST ||
+        this == SmartPlaylistRuleField.LOCAL_GENRE) listOf(
         SmartPlaylistRuleOperator.EQUAL,
         SmartPlaylistRuleOperator.NOT_EQUAL,
         SmartPlaylistRuleOperator.CONTAINS,
@@ -675,6 +680,56 @@ internal class SmartPlaylistV2RuleEngine(
                 else -> RuleTruth.UNKNOWN
             }
         }
+        if (rule.field == SmartPlaylistRuleField.LOCAL_GENRE) {
+            val genres = row.localGenres.mapNotNull { it.normalizedSmartPlaylistText() }
+            if (genres.isEmpty()) return RuleTruth.UNKNOWN
+            if (rule.operator == SmartPlaylistRuleOperator.IS_PRESENT) return RuleTruth.TRUE
+            val wanted = rule.textValue.normalizedSmartPlaylistText()
+                ?: return RuleTruth.UNKNOWN
+            val matched = genres.any { actual ->
+                when (rule.operator) {
+                    SmartPlaylistRuleOperator.EQUAL, SmartPlaylistRuleOperator.NOT_EQUAL ->
+                        actual == wanted
+                    SmartPlaylistRuleOperator.CONTAINS,
+                    SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> actual.contains(wanted)
+                    SmartPlaylistRuleOperator.STARTS_WITH -> actual.startsWith(wanted)
+                    SmartPlaylistRuleOperator.ENDS_WITH -> actual.endsWith(wanted)
+                    else -> return RuleTruth.UNKNOWN
+                }
+            }
+            val negative = rule.operator == SmartPlaylistRuleOperator.NOT_EQUAL ||
+                rule.operator == SmartPlaylistRuleOperator.DOES_NOT_CONTAIN
+            return when {
+                matched -> if (negative) RuleTruth.FALSE else RuleTruth.TRUE
+                !row.localGenresComplete -> RuleTruth.UNKNOWN
+                negative -> RuleTruth.TRUE
+                else -> RuleTruth.FALSE
+            }
+        }
+        if (rule.field == SmartPlaylistRuleField.LOCAL_BITRATE_KBPS) {
+            val bitrates = row.localBitratesKbps.filter { it.isFinite() && it > 0.0 }
+            if (bitrates.isEmpty()) return RuleTruth.UNKNOWN
+            if (rule.operator == SmartPlaylistRuleOperator.IS_PRESENT) return RuleTruth.TRUE
+            val wanted = rule.value ?: return RuleTruth.UNKNOWN
+            val matched = bitrates.any { bitrate ->
+                when (rule.operator) {
+                    SmartPlaylistRuleOperator.EQUAL,
+                    SmartPlaylistRuleOperator.NOT_EQUAL -> bitrate == wanted
+                    SmartPlaylistRuleOperator.GREATER_THAN -> bitrate > wanted
+                    SmartPlaylistRuleOperator.GREATER_OR_EQUAL -> bitrate >= wanted
+                    SmartPlaylistRuleOperator.LESS_THAN -> bitrate < wanted
+                    SmartPlaylistRuleOperator.LESS_OR_EQUAL -> bitrate <= wanted
+                    else -> return RuleTruth.UNKNOWN
+                }
+            }
+            return when {
+                matched -> if (rule.operator == SmartPlaylistRuleOperator.NOT_EQUAL)
+                    RuleTruth.FALSE else RuleTruth.TRUE
+                !row.localBitrateEvidenceComplete -> RuleTruth.UNKNOWN
+                rule.operator == SmartPlaylistRuleOperator.NOT_EQUAL -> RuleTruth.TRUE
+                else -> RuleTruth.FALSE
+            }
+        }
         if (rule.field == SmartPlaylistRuleField.LOCAL_FOLDER ||
             rule.field == SmartPlaylistRuleField.LOCAL_FILE_PATH ||
             rule.field == SmartPlaylistRuleField.LOCAL_FILE_EXTENSION) {
@@ -812,7 +867,9 @@ internal class SmartPlaylistV2RuleEngine(
             SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
             SmartPlaylistRuleField.LOCAL_FOLDER,
             SmartPlaylistRuleField.LOCAL_FILE_PATH,
-            SmartPlaylistRuleField.LOCAL_FILE_EXTENSION -> null
+            SmartPlaylistRuleField.LOCAL_FILE_EXTENSION,
+            SmartPlaylistRuleField.LOCAL_GENRE,
+            SmartPlaylistRuleField.LOCAL_BITRATE_KBPS -> null
         }
         if (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE &&
             row.audibleCompletions > 0 && row.lastAudibleAtEpochMs == null
