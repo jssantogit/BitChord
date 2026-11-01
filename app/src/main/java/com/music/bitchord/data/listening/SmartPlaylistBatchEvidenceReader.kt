@@ -166,7 +166,7 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                     addedValues.any { it == null },
                 localFilePaths = usablePaths,
                 localFilePathsComplete = localPathRows.isNotEmpty() &&
-                    usablePaths.size == localPathRows.size,
+                    localPathRows.all { normalizeLocalSmartFilterPath(it.path) != null },
                 canonicalReleaseIds = releaseMembershipsById[id].orEmpty()
                     .map { it.releaseId }.distinct().sorted(),
             )
