@@ -187,6 +187,33 @@ class A0AutoAcquisitionExecutorTest {
         }
     }
 
+    @Test fun preAcceptFailureMayUseNextExactScoreButNeverReusesTechnicalRejection() {
+        val two=choices("first")+choices("second",bytes+1024L)
+        val port=FakePort().apply {
+            decoded=this@A0AutoAcquisitionExecutorTest.decoded
+            failCount=1
+        }
+        val result=A0AutoAcquisitionExecutor(port).run(
+            target,two,quality,userRequested=true,optedIn=true,
+            stillAuthorized={true})
+        assertEquals(A0AutoAcquisitionExecutor.Status.PUBLISHED,result.status)
+        assertEquals(listOf("first","second"),port.fetchedPeers)
+        assertEquals(1,port.inspections)
+        assertEquals(1,port.publishes)
+        assertEquals(2,result.attempts)
+
+        val invalid=FakePort().apply {
+            decoded=this@A0AutoAcquisitionExecutorTest.decoded.copy(
+                durationMillis=194_000L)
+        }
+        val rejected=A0AutoAcquisitionExecutor(invalid).run(
+            target,two,quality,userRequested=true,optedIn=true,
+            stillAuthorized={true})
+        assertEquals(A0AutoAcquisitionExecutor.Status.MANUAL_REVIEW,rejected.status)
+        assertEquals(listOf("first"),invalid.fetchedPeers)
+        assertEquals(0,invalid.publishes)
+    }
+
     @Test fun ambiguousVersionsAndDisabledSourceReturnToManualWithoutIOMutation() {
         val port=FakePort()
         val ambiguous=choices("p1")+choices("p2")
