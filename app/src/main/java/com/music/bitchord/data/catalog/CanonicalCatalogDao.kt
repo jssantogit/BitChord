@@ -64,6 +64,12 @@ internal data class CanonicalRecordingLocalAddedRow(
     val dateAddedSeconds: Long?,
 )
 
+/** One raw path per verified local MediaAsset; null means provenance is unknown. */
+internal data class CanonicalRecordingLocalPathRow(
+    val recordingId: String,
+    val path: String?,
+)
+
 internal data class CanonicalRecordingReleaseArtworkRow(
     val recordingId: String,
     val releaseId: String,
@@ -311,6 +317,20 @@ internal interface CanonicalCatalogDao {
         localProvider: String,
         recordingIds: List<String>,
     ): List<CanonicalRecordingLocalAddedRow>
+
+    /** Current MediaStore paths only, never path guesses from provider or song titles. */
+    @Query(
+        """
+        SELECT recordingId AS recordingId, path AS path
+        FROM catalog_media_asset
+        WHERE provider = :localProvider AND recordingId IN (:recordingIds)
+        ORDER BY recordingId ASC, id ASC
+        """,
+    )
+    suspend fun localPathsByRecordingIds(
+        localProvider: String,
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingLocalPathRow>
 
     /** Bounded, factual local additions: actual MediaStore dates, never fake releases. */
     @Query(
