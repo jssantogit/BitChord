@@ -72,6 +72,8 @@ import com.music.bitchord.data.listening.SmartPlaylistV2FilterRepository
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Filter
 import com.music.bitchord.data.listening.filterCanonicalBrowseSongs
 import com.music.bitchord.data.listening.isSupportedForCanonicalSongBrowse
+import com.music.bitchord.data.listening.SmartPlaylistRuleField
+import com.music.bitchord.data.listening.referencedFields
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoadResult
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoader
 import com.music.bitchord.data.catalog.provider.opensubsonic.androidOpenSubsonicArtworkLoader
@@ -174,11 +176,11 @@ internal fun CanonicalRemoteLibraryScreen(
     var selectedFilterId by remember(providerKey, selectedContext) {
         mutableStateOf<String?>(null)
     }
-    val compatible = remember(filters, selectedContext) {
+    val compatible = remember(filters, selectedContext, providerKey) {
         filters.filter { filter ->
             when (selectedContext) {
                 CanonicalSmartFilterContext.SONGS ->
-                    filter.isSupportedForCanonicalSongBrowse()
+                    filter.isSupportedForCanonicalSongBrowse(providerKey)
                 CanonicalSmartFilterContext.ALBUMS ->
                     filter.isSupportedForCanonicalAlbumBrowse()
                 CanonicalSmartFilterContext.ARTISTS ->
@@ -199,9 +201,21 @@ internal fun CanonicalRemoteLibraryScreen(
                 filtersUnavailable && selectedFilterId != null -> CanonicalSongFilterState.Failed
                 selectedFilterId == null -> CanonicalSongFilterState.Ready(library.tracks)
                 selected == null -> CanonicalSongFilterState.Failed
-                else -> CanonicalSongFilterState.Ready(withContext(Dispatchers.Default) {
-                    filterCanonicalBrowseSongs(library.tracks, selected, providerKey)
-                })
+                else -> {
+                    val tagRows = if (selected.rules.referencedFields().any {
+                        it == SmartPlaylistRuleField.GENRE || it == SmartPlaylistRuleField.MOOD
+                    }) withContext(Dispatchers.IO) {
+                        library.tracks.map { it.recordingId }.chunked(400).flatMap { ids ->
+                            catalogDao.providerScopedTagRows(providerKey, ids)
+                        }.groupBy { it.recordingId }
+                    } else null
+                    CanonicalSongFilterState.Ready(withContext(Dispatchers.Default) {
+                        filterCanonicalBrowseSongs(
+                            library.tracks, selected, providerKey,
+                            scopedTagRowsByRecording = tagRows,
+                        )
+                    })
+                }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
