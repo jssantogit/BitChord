@@ -108,8 +108,36 @@ internal data class CanonicalRecordingReleaseTitleRow(
     val releaseTitle: String,
 )
 
+/** Asset-scoped optional tags; missing row / NULL is unknown, "[]" is verified empty. */
+internal data class CanonicalScopedTagRow(
+    val recordingId: String,
+    val mediaAssetId: String,
+    val genresJson: String?,
+    val moodsJson: String?,
+)
+
 @Dao
 internal interface CanonicalCatalogDao {
+
+    @Upsert
+    suspend fun upsertMediaAssetTags(tags: MediaAssetTagsEntity)
+
+    @Query(
+        """
+        SELECT asset.recordingId AS recordingId,
+               asset.id AS mediaAssetId,
+               tags.genresJson AS genresJson,
+               tags.moodsJson AS moodsJson
+        FROM catalog_media_asset AS asset
+        LEFT JOIN catalog_media_asset_tags AS tags ON tags.mediaAssetId = asset.id
+        WHERE asset.provider = :providerKey AND asset.recordingId IN (:recordingIds)
+        ORDER BY asset.recordingId ASC, asset.id ASC
+        """,
+    )
+    suspend fun providerScopedTagRows(
+        providerKey: String,
+        recordingIds: List<String>,
+    ): List<CanonicalScopedTagRow>
 
     /** Never used by the first-party Listening preference store. */
     @Upsert
