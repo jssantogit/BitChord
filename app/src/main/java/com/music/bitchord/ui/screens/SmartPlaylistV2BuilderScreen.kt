@@ -50,6 +50,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import com.music.bitchord.diagnostics.Diagnostics
+import com.music.bitchord.diagnostics.DiagnosticCategory
+import com.music.bitchord.diagnostics.DiagnosticLevel
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLocalLibrary
 import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
@@ -441,7 +444,15 @@ internal fun SmartPlaylistV2BuilderScreen(
         filter: SavedSmartPlaylistV2Filter,
         application: SavedFilterApplication,
     ) {
+        val diagnosticMeta = mapOf(
+            "mode" to application.name.lowercase(),
+            "configured" to hasConfiguredRules.toString(),
+            "existingRuleLeaves" to smartRuleLeafCount(rule).toString(),
+            "filterRuleLeaves" to smartRuleLeafCount(filter.rules).toString(),
+        )
         if (!canApplySmartFilterToDraft(normalMode, editingNormalId)) {
+            Diagnostics.event(DiagnosticCategory.UI, "smart_filter_apply_rejected",
+                level = DiagnosticLevel.WARN, metadata = diagnosticMeta)
             error = "Filtros inteligentes não podem alterar playlists normais."
             return
         }
@@ -456,7 +467,12 @@ internal fun SmartPlaylistV2BuilderScreen(
             filterNotice = null
             error = null
             showWizard = true
+            Diagnostics.event(DiagnosticCategory.UI, "smart_filter_apply_success",
+                metadata = diagnosticMeta + ("resultRuleLeaves" to
+                    smartRuleLeafCount(updated).toString()))
         } catch (_: IllegalArgumentException) {
+            Diagnostics.event(DiagnosticCategory.UI, "smart_filter_apply_invalid",
+                level = DiagnosticLevel.WARN, metadata = diagnosticMeta)
             error = "As regras combinadas excedem os limites do motor."
         }
     }
@@ -979,6 +995,17 @@ internal fun SmartPlaylistV2BuilderScreen(
                                     withContext(Dispatchers.IO) {
                                         filterRepo.save(SavedSmartPlaylistV2Filter(id, name, rule))
                                     }
+                                    Diagnostics.event(
+                                        DiagnosticCategory.UI, "smart_filter_save_success",
+                                        metadata = mapOf(
+                                            "mode" to when {
+                                                editingFilterId != null -> "edit"
+                                                creatingFilter -> "create"
+                                                else -> "export"
+                                            },
+                                            "ruleLeaves" to smartRuleLeafCount(rule).toString(),
+                                        ),
+                                    )
                                     if (shouldClosePlaylistDraftAfterSavingFilter(
                                         editingFilterId, creatingFilter,
                                     )) {
@@ -994,7 +1021,16 @@ internal fun SmartPlaylistV2BuilderScreen(
                                     }
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
-                                } catch (_: Exception) {
+                                } catch (failure: Exception) {
+                                    Diagnostics.event(
+                                        DiagnosticCategory.UI, "smart_filter_save_failure",
+                                        level = DiagnosticLevel.WARN,
+                                        metadata = mapOf(
+                                            "failureType" to failure.javaClass.simpleName,
+                                            "hasReferences" to
+                                                rule.referencedPlaylistIds().isNotEmpty().toString(),
+                                        ),
+                                    )
                                     error = "Não foi possível salvar o filtro reutilizável."
                                 } finally { loading = false }
                             }
