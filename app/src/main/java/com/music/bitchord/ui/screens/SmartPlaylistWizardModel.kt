@@ -11,7 +11,7 @@ import java.util.Locale
 /**
  * Capability-driven catalog for the 05/06 condition screens in the approved
  * docs/design/playlists. Only V2 rules implemented by the evaluator appear.
- * A future folder, codec, favorite-date or genre predicate MUST NOT be offered
+ * A future folder, codec or favorite-date predicate MUST NOT be offered
  * as selectable before canonical evidence and serialization are implemented.
  */
 internal data class SmartConditionCategory(
@@ -56,6 +56,8 @@ internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (
     SmartPlaylistRuleField.RELEASE_TITLE -> "Álbum ou lançamento"
     SmartPlaylistRuleField.ALBUM_ARTIST -> "Artista do álbum"
     SmartPlaylistRuleField.TRACK_ARTIST -> "Créditos do artista da faixa"
+    SmartPlaylistRuleField.GENRE -> "Gênero musical"
+    SmartPlaylistRuleField.MOOD -> "Clima / mood"
     SmartPlaylistRuleField.TRACK_NUMBER -> "Número da faixa"
     SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "Álbum com referência de capa"
     SmartPlaylistRuleField.EXPLICIT_RATING -> "Avaliação em estrelas"
@@ -81,6 +83,10 @@ internal fun smartConditionDescription(field: SmartPlaylistRuleField): String = 
         "Considere apenas créditos de artista do álbum identificados."
     SmartPlaylistRuleField.TRACK_ARTIST ->
         "Use os créditos específicos da música, quando conhecidos."
+    SmartPlaylistRuleField.GENRE ->
+        "Filtra gêneros informados pelo servidor; uma tag ausente não impede usar o filtro."
+    SmartPlaylistRuleField.MOOD ->
+        "Filtra climas informados pelo servidor; valores não fornecidos permanecem desconhecidos."
     SmartPlaylistRuleField.TRACK_NUMBER ->
         "Compare a posição conhecida da música no lançamento."
     SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE ->
