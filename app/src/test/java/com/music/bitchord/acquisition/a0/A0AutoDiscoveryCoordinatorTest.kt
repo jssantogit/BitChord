@@ -246,11 +246,14 @@ class A0AutoDiscoveryCoordinatorTest {
                 alternatePeerClaims(listOf(two[1])))
         }
         val done=mutableListOf<String>()
+        val actions=mutableListOf<A0AutoDiscoveryCoordinator.CacheAction>()
         val result=A0AutoDiscoveryCoordinator(search,batch(done)).run(
             two,quality,userRequested=true,optedIn=true,
-            isCancelled={false},stillAuthorized={true})
+            isCancelled={false},stillAuthorized={true},
+            onCacheEvidence={_,e -> actions.add(e.action)})
         assertEquals(2,result.searches)
         assertEquals(listOf("two"),done)
+        assertTrue(A0AutoDiscoveryCoordinator.CacheAction.SIBLING_RESCUE_SKIPPED in actions)
         assertEquals(listOf(
             A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW,
             A0AutoBatchExecutor.TrackStatus.PUBLISHED),result.batch.results)
