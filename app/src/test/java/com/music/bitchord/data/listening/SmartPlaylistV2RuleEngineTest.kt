@@ -110,6 +110,60 @@ class SmartPlaylistV2RuleEngineTest {
         )).map { it.recordingId })
     }
 
+    @Test fun symfoniumTotalSkipsSumOnlyClassifiedTerminalEvents() {
+        val rows = listOf(
+            candidate("both").copy(earlySkips = 2, lateSkips = 1),
+            candidate("early").copy(earlySkips = 1),
+            candidate("never"),
+        )
+        val atLeastTwo = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.TOTAL_SKIPS,
+            SmartPlaylistRuleOperator.GREATER_OR_EQUAL, value = 2.0,
+        )
+        assertEquals(listOf("both"), planner.preview(
+            rows, SmartPlaylistV2Query(atLeastTwo),
+        ).map { it.recordingId })
+        assertEquals(listOf("early", "never"), planner.preview(
+            rows, SmartPlaylistV2Query(SmartPlaylistRule.Not(atLeastTwo)),
+        ).map { it.recordingId })
+        for (invalid in listOf(-1.0, 0.5, Double.NaN)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                SmartPlaylistV2Query(atLeastTwo.copy(value = invalid))
+            }
+        }
+    }
+
+    @Test fun symfoniumLastSkipAgeKeepsUnknownAndFutureEventsOutOfNegation() {
+        val day = 86_400_000L
+        val rows = listOf(
+            candidate("recent").copy(earlySkips = 1,
+                lastSkippedAtEpochMs = now - 2 * day),
+            candidate("old").copy(lateSkips = 1,
+                lastSkippedAtEpochMs = now - 12 * day),
+            candidate("never"),
+            candidate("future").copy(earlySkips = 1,
+                lastSkippedAtEpochMs = now + day),
+        )
+        val recent = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP,
+            SmartPlaylistRuleOperator.LESS_OR_EQUAL, value = 3.0,
+        )
+        assertEquals(listOf("recent"), planner.preview(rows,
+            SmartPlaylistV2Query(recent)).map { it.recordingId })
+        assertEquals(listOf("old"), planner.preview(rows,
+            SmartPlaylistV2Query(SmartPlaylistRule.Not(recent))).map { it.recordingId })
+        assertEquals(listOf("old", "recent"), planner.preview(rows,
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP,
+                SmartPlaylistRuleOperator.IS_PRESENT,
+            ))).map { it.recordingId })
+        for (invalid in listOf(-1.0, 1.5, 100_001.0)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                SmartPlaylistV2Query(recent.copy(value = invalid))
+            }
+        }
+    }
+
     @Test fun localGenreIsPositiveOnlyWhenSourceTagIsProven() {
         val known = candidate("known").copy(localGenres = listOf("Synthpop"),
             localGenresComplete = true)
