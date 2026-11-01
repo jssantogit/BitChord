@@ -2,8 +2,7 @@ name: Android CI
 
 on:
   push:
-    # Temporary #192 branch CI while PR #193 cannot generate a merge ref.
-    branches: [main, 'listening/smart-playlists-v2-192']
+    branches: [main]
   pull_request:
 
 # Per-PR workflows supersede old HEADs; main runs are keyed by commit and
@@ -52,6 +51,13 @@ jobs:
 
       - name: Run Android unit tests
         run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+
+      # Automix's cueing logic lives in commonMain, and its commonTest
+      # regression is not exercised by :app:testDevDebugUnitTest.
+      # This checks shared timing semantics on the JVM used by Android,
+      # without building or publishing any desktop app artifact.
+      - name: Run shared Automix planner tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :shared:jvmTest --tests "com.music.bitchord.playback.smart.AdvancedAutomixPlannerTest"
 
       - name: Publish smart playlist CI benchmark summary
         if: always() && ((github.event_name == 'pull_request' && startsWith(github.head_ref, 'listening/smart-playlists')) || (github.event_name == 'push' && github.ref == 'refs/heads/listening/smart-playlists-v2-192'))

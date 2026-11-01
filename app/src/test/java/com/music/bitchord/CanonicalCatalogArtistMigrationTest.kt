@@ -2,6 +2,7 @@ package com.music.bitchord
 
 import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
+import androidx.room.migration.Migration
 import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.RecordingArtistCreditEntity
@@ -33,12 +34,31 @@ class CanonicalCatalogArtistMigrationTest {
         file.parentFile?.mkdirs()
         createVersionOneDatabase(file)
 
+        // This stands in for rows already cached by v5, immediately before
+        // the additive v5 -> v6 credit columns are installed.
+        val preserveLegacyTrackCreditColumns = object : Migration(5, 6) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL(
+                    "INSERT INTO catalog_musicbrainz_track(trackMbid, releaseId, recordingId, mediumNumber, trackNumber, title, durationMs) " +
+                        "VALUES('14f273b6-813b-4239-b0f8-c4b839b902c6', 'release-1', 'recording-1', 1, 1, 'Existing MB Track', 123000)",
+                )
+                CanonicalCatalogDatabase.MIGRATION_5_6.migrate(db)
+            }
+        }
+
         val database = Room.databaseBuilder(context, CanonicalCatalogDatabase::class.java, name)
             .addMigrations(
                 CanonicalCatalogDatabase.MIGRATION_1_2,
                 CanonicalCatalogDatabase.MIGRATION_2_3,
                 CanonicalCatalogDatabase.MIGRATION_3_4,
                 CanonicalCatalogDatabase.MIGRATION_4_5,
+                preserveLegacyTrackCreditColumns,
+                CanonicalCatalogDatabase.MIGRATION_6_7,
+                CanonicalCatalogDatabase.MIGRATION_7_8,
+                CanonicalCatalogDatabase.MIGRATION_8_9,
+                CanonicalCatalogDatabase.MIGRATION_9_10,
+                CanonicalCatalogDatabase.MIGRATION_10_11,
+                CanonicalCatalogDatabase.MIGRATION_11_12,
             )
             .allowMainThreadQueries()
             .build()
@@ -63,8 +83,7 @@ class CanonicalCatalogArtistMigrationTest {
             assertTrue(cursor.moveToFirst())
             assertEquals(1, cursor.getInt(0))
         }
-        // v4→v5 must add nullable per-file tags without fabricating metadata
-        // for assets that were indexed before the migration.
+        // The v11→v12 migration preserves older assets without synthesizing genre/bitrate.
         sql.query("SELECT localGenre, localBitrateBps FROM catalog_media_asset WHERE id = 'asset-1'").use { cursor ->
             assertTrue(cursor.moveToFirst())
             assertTrue(cursor.isNull(0))
@@ -72,7 +91,7 @@ class CanonicalCatalogArtistMigrationTest {
         }
         sql.query("PRAGMA user_version").use { cursor ->
             assertTrue(cursor.moveToFirst())
-            assertEquals(5, cursor.getInt(0))
+            assertEquals(12, cursor.getInt(0))
         }
         sql.query("SELECT COUNT(*) FROM catalog_artist").use { cursor ->
             assertTrue(cursor.moveToFirst())
@@ -85,6 +104,15 @@ class CanonicalCatalogArtistMigrationTest {
         sql.query("SELECT COUNT(*) FROM catalog_release_artist_credit").use { cursor ->
             assertTrue(cursor.moveToFirst())
             assertEquals(0, cursor.getInt(0))
+        }
+        sql.query(
+            "SELECT title, artistDisplay, recordingArtistDisplay FROM catalog_musicbrainz_track " +
+                "WHERE trackMbid = '14f273b6-813b-4239-b0f8-c4b839b902c6'",
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("Existing MB Track", cursor.getString(0))
+            assertTrue(cursor.isNull(1))
+            assertTrue(cursor.isNull(2))
         }
 
         database.close()

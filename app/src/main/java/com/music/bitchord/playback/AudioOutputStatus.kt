@@ -63,22 +63,14 @@ object AudioOutputStatus {
         val decoderName: String? = null,
         val bufferSize: Int? = null,
         val decoderOutputEncoding: String? = null,
-        val dspFormat: String = "Float32",
+        val dspFormat: String = "Bypassed",
         /**
-         * Whether the DSP chain can run on the playing track at all.
-         *
-         * False only on the sink's legacy path, which a stream that was never
-         * decoded to linear PCM takes — a passthrough or offload bitstream.
-         * There is nothing to filter there, so the equaliser and spatial audio
-         * are genuinely inert, and the equaliser screen says so.
-         *
-         * Notably *not* tied to the output encoding. The DSP chain runs inside
-         * `PrecisionAudioSink`, upstream of Media3's own processor list, so a
-         * float AudioTrack makes no difference to it — an older readout keyed
-         * off exactly that and spent months telling people their equaliser was
-         * off while it was working.
+         * The Android service intentionally does not instantiate the custom
+         * DSP chain. No playback configured yet must also report bypass, not
+         * claim that equalizer/spatial/loudness processors are available.
+         * Format conversion alone is not a custom audio effect.
          */
-        val dspAvailable: Boolean = true,
+        val dspAvailable: Boolean = false,
         val directUsbProbe: DirectUsbProbeResult? = null,
         val directSupport: DirectAudioProbe.DirectSupport? = null,
         val directPlaybackSupported: Boolean = false,

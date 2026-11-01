@@ -607,6 +607,25 @@ class SourcesTest {
     }
 
     @Test
+    fun `disabled YouTube stays disabled when source configurations are restored`() {
+        val disabled = SourceConfig(kind = SourceKind.YOUTUBE, enabled = false)
+        val firstBoot = SourceRegistry.sourcesForInit(
+            stored = listOf(disabled),
+            forceJioSaavnOff = true,
+        )
+        assertFalse(firstBoot.single { it.kind == SourceKind.YOUTUBE }.enabled)
+        assertFalse(firstBoot.single { it.kind == SourceKind.JIOSAAVN }.enabled)
+
+        val nextBoot = SourceRegistry.sourcesForInit(
+            stored = firstBoot,
+            forceJioSaavnOff = false,
+        )
+        assertFalse(nextBoot.single { it.kind == SourceKind.YOUTUBE }.enabled)
+        assertTrue(SourceRegistry.sourcesForInit(emptyList(), true)
+            .single { it.kind == SourceKind.YOUTUBE }.enabled)
+    }
+
+    @Test
     fun `the opt-in migration disables JioSaavn once for existing installs`() {
         val previouslyEnabled = SourceConfig(kind = SourceKind.JIOSAAVN, enabled = true)
 
@@ -1846,5 +1865,23 @@ class SourcesTest {
         assertNull(TrackMatcher.secondsOf(null))
         assertNull(TrackMatcher.secondsOf("live"))
         assertNull(TrackMatcher.secondsOf("0:00"))
+    }
+
+    @Test
+    fun `legacy YouTube stream resolution requires enabled YouTube source`() {
+        val enabled = SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)
+        val disabled = enabled.copy(enabled = false)
+        assertTrue(SourceRegistry.mayResolveLegacyYoutubeStream(emptyList()))
+        assertTrue(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(enabled)))
+        assertFalse(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(disabled)))
+        assertFalse(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(
+            SourceConfig(kind = SourceKind.ADDON, enabled = true),
+            disabled,
+        )))
+        // Disabling an unrelated source does not turn YouTube off.
+        assertTrue(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(
+            enabled,
+            SourceConfig(kind = SourceKind.JIOSAAVN, enabled = false),
+        )))
     }
 }

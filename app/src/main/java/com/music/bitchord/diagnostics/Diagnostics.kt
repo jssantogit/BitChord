@@ -1,5 +1,6 @@
 package com.music.bitchord.diagnostics
 
+import com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry
 import android.app.Application
 import android.content.Context
 import android.os.Build
@@ -246,6 +247,7 @@ object Diagnostics {
             )
             return CaptureStatus(active = false, expiresAtEpochMillis = null, remainingMillis = 0L)
         }
+        CatalogCoverTelemetry.process.reset()
         captureWindow = CaptureWindow(expiresAt)
         event(
             category = DiagnosticCategory.APP,
@@ -296,6 +298,7 @@ object Diagnostics {
     /** Clears memory, capture segments, exports and retained crash. Capture mode itself stays enabled. */
     fun clear() {
         buffer.clear()
+        CatalogCoverTelemetry.process.reset()
         writer.runControl { fileStore?.clear() }
         event(category = DiagnosticCategory.APP, name = "diagnostics_cleared")
     }
@@ -335,6 +338,9 @@ object Diagnostics {
             performanceReport = DiagnosticBottleneckAnalysis.summarize(
                 events = snapshot,
                 captureEnabled = true, // explicit export; never a runtime hot-path probe
+            ),
+            catalogCoverReport = CatalogCoverDiagnostics.lines(
+                CatalogCoverTelemetry.process.snapshot(),
             ),
         )
     }

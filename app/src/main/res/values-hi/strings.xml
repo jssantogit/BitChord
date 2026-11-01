@@ -62,6 +62,7 @@
     </plurals>
     <string name="songs">गाने</string>
     <string name="artists">कलाकार</string>
+    <string name="canonical_singles_eps">सिंगल और ईपी</string>
     <string name="albums">एल्बम</string>
     <string name="no_album_metadata">इनमें से कोई भी ट्रैक यह नहीं बताता कि वह किस एल्बम का है।</string>
     <string name="search_empty">YouTube Music पर लाखों गाने खोजें।</string>
@@ -1360,4 +1361,31 @@
     <string name="playback_recovery_retry">फिर कोशिश करें</string>
     <string name="playback_recovery_retrying">फिर कोशिश हो रही है…</string>
     <string name="playback_recovery_dismiss">बंद करें</string>
+    <string name="canonical_discovery_header">कैटलॉग खोज</string>
+    <string name="canonical_discovery_setting_title">कैटलॉग आधारित होम और एक्सप्लोर</string>
+    <string name="canonical_discovery_setting_subtitle">होम और एक्सप्लोर में सेव किया गया संगीत और MusicBrainz इस्तेमाल करें। YouTube Music बंद होने पर भी यही मोड इस्तेमाल होता है।</string>
+    <string name="canonical_discovery_home_title">आपका संगीत</string>
+    <string name="canonical_discovery_explore_title">कैटलॉग एक्सप्लोर करें</string>
+    <string name="canonical_discovery_description">डिवाइस पर सेव किए गए संग्रह देखें या MusicBrainz में खोजें। मेटाडेटा होने का मतलब ऑडियो उपलब्ध होना नहीं है।</string>
+    <string name="canonical_discovery_search">MusicBrainz में खोजें</string>
+    <string name="canonical_discovery_open_library">लाइब्रेरी खोलें</string>
+    <string name="canonical_discovery_downloaded_collections">डाउनलोड किए गए संग्रह</string>
+    <string name="canonical_discovery_local_playlists">डिवाइस पर सेव प्लेलिस्ट</string>
+    <string name="canonical_discovery_empty_collections">इस डिवाइस पर अभी कोई संग्रह सेव नहीं है।</string>
+    <string name="canonical_discovery_catalog_cache">डिवाइस पर सेव कैटलॉग</string>
+    <string name="canonical_discovery_cache_loading">सेव कैटलॉग लोड हो रहा है…</string>
+    <string name="canonical_discovery_cache_error">सेव किया गया MusicBrainz कैटलॉग पढ़ा नहीं जा सका।</string>
+    <string name="canonical_discovery_cache_empty">अभी कोई MusicBrainz प्रविष्टि सेव नहीं है। सार्वजनिक मेटाडेटा देखने के लिए खोजें।</string>
+    <string name="canonical_discovery_metadata_only">सिर्फ मेटाडेटा · ऑडियो सूचीबद्ध नहीं</string>
+    <string name="canonical_discovery_asset_available">ऑडियो सूचीबद्ध · चलाने पर पहुँच जाँची जाएगी</string>
+    <string name="canonical_discovery_cached_offline">ऑफ़लाइन सेव किया गया</string>
+    <string name="canonical_discovery_retry">फिर कोशिश करें</string>
+    <string name="canonical_discovery_refresh">सेव कैटलॉग रीफ़्रेश करें</string>
+    <string name="legacy_library_youtube_disabled">ऑनलाइन लाइब्रेरी लोड करने के लिए सेटिंग में YouTube Music चालू करें। स्थानीय प्लेलिस्ट और संग्रह उपलब्ध रहेंगे।</string>
+    <string name="spotify_import_youtube_required">Spotify प्लेलिस्ट आयात करने के लिए अभी YouTube Music से मिलान आवश्यक है। YouTube Music चालू करें और कैटलॉग-आधारित खोज बंद करें।</string>
+    <string name="search_origin_general">सामान्य</string>
+    <string name="search_origin_server">सर्वर</string>
+    <string name="search_origin_local">स्थानीय</string>
+    <string name="pause_resume_fade">पॉज़ और फिर चलाने पर फ़ेड</string>
+    <string name="pause_resume_fade_subtitle">रोकने पर आवाज़ धीरे-धीरे कम करता है और फिर चलाने पर बढ़ाता है</string>
 </resources>

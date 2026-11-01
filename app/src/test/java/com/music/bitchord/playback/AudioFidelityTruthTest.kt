@@ -11,21 +11,30 @@ import org.junit.Test
 
 class AudioFidelityTruthTest {
     @Test
+    fun `unconfigured neutral playback does not advertise a DSP chain`() {
+        val initial = AudioOutputStatus.Snapshot()
+        assertFalse("No audio effects are connected in Android playback", initial.dspAvailable)
+        assertEquals("Bypassed", initial.dspFormat)
+    }
+
+    @Test
     fun `app PCM exact alone cannot prove end to end bit perfect on speaker bluetooth or usb`() {
         for (kind in listOf(AudioRouting.Kind.PHONE, AudioRouting.Kind.BLUETOOTH, AudioRouting.Kind.USB)) {
             assertEquals(
                 "Unobserved route $kind cannot claim bit perfect",
                 FidelityTruth.PCM_EXACT_ROUTE_NOT_PROVEN,
-                AudioFidelityTruth.classify(pcmExact = true, anyDsp = false, routeActuallyObserved = false),
+                AudioFidelityTruth.classify(pcmExact = true, anyDsp = false),
             )
         }
     }
 
     @Test
-    fun `DSP or PCM conversion is altered and end to end verified needs real route observation`() {
-        assertEquals(FidelityTruth.ALTERED, AudioFidelityTruth.classify(false, false, false))
-        assertEquals(FidelityTruth.ALTERED, AudioFidelityTruth.classify(true, true, true))
-        assertEquals(FidelityTruth.END_TO_END_VERIFIED, AudioFidelityTruth.classify(true, false, true))
+    fun `DSP and PCM conversion remain altered but direct route is not end to end proof`() {
+        assertEquals(FidelityTruth.ALTERED, AudioFidelityTruth.classify(false, false))
+        assertEquals(FidelityTruth.ALTERED, AudioFidelityTruth.classify(true, true))
+        // A direct AudioTrack observation is insufficient to prove the
+        // intervening Android mixer/HAL or external output path.
+        assertEquals(FidelityTruth.PCM_EXACT_ROUTE_NOT_PROVEN, AudioFidelityTruth.classify(true, false))
     }
 
     @Test

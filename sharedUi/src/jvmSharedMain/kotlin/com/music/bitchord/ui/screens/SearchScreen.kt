@@ -36,6 +36,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.NorthWest
@@ -88,6 +89,76 @@ import com.music.bitchord.ui.components.songListSkeleton
 import com.music.bitchord.ui.haptics.Haptic
 import com.music.bitchord.ui.haptics.rememberHaptics
 import java.util.Locale
+
+/**
+ * Search-only MusicBrainz identity. This model deliberately contains no Song,
+ * videoId or playback URI; tapping a metadata match cannot start a YT stream.
+ */
+enum class CanonicalSearchKind { RECORDING, RELEASE_GROUP, RELEASE, ARTIST }
+
+/**
+ * Search artwork provenance: an inherited sleeve may be reconciled when a
+ * verified group Front arrives. Null is deliberately treated as owned/unknown
+ * and MUST NOT be overwritten based on a matching recording title or group.
+ */
+enum class CanonicalArtworkProvenance { INHERITED_RELEASE, INHERITED_GROUP }
+
+data class CanonicalCatalogSearchRow(
+    val musicBrainzId: String,
+    val kind: CanonicalSearchKind,
+    val title: String,
+    val subtitle: String?,
+    val hasCatalogedAsset: Boolean = false,
+    val fromOfflineCache: Boolean = false,
+    /** Edition-specific Track MBID disambiguates repeated recordings in a tracklist. */
+    val trackMbid: String? = null,
+    /** First release/edition date from MusicBrainz. Never synthesized from a local import. */
+    val releaseDate: String? = null,
+    /** Album, Single, EP, etc. Only MusicBrainz can supply this classification. */
+    val releaseKind: String? = null,
+    /** Cached authorized cover art; not an implied playable asset. */
+    val artworkUri: String? = null,
+    /** Verifiable scoped search relation returned by MusicBrainz arid, not a text match. */
+    val artistScopeMbid: String? = null,
+    /** Exact Release MBID explicitly listed by MusicBrainz for this recording. */
+    val coverReleaseMbid: String? = null,
+    /** UI decoration only: strong canonical MBID -> readable local MediaAsset. */
+    val hasVerifiedLocalAsset: Boolean = false,
+    /** Release -> ReleaseGroup MBID advertised by MusicBrainz; cover fallback only. */
+    val coverGroupMbid: String? = null,
+    /** Recording/release Track duration from MusicBrainz; never inferred from UI title. */
+    val durationMs: Long? = null,
+    /** Secondary MusicBrainz ReleaseGroup type evidence, never inferred from a title. */
+    val secondaryTypes: String? = null,
+    /** Only set on Recording art adopted from a known MusicBrainz edition or group. */
+    val artworkProvenance: CanonicalArtworkProvenance? = null,
+)
+
+/**
+ * Indexed Server result. A canonical recording may have one or several server
+ * assets, but the UI receives only a verified opaque mediaAssetId/providerKey,
+ * not the private provider's URL, track id or authentication credentials.
+ */
+data class CanonicalServerSearchRow(
+    val recordingId: String,
+    val mediaAssetId: String,
+    val providerKey: String,
+    val title: String,
+    val artistDisplay: String,
+    /** Trusted provider artwork, never an audio stream or provider-native key. */
+    val artworkUri: String? = null,
+)
+
+/** One navigable step; its rows are metadata identities, not video IDs. */
+data class CanonicalCatalogDetailPage(
+    val title: String,
+    val summary: String?,
+    val rows: List<CanonicalCatalogSearchRow>,
+    val artworkUri: String? = null,
+    /** Next MusicBrainz browse offset, which must use returned row count. */
+    val nextOffset: Int? = null,
+    val totalCount: Int? = null,
+)
 
 @Composable
 fun SearchScreen(
@@ -145,6 +216,23 @@ fun SearchScreen(
     searchingLibrary: Boolean = false,
     /** Whether the page is showing the enabled addons' combined results; see [addonResults]. */
     searchingAddons: Boolean = false,
+    /** Public MusicBrainz discovery shows metadata-only rows with no play actions. */
+    searchingCanonical: Boolean = false,
+    canonicalResults: UiState<List<CanonicalCatalogSearchRow>>? = null,
+    canonicalDetail: UiState<CanonicalCatalogDetailPage>? = null,
+    onCanonicalOpen: (CanonicalCatalogSearchRow) -> Unit = {},
+    onCanonicalBack: () -> Unit = {},
+    onCanonicalLoadMore: () -> Unit = {},
+    canonicalLoadingMore: Boolean = false,
+    onCanonicalSearchLoadMore: () -> Unit = {},
+    canonicalSearchHasMore: Boolean = false,
+    canonicalSearchLoadingMore: Boolean = false,
+    /** Only called for MBIDs that have a cataloged asset; Playback revalidates. */
+    onCanonicalPlay: (String) -> Unit = {},
+    onCanonicalAddToQueue: (String) -> Unit = {},
+    /** Canonical remote assets, not source-owned stream URLs. */
+    serverResults: UiState<List<CanonicalServerSearchRow>>? = null,
+    onServerPlay: (CanonicalServerSearchRow) -> Unit = {},
     /** The Addons source's tracks for the submitted query; null until one is submitted. */
     addonResults: UiState<List<Song>>? = null,
     /** Words searched in the Addons tab before, newest first; shown while the field is empty. */
@@ -156,8 +244,10 @@ fun SearchScreen(
     libraryResults: UiState<List<Song>>? = null,
     /** Files on the device are a running order to play through, not a station seed. */
     onLibrarySongClick: (List<Song>, Int) -> Unit = onSongClick,
+    /** An authorized addon song never inherits local MediaStore provenance. */
+    onAddonSongClick: (List<Song>, Int) -> Unit = onLibrarySongClick,
     /**
-     * The YouTube / Library switcher, full width at the head of the page. Up
+     * The user-facing General / Server / Local switcher, full width at the head of the page. Up
      * only while the field is empty: once something is typed the page is
      * about the results, and the switcher would just push them down.
      */
@@ -185,14 +275,14 @@ fun SearchScreen(
     // MainViewModel.suggestions. Nothing below it is worth showing while it is
     // up: the results are for whatever was searched before this edit began,
     // and so are the filter tabs above them.
-    val suggesting = suggestions.isNotEmpty() && !searchingLibrary && !searchingAddons
+    val suggesting = suggestions.isNotEmpty() && !searchingLibrary && !searchingAddons && !searchingCanonical
     // Live media results arrive from the parallel typeahead pipeline; show
     // them only while the user is still typing (suggestions visible), so they
     // appear as a dropdown beneath the text completions rather than floating
     // after the search has committed.
     val showTypeahead = typeaheadResults.isNotEmpty() && suggesting
-    LaunchedEffect(listState, results, loadingMore, searchingLibrary, searchingAddons) {
-        if (results !is UiState.Success || searchingLibrary || searchingAddons) return@LaunchedEffect
+    LaunchedEffect(listState, results, loadingMore, searchingLibrary, searchingAddons, searchingCanonical) {
+        if (results !is UiState.Success || searchingLibrary || searchingAddons || searchingCanonical) return@LaunchedEffect
         snapshotFlow {
             val layout = listState.layoutInfo
             (layout.visibleItemsInfo.lastOrNull()?.index ?: -1) to layout.totalItemsCount
@@ -217,7 +307,7 @@ fun SearchScreen(
                     placeholder = if (searchingLibrary) {
                         stringResource(Res.string.search_library_hint)
                     } else if (searchingAddons) {
-                        stringResource(Res.string.search_addons_hint)
+                        stringResource(Res.string.search_server_hint)
                     } else {
                         stringResource(Res.string.search_hint)
                     },
@@ -225,22 +315,32 @@ fun SearchScreen(
                 )
             }
             if (sourceSwitcher != null) {
-                AnimatedVisibility(
-                    visible = query.isEmpty(),
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically(),
-                ) {
-                    Box(Modifier.padding(start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 4.dp)) {
-                        sourceSwitcher()
-                    }
+                // Source origins remain selectable while a query is visible,
+                // so changing General ↔ Server ↔ Local does not require the
+                // user to clear and retype the same artist or release.
+                Box(Modifier.padding(start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 4.dp)) {
+                    sourceSwitcher()
                 }
             }
             // The filters only mean something once there is a result set to narrow;
             // they stay up for an empty or failed search too, or picking a filter
             // that finds nothing would take away the control needed to leave it.
             // They are YouTube's categories, so the Library source has none.
-            if (results != null && !suggesting && !searchingLibrary && !searchingAddons) {
-                SearchFilterTabs(filter = filter, onFilterChange = onFilterChange)
+            // Catalog searches have artist/album/recording types too. The
+            // underlying source is metadata, not a separate user-facing tab.
+            // YouTube-only video/playlist filters are never offered there.
+            if (!suggesting && !searchingLibrary && !searchingAddons &&
+                (!searchingCanonical || canonicalDetail == null) &&
+                (results != null || (searchingCanonical && canonicalResults != null))
+            ) {
+                SearchFilterTabs(
+                    filter = filter,
+                    onFilterChange = onFilterChange,
+                    available = if (searchingCanonical) listOf(
+                        SearchFilter.ALL, SearchFilter.SONGS,
+                        SearchFilter.ALBUMS, SearchFilter.ARTISTS,
+                    ) else SearchFilter.entries,
+                )
             }
         }
 
@@ -250,7 +350,37 @@ fun SearchScreen(
             contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
         ) {
             when {
-                searchingLibrary || searchingAddons -> librarySearchResults(
+                searchingCanonical -> if (query.isBlank() &&
+                    canonicalResults == null && canonicalDetail == null
+                ) {
+                    // Same recent-search row, clear/remove actions, and persisted
+                    // list as the original Search; never route legacy video IDs
+                    // through a MusicBrainz-only history entry.
+                    val recent = canonicalRecentSearchEntries(history)
+                    if (recent.isEmpty()) {
+                        item { MessageState(stringResource(Res.string.search_empty)) }
+                    } else {
+                        recentSearches(
+                            history = recent,
+                            currentSong = currentSong,
+                            isPlaying = isPlaying,
+                            onClick = onHistoryClick,
+                            onRemove = onHistoryRemove,
+                            onClear = onHistoryClear,
+                        )
+                    }
+                } else canonicalMusicBrainzResults(
+                    query, canonicalResults, canonicalDetail, filter, onCanonicalOpen, onCanonicalBack,
+                    onCanonicalLoadMore, canonicalLoadingMore,
+                    onCanonicalSearchLoadMore, canonicalSearchHasMore,
+                    canonicalSearchLoadingMore,
+                    onCanonicalPlay, onCanonicalAddToQueue,
+                )
+                searchingLibrary || searchingAddons -> if (
+                    searchingLibrary ||
+                    serverResults !is UiState.Success || serverResults.data.isEmpty() ||
+                    addonResults !is UiState.Success || addonResults.data.isNotEmpty()
+                ) librarySearchResults(
                     query = query.trim(),
                     results = if (searchingAddons) addonResults else libraryResults,
                     addons = searchingAddons,
@@ -260,7 +390,7 @@ fun SearchScreen(
                     onAddonHistoryClear = onAddonHistoryClear,
                     currentSong = currentSong,
                     isPlaying = isPlaying,
-                    onSongClick = onLibrarySongClick,
+                    onSongClick = if (searchingAddons) onAddonSongClick else onLibrarySongClick,
                     onSongLongPress = onSongLongPress,
                     onSongSwipe = onSongSwipe,
                 )
@@ -386,7 +516,362 @@ fun SearchScreen(
                     }
                 }
             }
+            if (!searchingLibrary && query.isNotBlank() &&
+                (filter == SearchFilter.ALL || filter == SearchFilter.SONGS) &&
+                (!searchingCanonical || canonicalDetail == null) &&
+                (searchingCanonical || (!searchingAddons && results != null))
+            ) {
+                // General contains both public metadata and authorized server
+                // renditions. A server result uses the same canonical queue
+                // contract, never a videoId derived from an MBID.
+                canonicalServerSearchRows(serverResults, onServerPlay)
+            }
+            if (searchingAddons && query.isNotBlank()) {
+                canonicalServerSearchRows(serverResults, onServerPlay)
+            }
+            if (searchingCanonical && canonicalDetail == null &&
+                (filter == SearchFilter.ALL || filter == SearchFilter.SONGS) &&
+                (addonResults as? UiState.Success)?.data?.isNotEmpty() == true
+            ) {
+                librarySearchResults(
+                    query = query.trim(),
+                    results = addonResults,
+                    addons = true,
+                    addonHistory = emptyList(),
+                    onAddonHistoryClick = {},
+                    onAddonHistoryRemove = {},
+                    onAddonHistoryClear = {},
+                    currentSong = currentSong,
+                    isPlaying = isPlaying,
+                    onSongClick = onAddonSongClick,
+                    onSongLongPress = onSongLongPress,
+                    onSongSwipe = onSongSwipe,
+                )
+            }
         }
+    }
+}
+
+/**
+ * The MusicBrainz catalog proves that a Recording/ReleaseGroup/Artist exists,
+ * not that the user owns an audio rendition. Keep the UI strictly non-playable
+ * until canonical availability resolution is wired for each Recording MBID.
+ */
+private fun LazyListScope.canonicalMusicBrainzResults(
+    query: String,
+    results: UiState<List<CanonicalCatalogSearchRow>>?,
+    detail: UiState<CanonicalCatalogDetailPage>?,
+    filter: SearchFilter,
+    onOpen: (CanonicalCatalogSearchRow) -> Unit,
+    onBack: () -> Unit,
+    onLoadMore: () -> Unit,
+    loadingMore: Boolean,
+    onSearchLoadMore: () -> Unit,
+    searchHasMore: Boolean,
+    searchLoadingMore: Boolean,
+    onPlay: (String) -> Unit,
+    onAddToQueue: (String) -> Unit,
+) {
+    if (detail != null) {
+        item(key = "musicbrainz:navigation") {
+            Column(Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 12.dp)) {
+                OutlinedButton(onClick = onBack) { Text(stringResource(Res.string.canonical_back)) }
+                if (detail is UiState.Success) {
+                    detail.data.artworkUri?.let { art ->
+                        AsyncImage(
+                            model = art,
+                            contentDescription = stringResource(Res.string.canonical_cover_art),
+                            modifier = Modifier.size(112.dp).clip(RoundedCornerShape(10.dp)),
+                        )
+                    }
+                    Text(detail.data.title, style = MaterialTheme.typography.titleLarge)
+                    detail.data.summary?.let {
+                        Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+    }
+    // Filters narrow public search results, never an opened release's
+    // tracklist. In an album drill-down the tracklist must stay complete.
+    val rows = when (detail) {
+        is UiState.Success -> UiState.Success(detail.data.rows)
+        is UiState.Error -> UiState.Error(detail.message)
+        UiState.Loading -> UiState.Loading
+        null -> when (results) {
+            is UiState.Success -> UiState.Success(canonicalRowsForQuery(results.data, query, filter))
+            else -> results
+        }
+    }
+    when (rows) {
+        null -> item(key = "musicbrainz:hint") {
+            MessageState(stringResource(Res.string.canonical_search_hint))
+        }
+        UiState.Loading -> songListSkeleton(keyPrefix = "musicbrainz:search")
+        is UiState.Error -> item(key = "musicbrainz:error") {
+            MessageState(rows.message)
+        }
+        is UiState.Success -> if (rows.data.isEmpty()) {
+            item(key = "musicbrainz:empty") { MessageState(stringResource(Res.string.canonical_empty_search)) }
+        } else {
+            // Exactly the same native category grouping as legacy Search:
+            // Artists lead General, then Songs, then Albums. Switching a
+            // filter removes the headers rather than duplicating that UI.
+            canonicalSearchDisplaySections(rows.data, filter).forEach { section ->
+                section.first?.let { type ->
+                    item(key = "musicbrainz:section:${type.name}") {
+                        Text(
+                            text = stringResource(when (type) {
+                                SearchFilter.ARTISTS -> Res.string.artists
+                                SearchFilter.SONGS -> Res.string.canonical_filter_songs
+                                else -> Res.string.albums
+                            }),
+                            modifier = Modifier.padding(
+                                start = PAGE_GUTTER, end = PAGE_GUTTER,
+                                top = 16.dp, bottom = 6.dp,
+                            ),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+                itemsIndexed(
+                items = section.second,
+                key = { _, row -> "mb:${row.kind}:${row.trackMbid ?: row.musicBrainzId}" },
+            ) { index, row ->
+                val kind = when (row.kind) {
+                    CanonicalSearchKind.RECORDING -> stringResource(Res.string.canonical_recording_kind)
+                    CanonicalSearchKind.RELEASE_GROUP -> stringResource(Res.string.canonical_group_kind)
+                    CanonicalSearchKind.RELEASE -> stringResource(Res.string.canonical_release_kind)
+                    CanonicalSearchKind.ARTIST -> stringResource(Res.string.canonical_artist_kind)
+                }
+                val nativeItem = canonicalRowAsBrowseItem(row).copy(
+                    subtitle = canonicalDisplaySubtitle(row, kind),
+                )
+                // Reuse the same native 52dp artwork, typography and artist/album
+                // rows as the established Search interface. MusicBrainz remains
+                // metadata; a Recording without an owned asset has no click.
+                BrowseRow(
+                    item = nativeItem,
+                    onClick = when {
+                        row.kind != CanonicalSearchKind.RECORDING -> ({ onOpen(row) })
+                        row.hasCatalogedAsset -> ({ onPlay(row.musicBrainzId) })
+                        else -> null
+                    },
+                    localDownloaded = row.kind == CanonicalSearchKind.RECORDING &&
+                        row.hasVerifiedLocalAsset,
+                    durationLabel = if (row.kind == CanonicalSearchKind.RECORDING) {
+                        canonicalDurationLabel(row.durationMs)
+                    } else null,
+                )
+                if (index < section.second.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
+                }
+            }
+            if (detail is UiState.Success && detail.data.nextOffset != null) {
+                item(key = "musicbrainz:load-more") {
+                    OutlinedButton(
+                        onClick = onLoadMore,
+                        enabled = !loadingMore,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
+                    ) { Text(if (loadingMore) stringResource(Res.string.canonical_loading_more) else stringResource(Res.string.canonical_more_editions)) }
+                }
+            }
+        }
+    }
+    if (detail == null && results is UiState.Success && searchHasMore) {
+        item(key = "musicbrainz:search:load-more") {
+            OutlinedButton(
+                onClick = onSearchLoadMore,
+                enabled = !searchLoadingMore,
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
+            ) {
+                Text(if (searchLoadingMore) stringResource(Res.string.canonical_loading_more) else stringResource(Res.string.canonical_more_results))
+            }
+        }
+    }
+}
+
+/** Show only terms, not YouTube media IDs, in the canonical empty-query surface. */
+fun canonicalRecentSearchEntries(history: List<SearchHistoryEntity>): List<SearchHistoryEntity> =
+    history.filter { it.id.startsWith("q:") }
+
+/** Identity-preserving, client-side category view over four MusicBrainz types. */
+/** A display-only adapter: never turn a public MBID into a videoId or stream URI. */
+fun canonicalRowAsBrowseItem(row: CanonicalCatalogSearchRow): BrowseItem = BrowseItem(
+    browseId = "catalog:${row.kind}:${row.musicBrainzId}",
+    title = row.title,
+    subtitle = row.subtitle.orEmpty(),
+    thumbnailUrl = row.artworkUri.takeUnless {
+        row.kind == CanonicalSearchKind.RELEASE_GROUP && !canonicalVerifiedGroupType(row)
+    },
+    type = if (row.kind == CanonicalSearchKind.ARTIST) BrowseType.ARTIST else BrowseType.ALBUM,
+)
+
+/** Only positive, independently supplied release classification may create an album tile. */
+private fun canonicalVerifiedGroupType(row: CanonicalCatalogSearchRow): Boolean =
+    row.releaseKind?.trim()?.lowercase(Locale.ROOT) in setOf("album", "ep", "single")
+
+/** Presentation-only grouping; never changes the underlying indexed identities. */
+fun canonicalSearchDisplaySections(
+    rows: List<CanonicalCatalogSearchRow>,
+    filter: SearchFilter,
+): List<Pair<SearchFilter?, List<CanonicalCatalogSearchRow>>> {
+    if (filter != SearchFilter.ALL) return listOf(null to rows)
+    return listOf(
+        SearchFilter.ARTISTS to rows.filter { it.kind == CanonicalSearchKind.ARTIST },
+        SearchFilter.SONGS to rows.filter { it.kind == CanonicalSearchKind.RECORDING },
+        SearchFilter.ALBUMS to canonicalRowsForFilter(rows, SearchFilter.ALBUMS),
+    ).filter { it.second.isNotEmpty() }
+}
+
+fun canonicalRowsForFilter(
+    rows: List<CanonicalCatalogSearchRow>,
+    filter: SearchFilter,
+): List<CanonicalCatalogSearchRow> {
+    val knownGroupIds = rows.filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
+        .mapTo(HashSet()) { it.musicBrainzId }
+    return rows.filter { row ->
+    when (filter) {
+        SearchFilter.ALL -> true
+        SearchFilter.SONGS -> row.kind == CanonicalSearchKind.RECORDING
+        SearchFilter.ALBUMS -> canonicalVerifiedGroupType(row) && when (row.kind) {
+            CanonicalSearchKind.RELEASE_GROUP -> true
+            CanonicalSearchKind.RELEASE -> row.coverGroupMbid !in knownGroupIds
+            else -> false
+        }
+        SearchFilter.ARTISTS -> row.kind == CanonicalSearchKind.ARTIST
+        SearchFilter.VIDEOS, SearchFilter.PLAYLISTS -> false
+    }
+    }
+}
+
+/**
+ * Search relevance is a presentation policy, not an identity migration.
+ * When an exact artist match exists, the General page leads with that artist
+ * and with works actually credited to that artist, rather than unrelated
+ * recordings containing the same word in their titles. Other MBIDs remain
+ * distinct; no artist is merged or rewritten by name.
+ */
+fun canonicalRowsForQuery(
+    rows: List<CanonicalCatalogSearchRow>,
+    query: String,
+    filter: SearchFilter,
+): List<CanonicalCatalogSearchRow> {
+    val normalized = query.trim().replace(Regex("\\s+"), " ")
+    val candidates = canonicalRowsForFilter(rows, filter)
+        .distinctBy { it.kind to it.musicBrainzId }
+    if (normalized.isBlank()) return candidates
+    val exactArtists = candidates.filter {
+        it.kind == CanonicalSearchKind.ARTIST &&
+            it.title.equals(normalized, ignoreCase = true)
+    }
+    val identityScoped = if (filter == SearchFilter.ALL && exactArtists.isNotEmpty()) {
+        // The General view highlights the best-ranked exact artist from the
+        // MusicBrainz response. Namesakes remain independently accessible in
+        // the Artists filter; never merge their distinct MBIDs in Room.
+        val primaryArtist = exactArtists.first()
+        candidates.filter { row ->
+            (row.kind == CanonicalSearchKind.ARTIST &&
+                row.musicBrainzId == primaryArtist.musicBrainzId) ||
+                (row.kind != CanonicalSearchKind.ARTIST &&
+                    (row.artistScopeMbid == primaryArtist.musicBrainzId ||
+                        canonicalCreditsMentionArtist(row.subtitle, normalized)))
+        }
+    } else candidates
+    return identityScoped.sortedWith(
+        compareBy<CanonicalCatalogSearchRow> { row ->
+            when {
+                row.kind == CanonicalSearchKind.ARTIST &&
+                    row.title.equals(normalized, ignoreCase = true) -> 0
+                row.title.equals(normalized, ignoreCase = true) -> 1
+                row.kind == CanonicalSearchKind.ARTIST -> 2
+                row.title.startsWith(normalized, ignoreCase = true) -> 3
+                canonicalCreditsMentionArtist(row.subtitle, normalized) -> 4
+                else -> 5
+            }
+        }.thenBy { row ->
+            when (row.kind) {
+                CanonicalSearchKind.ARTIST -> 0
+                CanonicalSearchKind.RELEASE_GROUP -> 1
+                CanonicalSearchKind.RELEASE -> 2
+                CanonicalSearchKind.RECORDING -> 3
+            }
+        },
+    )
+}
+
+/** Credited-name boundary check; a text match is never an MBID equivalence. */
+private fun canonicalCreditsMentionArtist(credit: String?, query: String): Boolean {
+    if (credit.isNullOrBlank()) return false
+    return credit.equals(query, ignoreCase = true) ||
+        credit.startsWith("$query ·", ignoreCase = true) ||
+        credit.startsWith("$query,", ignoreCase = true) ||
+        credit.startsWith("$query &", ignoreCase = true) ||
+        credit.startsWith("$query feat.", ignoreCase = true) ||
+        credit.contains(" · $query", ignoreCase = true) ||
+        credit.contains(", $query", ignoreCase = true) ||
+        credit.contains(" & $query", ignoreCase = true)
+}
+
+/** User-facing text only; never advertise DB availability or metadata plumbing. */
+fun canonicalDisplaySubtitle(row: CanonicalCatalogSearchRow, kindLabel: String): String =
+    when (row.kind) {
+        // Never expose "Recording", "metadata-only" or an internal fallback
+        // when the artist credit is missing.
+        CanonicalSearchKind.RECORDING -> row.subtitle.orEmpty()
+        // Native label already exists in every locale; trim its explanatory
+        // suffix rather than introducing a second, untranslated label.
+        CanonicalSearchKind.ARTIST -> kindLabel.substringBefore('·').trim()
+        CanonicalSearchKind.RELEASE_GROUP, CanonicalSearchKind.RELEASE ->
+            row.releaseKind?.takeIf {
+                it.isNotBlank() && !it.equals("Other", ignoreCase = true)
+            } ?: row.subtitle?.substringBefore('·')?.trim()
+                ?.takeUnless { it.equals("Other", ignoreCase = true) }.orEmpty()
+    }
+
+/** A Server asset uses the same native search row as other browseable content. */
+fun canonicalServerRowAsBrowseItem(row: CanonicalServerSearchRow): BrowseItem = BrowseItem(
+    browseId = "server:asset:${row.mediaAssetId}",
+    title = row.title,
+    subtitle = row.artistDisplay,
+    thumbnailUrl = row.artworkUri,
+    type = BrowseType.OTHER,
+)
+
+/** Searchable files provided by configured servers, with live access checked at play. */
+private fun LazyListScope.canonicalServerSearchRows(
+    rows: UiState<List<CanonicalServerSearchRow>>?,
+    onPlay: (CanonicalServerSearchRow) -> Unit,
+) {
+    val results = (rows as? UiState.Success)?.data.orEmpty()
+    if (results.isEmpty()) return
+    item(key = "server:heading") {
+        Text(
+            text = stringResource(Res.string.canonical_server_heading),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 14.dp),
+            style = MaterialTheme.typography.titleMedium,
+        )
+    }
+    itemsIndexed(
+        items = results,
+        key = { _, row -> "server:${row.mediaAssetId}" },
+    ) { _, row ->
+        BrowseRow(
+            item = canonicalServerRowAsBrowseItem(row),
+            onClick = { onPlay(row) },
+        )
+        HorizontalDivider(
+            modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline,
+        )
     }
 }
 
@@ -428,7 +913,7 @@ private fun LazyListScope.librarySearchResults(
             recentAddonSearches(addonHistory, onAddonHistoryClick, onAddonHistoryRemove, onAddonHistoryClear)
         } else item(key = "library:empty") {
             MessageState(
-                stringResource(if (addons) Res.string.search_addons_empty else Res.string.search_library_empty),
+                stringResource(if (addons) Res.string.search_server_empty else Res.string.search_library_empty),
             )
         }
         UiState.Loading -> songListSkeleton(keyPrefix = "skeleton:search:library")
@@ -437,7 +922,7 @@ private fun LazyListScope.librarySearchResults(
             item(key = "library:no-match") {
                 MessageState(
                     if (addons) {
-                        stringResource(Res.string.search_addons_no_results, query)
+                        stringResource(Res.string.search_server_no_results, query)
                     } else {
                         stringResource(Res.string.search_library_no_results, query)
                     },
@@ -889,18 +1374,29 @@ private fun RecentSearchEntityRow(
             .padding(start = PAGE_GUTTER, end = 8.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(52.dp)) {
-            AsyncImage(
-                model = entity.artworkUrl,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .thumbnailBorder(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-            )
-            if (isCurrent && isPlaying) {
-                SearchPlayingBars(Modifier.align(Alignment.Center))
+        Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+            if (entity.id.startsWith("q:")) {
+                // Reuse native History icon for search terms, never a fake
+                // missing track artwork or playback indicator.
+                Icon(
+                    Icons.Rounded.History,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp),
+                )
+            } else {
+                AsyncImage(
+                    model = entity.artworkUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .thumbnailBorder(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                )
+                if (isCurrent && isPlaying) {
+                    SearchPlayingBars(Modifier.align(Alignment.Center))
+                }
             }
         }
         Spacer(Modifier.width(14.dp))
@@ -912,14 +1408,17 @@ private fun RecentSearchEntityRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = entity.subtitle.ifBlank { entity.entityType.name.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase(Locale.ROOT) } },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            // A query is not a TRACK; do not display the bogus "Track" label.
+            if (!entity.id.startsWith("q:")) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = entity.subtitle.ifBlank { entity.entityType.name.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase(Locale.ROOT) } },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         Box(
             modifier = Modifier
@@ -940,30 +1439,57 @@ private fun RecentSearchEntityRow(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BrowseRow(item: BrowseItem, onClick: () -> Unit, onLongPress: (() -> Unit)? = null) {
+private fun BrowseRow(
+    item: BrowseItem,
+    onClick: (() -> Unit)?,
+    onLongPress: (() -> Unit)? = null,
+    localDownloaded: Boolean = false,
+    durationLabel: String? = null,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
-            .contextClick(onLongPress)
+            .then(if (onClick != null) {
+                Modifier.longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
+                    .contextClick(onLongPress)
+            } else Modifier)
             .padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AsyncImage(
-            model = item.thumbnailUrl.artworkAt(ROW_ART_PX),
-            contentDescription = null,
-            modifier = Modifier
-                .size(52.dp)
-                .clip(
-                    if (item.type == BrowseType.ARTIST) CircleShape
-                    else RoundedCornerShape(8.dp),
-                )
-                .thumbnailBorder(
-                    if (item.type == BrowseType.ARTIST) CircleShape
-                    else RoundedCornerShape(8.dp),
-                )
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-        )
+        Box(Modifier.size(52.dp)) {
+            AsyncImage(
+                model = item.thumbnailUrl.artworkAt(ROW_ART_PX),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(
+                        if (item.type == BrowseType.ARTIST) CircleShape
+                        else RoundedCornerShape(8.dp),
+                    )
+                    .thumbnailBorder(
+                        if (item.type == BrowseType.ARTIST) CircleShape
+                        else RoundedCornerShape(8.dp),
+                    )
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            )
+            if (localDownloaded && item.type != BrowseType.ARTIST) {
+                Box(
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                        .padding(2.dp)
+                        .size(17.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.82f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Rounded.DownloadDone,
+                        contentDescription = stringResource(Res.string.downloaded),
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
+            }
+        }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -981,6 +1507,28 @@ private fun BrowseRow(item: BrowseItem, onClick: () -> Unit, onLongPress: (() ->
                 overflow = TextOverflow.Ellipsis,
             )
         }
+        durationLabel?.let { duration ->
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = duration,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Display-only duration from actual MusicBrainz recording evidence. */
+fun canonicalDurationLabel(durationMs: Long?): String? {
+    if (durationMs == null || durationMs < 1000L) return null
+    val totalSeconds = durationMs / 1000L
+    val hours = totalSeconds / 3600L
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return if (hours > 0L) {
+        String.format(Locale.ROOT, "%d:%02d:%02d", hours, minutes % 60L, seconds)
+    } else {
+        String.format(Locale.ROOT, "%d:%02d", minutes, seconds)
     }
 }
 
@@ -990,7 +1538,11 @@ private fun BrowseRow(item: BrowseItem, onClick: () -> Unit, onLongPress: (() ->
  * text, and the gutter padding sits inside the scroll so it scrolls with them.
  */
 @Composable
-private fun SearchFilterTabs(filter: SearchFilter, onFilterChange: (SearchFilter) -> Unit) {
+private fun SearchFilterTabs(
+    filter: SearchFilter,
+    onFilterChange: (SearchFilter) -> Unit,
+    available: List<SearchFilter> = SearchFilter.entries,
+) {
     val haptics = rememberHaptics()
     Row(
         modifier = Modifier
@@ -1000,7 +1552,7 @@ private fun SearchFilterTabs(filter: SearchFilter, onFilterChange: (SearchFilter
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SearchFilter.entries.forEach { entry ->
+        available.forEach { entry ->
             val selected = entry == filter
             Box(
                 modifier = Modifier
@@ -1019,7 +1571,14 @@ private fun SearchFilterTabs(filter: SearchFilter, onFilterChange: (SearchFilter
                     .padding(horizontal = 12.dp, vertical = 6.dp),
             ) {
                 Text(
-                    text = entry.label,
+                    text = when (entry) {
+                        SearchFilter.ALL -> stringResource(Res.string.canonical_filter_all)
+                        SearchFilter.SONGS -> stringResource(Res.string.canonical_filter_songs)
+                        SearchFilter.ALBUMS -> stringResource(Res.string.albums)
+                        SearchFilter.ARTISTS -> stringResource(Res.string.artists)
+                        SearchFilter.VIDEOS -> stringResource(Res.string.canonical_filter_videos)
+                        SearchFilter.PLAYLISTS -> stringResource(Res.string.playlists)
+                    },
                     style = MaterialTheme.typography.labelLarge,
                     color = if (selected) MaterialTheme.colorScheme.background
                     else MaterialTheme.colorScheme.onBackground,

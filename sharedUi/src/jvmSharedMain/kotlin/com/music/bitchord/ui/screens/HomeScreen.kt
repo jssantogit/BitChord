@@ -7,7 +7,7 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.DrawableResource
 import androidx.compose.foundation.Image
 import org.jetbrains.compose.resources.stringResource
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -35,6 +35,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
@@ -43,6 +46,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
@@ -123,6 +128,7 @@ fun HomeScreen(
     contentPadding: PaddingValues,
     /** The page's heading, or null for none — the desktop's pages carry no heading. */
     title: String?,
+    headerActions: List<HomeHeaderAction> = emptyList(),
     signedIn: Boolean = true,
     onSignIn: (() -> Unit)? = null,
     /**
@@ -188,7 +194,7 @@ fun HomeScreen(
             },
         ) {
             if (title != null) {
-                item { HomeTitle(title) }
+                item(key = "home-title") { HomeTitle(title, actions = headerActions) }
             }
             if (!signedIn && onSignIn != null) {
                 item {
@@ -510,41 +516,68 @@ fun CompactTrackRow(
     }
 }
 
+/** An Android Home action. Desktop has no in-feed title or overflow. */
+data class HomeHeaderAction(val label: String, val onClick: () -> Unit)
+
 /**
- * Listen now's large heading, with the wordmark stacked above it.
- *
- * Only the home tab carries it — the top bar no longer shows the logo, so this
- * is where the app's mark lives. Its height is taken from the heading's own
- * font size rather than a fixed dp, so the two keep their proportion under the
- * system font scale.
+ * Home header: a single title on the left, one overflow on the right.
+ * Keep the action menu at the same scroll position as the large heading,
+ * not in another floating pill above the feed.
  */
 @Composable
-private fun HomeTitle(title: String, modifier: Modifier = Modifier) {
-    val style = MaterialTheme.typography.displayLarge
-    val logoHeight = with(LocalDensity.current) { (style.fontSize * LOGO_TO_FONT).toDp() }
-    Column(modifier = modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp)) {
-        Icon(
-            painter = painterResource(Res.drawable.ic_logo),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier
-                .padding(bottom = 14.dp)
-                .height(logoHeight)
-                .aspectRatio(LOGO_ASPECT),
-        )
+fun HomeTitle(
+    title: String,
+    actions: List<HomeHeaderAction> = emptyList(),
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Row(
+        modifier = modifier.fillMaxWidth()
+            .padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
         Text(
             text = title,
-            style = style,
+            modifier = Modifier.weight(1f).testTag("home-title"),
+            style = MaterialTheme.typography.displayLarge,
             color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
+        if (actions.isNotEmpty()) {
+            Box {
+                IconButton(
+                    onClick = { expanded = true },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                        .testTag("home-overflow"),
+                ) {
+                    Icon(
+                        Icons.Rounded.MoreVert,
+                        contentDescription = stringResource(Res.string.more),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    actions.forEach { action ->
+                        DropdownMenuItem(
+                            text = { Text(action.label) },
+                            onClick = {
+                                expanded = false
+                                action.onClick()
+                            },
+                        )
+                    }
+                }
+            }
+        }
     }
 }
-
-/** The wordmark's height against the heading's font size. */
-private const val LOGO_TO_FONT = 0.9f
-
-/** ic_logo's viewport, 730 x 484. */
-private const val LOGO_ASPECT = 730f / 484f
 
 /**
  * Shared by the home feed, Explore and Library so headings line up across tabs.

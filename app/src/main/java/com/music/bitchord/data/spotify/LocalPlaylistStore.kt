@@ -32,7 +32,12 @@ object LocalPlaylistStore {
 
     private fun load() {
         if (!this::prefs.isInitialized) return
-        val raw = prefs.getString(KEY_PLAYLISTS, null) ?: return
+        val raw = prefs.getString(KEY_PLAYLISTS, null)
+        if (raw == null) {
+            // Reinitialization after data clearing must not expose stale rows.
+            _playlists.value = emptyList()
+            return
+        }
         runCatching {
             val list = mutableListOf<LocalPlaylist>()
             val jsonArray = JSONArray(raw)
@@ -44,8 +49,9 @@ object LocalPlaylistStore {
                 val songs = mutableListOf<Song>()
                 for (j in 0 until songsArray.length()) {
                     val sObj = songsArray.getJSONObject(j)
+                    val videoId = sObj.optString("videoId", "")
                     val song = Song(
-                        videoId = sObj.optString("videoId", ""),
+                        videoId = videoId,
                         title = sObj.optString("title", ""),
                         artist = sObj.optString("artist", ""),
                         thumbnailUrl = sObj.optString("thumbnailUrl", null).takeIf { !it.isNullOrBlank() && it != "null" },
@@ -54,14 +60,30 @@ object LocalPlaylistStore {
                         albumId = sObj.optString("albumId", null).takeIf { !it.isNullOrBlank() && it != "null" },
                         albumName = sObj.optString("albumName", null).takeIf { !it.isNullOrBlank() && it != "null" },
                         isVideo = sObj.optBoolean("isVideo", false),
+                        // Old rows contained only videoId. Recover an existing
+                        // content/file URI, but never turn a YouTube/HTTP id into
+                        // fake local audio. File reachability is checked at play.
+                        localUri = localAudioUriOrNull(sObj.optString("localUri", null))
+                            ?: localAudioUriOrNull(videoId),
                     )
                     songs.add(song)
                 }
                 list.add(LocalPlaylist(id, title, songs))
             }
             _playlists.value = list
+        }.onFailure {
+            // Invalid JSON must not retain a previously loaded user's rows.
+            // Do not overwrite corrupt preferences: keep forensic evidence.
+            _playlists.value = emptyList()
         }
     }
+
+    /** A local audio locator, not an arbitrary HTTP or music-service ID. */
+    private fun localAudioUriOrNull(value: String?): String? =
+        value?.takeIf {
+            it.startsWith("content://", ignoreCase = true) ||
+                it.startsWith("file://", ignoreCase = true)
+        }
 
     fun savePlaylist(title: String, songs: List<Song>): LocalPlaylist {
         val id = "sp_local_" + System.currentTimeMillis()
@@ -106,6 +128,10 @@ object LocalPlaylistStore {
                 for (song in playlist.songs) {
                     val sObj = JSONObject()
                     sObj.put("videoId", song.videoId)
+                    // Persist the real local stream locator separately from
+                    // legacy videoId so offline playlists survive app restart.
+                    // A missing locator is not proof an asset exists.
+                    localAudioUriOrNull(song.localUri)?.let { sObj.put("localUri", it) }
                     sObj.put("title", song.title)
                     sObj.put("artist", song.artist)
                     sObj.put("thumbnailUrl", song.thumbnailUrl)

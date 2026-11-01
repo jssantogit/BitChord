@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.player
 
+import com.music.bitchord.ui.components.CanonicalSongRatingStars
+
 import com.music.bitchord.sharedui.resources.*
 import com.music.bitchord.ui.components.ExplicitSongTitle
 
@@ -32,7 +34,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DragHandle
-import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -245,8 +246,9 @@ internal fun InlineQueue(
         onReveal = onRevealPlayer,
         onHide = onHidePlayer,
     )
-    val showHistory by PlayerSettings.showQueueHistory.collectAsStateWithLifecycle()
-    val tracks = remember(queue, currentIndex, showHistory) { splitQueue(queue, currentIndex, showHistory) }
+    // Playback history remains in the queue engine but not above the music
+    // on this surface. Keep the active and upcoming sections first.
+    val tracks = remember(queue, currentIndex) { visibleNowPlayingQueue(queue, currentIndex) }
     val drag = rememberQueueDrag(listState, tracks, onMove, onDragActiveChange)
     val nowPlaying = tracks.nowPlaying
     val contextSong = tracks.context.firstOrNull()?.song
@@ -258,8 +260,8 @@ internal fun InlineQueue(
     // Keep Now playing in view; history is available by scrolling upwards.
     // Include the entry key because trimming history can leave the index unchanged.
     var hasScrolledOnce by remember { mutableStateOf(false) }
-    LaunchedEffect(currentIndex, nowPlaying?.key, showHistory) {
-        val nowPlayingRow = if (tracks.history.isEmpty()) 0 else tracks.history.size + 1
+    LaunchedEffect(currentIndex, nowPlaying?.key) {
+        val nowPlayingRow = 1
         val scrolledAway = listState.firstVisibleItemIndex != nowPlayingRow || listState.firstVisibleItemScrollOffset != 0
         if (drag.held == null && nowPlaying != null && scrolledAway) {
             if (hasScrolledOnce) {
@@ -282,6 +284,8 @@ internal fun InlineQueue(
                 color = Color.White,
                 modifier = Modifier.weight(1f),
             )
+            // One Clear action beside the queue heading, never a second copy
+            // above the manual-track section.
             if (tracks.user.isNotEmpty()) {
                 QueueClearButton(MaterialTheme.typography.titleMedium, controlsLocked, onClear)
             }
@@ -303,24 +307,6 @@ internal fun InlineQueue(
                     .then(if (collapsePlayerOnScroll) Modifier.nestedScroll(controlsOnScroll) else Modifier),
                 contentPadding = PaddingValues(horizontal = PLAYER_GUTTER),
             ) {
-                if (tracks.history.isNotEmpty()) {
-                    item(key = "header-history") {
-                        QueueHeading(
-                            title = stringResource(Res.string.previously_played),
-                            modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
-                        )
-                    }
-                    items(tracks.history, key = { it.key }) { track ->
-                        InlineQueueRow(
-                            song = track.song,
-                            isCurrent = false,
-                            onClick = { onJumpTo(track.timelineIndex) },
-                            onRemove = { onRemove(track.timelineIndex) },
-                            locked = controlsLocked,
-                            modifier = queueMotion(),
-                        )
-                    }
-                }
                 if (nowPlaying != null) {
                     item(key = "header-now-playing") {
                         QueueHeading(
@@ -344,9 +330,7 @@ internal fun InlineQueue(
                         QueueHeading(
                             title = stringResource(Res.string.next_in_queue),
                             modifier = Modifier.padding(top = 16.dp, bottom = 6.dp).then(queueMotion()),
-                        ) {
-                            QueueClearButton(MaterialTheme.typography.labelLarge, controlsLocked, onClear)
-                        }
+                        )
                     }
                     queueSection(tracks.user, QueueSection.USER, drag, controlsLocked, onJumpTo, onRemove)
                 }
@@ -796,15 +780,13 @@ private fun InlineQueueRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (isCurrent) {
-            Icon(
-                Icons.Rounded.GraphicEq,
-                contentDescription = stringResource(Res.string.now_playing),
-                tint = Color.White,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-        }
+        // The weighted credits surrender width to a fixed trailing star strip.
+        // ExplicitSongTitle ellipsizes earlier instead of pushing stars away.
+        CanonicalSongRatingStars(
+            song = song,
+            modifier = Modifier.padding(start = 8.dp, end = 6.dp),
+            color = Color.White.copy(alpha = 0.8f),
+        )
         if (!locked) {
             Box(
                 modifier = Modifier

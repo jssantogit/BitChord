@@ -1,0 +1,32 @@
+<resources>
+    <string name="settings_nav_group_account">CUENTA</string>
+    <string name="settings_nav_group_music">MÚSICA</string>
+    <string name="settings_nav_group_experience">EXPERIENCIA</string>
+    <string name="settings_nav_group_data">DATOS Y DESCARGAS</string>
+    <string name="settings_nav_group_system">SISTEMA</string>
+    <string name="settings_nav_group_about">ACERCA DE</string>
+    <string name="settings_nav_lyrics">Letras</string>
+    <string name="settings_nav_about">Acerca de</string>
+    <string name="settings_nav_filtered">Resultados de: %1$s</string>
+    <string name="settings_nav_show_all">Ver todo</string>
+    <string name="settings_nav_controls">Controles y comportamiento</string>
+    <string name="settings_nav_advanced">Avanzado</string>
+    <string name="settings_nav_desc_account">Cuentas e integraciones musicales</string>
+    <string name="settings_nav_desc_audio">Fuentes, Wi-Fi y datos móviles</string>
+    <string name="settings_nav_desc_playback">Salida, transiciones y cola</string>
+    <string name="settings_nav_desc_local">Carpetas y filtros de audio local</string>
+    <string name="settings_nav_desc_appearance">Tema, portadas y efectos visuales</string>
+    <string name="settings_nav_desc_lyrics">Sincronización, fuentes y traducción</string>
+    <string name="settings_nav_desc_downloads">Soulseek, calidad y destino</string>
+    <string name="settings_nav_desc_storage">Caché de audio y almacenamiento</string>
+    <string name="settings_nav_desc_data">Replay, copias e importaciones</string>
+    <string name="settings_nav_desc_performance">Frecuencia de actualización y batería</string>
+    <string name="settings_nav_desc_misc">Gestos y comportamiento de reproducción</string>
+    <string name="settings_nav_desc_language">Idioma de la interfaz</string>
+    <string name="settings_nav_desc_advanced">Diagnóstico y controles técnicos</string>
+    <string name="settings_nav_desc_wear">Integración con reloj</string>
+    <string name="settings_nav_desc_about">Versión e información del proyecto</string>
+    <string name="settings_nav_desc_sources">Proveedores y extensiones musicales</string>
+    <string name="settings_nav_diagnostics_title">Diagnósticos</string>
+    <string name="settings_nav_diagnostics_subtitle">Capturar, revisar y compartir informes de diagnóstico</string>
+</resources>
