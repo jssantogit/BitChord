@@ -72,13 +72,13 @@ internal data class ProviderTrack(
     val bitDepth: Int?,
     val samplingRateHz: Int?,
     val artists: List<ProviderArtist> = emptyList(),
-    /** Null = field not returned by the provider, empty = explicitly supported but untagged. */
-    val genres: List<String>? = null,
-    val moods: List<String>? = null,
     /** Strong Recording-level external identity evidence, never playback identity. */
     val isrcs: List<String> = emptyList(),
     /** Protocol evidence; identity is resolved by the canonical sync transaction. */
     val remoteRating: ProviderRemoteRating = ProviderRemoteRating(),
+    /** Null = field not returned by the provider, empty = explicitly supported but untagged. */
+    val genres: List<String>? = null,
+    val moods: List<String>? = null,
 )
 
 internal data class ProviderLibrarySnapshot(
