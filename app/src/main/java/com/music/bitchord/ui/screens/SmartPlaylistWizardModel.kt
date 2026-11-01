@@ -26,6 +26,7 @@ internal val smartConditionCategories = listOf(
         SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY,
         SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleField.ALBUM_ARTIST,
         SmartPlaylistRuleField.TRACK_ARTIST, SmartPlaylistRuleField.TRACK_NUMBER,
+        SmartPlaylistRuleField.LOCAL_GENRE,
     )),
     SmartConditionCategory("ratings", "Avaliações", "Notas em estrelas e data da nota local", listOf(
         SmartPlaylistRuleField.EXPLICIT_RATING, SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING,
@@ -37,8 +38,8 @@ internal val smartConditionCategories = listOf(
     SmartConditionCategory("dates", "Datas e lançamentos", "Ano da edição e adição de arquivo local", listOf(
         SmartPlaylistRuleField.RELEASE_YEAR, SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
     )),
-    SmartConditionCategory("library", "Biblioteca e origens", "Fontes comprovadas do catálogo", listOf(
-        SmartPlaylistRuleField.SOURCE_KIND, SmartPlaylistRuleField.LOCAL_GENRE,
+    SmartConditionCategory("library", "Biblioteca e pastas", "Origem das músicas e localização dos arquivos", listOf(
+        SmartPlaylistRuleField.SOURCE_KIND,
         SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleField.LOCAL_FILE_PATH,
     )),
     SmartConditionCategory("audio", "Áudio", "Duração comprovada das faixas", listOf(
@@ -46,8 +47,8 @@ internal val smartConditionCategories = listOf(
         SmartPlaylistRuleField.LOCAL_BITRATE_KBPS,
     )),
     SmartConditionCategory(
-        "advanced", "Outros · avançado",
-        "Evidência técnica do catálogo, não qualidade visual ou reprodução",
+        "advanced", "Capas de álbuns",
+        "Dados de imagem dos lançamentos cadastrados",
         listOf(SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE),
     ),
 )
@@ -59,7 +60,7 @@ internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (
     SmartPlaylistRuleField.ALBUM_ARTIST -> "Artista do álbum"
     SmartPlaylistRuleField.TRACK_ARTIST -> "Créditos do artista da faixa"
     SmartPlaylistRuleField.TRACK_NUMBER -> "Número da faixa"
-    SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "Álbum com referência de capa"
+    SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "Capa cadastrada no álbum"
     SmartPlaylistRuleField.EXPLICIT_RATING -> "Avaliação em estrelas"
     SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING -> "Dias desde alteração da avaliação"
     SmartPlaylistRuleField.AUDIBLE_COMPLETIONS -> "Reproduções concluídas"
@@ -91,7 +92,7 @@ internal fun smartConditionDescription(field: SmartPlaylistRuleField): String = 
     SmartPlaylistRuleField.TRACK_NUMBER ->
         "Compare a posição conhecida da música no lançamento."
     SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE ->
-        "Verifica se há uma referência de capa no lançamento; não garante imagem disponível."
+        "Seleciona músicas cujo álbum tem uma imagem cadastrada. Não verifica se a capa carrega."
     SmartPlaylistRuleField.EXPLICIT_RATING ->
         "Compare a avaliação de uma a cinco estrelas, quando atribuída."
     SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING ->
@@ -117,7 +118,7 @@ internal fun smartConditionDescription(field: SmartPlaylistRuleField): String = 
     SmartPlaylistRuleField.LOCAL_FILE_EXTENSION ->
         "Compare a extensão do arquivo local (FLAC, MP3, M4A); não equivale ao codec."
     SmartPlaylistRuleField.LOCAL_GENRE ->
-        "Gênero lido do MediaStore em arquivos locais. Não usa tags inferidas de álbuns."
+        "Digite o gênero para encontrar músicas locais identificadas pelo MediaStore (ex.: Pop)."
     SmartPlaylistRuleField.LOCAL_BITRATE_KBPS ->
         "Taxa de bits lida do arquivo local, em kbps decimais; não é taxa de transcodificação."
     SmartPlaylistRuleField.DURATION_MS ->
@@ -256,6 +257,9 @@ internal fun smartRuleNewComparison(field: SmartPlaylistRuleField): SmartPlaylis
         )
         SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> SmartPlaylistRule.Comparison(
             field, SmartPlaylistRuleOperator.IS_PRESENT,
+        )
+        SmartPlaylistRuleField.LOCAL_GENRE -> SmartPlaylistRule.Comparison(
+            field, SmartPlaylistRuleOperator.CONTAINS, textValue = "",
         )
         else -> {
             val op = if (SmartPlaylistRuleOperator.IS_PRESENT in field.allowedOperators())
