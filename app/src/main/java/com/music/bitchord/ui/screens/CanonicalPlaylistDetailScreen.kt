@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.AddCircleOutline
@@ -61,6 +62,7 @@ import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
+import com.music.bitchord.ui.components.ActionRow
 import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
 import com.music.bitchord.ui.components.NativeTrackRowText
 import com.music.bitchord.ui.theme.AccentRed
@@ -244,25 +246,58 @@ internal fun CanonicalPlaylistTrackRow(
                     contentDescription = "Ações da música",
                 )
                 if (menuExpanded) {
-                    // The same native Settings-row choice sheet used throughout
-                    // the BitChord playlist editor, never a floating M3 menu.
-                    val actions = if (onQueue == null) listOf("Reproduzir daqui")
-                        else listOf("Reproduzir daqui", "Reproduzir a seguir", "Adicionar à fila")
-                    WizardChoiceDialog(
-                        title = "Ações da música",
-                        options = actions,
-                        label = { it },
-                        onChosen = { action ->
-                            when (action) {
-                                "Reproduzir daqui" -> onPlay(track.id)
-                                "Reproduzir a seguir" ->
-                                    onQueue?.invoke(track.id, CanonicalCollectionIntent.ADD_NEXT)
-                                "Adicionar à fila" ->
-                                    onQueue?.invoke(track.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
-                            }
+                    CanonicalTrackActionSheet(
+                        onDismiss = { menuExpanded = false },
+                        onPlay = { onPlay(track.id) },
+                        onPlayNext = onQueue?.let { queue ->
+                            { queue(track.id, CanonicalCollectionIntent.ADD_NEXT) }
                         },
-                        onClose = { menuExpanded = false },
+                        onAddToQueue = onQueue?.let { queue ->
+                            { queue(track.id, CanonicalCollectionIntent.ADD_TO_QUEUE) }
+                        },
                     )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Native action-row presentation reused from SongActionsSheet / BrowseActionsSheet.
+ * The actions carry only the clicked canonical RecordingId, never a legacy Song.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun CanonicalTrackActionSheet(
+    onDismiss: () -> Unit,
+    onPlay: () -> Unit,
+    onPlayNext: (() -> Unit)?,
+    onAddToQueue: (() -> Unit)?,
+) {
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
+        ),
+        containerColor = MaterialTheme.colorScheme.background,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+        ) {
+            ActionRow(Icons.Rounded.PlayArrow, "Reproduzir daqui") {
+                onPlay()
+                onDismiss()
+            }
+            onPlayNext?.let { next ->
+                ActionRow(Icons.Rounded.SkipNext, "Reproduzir a seguir") {
+                    next()
+                    onDismiss()
+                }
+            }
+            onAddToQueue?.let { queue ->
+                ActionRow(Icons.AutoMirrored.Rounded.QueueMusic, "Adicionar à fila") {
+                    queue()
+                    onDismiss()
                 }
             }
         }
