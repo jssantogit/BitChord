@@ -254,7 +254,8 @@ internal class CanonicalContextualFilterLibrary(
         } else null
         val tagRows = if (filter.rules.referencedFields().any {
             it == SmartPlaylistRuleField.GENRE || it == SmartPlaylistRuleField.MOOD ||
-                it == SmartPlaylistRuleField.BPM
+                it == SmartPlaylistRuleField.BPM ||
+                it == SmartPlaylistRuleField.STYLE
         }) {
             snapshot.tracks.map { it.recordingId }.chunked(400).flatMap { ids ->
                 catalog.providerScopedTagRows(providerKey, ids)
