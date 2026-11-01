@@ -1330,6 +1330,15 @@ internal fun SmartPlaylistV2WizardUi(
                             onClick = if (filterMode) onSaveFilter
                                 else if (normalMode) onSaveNormal else onSave,
                         )
+                        if (!normalMode && !filterMode) {
+                            PlaylistWizardSecondaryAction(
+                                label = if (hasExportedFilter)
+                                    "Atualizar filtro reutilizável" else
+                                    "Salvar como filtro reutilizável",
+                                enabled = canReview && !loading,
+                                onClick = onSaveFilter,
+                            )
+                        }
                         if (!filterMode &&
                             (editingNormalId != null || editingId != null)
                         ) {
