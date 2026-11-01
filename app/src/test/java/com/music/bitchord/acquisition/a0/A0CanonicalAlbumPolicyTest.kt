@@ -142,7 +142,6 @@ class A0CanonicalAlbumPolicyTest {
         for(folder in listOf(
             "ILLIT - BREAK EVEN [FLAC]",
             "BREAK EVEN (2026) 24bit",
-            "ILLIT - BREAK EVEN",
             "Music - BREAK EVEN (Deluxe)"
         )) {
             val decision=policy.assess(target,A0CanonicalAlbumPolicy.Claim(
@@ -155,6 +154,26 @@ class A0CanonicalAlbumPolicyTest {
             "ILLIT - Another Album [FLAC]",
             A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
         assertEquals(A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM,wrong.status)
+    }
+
+    @Test fun exactlyNamedArtistAndAlbumFolderIsEquivalentToExactAlbumHint() {
+        val target=A0CanonicalAlbumPolicy.Target("BREAK EVEN",expectedArtist="ILLIT")
+        val candidate=policy.assess(target,A0CanonicalAlbumPolicy.Claim(
+            "ILLIT - BREAK EVEN",A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
+        assertEquals(A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED,
+            candidate.status)
+        assertFalse(candidate.authorizesTransfer)
+        val otherArtist=policy.assess(target,A0CanonicalAlbumPolicy.Claim(
+            "Another Artist - BREAK EVEN",
+            A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
+        assertEquals(A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL,
+            otherArtist.status)
+        val exactRelease=policy.assess(target.copy(
+            exactReleaseMbid="11111111-1111-4111-8111-111111111111"),
+            A0CanonicalAlbumPolicy.Claim("ILLIT - BREAK EVEN",
+                A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
+        assertEquals(A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL,
+            exactRelease.status)
     }
 
     @Test fun compositeNamesNeverOverrideExplicitConflictOrAlternateVersion() {
