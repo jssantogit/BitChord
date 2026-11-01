@@ -22,6 +22,46 @@ import org.robolectric.annotation.ConscryptMode
 @Config(application = Application::class, sdk = [35])
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class SmartPlaylistBatchEvidenceRoomTest {
+    @Test fun localAudioTagsAreVerifiedPerAssetAndNeverPromotedFromRemote() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:genre", "Song", "Artist", 123_000L))
+            dao.upsertMediaAsset(com.music.bitchord.data.catalog.MediaAssetEntity(
+                id = "asset:local", recordingId = "rec:genre",
+                provider = "local-mediastore", sourceKey = "local-1",
+                uri = "content://media/external/audio/media/1",
+                path = "/storage/emulated/0/Music/Song.flac",
+                dateAddedSeconds = null, dateModifiedSeconds = null, artworkUri = null,
+                localGenre = "Synthpop", localBitrateBps = 320_000L,
+            ))
+            dao.upsertMediaAsset(com.music.bitchord.data.catalog.MediaAssetEntity(
+                id = "asset:remote", recordingId = "rec:genre",
+                provider = "opensubsonic", sourceKey = "remote",
+                uri = "https://server.invalid/stream",
+                path = "/remote/irrelevant", dateAddedSeconds = null,
+                dateModifiedSeconds = null, artworkUri = null,
+                localGenre = "Should never appear", localBitrateBps = 1000L,
+            ))
+            val result = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            ).read(listOf("rec:genre"), setOf(
+                SmartPlaylistRuleField.LOCAL_GENRE, SmartPlaylistRuleField.LOCAL_BITRATE_KBPS,
+            )).single()
+            assertEquals(listOf("Synthpop"), result.localGenres)
+            assertTrue(result.localGenresComplete)
+            assertEquals(listOf(320.0), result.localBitratesKbps)
+            assertTrue(result.localBitrateEvidenceComplete)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
     @Test fun localPathEvidenceOnlyReadsMediaStoreAndDoesNotPromoteMissingPaths() = runTest {
         val context = RuntimeEnvironment.getApplication()
         val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
