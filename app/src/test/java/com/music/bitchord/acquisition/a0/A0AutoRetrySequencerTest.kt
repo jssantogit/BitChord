@@ -33,6 +33,20 @@ class A0AutoRetrySequencerTest {
         assertFalse(policy.canTransfer)
     }
 
+    @Test fun exactScoreRequiresIndependentEvidenceNotOnlyOptIn() {
+        val unproven=A0AutoRetrySequencer(2,optIn=true,
+            equivalentClaimsConfirmed=false,
+            independentlyEligibleExactScore=false)
+        assertNull(unproven.begin())
+        val independentlyVetted=A0AutoRetrySequencer(2,optIn=true,
+            equivalentClaimsConfirmed=false,
+            independentlyEligibleExactScore=true)
+        val first=independentlyVetted.begin()!!
+        assertNull(independentlyVetted.begin())
+        assertTrue(independentlyVetted.complete(first,false))
+        assertEquals(1,independentlyVetted.begin()!!.alternativeIndex)
+    }
+
     @Test fun successAndCancellationNeverStartAnotherAttempt() {
         val success=A0AutoRetrySequencer(3,true,true)
         val attempt=success.begin()!!
