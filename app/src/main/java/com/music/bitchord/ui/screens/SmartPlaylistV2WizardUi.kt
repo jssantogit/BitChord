@@ -1099,7 +1099,21 @@ internal fun SmartPlaylistV2WizardUi(
                                             onValueChange = {
                                                 draft = draft.copy(textValue = it, value = null)
                                             },
-                                            label = "Texto a comparar",
+                                            label = when (draft.field) {
+                                                SmartPlaylistRuleField.LOCAL_GENRE ->
+                                                    "Gênero da música (ex.: K-pop)"
+                                                SmartPlaylistRuleField.ARTIST_COUNTRY ->
+                                                    "Código do país (ex.: BR, KR)"
+                                                SmartPlaylistRuleField.LOCAL_FOLDER ->
+                                                    "Pasta (ex.: Music/Kpop)"
+                                                SmartPlaylistRuleField.LOCAL_FILE_PATH ->
+                                                    "Caminho do arquivo"
+                                                SmartPlaylistRuleField.LOCAL_FILE_EXTENSION ->
+                                                    "Extensão (ex.: FLAC)"
+                                                SmartPlaylistRuleField.RELEASE_TITLE ->
+                                                    "Nome do álbum"
+                                                else -> "Texto a comparar"
+                                            },
                                             emphasized = true,
                                         )
                                     } else {
@@ -1118,8 +1132,16 @@ internal fun SmartPlaylistV2WizardUi(
                                                         it * 1000.0 else it
                                                 }, textValue = null)
                                             },
-                                            label = if (draft.field == SmartPlaylistRuleField.DURATION_MS)
-                                                "Duração (segundos)" else "Valor numérico",
+                                            label = when (draft.field) {
+                                                SmartPlaylistRuleField.DURATION_MS -> "Duração (segundos)"
+                                                SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR ->
+                                                    "Ano do primeiro lançamento (ex.: 2018)"
+                                                SmartPlaylistRuleField.RELEASE_YEAR ->
+                                                    "Ano desta edição (ex.: 2024)"
+                                                SmartPlaylistRuleField.LOCAL_BITRATE_KBPS ->
+                                                    "Bitrate (kbps)"
+                                                else -> "Valor numérico"
+                                            },
                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                             emphasized = true,
                                         )
