@@ -53,6 +53,25 @@ class A0FlacEncodedFrameEvidenceTest {
         assertEquals(A0FlacFrameSequenceEvidence.Problem.NUMBERING_INCONSISTENT,tracker.problem)
         assertFalse(tracker.verified(1024))
     }
+    @Test fun acceptsActualEncodedFlacFramesIncludingShortLastFrame() {
+        // Generated from local 8 kHz mono silence with FFmpeg.
+        // These are three real frames with CRCs, not fabricated checksums.
+        val encoded=listOf(
+            "fff81408002b000000e95b",
+            "fff81408012c0000008523",
+            "fff8640802af8d000000f19b"
+        )
+        val tracker=A0FlacFrameSequenceEvidence()
+        for(hex in encoded) {
+            val frame=hex.chunked(2).map {it.toInt(16).toByte()}.toByteArray()
+            tracker.observe(checked(frame),192,192,560)
+        }
+        assertTrue(tracker.verified(560))
+        assertEquals(3,tracker.packets)
+        assertEquals(560L,tracker.pcmSamples)
+        assertEquals(A0FlacFrameSequenceEvidence.Problem.NONE,tracker.problem)
+    }
+
     @Test fun garbageDemuxPacketIsNotPretendedToBeFlacFrame() {
         val bad=checked(ByteArray(128))
         assertNull(bad.frame)
