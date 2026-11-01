@@ -56,6 +56,15 @@ class A0FlacWholeFileEvidenceTest {
         assertEquals(A0FlacWholeFileEvidence.Status.VERIFIED,result.status)
         assertEquals(3,result.frames)
         assertEquals(560L,result.pcmSamples)
+        assertEquals(1,result.embeddedHeaderCandidates)
+        assertEquals(4,result.headerCandidates)
+    }
+
+    @Test fun corruptedEncodedFrameWithEmbeddedHeaderStillFailsClosed() {
+        val embedded=bytes("fff81408002b00fff81408012c0000d228")
+        embedded[embedded.size-1]=(embedded.last().toInt() xor 1).toByte()
+        val result=check(stream(embedded,frames[1],frames[2]))
+        assertNotEquals(A0FlacWholeFileEvidence.Status.VERIFIED,result.status)
     }
 
     @Test fun truncatedFileAndAlteredFrameDataNeverApprove() {

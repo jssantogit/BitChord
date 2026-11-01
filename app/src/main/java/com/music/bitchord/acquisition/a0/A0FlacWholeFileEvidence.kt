@@ -30,6 +30,7 @@ internal object A0FlacWholeFileEvidence {
         val scannedBytes:Long=0,
         val frameCrcErrors:Int=0,
         val headerCandidates:Int=0,
+        val embeddedHeaderCandidates:Int=0,
     )
 
     private const val MAX_FILE_BYTES=256L*1024L*1024L
@@ -173,8 +174,9 @@ internal object A0FlacWholeFileEvidence {
         var pcmSamples=0L
         var crcErrors=0
         var candidates=0
+        var embedded=0
         fun finish(status:Status):Result=Result(
-            status,frames,pcmSamples,scanned,crcErrors,candidates)
+            status,frames,pcmSamples,scanned,crcErrors,candidates,embedded)
         fun stopped():Status?=when {
             isCancelled() || Thread.currentThread().isInterrupted ->
                 Status.CANCELLED
@@ -259,27 +261,32 @@ internal object A0FlacWholeFileEvidence {
                         if(next!=null) {
                             candidates++
                             if(startedFrame && crc!=0) {
-                                crcErrors++
-                                return finish(Status.FRAME_CRC_MISMATCH)
+                                // CRC8-valid header-shaped bytes can occur
+                                // inside compressed audio; CRC16 of the
+                                // previous frame must finish before accepting
+                                // a new frame boundary.
+                                embedded++
+                            } else {
+                                if(mode!=null && mode!=next.variable)
+                                    return finish(Status.FRAME_NUMBERING)
+                                val expectedNumber=if(next.variable)
+                                    pcmSamples else frames.toLong()
+                                if(next.number!=expectedNumber)
+                                    return finish(Status.FRAME_NUMBERING)
+                                if(next.block!=expectedFixedBlock &&
+                                    !(next.block in 1 until expectedFixedBlock &&
+                                        pcmSamples+next.block==expectedPcmSamples))
+                                    return finish(Status.BLOCK_SIZE_CONFLICT)
+                                frames++
+                                if(frames>MAX_FRAMES)
+                                    return finish(Status.FRAME_NUMBERING)
+                                pcmSamples+=next.block
+                                if(pcmSamples>expectedPcmSamples)
+                                    return finish(Status.PCM_SAMPLE_MISMATCH)
+                                startedFrame=true
+                                mode=next.variable
+                                crc=0
                             }
-                            if(mode!=null && mode!=next.variable)
-                                return finish(Status.FRAME_NUMBERING)
-                            val expectedNumber=if(next.variable)
-                                pcmSamples else frames.toLong()
-                            if(next.number!=expectedNumber)
-                                return finish(Status.FRAME_NUMBERING)
-                            if(next.block!=expectedFixedBlock &&
-                                !(next.block in 1 until expectedFixedBlock &&
-                                    pcmSamples+next.block==expectedPcmSamples))
-                                return finish(Status.BLOCK_SIZE_CONFLICT)
-                            frames++
-                            if(frames>MAX_FRAMES)return finish(Status.FRAME_NUMBERING)
-                            pcmSamples+=next.block
-                            if(pcmSamples>expectedPcmSamples)
-                                return finish(Status.PCM_SAMPLE_MISMATCH)
-                            startedFrame=true
-                            mode=next.variable
-                            crc=0
                         }
                     }
                     if(startedFrame)crc=crc16Next(crc,first)

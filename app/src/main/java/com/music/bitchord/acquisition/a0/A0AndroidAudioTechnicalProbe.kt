@@ -63,6 +63,7 @@ internal object A0AndroidAudioTechnicalProbe {
         var localFlacBytesPm=-1
         var localFlacCrcErrors=0
         var localFlacHeaderCandidates=0
+        var localFlacEmbeddedHeaderCandidates=0
         var localFlacElapsedMs=-1L
         var checkedFlacPackets=0
         var flacCoveragePermille=-1
@@ -94,6 +95,7 @@ internal object A0AndroidAudioTechnicalProbe {
                     " flac_local_bytes_pm=${m.localFlacBytesPm.coerceIn(-1,1000)}" +
                     " flac_local_crc_errors=${m.localFlacCrcErrors.coerceIn(0,400000)}" +
                     " flac_local_headers=${m.localFlacHeaderCandidates.coerceIn(0,400000)}" +
+                    " flac_local_embedded_sync=${m.localFlacEmbeddedHeaderCandidates.coerceIn(0,400000)}" +
                     " flac_local_elapsed_ms=${m.localFlacElapsedMs.coerceIn(-1L,600000L)}" +
                     " flac_frame_packets=${m.checkedFlacPackets.coerceIn(0,400000)}" +
                     " flac_pcm_coverage_pm=${m.flacCoveragePermille.coerceIn(-1,1000)}" +
@@ -377,6 +379,8 @@ internal object A0AndroidAudioTechnicalProbe {
                 metrics.localFlacFrames=evidence.frames
                 metrics.localFlacCrcErrors=evidence.frameCrcErrors
                 metrics.localFlacHeaderCandidates=evidence.headerCandidates
+                metrics.localFlacEmbeddedHeaderCandidates=
+                    evidence.embeddedHeaderCandidates
                 metrics.localFlacCoveragePm=
                     ((evidence.pcmSamples*1000L/header.flacTotalSamples)
                         .coerceIn(0,1000)).toInt()
