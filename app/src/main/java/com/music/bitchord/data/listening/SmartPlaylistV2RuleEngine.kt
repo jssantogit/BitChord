@@ -763,13 +763,23 @@ internal class SmartPlaylistV2RuleEngine(
                     ?.lowercase(Locale.ROOT)?.takeIf { it.isNotBlank() }
                 ?: return RuleTruth.UNKNOWN
             val matched = values.any { actual ->
+                val isFolder = rule.field == SmartPlaylistRuleField.LOCAL_FOLDER
                 when (rule.operator) {
                     SmartPlaylistRuleOperator.EQUAL, SmartPlaylistRuleOperator.NOT_EQUAL ->
                         actual == wanted
                     SmartPlaylistRuleOperator.CONTAINS, SmartPlaylistRuleOperator.DOES_NOT_CONTAIN ->
-                        actual.contains(wanted)
-                    SmartPlaylistRuleOperator.STARTS_WITH -> actual.startsWith(wanted)
-                    SmartPlaylistRuleOperator.ENDS_WITH -> actual.endsWith(wanted)
+                        if (isFolder) {
+                            // Match complete folder segments, not arbitrary name prefixes
+                            // (e.g. ILLIT must never select ILLIT-Backup).
+                            val fragment = wanted.trim('/')
+                            fragment.isNotEmpty() && "/${actual.trim('/')}/".contains("/$fragment/")
+                        } else actual.contains(wanted)
+                    SmartPlaylistRuleOperator.STARTS_WITH ->
+                        if (isFolder) actual == wanted || actual.startsWith("$wanted/")
+                        else actual.startsWith(wanted)
+                    SmartPlaylistRuleOperator.ENDS_WITH ->
+                        if (isFolder) actual == wanted || actual.endsWith("/${wanted.trimStart('/')}")
+                        else actual.endsWith(wanted)
                     else -> return RuleTruth.UNKNOWN
                 }
             }
