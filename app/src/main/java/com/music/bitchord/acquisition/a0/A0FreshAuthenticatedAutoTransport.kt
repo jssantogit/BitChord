@@ -143,9 +143,10 @@ internal class A0FreshAuthenticatedAutoTransport(
                 // The executor may try only the NEXT metadata-equivalent
                 // source and will never switch to another edition on a tie.
                 com.music.bitchord.data.DebugLog.d("BitChord",
-                    "soulseek_auto_retry decision=EQUIVALENT_ONLY" +
-                        " cause=PRE_ACCEPT_TIMEOUT" +
-                        " phase=${lastPhase?.name ?: "NONE"}")
+                    "soulseek_auto_retry eligibility=PRE_ACCEPT_ONLY" +
+                        " cause=TIMEOUT" +
+                        " phase=${lastPhase?.name ?: "NONE"}" +
+                        " scope=$diagnosticScope")
                 return A0AutoAcquisitionExecutor.FetchResult.RetryableConnectionFailure
             }
             throw error
