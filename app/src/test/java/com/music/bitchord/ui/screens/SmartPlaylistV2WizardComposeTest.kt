@@ -451,6 +451,32 @@ class SmartPlaylistV2WizardComposeTest {
     }
 
 
+    @Test fun existingSmartPlaylistCanExportReusableFilterWithoutLeavingEditFlow() {
+        var exports = 0
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Minha inteligente",
+                rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+                    SmartPlaylistRule.Comparison(
+                        SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+                    ),
+                )),
+                hasConfiguredRules = true, sort = SmartPlaylistV2Sort.TITLE_ASC,
+                limit = "100", seed = "0", preview = null, loading = false,
+                error = null, editingId = "smart-1", editingFilterId = null,
+                savedDefinitions = emptyList(), onNameChange = {},
+                onRuleChange = {}, onSortChange = {}, onLimitChange = {},
+                onSeedChange = {}, onPreview = {}, onSave = {},
+                onSaveFilter = { exports++ }, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Editar playlist").assertExists()
+        compose.onNodeWithText("Salvar como filtro reutilizável").performClick()
+        compose.runOnIdle { assertEquals(1, exports) }
+        compose.onNodeWithText("Editar playlist").assertExists()
+    }
+
     @Test fun newReusableFilterUsesExistingRuleEditorAndSavesWithoutPlaylistControls() {
         var saves = 0
         val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
