@@ -168,7 +168,7 @@ object Downloads {
     /** Visible individual tracks, not the synthetic service-worker album ID. */
     internal enum class AutoTrackStage {
         WAITING, SEARCHING, DOWNLOADING, SAVED, MANUAL_REVIEW,
-        CANCELLED, VERIFY_STORAGE,
+        CANCELLED, INTERRUPTED, VERIFY_STORAGE,
     }
     internal data class AutoTrackRow(
         val song:Song,
@@ -1352,7 +1352,7 @@ object Downloads {
                             A0AutoBatchExecutor.TrackStatus.RECONCILE ->
                                 AutoTrackStage.VERIFY_STORAGE
                             A0AutoBatchExecutor.TrackStatus.NOT_STARTED ->
-                                AutoTrackStage.WAITING
+                                AutoTrackStage.INTERRUPTED
                         }
                         updateAutoTrack(id,index,stage)
                         if(job?.isActive==true) {
