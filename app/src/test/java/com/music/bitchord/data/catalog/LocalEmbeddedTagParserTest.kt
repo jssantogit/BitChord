@@ -1,8 +1,10 @@
 package com.music.bitchord.data.catalog
 
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LocalEmbeddedTagParserTest {
@@ -70,6 +72,21 @@ class LocalEmbeddedTagParserTest {
         assertEquals(emptyList<String>(), empty.genres)
         assertEquals(emptyList<String>(), empty.moods)
         assertEquals(emptyList<Double>(), empty.bpms)
+    }
+
+    @Test fun streamingReaderConsumesOnlyMetadataNotAudioPayload() {
+        val bytes = id3(frame("TMOO", "Energetic"), frame("TBPM", "134"))
+        val source = ByteArrayInputStream(bytes + ByteArray(2_000_000) { 99 })
+        val result = requireNotNull(LocalEmbeddedTagParser.readStream(source))
+        assertEquals(listOf("Energetic"), result.moods)
+        assertEquals(listOf(134.0), result.bpms)
+        assertTrue(source.available() >= 2_000_000)
+        val flacSource = ByteArrayInputStream(
+            flac("STYLE=House", "BPM=119.5") + ByteArray(50_000) { 33 },
+        )
+        assertEquals(listOf("House"),
+            requireNotNull(LocalEmbeddedTagParser.readStream(flacSource)).styles)
+        assertTrue(flacSource.available() >= 50_000)
     }
 
     @Test fun corruptOrUnsupportedHeadersAreUnknownNeverKnownMissing() {
