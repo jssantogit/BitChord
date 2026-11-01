@@ -48,6 +48,29 @@ class SmartPlaylistV2WizardComposeTest {
         assertEquals(first.map { it.id }, suggestedCanonicalPlaylistTracks(rows, selected, page = 2).map { it.id })
     }
 
+    @Test fun suggestionRefreshShufflesDeterministicallyAndAvoidsRepeatsUntilExhausted() {
+        val rows = (1..30).map { index ->
+            V2DisplayRow(id = "recording-$index", title = "Faixa $index", artist = "Artista")
+        }
+        val pages = (0..5).map { page ->
+            suggestedCanonicalPlaylistTracks(rows, emptySet(), page, shuffleSeed = 42L)
+        }
+        val ids = pages.flatten().map { it.id }
+        assertEquals(30, ids.distinct().size)
+        assertEquals(30, ids.size)
+        assertEquals(false, ids == rows.map { it.id })
+        assertEquals(pages[0], suggestedCanonicalPlaylistTracks(rows, emptySet(), 0, shuffleSeed = 42L))
+    }
+
+    @Test fun localGenreAsksForTextRatherThanSilentPresence() {
+        val comparison = smartRuleNewComparison(SmartPlaylistRuleField.LOCAL_GENRE)
+        assertEquals(SmartPlaylistRuleOperator.CONTAINS, comparison.operator)
+        assertEquals("", comparison.textValue)
+        assertEquals("music", smartConditionCategories.single {
+            SmartPlaylistRuleField.LOCAL_GENRE in it.fields
+        }.id)
+    }
+
     @Test fun addingSuggestedRecordingPreservesMetadataAndPreventsDuplicates() {
         val existing = com.music.bitchord.data.listening.SavedCanonicalStaticPlaylist(
             id = "saved-1", name = "Minha playlist", recordingIds = listOf("rec-1"),
