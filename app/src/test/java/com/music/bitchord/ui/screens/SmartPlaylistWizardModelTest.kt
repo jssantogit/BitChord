@@ -48,7 +48,7 @@ class SmartPlaylistWizardModelTest {
         assertEquals(fields.size, fields.distinct().size)
         assertEquals(listOf(SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE),
             smartConditionCategories.last().fields)
-        assertEquals("Outros · avançado", smartConditionCategories.last().title)
+        assertEquals("Capas de álbuns", smartConditionCategories.last().title)
         assertEquals(listOf(SmartPlaylistRuleField.SOURCE_KIND), smartConditionSearch("fonte"))
         assertEquals(listOf(SmartPlaylistRuleField.DURATION_MS), smartConditionSearch("duracao"))
         assertTrue(smartConditionSearch("pasta de origem").isEmpty())
