@@ -17,7 +17,7 @@ import com.music.bitchord.download.SoulseekBatchPlan
 internal class A0AutoBatchExecutor(
     private val portForTrack:(SoulseekBatchPlan.Entry)->A0AutoAcquisitionExecutor.Port,
 ) {
-    enum class TrackStatus { PUBLISHED, MANUAL_REVIEW, CANCELLED, RECONCILE, NOT_STARTED }
+    enum class TrackStatus { PUBLISHED, MANUAL_REVIEW, ATTEMPT_FAILED, CANCELLED, RECONCILE, NOT_STARTED }
     class Report(
         val results:List<TrackStatus>,
         val attempts:Int,
@@ -26,6 +26,7 @@ internal class A0AutoBatchExecutor(
     ) {
         val published:Int get()=results.count { it==TrackStatus.PUBLISHED }
         val manualReview:Int get()=results.count { it==TrackStatus.MANUAL_REVIEW }
+        val attemptFailures:Int get()=results.count { it==TrackStatus.ATTEMPT_FAILED }
         val cancelled:Int get()=results.count { it==TrackStatus.CANCELLED }
         val needsReconciliation:Int get()=results.count { it==TrackStatus.RECONCILE }
         val notStarted:Int get()=results.count { it==TrackStatus.NOT_STARTED }
@@ -120,6 +121,9 @@ internal class A0AutoBatchExecutor(
                 A0AutoAcquisitionExecutor.Status.PUBLISHED -> TrackStatus.PUBLISHED
                 A0AutoAcquisitionExecutor.Status.CANCELLED -> TrackStatus.CANCELLED
                 A0AutoAcquisitionExecutor.Status.RECONCILE -> TrackStatus.RECONCILE
+                A0AutoAcquisitionExecutor.Status.MANUAL_REVIEW ->
+                    if(result.attempts>0)TrackStatus.ATTEMPT_FAILED
+                    else TrackStatus.MANUAL_REVIEW
                 else -> TrackStatus.MANUAL_REVIEW
             })
             if(result?.status in setOf(
