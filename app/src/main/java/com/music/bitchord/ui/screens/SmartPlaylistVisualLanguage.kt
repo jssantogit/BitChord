@@ -1,6 +1,8 @@
 package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
@@ -21,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import com.music.bitchord.ui.components.PillTextField
 import com.music.bitchord.ui.components.CoverPlaceholder
@@ -28,6 +32,8 @@ import com.music.bitchord.ui.components.ArtworkPageBackButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
@@ -84,12 +90,18 @@ internal fun PlaylistWizardSecondaryAction(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    // The native Settings/Detail screens use text actions for secondary work.
-    // Avoid adding a second tall, filled Material3 button in a card.
-    TextButton(
+    // Native neutral outlined action: unmistakable touch target without
+    // competing with the single red primary CTA or tinting text red.
+    OutlinedButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .testTag("playlist-wizard-secondary-button"),
+        shape = GroupShape,
+        colors = ButtonDefaults.outlinedButtonColors(
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Text(label, style = MaterialTheme.typography.bodyLarge)
     }
@@ -125,6 +137,7 @@ internal fun PlaylistWizardTextEntry(
     error: Boolean = false,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     multiline: Boolean = false,
+    emphasized: Boolean = false,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -138,15 +151,27 @@ internal fun PlaylistWizardTextEntry(
         )
         // Reuse the same field as Settings and dialogs. Only the label and
         // validation text are specific to this wizard.
-        PillTextField(
-            value = value,
-            onValueChange = onValueChange,
-            placeholder = "Toque para preencher",
-            container = MaterialTheme.colorScheme.surfaceVariant,
-            keyboardOptions = keyboardOptions,
-            accessibilityLabel = label,
-            multiline = multiline,
-        )
+        // Reuse the native PillTextField, with the same distinct outline as
+        // the app's search surfaces when embedded in a Settings card.
+        Box(
+            modifier = Modifier.fillMaxWidth().then(
+                if (emphasized) Modifier.border(
+                    BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    GroupShape,
+                ) else Modifier,
+            ),
+        ) {
+            PillTextField(
+                value = value,
+                onValueChange = onValueChange,
+                placeholder = "Toque para preencher",
+                container = if (emphasized) MaterialTheme.colorScheme.surface
+                    else MaterialTheme.colorScheme.surfaceVariant,
+                keyboardOptions = keyboardOptions,
+                accessibilityLabel = label,
+                multiline = multiline,
+            )
+        }
         if (hint != null) {
             Text(
                 hint,
@@ -209,17 +234,37 @@ internal fun PlaylistWizardNavigationList(options: List<PlaylistWizardNavOption>
         // The native Settings surface stays the source of truth, but each
         // category gets its own row-sized card. This avoids one dense block
         // followed by a large empty lower half on tall phones.
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            options.forEach { option ->
+        val badgeColors = listOf(
+            AccentRed, Color(0xFF6544E9), Color(0xFF43BD55),
+            Color(0xFF1887EF), Color(0xFFF49A13),
+            Color(0xFFEC287F), Color(0xFF00A9A8),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEachIndexed { index, option ->
                 SettingsGroupSurface {
                     SettingsRow(
-                        icon = option.icon,
                         title = option.title,
                         subtitle = option.description.ifBlank { null },
                         onClick = option.onClick,
                         reserveIconSpace = false,
-                        iconTint = AccentRed,
-                        minHeight = 88.dp,
+                        minHeight = 76.dp,
+                        trailing = {},
+                        leading = {
+                            Box(
+                                modifier = Modifier.size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(badgeColors[index % badgeColors.size])
+                                    .testTag("playlist-category-icon-badge"),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    imageVector = option.icon ?: Icons.Rounded.LibraryMusic,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(26.dp),
+                                )
+                            }
+                        },
                     )
                 }
             }
@@ -235,7 +280,7 @@ internal fun PlaylistWizardNavigationList(options: List<PlaylistWizardNavOption>
                     subtitle = option.description.ifBlank { null },
                     onClick = option.onClick,
                     reserveIconSpace = false,
-                    iconTint = AccentRed,
+                    trailing = {},
                 )
                 if (index < options.lastIndex) RowDivider()
             }
