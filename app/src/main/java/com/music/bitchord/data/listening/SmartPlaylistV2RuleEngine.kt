@@ -58,6 +58,8 @@ internal enum class SmartPlaylistRuleField {
     DAYS_SINCE_LOCAL_RATING,
     RELEASE_ARTWORK_REFERENCE,
     DAYS_SINCE_LOCAL_FILE_ADDED,
+    LOCAL_FOLDER,
+    LOCAL_FILE_PATH,
 }
 
 internal enum class SmartPlaylistSourceKind { LOCAL, OPENSUBSONIC }
@@ -86,7 +88,9 @@ internal fun SmartPlaylistRuleField.isTextField(): Boolean =
         this == SmartPlaylistRuleField.RELEASE_TITLE ||
         this == SmartPlaylistRuleField.SOURCE_KIND ||
         this == SmartPlaylistRuleField.ALBUM_ARTIST ||
-        this == SmartPlaylistRuleField.TRACK_ARTIST
+        this == SmartPlaylistRuleField.TRACK_ARTIST ||
+        this == SmartPlaylistRuleField.LOCAL_FOLDER ||
+        this == SmartPlaylistRuleField.LOCAL_FILE_PATH
 
 internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOperator> =
     if (this == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) listOf(
@@ -313,6 +317,15 @@ private fun sortStableRandomAlbums(
             .thenBy { it.normalizedTitle ?: "\uFFFF" }
             .thenBy { it.row.recordingId },
     ).map { it.row }
+}
+
+/** Filesystem evidence is read from the existing local MediaAsset, never remote URLs. */
+internal fun normalizeLocalSmartFilterPath(value: String?): String? {
+    val raw = value?.trim()?.replace('\\', '/') ?: return null
+    if (raw.isBlank() || raw.contains("://") || '\u0000' in raw || !raw.startsWith('/'))
+        return null
+    return raw.replace(Regex("/+"), "/").trimEnd('/')
+        .lowercase(Locale.ROOT).takeIf(String::isNotEmpty)
 }
 
 private enum class RuleTruth { TRUE, FALSE, UNKNOWN }
@@ -660,6 +673,43 @@ internal class SmartPlaylistV2RuleEngine(
                 else -> RuleTruth.UNKNOWN
             }
         }
+        if (rule.field == SmartPlaylistRuleField.LOCAL_FOLDER ||
+            rule.field == SmartPlaylistRuleField.LOCAL_FILE_PATH) {
+            val verifiedPaths = row.localFilePaths.mapNotNull(::normalizeLocalSmartFilterPath)
+            val values = if (rule.field == SmartPlaylistRuleField.LOCAL_FOLDER)
+                verifiedPaths.mapNotNull { path ->
+                    path.substringBeforeLast('/', missingDelimiterValue = "")
+                        .takeIf(String::isNotBlank)
+                } else verifiedPaths
+            if (values.isEmpty() && !row.localFilePathsComplete) return RuleTruth.UNKNOWN
+            if (rule.operator == SmartPlaylistRuleOperator.IS_PRESENT)
+                return if (values.isNotEmpty()) RuleTruth.TRUE else RuleTruth.FALSE
+            if (rule.operator == SmartPlaylistRuleOperator.IS_MISSING)
+                return if (values.isNotEmpty()) RuleTruth.FALSE else RuleTruth.TRUE
+            val wanted = normalizeLocalSmartFilterPath(rule.textValue)
+                ?: rule.textValue?.trim()?.replace('\\', '/')?.trim('/')
+                    ?.lowercase(Locale.ROOT)?.takeIf { it.isNotBlank() }
+                ?: return RuleTruth.UNKNOWN
+            val matched = values.any { actual ->
+                when (rule.operator) {
+                    SmartPlaylistRuleOperator.EQUAL, SmartPlaylistRuleOperator.NOT_EQUAL ->
+                        actual == wanted
+                    SmartPlaylistRuleOperator.CONTAINS, SmartPlaylistRuleOperator.DOES_NOT_CONTAIN ->
+                        actual.contains(wanted)
+                    SmartPlaylistRuleOperator.STARTS_WITH -> actual.startsWith(wanted)
+                    SmartPlaylistRuleOperator.ENDS_WITH -> actual.endsWith(wanted)
+                    else -> return RuleTruth.UNKNOWN
+                }
+            }
+            val negative = rule.operator == SmartPlaylistRuleOperator.NOT_EQUAL ||
+                rule.operator == SmartPlaylistRuleOperator.DOES_NOT_CONTAIN
+            return when {
+                matched -> if (negative) RuleTruth.FALSE else RuleTruth.TRUE
+                !row.localFilePathsComplete -> RuleTruth.UNKNOWN
+                negative -> RuleTruth.TRUE
+                else -> RuleTruth.FALSE
+            }
+        }
         if (rule.field.isTextField()) {
             // Only a verified positive title/artist field is known. A null or
             // blank canonical label does not prove that metadata is missing.
@@ -748,7 +798,9 @@ internal class SmartPlaylistV2RuleEngine(
             SmartPlaylistRuleField.TRACK_NUMBER,
             SmartPlaylistRuleField.TRACK_ARTIST,
             SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
-            SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED -> null
+            SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
+            SmartPlaylistRuleField.LOCAL_FOLDER,
+            SmartPlaylistRuleField.LOCAL_FILE_PATH -> null
         }
         if (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE &&
             row.audibleCompletions > 0 && row.lastAudibleAtEpochMs == null
