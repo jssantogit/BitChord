@@ -215,19 +215,27 @@ object LocalMediaRepository {
         // for — a content URI fails its id check on purpose, since most rows
         // here really are just local files with nothing to sync.
         val videoIdByUri = Downloads.saved.value.entries.associate { (id, uri) -> uri to id }
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.DISPLAY_NAME,
-            MediaStore.Audio.Media.TITLE,
+        val projection = buildList {
+            addAll(listOf(
+                MediaStore.Audio.Media._ID,
+                MediaStore.Audio.Media.DISPLAY_NAME,
+                MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DATA,
             MediaStore.Audio.Media.DATE_ADDED,
-            MediaStore.Audio.Media.DATE_MODIFIED,
-            MediaStore.Audio.Media.TRACK,
-        )
+                MediaStore.Audio.Media.DATE_MODIFIED,
+                MediaStore.Audio.Media.TRACK,
+            ))
+            // Android 11+ provides an indexed genre without opening every file.
+            // Keep this a one-query scan at 50k tracks; other tags need their
+            // own bounded, fingerprint-aware extractor rather than N file reads.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                add(MediaStore.Audio.Media.GENRE)
+            }
+        }.toTypedArray()
 
         val filterNonMusic = AppSettings.filterNonMusicAudio.value
         val selection = if (filterNonMusic) {
@@ -279,6 +287,9 @@ object LocalMediaRepository {
                 val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
                 val dateModifiedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
                 val trackCol = cursor.getColumnIndex(MediaStore.Audio.Media.TRACK)
+                val genreCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    cursor.getColumnIndex(MediaStore.Audio.Media.GENRE)
+                } else -1
 
                 val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
 
@@ -308,6 +319,13 @@ object LocalMediaRepository {
                     } else {
                         null
                     }
+                    // Absence from the Android index is not proof that the
+                    // embedded tag is absent (unsupported formats/OEM parsing).
+                    val genres = if (genreCol >= 0 && !cursor.isNull(genreCol)) {
+                        cursor.getString(genreCol)?.trim()?.takeIf {
+                            it.isNotEmpty() && !it.equals("<unknown>", ignoreCase = true)
+                        }?.let(::listOf)
+                    } else null
 
                     songs.add(
                         Song(
@@ -322,6 +340,7 @@ object LocalMediaRepository {
                             localDateAddedSeconds = cursor.getLong(dateAddedCol),
                             localDateModifiedSeconds = cursor.getLong(dateModifiedCol),
                             trackNumber = trackNumber,
+                            localGenres = genres,
                         )
                     )
                 }
