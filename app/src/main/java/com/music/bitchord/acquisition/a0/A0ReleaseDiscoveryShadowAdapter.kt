@@ -8,14 +8,14 @@ import java.util.Locale
  * a requested release. A track matched as part of a shared folder is NOT proof
  * that the peer offers the exact edition/master; all evidence remains untrusted.
  *
- * Bounded CPU: scan at most 512 memory-only observations per slot for a cheap
+ * Bounded CPU: scan at most 1024 memory-only release observations for a cheap
  * match/quality/album ranking, and perform at most 8192 full preflight
  * assessments in the existing background discovery worker. Unlike taking the
  * first N observations, this does not silently exclude a late relevant track.
  * Does not perform a new peer search or start a transfer.
  */
 internal object A0ReleaseDiscoveryShadowAdapter {
-    private const val MAX_OBSERVED_CHOICES=512
+    private const val MAX_OBSERVED_CHOICES=1024
 
     // Necessary-only match condition: title terms must be in the filename for
     // A0CandidateRank to return ALL_TERMS. File and query use the exact same
@@ -99,7 +99,7 @@ internal object A0ReleaseDiscoveryShadowAdapter {
                         declaredDurationSeconds=duration,
                         expectedDurationSeconds=entry.durationSeconds,
                         declaredSampleRateHz=sample,declaredBitDepth=depth,
-                        sizeBytes=candidate.sizeBytes)
+                        sizeBytes=candidate.sizeBytes,expectedAlbum=entry.album)
                     if(ranked.match!=A0CandidateRank.Match.ALL_TERMS)
                         return@mapNotNull null
                     rankMatchedPairs++
