@@ -102,8 +102,8 @@ class A0AutoCandidateSelectionPolicyTest {
             assertEquals(A0AutoCandidateSelectionPolicy.TieResolution.FIRST_READY,
                 decision.tieResolution)
         }
-        assertEquals("unnumbered",a.sequentialAlternatives.single().peerUsername)
-        assertEquals("one",b.sequentialAlternatives.single().peerUsername)
+        assertEquals("unnumbered",a.sequentialAlternatives.first().peerUsername)
+        assertEquals("one",b.sequentialAlternatives.first().peerUsername)
     }
 
     @Test fun differentSizesWithEqualRankChooseFirstReadySourceOnly() {
