@@ -41,9 +41,12 @@ class ProviderScopedTagsRoomTest {
             dao.upsertMediaAsset(MediaAssetEntity("asset:unknown", "rec:unknown", home,
                 "remote-3", "opensubsonic://home/3", null, null, null, null))
             dao.upsertMediaAssetTags(MediaAssetTagsEntity(
-                "asset:home", "[\"Dream Pop\",\"K-Pop\"]", "[\"Calm\"]"))
-            dao.upsertMediaAssetTags(MediaAssetTagsEntity("asset:work", "[\"Jazz\"]", "[]"))
-            dao.upsertMediaAssetTags(MediaAssetTagsEntity("asset:empty", "[]", "[]"))
+                "asset:home", "[\"Dream Pop\",\"K-Pop\"]", "[\"Calm\"]",
+                bpmsJson = "[128.0]", stylesJson = "[\"Shoegaze\"]"))
+            dao.upsertMediaAssetTags(MediaAssetTagsEntity("asset:work", "[\"Jazz\"]", "[]",
+                bpmsJson = "[]", stylesJson = "[]"))
+            dao.upsertMediaAssetTags(MediaAssetTagsEntity("asset:empty", "[]", "[]",
+                bpmsJson = "[]", stylesJson = "[]"))
             dao.upsertMediaAssetTags(MediaAssetTagsEntity("asset:unknown", null, null))
             val reader = CanonicalContextualFilterLibrary(dao)
             fun filter(field: SmartPlaylistRuleField, operator: SmartPlaylistRuleOperator,
@@ -68,6 +71,19 @@ class ProviderScopedTagsRoomTest {
                 SmartPlaylistRuleOperator.EQUAL, "calm")
             assertEquals(listOf("rec:shared"), reader.songs(home, calm).map { it.recordingId })
             assertTrue(reader.songs(work, calm).isEmpty())
+            val style = filter(SmartPlaylistRuleField.STYLE,
+                SmartPlaylistRuleOperator.EQUAL, "shoegaze")
+            assertEquals(listOf("rec:shared"), reader.songs(home, style).map { it.recordingId })
+            assertTrue(reader.songs(work, style).isEmpty())
+            val bpm = SavedSmartPlaylistV2Filter("bpm", "Fast tempo",
+                SmartPlaylistRule.Comparison(SmartPlaylistRuleField.BPM,
+                    SmartPlaylistRuleOperator.GREATER_OR_EQUAL, value = 120.0))
+            assertEquals(listOf("rec:shared"), reader.songs(home, bpm).map { it.recordingId })
+            assertTrue(reader.songs(work, bpm).isEmpty())
+            val missingBpm = bpm.copy(rules = SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.BPM, SmartPlaylistRuleOperator.IS_MISSING))
+            assertEquals(listOf("rec:empty"), reader.songs(home, missingBpm).map { it.recordingId })
+            assertEquals(listOf("rec:shared"), reader.songs(work, missingBpm).map { it.recordingId })
             // Global smart-playlist previews receive only RecordingIds and
             // aggregated tags from configured accounts, never native source IDs.
             val global = CanonicalLibraryAvailabilityRepository(
@@ -79,6 +95,11 @@ class ProviderScopedTagsRoomTest {
             ).associateBy { it.recordingId }
             assertEquals(listOf("Dream Pop", "K-Pop"), availableTags["rec:shared"]?.genres)
             assertEquals(false, availableTags["rec:shared"]?.genreEvidenceUnknown)
+            assertEquals(listOf(128.0), availableTags["rec:shared"]?.bpms)
+            assertEquals(listOf("Shoegaze"), availableTags["rec:shared"]?.styles)
+            assertEquals(false, availableTags["rec:shared"]?.bpmEvidenceUnknown)
+            assertEquals(false, availableTags["rec:shared"]?.styleEvidenceUnknown)
+            assertEquals(true, availableTags["rec:unknown"]?.bpmEvidenceUnknown)
             assertEquals(emptyList<String>(), availableTags["rec:empty"]?.genres)
             assertEquals(false, availableTags["rec:empty"]?.genreEvidenceUnknown)
             assertEquals(true, availableTags["rec:unknown"]?.genreEvidenceUnknown)
