@@ -130,11 +130,12 @@ internal class A0FreshAutoSearchTransport(
                     try {
                         peer.soTimeout=3500
                         A0OneShotPublicSearchWire.readOneDirectPeerReply(
-                            peer.getInputStream(),token
-                        ) { frame,claimed ->
-                            if(!holder.offerSearchResult(frame,claimed))
-                                throw IOException("Soulseek direct claim was invalid")
-                        }
+                            peer.getInputStream(),token,
+                            onValidatedParsedReply={ parsed ->
+                                if(!holder.offerParsed(parsed,parsed.peerUsername))
+                                    throw IOException("Soulseek direct claim was invalid")
+                            }
+                        )
                     }catch(_:IOException) {
                         // One malformed or slow untrusted peer cannot poison
                         // an otherwise useful release-wide discovery.
@@ -189,11 +190,12 @@ internal class A0FreshAutoSearchTransport(
                                             flush()
                                         }
                                         A0IndirectSearchWire.readIndirectReply(
-                                            peer.getInputStream(),token,offer.username
-                                        ) { frame,claimed ->
-                                            if(!holder.offerSearchResult(frame,claimed))
-                                                throw IOException("Invalid Soulseek indirect reply")
-                                        }
+                                            peer.getInputStream(),token,offer.username,
+                                            onValidatedParsedReply={ parsed ->
+                                                if(!holder.offerParsed(parsed,offer.username))
+                                                    throw IOException("Invalid Soulseek indirect reply")
+                                            }
+                                        )
                                     }catch(_:IOException) {
                                         // Ignore one peer; retain validated replies.
                                     }finally {
