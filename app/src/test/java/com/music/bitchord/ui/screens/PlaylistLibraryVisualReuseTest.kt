@@ -12,6 +12,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onParent
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.assertCountEquals
@@ -258,7 +261,9 @@ class PlaylistLibraryVisualReuseTest {
         compose.onNodeWithContentDescription("Ações da música").performClick()
         compose.waitForIdle()
         // Target the clickable ActionRow, never the label or sheet container.
-        compose.onNodeWithTag("canonical-track-queue-action").performClick()
+        compose.onNodeWithTag("canonical-track-queue-action")
+            .assertHasClickAction()
+            .performSemanticsAction(SemanticsActions.OnClick) { it() }
         compose.runOnIdle {
             assertEquals(
                 "recording:verified-28" to
