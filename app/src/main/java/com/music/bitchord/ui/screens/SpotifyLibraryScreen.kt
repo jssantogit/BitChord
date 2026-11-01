@@ -166,6 +166,8 @@ internal fun LibraryRow(
     trailing: (@Composable () -> Unit)? = null,
     horizontalPadding: Dp = 20.dp,
     artworkSize: Dp = 52.dp,
+    titleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onBackground,
+    subtitleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     Row(
         modifier = modifier.fillMaxWidth()
@@ -193,7 +195,7 @@ internal fun LibraryRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = titleColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
