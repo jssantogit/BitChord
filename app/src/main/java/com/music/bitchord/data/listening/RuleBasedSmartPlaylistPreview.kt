@@ -366,7 +366,20 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
                 )
             }
         }
-        val sourceBound = if (includeSourceEvidence) rows.map { row ->
+        val tagEvidence = if (requiredFields.any {
+            it == SmartPlaylistRuleField.GENRE || it == SmartPlaylistRuleField.MOOD
+        }) availability.availableRecordingTags(ids).associateBy { it.recordingId }
+        else emptyMap()
+        val taggedRows = if (tagEvidence.isEmpty()) rows else rows.map { row ->
+            val tags = tagEvidence[row.recordingId]
+            if (tags == null) row else row.copy(
+                genres = tags.genres,
+                genreEvidenceUnknown = tags.genreEvidenceUnknown,
+                moods = tags.moods,
+                moodEvidenceUnknown = tags.moodEvidenceUnknown,
+            )
+        }
+        val sourceBound = if (includeSourceEvidence) taggedRows.map { row ->
             val source = sourceMap[row.recordingId]
             row.copy(
                 sourceKinds = source?.kinds?.map { kind ->
@@ -379,7 +392,7 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
                 }?.toSet(),
                 sourceKindsComplete = source?.kindsComplete == true,
             )
-        } else rows
+        } else taggedRows
         if (!includeRemoteRatings) return sourceBound
         return sourceBound.map { row ->
             val remote = remoteByRecording[row.recordingId].orEmpty()
