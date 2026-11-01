@@ -1347,6 +1347,8 @@ object Downloads {
                                 AutoTrackStage.SAVED
                             A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW ->
                                 AutoTrackStage.MANUAL_REVIEW
+                            A0AutoBatchExecutor.TrackStatus.ATTEMPT_FAILED ->
+                                AutoTrackStage.VERIFY_STORAGE
                             A0AutoBatchExecutor.TrackStatus.CANCELLED ->
                                 AutoTrackStage.CANCELLED
                             A0AutoBatchExecutor.TrackStatus.RECONCILE ->
@@ -1386,6 +1388,7 @@ object Downloads {
                     " review=${report.results.count {
                         it==A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW }}" +
                     " reconcile=${report.needsReconciliation}" +
+                    " attempt_failed=${report.attemptFailures}" +
                     " cancelled=${report.cancelled}" +
                     " unused_reservation_released=${outcome.unusedReservationReleased}" +
                     " retained_slots=${retained.size}")
@@ -1413,7 +1416,11 @@ object Downloads {
                     report.needsReconciliation>0 ->
                         fail(id,"Publicação incerta: verifique a biblioteca antes de tentar novamente.")
                     report.cancelled>0 ->
-                        fail(id,"Automação interrompida; revise as faixas restantes manualmente.")
+                        fail(id,"Automação interrompida; confira as faixas restantes.")
+                    report.attemptFailures>0 ->
+                        fail(id,"${report.published} de ${request.entries.size} faixas salvas. " +
+                            "Uma tentativa falhou e permanece protegida no A3. " +
+                            "Confira a biblioteca antes de repetir.")
                     else -> fail(id,
                         "${report.published} de ${request.entries.size} faixas salvas. " +
                             "Revise as demais pelo seletor manual.")
