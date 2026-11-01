@@ -207,7 +207,7 @@ internal fun CanonicalLocalRecentAdditions(
             )
         }
     } else if (recent != null) {
-        CanonicalRecentAdditionsShelf(recent, onOpenSongs, onSeeAll)
+        CanonicalRecentAdditionsShelf(recent.orEmpty(), onOpenSongs, onSeeAll)
     } else {
         Text(
             if (loadFailed) "Não foi possível consultar as adições locais."
