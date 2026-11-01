@@ -119,9 +119,12 @@ internal object A0ModernIncomingTransfer {
         outgoingF: OutputStream,
         ticket: Ticket,
         privateDirectory: File,
-        isCancelled: () -> Boolean = { false }
+        isCancelled: () -> Boolean = { false },
+        onTokenValidated: () -> Unit = {},
+        onProgress: (Long) -> Unit = {},
     ): A0VerifiedByteStager.Receipt {
         if (readLE32(incomingF) != ticket.token) throw FileTokenMismatch()
+        onTokenValidated()
         if (isCancelled()) throw IOException("A0 modern incoming transfer cancelled")
         outgoingF.write(ByteArray(8)) // raw uint64 little-endian offset 0
         outgoingF.flush()
@@ -130,13 +133,13 @@ internal object A0ModernIncomingTransfer {
             source=incomingF,
             privateDirectory=privateDirectory,
             expectedByteCount=ticket.expectedByteCount,
-            isCancelled=isCancelled
+            isCancelled=isCancelled,onProgress=onProgress
         ) else A0VerifiedByteStager.stage(
             source=incomingF,
             privateDirectory=privateDirectory,
             expectedByteCount=ticket.expectedByteCount,
             expectedSha256Hex=trusted,
-            isCancelled=isCancelled
+            isCancelled=isCancelled,onProgress=onProgress
         )
     }
 
