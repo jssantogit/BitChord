@@ -99,7 +99,7 @@ class CanonicalLocalTagsRoomTest {
             dao.upsertMediaAsset(MediaAssetEntity("remote:101", sameRecording, remote,
                 "native:101", "opensubsonic://asset/work", null, null, null, null))
             dao.upsertMediaAssetTags(MediaAssetTagsEntity(
-                "remote:101", "[\\\"Jazz\\\"]", "[]",
+                "remote:101", "[\"Jazz\"]", "[]",
             ))
             val jazz = filter(SmartPlaylistRuleField.GENRE,
                 SmartPlaylistRuleOperator.EQUAL, "jazz")
