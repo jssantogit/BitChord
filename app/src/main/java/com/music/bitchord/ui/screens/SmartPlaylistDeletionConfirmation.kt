@@ -14,7 +14,7 @@ internal fun SmartPlaylistDeletionConfirmation(
 ) {
     val noun = if (isFilter) "filtro" else "playlist"
     val warning = if (isFilter) "O filtro salvo será removido."
-        else "Playlists dependentes podem impedir esta exclusão."
+        else "Playlists ou filtros que dependem desta playlist podem impedir a exclusão."
     BackHandler { onCancel() }
     ConfirmationAlert(
         hazeState = null,
