@@ -97,7 +97,8 @@ class A0AutoCandidateSelectionPolicyTest {
         for(decision in listOf(a,b)) {
             assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,
                 decision.status)
-            assertEquals(1,decision.sequentialAlternatives.size)
+            assertEquals(2,decision.sequentialAlternatives.size)
+            assertFalse(decision.sequentialAlternatives.any { it.peerUsername=="two" })
             assertEquals(A0AutoCandidateSelectionPolicy.TieResolution.FIRST_READY,
                 decision.tieResolution)
         }
