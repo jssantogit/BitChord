@@ -88,6 +88,14 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
         val artworkById = if (SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE in requiredFields) {
             catalog.recordingReleaseArtworkByIds(recordingIds).groupBy { it.recordingId }
         } else emptyMap()
+        val countriesById = if (SmartPlaylistRuleField.ARTIST_COUNTRY in requiredFields) {
+            catalog.recordingArtistCountriesByIds(recordingIds).groupBy { it.recordingId }
+        } else emptyMap()
+        val originalReleaseDatesById = if (
+            SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR in requiredFields
+        ) {
+            catalog.recordingOriginalReleaseDatesByIds(recordingIds).groupBy { it.recordingId }
+        } else emptyMap()
         val localAddedById = if (
             SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED in requiredFields
         ) {
@@ -122,6 +130,11 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
             val albumArtistRows = albumArtistRowsById[id].orEmpty()
             val trackPositionRows = trackPositionsById[id].orEmpty()
             val trackArtistRows = trackArtistsById[id].orEmpty()
+            val artistCountryRows = countriesById[id].orEmpty()
+            val originalDateRows = originalReleaseDatesById[id].orEmpty()
+            val parsedOriginalYears = originalDateRows.map {
+                parseTrustedMusicBrainzReleaseYear(it.firstReleaseDate)
+            }
             val addedRows = localAddedById[id].orEmpty()
             val localPathRows = localPathsById[id].orEmpty()
             val audioTagRows = localAudioTagsById[id].orEmpty()
@@ -192,6 +205,19 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                     audioTagRows.all { (it.localBitrateBps ?: 0L) > 0L },
                 canonicalReleaseIds = releaseMembershipsById[id].orEmpty()
                     .map { it.releaseId }.distinct().sorted(),
+                artistCountryCodes = artistCountryRows.mapNotNull {
+                    it.country?.trim()?.uppercase(java.util.Locale.ROOT)
+                        ?.takeIf { code -> code.length == 2 && code.all(Char::isLetter) }
+                }.distinct().sorted(),
+                artistCountryEvidenceUnknown = artistCountryRows.isEmpty() ||
+                    artistCountryRows.any { row ->
+                        row.country?.trim()?.let { code ->
+                            code.length != 2 || !code.all(Char::isLetter)
+                        } != false
+                    },
+                originalReleaseYears = parsedOriginalYears.filterNotNull().distinct().sorted(),
+                originalReleaseYearEvidenceUnknown = originalDateRows.isEmpty() ||
+                    parsedOriginalYears.any { it == null },
             )
         }
     }
