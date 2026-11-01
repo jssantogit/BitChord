@@ -269,13 +269,28 @@ object LocalMediaRepository {
         val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
 
         runCatching {
-            context.contentResolver.query(
-                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                projection,
-                selection,
-                selectionArgs,
-                sortOrder,
-            )?.use { cursor ->
+            // An OEM MediaStore may not implement an optional genre column.
+            // Retry the old projection rather than letting an optional tag
+            // break the complete playable local-library enumeration.
+            val cursor = runCatching {
+                context.contentResolver.query(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    projection,
+                    selection,
+                    selectionArgs,
+                    sortOrder,
+                )
+            }.getOrElse { cause ->
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) throw cause
+                context.contentResolver.query(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    projection.dropLast(1).toTypedArray(),
+                    selection,
+                    selectionArgs,
+                    sortOrder,
+                )
+            }
+            cursor?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
                 val displayNameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
                 val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
