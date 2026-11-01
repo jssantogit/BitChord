@@ -37,13 +37,13 @@ class OpenSubsonicTagSyncRoomTest {
                             {"subsonic-response":{"status":"ok","album":{
                                 "id":"a","songCount":1,"song":[
                                     {"id":"1","title":"A","artist":"B",
-                                     "genres":[{"name":"Trip Hop"}],"moods":["Calm"]}
+                                     "genres":[{"name":"Trip Hop"}],"moods":["Calm"],"bpm":124}
                                 ]
                             }}}
                         """.trimIndent() else """
                             {"subsonic-response":{"status":"ok","album":{
                                 "id":"a","songCount":1,"song":[
-                                    {"id":"1","title":"A","artist":"B","genres":[],"moods":[]}
+                                    {"id":"1","title":"A","artist":"B","genres":[],"moods":[],"bpm":0}
                                 ]
                             }}}
                         """.trimIndent()
@@ -63,11 +63,13 @@ class OpenSubsonicTagSyncRoomTest {
             var tags = dao.providerScopedTagRows("opensubsonic:home", ids).single()
             assertEquals("[\"Trip Hop\"]", tags.genresJson)
             assertEquals("[\"Calm\"]", tags.moodsJson)
+            assertEquals("[124.0]", tags.bpmsJson)
             untagged = true
             assertTrue(OpenSubsonicCatalogSync.sync(db, provider) is ProviderSyncResult.Success)
             tags = dao.providerScopedTagRows("opensubsonic:home", ids).single()
             assertEquals("[]", tags.genresJson)
             assertEquals("[]", tags.moodsJson)
+            assertEquals("[]", tags.bpmsJson)
             dao.deleteAllMediaAssets("opensubsonic:home")
             assertTrue(dao.providerScopedTagRows("opensubsonic:home", ids).isEmpty())
         } finally {
