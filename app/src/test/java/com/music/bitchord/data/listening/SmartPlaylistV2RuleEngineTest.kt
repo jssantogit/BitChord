@@ -25,6 +25,44 @@ class SmartPlaylistV2RuleEngineTest {
         value: Double? = null,
     ) = SmartPlaylistRule.Comparison(field, operator, value)
 
+    @Test fun localGenreIsPositiveOnlyWhenSourceTagIsProven() {
+        val known = candidate("known").copy(localGenres = listOf("Synthpop"),
+            localGenresComplete = true)
+        val uncertain = candidate("uncertain").copy(localGenresComplete = false)
+        val partlyUnknown = candidate("partial").copy(localGenres = listOf("Rock"),
+            localGenresComplete = false)
+        val rows = listOf(known, uncertain, partlyUnknown)
+        fun matches(op: SmartPlaylistRuleOperator, text: String) =
+            planner.preview(rows, SmartPlaylistV2Query(
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.LOCAL_GENRE, op, textValue = text,
+                ),
+            )).map { it.recordingId }
+        assertEquals(listOf("known"), matches(SmartPlaylistRuleOperator.EQUAL, "SYNTHPOP"))
+        assertEquals(listOf("known"), matches(SmartPlaylistRuleOperator.DOES_NOT_CONTAIN, "rock"))
+        assertEquals(emptyList<String>(), matches(SmartPlaylistRuleOperator.IS_MISSING, ""))
+    }
+
+    @Test fun localBitrateUsesKbpsWithUnknownFailClosedAcrossAssets() {
+        val known = candidate("known").copy(localBitratesKbps = listOf(320.0),
+            localBitrateEvidenceComplete = true)
+        val uncertain = candidate("uncertain").copy(localBitrateEvidenceComplete = false)
+        val partial = candidate("partial").copy(localBitratesKbps = listOf(128.0),
+            localBitrateEvidenceComplete = false)
+        val rows = listOf(known, uncertain, partial)
+        val greater = SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.LOCAL_BITRATE_KBPS,
+            SmartPlaylistRuleOperator.GREATER_OR_EQUAL, value = 256.0,
+        ))
+        assertEquals(listOf("known"), planner.preview(rows, greater).map { it.recordingId })
+        val inverse = SmartPlaylistV2Query(SmartPlaylistRule.Not(
+            SmartPlaylistRule.Comparison(SmartPlaylistRuleField.LOCAL_BITRATE_KBPS,
+                SmartPlaylistRuleOperator.GREATER_OR_EQUAL, value = 256.0),
+        ))
+        assertEquals(emptyList<String>(), planner.preview(listOf(uncertain, partial), inverse)
+            .map { it.recordingId })
+    }
+
     @Test fun fileExtensionUsesActualLocalAssetNameNotGuessedCodec() {
         val rows = listOf(
             candidate("flac").copy(
