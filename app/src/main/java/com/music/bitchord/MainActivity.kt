@@ -4779,354 +4779,360 @@ private fun BitChordApp(
             }
         }
 
-        // ---- Album / playlist detail ----
-        // ---- Long-press track actions ----
-        // One body for both presentations of the track menu: the sheet the ⋮
-        // and the player open, and the popup a held row lifts into. Every
-        // callback below is the same in either; only the frame differs.
-        val songMenuBody: @Composable (Song, SongActionsPresentation) -> Unit = { song, presentation ->
-            // Set by whoever opened it — see [menuFromPlayer]. It cannot be
-            // read off the player's own visibility any more, because on a
-            // tablet the player is visible whatever the menu was opened from.
-            val fromPlayer = menuFromPlayer
-            val share: () -> Unit = {
-                val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, musicOnlyShareText(song.title, song.artist))
+        // Keep contextual menus and playlist sheets in a separate Compose
+        // lambda, so BitChordApp's JVM method stays below the 64 KiB limit.
+        val contextualActionOverlays: @Composable () -> Unit = {
+            // ---- Album / playlist detail ----
+            // ---- Long-press track actions ----
+            // One body for both presentations of the track menu: the sheet the ⋮
+            // and the player open, and the popup a held row lifts into. Every
+            // callback below is the same in either; only the frame differs.
+            val songMenuBody: @Composable (Song, SongActionsPresentation) -> Unit = { song, presentation ->
+                // Set by whoever opened it — see [menuFromPlayer]. It cannot be
+                // read off the player's own visibility any more, because on a
+                // tablet the player is visible whatever the menu was opened from.
+                val fromPlayer = menuFromPlayer
+                val share: () -> Unit = {
+                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, musicOnlyShareText(song.title, song.artist))
+                    }
+                    context.startActivity(Intent.createChooser(sendIntent, song.title))
+                    songActions = null
                 }
-                context.startActivity(Intent.createChooser(sendIntent, song.title))
-                songActions = null
-            }
-            // Navigating has to take the player down with the sheet, or the
-            // page it opens lands behind a still-covering player.
-            // The track's cover stands in for an album's, but never for an
-            // artist's picture — that page loads its own.
-            val openPage: (String, String, String, BrowseType) -> Unit = { id, title, sub, type ->
-                songActions = null
-                dismissPlayer()
-                val art = song.thumbnailUrl.takeUnless { type == BrowseType.ARTIST }
-                viewModel.openDetail(id, title, sub, art, type)
-            }
-            // "Remove from this playlist" is only a sentence on a playlist
-            // page the account can actually edit, and only for a row that
-            // carries the per-entry id a removal is expressed in.
-            val editable = viewModel.editablePlaylist(detail?.browseId)
-                ?.takeIf { !fromPlayer && song.setVideoId != null }
-            SongActionsSheet(
-                song = song,
-                presentation = presentation,
-                preloadedArtworkModel = if (fromPlayer) {
-                    com.music.bitchord.ui.player.preloadedMenuArtworkFor(
-                        song, openedPlayerArtwork?.first, openedPlayerArtwork?.second,
-                    )
-                } else null,
-                signedIn = signedIn,
-                canonicalRatingContent = { CanonicalSongMenuRating(song) },
-                onPlayNext = { playNext(song); songActions = null },
-                onAddToQueue = { addToQueue(song); songActions = null },
-                onStartRadio = { startRadio(song); songActions = null },
-                // Stays open: the row it replaces itself with is the
-                // progress, and closing the sheet would hide the only
-                // answer to "did that work?".
-                onDownload = { downloadSong(song) },
-                // The other direction: a device file going up to the
-                // server. Closed first, unlike a download — progress and
-                // the summary notice live outside the sheet.
-                onUploadToWebDav =
-                    if (com.music.bitchord.data.webdav.WebDavConfig.isConfigured(webdavUrl) &&
-                        com.music.bitchord.data.webdav.WebDavUploads.isUploadable(song)
-                    ) {
+                // Navigating has to take the player down with the sheet, or the
+                // page it opens lands behind a still-covering player.
+                // The track's cover stands in for an album's, but never for an
+                // artist's picture — that page loads its own.
+                val openPage: (String, String, String, BrowseType) -> Unit = { id, title, sub, type ->
+                    songActions = null
+                    dismissPlayer()
+                    val art = song.thumbnailUrl.takeUnless { type == BrowseType.ARTIST }
+                    viewModel.openDetail(id, title, sub, art, type)
+                }
+                // "Remove from this playlist" is only a sentence on a playlist
+                // page the account can actually edit, and only for a row that
+                // carries the per-entry id a removal is expressed in.
+                val editable = viewModel.editablePlaylist(detail?.browseId)
+                    ?.takeIf { !fromPlayer && song.setVideoId != null }
+                SongActionsSheet(
+                    song = song,
+                    presentation = presentation,
+                    preloadedArtworkModel = if (fromPlayer) {
+                        com.music.bitchord.ui.player.preloadedMenuArtworkFor(
+                            song, openedPlayerArtwork?.first, openedPlayerArtwork?.second,
+                        )
+                    } else null,
+                    signedIn = signedIn,
+                    canonicalRatingContent = { CanonicalSongMenuRating(song) },
+                    onPlayNext = { playNext(song); songActions = null },
+                    onAddToQueue = { addToQueue(song); songActions = null },
+                    onStartRadio = { startRadio(song); songActions = null },
+                    // Stays open: the row it replaces itself with is the
+                    // progress, and closing the sheet would hide the only
+                    // answer to "did that work?".
+                    onDownload = { downloadSong(song) },
+                    // The other direction: a device file going up to the
+                    // server. Closed first, unlike a download — progress and
+                    // the summary notice live outside the sheet.
+                    onUploadToWebDav =
+                        if (com.music.bitchord.data.webdav.WebDavConfig.isConfigured(webdavUrl) &&
+                            com.music.bitchord.data.webdav.WebDavUploads.isUploadable(song)
+                        ) {
+                            {
+                                songActions = null
+                                uploadToWebDav(listOf(song))
+                            }
+                        } else {
+                            null
+                        },
+                    onAddToPlaylist = {
+                        songActions = null
+                        viewModel.loadPlaylists()
+                        playlistTarget = song
+                    },
+                    onRemoveFromPlaylist = editable?.let {
                         {
                             songActions = null
-                            uploadToWebDav(listOf(song))
+                            viewModel.removeFromPlaylist(it.browseId, song)
                         }
-                    } else {
-                        null
                     },
-                onAddToPlaylist = {
-                    songActions = null
-                    viewModel.loadPlaylists()
-                    playlistTarget = song
-                },
-                onRemoveFromPlaylist = editable?.let {
-                    {
+                    onOpenAlbum = { id ->
+                        openPage(
+                            id,
+                            song.albumName ?: song.title,
+                            song.artist,
+                            BrowseType.ALBUM,
+                        )
+                    },
+                    onOpenArtist = { id ->
+                        openPage(id, song.artist, context.getString(R.string.artist), BrowseType.ARTIST)
+                    },
+                    // Only the player's copy of a track is ever missing these
+                    // and backfilling — a row opened from a list already has
+                    // whatever ids it's ever going to have.
+                    resolvingLinks = fromPlayer && linksLoading,
+                    onShare = share,
+                )
+            }
+            songActions?.takeIf { songMenuOrigin == null }?.let { song ->
+                ModalBottomSheet(
+                    onDismissRequest = { songActions = null },
+                    // The sheet paints itself in the track's own colours, corners
+                    // and drag handle included — see SongActionsSheet.
+                    containerColor = Color.Transparent,
+                    dragHandle = null,
+                ) {
+                    songMenuBody(song, SongActionsPresentation.Sheet)
+                }
+            }
+            // Drawn over everything, tab bar and mini player included, and kept
+            // composed through its own exit — so it is not gated on songActions.
+            HeldContextMenu(
+                item = songActions,
+                held = songMenuOrigin,
+                hazeState = hazeState,
+                onDismiss = { songActions = null },
+                // Tapping the lifted track opens its album, as Apple Music's does.
+                onPreviewClick = { song ->
+                    song.albumId?.let { id ->
                         songActions = null
-                        viewModel.removeFromPlaylist(it.browseId, song)
+                        viewModel.openDetail(id, song.albumName ?: song.title, song.artist, song.thumbnailUrl, BrowseType.ALBUM)
                     }
                 },
-                onOpenAlbum = { id ->
-                    openPage(
-                        id,
-                        song.albumName ?: song.title,
-                        song.artist,
-                        BrowseType.ALBUM,
-                    )
-                },
-                onOpenArtist = { id ->
-                    openPage(id, song.artist, context.getString(R.string.artist), BrowseType.ARTIST)
-                },
-                // Only the player's copy of a track is ever missing these
-                // and backfilling — a row opened from a list already has
-                // whatever ids it's ever going to have.
-                resolvingLinks = fromPlayer && linksLoading,
-                onShare = share,
-            )
-        }
-        songActions?.takeIf { songMenuOrigin == null }?.let { song ->
-            ModalBottomSheet(
-                onDismissRequest = { songActions = null },
-                // The sheet paints itself in the track's own colours, corners
-                // and drag handle included — see SongActionsSheet.
-                containerColor = Color.Transparent,
-                dragHandle = null,
-            ) {
-                songMenuBody(song, SongActionsPresentation.Sheet)
+            ) { song ->
+                songMenuBody(song, SongActionsPresentation.Menu)
             }
-        }
-        // Drawn over everything, tab bar and mini player included, and kept
-        // composed through its own exit — so it is not gated on songActions.
-        HeldContextMenu(
-            item = songActions,
-            held = songMenuOrigin,
-            hazeState = hazeState,
-            onDismiss = { songActions = null },
-            // Tapping the lifted track opens its album, as Apple Music's does.
-            onPreviewClick = { song ->
-                song.albumId?.let { id ->
-                    songActions = null
-                    viewModel.openDetail(id, song.albumName ?: song.title, song.artist, song.thumbnailUrl, BrowseType.ALBUM)
+            // A closed menu forgets where it was held, so whatever opens it next
+            // — the ⋮, the player — starts from the sheet.
+            LaunchedEffect(songActions == null) {
+                if (songActions == null) {
+                    songMenuOrigin = null
+                    openedPlayerArtwork = null // Release the handed-off Drawable on dismiss.
                 }
-            },
-        ) { song ->
-            songMenuBody(song, SongActionsPresentation.Menu)
-        }
-        // A closed menu forgets where it was held, so whatever opens it next
-        // — the ⋮, the player — starts from the sheet.
-        LaunchedEffect(songActions == null) {
-            if (songActions == null) {
-                songMenuOrigin = null
-                openedPlayerArtwork = null // Release the handed-off Drawable on dismiss.
             }
-        }
 
-        // ---- Download manager ----
-        // The batch view of what the top-bar indicator is counting. Dismissing
-        // it is what marks the batch seen, and marking it on the way *out*
-        // rather than on the way in is deliberate: it is the outcome the user is
-        // signing off on, and while the sheet is up there may not be one yet.
-        if (showDownloadManager) {
-            val closeDownloadManager = {
-                showDownloadManager = false
-                DownloadSession.markSeen()
+            // ---- Download manager ----
+            // The batch view of what the top-bar indicator is counting. Dismissing
+            // it is what marks the batch seen, and marking it on the way *out*
+            // rather than on the way in is deliberate: it is the outcome the user is
+            // signing off on, and while the sheet is up there may not be one yet.
+            if (showDownloadManager) {
+                val closeDownloadManager = {
+                    showDownloadManager = false
+                    DownloadSession.markSeen()
+                }
+                BackHandler(onBack = closeDownloadManager)
+                ModalBottomSheet(
+                    onDismissRequest = closeDownloadManager,
+                    containerColor = MaterialTheme.colorScheme.background,
+                ) {
+                    DownloadManagerSheet(onDismiss = closeDownloadManager)
+                }
             }
-            BackHandler(onBack = closeDownloadManager)
-            ModalBottomSheet(
-                onDismissRequest = closeDownloadManager,
-                containerColor = MaterialTheme.colorScheme.background,
-            ) {
-                DownloadManagerSheet(onDismiss = closeDownloadManager)
-            }
-        }
 
-        // ---- Add to playlist / new playlist ----
-        // One sheet for both, because they are one decision: the list of
-        // playlists with a way to make another. `creatingPlaylist` opens it
-        // straight onto the form, which is what the Library tile means.
-        if (playlistTarget != null || creatingPlaylist) {
-            val target = playlistTarget
-            val dismiss = {
-                playlistTarget = null
-                creatingPlaylist = false
+            // ---- Add to playlist / new playlist ----
+            // One sheet for both, because they are one decision: the list of
+            // playlists with a way to make another. `creatingPlaylist` opens it
+            // straight onto the form, which is what the Library tile means.
+            if (playlistTarget != null || creatingPlaylist) {
+                val target = playlistTarget
+                val dismiss = {
+                    playlistTarget = null
+                    creatingPlaylist = false
+                }
+                ModalBottomSheet(
+                    onDismissRequest = dismiss,
+                    containerColor = MaterialTheme.colorScheme.background,
+                ) {
+                    PlaylistPickerSheet(
+                        playlists = playlists,
+                        loading = playlistsLoading,
+                        song = target,
+                        startCreating = target == null,
+                        onAdd = { picked ->
+                            target?.let { song ->
+                                viewModel.addToPlaylists(picked, song) { added, alreadyThere, failed ->
+                                    // One line for the whole batch, saying the
+                                    // outcome that matters most: what went in, else
+                                    // that it was all there already, else that it
+                                    // didn't work.
+                                    showQueueNotice(
+                                        when {
+                                            added > 1 -> context.resources.getQuantityString(
+                                                R.plurals.added_to_playlists_notice, added, added,
+                                            )
+                                            added == 1 -> context.getString(R.string.song_added_to_playlist)
+                                            alreadyThere > 0 && failed == 0 ->
+                                                context.getString(R.string.song_already_in_playlist)
+                                            else -> context.getString(R.string.failed)
+                                        },
+                                    )
+                                }
+                            }
+                            dismiss()
+                        },
+                        onCreate = { title, privacy ->
+                            viewModel.createPlaylist(title, privacy, target)
+                            dismiss()
+                        },
+                    )
+                }
             }
-            ModalBottomSheet(
-                onDismissRequest = dismiss,
-                containerColor = MaterialTheme.colorScheme.background,
-            ) {
-                PlaylistPickerSheet(
-                    playlists = playlists,
-                    loading = playlistsLoading,
-                    song = target,
-                    startCreating = target == null,
-                    onAdd = { picked ->
-                        target?.let { song ->
-                            viewModel.addToPlaylists(picked, song) { added, alreadyThere, failed ->
-                                // One line for the whole batch, saying the
-                                // outcome that matters most: what went in, else
-                                // that it was all there already, else that it
-                                // didn't work.
-                                showQueueNotice(
-                                    when {
-                                        added > 1 -> context.resources.getQuantityString(
-                                            R.plurals.added_to_playlists_notice, added, added,
-                                        )
-                                        added == 1 -> context.getString(R.string.song_added_to_playlist)
-                                        alreadyThere > 0 && failed == 0 ->
-                                            context.getString(R.string.song_already_in_playlist)
-                                        else -> context.getString(R.string.failed)
-                                    },
-                                )
+
+            if (showSpotifyImportDialog) {
+                BackHandler { showSpotifyImportDialog = false }
+                SpotifyImportAlert(
+                    hazeState = hazeState,
+                    signedIn = signedIn,
+                    allowYoutubeMatching = {
+                        shouldRunLegacyYoutubeVersionLookup(
+                            canonicalMode = AppSettings.canonicalDiscoveryEnabled.value,
+                            configs = SourceRegistry.configs.value,
+                        )
+                    },
+                    onImported = { title, privacy, songs ->
+                        viewModel.createPlaylistWithVideoIds(
+                            title,
+                            privacy,
+                            songs.map { it.videoId },
+                            songs,
+                        ) { browseId, pTitle, savedLocally ->
+                            showQueueNotice(
+                                context.getString(
+                                    if (savedLocally && signedIn) R.string.spotify_import_local_fallback
+                                    else R.string.spotify_import_done,
+                                    pTitle,
+                                ),
+                            )
+                            browseId?.let { id ->
+                                viewModel.openDetail(id, pTitle, "${songs.size} songs", songs.firstOrNull()?.thumbnailUrl)
                             }
                         }
-                        dismiss()
                     },
-                    onCreate = { title, privacy ->
-                        viewModel.createPlaylist(title, privacy, target)
-                        dismiss()
-                    },
+                    onDismiss = { showSpotifyImportDialog = false },
                 )
             }
-        }
 
-        if (showSpotifyImportDialog) {
-            BackHandler { showSpotifyImportDialog = false }
-            SpotifyImportAlert(
-                hazeState = hazeState,
-                signedIn = signedIn,
-                allowYoutubeMatching = {
-                    shouldRunLegacyYoutubeVersionLookup(
-                        canonicalMode = AppSettings.canonicalDiscoveryEnabled.value,
-                        configs = SourceRegistry.configs.value,
-                    )
-                },
-                onImported = { title, privacy, songs ->
-                    viewModel.createPlaylistWithVideoIds(
-                        title,
-                        privacy,
-                        songs.map { it.videoId },
-                        songs,
-                    ) { browseId, pTitle, savedLocally ->
-                        showQueueNotice(
-                            context.getString(
-                                if (savedLocally && signedIn) R.string.spotify_import_local_fallback
-                                else R.string.spotify_import_done,
-                                pTitle,
-                            ),
-                        )
-                        browseId?.let { id ->
-                            viewModel.openDetail(id, pTitle, "${songs.size} songs", songs.firstOrNull()?.thumbnailUrl)
-                        }
-                    }
-                },
-                onDismiss = { showSpotifyImportDialog = false },
-            )
-        }
-
-        // ---- Album / playlist actions ----
-        // Opened by holding a card on any tab, or from the release page's own
-        // overflow. What a track's long-press menu is to one song, this is to
-        // the whole release — the queue rows above all.
-        // One body for the sheet and the popup alike — see songMenuBody.
-        val browseMenuBody: @Composable (BrowseTarget, SongActionsPresentation) -> Unit = { target, presentation ->
-            LegacyBrowseActionsMenuBody(
-                target = target,
-                presentation = presentation,
-                viewModel = viewModel,
-                context = context,
-                signedIn = signedIn,
-                playlists = playlists,
-                startRenaming = browseRenameInSheet,
-                onBeginRename = {
-                    browseRenameInSheet = true
-                    browseMenuOrigin = null
-                },
-                onDismissBrowse = { browseActions = null },
-                withBrowseSongs = withBrowseSongs,
-                playSongsNext = playSongsNext,
-                addSongsToQueue = addSongsToQueue,
-                play = play,
-                startDownload = startDownload,
-                onBeginReorder = { p ->
-                    browseActions = null
-                    reorderTarget = p
-                    reorderEntries = UiState.Loading
-                    reorderSaving = false
-                    viewModel.loadPlaylistEntries(p) { result ->
-                        if (reorderTarget != p) return@loadPlaylistEntries
-                        reorderEntries = result.fold(
-                            onSuccess = { UiState.Success(it) },
-                            onFailure = { UiState.Error(context.getString(R.string.failed)) },
-                        )
-                    }
-                },
-                onDeleteDownload = { id -> scope.launch { Downloads.deleteCollection(context, id) } },
-            )
-        }
-        browseActions?.takeIf { browseMenuOrigin == null }?.let { target ->
-            ModalBottomSheet(
-                onDismissRequest = { browseActions = null },
-                containerColor = MaterialTheme.colorScheme.background,
-            ) {
-                browseMenuBody(target, SongActionsPresentation.Sheet)
-            }
-        }
-        HeldContextMenu(
-            item = browseActions,
-            held = browseMenuOrigin,
-            hazeState = hazeState,
-            onDismiss = { browseActions = null },
-            // Tapping the lifted card opens it, as a tap on it in the list
-            // would have. Not for a Local Music grouping, which has no page.
-            onPreviewClick = { target ->
-                target.browseId?.let { id ->
-                    browseActions = null
-                    viewModel.openDetail(
-                        browseId = id,
-                        title = target.title,
-                        subtitle = target.subtitle,
-                        thumbnailUrl = target.thumbnailUrl,
-                        type = target.type,
-                    )
-                }
-            },
-        ) { target ->
-            browseMenuBody(target, SongActionsPresentation.Menu)
-        }
-        LaunchedEffect(browseActions == null) {
-            if (browseActions == null) {
-                browseMenuOrigin = null
-                browseRenameInSheet = false
-            }
-        }
-
-        // ---- Reorder playlist ----
-        // Full height, and the list never hands its leftover scroll to the
-        // sheet: every vertical drag inside it is meant for a row or the list,
-        // and one that pulled the sheet down instead would throw the new order
-        // away. (Material3 1.3 has no sheetGesturesEnabled; the row drags
-        // consume their own events, so the list's overscroll is the only path.)
-        reorderTarget?.let { target ->
-            val close = { reorderTarget = null }
-            val keepSheetStill = remember {
-                object : NestedScrollConnection {
-                    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) = available
-                    override suspend fun onPostFling(consumed: Velocity, available: Velocity) = available
-                }
-            }
-            ModalBottomSheet(
-                onDismissRequest = close,
-                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                containerColor = MaterialTheme.colorScheme.background,
-            ) {
-                ReorderPlaylistSheet(
-                    modifier = Modifier.nestedScroll(keepSheetStill),
-                    playlist = target,
-                    entries = reorderEntries,
-                    saving = reorderSaving,
-                    onClose = close,
-                    onSave = { reordered ->
-                        val original = (reorderEntries as? UiState.Success)?.data.orEmpty()
-                        reorderSaving = true
-                        viewModel.reorderPlaylist(target, original, reordered) { saved ->
-                            reorderSaving = false
-                            showQueueNotice(
-                                context.getString(if (saved) R.string.playlist_reordered else R.string.reorder_failed),
+            // ---- Album / playlist actions ----
+            // Opened by holding a card on any tab, or from the release page's own
+            // overflow. What a track's long-press menu is to one song, this is to
+            // the whole release — the queue rows above all.
+            // One body for the sheet and the popup alike — see songMenuBody.
+            val browseMenuBody: @Composable (BrowseTarget, SongActionsPresentation) -> Unit = { target, presentation ->
+                LegacyBrowseActionsMenuBody(
+                    target = target,
+                    presentation = presentation,
+                    viewModel = viewModel,
+                    context = context,
+                    signedIn = signedIn,
+                    playlists = playlists,
+                    startRenaming = browseRenameInSheet,
+                    onBeginRename = {
+                        browseRenameInSheet = true
+                        browseMenuOrigin = null
+                    },
+                    onDismissBrowse = { browseActions = null },
+                    withBrowseSongs = withBrowseSongs,
+                    playSongsNext = playSongsNext,
+                    addSongsToQueue = addSongsToQueue,
+                    play = play,
+                    startDownload = startDownload,
+                    onBeginReorder = { p ->
+                        browseActions = null
+                        reorderTarget = p
+                        reorderEntries = UiState.Loading
+                        reorderSaving = false
+                        viewModel.loadPlaylistEntries(p) { result ->
+                            if (reorderTarget != p) return@loadPlaylistEntries
+                            reorderEntries = result.fold(
+                                onSuccess = { UiState.Success(it) },
+                                onFailure = { UiState.Error(context.getString(R.string.failed)) },
                             )
-                            if (saved && reorderTarget == target) reorderTarget = null
                         }
                     },
+                    onDeleteDownload = { id -> scope.launch { Downloads.deleteCollection(context, id) } },
                 )
             }
+            browseActions?.takeIf { browseMenuOrigin == null }?.let { target ->
+                ModalBottomSheet(
+                    onDismissRequest = { browseActions = null },
+                    containerColor = MaterialTheme.colorScheme.background,
+                ) {
+                    browseMenuBody(target, SongActionsPresentation.Sheet)
+                }
+            }
+            HeldContextMenu(
+                item = browseActions,
+                held = browseMenuOrigin,
+                hazeState = hazeState,
+                onDismiss = { browseActions = null },
+                // Tapping the lifted card opens it, as a tap on it in the list
+                // would have. Not for a Local Music grouping, which has no page.
+                onPreviewClick = { target ->
+                    target.browseId?.let { id ->
+                        browseActions = null
+                        viewModel.openDetail(
+                            browseId = id,
+                            title = target.title,
+                            subtitle = target.subtitle,
+                            thumbnailUrl = target.thumbnailUrl,
+                            type = target.type,
+                        )
+                    }
+                },
+            ) { target ->
+                browseMenuBody(target, SongActionsPresentation.Menu)
+            }
+            LaunchedEffect(browseActions == null) {
+                if (browseActions == null) {
+                    browseMenuOrigin = null
+                    browseRenameInSheet = false
+                }
+            }
+
+            // ---- Reorder playlist ----
+            // Full height, and the list never hands its leftover scroll to the
+            // sheet: every vertical drag inside it is meant for a row or the list,
+            // and one that pulled the sheet down instead would throw the new order
+            // away. (Material3 1.3 has no sheetGesturesEnabled; the row drags
+            // consume their own events, so the list's overscroll is the only path.)
+            reorderTarget?.let { target ->
+                val close = { reorderTarget = null }
+                val keepSheetStill = remember {
+                    object : NestedScrollConnection {
+                        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) = available
+                        override suspend fun onPostFling(consumed: Velocity, available: Velocity) = available
+                    }
+                }
+                ModalBottomSheet(
+                    onDismissRequest = close,
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                    containerColor = MaterialTheme.colorScheme.background,
+                ) {
+                    ReorderPlaylistSheet(
+                        modifier = Modifier.nestedScroll(keepSheetStill),
+                        playlist = target,
+                        entries = reorderEntries,
+                        saving = reorderSaving,
+                        onClose = close,
+                        onSave = { reordered ->
+                            val original = (reorderEntries as? UiState.Success)?.data.orEmpty()
+                            reorderSaving = true
+                            viewModel.reorderPlaylist(target, original, reordered) { saved ->
+                                reorderSaving = false
+                                showQueueNotice(
+                                    context.getString(if (saved) R.string.playlist_reordered else R.string.reorder_failed),
+                                )
+                                if (saved && reorderTarget == target) reorderTarget = null
+                            }
+                        },
+                    )
+                }
+            }
+
         }
+        contextualActionOverlays()
 
         // ---- Welcome (once; under the sign-in WebView it can open) ----
         // There from the first frame, so no way in; on the way out it drops
