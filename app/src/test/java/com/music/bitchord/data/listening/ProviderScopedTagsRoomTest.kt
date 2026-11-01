@@ -2,6 +2,9 @@ package com.music.bitchord.data.listening
 
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityRepository
+import com.music.bitchord.data.catalog.CanonicalLibraryProviderConfigurationReader
+import com.music.bitchord.data.catalog.RoomCanonicalLibraryAvailabilityStore
 import com.music.bitchord.data.catalog.MediaAssetEntity
 import com.music.bitchord.data.catalog.MediaAssetTagsEntity
 import com.music.bitchord.data.catalog.RecordingEntity
@@ -65,6 +68,26 @@ class ProviderScopedTagsRoomTest {
                 SmartPlaylistRuleOperator.EQUAL, "calm")
             assertEquals(listOf("rec:shared"), reader.songs(home, calm).map { it.recordingId })
             assertTrue(reader.songs(work, calm).isEmpty())
+            // Global smart-playlist previews receive only RecordingIds and
+            // aggregated tags from configured accounts, never native source IDs.
+            val global = CanonicalLibraryAvailabilityRepository(
+                RoomCanonicalLibraryAvailabilityStore(dao),
+                CanonicalLibraryProviderConfigurationReader { setOf(home) },
+            )
+            val availableTags = global.availableRecordingTags(
+                listOf("rec:shared", "rec:empty", "rec:unknown"),
+            ).associateBy { it.recordingId }
+            assertEquals(listOf("Dream Pop", "K-Pop"), availableTags["rec:shared"]?.genres)
+            assertEquals(false, availableTags["rec:shared"]?.genreEvidenceUnknown)
+            assertEquals(emptyList<String>(), availableTags["rec:empty"]?.genres)
+            assertEquals(false, availableTags["rec:empty"]?.genreEvidenceUnknown)
+            assertEquals(true, availableTags["rec:unknown"]?.genreEvidenceUnknown)
+            val withTwoAccounts = CanonicalLibraryAvailabilityRepository(
+                RoomCanonicalLibraryAvailabilityStore(dao),
+                CanonicalLibraryProviderConfigurationReader { setOf(home, work) },
+            )
+            assertEquals(listOf("Dream Pop", "K-Pop", "Jazz"),
+                withTwoAccounts.availableRecordingTags(listOf("rec:shared")).single().genres)
             dao.deleteAllMediaAssets(home)
             assertTrue(dao.providerScopedTagRows(home, listOf("rec:shared")).isEmpty())
             assertEquals(listOf("rec:shared"), reader.songs(work, jazz).map { it.recordingId })
