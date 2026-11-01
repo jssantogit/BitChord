@@ -8,6 +8,25 @@ import java.nio.ByteBuffer
  * This is NOT a PCM decoder, and cannot by itself approve publication.
  */
 internal object A0FlacEncodedFrameEvidence {
+    // Table-driven checksums keep large FLAC files within the demux time
+    // budget: a per-bit CRC multiplies work by eight for every encoded byte.
+    private val crc8Table=IntArray(256) { seed ->
+        var c=seed
+        repeat(8) {
+            c=if((c and 128)!=0)((c shl 1) xor 7) and 255
+                else (c shl 1) and 255
+        }
+        c
+    }
+    private val crc16Table=IntArray(256) { seed ->
+        var c=seed shl 8
+        repeat(8) {
+            c=if((c and 32768)!=0)
+                ((c shl 1) xor 0x8005) and 65535
+                else (c shl 1) and 65535
+        }
+        c
+    }
     data class Frame(val number:Long,val sampleCount:Int,val variableBlock:Boolean)
     enum class Fault {
         NONE, INCOMPLETE, BAD_SYNC, RESERVED_FIELD, HEADER_CRC,
@@ -65,23 +84,12 @@ internal object A0FlacEncodedFrameEvidence {
         i+=when(rateCode) {12->1;13,14->2;else->0}
         if(i>=size-2)return fail(Fault.INCOMPLETE)
         var crc=0
-        for(k in 0 until i) {
-            crc=crc xor byte(k)
-            repeat(8) {
-                crc=if((crc and 0x80)!=0)
-                    ((crc shl 1) xor 0x07) and 255
-                    else (crc shl 1) and 255
-            }
-        }
+        for(k in 0 until i)crc=crc8Table[(crc xor byte(k)) and 255]
         if(crc!=byte(i))return fail(Fault.HEADER_CRC)
         var crc16=0
         for(k in 0 until size-2) {
-            crc16=crc16 xor (byte(k) shl 8)
-            repeat(8) {
-                crc16=if((crc16 and 0x8000)!=0)
-                    ((crc16 shl 1) xor 0x8005) and 65535
-                    else (crc16 shl 1) and 65535
-            }
+            crc16=((crc16 shl 8) xor
+                crc16Table[((crc16 ushr 8) xor byte(k)) and 255]) and 65535
         }
         if(crc16!=((byte(size-2) shl 8) or byte(size-1)))
             return fail(Fault.FOOTER_CRC)
