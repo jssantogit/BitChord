@@ -42,7 +42,7 @@ internal val smartConditionCategories = listOf(
         SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleField.LOCAL_FILE_PATH,
     )),
     SmartConditionCategory("audio", "Áudio", "Duração comprovada das faixas", listOf(
-        SmartPlaylistRuleField.DURATION_MS,
+        SmartPlaylistRuleField.DURATION_MS, SmartPlaylistRuleField.LOCAL_FILE_EXTENSION,
     )),
     SmartConditionCategory(
         "advanced", "Outros · avançado",
@@ -70,6 +70,7 @@ internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (
     SmartPlaylistRuleField.SOURCE_KIND -> "Origem disponível"
     SmartPlaylistRuleField.LOCAL_FOLDER -> "Pasta da música local"
     SmartPlaylistRuleField.LOCAL_FILE_PATH -> "Caminho do arquivo local"
+    SmartPlaylistRuleField.LOCAL_FILE_EXTENSION -> "Extensão do arquivo local"
     SmartPlaylistRuleField.DURATION_MS -> "Duração da música"
 }
 
@@ -110,6 +111,8 @@ internal fun smartConditionDescription(field: SmartPlaylistRuleField): String = 
         "Compare a pasta real do arquivo MediaStore (ex.: Music/Kpop); outros servidores são desconhecidos."
     SmartPlaylistRuleField.LOCAL_FILE_PATH ->
         "Compare o caminho real do arquivo local; caminhos de servidores não são inferidos."
+    SmartPlaylistRuleField.LOCAL_FILE_EXTENSION ->
+        "Compare a extensão do arquivo local (FLAC, MP3, M4A); não equivale ao codec."
     SmartPlaylistRuleField.DURATION_MS ->
         "Informe a duração total da música em segundos."
 }
@@ -131,6 +134,7 @@ internal fun smartConditionSearch(
             SmartPlaylistRuleField.SOURCE_KIND -> "fonte catalogo navidrome local biblioteca"
             SmartPlaylistRuleField.LOCAL_FOLDER -> "pasta diretorio diretório local caminho mediastore"
             SmartPlaylistRuleField.LOCAL_FILE_PATH -> "arquivo caminho pasta filepath path mediastore"
+            SmartPlaylistRuleField.LOCAL_FILE_EXTENSION -> "formato extensão extensao mp3 flac m4a arquivo"
             SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "capa artwork imagem album"
             SmartPlaylistRuleField.DURATION_MS -> "duracao segundos tempo audio"
             SmartPlaylistRuleField.AUDIBLE_COMPLETIONS -> "plays execucoes escutas"
