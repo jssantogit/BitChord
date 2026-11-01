@@ -225,13 +225,20 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                     val searching=tracks.count { it.stage==Downloads.AutoTrackStage.SEARCHING }
                     val transferring=tracks.count { it.stage==Downloads.AutoTrackStage.DOWNLOADING }
                     val saved=tracks.count { it.stage==Downloads.AutoTrackStage.SAVED }
-                    val review=tracks.size-waiting-searching-transferring-saved
+                    val review=tracks.count { it.stage==Downloads.AutoTrackStage.MANUAL_REVIEW }
+                    val interrupted=tracks.count {
+                        it.stage in setOf(Downloads.AutoTrackStage.INTERRUPTED,
+                            Downloads.AutoTrackStage.CANCELLED)
+                    }
+                    val verify=tracks.count { it.stage==Downloads.AutoTrackStage.VERIFY_STORAGE }
                     listOfNotNull(
                         waiting.takeIf { it>0 }?.let { "$it aguardando" },
                         searching.takeIf { it>0 }?.let { "$it pesquisando" },
                         transferring.takeIf { it>0 }?.let { "$it baixando" },
                         saved.takeIf { it>0 }?.let { "$it salvas" },
-                        review.takeIf { it>0 }?.let { "$it para revisão" }
+                        review.takeIf { it>0 }?.let { "$it para revisão" },
+                        interrupted.takeIf { it>0 }?.let { "$it interrompida(s)" },
+                        verify.takeIf { it>0 }?.let { "$it verificar armazenamento" }
                     ).joinToString(" · ")
                 } else session.summary()
                 Text(
@@ -386,6 +393,7 @@ private fun SoulseekAutoTrackList(
                         Downloads.AutoTrackStage.SAVED -> "Salva"
                         Downloads.AutoTrackStage.MANUAL_REVIEW -> "Revisão manual"
                         Downloads.AutoTrackStage.CANCELLED -> "Cancelada"
+                        Downloads.AutoTrackStage.INTERRUPTED -> "Não iniciada · busca interrompida"
                         Downloads.AutoTrackStage.VERIFY_STORAGE ->
                             "Verificar publicação na biblioteca"
                     }
@@ -402,6 +410,7 @@ private fun SoulseekAutoTrackList(
                         RowStatus(stage,
                             if(track.stage in setOf(
                                 Downloads.AutoTrackStage.CANCELLED,
+                                Downloads.AutoTrackStage.INTERRUPTED,
                                 Downloads.AutoTrackStage.VERIFY_STORAGE))
                                 MaterialTheme.colorScheme.error
                             else MaterialTheme.colorScheme.onSurfaceVariant)
