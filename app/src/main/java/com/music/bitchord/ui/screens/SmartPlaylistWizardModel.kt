@@ -27,6 +27,7 @@ internal val smartConditionCategories = listOf(
         SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleField.ALBUM_ARTIST,
         SmartPlaylistRuleField.TRACK_ARTIST, SmartPlaylistRuleField.TRACK_NUMBER,
         SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD,
+        SmartPlaylistRuleField.BPM,
     )),
     SmartConditionCategory("ratings", "Avaliações", "Notas em estrelas e data da nota local", listOf(
         SmartPlaylistRuleField.EXPLICIT_RATING, SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING,
@@ -59,6 +60,7 @@ internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (
     SmartPlaylistRuleField.TRACK_ARTIST -> "Créditos do artista da faixa"
     SmartPlaylistRuleField.GENRE -> "Gênero musical"
     SmartPlaylistRuleField.MOOD -> "Clima / mood"
+    SmartPlaylistRuleField.BPM -> "Ritmo (BPM)"
     SmartPlaylistRuleField.TRACK_NUMBER -> "Número da faixa"
     SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "Álbum com referência de capa"
     SmartPlaylistRuleField.EXPLICIT_RATING -> "Avaliação em estrelas"
@@ -85,9 +87,11 @@ internal fun smartConditionDescription(field: SmartPlaylistRuleField): String = 
     SmartPlaylistRuleField.TRACK_ARTIST ->
         "Use os créditos específicos da música, quando conhecidos."
     SmartPlaylistRuleField.GENRE ->
-        "Filtra gêneros informados pelo servidor; uma tag ausente não impede usar o filtro."
+        "Filtra gêneros informados pelas fontes disponíveis, locais ou remotas."
     SmartPlaylistRuleField.MOOD ->
-        "Filtra climas informados pelo servidor; valores não fornecidos permanecem desconhecidos."
+        "Filtra climas informados pelas fontes disponíveis; valores desconhecidos não contam como ausentes."
+    SmartPlaylistRuleField.BPM ->
+        "Compara o ritmo informado em batidas por minuto, sem supor BPM zero para tags ausentes."
     SmartPlaylistRuleField.TRACK_NUMBER ->
         "Compare a posição conhecida da música no lançamento."
     SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE ->
