@@ -16,6 +16,7 @@ import kotlin.math.abs
  */
 internal object A0AutoCandidateSelectionPolicy {
     enum class Status { PROVISIONAL, MANUAL_REVIEW }
+    enum class TieResolution { NONE, FIRST_READY }
     enum class Reason {
         INVALID_TARGET, INCOMPLETE_SAMPLE, CONTRADICTORY_SOURCE,
         NO_STRONG_CANDIDATE, AMBIGUOUS_EDITION, NO_READY_SOURCE,
@@ -77,6 +78,9 @@ internal object A0AutoCandidateSelectionPolicy {
         val funnel:Funnel=Funnel(),
         val ambiguity:AmbiguityEvidence?=null,
         val rejectionDetails:RejectionDetails=RejectionDetails(),
+        /** Aggregate only: never expose the chosen peer/path in diagnostics. */
+        val tieResolution:TieResolution=TieResolution.NONE,
+        val tieGroups:Int=0,
     ) {
         val canTransfer:Boolean get()=false
         override fun toString()="AutoCandidateDecision(status=$status, reason=$reason)"
@@ -147,6 +151,8 @@ internal object A0AutoCandidateSelectionPolicy {
         profile:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
         reliability:A0PeerReliabilityEvidence=A0PeerReliabilityEvidence(),
         sampleTruncated:Boolean=false,
+        /** The coordinator may first attempt unique release-cohesion evidence. */
+        resolveExactTies:Boolean=true,
     ):Decision {
         val parts=target.query.split(Regex("\\s+[-–—]\\s+"),limit=2)
         val expected=target.durationSeconds
@@ -285,11 +291,14 @@ internal object A0AutoCandidateSelectionPolicy {
         val rankedGroups=clusters.sortedWith(
             compareByDescending<List<Eligible>> { it.maxOf { e -> e.rank } }
                 .thenBy { it.first().choice.claim.filename.lowercase(Locale.ROOT) })
-        if(rankedGroups.size>1 &&
-            rankedGroups[0].maxOf { it.rank } -
-                rankedGroups[1].maxOf { it.rank }<12) {
-            val gap=rankedGroups[0].maxOf { it.rank } -
-                rankedGroups[1].maxOf { it.rank }
+        val topRank=rankedGroups.first().maxOf { it.rank }
+        val runnerRank=rankedGroups.getOrNull(1)?.maxOf { it.rank }
+        val gap=if(runnerRank==null)Int.MAX_VALUE else topRank-runnerRank
+        val exactTie=runnerRank!=null && gap==0
+        // A near tie is NOT an exact tie: a rank difference of 1..11
+        // continues to require review or a uniquely coherent release.
+        if(rankedGroups.size>1 && gap<12 &&
+            (!exactTie || !resolveExactTies)) {
             val first=rankedGroups[0].first().choice.claim
             val second=rankedGroups[1].first().choice.claim
             val differences=buildSet {
@@ -318,7 +327,23 @@ internal object A0AutoCandidateSelectionPolicy {
             return Decision(Status.MANUAL_REVIEW,Reason.AMBIGUOUS_EDITION,
                 emptyList(),observed.size,strong.size,funnel,evidence,details)
         }
-        val leading=rankedGroups[0]
+
+        // User preference for the explicit auto-download opt-in: when
+        // independently eligible claims have EXACTLY the same top score,
+        // take the FIRST observed READY claim. This is not authentication
+        // of edition/master. Never mix non-equivalent peers as retries.
+        val topGroups=if(exactTie)rankedGroups.filter {
+            it.maxOf { candidate -> candidate.rank }==topRank
+        } else emptyList()
+        val firstReady=if(exactTie)strong.firstOrNull { candidate ->
+            candidate.rank==topRank &&
+                candidate.choice.peerAvailability.tier==A0PeerAvailability.Tier.READY &&
+                topGroups.any { candidate in it }
+        } else null
+        val leading=if(exactTie)topGroups.firstOrNull { group ->
+            firstReady!=null && firstReady in group
+        } ?: return review(Reason.NO_READY_SOURCE,observed.size,strong.size,
+            funnel,details) else rankedGroups[0]
         // Only a peer claiming a currently free slot with acceptable queue/
         // speed evidence may be provisionally preferred for unattended use.
         val ready=leading.filter {
@@ -330,12 +355,18 @@ internal object A0AutoCandidateSelectionPolicy {
             ready.map { A0PeerReliabilityEvidence.Alternative(
                 it.choice.peerUsername,"same-claim",it.choice.peerAvailability.tier) },
             claimKey="same-claim",failedPeers=emptySet(),maxPeers=3)
-        val handles=ordered.mapNotNull { peer ->
+        val alternatives=ordered.mapNotNull { peer ->
             ready.firstOrNull { it.choice.peerUsername==peer }?.choice
         }
+        val handles=if(firstReady==null)alternatives else
+            (listOf(firstReady.choice)+alternatives.filter {
+                it.peerUsername!=firstReady.choice.peerUsername
+            }).take(3)
         if(handles.isEmpty())
             return review(Reason.NO_READY_SOURCE,observed.size,strong.size,funnel,details)
         return Decision(Status.PROVISIONAL,null,handles,observed.size,strong.size,
-            funnel,rejectionDetails=details)
+            funnel,rejectionDetails=details,
+            tieResolution=if(exactTie)TieResolution.FIRST_READY else TieResolution.NONE,
+            tieGroups=topGroups.size)
     }
 }
