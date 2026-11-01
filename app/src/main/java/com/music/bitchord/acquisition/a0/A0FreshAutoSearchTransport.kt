@@ -305,7 +305,10 @@ internal class A0FreshAutoSearchTransport(
                 " unsupported_format=${counts.unsupportedFormat}" +
                 " duplicate=${counts.duplicates}" +
                 " manual_limit=${counts.capacityDropped}" +
-                " peer_limit=${counts.perPeerDropped}")
+                " peer_limit=${counts.perPeerDropped}" +
+                " shadow_evicted=${snapshot.shadowEvicted}" +
+                " shadow_global_dropped=${snapshot.shadowDroppedAtGlobalLimit}" +
+                " shadow_peer_dropped=${snapshot.shadowDroppedAtPeerLimit}")
             return if(snapshot.choices.isEmpty() && snapshot.truncatedSlots.isEmpty())
                 A0AutoDiscoveryCoordinator.SearchResult.NoReply
             else A0AutoDiscoveryCoordinator.SearchResult.Found(
