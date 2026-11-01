@@ -54,7 +54,9 @@ internal object A0CandidateRank {
         remotePath:String?=null, format:String?=null,
         declaredSampleRateHz:Int?=null, declaredBitDepth:Int?=null,
         declaredDurationSeconds:Int?=null, expectedDurationSeconds:Int?=null,
-        sizeBytes:Long?=null, queueLength:Int?=null
+        sizeBytes:Long?=null, queueLength:Int?=null,
+        /** Trusted requested release, never a peer-supplied album label. */
+        expectedAlbum:String?=null,
     ):Ranking {
         val parts=searchPhrase.orEmpty().split(Regex("\\s+[-–—]\\s+"),limit=2)
         val titleSequence=tokens(if(parts.size==2)parts[1] else searchPhrase.orEmpty())
@@ -201,8 +203,19 @@ internal object A0CandidateRank {
                 "official","audio","hq","hd","320","kbps","256",
                 "cbr","vbr","track","stereo"
             )
+            // Peers often put an exact release title between artist and
+            // canonical song title: "ILLIT - BREAK EVEN - 01 - Song.flac".
+            // Do NOT ignore arbitrary extra words. Only the complete,
+            // ordered, locally requested album phrase is safe to discount.
+            // Canonical folder/quality gates still run independently later.
+            val albumTokens=tokens(expectedAlbum.orEmpty())
+            val exactAlbumInFilename=albumTokens.isNotEmpty() &&
+                containsPhrase(fileTokens,albumTokens)
+            val neutralAlbum=if(exactAlbumInFilename)albumTokens.toSet()
+                else emptySet()
             val unknown=fileWords.filter { token ->
                 token !in expectedWords && token !in neutralLabels &&
+                token !in neutralAlbum &&
                     !(token.length<=3 && token.all(Char::isDigit))
             }
             if(unknown.isNotEmpty()) {
