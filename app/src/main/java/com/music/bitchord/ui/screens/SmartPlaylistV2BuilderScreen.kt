@@ -105,6 +105,11 @@ private fun newRule(): SmartPlaylistRule = SmartPlaylistRule.Comparison(
     1.0,
 )
 
+/** The visual group editor needs a root container even for a single leaf/NOT. */
+internal fun editableSmartPlaylistRuleRoot(rule: SmartPlaylistRule): SmartPlaylistRule =
+    if (rule is SmartPlaylistRule.Group) rule
+    else SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(rule))
+
 /** A reusable smart filter cannot mutate a canonical manual playlist in place. */
 internal fun canApplySmartFilterToDraft(
     normalMode: Boolean,
@@ -364,7 +369,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                 reset()
                 editingFilterId = filter.id
                 name = filter.name
-                rule = filter.rules
+                rule = editableSmartPlaylistRuleRoot(filter.rules)
                 hasConfiguredRules = true
             }
             EditorDestination.CREATE_FROM_FILTER -> {
@@ -376,7 +381,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                 val copy = filter.toPlaylistCopy(UUID.randomUUID().toString(), filter.name)
                 reset()
                 name = copy.name
-                rule = copy.query.rules
+                rule = editableSmartPlaylistRuleRoot(copy.query.rules)
                 hasConfiguredRules = true
                 sort = copy.query.sort
                 limit = copy.query.limit.toString()
@@ -394,7 +399,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                 name = item.name
                 description = item.description
                 coverUri = item.coverUri
-                rule = item.query.rules
+                rule = editableSmartPlaylistRuleRoot(item.query.rules)
                 hasConfiguredRules = true
                 sort = item.query.sort
                 limit = item.query.limit.toString()
@@ -411,7 +416,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                 // A new copy is a creation, not an edit of a non-existent ID.
                 name = copy.name
                 description = copy.description
-                rule = copy.query.rules
+                rule = editableSmartPlaylistRuleRoot(copy.query.rules)
                 hasConfiguredRules = true
                 sort = copy.query.sort
                 limit = copy.query.limit.toString()
@@ -460,7 +465,7 @@ internal fun SmartPlaylistV2BuilderScreen(
             val updated = applySavedFilterToDraft(
                 rule, hasConfiguredRules, filter, application,
             )
-            rule = updated
+            rule = editableSmartPlaylistRuleRoot(updated)
             hasConfiguredRules = true
             preview = null
             previewQuery = null
@@ -501,7 +506,7 @@ internal fun SmartPlaylistV2BuilderScreen(
         name = item.name
         description = item.description
         coverUri = item.coverUri
-        rule = item.query.rules
+        rule = editableSmartPlaylistRuleRoot(item.query.rules)
         hasConfiguredRules = true
         sort = item.query.sort
         limit = item.query.limit.toString()
