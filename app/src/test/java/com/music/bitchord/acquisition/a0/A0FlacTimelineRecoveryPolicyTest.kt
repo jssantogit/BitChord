@@ -12,37 +12,39 @@ class A0FlacTimelineRecoveryPolicyTest {
         resets:Int=5,regressionMs:Long=22_662L,
         fixed:Int?=block,totalSamples:Long?=total,
         rate:Int?=44_100,actualDuration:Long=duration,
-        frameProblem:A0FlacFrameSequenceEvidence.Problem=
-            A0FlacFrameSequenceEvidence.Problem.NONE,
-        frameSamples:Long=total,packets:Int=frames,
-        demuxBytes:Long=11_000_000L,sourceBytes:Long=12_000_000L,
+        status:A0FlacWholeFileEvidence.Status?=
+            A0FlacWholeFileEvidence.Status.VERIFIED,
+        scannedSamples:Long=total,scannedFrames:Int=frames,
+        scannedBytes:Long=12_000_000L,sourceBytes:Long=12_000_000L,
     )=A0FlacTimelineRecoveryPolicy.assess(
         resets,regressionMs,fixed,totalSamples,rate,actualDuration,
-        frameProblem,frameSamples,packets,demuxBytes,sourceBytes)
+        status,scannedSamples,scannedFrames,scannedBytes,sourceBytes)
 
-    @Test fun recoveredTimestampNeedsChecksummedWholeStreamEvidence() {
-        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.VERIFIED_ENCODED_FRAME_SEQUENCE,
+    @Test fun verifiedIndependentLocalFileCanReconcileBrokenAndroidPts() {
+        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.VERIFIED_LOCAL_FLAC_SEQUENCE,
             check())
         assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.NOT_NEEDED,
             check(resets=0))
     }
-    @Test fun packetsAreNotFramesAndCountAloneDoesNotAuthorise() {
+    @Test fun neverTrustsAndroidPacketsWithoutIndependentWholeFileScan() {
+        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.INDEPENDENT_FILE_UNVERIFIED,
+            check(status=null))
+        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.INDEPENDENT_FILE_UNVERIFIED,
+            check(status=A0FlacWholeFileEvidence.Status.FRAME_CRC_MISMATCH))
+        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.INDEPENDENT_FILE_UNVERIFIED,
+            check(status=A0FlacWholeFileEvidence.Status.TIME_LIMIT))
         assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.FRAME_SAMPLE_COVERAGE_MISMATCH,
-            check(frameSamples=total-4096))
+            check(scannedSamples=total-4096))
         assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.FRAME_SAMPLE_COVERAGE_MISMATCH,
-            check(packets=0))
-        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.ENCODED_FRAME_PACKET_UNREADABLE,
-            check(frameProblem=A0FlacFrameSequenceEvidence.Problem.PACKET_UNREADABLE))
-        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.ENCODED_FRAME_SEQUENCE_INVALID,
-            check(frameProblem=A0FlacFrameSequenceEvidence.Problem.NUMBERING_INCONSISTENT))
+            check(scannedFrames=0))
     }
     @Test fun incompleteOrContradictoryLocalAudioNeverApproved() {
         assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.NO_INDEPENDENT_STREAMINFO,
             check(fixed=null))
         assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.NO_INDEPENDENT_STREAMINFO,
             check(totalSamples=null))
-        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.INSUFFICIENT_DEMUX_BYTES,
-            check(demuxBytes=500_000))
+        assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.INCOMPLETE_FILE_EVIDENCE,
+            check(scannedBytes=500_000))
         assertEquals(A0FlacTimelineRecoveryPolicy.Verdict.STREAMINFO_DURATION_MISMATCH,
             check(actualDuration=duration+5000))
     }

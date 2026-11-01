@@ -2,14 +2,17 @@ package com.music.bitchord.acquisition.a0
 
 import kotlin.math.abs
 
-/** FLAC timestamp recovery never trusts MediaExtractor packet count as frames. */
+/**
+ * Android FLAC PTS workarounds require a VERIFIED LOCAL file scan, not trust
+ * in the Android demux output after it starts returning PTS=0. This check
+ * does not replace real MediaExtractor EOS, quality, A3 or cancellation.
+ */
 internal object A0FlacTimelineRecoveryPolicy {
     enum class Verdict {
-        NOT_NEEDED, VERIFIED_ENCODED_FRAME_SEQUENCE,
-        NO_INDEPENDENT_STREAMINFO, ENCODED_FRAME_PACKET_UNREADABLE,
-        ENCODED_FRAME_SEQUENCE_INVALID, FRAME_SAMPLE_COVERAGE_MISMATCH,
-        STREAMINFO_DURATION_MISMATCH, INSUFFICIENT_DEMUX_BYTES,
-        EXCESSIVE_RESETS,
+        NOT_NEEDED, VERIFIED_LOCAL_FLAC_SEQUENCE,
+        NO_INDEPENDENT_STREAMINFO, INDEPENDENT_FILE_UNVERIFIED,
+        FRAME_SAMPLE_COVERAGE_MISMATCH, STREAMINFO_DURATION_MISMATCH,
+        INCOMPLETE_FILE_EVIDENCE, EXCESSIVE_RESETS,
     }
     fun assess(
         resetEvents:Int,
@@ -18,10 +21,10 @@ internal object A0FlacTimelineRecoveryPolicy {
         totalPcmSamples:Long?,
         sampleRateHz:Int?,
         durationMillis:Long,
-        frameProblem:A0FlacFrameSequenceEvidence.Problem,
-        frameSamples:Long,
-        frameCount:Int,
-        demuxedBytes:Long,
+        localStatus:A0FlacWholeFileEvidence.Status?,
+        localSamples:Long,
+        localFrames:Int,
+        locallyScannedBytes:Long,
         fileBytes:Long,
     ):Verdict {
         if(resetEvents==0)return Verdict.NOT_NEEDED
@@ -33,20 +36,19 @@ internal object A0FlacTimelineRecoveryPolicy {
             ?:return Verdict.NO_INDEPENDENT_STREAMINFO
         val rate=sampleRateHz?.takeIf {it in 8_000..384_000}
             ?:return Verdict.NO_INDEPENDENT_STREAMINFO
-        if(frameProblem!=A0FlacFrameSequenceEvidence.Problem.NONE)
-            return if(frameProblem==A0FlacFrameSequenceEvidence.Problem.PACKET_UNREADABLE)
-                Verdict.ENCODED_FRAME_PACKET_UNREADABLE
-                else Verdict.ENCODED_FRAME_SEQUENCE_INVALID
-        if(frameCount<2 || frameSamples!=total)
+        if(localStatus!=A0FlacWholeFileEvidence.Status.VERIFIED)
+            return Verdict.INDEPENDENT_FILE_UNVERIFIED
+        if(localFrames<2 || localSamples!=total)
             return Verdict.FRAME_SAMPLE_COVERAGE_MISMATCH
-        if(fileBytes<44L || demuxedBytes<fileBytes/2L ||
-            demuxedBytes>fileBytes)
-            return Verdict.INSUFFICIENT_DEMUX_BYTES
-        val expectedDurationMs=total*1000L/rate
-        if(expectedDurationMs !in 15_000L..7_200_000L ||
+        // Validating all local bytes matters more than comparing opaque
+        // MediaExtractor packet sizes against the file size.
+        if(fileBytes<44L || locallyScannedBytes!=fileBytes)
+            return Verdict.INCOMPLETE_FILE_EVIDENCE
+        val independentDuration=total*1000L/rate
+        if(independentDuration !in 15_000L..7_200_000L ||
             durationMillis !in 15_000L..7_200_000L ||
-            abs(expectedDurationMs-durationMillis)>2000L)
+            abs(independentDuration-durationMillis)>2000L)
             return Verdict.STREAMINFO_DURATION_MISMATCH
-        return Verdict.VERIFIED_ENCODED_FRAME_SEQUENCE
+        return Verdict.VERIFIED_LOCAL_FLAC_SEQUENCE
     }
 }
