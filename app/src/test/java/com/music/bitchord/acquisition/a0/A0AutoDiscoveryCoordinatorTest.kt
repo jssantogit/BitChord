@@ -89,6 +89,57 @@ class A0AutoDiscoveryCoordinatorTest {
         assertEquals(1,search.closed)
     }
 
+    private fun alternatePeerClaims(
+        tracks:List<SoulseekBatchPlan.Entry>,
+    ):List<A0ObservedCandidateHandoff.Choice> {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase=entries[0].query,requestedAlbum="SUPER REAL ME",
+            expectedDurationSeconds=120,qualityProfile=quality,
+            collectReleaseShadow=true)
+        val files=tracks.map {
+            A0SoulseekSearchFile(
+                "Shared\\ILLIT\\SUPER REAL ME\\${it.query}.mp3",
+                it.durationSeconds!!.toLong()*40_000L+1024L,"mp3",
+                mapOf(0 to 320,1 to it.durationSeconds))
+        }
+        handoff.offerParsed(A0SoulseekSearchResponse(
+            "other-peer",177,files,emptyList(),true,128_000,0),"other-peer")
+        return handoff.releaseShadowChoices()
+    }
+
+    @Test fun completeReleaseCohortResolvesByteSizeTieWithoutExtraSearch() {
+        val search=FakeSearch {
+            A0AutoDiscoveryCoordinator.SearchResult.Found(
+                claims(entries)+alternatePeerClaims(listOf(entries[0])))
+        }
+        val done=mutableListOf<String>()
+        val observations=mutableListOf<A0ReleaseCohesionPolicy.Reason>()
+        val result=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            entries,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true},
+            onCohesionEvidence={_,evidence -> observations.add(evidence.reason)})
+        assertEquals(4,result.batch.published)
+        assertEquals(4,result.batch.attempts)
+        assertEquals(listOf("one"),search.requests)
+        assertEquals(entries.map {it.trackId},done)
+        assertTrue(A0ReleaseCohesionPolicy.Reason.UNIQUE_RELEASE_COHORT
+            in observations)
+    }
+
+    @Test fun equallyCoherentReleasesStayManualWithoutFetchingAnyPeer() {
+        val search=FakeSearch {
+            A0AutoDiscoveryCoordinator.SearchResult.Found(
+                claims(entries)+alternatePeerClaims(entries))
+        }
+        val done=mutableListOf<String>()
+        val result=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            entries,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(0,result.batch.attempts)
+        assertEquals(4,result.batch.manualReview)
+        assertTrue(done.isEmpty())
+    }
+
     @Test fun missingTracksCauseOnlyBoundedUnsearchedSlotQueries() {
         val search=FakeSearch { target ->
             A0AutoDiscoveryCoordinator.SearchResult.Found(
