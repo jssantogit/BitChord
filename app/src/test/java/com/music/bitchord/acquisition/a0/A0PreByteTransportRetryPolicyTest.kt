@@ -1,13 +1,12 @@
 package com.music.bitchord.acquisition.a0
 
+import com.music.bitchord.acquisition.a0.A0ServerAssociatedTransfer.Phase
 import java.io.IOException
 import java.net.SocketTimeoutException
 import org.junit.Assert.*
 import org.junit.Test
 
 class A0PreByteTransportRetryPolicyTest {
-    private val Phase=A0ServerAssociatedTransfer.Phase
-
     @Test fun grwmTimeoutAfterQueueRequestMayTryOnlyEquivalentPeer() {
         assertTrue(A0PreByteTransportRetryPolicy.canRetry(
             Phase.QUEUE_UPLOAD_SENT,SocketTimeoutException(),false,true))
