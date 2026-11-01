@@ -623,6 +623,7 @@ internal fun SmartPlaylistV2WizardUi(
                                         else "Nome da playlist",
                                     hint = "Obrigatório · até 80 caracteres",
                                     error = name.length > 80,
+                                    emphasized = true,
                                 )
                                 if (!filterMode) {
                                     PlaylistWizardTextEntry(
