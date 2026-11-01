@@ -126,18 +126,28 @@ class A0AutoDiscoveryCoordinatorTest {
             in observations)
     }
 
-    @Test fun equallyCoherentReleasesStayManualWithoutFetchingAnyPeer() {
+    @Test fun equallyCoherentReleasesUseFirstEligibleSourceWithoutManualSelection() {
         val search=FakeSearch {
             A0AutoDiscoveryCoordinator.SearchResult.Found(
                 claims(entries)+alternatePeerClaims(entries))
         }
         val done=mutableListOf<String>()
+        val tieReasons=mutableListOf<A0ReleaseCohesionPolicy.Reason>()
+        val decisions=mutableListOf<A0AutoCandidateSelectionPolicy.Decision>()
         val result=A0AutoDiscoveryCoordinator(search,batch(done)).run(
             entries,quality,userRequested=true,optedIn=true,
-            isCancelled={false},stillAuthorized={true})
-        assertEquals(0,result.batch.attempts)
-        assertEquals(4,result.batch.manualReview)
-        assertTrue(done.isEmpty())
+            isCancelled={false},stillAuthorized={true},
+            onCandidateDecision={_,decision -> decisions.add(decision)},
+            onCohesionEvidence={_,evidence -> tieReasons.add(evidence.reason)})
+        assertEquals(4,result.batch.attempts)
+        assertEquals(4,result.batch.published)
+        assertEquals(0,result.batch.manualReview)
+        assertEquals(1,result.searches)
+        assertEquals(entries.map { it.trackId },done)
+        assertTrue(A0ReleaseCohesionPolicy.Reason.TIED_COHORTS in tieReasons)
+        assertTrue(decisions.all {
+            it.tieResolution==A0AutoCandidateSelectionPolicy.TieResolution.FIRST_READY
+        })
     }
 
     @Test fun missingTracksCauseOnlyBoundedUnsearchedSlotQueries() {
