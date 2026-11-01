@@ -40,7 +40,12 @@ class SmartPlaylistV2RuleEngineTest {
             )).map { it.recordingId }
         assertEquals(listOf("known"), matches(SmartPlaylistRuleOperator.EQUAL, "SYNTHPOP"))
         assertEquals(listOf("known"), matches(SmartPlaylistRuleOperator.DOES_NOT_CONTAIN, "rock"))
-        assertEquals(emptyList<String>(), matches(SmartPlaylistRuleOperator.IS_MISSING, ""))
+        assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.LOCAL_GENRE,
+                SmartPlaylistRuleOperator.IS_MISSING,
+            ))
+        }
     }
 
     @Test fun localBitrateUsesKbpsWithUnknownFailClosedAcrossAssets() {
