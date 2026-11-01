@@ -37,7 +37,7 @@ internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalSongBrowse(
                 rule.field == SmartPlaylistRuleField.DURATION_MS ||
                 rule.field == SmartPlaylistRuleField.SOURCE_KIND ||
                 (rule.field in setOf(SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD,
-                    SmartPlaylistRuleField.BPM) &&
+                    SmartPlaylistRuleField.BPM, SmartPlaylistRuleField.STYLE) &&
                     verifiedContextualSourceKind(providerKey) != null) ||
                 (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED &&
                     providerKey == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
@@ -100,7 +100,7 @@ internal fun filterCanonicalBrowseSongs(
     }
     val needsTags = filter.rules.referencedFields().any {
         it == SmartPlaylistRuleField.GENRE || it == SmartPlaylistRuleField.MOOD ||
-            it == SmartPlaylistRuleField.BPM
+            it == SmartPlaylistRuleField.BPM || it == SmartPlaylistRuleField.STYLE
     }
     if (needsTags) require(scopedTagRowsByRecording != null) {
         "Provider tag rules require a current scoped Room snapshot"
@@ -132,6 +132,7 @@ internal fun filterCanonicalBrowseSongs(
             val genres = validRows.map { parseScopedAssetTags(it.genresJson) }
             val moods = validRows.map { parseScopedAssetTags(it.moodsJson) }
             val bpms = validRows.map { parseScopedBpmValues(it.bpmsJson) }
+            val styles = validRows.map { parseScopedAssetTags(it.stylesJson) }
             RuleBasedRecordingCandidate(
                 recordingId = song.recordingId,
                 explicitRating = null,
@@ -148,6 +149,8 @@ internal fun filterCanonicalBrowseSongs(
                 moodEvidenceUnknown = !completeRows || moods.any { it == null },
                 bpms = bpms.filterNotNull().flatten().distinct(),
                 bpmEvidenceUnknown = !completeRows || bpms.any { it == null },
+                styles = styles.filterNotNull().flatten().distinct(),
+                styleEvidenceUnknown = !completeRows || styles.any { it == null },
                 localAddedEpochMs = validTimestamps,
                 localAddedDateEvidenceUnknown = timestampsUnknown,
             )
