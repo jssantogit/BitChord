@@ -1150,6 +1150,10 @@ internal fun SmartPlaylistV2WizardUi(
                                                     "Ano desta edição (ex.: 2024)"
                                                 SmartPlaylistRuleField.DISC_NUMBER ->
                                                     "Número do disco (ex.: 2)"
+                                                SmartPlaylistRuleField.TOTAL_SKIPS ->
+                                                    "Quantidade total de pulos"
+                                                SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP ->
+                                                    "Dias desde a última pulada"
                                                 SmartPlaylistRuleField.LOCAL_BITRATE_KBPS ->
                                                     "Bitrate (kbps)"
                                                 else -> "Valor numérico"
