@@ -10,6 +10,8 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AppSettings
 import java.util.Locale
 import java.util.UUID
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 internal object CanonicalLocalLibrary {
     internal const val LOCAL_MEDIASTORE_PROVIDER = "local-mediastore"
@@ -23,9 +25,15 @@ internal object CanonicalLocalLibrary {
      * reads Local Music back from Room. The existing UI/player sees only the
      * legacy adapter output; Room is the source of truth after this boundary.
      */
-    suspend fun sync(context: Context, scannedSongs: List<Song>): List<Song> {
-        val database = CanonicalCatalogDatabase.get(context)
-        return database.withTransaction {
+    suspend fun sync(context: Context, scannedSongs: List<Song>): List<Song> =
+        syncWithDatabase(context, CanonicalCatalogDatabase.get(context), scannedSongs)
+
+    /** Real Room test seam; retains the exact production transaction and prune guard. */
+    internal suspend fun syncWithDatabase(
+        context: Context,
+        database: CanonicalCatalogDatabase,
+        scannedSongs: List<Song>,
+    ): List<Song> = database.withTransaction {
             val dao = database.catalogDao()
             val candidates = scannedSongs.mapNotNull(::candidateFromLegacySong)
             val seenSourceKeys = ArrayList<String>(candidates.size)
@@ -71,6 +79,16 @@ internal object CanonicalLocalLibrary {
                         dateAddedSeconds = candidate.dateAddedSeconds,
                         dateModifiedSeconds = candidate.dateModifiedSeconds,
                         artworkUri = candidate.artworkUri,
+                    ),
+                )
+                // Use the same per-MediaAsset provenance table as OpenSubsonic.
+                // Null is UNKNOWN, [] is an explicit empty tag set from a source
+                // that actually verified absence. Never borrow other copies.
+                dao.upsertMediaAssetTags(
+                    MediaAssetTagsEntity(
+                        mediaAssetId = mediaAssetId,
+                        genresJson = candidate.genres?.let { Json.encodeToString(it) },
+                        moodsJson = candidate.moods?.let { Json.encodeToString(it) },
                     ),
                 )
 
@@ -159,7 +177,6 @@ internal object CanonicalLocalLibrary {
                 ),
             ).map(CanonicalLocalRow::toLegacySong)
         }
-    }
 
     internal fun candidateFromLegacySong(song: Song): LocalMediaCandidate? {
         val uri = song.localUri?.takeIf(String::isNotBlank) ?: return null
@@ -175,6 +192,8 @@ internal object CanonicalLocalLibrary {
             dateAddedSeconds = song.localDateAddedSeconds,
             dateModifiedSeconds = song.localDateModifiedSeconds,
             trackNumber = song.trackNumber,
+            genres = normalizedLocalTagList(song.localGenres),
+            moods = normalizedLocalTagList(song.localMoods),
             youtubeVideoId = song.videoId.takeIf { id ->
                 id != uri &&
                     !id.startsWith("content://", ignoreCase = true) &&
@@ -325,6 +344,14 @@ internal object CanonicalLocalLibrary {
 
     private fun String?.cleanOptionalTag(): String? =
         this?.trim()?.takeIf { it.isNotEmpty() && !it.equals("<unknown>", ignoreCase = true) }
+
+    /** Never turn a failed/blank tag read into a verified empty field. */
+    private fun normalizedLocalTagList(values: List<String>?): List<String>? =
+        values?.takeIf { it.size <= 64 }?.map { it.trim() }
+            ?.takeIf { tags ->
+                tags.all { it.isNotEmpty() && it.length <= 256 &&
+                    !it.equals("<unknown>", ignoreCase = true) }
+            }?.distinct()
 }
 
 internal data class LocalMediaCandidate(
@@ -340,6 +367,8 @@ internal data class LocalMediaCandidate(
     val dateModifiedSeconds: Long?,
     val trackNumber: Int?,
     val youtubeVideoId: String?,
+    val genres: List<String>? = null,
+    val moods: List<String>? = null,
 )
 
 internal data class MediaStoreSourceLookup(
