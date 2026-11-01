@@ -69,10 +69,14 @@ internal object A0ReleaseCohesionPolicy {
         }
         val current=unspent[slot]
         if(current.isEmpty())return Assessment(Reason.NO_ELIGIBLE_COHORT)
+        // Index the portfolio ONCE. A 64-track release can retain up to
+        // 8192 offers: recomputing and normalizing every directory inside
+        // every candidate x sibling iteration would approach 4M parses.
+        val grouped=unspent.map { it.groupBy(::cohort) }
         // A cohort cannot win on a single guessed query. Every credited
         // sibling MUST pass the unchanged ranking, album, quality, duration,
         // source readiness and contradictory-claim checks independently.
-        val bySource=current.groupBy(::cohort)
+        val bySource=grouped[slot]
         data class Candidate(
             val source:Cohort,
             val covered:Int,
@@ -86,7 +90,7 @@ internal object A0ReleaseCohesionPolicy {
             var covered=0
             val physicalPaths=HashSet<Pair<String,String>>()
             for(i in entries.indices) {
-                val siblings=unspent[i].filter {cohort(it)==source}
+                val siblings=grouped[i][source].orEmpty()
                 if(siblings.isEmpty())continue
                 if(A0AutoCandidateSelectionPolicy.preview(
                         entries[i],siblings,quality).status!=
