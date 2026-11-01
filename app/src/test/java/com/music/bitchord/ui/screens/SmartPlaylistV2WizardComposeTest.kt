@@ -45,7 +45,13 @@ class SmartPlaylistV2WizardComposeTest {
         assertEquals(5, first.map { it.id }.distinct().size)
         assertEquals(0, first.count { it.id in selected })
         assertEquals(0, first.map { it.id }.intersect(second.map { it.id }.toSet()).size)
-        assertEquals(first.map { it.id }, suggestedCanonicalPlaylistTracks(rows, selected, page = 2).map { it.id })
+        // A new cycle reshuffles instead of always restarting the alphabetical
+        // first page. Its own contents remain reproducible for the same seed.
+        val third = suggestedCanonicalPlaylistTracks(rows, selected, page = 2)
+        assertEquals(5, third.size)
+        assertEquals(5, third.map { it.id }.distinct().size)
+        assertEquals(0, third.count { it.id in selected })
+        assertEquals(third, suggestedCanonicalPlaylistTracks(rows, selected, page = 2))
     }
 
     @Test fun suggestionRefreshShufflesDeterministicallyAndAvoidsRepeatsUntilExhausted() {
