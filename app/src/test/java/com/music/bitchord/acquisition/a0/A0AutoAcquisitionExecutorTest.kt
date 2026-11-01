@@ -16,14 +16,14 @@ class A0AutoAcquisitionExecutorTest {
         "magnetic","ILLIT - Magnetic","SUPER REAL ME",161)
     private val quality=A0SoulseekQualityProfiles.snapshot(DownloadQualityProfile.HIGH_QUALITY)
     private val bytes=6_440_000L
-    private fun choices(peer:String):List<A0ObservedCandidateHandoff.Choice> {
+    private fun choices(peer:String,sizeBytes:Long=bytes):List<A0ObservedCandidateHandoff.Choice> {
         val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true,
             searchPhrase=target.query,requestedAlbum=target.album,
             expectedDurationSeconds=161,qualityProfile=quality,
             collectReleaseShadow=true)
         handoff.offerParsed(A0SoulseekSearchResponse(
             peer,177,listOf(A0SoulseekSearchFile(
-                "Shared\\ILLIT\\SUPER REAL ME\\ILLIT - Magnetic.mp3",bytes,
+                "Shared\\ILLIT\\SUPER REAL ME\\ILLIT - Magnetic.mp3",sizeBytes,
                 "mp3",mapOf(0 to 320,1 to 161))),
             emptyList(),true,128000,0),peer)
         return handoff.releaseShadowChoices()
@@ -34,6 +34,7 @@ class A0AutoAcquisitionExecutorTest {
         bitrateKbps=320,sampleRateHz=44100,bitDepth=null,completed=true)
     private class FakePort:A0AutoAcquisitionExecutor.Port {
         var fetches=0
+        val fetchedPeers=mutableListOf<String>()
         var publishes=0
         var cleanups=0
         var finishes=0
@@ -56,6 +57,7 @@ class A0AutoAcquisitionExecutorTest {
             isCancelled:()->Boolean,
         ):A0AutoAcquisitionExecutor.FetchResult {
             fetches++
+            fetchedPeers.add(candidate.peerUsername)
             if(fetches<=failCount)return A0AutoAcquisitionExecutor.FetchResult.RetryableConnectionFailure
             afterFetch?.invoke()
             val scratch=File.createTempFile("a0-auto-test-", ".observed")
@@ -166,10 +168,29 @@ class A0AutoAcquisitionExecutorTest {
         assertEquals(1,port.finishes)
     }
 
+    @Test fun exactScoreTieTransfersOnlyFirstSourceAndStillRequiresTechnicalGate() {
+        for((candidates,firstPeer) in listOf(
+            (choices("one")+choices("two",bytes+1024L)) to "one",
+            (choices("two",bytes+1024L)+choices("one")) to "two"
+        )) {
+            val port=FakePort().apply {
+                decoded=this@A0AutoAcquisitionExecutorTest.decoded
+            }
+            val result=A0AutoAcquisitionExecutor(port).run(
+                target,candidates,quality,userRequested=true,optedIn=true,
+                stillAuthorized={true})
+            assertEquals(A0AutoAcquisitionExecutor.Status.PUBLISHED,result.status)
+            assertEquals(listOf(firstPeer),port.fetchedPeers)
+            assertEquals(1,port.inspections)
+            assertEquals(1,port.publishes)
+            assertEquals(1,port.cleanups)
+        }
+    }
+
     @Test fun ambiguousVersionsAndDisabledSourceReturnToManualWithoutIOMutation() {
         val port=FakePort()
         val ambiguous=choices("p1")+choices("p2")
-        // Different declared filesize but otherwise strongly matching title.
+        // Even excellent peer claims cannot bypass the explicit opt-in.
         val result=A0AutoAcquisitionExecutor(port).run(
             target,ambiguous,quality,userRequested=true,optedIn=false,stillAuthorized={true})
         assertEquals(A0AutoAcquisitionExecutor.Status.MANUAL_REVIEW,result.status)
