@@ -219,6 +219,43 @@ class A0AutoDiscoveryCoordinatorTest {
         assertEquals(2,report.searches)
     }
 
+    @Test fun truncatedEarlierSlotMayUseLaterPublishedSiblingFolderOnce() {
+        val two=entries.take(2)
+        val search=FakeSearch {
+            A0AutoDiscoveryCoordinator.SearchResult.Found(claims(two),setOf(0))
+        }
+        val done=mutableListOf<String>()
+        val actions=mutableListOf<A0AutoDiscoveryCoordinator.CacheAction>()
+        val result=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            two,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true},
+            onCacheEvidence={_,e -> actions.add(e.action)})
+        assertEquals(1,result.searches)
+        assertEquals(listOf("two","one"),done)
+        assertEquals(2,result.batch.published)
+        assertTrue(A0AutoDiscoveryCoordinator.CacheAction.SIBLING_RESCUE in actions)
+    }
+
+    @Test fun truncatedEarlierSlotMustNotBeRescuedFromUnrelatedPeerFolder() {
+        val two=entries.take(2)
+        val search=FakeSearch { slot ->
+            if(slot.trackId=="one")
+                A0AutoDiscoveryCoordinator.SearchResult.Found(
+                    claims(listOf(two[0])),setOf(0))
+            else A0AutoDiscoveryCoordinator.SearchResult.Found(
+                alternatePeerClaims(listOf(two[1])))
+        }
+        val done=mutableListOf<String>()
+        val result=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            two,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(2,result.searches)
+        assertEquals(listOf("two"),done)
+        assertEquals(listOf(
+            A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW,
+            A0AutoBatchExecutor.TrackStatus.PUBLISHED),result.batch.results)
+    }
+
     @Test fun readerTeardownFailureOnlyBlocksItsSlotAndAllowsFreshSiblingSearch() {
         val search=FakeSearch { slot ->
             if(slot.trackId=="two")
