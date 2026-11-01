@@ -130,10 +130,33 @@ class SmartPlaylistV2RuleEngineTest {
             match(SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.CONTAINS, "music/kpop"))
         assertEquals(listOf("local"),
             match(SmartPlaylistRuleField.LOCAL_FILE_PATH, SmartPlaylistRuleOperator.ENDS_WITH, ".flac"))
-        assertEquals(listOf("local"),
+        // A verified positive prefix remains true even when other asset paths are missing.
+        assertEquals(listOf("local", "mixed"),
             match(SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.STARTS_WITH, "/storage/emulated/0/music"))
-        assertEquals(emptyList<String>(),
+        // A complete Kpop path disproves Jazz; the incomplete Jazz candidate cannot prove a negative.
+        assertEquals(listOf("local"),
             match(SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.DOES_NOT_CONTAIN, "jazz"))
+        val sibling = candidate("sibling").copy(
+            localFilePaths = listOf("/storage/emulated/0/Music/Kpop-Backup/Other.FLAC"),
+            localFilePathsComplete = true,
+        )
+        val boundaryRows = listOf(known, sibling)
+        val boundaryQuery = SmartPlaylistV2Query(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.CONTAINS,
+                textValue = "music/kpop",
+            ),
+        )
+        assertEquals(listOf("local"),
+            planner.preview(boundaryRows, boundaryQuery).map { it.recordingId })
+        val ancestorQuery = SmartPlaylistV2Query(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.STARTS_WITH,
+                textValue = "/storage/emulated/0/music/kpop",
+            ),
+        )
+        assertEquals(listOf("local"),
+            planner.preview(boundaryRows, ancestorQuery).map { it.recordingId })
         assertEquals(emptyList<String>(), planner.preview(rows, SmartPlaylistV2Query(
             SmartPlaylistRule.Not(SmartPlaylistRule.Comparison(
                 SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.CONTAINS,
