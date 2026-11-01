@@ -89,6 +89,7 @@ internal object CanonicalLocalLibrary {
                         mediaAssetId = mediaAssetId,
                         genresJson = candidate.genres?.let { Json.encodeToString(it) },
                         moodsJson = candidate.moods?.let { Json.encodeToString(it) },
+                        bpmsJson = candidate.bpms?.let { Json.encodeToString(it) },
                     ),
                 )
 
@@ -194,6 +195,7 @@ internal object CanonicalLocalLibrary {
             trackNumber = song.trackNumber,
             genres = normalizedLocalTagList(song.localGenres),
             moods = normalizedLocalTagList(song.localMoods),
+            bpms = normalizedLocalBpmList(song.localBpms),
             youtubeVideoId = song.videoId.takeIf { id ->
                 id != uri &&
                     !id.startsWith("content://", ignoreCase = true) &&
@@ -346,6 +348,10 @@ internal object CanonicalLocalLibrary {
         this?.trim()?.takeIf { it.isNotEmpty() && !it.equals("<unknown>", ignoreCase = true) }
 
     /** Never turn a failed/blank tag read into a verified empty field. */
+    private fun normalizedLocalBpmList(values: List<Double>?): List<Double>? =
+        values?.takeIf { it.size <= 16 && it.all { v -> v.isFinite() && v > 0.0 && v <= 999.0 } }
+            ?.distinct()
+
     private fun normalizedLocalTagList(values: List<String>?): List<String>? =
         values?.takeIf { it.size <= 64 }?.map { it.trim() }
             ?.takeIf { tags ->
@@ -369,6 +375,7 @@ internal data class LocalMediaCandidate(
     val youtubeVideoId: String?,
     val genres: List<String>? = null,
     val moods: List<String>? = null,
+    val bpms: List<Double>? = null,
 )
 
 internal data class MediaStoreSourceLookup(
