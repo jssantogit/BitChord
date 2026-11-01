@@ -26,6 +26,7 @@ internal val smartConditionCategories = listOf(
         SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY,
         SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleField.ALBUM_ARTIST,
         SmartPlaylistRuleField.TRACK_ARTIST, SmartPlaylistRuleField.TRACK_NUMBER,
+        SmartPlaylistRuleField.DISC_NUMBER, SmartPlaylistRuleField.RELEASE_GROUP_TYPE,
         SmartPlaylistRuleField.LOCAL_GENRE, SmartPlaylistRuleField.ARTIST_COUNTRY,
     )),
     SmartConditionCategory("ratings", "Avaliações", "Notas em estrelas e data da nota local", listOf(
@@ -61,6 +62,8 @@ internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (
     SmartPlaylistRuleField.ALBUM_ARTIST -> "Artista do álbum"
     SmartPlaylistRuleField.TRACK_ARTIST -> "Créditos do artista da faixa"
     SmartPlaylistRuleField.TRACK_NUMBER -> "Número da faixa"
+    SmartPlaylistRuleField.DISC_NUMBER -> "Número do disco"
+    SmartPlaylistRuleField.RELEASE_GROUP_TYPE -> "Tipo de lançamento (álbum, single, EP)"
     SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "Capa cadastrada no álbum"
     SmartPlaylistRuleField.EXPLICIT_RATING -> "Avaliação em estrelas"
     SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING -> "Dias desde alteração da avaliação"
@@ -94,6 +97,10 @@ internal fun smartConditionDescription(field: SmartPlaylistRuleField): String = 
         "Use os créditos específicos da música, quando conhecidos."
     SmartPlaylistRuleField.TRACK_NUMBER ->
         "Compare a posição conhecida da música no lançamento."
+    SmartPlaylistRuleField.DISC_NUMBER ->
+        "Número do disco da edição, cadastrado no MusicBrainz."
+    SmartPlaylistRuleField.RELEASE_GROUP_TYPE ->
+        "Compare Single, Album ou EP conforme o tipo oficial do lançamento, não o título."
     SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE ->
         "Seleciona músicas cujo álbum tem uma imagem cadastrada. Não verifica se a capa carrega."
     SmartPlaylistRuleField.EXPLICIT_RATING ->
@@ -150,6 +157,8 @@ internal fun smartConditionSearch(
             SmartPlaylistRuleField.LOCAL_FOLDER -> "pasta diretorio diretório local caminho mediastore"
             SmartPlaylistRuleField.LOCAL_FILE_PATH -> "arquivo caminho pasta filepath path mediastore"
             SmartPlaylistRuleField.LOCAL_FILE_EXTENSION -> "formato extensão extensao mp3 flac m4a arquivo"
+            SmartPlaylistRuleField.DISC_NUMBER -> "disco numero disc medium faixa"
+            SmartPlaylistRuleField.RELEASE_GROUP_TYPE -> "single álbum album ep tipo lançamento"
             SmartPlaylistRuleField.LOCAL_GENRE -> "genero gênero music style tag"
             SmartPlaylistRuleField.ARTIST_COUNTRY -> "país origem artista musicbrainz country brasil coreia"
             SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR -> "ano original lançamento data release-group musicbrainz"
@@ -272,6 +281,12 @@ internal fun smartRuleNewComparison(field: SmartPlaylistRuleField): SmartPlaylis
         )
         SmartPlaylistRuleField.ARTIST_COUNTRY -> SmartPlaylistRule.Comparison(
             field, SmartPlaylistRuleOperator.EQUAL, textValue = "",
+        )
+        SmartPlaylistRuleField.RELEASE_GROUP_TYPE -> SmartPlaylistRule.Comparison(
+            field, SmartPlaylistRuleOperator.EQUAL, textValue = "",
+        )
+        SmartPlaylistRuleField.DISC_NUMBER -> SmartPlaylistRule.Comparison(
+            field, SmartPlaylistRuleOperator.EQUAL,
         )
         SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR -> SmartPlaylistRule.Comparison(
             field, SmartPlaylistRuleOperator.EQUAL,
