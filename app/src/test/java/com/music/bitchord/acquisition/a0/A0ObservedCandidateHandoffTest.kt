@@ -131,8 +131,12 @@ class A0ObservedCandidateHandoffTest {
             A0SoulseekSearchFile("Music\\Artist\\Album\\Artist - Song.mp3",
                 6_400_000L,"mp3",mapOf(0 to 320,1 to 161))),
             emptyList(),true,128_000,0),"late")
-        val after=handoff.releaseShadowChoices()
+        val afterSnapshot=handoff.releaseShadowSnapshot()
+        val after=afterSnapshot.choices
         assertEquals(512,after.size)
+        assertEquals(1,afterSnapshot.shadowEvicted)
+        assertEquals(0,afterSnapshot.shadowDroppedAtGlobalLimit)
+        assertEquals(0,afterSnapshot.shadowDroppedAtPeerLimit)
         assertTrue(after.any { it.peerUsername=="late" })
         assertTrue(after.groupBy { it.peerUsername }.values.all { it.size<=64 })
         assertEquals(1,after.count { it.peerUsername=="late" })
