@@ -26,6 +26,7 @@ internal val smartConditionCategories = listOf(
         SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY,
         SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleField.ALBUM_ARTIST,
         SmartPlaylistRuleField.TRACK_ARTIST, SmartPlaylistRuleField.TRACK_NUMBER,
+        SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD,
     )),
     SmartConditionCategory("ratings", "Avaliações", "Notas em estrelas e data da nota local", listOf(
         SmartPlaylistRuleField.EXPLICIT_RATING, SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING,
