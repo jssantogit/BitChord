@@ -27,7 +27,7 @@ class LocalOggTagParserTest {
         val header = byteArrayOf(
             'O'.code.toByte(), 'g'.code.toByte(), 'g'.code.toByte(), 'S'.code.toByte(),
             0, (if (first) 2 else if (continued) 1 else 0).toByte(),
-        ) + ByteArray(14) + le32(serial) + le32(sequence) +
+        ) + ByteArray(8) + le32(serial) + le32(sequence) +
             ByteArray(4) + byteArrayOf(segments.size.toByte()) +
             segments.map(Int::toByte).toByteArray()
         return header + packet
