@@ -248,6 +248,13 @@ object Downloads {
                 it.videoId==sessionId
             }?.progress !is DownloadProgress.Failed)return false
         val entries=plan.manualEntries
+        val retainedRows=plan.manualIndices.count {
+            plan.candidatesForManual(it).isNotEmpty()
+        }
+        Log.d(TAG,"soulseek_manual_review_route" +
+            " screen=${if(retainedRows>0) "RETAINED" else "LEGACY_SEARCH"}" +
+            " manual_slots=${plan.manualIndices.size.coerceIn(0,64)}" +
+            " retained_slots=${retainedRows.coerceIn(0,64)}")
         if(!SoulseekAutoQueueAdmission.allows(
                 entries,true,true,true,true))return false
         val first=entries.first()
@@ -1398,7 +1405,8 @@ object Downloads {
                     " attempt_failed=${report.attemptFailures}" +
                     " cancelled=${report.cancelled}" +
                     " unused_reservation_released=${outcome.unusedReservationReleased}" +
-                    " retained_slots=${retained.size}")
+                    " retained_slots=${retained.count { it.value.isNotEmpty() }}" +
+                    " retained_offers=${retained.values.sumOf { it.size }.coerceIn(0,1024)}")
                 if(job?.isActive!=true)throw CancellationException()
                 val review=SoulseekAutoReviewPlan.from(
                     request.entries,report.results,retained,
