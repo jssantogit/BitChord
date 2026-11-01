@@ -78,6 +78,10 @@ internal data class RuleBasedRecordingCandidate(
     val hasReleaseArtworkReference: Boolean = false,
     val localAddedEpochMs: List<Long> = emptyList(),
     val localAddedDateEvidenceUnknown: Boolean = true,
+    /** Verified paths of MediaStore assets only, never provider/stream URLs. */
+    val localFilePaths: List<String> = emptyList(),
+    /** False when local assets have missing/inaccessible paths or provenance is unknown. */
+    val localFilePathsComplete: Boolean = false,
     /** Real canonical ReleaseTrack IDs, never matched by album title. */
     val canonicalReleaseIds: List<String> = emptyList(),
 )
@@ -244,7 +248,9 @@ internal fun SmartPlaylistV2Query.requiredEvidenceFields(): Set<SmartPlaylistRul
 
 private fun SmartPlaylistRule.needsSourceKinds(): Boolean = when (this) {
     is SmartPlaylistRule.Comparison -> field == SmartPlaylistRuleField.SOURCE_KIND ||
-        field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED
+        (field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED ||
+            field == SmartPlaylistRuleField.LOCAL_FOLDER ||
+            field == SmartPlaylistRuleField.LOCAL_FILE_PATH)
     is SmartPlaylistRule.Reference -> false
     is SmartPlaylistRule.Group -> children.any { it.needsSourceKinds() }
     is SmartPlaylistRule.Not -> child.needsSourceKinds()
