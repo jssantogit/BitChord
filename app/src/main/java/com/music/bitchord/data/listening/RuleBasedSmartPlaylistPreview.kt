@@ -90,6 +90,12 @@ internal data class RuleBasedRecordingCandidate(
     val localBitrateEvidenceComplete: Boolean = false,
     /** Real canonical ReleaseTrack IDs, never matched by album title. */
     val canonicalReleaseIds: List<String> = emptyList(),
+    /** Country codes from verified canonical artist credits joined to MusicBrainz. */
+    val artistCountryCodes: List<String> = emptyList(),
+    val artistCountryEvidenceUnknown: Boolean = true,
+    /** The ReleaseGroup first-release year; never an edition's releaseDate. */
+    val originalReleaseYears: List<Int> = emptyList(),
+    val originalReleaseYearEvidenceUnknown: Boolean = true,
 )
 
 internal data class RuleBasedSmartPlaylistQuery(
