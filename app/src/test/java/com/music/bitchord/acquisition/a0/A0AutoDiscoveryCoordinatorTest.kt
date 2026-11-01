@@ -212,6 +212,28 @@ class A0AutoDiscoveryCoordinatorTest {
         assertEquals(2,report.searches)
     }
 
+    @Test fun readerTeardownFailureOnlyBlocksItsSlotAndAllowsFreshSiblingSearch() {
+        val search=FakeSearch { slot ->
+            if(slot.trackId=="two")
+                A0AutoDiscoveryCoordinator.SearchResult.TeardownIncomplete
+            else A0AutoDiscoveryCoordinator.SearchResult.Found(claims(listOf(slot)))
+        }
+        val done=mutableListOf<String>()
+        val result=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            entries.take(3),quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(3,result.searches)
+        assertEquals(listOf("one","two","three"),search.requests)
+        assertEquals(listOf("one","three"),done)
+        assertEquals(listOf(
+            A0AutoBatchExecutor.TrackStatus.PUBLISHED,
+            A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW,
+            A0AutoBatchExecutor.TrackStatus.PUBLISHED),result.batch.results)
+        assertEquals(2,result.batch.published)
+        assertEquals(1,result.batch.manualReview)
+        assertEquals(1,search.closed)
+    }
+
     @Test fun failedLaterDiscoveryKeepsEarlierPublishedTrackVisible() {
         val events=mutableListOf<String>()
         val search=FakeSearch { target ->
