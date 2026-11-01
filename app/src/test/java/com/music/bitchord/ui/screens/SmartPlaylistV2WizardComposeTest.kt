@@ -1,6 +1,8 @@
 package com.music.bitchord.ui.screens
 
 import android.app.Application
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -46,7 +48,7 @@ class SmartPlaylistV2WizardComposeTest {
                 PlaylistWizardNavOption(
                     title = "Músicas e metadados",
                     description = "Título e artista",
-                    icon = androidx.compose.material.icons.Icons.Rounded.MusicNote,
+                    icon = Icons.Rounded.MusicNote,
                     onClick = { pressed++ },
                 ),
             ))
