@@ -112,8 +112,8 @@ private fun operatorUiLabel(operator: SmartPlaylistRuleOperator): String = when 
     SmartPlaylistRuleOperator.GREATER_OR_EQUAL -> "Pelo menos"
     SmartPlaylistRuleOperator.LESS_THAN -> "É menor que"
     SmartPlaylistRuleOperator.LESS_OR_EQUAL -> "No máximo"
-    SmartPlaylistRuleOperator.IS_PRESENT -> "Possui valor conhecido"
-    SmartPlaylistRuleOperator.IS_MISSING -> "Sem valor confirmado"
+    SmartPlaylistRuleOperator.IS_PRESENT -> "Tem informação cadastrada"
+    SmartPlaylistRuleOperator.IS_MISSING -> "Não tem informação cadastrada"
     SmartPlaylistRuleOperator.CONTAINS -> "Contém"
     SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> "Não contém"
     SmartPlaylistRuleOperator.STARTS_WITH -> "Começa com"
@@ -1079,7 +1079,15 @@ internal fun SmartPlaylistV2WizardUi(
                                 )
                                 val presence = draft.operator == SmartPlaylistRuleOperator.IS_PRESENT ||
                                     draft.operator == SmartPlaylistRuleOperator.IS_MISSING
-                                if (!presence) {
+                                if (presence) {
+                                    Text(
+                                        "Não precisa digitar um valor: verifica se o campo “" +
+                                            smartConditionLabel(draft.field) +
+                                            "” tem uma informação registrada.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                } else {
                                     if (draft.field == SmartPlaylistRuleField.SOURCE_KIND) {
                                         PlaylistWizardSegmented(
                                             first = "Dispositivo",
