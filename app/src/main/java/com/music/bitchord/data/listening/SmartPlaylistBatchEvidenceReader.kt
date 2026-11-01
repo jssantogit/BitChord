@@ -82,6 +82,12 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
         val trackPositionsById = if (SmartPlaylistRuleField.TRACK_NUMBER in requiredFields) {
             catalog.recordingTrackPositionsByIds(recordingIds).groupBy { it.recordingId }
         } else emptyMap()
+        val discNumbersById = if (SmartPlaylistRuleField.DISC_NUMBER in requiredFields) {
+            catalog.recordingDiscNumbersByIds(recordingIds).groupBy { it.recordingId }
+        } else emptyMap()
+        val groupTypesById = if (SmartPlaylistRuleField.RELEASE_GROUP_TYPE in requiredFields) {
+            catalog.recordingReleaseGroupTypesByIds(recordingIds).groupBy { it.recordingId }
+        } else emptyMap()
         val trackArtistsById = if (SmartPlaylistRuleField.TRACK_ARTIST in requiredFields) {
             catalog.recordingTrackArtistCreditsByIds(recordingIds).groupBy { it.recordingId }
         } else emptyMap()
@@ -129,6 +135,8 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
             val parsedYears = datedReleases.map { parseTrustedMusicBrainzReleaseYear(it.releaseDate) }
             val albumArtistRows = albumArtistRowsById[id].orEmpty()
             val trackPositionRows = trackPositionsById[id].orEmpty()
+            val discRows = discNumbersById[id].orEmpty()
+            val groupTypeRows = groupTypesById[id].orEmpty()
             val trackArtistRows = trackArtistsById[id].orEmpty()
             val artistCountryRows = countriesById[id].orEmpty()
             val originalDateRows = originalReleaseDatesById[id].orEmpty()
@@ -218,6 +226,15 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                 originalReleaseYears = parsedOriginalYears.filterNotNull().distinct().sorted(),
                 originalReleaseYearEvidenceUnknown = originalDateRows.isEmpty() ||
                     parsedOriginalYears.any { it == null },
+                discNumbers = discRows.mapNotNull { it.discNumber?.takeIf { n -> n > 0 } }
+                    .distinct().sorted(),
+                discNumberEvidenceUnknown = discRows.isEmpty() ||
+                    discRows.any { (it.discNumber ?: 0) <= 0 },
+                releaseGroupTypes = groupTypeRows.mapNotNull {
+                    it.primaryType?.trim()?.takeIf(String::isNotBlank)
+                }.distinct().sorted(),
+                releaseGroupTypeEvidenceUnknown = groupTypeRows.isEmpty() ||
+                    groupTypeRows.any { it.primaryType.isNullOrBlank() },
             )
         }
     }
