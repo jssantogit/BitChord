@@ -583,7 +583,9 @@ internal fun rememberMusicBrainzCatalogAction(
                 CanonicalCatalogDatabase.get(context).catalogDao()
                     .entityIdForExternalIdentity("musicbrainz", "recording", mbid)
             },
-            browse = { currentCanonicalBrowse(context) },
+            // Never materialize an unrestricted catalog for one MBID tap.
+            browse = { CanonicalBrowseLibrary.EMPTY },
+            browseSelected = { ids -> currentCanonicalBrowse(context, ids) },
             planner = CanonicalCollectionIntentPlanner(androidCanonicalQueueResolver(context)),
         )
     }
