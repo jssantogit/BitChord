@@ -22,6 +22,14 @@ class A0TransferDeadlinesTest {
             A0TransferDeadlines.isExpired(receiving,fEstablished+seconds.toNanos(181)))
     }
 
+    @Test fun aSlowInitialFTokenHasEightSecondsButDataStillHasFourSecondIdleCap() {
+        assertEquals(8000,A0TransferDeadlines.fTokenReadTimeoutMillis)
+        assertEquals(4000,A0TransferDeadlines.streamIdleTimeoutMillis)
+        assertTrue(A0TransferDeadlines.fTokenReadTimeoutMillis >
+            A0TransferDeadlines.streamIdleTimeoutMillis)
+        assertTrue(A0TransferDeadlines.fTokenReadTimeoutMillis < 180000)
+    }
+
     @Test fun peerNegotiationDoesNotGetAnUnboundedExtension() {
         val started=seconds.toNanos(10)
         val deadline=A0TransferDeadlines.negotiate(started)
