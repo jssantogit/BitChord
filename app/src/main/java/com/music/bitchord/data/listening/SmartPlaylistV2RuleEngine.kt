@@ -65,6 +65,8 @@ internal enum class SmartPlaylistRuleField {
     LOCAL_BITRATE_KBPS,
     ARTIST_COUNTRY,
     ORIGINAL_RELEASE_YEAR,
+    DISC_NUMBER,
+    RELEASE_GROUP_TYPE,
 }
 
 internal enum class SmartPlaylistSourceKind { LOCAL, OPENSUBSONIC }
@@ -98,7 +100,8 @@ internal fun SmartPlaylistRuleField.isTextField(): Boolean =
         this == SmartPlaylistRuleField.LOCAL_FILE_PATH ||
         this == SmartPlaylistRuleField.LOCAL_FILE_EXTENSION ||
         this == SmartPlaylistRuleField.LOCAL_GENRE ||
-        this == SmartPlaylistRuleField.ARTIST_COUNTRY
+        this == SmartPlaylistRuleField.ARTIST_COUNTRY ||
+        this == SmartPlaylistRuleField.RELEASE_GROUP_TYPE
 
 internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOperator> =
     if (this == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) listOf(
@@ -106,6 +109,7 @@ internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOp
     ) else if (this == SmartPlaylistRuleField.RELEASE_YEAR ||
         this == SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR ||
         this == SmartPlaylistRuleField.TRACK_NUMBER ||
+        this == SmartPlaylistRuleField.DISC_NUMBER ||
         this == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED ||
         this == SmartPlaylistRuleField.LOCAL_BITRATE_KBPS) listOf(
         SmartPlaylistRuleOperator.EQUAL,
@@ -118,6 +122,7 @@ internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOp
     ) else if (this == SmartPlaylistRuleField.ALBUM_ARTIST ||
         this == SmartPlaylistRuleField.ARTIST_COUNTRY ||
         this == SmartPlaylistRuleField.TRACK_ARTIST ||
+        this == SmartPlaylistRuleField.RELEASE_GROUP_TYPE ||
         this == SmartPlaylistRuleField.LOCAL_GENRE) listOf(
         SmartPlaylistRuleOperator.EQUAL,
         SmartPlaylistRuleOperator.NOT_EQUAL,
@@ -239,7 +244,8 @@ internal data class SmartPlaylistV2Query(
                                 "Local bitrate threshold must be positive kbps"
                             }
                         }
-                        if (node.field == SmartPlaylistRuleField.TRACK_NUMBER && !presence) {
+                        if (node.field in listOf(SmartPlaylistRuleField.TRACK_NUMBER,
+                            SmartPlaylistRuleField.DISC_NUMBER) && !presence) {
                             require(node.value!! in 1.0..99_999.0 &&
                                 node.value % 1.0 == 0.0) {
                                 "Track position must be a positive integer"
@@ -594,15 +600,18 @@ internal class SmartPlaylistV2RuleEngine(
         }
         if (rule.field == SmartPlaylistRuleField.RELEASE_YEAR ||
             rule.field == SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR ||
-            rule.field == SmartPlaylistRuleField.TRACK_NUMBER) {
+            rule.field == SmartPlaylistRuleField.TRACK_NUMBER ||
+            rule.field == SmartPlaylistRuleField.DISC_NUMBER) {
             val numbers = when (rule.field) {
                 SmartPlaylistRuleField.RELEASE_YEAR -> row.releaseYears
                 SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR -> row.originalReleaseYears
+                SmartPlaylistRuleField.DISC_NUMBER -> row.discNumbers
                 else -> row.trackNumbers
             }
             val evidenceUnknown = when (rule.field) {
                 SmartPlaylistRuleField.RELEASE_YEAR -> row.releaseYearEvidenceUnknown
                 SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR -> row.originalReleaseYearEvidenceUnknown
+                SmartPlaylistRuleField.DISC_NUMBER -> row.discNumberEvidenceUnknown
                 else -> row.trackNumberEvidenceUnknown
             }
             if (rule.operator == SmartPlaylistRuleOperator.IS_PRESENT) {
@@ -636,15 +645,18 @@ internal class SmartPlaylistV2RuleEngine(
         }
         if (rule.field == SmartPlaylistRuleField.ALBUM_ARTIST ||
             rule.field == SmartPlaylistRuleField.TRACK_ARTIST ||
-            rule.field == SmartPlaylistRuleField.ARTIST_COUNTRY) {
+            rule.field == SmartPlaylistRuleField.ARTIST_COUNTRY ||
+            rule.field == SmartPlaylistRuleField.RELEASE_GROUP_TYPE) {
             val creditedNames = when (rule.field) {
                 SmartPlaylistRuleField.ALBUM_ARTIST -> row.albumArtistNames
                 SmartPlaylistRuleField.ARTIST_COUNTRY -> row.artistCountryCodes
+                SmartPlaylistRuleField.RELEASE_GROUP_TYPE -> row.releaseGroupTypes
                 else -> row.trackArtistNames
             }
             val evidenceUnknown = when (rule.field) {
                 SmartPlaylistRuleField.ALBUM_ARTIST -> row.albumArtistEvidenceUnknown
                 SmartPlaylistRuleField.ARTIST_COUNTRY -> row.artistCountryEvidenceUnknown
+                SmartPlaylistRuleField.RELEASE_GROUP_TYPE -> row.releaseGroupTypeEvidenceUnknown
                 else -> row.trackArtistEvidenceUnknown
             }
             val names = creditedNames.mapNotNull {
@@ -901,6 +913,8 @@ internal class SmartPlaylistV2RuleEngine(
             SmartPlaylistRuleField.ARTIST_COUNTRY,
             SmartPlaylistRuleField.ALBUM_ARTIST,
             SmartPlaylistRuleField.TRACK_NUMBER,
+            SmartPlaylistRuleField.DISC_NUMBER,
+            SmartPlaylistRuleField.RELEASE_GROUP_TYPE,
             SmartPlaylistRuleField.TRACK_ARTIST,
             SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
             SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED,
