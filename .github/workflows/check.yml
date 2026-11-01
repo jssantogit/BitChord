@@ -2,8 +2,7 @@ name: Android CI
 
 on:
   push:
-    # Temporary #192 branch CI while PR #193 cannot generate a merge ref.
-    branches: [main, 'listening/smart-playlists-v2-192']
+    branches: [main]
   pull_request:
 
 # Per-PR workflows supersede old HEADs; main runs are keyed by commit and
