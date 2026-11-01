@@ -76,6 +76,29 @@ class A0OneShotPublicSearchWireTest {
         assertEquals(0,observed)
     }
 
+    @Test fun parsedCallbackOnlySeesTokenAndPeerValidatedDirectReply() {
+        var observed=0
+        val answer=A0OneShotPublicSearchWire.readOneDirectPeerReply(
+            ByteArrayInputStream(peerInit("peer-A","P",0) +
+                searchReply("peer-A",27182,"Ringingsound.wav")),27182,
+            onValidatedParsedReply={ parsed ->
+                observed++
+                assertEquals("peer-A",parsed.peerUsername)
+                assertEquals(27182,parsed.token)
+                assertEquals(1,parsed.files.size)
+            })
+        assertEquals(1,observed)
+        assertEquals(1,answer.untrustedResultCount)
+        observed=0
+        reject {
+            A0OneShotPublicSearchWire.readOneDirectPeerReply(
+                ByteArrayInputStream(peerInit("peer-A","P",0) +
+                    searchReply("different",27182,"Ringingsound.wav")),27182,
+                onValidatedParsedReply={ observed++ })
+        }
+        assertEquals(0,observed)
+    }
+
     @Test fun wrongSearchTokenOrClaimedUsernameMustNotCountAsAReply() {
         for (payload in listOf(
             peerInit("peer-A", "P", 0) + searchReply("peer-A", 123, "f\\Ringingsound.wav"),
