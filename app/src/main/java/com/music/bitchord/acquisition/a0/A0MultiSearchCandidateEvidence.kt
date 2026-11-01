@@ -56,10 +56,11 @@ internal class A0MultiSearchCandidateEvidence(
         for(index in lostSlots) {
             if(index in entries.indices)clipped[index]=true
         }
-        // A collector is bounded at 512; distrust larger external lists and
-        // signal lost coverage rather than silently treating it as complete.
-        if(choices.size>512)clipped.fill(true)
-        for(choice in choices.take(512)) {
+        // A multi-track collector can retain 1024 release-wide offers; each
+        // target track still caps at 512 and flags lost relevant coverage.
+        // Reject unexpectedly larger external populations without silent loss.
+        if(choices.size>1024)clipped.fill(true)
+        for(choice in choices.take(1024)) {
             val tokens=A0ReleaseDiscoveryShadowAdapter.fileTokens(choice.claim.filename)
             for(index in entries.indices) {
                 if(titleTokens[index].isEmpty() ||
