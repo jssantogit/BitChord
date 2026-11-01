@@ -107,8 +107,12 @@ internal class A0AutoDiscoveryCoordinator(
             truncated:Boolean,notify:Boolean):
             Pair<List<A0ObservedCandidateHandoff.Choice>,
                 A0AutoCandidateSelectionPolicy.Decision> {
+            // Try the more informative release-wide consensus first.
+            // If equally strong release cohorts remain tied, the user's
+            // explicit auto opt-in permits first-observed READY selection.
             val baseline=A0AutoCandidateSelectionPolicy.preview(
-                entries[index],offers,quality,sampleTruncated=truncated)
+                entries[index],offers,quality,sampleTruncated=truncated,
+                resolveExactTies=false)
             if(baseline.reason!=A0AutoCandidateSelectionPolicy.Reason.AMBIGUOUS_EDITION)
                 return offers to baseline
             val snapshots=entries.indices.map {
@@ -120,7 +124,8 @@ internal class A0AutoDiscoveryCoordinator(
                 publishedPaths,quality)
             if(notify)try {onCohesionEvidence(index,outcome)}catch(_:Exception){}
             if(outcome.reason!=A0ReleaseCohesionPolicy.Reason.UNIQUE_RELEASE_COHORT)
-                return offers to baseline
+                return offers to A0AutoCandidateSelectionPolicy.preview(
+                    entries[index],offers,quality,sampleTruncated=truncated)
             val filtered=A0AutoCandidateSelectionPolicy.preview(
                 entries[index],outcome.choices,quality)
             // The policy's cached evidence is not permission to bypass
