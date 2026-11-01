@@ -57,6 +57,7 @@ internal enum class SmartPlaylistRuleField {
     TRACK_ARTIST,
     GENRE,
     MOOD,
+    STYLE,
     BPM,
     DAYS_SINCE_LOCAL_RATING,
     RELEASE_ARTWORK_REFERENCE,
@@ -91,7 +92,8 @@ internal fun SmartPlaylistRuleField.isTextField(): Boolean =
         this == SmartPlaylistRuleField.ALBUM_ARTIST ||
         this == SmartPlaylistRuleField.TRACK_ARTIST ||
         this == SmartPlaylistRuleField.GENRE ||
-        this == SmartPlaylistRuleField.MOOD
+        this == SmartPlaylistRuleField.MOOD ||
+        this == SmartPlaylistRuleField.STYLE
 
 internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOperator> =
     if (this == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) listOf(
@@ -713,6 +715,7 @@ internal class SmartPlaylistV2RuleEngine(
                 SmartPlaylistRuleField.RELEASE_TITLE -> row.releaseTitles
                 SmartPlaylistRuleField.GENRE -> row.genres
                 SmartPlaylistRuleField.MOOD -> row.moods
+                SmartPlaylistRuleField.STYLE -> row.styles
                 SmartPlaylistRuleField.ALBUM_ARTIST,
                 SmartPlaylistRuleField.TRACK_ARTIST,
                 SmartPlaylistRuleField.SOURCE_KIND -> emptyList()
@@ -726,6 +729,7 @@ internal class SmartPlaylistV2RuleEngine(
             } || when (rule.field) {
                 SmartPlaylistRuleField.GENRE -> row.genreEvidenceUnknown
                 SmartPlaylistRuleField.MOOD -> row.moodEvidenceUnknown
+                SmartPlaylistRuleField.STYLE -> row.styleEvidenceUnknown
                 else -> false
             }
             if ((rule.field == SmartPlaylistRuleField.TITLE ||
@@ -796,6 +800,7 @@ internal class SmartPlaylistV2RuleEngine(
             SmartPlaylistRuleField.TRACK_NUMBER,
             SmartPlaylistRuleField.TRACK_ARTIST,
             SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD,
+            SmartPlaylistRuleField.STYLE,
             SmartPlaylistRuleField.BPM,
             SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
             SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED -> null
