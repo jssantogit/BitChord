@@ -37,7 +37,7 @@ internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalSongBrowse(
                 rule.field == SmartPlaylistRuleField.DURATION_MS ||
                 rule.field == SmartPlaylistRuleField.SOURCE_KIND ||
                 (rule.field in setOf(SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD) &&
-                    verifiedContextualSourceKind(providerKey) == SmartPlaylistSourceKind.OPENSUBSONIC) ||
+                    verifiedContextualSourceKind(providerKey) != null) ||
                 (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED &&
                     providerKey == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
         is SmartPlaylistRule.Group -> rule.children.isNotEmpty() &&
@@ -56,7 +56,7 @@ internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalSongBrowse(
  * canonical Recordings and playback assets from its input unchanged.
  */
 /** Invalid JSON, an absent optional field, or a malformed value remains UNKNOWN. */
-private fun parseServerTagValues(json: String?): List<String>? =
+private fun parseScopedAssetTags(json: String?): List<String>? =
     json?.let { serialized ->
         runCatching { Json.decodeFromString<List<String>>(serialized) }
             .getOrNull()?.map(String::trim)
@@ -121,8 +121,8 @@ internal fun filterCanonicalBrowseSongs(
             val completeRows = tagRows.size == visibleAssetIds.size &&
                 validRows.size == visibleAssetIds.size &&
                 validRows.map { it.mediaAssetId }.toSet() == visibleAssetIds
-            val genres = validRows.map { parseServerTagValues(it.genresJson) }
-            val moods = validRows.map { parseServerTagValues(it.moodsJson) }
+            val genres = validRows.map { parseScopedAssetTags(it.genresJson) }
+            val moods = validRows.map { parseScopedAssetTags(it.moodsJson) }
             RuleBasedRecordingCandidate(
                 recordingId = song.recordingId,
                 explicitRating = null,
