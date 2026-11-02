@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -1135,5 +1136,207 @@ private fun formatDuration(durationMs: Long?): String? {
         "%d:%02d:%02d".format(hours, minutes, seconds)
     } else {
         "%d:%02d".format(minutes, seconds)
+    }
+}
+
+/**
+ * The unified catalog reuses the pre-regression release-page header, search,
+ * action pills and Library rows. Its entities remain Recording/Release/Artist
+ * IDs; this is intentionally not a conversion into fake local Song/browse IDs.
+ */
+@Composable
+private fun NativeUnifiedLibraryBody(
+    title: String,
+    selectedContext: CanonicalSmartFilterContext,
+    tracks: List<CanonicalBrowseTrack>,
+    filteredState: CanonicalSongFilterState,
+    entityState: CanonicalEntityBrowseState,
+    artworkLoader: OpenSubsonicArtworkLoader,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    searching: Boolean,
+    viewType: LibraryViewType,
+    onTrackPlay: (CanonicalBrowseTrack) -> Unit,
+    onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
+    onEntitySelect: (CanonicalSelectedEntity) -> Unit,
+) {
+    val palette = rememberArtworkPalette(imageUrl = null)
+    val albums = (entityState as? CanonicalEntityBrowseState.Albums)?.releases.orEmpty()
+    val artists = (entityState as? CanonicalEntityBrowseState.Artists)?.artists.orEmpty()
+    val count = when (selectedContext) {
+        CanonicalSmartFilterContext.SONGS -> tracks.size
+        CanonicalSmartFilterContext.ALBUMS -> albums.size
+        CanonicalSmartFilterContext.ARTISTS -> artists.size
+    }
+    val completeDuration = tracks.isNotEmpty() && tracks.all { (it.durationMs ?: 0L) > 0 }
+    val minutes = tracks.sumOf { it.durationMs ?: 0L } / 60_000
+    val label = when (selectedContext) {
+        CanonicalSmartFilterContext.SONGS ->
+            "$" + "{count} faixas" + if (completeDuration) " · $" + "{minutes / 60}h $" + "{minutes % 60}m" else ""
+        CanonicalSmartFilterContext.ALBUMS -> "$" + "{count} álbuns"
+        CanonicalSmartFilterContext.ARTISTS -> "$" + "{count} artistas"
+    }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val sleeve = (maxWidth * 0.76f).coerceAtMost(maxHeight * 0.6f)
+        LazyColumn(
+            modifier = Modifier.fillMaxSize()
+                .statusBarsPadding().navigationBarsPadding()
+                .padding(top = 72.dp),
+            contentPadding = PaddingValues(bottom = 112.dp),
+        ) {
+            item(key = "native-library-header") {
+                NativeReleaseHeaderLayout(
+                    title = title,
+                    credit = "",
+                    meta = label,
+                    palette = palette,
+                    sleeveSize = sleeve,
+                    artwork = { CoverPlaceholder(Icons.Rounded.Folder, Modifier.fillMaxSize()) },
+                    topInset = 18.dp,
+                    actions = {
+                        if (count > 0) {
+                            Spacer(Modifier.height(18.dp))
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                ActionPill(
+                                    icon = BitChordIcons.Play,
+                                    label = stringResource(R.string.play),
+                                    onClick = { tracks.firstOrNull()?.let(onTrackPlay) },
+                                    filled = true,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                ActionPill(
+                                    icon = BitChordIcons.Shuffle,
+                                    label = stringResource(R.string.shuffle),
+                                    onClick = { tracks.randomOrNull()?.let(onTrackPlay) },
+                                    filled = false,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                    },
+                )
+            }
+            item(key = "native-library-search") {
+                DetailSearchField(
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    onClose = { onQueryChange("") },
+                    autoFocus = searching,
+                    onFocused = {},
+                    palette = palette,
+                )
+            }
+            when (selectedContext) {
+                CanonicalSmartFilterContext.SONGS -> when (filteredState) {
+                    CanonicalSongFilterState.Loading -> item {
+                        RemoteBrowseMessage("Carregando músicas…")
+                    }
+                    CanonicalSongFilterState.Failed -> item {
+                        RemoteBrowseMessage("Não foi possível aplicar o filtro.")
+                    }
+                    is CanonicalSongFilterState.Ready -> if (tracks.isEmpty()) item {
+                        RemoteBrowseMessage("Nenhuma música nesta seleção.")
+                    } else if (viewType == LibraryViewType.GRID) {
+                        gridRows(
+                            tracks, 2, key = { it.recordingId },
+                        ) { track ->
+                            Column(
+                                modifier = Modifier.fillMaxWidth()
+                                    .clickable { onTrackPlay(track) },
+                            ) {
+                                RemoteTrackArtwork(
+                                    mediaAssetId = track.availableAssets.firstOrNull()?.mediaAssetId,
+                                    artworkRevision = track.artworkUri,
+                                    title = track.title,
+                                    artworkLoader = artworkLoader,
+                                    modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                                )
+                                Text(track.title, maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.titleMedium)
+                                Text(track.artistDisplay, maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    } else items(
+                        items = tracks,
+                        key = CanonicalBrowseTrack::recordingId,
+                    ) { track ->
+                        CanonicalTrackRow(
+                            track = track, artworkLoader = artworkLoader,
+                            onClick = { onTrackPlay(track) },
+                            onEditRating = { onTrackEditRating(track) },
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(start = 84.dp),
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                        )
+                    }
+                }
+                CanonicalSmartFilterContext.ALBUMS -> when (entityState) {
+                    CanonicalEntityBrowseState.Loading -> item {
+                        RemoteBrowseMessage("Carregando álbuns…")
+                    }
+                    CanonicalEntityBrowseState.Failed -> item {
+                        RemoteBrowseMessage("Não foi possível carregar os álbuns.")
+                    }
+                    is CanonicalEntityBrowseState.Albums -> {
+                        if (albums.isEmpty()) item {
+                            RemoteBrowseMessage("Nenhum álbum nesta seleção.")
+                        }
+                        items(albums, key = { it.id }) { album ->
+                            LibraryRow(
+                                title = album.title,
+                                subtitle = album.artistDisplay.orEmpty(),
+                                imageUrl = album.artworkUri,
+                                onClick = { onEntitySelect(CanonicalSelectedEntity(album.id, album.title)) },
+                                artworkSize = 64.dp,
+                                horizontalPadding = PAGE_GUTTER,
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 84.dp),
+                                thickness = 0.5.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                            )
+                        }
+                    }
+                    is CanonicalEntityBrowseState.Artists -> Unit
+                }
+                CanonicalSmartFilterContext.ARTISTS -> when (entityState) {
+                    CanonicalEntityBrowseState.Loading -> item {
+                        RemoteBrowseMessage("Carregando artistas…")
+                    }
+                    CanonicalEntityBrowseState.Failed -> item {
+                        RemoteBrowseMessage("Não foi possível carregar os artistas.")
+                    }
+                    is CanonicalEntityBrowseState.Artists -> {
+                        if (artists.isEmpty()) item {
+                            RemoteBrowseMessage("Nenhum artista nesta seleção.")
+                        }
+                        items(artists, key = { it.id }) { artist ->
+                            LibraryRow(
+                                title = artist.name,
+                                subtitle = "",
+                                imageUrl = null,
+                                onClick = { onEntitySelect(artist) },
+                                artworkSize = 64.dp,
+                                horizontalPadding = PAGE_GUTTER,
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 84.dp),
+                                thickness = 0.5.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                            )
+                        }
+                    }
+                    is CanonicalEntityBrowseState.Albums -> Unit
+                }
+            }
+        }
     }
 }
