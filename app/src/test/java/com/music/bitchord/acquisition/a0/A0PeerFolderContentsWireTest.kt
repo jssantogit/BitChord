@@ -66,6 +66,28 @@ class A0PeerFolderContentsWireTest {
             response(712,folder,folder+"\\CD2"),712,folder)
         assertTrue("subdirectory cannot establish same-folder release",child.isEmpty())
     }
+    @Test fun decompressionAndCountBudgetsRejectUntrustedBulkListing() {
+        val folder="Music\\ILLIT\\BREAK EVEN"
+        val names=List(513) { n -> "track-$n.flac" }
+        try {
+            A0PeerFolderContentsWire.parse(
+                response(712,folder,files=names),712,folder)
+            fail("over-budget file population accepted")
+        }catch(_:IOException){}
+        val raw=response(712,folder)
+        raw[4]=9 // unrelated P message code
+        try {
+            A0PeerFolderContentsWire.parse(raw,712,folder)
+            fail("unsolicited peer message accepted")
+        }catch(_:IOException){}
+        val mangled=response(712,folder)
+        mangled[mangled.lastIndex]=(mangled.last().toInt() xor 0x7f).toByte()
+        try {
+            A0PeerFolderContentsWire.parse(mangled,712,folder)
+            fail("corrupt zlib data accepted")
+        }catch(_:IOException){}
+    }
+
     @Test fun boundedFramingRejectsMalformedFileCountAndTraversal() {
         val folder="Music\\ILLIT\\BREAK EVEN"
         try {
