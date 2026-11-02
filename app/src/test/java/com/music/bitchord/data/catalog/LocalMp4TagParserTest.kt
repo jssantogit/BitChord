@@ -36,6 +36,8 @@ class LocalMp4TagParserTest {
             freeform("MOOD", "Bright"),
             freeform("STYLE", "House"),
             freeform("GENRE", "Downtempo"),
+            textItem(byteArrayOf(0xA9.toByte(), 'w'.code.toByte(), 'r'.code.toByte(), 't'.code.toByte()), "Jane Doe"),
+            freeform("COMPOSER", "John Doe"),
             textItem(byteArrayOf(0xA9.toByte(), 'g'.code.toByte(), 'r'.code.toByte(), 'p'.code.toByte()), "Album grouping"),
         )
         val tags = requireNotNull(read(data))
@@ -43,6 +45,7 @@ class LocalMp4TagParserTest {
         assertEquals(listOf("Bright"), tags.moods)
         assertEquals(listOf("House"), tags.styles)
         assertEquals(listOf(127.0), tags.bpms)
+        assertEquals(listOf("Jane Doe", "John Doe"), tags.composers)
     }
 
     @Test fun moovAfterGiganticMdatIsLocatedBySeekWithoutReadingAudio() {
