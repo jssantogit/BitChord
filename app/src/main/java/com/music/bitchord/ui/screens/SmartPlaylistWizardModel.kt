@@ -5,6 +5,7 @@ import com.music.bitchord.data.listening.SmartPlaylistRuleField
 import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
 import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
 import com.music.bitchord.data.listening.allowedOperators
+import com.music.bitchord.data.listening.isTextField
 import java.text.Normalizer
 import java.util.Locale
 

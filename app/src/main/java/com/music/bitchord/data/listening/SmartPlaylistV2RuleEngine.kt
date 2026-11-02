@@ -931,19 +931,19 @@ internal class SmartPlaylistV2RuleEngine(
             } || when (rule.field) {
                 SmartPlaylistRuleField.GENRE ->
                     (row.genreEvidenceUnknown && (row.sourceKinds == null ||
-                        SmartPlaylistSourceKind.OPENSUBSONIC in row.sourceKinds)) ||
-                    (SmartPlaylistSourceKind.LOCAL in row.sourceKinds && !row.localGenresComplete)
+                        row.sourceKinds?.contains(SmartPlaylistSourceKind.OPENSUBSONIC) == true)) ||
+                    (row.sourceKinds?.contains(SmartPlaylistSourceKind.LOCAL) == true && !row.localGenresComplete)
                 SmartPlaylistRuleField.MOOD -> row.moodEvidenceUnknown
                 SmartPlaylistRuleField.STYLE -> row.styleEvidenceUnknown
                 SmartPlaylistRuleField.COMPOSER -> row.composerEvidenceUnknown
                 SmartPlaylistRuleField.FILE_PATH ->
                     (row.filePathEvidenceUnknown && (row.sourceKinds == null ||
-                        SmartPlaylistSourceKind.OPENSUBSONIC in row.sourceKinds)) ||
-                    (SmartPlaylistSourceKind.LOCAL in row.sourceKinds && !row.localFilePathsComplete)
+                        row.sourceKinds?.contains(SmartPlaylistSourceKind.OPENSUBSONIC) == true)) ||
+                    (row.sourceKinds?.contains(SmartPlaylistSourceKind.LOCAL) == true && !row.localFilePathsComplete)
                 SmartPlaylistRuleField.FOLDER_PATH ->
                     (row.folderPathEvidenceUnknown && (row.sourceKinds == null ||
-                        SmartPlaylistSourceKind.OPENSUBSONIC in row.sourceKinds)) ||
-                    (SmartPlaylistSourceKind.LOCAL in row.sourceKinds && !row.localFilePathsComplete)
+                        row.sourceKinds?.contains(SmartPlaylistSourceKind.OPENSUBSONIC) == true)) ||
+                    (row.sourceKinds?.contains(SmartPlaylistSourceKind.LOCAL) == true && !row.localFilePathsComplete)
                 else -> false
             }
             if ((rule.field == SmartPlaylistRuleField.TITLE ||
