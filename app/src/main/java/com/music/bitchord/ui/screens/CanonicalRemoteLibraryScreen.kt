@@ -242,6 +242,29 @@ internal fun CanonicalRemoteLibraryScreen(
             library.tracks, selectedSource, selectedStars, ratingsSnapshot,
         ) else library.tracks
     }
+    val executeLibraryTrack = rememberSmartCollectionBatchAction(controller)
+    // Preserve native RecordingId-scoped rating edits from the main branch.
+    var editingRecordingId by remember { mutableStateOf<String?>(null) }
+    val filterRepo = remember(context.applicationContext) {
+        SmartPlaylistV2FilterRepository(
+            SmartPlaylistDefinitionDatabase.get(context.applicationContext).v2FilterDao(),
+        )
+    }
+    var filtersUnavailable by remember(providerKey) { mutableStateOf(false) }
+    val filters by produceState<List<SavedSmartPlaylistV2Filter>>(
+        initialValue = emptyList(), key1 = filterRepo, key2 = providerKey,
+    ) {
+        try {
+            filterRepo.observe().collect { value = it; filtersUnavailable = false }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            filtersUnavailable = true
+        }
+    }
+    var selectedContext by remember(providerKey, initialContext) {
+        mutableStateOf(initialContext)
+    }
     // A future physical smoke can distinguish unavailable MediaStore evidence
     // from an empty account, an invalid source choice and an active star filter.
     // Only counts and enum labels are exported (no account IDs or song paths).
@@ -273,29 +296,6 @@ internal fun CanonicalRemoteLibraryScreen(
                 ),
             )
         }
-    }
-    val executeLibraryTrack = rememberSmartCollectionBatchAction(controller)
-    // Preserve native RecordingId-scoped rating edits from the main branch.
-    var editingRecordingId by remember { mutableStateOf<String?>(null) }
-    val filterRepo = remember(context.applicationContext) {
-        SmartPlaylistV2FilterRepository(
-            SmartPlaylistDefinitionDatabase.get(context.applicationContext).v2FilterDao(),
-        )
-    }
-    var filtersUnavailable by remember(providerKey) { mutableStateOf(false) }
-    val filters by produceState<List<SavedSmartPlaylistV2Filter>>(
-        initialValue = emptyList(), key1 = filterRepo, key2 = providerKey,
-    ) {
-        try {
-            filterRepo.observe().collect { value = it; filtersUnavailable = false }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            filtersUnavailable = true
-        }
-    }
-    var selectedContext by remember(providerKey, initialContext) {
-        mutableStateOf(initialContext)
     }
     var selectedEntity by remember(providerKey, selectedContext) {
         mutableStateOf<CanonicalSelectedEntity?>(null)
