@@ -71,8 +71,11 @@ class CanonicalUnifiedLibrarySortingTest {
     }
 
     @Test fun nativeUnifiedHeaderDisplaysComputedHoursNotKotlinSource() {
+        val totalMs = 29L * 3_600_000 + 20L * 60_000
+        val perTrack = totalMs / 594
+        val durations = List(593) { perTrack } + listOf(totalMs - perTrack * 593)
         assertEquals("594 faixas · 29h 20m",
-            nativeUnifiedTrackCountLabel(594, listOf(29L * 3_600_000 + 20L * 60_000)))
+            nativeUnifiedTrackCountLabel(594, durations))
         assertEquals("1 faixa · 0h 03m",
             nativeUnifiedTrackCountLabel(1, listOf(180_000L)))
         assertEquals("2 faixas · 0h 01m",
