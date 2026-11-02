@@ -147,6 +147,9 @@ internal fun smartConditionSearch(
         val cat = smartConditionCategories.first { field in it.fields }
         val aliases = when (field) {
             SmartPlaylistRuleField.SOURCE_KIND -> "fonte catalogo navidrome local biblioteca"
+            SmartPlaylistRuleField.COMPOSER -> "compositor autoria composicao"
+            SmartPlaylistRuleField.FOLDER_PATH -> "pasta de origem diretorio folder"
+            SmartPlaylistRuleField.FILE_PATH -> "caminho completo arquivo filepath"
             SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "capa artwork imagem album"
             SmartPlaylistRuleField.DURATION_MS -> "duracao segundos tempo audio"
             SmartPlaylistRuleField.AUDIBLE_COMPLETIONS -> "plays execucoes escutas"
