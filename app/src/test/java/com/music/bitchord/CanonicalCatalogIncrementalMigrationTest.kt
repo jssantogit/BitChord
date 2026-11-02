@@ -95,6 +95,15 @@ class CanonicalCatalogIncrementalMigrationTest {
                 org.junit.Assert.assertTrue("composer column must be migrated",
                     "composersJson" in names)
             }
+            // Reconcile the indexed MediaStore fields from the UI PR without
+            // destroying v14 composer or style evidence on existing assets.
+            CanonicalCatalogDatabase.MIGRATION_14_15.migrate(migrationDb)
+            raw.rawQuery("PRAGMA table_info(catalog_media_asset)", null).use { columns ->
+                val names = mutableListOf<String>()
+                while (columns.moveToNext()) names += columns.getString(1)
+                org.junit.Assert.assertTrue("local genre must be migrated", "localGenre" in names)
+                org.junit.Assert.assertTrue("bitrate must be migrated", "localBitrateBps" in names)
+            }
 
             raw.rawQuery(
                 "SELECT title,hasOfficialAudioRelease,isVideo FROM musicbrainz_recording_enrichment WHERE recordingId='old-recording'",
