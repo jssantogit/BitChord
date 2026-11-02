@@ -26,8 +26,14 @@ internal object A0SoulseekSearchResponseParser {
     private const val MAX_FIELD_BYTES = 2_048
     private const val SEARCH_RESPONSE_CODE = 9
 
-    fun parse(frame: ByteArray, expectedToken: Int): A0SoulseekSearchResponse {
-        require(expectedToken > 0) { "A positive search token is required" }
+    fun parse(frame: ByteArray, expectedToken: Int): A0SoulseekSearchResponse =
+        parse(frame,setOf(expectedToken))
+
+    /** Only search tickets dispatched by this session may authorize peer replies. */
+    fun parse(frame: ByteArray, expectedTokens: Set<Int>): A0SoulseekSearchResponse {
+        require(expectedTokens.isNotEmpty() && expectedTokens.all { it>0 }) {
+            "Positive registered search tokens are required"
+        }
         if (frame.size < 10 || frame.size > MAX_WIRE_BYTES) fail()
         val header = Fields(frame)
         val declaredLength = header.int32()
@@ -54,7 +60,7 @@ internal object A0SoulseekSearchResponseParser {
         val username = fields.string()
         if (username.isBlank()) fail()
         val token = fields.int32()
-        if (token != expectedToken) fail()
+        if (token !in expectedTokens) fail()
 
         var totalFiles = 0
         fun files(): List<A0SoulseekSearchFile> {

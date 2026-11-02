@@ -77,13 +77,14 @@ internal object A0IndirectSearchWire {
         expectedPeerUsername: String,
         // Already validated against the search token and server-advertised peer.
         onValidatedParsedReply: ((A0SoulseekSearchResponse) -> Unit)? = null,
+        acceptedSearchTokens: Set<Int> = setOf(expectedSearchToken),
         onValidatedReply: ((ByteArray, String) -> Unit)? = null
     ): A0OneShotPublicSearchWire.Observation {
         require(expectedSearchToken > 0 && expectedPeerUsername.isNotBlank())
         val length = le32(input)
         if (length !in 6..1_048_572) invalid()
         val frame = le32Bytes(length) + exact(input, length)
-        val reply = A0SoulseekSearchResponseParser.parse(frame, expectedSearchToken)
+        val reply = A0SoulseekSearchResponseParser.parse(frame, acceptedSearchTokens)
         if (reply.peerUsername != expectedPeerUsername) invalid()
         onValidatedParsedReply?.invoke(reply)
         onValidatedReply?.invoke(frame, expectedPeerUsername)

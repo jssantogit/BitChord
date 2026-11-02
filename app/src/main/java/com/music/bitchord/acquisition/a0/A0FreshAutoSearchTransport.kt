@@ -105,6 +105,9 @@ internal class A0FreshAutoSearchTransport(
             activeListener=listener
             listener.soTimeout=750
             val token=SecureRandom().nextInt(Int.MAX_VALUE-1)+1
+            val tickets=A0SearchTicketRegistry(token)
+            val validDirect=AtomicInteger()
+            val validIndirect=AtomicInteger()
             handoff=A0ObservedCandidateHandoff(
                 connection,checkNotNull(session).username,token,
                 searchPhrase=entry.query,saveFormatsOnly=true,
@@ -113,6 +116,7 @@ internal class A0FreshAutoSearchTransport(
                 collectReleaseShadow=true,
                 releaseQueries=releaseSlots.map {it.query},
                 collectManualCandidates=false,
+                acceptedSearchTokens=tickets.accepted,
             )
             activeHandoff=handoff
             A0AcquisitionDiagnostics.emit(traceScope,
@@ -151,7 +155,9 @@ internal class A0FreshAutoSearchTransport(
                             onValidatedParsedReply={ parsed ->
                                 if(!publishParsed(parsed,parsed.peerUsername))
                                     throw IOException("Soulseek direct claim was invalid")
-                            }
+                                validDirect.incrementAndGet()
+                            },
+                            acceptedSearchTokens=tickets.accepted
                         )
                     }catch(_:IOException) {
                         // One malformed or slow untrusted peer cannot poison
@@ -218,8 +224,10 @@ internal class A0FreshAutoSearchTransport(
                                                         A0PeerWorkStageCounts.Stage.PUBLISHING) {
                                                         if(!publishParsed(parsed,offer.username))
                                                             throw IOException("Invalid Soulseek indirect reply")
+                                                        validIndirect.incrementAndGet()
                                                     }
-                                                }
+                                                },
+                                                acceptedSearchTokens=tickets.accepted
                                             )
                                         }
                                     }catch(_:IOException) {
@@ -252,8 +260,14 @@ internal class A0FreshAutoSearchTransport(
                         val variant=recovery.next(
                             at.toLong(),holder.hasAutoReadyCandidateForSearchRecovery(entry,quality),sent)
                         if(variant!=null && !stopped()) {
+                            // Register a unique correlation ticket before
+                            // sending each fallback wire query.
+                            val variantTicket=generateSequence {
+                                SecureRandom().nextInt(Int.MAX_VALUE-1)+1
+                            }.take(8).firstOrNull(tickets::register)
+                            if(variantTicket==null)continue
                             connection.getOutputStream().apply {
-                                write(A0OneShotPublicSearchWire.fileSearch(token,variant))
+                                write(A0OneShotPublicSearchWire.fileSearch(variantTicket,variant))
                                 flush()
                             }
                             sent.add(variant)
@@ -334,6 +348,9 @@ internal class A0FreshAutoSearchTransport(
             val snapshot=holder.releaseShadowSnapshot()
             val counts=holder.screening()
             Log.d("BitChord","soulseek_auto_search replies=${snapshot.choices.size}" +
+                " tickets_sent=${tickets.accepted.size.coerceIn(1,3)}" +
+                " valid_direct=${validDirect.get().coerceIn(0,160)}" +
+                " valid_indirect=${validIndirect.get().coerceIn(0,160)}" +
                 " truncated_slots=${snapshot.truncatedSlots.size}" +
                 " raw_responses=${counts.responses} public_files=${counts.publicFiles}" +
                 " admitted_before_limit=${counts.validBeforeLimit}" +

@@ -28,6 +28,7 @@ internal class A0ObservedCandidateHandoff(
     // Automatic discovery consumes release shadow only; avoid rebuilding the
     // separate sorted manual selector for each untrusted peer file.
     private val collectManualCandidates:Boolean=true,
+    private val acceptedSearchTokens:Set<Int> = setOf(searchToken),
 ) {
     class Choice internal constructor(
         val displayName:String,
@@ -254,7 +255,7 @@ internal class A0ObservedCandidateHandoff(
     private var cancelled=false
     private var spent=false
 
-    init {require(searchToken>0)}
+    init {require(searchToken>0 && searchToken in acceptedSearchTokens)}
 
     /** A wire frame is credited as a valid peer reply only after the
      * authenticated search token and claimed peer identity pass every gate.
@@ -262,14 +263,14 @@ internal class A0ObservedCandidateHandoff(
      */
     fun offerSearchResult(frame:ByteArray,claimedPeerUsername:String):Boolean {
         val result=try {
-            A0SoulseekSearchResponseParser.parse(frame,searchToken)
+            A0SoulseekSearchResponseParser.parse(frame,acceptedSearchTokens)
         } catch (_:IOException) {return false} catch (_:IllegalArgumentException) {return false}
         return offerParsed(result,claimedPeerUsername)
     }
 
     @Synchronized
     fun offerParsed(result:A0SoulseekSearchResponse,claimedPeerUsername:String):Boolean {
-        if(cancelled||spent||readersStopped||result.token!=searchToken ||
+        if(cancelled||spent||readersStopped||result.token !in acceptedSearchTokens ||
             result.peerUsername!=claimedPeerUsername) return false
         try { A0PeerRendezvousWire.getPeerAddress(result.peerUsername) }
         catch (_:IllegalArgumentException) { return false }

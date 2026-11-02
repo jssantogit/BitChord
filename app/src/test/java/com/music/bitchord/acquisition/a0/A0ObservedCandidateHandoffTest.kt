@@ -167,6 +167,19 @@ class A0ObservedCandidateHandoffTest {
         assertTrue(handoff.releaseShadowChoices().isEmpty())
     }
 
+    @Test fun ticketOfUnsentVariationMustNeverCountAsValidReply() {
+        val tickets=A0SearchTicketRegistry(81)
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",81,true,
+            acceptedSearchTokens=tickets.accepted)
+        fun reply(token:Int)=A0SoulseekSearchResponse("peer",token,
+            listOf(A0SoulseekSearchFile("Music\\\\Boy In Luv.flac",
+                30000000L,"flac",mapOf(1 to 235))),emptyList(),true,100000,0)
+        assertFalse(handoff.offerParsed(reply(82),"peer"))
+        assertTrue(tickets.register(82))
+        assertTrue(handoff.offerParsed(reply(82),"peer"))
+        assertFalse(handoff.offerParsed(reply(83),"peer"))
+        assertEquals(1,handoff.screening().responses)
+    }
     @Test fun onlyValidatedParsedPeerRepliesMayBeCreditedAsSuccessful() {
         val handoff=A0ObservedCandidateHandoff(java.net.Socket(),"local",81,true)
         assertFalse(handoff.offerSearchResult(byteArrayOf(1,2,3),"claimed"))

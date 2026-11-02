@@ -134,6 +134,18 @@ class A0OneShotPublicSearchWireTest {
         assertEquals(1, parsed.untrustedResultCount) // Valid P reply but not a CC0 file
     }
 
+    @Test fun directReplyFromSecondaryTicketNeedsExplicitRegistration() {
+        val payload=peerInit("peer-A","P",0)+
+            searchReply("peer-A",27183,"Music\\\\Boy In Luv.flac")
+        reject { A0OneShotPublicSearchWire.readOneDirectPeerReply(
+            ByteArrayInputStream(payload),27182) }
+        assertEquals(1,A0OneShotPublicSearchWire.readOneDirectPeerReply(
+            ByteArrayInputStream(payload),27182,
+            acceptedSearchTokens=setOf(27182,27183)).untrustedResultCount)
+        reject { A0OneShotPublicSearchWire.readOneDirectPeerReply(
+            ByteArrayInputStream(payload),27182,
+            acceptedSearchTokens=setOf(27182,27184)) }
+    }
     @Test fun invalidWaitPortAndTokensCannotGeneratePackets() {
         for (port in listOf(0, -1, 65536)) rejectIllegal {
             A0OneShotPublicSearchWire.setWaitPort(port)

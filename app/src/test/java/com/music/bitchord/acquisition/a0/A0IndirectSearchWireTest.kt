@@ -134,6 +134,17 @@ class A0IndirectSearchWireTest {
         assertEquals(0,observed)
     }
 
+    @Test fun indirectReplyFromSecondaryTicketNeedsExplicitRegistration() {
+        val payload=searchReply("peer",73,"Music\\\\Boy In Luv.flac")
+        reject { A0IndirectSearchWire.readIndirectReply(
+            ByteArrayInputStream(payload),72,"peer") }
+        assertEquals(1,A0IndirectSearchWire.readIndirectReply(
+            ByteArrayInputStream(payload),72,"peer",
+            acceptedSearchTokens=setOf(72,73)).untrustedResultCount)
+        reject { A0IndirectSearchWire.readIndirectReply(
+            ByteArrayInputStream(payload),72,"peer",
+            acceptedSearchTokens=setOf(72,74)) }
+    }
     @Test fun legacyConnectToPeerWithoutExtendedFieldsRemainsDiscoverable() {
         // Older Soulseek clients advertise only the original five fields.
         val legacy = frame(18,

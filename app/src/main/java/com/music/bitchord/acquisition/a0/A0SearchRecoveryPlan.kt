@@ -22,9 +22,17 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null) {
         val artist=original.split(Regex("\\s+[-–—]\\s+"),limit=2).first()
         A0SearchQuery.normalize("$artist $albumNormalized $title")
     }.getOrNull()
-    private val variants=(listOfNotNull(albumQualified)+
-        A0SearchQuery.variants(original).drop(1))
-        .filter { it.length>=3 }.distinct().take(2)
+    // Avoid overconstraining descriptive title searches by adding a
+    // compilation album. Generic one-word titles still prefer the album.
+    // The original canonical track and quality gates are never changed.
+    private val variants=run {
+        val title=A0SearchQuery.titleOnlyFallback(original)
+        val generic=title==null || title.length<8 || title.split(' ').size<2
+        val normal=A0SearchQuery.variants(original).drop(1)
+        val ordered=if(generic)listOfNotNull(albumQualified)+normal
+            else listOfNotNull(title,albumQualified)+normal
+        ordered.filter { it.length>=3 }.distinct().take(2)
+    }
     val authorizesTransfer:Boolean get()=false
 
     fun next(

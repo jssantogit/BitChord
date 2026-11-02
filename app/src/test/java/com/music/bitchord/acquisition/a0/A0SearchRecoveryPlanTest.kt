@@ -15,6 +15,15 @@ class A0SearchRecoveryPlanTest {
         already.add("Jóga")
         assertNull(recovery.next(15000,false,already))
     }
+    @Test fun longerDescriptiveTitlePrecedesCompilationAlbumVariant() {
+        val original="BTS (방탄소년단) - Boy In Luv"
+        val recovery=A0SearchRecoveryPlan(original,album="Proof")
+        val already=mutableSetOf(A0SearchQuery.normalize(original))
+        assertEquals("Boy In Luv",recovery.next(6000,false,already))
+        already.add("Boy In Luv")
+        assertEquals(A0SearchQuery.normalize(
+            "BTS (방탄소년단) Proof Boy In Luv"),recovery.next(12000,false,already))
+    }
     @Test fun genericTrackReceivesAlbumSpecificRecoveryBeforeBroadTitleOnly() {
         val recovery=A0SearchRecoveryPlan("BTS - Normal",album="ARIRANG")
         val already=mutableSetOf("BTS Normal")
