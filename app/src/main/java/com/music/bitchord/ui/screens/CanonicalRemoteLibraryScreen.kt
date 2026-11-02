@@ -75,6 +75,7 @@ import com.music.bitchord.R
 import com.music.bitchord.data.catalog.CanonicalBrowseLibrary
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.CanonicalEntitySortDateRow
 import com.music.bitchord.data.catalog.UnifiedLocalCatalogIndex
 import com.music.bitchord.data.settings.LocalMusicSort
 import com.music.bitchord.data.settings.LibraryViewType
@@ -125,6 +126,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
 private sealed interface CanonicalSongFilterState {
     data object Loading : CanonicalSongFilterState
@@ -421,6 +423,36 @@ internal fun CanonicalRemoteLibraryScreen(
             }
         }
     }
+    // One Room grouped read per active category/provider scope, not a
+    // per-entity query loop. Unknown remote dates remain null.
+    val nativeEntitySortDates by produceState(
+        initialValue = emptyMap<String, CanonicalEntitySortDateRow>(),
+        key1 = catalogDb,
+        key2 = selectedContext,
+        key3 = sources to selectedSource,
+    ) {
+        if (!unified || selectedContext == CanonicalSmartFilterContext.SONGS) return@produceState
+        catalogDb.invalidationTracker.createFlow(
+            "catalog_media_asset", "catalog_release_track",
+            "catalog_recording_artist_credit", "catalog_release_artist_credit",
+        ).collectLatest {
+            value = try {
+                val keys = sources.filter { selectedSource == null || selectedSource == it }
+                withContext(Dispatchers.IO) {
+                    when (selectedContext) {
+                        CanonicalSmartFilterContext.ALBUMS -> catalogDao.unifiedReleaseSortDates(keys)
+                        CanonicalSmartFilterContext.ARTISTS -> catalogDao.unifiedArtistSortDates(keys)
+                        CanonicalSmartFilterContext.SONGS -> emptyList()
+                    }.associateBy { it.entityId }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                emptyMap()
+            }
+        }
+    }
+
     val detailState by produceState<CanonicalDetailBrowseState>(
         initialValue = CanonicalDetailBrowseState.Loading,
         key1 = providerKey, key2 = selectedContext,
@@ -528,6 +560,8 @@ internal fun CanonicalRemoteLibraryScreen(
                 onQueryChange = { if (detail == null) libraryQuery = it else detailQuery = it },
                 searching = searchVisible,
                 viewType = unifiedViewType,
+                sort = unifiedSort,
+                sortDates = nativeEntitySortDates,
                 heroArtworkUri = detail?.artworkUri,
                 heroArtworkTrack = if (detail == null) null else scopedDetailTracks.firstOrNull(),
                 onTrackPlay = playTrack,
@@ -1183,6 +1217,8 @@ private fun NativeUnifiedLibraryBody(
     onQueryChange: (String) -> Unit,
     searching: Boolean,
     viewType: LibraryViewType,
+    sort: LocalMusicSort,
+    sortDates: Map<String, CanonicalEntitySortDateRow>,
     heroArtworkUri: String? = null,
     heroArtworkTrack: CanonicalBrowseTrack? = null,
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
@@ -1191,8 +1227,36 @@ private fun NativeUnifiedLibraryBody(
     onEntitySelect: (CanonicalSelectedEntity) -> Unit,
 ) {
     val palette = rememberArtworkPalette(imageUrl = null)
-    val albums = (entityState as? CanonicalEntityBrowseState.Albums)?.releases.orEmpty()
-    val artists = (entityState as? CanonicalEntityBrowseState.Artists)?.artists.orEmpty()
+    val albumItems = (entityState as? CanonicalEntityBrowseState.Albums)?.releases.orEmpty()
+    val artistItems = (entityState as? CanonicalEntityBrowseState.Artists)?.artists.orEmpty()
+    // Browse-only artist fallback IDs are intentionally not real ArtistIds.
+    // Their dates come from the same visible display groups, never a name
+    // guess used to synthesize a canonical identity or queue item.
+    val displayArtistDates = remember(artistItems, tracks) {
+        val grouped = tracks.groupBy { it.artistDisplay.lowercase(Locale.ROOT) }
+        artistItems.mapNotNull { artist ->
+            val displayName = playlistDisplayArtistNameFromGroupId(artist.id)
+                ?: return@mapNotNull null
+            val members = grouped[displayName.lowercase(Locale.ROOT)].orEmpty()
+            artist.id to CanonicalEntitySortDateRow(
+                entityId = artist.id,
+                dateAddedSeconds = members.mapNotNull { it.dateAddedSeconds }.maxOrNull(),
+                dateModifiedSeconds = members.mapNotNull { it.dateModifiedSeconds }.maxOrNull(),
+            )
+        }.toMap()
+    }
+    val albums = remember(albumItems, sort, sortDates) {
+        sortCanonicalUnifiedEntities(
+            albumItems, sort, sortDates,
+            id = { it.id }, title = { it.title },
+        )
+    }
+    val artists = remember(artistItems, sort, sortDates, displayArtistDates) {
+        sortCanonicalUnifiedEntities(
+            artistItems, sort, sortDates + displayArtistDates,
+            id = { it.id }, title = { it.name },
+        )
+    }
     val count = when (selectedContext) {
         CanonicalSmartFilterContext.SONGS -> tracks.size
         CanonicalSmartFilterContext.ALBUMS -> albums.size
