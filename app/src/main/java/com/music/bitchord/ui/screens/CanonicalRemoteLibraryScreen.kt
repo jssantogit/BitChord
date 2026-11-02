@@ -487,6 +487,63 @@ internal fun CanonicalRemoteLibraryScreen(
         }
     }
 
+    // Resolve album/artist artwork by real canonical membership, never by
+    // comparing an artist's display name with a recording's credit text.
+    // These are grouped Room reads, not SQL calls from LazyColumn rows.
+    val entityArtworkById by produceState<Map<String, CanonicalBrowseTrack>>(
+        initialValue = emptyMap(),
+        key1 = selectedContext,
+        key2 = entityState,
+        key3 = (sources to selectedSource) to eligibleTracks,
+    ) {
+        if (!unified || selectedContext == CanonicalSmartFilterContext.SONGS) return@produceState
+        value = try {
+            val keys = sources.filter { selectedSource == null || selectedSource == it }
+            if (keys.isEmpty()) emptyMap() else {
+                val coverLinks = withContext(Dispatchers.IO) {
+                    when (val entities = entityState) {
+                        is CanonicalEntityBrowseState.Albums ->
+                            entities.releases.map { it.id }.chunked(300).flatMap { ids ->
+                                catalogDao.playlistAlbumCoverRecordingIds(keys, ids)
+                            }
+                        is CanonicalEntityBrowseState.Artists -> {
+                            val creditedIds = entities.artists.mapNotNull { artist ->
+                                artist.id.takeIf {
+                                    playlistDisplayArtistNameFromGroupId(it) == null
+                                }
+                            }
+                            val displayIdByName = entities.artists.mapNotNull { artist ->
+                                playlistDisplayArtistNameFromGroupId(artist.id)?.let { name ->
+                                    name to artist.id
+                                }
+                            }.toMap()
+                            val credited = creditedIds.chunked(300).flatMap { ids ->
+                                catalogDao.playlistCreditedArtistCoverRecordingIds(keys, ids)
+                            }
+                            val display = displayIdByName.keys.toList().chunked(300)
+                                .flatMap { names ->
+                                    catalogDao.playlistDisplayArtistCoverRecordingIds(keys, names)
+                                }.mapNotNull { match ->
+                                    displayIdByName[match.groupId]?.let { groupId ->
+                                        com.music.bitchord.data.catalog.CanonicalPlaylistAlbumCoverRow(
+                                            groupId, match.recordingId,
+                                        )
+                                    }
+                                }
+                            credited + display
+                        }
+                        else -> emptyList()
+                    }
+                }
+                canonicalLibraryEntityArtworkById(coverLinks, eligibleTracks)
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
     val detailState by produceState<CanonicalDetailBrowseState>(
         initialValue = CanonicalDetailBrowseState.Loading,
         key1 = providerKey, key2 = selectedContext,
@@ -596,8 +653,10 @@ internal fun CanonicalRemoteLibraryScreen(
                 viewType = unifiedViewType,
                 sort = unifiedSort,
                 sortDates = nativeEntitySortDates,
+                entityArtworkById = entityArtworkById,
                 heroArtworkUri = detail?.artworkUri,
-                heroArtworkTrack = if (detail == null) null else scopedDetailTracks.firstOrNull(),
+                heroArtworkTrack = detail?.let { entityArtworkById[it.id] }
+                    ?: if (detail == null) null else scopedDetailTracks.firstOrNull(),
                 onTrackPlay = playTrack,
                 onTrackEditRating = editRating,
                 onPlayAll = { visible, shuffle ->
@@ -1253,6 +1312,7 @@ private fun NativeUnifiedLibraryBody(
     viewType: LibraryViewType,
     sort: LocalMusicSort,
     sortDates: Map<String, CanonicalEntitySortDateRow>,
+    entityArtworkById: Map<String, CanonicalBrowseTrack>,
     heroArtworkUri: String? = null,
     heroArtworkTrack: CanonicalBrowseTrack? = null,
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
@@ -1430,21 +1490,33 @@ private fun NativeUnifiedLibraryBody(
                         }
                         if (viewType == LibraryViewType.GRID) {
                             gridRows(albums, 2, key = { it.id }) { album ->
+                                val art = entityArtworkById[album.id]
                                 NativeLibraryEntityCard(
                                     title = album.title,
                                     subtitle = album.artistDisplay.orEmpty(),
-                                    imageUrl = album.artworkUri,
+                                    imageUrl = if (art == null) album.artworkUri else null,
                                     isArtist = false,
+                                    artwork = art?.let { candidate ->
+                                        { CanonicalUnifiedArtwork(
+                                            candidate, artworkLoader, Modifier.fillMaxSize(),
+                                        ) }
+                                    },
                                     onClick = {
                                         onEntitySelect(CanonicalSelectedEntity(album.id, album.title, album.artworkUri))
                                     },
                                 )
                             }
                         } else items(albums, key = { it.id }) { album ->
+                            val art = entityArtworkById[album.id]
                             LibraryRow(
                                 title = album.title,
                                 subtitle = album.artistDisplay.orEmpty(),
-                                imageUrl = album.artworkUri,
+                                imageUrl = if (art == null) album.artworkUri else null,
+                                artwork = art?.let { candidate ->
+                                    { CanonicalUnifiedArtwork(
+                                        candidate, artworkLoader, Modifier.fillMaxSize(),
+                                    ) }
+                                },
                                 onClick = { onEntitySelect(CanonicalSelectedEntity(album.id, album.title, album.artworkUri)) },
                                 artworkSize = 52.dp,
                                 horizontalPadding = PAGE_GUTTER,
@@ -1471,9 +1543,7 @@ private fun NativeUnifiedLibraryBody(
                         }
                         if (viewType == LibraryViewType.GRID) {
                             gridRows(artists, 2, key = { it.id }) { artist ->
-                                val art = tracks.firstOrNull {
-                                    it.artistDisplay.equals(artist.name, ignoreCase = true)
-                                }
+                                val art = entityArtworkById[artist.id]
                                 NativeLibraryEntityCard(
                                     title = artist.name,
                                     subtitle = "",
@@ -1488,9 +1558,7 @@ private fun NativeUnifiedLibraryBody(
                                 )
                             }
                         } else items(artists, key = { it.id }) { artist ->
-                            val art = tracks.firstOrNull {
-                                it.artistDisplay.equals(artist.name, ignoreCase = true)
-                            }
+                            val art = entityArtworkById[artist.id]
                             LibraryRow(
                                 title = artist.name,
                                 subtitle = "",
