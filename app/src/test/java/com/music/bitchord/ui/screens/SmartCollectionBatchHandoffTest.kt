@@ -165,6 +165,21 @@ class SmartCollectionBatchHandoffTest {
         })
     }
 
+    @Test fun currentAssetIdentityIgnoresMutableCoverAndDateMetadata() {
+        val hint = CanonicalBrowseMediaAsset("asset", "opensubsonic:active")
+        val current = CanonicalBrowseMediaAsset(
+            "asset", "opensubsonic:active",
+            dateAddedSeconds = 48, artworkUri = "changed-cover",
+        )
+        assertTrue(sameCanonicalAssetIdentity(hint, current))
+        assertFalse(sameCanonicalAssetIdentity(
+            hint, current.copy(providerKey = "opensubsonic:revoked"),
+        ))
+        assertFalse(sameCanonicalAssetIdentity(
+            hint, current.copy(mediaAssetId = "different"),
+        ))
+    }
+
     @Test fun recentLocalCardPlaysOnlyItsVerifiedLocalAsset() = runBlocking {
         val library = CanonicalBrowseLibrary(listOf(
             CanonicalBrowseTrack("rec-recent", "Recent", "Artist", 120_000L, null,
