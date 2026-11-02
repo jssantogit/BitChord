@@ -85,6 +85,16 @@ class CanonicalCatalogArtistMigrationTest {
             assertTrue(cursor.moveToFirst())
             assertEquals(1, cursor.getInt(0))
         }
+        // The v11→v12 migration preserves older assets without synthesizing genre/bitrate.
+        sql.query("SELECT localGenre, localBitrateBps FROM catalog_media_asset WHERE id = 'asset-1'").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertTrue(cursor.isNull(0))
+            assertTrue(cursor.isNull(1))
+        }
+        sql.query("PRAGMA user_version").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals(12, cursor.getInt(0))
+        }
         sql.query("SELECT COUNT(*) FROM catalog_artist").use { cursor ->
             assertTrue(cursor.moveToFirst())
             assertEquals(0, cursor.getInt(0))
