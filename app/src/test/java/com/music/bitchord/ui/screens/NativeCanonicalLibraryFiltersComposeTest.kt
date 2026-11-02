@@ -7,7 +7,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -47,8 +48,11 @@ class NativeCanonicalLibraryFiltersComposeTest {
         compose.onNodeWithText("Filtrar biblioteca").assertDoesNotExist()
         compose.runOnIdle { actionToken.intValue++ }
         compose.onNodeWithText("Filtrar biblioteca").assertExists()
-        // Click the native SettingsRow itself, not its non-interactive Text child.
-        compose.onNodeWithTag("library-source-local-mediastore").performClick()
+        // Invoke the row's semantic action directly: Robolectric cannot
+        // reliably hit a moving ModalBottomSheet during its entrance animation.
+        // A physical touch on Galaxy A54 remains a separate smoke gate.
+        compose.onNodeWithTag("library-source-local-mediastore")
+            .performSemanticsAction(SemanticsActions.OnClick)
         compose.runOnIdle { assertEquals("local-mediastore", source.value) }
     }
 }
