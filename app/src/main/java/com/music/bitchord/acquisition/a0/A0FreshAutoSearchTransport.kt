@@ -243,6 +243,7 @@ internal class A0FreshAutoSearchTransport(
             val recovery=A0SearchRecoveryPlan(entry.query,entry.album)
             val sent=mutableSetOf(normalized)
             val marks=mutableSetOf<Int>()
+            var nextCompletionCheckMs=8000L
             while(System.nanoTime()<deadline && !stopped()) {
                 val elapsed=TimeUnit.NANOSECONDS.toMillis(
                     18L.let {TimeUnit.SECONDS.toNanos(it)}-(deadline-System.nanoTime()))
@@ -261,6 +262,19 @@ internal class A0FreshAutoSearchTransport(
                                 elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart,
                                 count=sent.size)
                         }
+                    }
+                }
+                // Keep ordinary 18-second recall if any sibling is missing,
+                // ambiguous or clipped. Only a complete independently
+                // eligible 2+ track release may finish at >=8 seconds.
+                if(releaseSlots.size>1 && elapsed>=nextCompletionCheckMs) {
+                    nextCompletionCheckMs=elapsed+2000L
+                    if(A0AutoSearchEarlyExitPolicy.canFinish(
+                        elapsed,releaseSlots,quality,holder.releaseShadowSnapshot()
+                    )) {
+                        Log.d("BitChord","soulseek_auto_search early_stop=FULL_RELEASE_COVERAGE" +
+                            " elapsed_ms=${elapsed.coerceIn(0,18000)}")
+                        break
                     }
                 }
                 Thread.sleep(200)
