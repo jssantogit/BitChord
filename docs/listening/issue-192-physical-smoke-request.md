@@ -187,3 +187,23 @@ publicar o APK como artifact associado ao SHA exato deste commit.
 9. Conservar UI nativa já aprovada, navegação Home/Biblioteca/Playlists/perfil, criação/edição normal e inteligente, fontes, capa e Play/Fila.
 
 Coletar capturas e diagnóstico físico. Mesmo com CI verde, NÃO declarar funcionamento aprovado sem teste. Sem alterações de Configurações/Logs, sem release assinada, sem merge `main` e sem fechar issue #192.
+
+
+## Smoke físico — cinco refinamentos finais de Playlists V2, 02/11/2026
+
+**Autorização:** continuação da solicitação anterior de APK e da validação dos cinco refinamentos na conversa de Playlists #11/#12. APK exclusivamente Dev Debug para uso no Galaxy A54; sem merge, sem release pública, sem alterações da main.
+
+**Código-base aprovado:** `0d4838937d0f2f47b37974377a657f0389f225bb`, branch `listening/smart-playlists-v2-192` da [PR #193](https://github.com/jssantogit/BitChord/pull/193) (OPEN/DRAFT). Gates neste SHA:
+- [Android CI #41472785617](https://github.com/jssantogit/BitChord/actions/runs/41472785617): SUCCESS.
+- [Integration Queue #41472785701](https://github.com/jssantogit/BitChord/actions/runs/41472785701): SUCCESS.
+
+**Disparo único:** este commit documental é o gatilho do workflow `.github/workflows/physical-smoke-apk.yml`, cujo checkout exige a UI reconciliada da #202 e reexecuta `:app:testDevDebugUnitTest`, seguido de `:app:assembleDevDebug`. Artefato deve conter o SHA exato desse commit de autorização (mesma árvore de código-fonte do SHA aprovado acima).
+
+**Aceite físico Galaxy A54:**
+1. Botões Fechar, Expandir, Recolher e Opções usam ícones nativos, com toque e acessibilidade funcionando; ícone de grupo alterna realmente expandir/recolher.
+2. Editor de grupos de regras conserva apenas menu Opções, sem chevron; toque no título abre o grupo sem roubar toques dos ícones.
+3. Revisão de músicas selecionadas não oferece Reproduzir nem Adicionar à fila; preserva prévia, avaliação e ordem das faixas.
+4. Menu ⋮ exibe capa personalizada de playlist preenchida e vazia, após fechar/reabrir.
+5. Excluir grupo e condição exige confirmação, preserva outras regras e não permite salvar grupo vazio inválido; conferir a última condição e E/OU/NÃO.
+
+**Regressão adicional:** preservar Home/perfil, Biblioteca→Playlists, fonte Navidrome/local, avaliação remota cinco estrelas, edição, prévia automática, capa e reprodução de playlist; coletar capturas e novo diagnóstico, observar travamentos recuperados separadamente. Não realizar merge sem aceite expresso do smoke.
