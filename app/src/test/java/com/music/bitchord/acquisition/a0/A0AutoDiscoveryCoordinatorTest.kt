@@ -74,6 +74,19 @@ class A0AutoDiscoveryCoordinatorTest {
         }
     }
 
+    @Test fun wrappingReservationReportKeepsRealFolderQueryCount() {
+        val report=A0AutoDiscoveryCoordinator.Report(
+            2,A0AutoBatchExecutor.Report(listOf(
+                A0AutoBatchExecutor.TrackStatus.PUBLISHED),1),
+            folderQueries=1)
+        val wrapped=report.withReservationReleased(true)
+        assertEquals(2,wrapped.searches)
+        assertEquals(1,wrapped.folderQueries)
+        assertEquals(1,wrapped.batch.published)
+        assertTrue(wrapped.unusedReservationReleased)
+        assertEquals(0,report.folderQueries-1)
+    }
+
     @Test fun successfulPublishedFolderBrowseAvoidsRemainingThreePublicSearches() {
         val search=object:A0AutoDiscoveryCoordinator.SearchPort {
             var searches=0
