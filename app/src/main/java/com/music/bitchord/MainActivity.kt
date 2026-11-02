@@ -76,6 +76,9 @@ import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sort
+import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Upgrade
@@ -2347,7 +2350,13 @@ private fun BitChordApp(
     var unifiedLibraryCategory by remember {
         mutableStateOf<com.music.bitchord.data.listening.CanonicalSmartFilterContext?>(null)
     }
-    var unifiedLibraryFilterToken by remember { mutableIntStateOf(0) }
+    var unifiedLibrarySourceKey by remember { mutableStateOf<String?>(null) }
+    var unifiedLibrarySourceKeys by remember { mutableStateOf(listOf("local-mediastore")) }
+    var unifiedLibraryStars by remember { mutableStateOf<Int?>(null) }
+    var unifiedLibrarySort by remember { mutableStateOf(LocalMusicSort.TITLE_ASC) }
+    var unifiedLibraryViewType by remember { mutableStateOf(LibraryViewType.LIST) }
+    var unifiedLibrarySortMenuOpen by remember { mutableStateOf(false) }
+    var unifiedLibrarySourceMenuOpen by remember { mutableStateOf(false) }
     var unifiedLibrarySearching by remember { mutableStateOf(false) }
     var unifiedLibraryDetailOpen by remember { mutableStateOf(false) }
     var unifiedLibraryBackToken by remember { mutableIntStateOf(0) }
@@ -3091,7 +3100,17 @@ private fun BitChordApp(
                                 else -> "Músicas"
                             },
                             unified = true,
-                            filterActionToken = unifiedLibraryFilterToken,
+                            selectedSourceKey = unifiedLibrarySourceKey,
+                            selectedStarsFilter = unifiedLibraryStars,
+                            unifiedSort = unifiedLibrarySort,
+                            unifiedViewType = unifiedLibraryViewType,
+                            onSourceKeysChanged = { keys ->
+                                unifiedLibrarySourceKeys = keys
+                                if (unifiedLibrarySourceKey != null &&
+                                    unifiedLibrarySourceKey !in keys) {
+                                    unifiedLibrarySourceKey = null
+                                }
+                            },
                             searchVisible = unifiedLibrarySearching,
                             detailBackToken = unifiedLibraryBackToken,
                             onDetailChanged = { unifiedLibraryDetailOpen = it },
@@ -3901,7 +3920,10 @@ private fun BitChordApp(
                             onSignIn = { webSession = WebSessionMode.SIGN_IN },
                             onRetry = viewModel::loadLibrary,
                             refreshing = MainViewModel.Feed.LIBRARY in refreshing,
-                            onRefresh = { viewModel.refresh(MainViewModel.Feed.LIBRARY) },
+                            onRefresh = {
+                                com.music.bitchord.data.catalog.UnifiedLocalCatalogIndex.invalidate()
+                                viewModel.refresh(MainViewModel.Feed.LIBRARY)
+                            },
                             pullState = libraryPull,
                             contentPadding = listPadding,
                             navigationHome = true,
@@ -3922,7 +3944,6 @@ private fun BitChordApp(
                                 onOpenPlaylists = { showPlaylistLibrary = true },
                                 onOpenLocalCategory = { category ->
                                     unifiedLibrarySearching = false
-                                    unifiedLibraryFilterToken = 0
                                     unifiedLibraryDetailOpen = false
                                     unifiedLibraryBackToken = 0
                                     unifiedLibraryCategory = when (category) {
@@ -4297,9 +4318,13 @@ private fun BitChordApp(
                                     "Fechar pesquisa da biblioteca" else "Pesquisar na biblioteca",
                                 onClick = { unifiedLibrarySearching = !unifiedLibrarySearching },
                             )
+                            IconButton(onClick = { unifiedLibrarySourceMenuOpen = true }) {
+                                Icon(Icons.Rounded.Layers, contentDescription = "Fonte das músicas",
+                                    tint = MaterialTheme.colorScheme.onSurface)
+                            }
                             NativeCollectionSortAction(
-                                contentDescription = "Filtrar biblioteca",
-                                onClick = { unifiedLibraryFilterToken++ },
+                                contentDescription = "Ordenar e filtrar biblioteca",
+                                onClick = { unifiedLibrarySortMenuOpen = true },
                             )
                         }
                         if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null &&
@@ -5357,6 +5382,34 @@ private fun BitChordApp(
                     }
                 },
                 onDismiss = { songSortMenuOpen = false },
+            )
+        }
+
+        if (unifiedLibraryCategory != null && unifiedLibrarySourceMenuOpen) {
+            BackHandler { unifiedLibrarySourceMenuOpen = false }
+            FrostedUnifiedLibrarySourceMenu(
+                hazeState = hazeState,
+                sources = unifiedLibrarySourceKeys,
+                selected = unifiedLibrarySourceKey,
+                onSelect = { unifiedLibrarySourceKey = it; unifiedLibrarySourceMenuOpen = false },
+                onDismiss = { unifiedLibrarySourceMenuOpen = false },
+            )
+        }
+        if (unifiedLibraryCategory != null && unifiedLibrarySortMenuOpen) {
+            BackHandler { unifiedLibrarySortMenuOpen = false }
+            FrostedUnifiedLibrarySortMenu(
+                hazeState = hazeState,
+                sort = unifiedLibrarySort,
+                viewType = unifiedLibraryViewType,
+                stars = unifiedLibraryStars,
+                onSort = { unifiedLibrarySort = it; unifiedLibrarySortMenuOpen = false },
+                onToggleViewType = {
+                    unifiedLibraryViewType = if (unifiedLibraryViewType == LibraryViewType.LIST)
+                        LibraryViewType.GRID else LibraryViewType.LIST
+                    unifiedLibrarySortMenuOpen = false
+                },
+                onStars = { value -> unifiedLibraryStars = value },
+                onDismiss = { unifiedLibrarySortMenuOpen = false },
             )
         }
 
