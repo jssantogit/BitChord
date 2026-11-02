@@ -109,6 +109,37 @@ class A0AutoDiscoveryCoordinatorTest {
         assertEquals(entries.map {it.trackId},done)
     }
 
+    @Test fun unavailablePeerFoldersNeverCauseUnboundedBrowsingOrBlockPublicSearch() {
+        val search=object:A0AutoDiscoveryCoordinator.SearchPort {
+            var searched=0
+            var inspected=0
+            override fun search(entry:SoulseekBatchPlan.Entry,
+                releaseSlots:List<SoulseekBatchPlan.Entry>,
+                isCancelled:()->Boolean):A0AutoDiscoveryCoordinator.SearchResult {
+                searched++
+                return A0AutoDiscoveryCoordinator.SearchResult.Found(
+                    claims(listOf(entry)))
+            }
+            override fun inspectPublishedFolder(
+                source:A0ObservedCandidateHandoff.Choice,
+                releaseSlots:List<SoulseekBatchPlan.Entry>,
+                isCancelled:()->Boolean,
+            ):A0AutoDiscoveryCoordinator.SearchResult {
+                inspected++
+                return A0AutoDiscoveryCoordinator.SearchResult.NoReply
+            }
+            override fun close() {}
+        }
+        val done=mutableListOf<String>()
+        val result=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            entries,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(4,result.batch.published)
+        assertEquals(4,search.searched)
+        assertEquals(2,search.inspected)
+        assertEquals(2,result.folderQueries)
+    }
+
     @Test fun folderBrowseClaimFromAnotherPeerCannotAvoidPublicSearch() {
         val two=entries.take(2)
         val search=object:A0AutoDiscoveryCoordinator.SearchPort {
