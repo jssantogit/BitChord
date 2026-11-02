@@ -4125,6 +4125,11 @@ private fun BitChordApp(
                         showHistory -> stringResource(R.string.history)
                         libraryShowAll != null && detail == null -> libraryShowAll?.title.orEmpty()
                         showAllLocalRecentAdditions && detail == null -> "Adições recentes"
+                        unifiedLibraryCategory != null -> when (unifiedLibraryCategory) {
+                            com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS -> "Álbuns"
+                            com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS -> "Artistas"
+                            else -> "Músicas"
+                        }
                         showSmartPlaylistBuilder && detail == null -> "Nova playlist"
                         showPlaylistLibrary && detail == null ->
                             openedCanonicalPlaylist?.title ?: "Playlists"
@@ -4165,6 +4170,7 @@ private fun BitChordApp(
                             showDiscord || showHistory ||
                             (libraryShowAll != null && detail == null) ||
                             (showAllLocalRecentAdditions && detail == null) ||
+                            (unifiedLibraryCategory != null) ||
                             (detail != null && detailActiveShelf != null) ||
                             selectedMoodGenre != null -> true
                         showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null ->
@@ -4188,6 +4194,7 @@ private fun BitChordApp(
                         showHistory -> ({ showHistory = false })
                         libraryShowAll != null && detail == null -> ({ libraryShowAll = null })
                         showAllLocalRecentAdditions && detail == null -> ({ showAllLocalRecentAdditions = false })
+                        unifiedLibraryCategory != null -> ({ unifiedLibraryCategory = null })
                         showSmartPlaylistBuilder && detail == null -> ({
                             showSmartPlaylistBuilder = false
                             editingSmartPlaylistId = null
@@ -4232,7 +4239,8 @@ private fun BitChordApp(
                     // Only on the Search tab itself, not on anything pushed over it.
                     accessory = if (
                         selectedTab == TAB_SEARCH && detail == null && selectedMoodGenre == null &&
-                        libraryShowAll == null && !showSettings && !showAccountScrobbling &&
+                        libraryShowAll == null && unifiedLibraryCategory == null &&
+                        !showSettings && !showAccountScrobbling &&
                         !showSources && !showListenTogether && !showWearOs && !showEqualizer && !showDiscord &&
                         !showHistory && !showReplay
                     ) {
@@ -4522,6 +4530,7 @@ private fun BitChordApp(
                     settingsSubScreen = null
                     showHistory = false
                     libraryShowAll = null
+                    unifiedLibraryCategory = null
                     showPlaylistLibrary = false
                     openedCanonicalPlaylist = null
                     selectedTab = index
