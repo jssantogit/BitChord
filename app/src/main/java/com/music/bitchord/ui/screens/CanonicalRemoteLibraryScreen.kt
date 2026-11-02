@@ -1348,7 +1348,7 @@ private fun NativeUnifiedLibraryBody(
                                 subtitle = album.artistDisplay.orEmpty(),
                                 imageUrl = album.artworkUri,
                                 onClick = { onEntitySelect(CanonicalSelectedEntity(album.id, album.title, album.artworkUri)) },
-                                artworkSize = 64.dp,
+                                artworkSize = 52.dp,
                                 horizontalPadding = PAGE_GUTTER,
                             )
                             HorizontalDivider(
@@ -1404,7 +1404,7 @@ private fun NativeUnifiedLibraryBody(
                                 },
                                 artworkShape = CircleShape,
                                 onClick = { onEntitySelect(artist) },
-                                artworkSize = 64.dp,
+                                artworkSize = 52.dp,
                                 horizontalPadding = PAGE_GUTTER,
                             )
                             HorizontalDivider(
