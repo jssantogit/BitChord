@@ -94,6 +94,7 @@ import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.SearchField
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.canonical_rating_song_options
@@ -175,6 +176,7 @@ internal fun CanonicalRemoteLibraryScreen(
         }
     }
     var selectedSource by remember(unified) { mutableStateOf<String?>(null) }
+    var libraryQuery by remember(unified) { mutableStateOf("") }
     var selectedStars by remember(unified) { mutableStateOf<Int?>(null) }
     val sources = if (unified) availableKeys else listOf(providerKey)
     val multiRepository = remember(catalogDao) {
@@ -244,14 +246,19 @@ internal fun CanonicalRemoteLibraryScreen(
         initialValue = CanonicalSongFilterState.Loading,
         key1 = library.tracks, key2 = selectedFilterId,
         key3 = (Triple(selectedContext, selected, filtersUnavailable) to tagEvidenceRevision)
-            to Triple(selectedSource, selectedStars, ratingsSnapshot),
+            to (Triple(selectedSource, selectedStars, ratingsSnapshot) to libraryQuery),
     ) {
         value = try {
             when {
                 selectedContext != CanonicalSmartFilterContext.SONGS ->
                     CanonicalSongFilterState.Ready(emptyList())
                 filtersUnavailable && selectedFilterId != null -> CanonicalSongFilterState.Failed
-                selectedFilterId == null -> CanonicalSongFilterState.Ready(eligibleTracks)
+                selectedFilterId == null -> CanonicalSongFilterState.Ready(
+                    if (unified && libraryQuery.isNotBlank()) eligibleTracks.filter {
+                        it.title.contains(libraryQuery, ignoreCase = true) ||
+                            it.artistDisplay.contains(libraryQuery, ignoreCase = true)
+                    } else eligibleTracks,
+                )
                 selected == null -> CanonicalSongFilterState.Failed
                 else -> {
                     val tagRows = if (selected.rules.referencedFields().any {
@@ -286,7 +293,7 @@ internal fun CanonicalRemoteLibraryScreen(
         initialValue = CanonicalEntityBrowseState.Loading,
         key1 = providerKey, key2 = selectedContext,
         key3 = (selectedFilterId to selected to filtersUnavailable) to
-            Triple(sources, selectedSource, eligibleTracks),
+            (Triple(sources, selectedSource, eligibleTracks) to libraryQuery),
     ) {
         if (selectedContext == CanonicalSmartFilterContext.SONGS) return@produceState
         catalogDb.invalidationTracker.createFlow(
@@ -315,6 +322,8 @@ internal fun CanonicalRemoteLibraryScreen(
                                     .flatMap { catalogDao.releaseIdsForVisibleRecordings(it) }.toSet()
                             } else null
                             all.filter { ratedIds == null || it.id in ratedIds }
+                                .filter { !unified || libraryQuery.isBlank() ||
+                                    it.title.contains(libraryQuery, ignoreCase = true) }
                                 .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
                         })
                     else -> CanonicalEntityBrowseState.Artists(withContext(Dispatchers.IO) {
@@ -330,6 +339,8 @@ internal fun CanonicalRemoteLibraryScreen(
                                 .flatMap { catalogDao.artistIdsForVisibleRecordings(it) }.toSet()
                         } else null
                         all.filter { ratedIds == null || it.id in ratedIds }
+                            .filter { !unified || libraryQuery.isBlank() ||
+                                it.name.contains(libraryQuery, ignoreCase = true) }
                             .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
                     })
                 }
@@ -455,6 +466,13 @@ internal fun CanonicalRemoteLibraryScreen(
                 RemoteBrowseContextTabs(
                     selected = selectedContext,
                     onSelect = { selectedContext = it },
+                )
+                if (unified) SearchField(
+                    query = libraryQuery,
+                    onQueryChange = { libraryQuery = it },
+                    onSubmit = {},
+                    placeholder = "Pesquisar na biblioteca",
+                    modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 6.dp),
                 )
                 if (unified) NativeCanonicalLibraryFilters(
                     availableKeys = availableKeys,
