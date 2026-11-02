@@ -5,6 +5,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -41,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -142,6 +145,8 @@ internal fun CanonicalRemoteLibraryScreen(
     title: String,
     onClose: () -> Unit,
     unified: Boolean = false,
+    filterActionToken: Int = 0,
+    searchVisible: Boolean = false,
     initialContext: CanonicalSmartFilterContext = CanonicalSmartFilterContext.SONGS,
 ) {
     val context = LocalContext.current
@@ -177,6 +182,7 @@ internal fun CanonicalRemoteLibraryScreen(
     }
     var selectedSource by remember(unified) { mutableStateOf<String?>(null) }
     var libraryQuery by remember(unified) { mutableStateOf("") }
+    LaunchedEffect(searchVisible) { if (!searchVisible) libraryQuery = "" }
     var selectedStars by remember(unified) { mutableStateOf<Int?>(null) }
     val sources = if (unified) availableKeys else listOf(providerKey)
     val multiRepository = remember(catalogDao) {
@@ -480,11 +486,19 @@ internal fun CanonicalRemoteLibraryScreen(
                     }
                 }
             } else {
-                RemoteBrowseContextTabs(
-                    selected = selectedContext,
-                    onSelect = { selectedContext = it },
-                )
-                if (unified) SearchField(
+                if (unified) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.headlineLarge,
+                        modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 20.dp),
+                    )
+                } else {
+                    RemoteBrowseContextTabs(
+                        selected = selectedContext,
+                        onSelect = { selectedContext = it },
+                    )
+                }
+                if (unified && searchVisible) SearchField(
                     query = libraryQuery,
                     onQueryChange = { libraryQuery = it },
                     onSubmit = {},
@@ -497,6 +511,7 @@ internal fun CanonicalRemoteLibraryScreen(
                     onSourceChange = { selectedSource = it },
                     selectedStars = selectedStars,
                     onStarsChange = { selectedStars = it },
+                    requestToken = filterActionToken,
                 )
                 if (compatible.isNotEmpty() || selectedFilterId != null) {
                     RemoteSongSavedFilterMenu(
@@ -539,8 +554,11 @@ internal fun CanonicalRemoteLibraryScreen(
                             RemoteBrowseMessage("${state.releases.size} álbuns vinculados à fonte")
                             RemoteCanonicalEntityList(
                                 entries = state.releases.map { entity ->
-                                    CanonicalSelectedEntity(entity.id, entity.title) to
-                                        entity.artistDisplay.orEmpty()
+                                    Triple(
+                                        CanonicalSelectedEntity(entity.id, entity.title),
+                                        entity.artistDisplay.orEmpty(),
+                                        entity.artworkUri,
+                                    )
                                 },
                                 onSelect = { selectedEntity = it },
                                 emptyText = "Nenhum álbum canônico disponível nesta fonte.",
@@ -556,7 +574,9 @@ internal fun CanonicalRemoteLibraryScreen(
                         is CanonicalEntityBrowseState.Artists -> {
                             RemoteBrowseMessage("${state.artists.size} artistas vinculados à fonte")
                             RemoteCanonicalEntityList(
-                                entries = state.artists.map { artist -> artist to "" },
+                                entries = state.artists.map { artist ->
+                                    Triple(artist, "", null)
+                                },
                                 onSelect = { selectedEntity = it },
                                 emptyText = "Nenhum artista canônico disponível nesta fonte.",
                             )
@@ -602,82 +622,81 @@ private fun NativeCanonicalLibraryFilters(
     onSourceChange: (String?) -> Unit,
     selectedStars: Int?,
     onStarsChange: (Int?) -> Unit,
+    requestToken: Int,
 ) {
-    var picker by remember { mutableStateOf<String?>(null) }
-    val sourceLabel = when {
-        selectedSource == null -> "Todas"
-        selectedSource == "local-mediastore" -> "Local"
-        selectedSource in availableKeys -> "Navidrome"
-        else -> "Indisponível"
+    // The native top-bar filter icon owns this single sheet. No duplicate
+    // filter buttons or Material3 chips in the Library content itself.
+    var open by remember { mutableStateOf(false) }
+    LaunchedEffect(requestToken) {
+        if (requestToken > 0) open = true
     }
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    if (!open) return
+
+    ModalBottomSheet(
+        onDismissRequest = { open = false },
+        containerColor = MaterialTheme.colorScheme.surface,
     ) {
-        PlaylistWizardCompactAction(
-            label = "Fonte: $sourceLabel",
-            onClick = { picker = "source" },
-            modifier = Modifier.weight(1f),
-        )
-        PlaylistWizardCompactAction(
-            label = if (selectedStars == null) "Avaliação: Todas"
-                else "Avaliação: $selectedStars ★",
-            onClick = { picker = "rating" },
-            modifier = Modifier.weight(1f),
-        )
-    }
-    if (picker != null) {
-        ModalBottomSheet(
-            onDismissRequest = { picker = null },
-            containerColor = MaterialTheme.colorScheme.surface,
+        Column(
+            modifier = Modifier.fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(Modifier.padding(bottom = 20.dp)) {
-                Text(
-                    if (picker == "source") "Fonte de origem" else "Avaliação das músicas",
-                    style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
-                )
-                SettingsGroupSurface(modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
-                    if (picker == "source") {
-                        val options = listOf<String?>(null) + availableKeys
-                        options.forEachIndexed { index, key ->
-                            val label = when {
-                                key == null -> "Todas as fontes"
-                                key == "local-mediastore" -> "Música local"
-                                availableKeys.count { it.startsWith("opensubsonic:") } > 1 ->
-                                    "Navidrome " + (availableKeys.filter {
-                                        it.startsWith("opensubsonic:")
-                                    }.indexOf(key) + 1)
-                                else -> "Navidrome"
-                            }
-                            SettingsRow(
-                                title = label,
-                                reserveIconSpace = false,
-                                onClick = { onSourceChange(key); picker = null },
-                                trailing = if (selectedSource == key) {
-                                    { Icon(Icons.Rounded.Check, contentDescription = null) }
-                                } else ({}),
-                            )
-                        }
-                    } else {
-                        (listOf<Int?>(null) + (1..5).map { it }).forEach { value ->
-                            SettingsRow(
-                                title = value?.let { "$it estrelas" } ?: "Todas as avaliações",
-                                reserveIconSpace = false,
-                                onClick = { onStarsChange(value); picker = null },
-                                trailing = {
-                                    if (value != null) CanonicalRatingStars(
-                                        RatingDisplay(localValue = value.toDouble()),
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                    )
-                                    if (selectedStars == value) Icon(
-                                        Icons.Rounded.Check, contentDescription = null,
-                                    )
-                                },
-                            )
-                        }
+            Text(
+                "Filtrar biblioteca",
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
+            )
+            Text(
+                "Fonte de origem",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+            )
+            SettingsGroupSurface(modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
+                (listOf<String?>(null) + availableKeys).forEach { key ->
+                    val label = when {
+                        key == null -> "Todas as fontes"
+                        key == "local-mediastore" -> "Música local"
+                        availableKeys.count { it.startsWith("opensubsonic:") } > 1 ->
+                            "Navidrome " + (availableKeys.filter {
+                                it.startsWith("opensubsonic:")
+                            }.indexOf(key) + 1)
+                        else -> "Navidrome"
                     }
+                    SettingsRow(
+                        title = label,
+                        reserveIconSpace = false,
+                        onClick = { onSourceChange(key); open = false },
+                        trailing = {
+                            if (selectedSource == key) Icon(
+                                Icons.Rounded.Check, contentDescription = null,
+                            )
+                        },
+                    )
+                }
+            }
+            Text(
+                "Avaliação das músicas",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+            )
+            SettingsGroupSurface(modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
+                (listOf<Int?>(null) + (1..5).map { it }).forEach { value ->
+                    SettingsRow(
+                        title = value?.let { "$it estrelas" } ?: "Todas as avaliações",
+                        reserveIconSpace = false,
+                        onClick = { onStarsChange(value); open = false },
+                        trailing = {
+                            if (value != null) CanonicalRatingStars(
+                                RatingDisplay(localValue = value.toDouble()),
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            if (selectedStars == value) Icon(
+                                Icons.Rounded.Check, contentDescription = null,
+                            )
+                        },
+                    )
                 }
             }
         }
@@ -697,7 +716,7 @@ private fun RemoteBrowseMessage(message: String) {
 /** Selection is by canonical ID; text is presentation only. */
 @Composable
 private fun RemoteCanonicalEntityList(
-    entries: List<Pair<CanonicalSelectedEntity, String>>,
+    entries: List<Triple<CanonicalSelectedEntity, String, String?>>,
     onSelect: (CanonicalSelectedEntity) -> Unit,
     emptyText: String,
 ) {
@@ -705,30 +724,25 @@ private fun RemoteCanonicalEntityList(
         RemoteBrowseMessage(emptyText)
         return
     }
+    // Identical artwork/title/subtitle geometry to the existing Library and
+    // playlist list rows; never reproduce a second plain-text entity list.
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = 4.dp, bottom = 28.dp),
     ) {
-        items(entries, key = { it.first.id }) { (entity, subtitle) ->
-            Column(
-                modifier = Modifier.fillMaxWidth()
-                    .clickable { onSelect(entity) }
-                    .heightIn(min = 64.dp)
-                    .padding(horizontal = 20.dp, vertical = 10.dp),
-            ) {
-                Text(entity.name, style = MaterialTheme.typography.bodyLarge)
-                if (subtitle.isNotBlank()) {
-                    Text(
-                        subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+        items(entries, key = { it.first.id }) { (entity, subtitle, artworkUri) ->
+            LibraryRow(
+                title = entity.name,
+                subtitle = subtitle,
+                imageUrl = artworkUri,
+                onClick = { onSelect(entity) },
+                artworkSize = 64.dp,
+                horizontalPadding = PAGE_GUTTER,
+            )
             HorizontalDivider(
-                modifier = Modifier.padding(start = 20.dp),
+                modifier = Modifier.padding(start = 84.dp),
                 thickness = 0.5.dp,
-                color = MaterialTheme.colorScheme.outlineVariant,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
             )
         }
     }
