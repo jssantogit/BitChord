@@ -1403,6 +1403,8 @@ object Downloads {
                     " folder_queries=${outcome.folderQueries}" +
                     " empty_searches=${outcome.noReplySearches}" +
                     " max_empty_streak=${outcome.longestNoReplyStreak}" +
+                    " screened_searches=${outcome.screenedOutSearches}" +
+                    " rejected_queries=${outcome.rejectedQueries}" +
                     " suppressed_offers=${outcome.suppressedOffers}" +
                     " attempts=${report.attempts}" +
                     " published=${report.published}" +
