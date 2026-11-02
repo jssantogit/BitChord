@@ -44,6 +44,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -147,6 +148,8 @@ internal fun CanonicalRemoteLibraryScreen(
     unified: Boolean = false,
     filterActionToken: Int = 0,
     searchVisible: Boolean = false,
+    detailBackToken: Int = 0,
+    onDetailChanged: (Boolean) -> Unit = {},
     initialContext: CanonicalSmartFilterContext = CanonicalSmartFilterContext.SONGS,
 ) {
     val context = LocalContext.current
@@ -224,6 +227,15 @@ internal fun CanonicalRemoteLibraryScreen(
     }
     var selectedEntity by remember(providerKey, selectedContext) {
         mutableStateOf<CanonicalSelectedEntity?>(null)
+    }
+    LaunchedEffect(detailBackToken) {
+        if (detailBackToken > 0) selectedEntity = null
+    }
+    LaunchedEffect(selectedEntity != null) {
+        onDetailChanged(selectedEntity != null)
+    }
+    DisposableEffect(Unit) {
+        onDispose { onDetailChanged(false) }
     }
     var selectedFilterId by remember(providerKey, selectedContext) {
         mutableStateOf<String?>(null)
@@ -463,13 +475,11 @@ internal fun CanonicalRemoteLibraryScreen(
                 onBack = if (selectedEntity != null) { { selectedEntity = null } } else onClose,
             )
             if (selectedEntity != null) {
-                TextButton(onClick = { selectedEntity = null }) {
-                    Text("Voltar para " + when (selectedContext) {
-                        CanonicalSmartFilterContext.ALBUMS -> "álbuns"
-                        CanonicalSmartFilterContext.ARTISTS -> "artistas"
-                        CanonicalSmartFilterContext.SONGS -> "músicas"
-                    })
-                }
+                Text(
+                    selectedEntity?.name.orEmpty(),
+                    style = MaterialTheme.typography.headlineLarge,
+                    modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 20.dp),
+                )
                 when (detailState) {
                     CanonicalDetailBrowseState.Loading ->
                         RemoteBrowseMessage("Carregando músicas vinculadas…")
