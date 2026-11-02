@@ -161,3 +161,29 @@ publicar o APK como artifact associado ao SHA exato deste commit.
 - Responsividade da UI e logs de `playlist_create_requested`, `canonical_playlist_library_entered` e `playlist_wizard_entered`; observar `main_thread_stall` sem atribuir causa sem evidência.
 
 **Não autorizado por este pedido:** mesclar na `main`, release assinada de produção, fechamento da issue #192 ou declaração de paridade Symfonium completa. APK Dev Debug apenas para smoke físico.
+
+
+## Smoke físico autorizado — playlists V2 pós-correções, 02/11/2026
+
+**Autorização do owner:** “Ok. Dispare apk” após aceite da CI e solicitação de registrar separadamente pendências de UI de Logs e Configurações no Notion. O registro no backlog NÃO integra este APK.
+
+**Base de código exata:** `845fc3e3d9e51dd8affcde782edb562acb9a38a3` no HEAD da [PR #193](https://github.com/jssantogit/BitChord/pull/193), única candidata futura ao merge, ainda OPEN/DRAFT. A #204 e #202 estão contidas nesta branch. Não mesclar `main`.
+
+**Gates previamente aprovados para esta mesma árvore:**
+- [Android CI #41447949910](https://github.com/jssantogit/BitChord/actions/runs/41447949910): COMPLETED/SUCCESS.
+- [Integration Queue #41447950102](https://github.com/jssantogit/BitChord/actions/runs/41447950102): COMPLETED/SUCCESS.
+
+**Disparo único solicitado:** alterar exclusivamente este documento de autorização na branch `listening/smart-playlists-v2-192` para ativar `.github/workflows/physical-smoke-apk.yml` pelo filtro de push. O workflow deve checar a integração UI #202, reexecutar testes e compilar `:app:assembleDevDebug`, publicando APK Dev Debug como artifact do novo SHA. O commit de gatilho não altera código de produção.
+
+**Plano de smoke Galaxy A54 — nove ajustes:**
+1. Playlist “elite” com regra Navidrome 5 estrelas: exibir avaliações no detalhe com `CanonicalRatingStars`, notas da gravação/MediaAsset correto, sem supor que starred=five; verificar casos com capa local e nota remota e com fonte remota sem capa.
+2. Exibir a mesma avaliação na lista de revisão/prévia de playlists normais e inteligentes, sem vazamento entre contas.
+3. Página Regras: abrir editor ao tocar no card, expandir/recolher condições em ação independente (sem chevron), nomear grupo, salvar, fechar e reabrir com nome persistido.
+4. “Fontes de origem”: seleção por rádio, sem `>` ou `^` redundantes, alterando realmente a fonte e respeitando isolamento.
+5. Gênero unificado e metadados locais/Navidrome (gênero, Humor, BPM, estilo, compositor, pasta e caminho); conferir filtro de segmento `ILLIT` versus `ILLIT-Backup`.
+6. “Humor” no lugar de Clima/mood; título de álbum não confundir com tipo de lançamento.
+7. Operadores por tipo: presença sem campo de valor, “contém” com entrada de texto, comparações numéricas com valores válidos.
+8. Revisão/prévia automática ao entrar (sem botão manual), mensagens/latência, sincronização após mudanças.
+9. Conservar UI nativa já aprovada, navegação Home/Biblioteca/Playlists/perfil, criação/edição normal e inteligente, fontes, capa e Play/Fila.
+
+Coletar capturas e diagnóstico físico. Mesmo com CI verde, NÃO declarar funcionamento aprovado sem teste. Sem alterações de Configurações/Logs, sem release assinada, sem merge `main` e sem fechar issue #192.
