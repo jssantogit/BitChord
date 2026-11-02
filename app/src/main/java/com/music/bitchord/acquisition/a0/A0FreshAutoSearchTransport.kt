@@ -38,6 +38,7 @@ internal class A0FreshAutoSearchTransport(
 ):A0AutoDiscoveryCoordinator.SearchPort {
     private val app=context.applicationContext
     private val closed=AtomicBoolean(false)
+    private val folderProbe=A0FreshPeerFolderTransport(app,generation,quality)
     private val activePeers=ConcurrentHashMap.newKeySet<Socket>()
     @Volatile private var activeServer:Socket?=null
     @Volatile private var activeListener:ServerSocket?=null
@@ -360,8 +361,16 @@ internal class A0FreshAutoSearchTransport(
         }
     }
 
+    override fun inspectPublishedFolder(
+        source:A0ObservedCandidateHandoff.Choice,
+        releaseSlots:List<SoulseekBatchPlan.Entry>,
+        isCancelled:()->Boolean,
+    ):A0AutoDiscoveryCoordinator.SearchResult = folderProbe.inspect(
+        source,releaseSlots,{closed.get() || isCancelled()})
+
     override fun close() {
         if(!closed.compareAndSet(false,true))return
+        runCatching{folderProbe.close()}
         runCatching{activeHandoff?.cancel()}
         runCatching{activeListener?.close()}
         runCatching{activeDirect?.cancel()}
