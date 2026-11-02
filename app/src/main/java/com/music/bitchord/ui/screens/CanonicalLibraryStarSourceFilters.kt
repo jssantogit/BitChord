@@ -4,6 +4,7 @@ import com.music.bitchord.data.catalog.CanonicalBrowseMediaAsset
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
+import com.music.bitchord.ui.components.visibleStarValues
 
 /**
  * One provider-neutral Library projection for Songs, Albums and Artists.
