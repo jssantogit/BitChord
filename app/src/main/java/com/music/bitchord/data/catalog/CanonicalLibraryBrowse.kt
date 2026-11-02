@@ -17,6 +17,8 @@ internal data class CanonicalBrowseAssetRow(
     val artistDisplay: String,
     val durationMs: Long?,
     val artworkUri: String?,
+    val dateAddedSeconds: Long? = null,
+    val dateModifiedSeconds: Long? = null,
 )
 
 /** Small provider-neutral seam so browse behavior is JVM-testable without Room. */
@@ -27,6 +29,8 @@ internal interface CanonicalLibraryBrowseStore {
 internal data class CanonicalBrowseMediaAsset(
     val mediaAssetId: String,
     val providerKey: String,
+    val dateAddedSeconds: Long? = null,
+    val dateModifiedSeconds: Long? = null,
 )
 
 /**
@@ -40,6 +44,8 @@ internal data class CanonicalBrowseTrack(
     val durationMs: Long?,
     val artworkUri: String?,
     val availableAssets: List<CanonicalBrowseMediaAsset>,
+    val dateAddedSeconds: Long? = null,
+    val dateModifiedSeconds: Long? = null,
 )
 
 internal data class CanonicalBrowseLibrary(
@@ -76,12 +82,16 @@ internal class CanonicalLibraryBrowseRepository(
                 artworkUri = recordingRows.firstNotNullOfOrNull { row ->
                     row.artworkUri?.takeIf(String::isNotBlank)
                 },
+                dateAddedSeconds = recordingRows.mapNotNull { it.dateAddedSeconds }.maxOrNull(),
+                dateModifiedSeconds = recordingRows.mapNotNull { it.dateModifiedSeconds }.maxOrNull(),
                 availableAssets = recordingRows
                     .distinctBy(CanonicalBrowseAssetRow::mediaAssetId)
                     .map { row ->
                         CanonicalBrowseMediaAsset(
                             mediaAssetId = row.mediaAssetId,
                             providerKey = row.providerKey,
+                            dateAddedSeconds = row.dateAddedSeconds,
+                            dateModifiedSeconds = row.dateModifiedSeconds,
                         )
                     }
                     .sortedBy(CanonicalBrowseMediaAsset::mediaAssetId),
