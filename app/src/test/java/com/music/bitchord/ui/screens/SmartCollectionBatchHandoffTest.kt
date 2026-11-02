@@ -128,11 +128,11 @@ class SmartCollectionBatchHandoffTest {
             handoff.execute(SmartCollectionActionSource.RecentLocalTrack("rec-recent"),
                 CanonicalCollectionIntent.PLAY_NOW))
         assertEquals(listOf("local-id"),
-            submitted.single().selections.map { it.mediaAssetId })
+            submitted.single().selections.map { it.identity.mediaAssetId })
         assertEquals(CanonicalCollectionIntent.PLAY_NOW, submitted.single().intent)
 
         val remoteOnly = canonicalBrowseOnlyProvider(
-            library.copy(tracks = listOf(library.tracks.single().copy(
+            CanonicalBrowseLibrary(listOf(library.tracks.single().copy(
                 availableAssets = listOf(CanonicalBrowseMediaAsset("remote-id", "opensubsonic:other")),
             ))),
             "local-mediastore",
