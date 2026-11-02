@@ -352,6 +352,7 @@ import com.music.bitchord.ui.screens.rememberMusicBrainzCatalogAction
 import com.music.bitchord.ui.screens.rememberSmartCollectionBatchAction
 import com.music.bitchord.ui.screens.SmartCollectionActionSource
 import com.music.bitchord.ui.screens.SmartPlaylistBuilderEntry
+import com.music.bitchord.ui.screens.explicitCoverUri
 import com.music.bitchord.ui.screens.SmartPlaylistBuilderScreen
 import com.music.bitchord.ui.screens.MoodGenrePlaylistsScreen
 import com.music.bitchord.ui.screens.SearchScreen
@@ -6272,6 +6273,9 @@ private fun CanonicalPlaylistMenus(
                     com.music.bitchord.ui.screens.CanonicalPlaylistCoverArt(
                         rows = detailRows.orEmpty(),
                         modifier = Modifier.fillMaxSize(),
+                        // The menu must show a manually selected cover even if
+                        // the smart playlist currently matches zero recordings.
+                        customCoverUri = selected.explicitCoverUri(),
                     )
                 },
                 onEdit = {
