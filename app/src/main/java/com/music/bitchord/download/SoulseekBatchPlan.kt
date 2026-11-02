@@ -101,6 +101,8 @@ internal class SoulseekBatchSession(val entries: List<SoulseekBatchPlan.Entry>) 
     val succeeded:Int get()=savedIndices.size
     val skipped:Int get()=skippedIndices.size
 
+    val pendingIndices:List<Int>
+        get()=entries.indices.filter { it !in savedIndices && it !in skippedIndices }
     val current:SoulseekBatchPlan.Entry?
         get()=entries.getOrNull(index)
     val isComplete:Boolean
