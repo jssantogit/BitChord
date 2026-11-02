@@ -230,6 +230,7 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                         it.stage in setOf(Downloads.AutoTrackStage.INTERRUPTED,
                             Downloads.AutoTrackStage.CANCELLED)
                     }
+                    val failures=tracks.count { it.stage==Downloads.AutoTrackStage.ATTEMPT_FAILED }
                     val verify=tracks.count { it.stage==Downloads.AutoTrackStage.VERIFY_STORAGE }
                     listOfNotNull(
                         waiting.takeIf { it>0 }?.let { "$it aguardando" },
@@ -237,6 +238,7 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                         transferring.takeIf { it>0 }?.let { "$it baixando" },
                         saved.takeIf { it>0 }?.let { "$it salvas" },
                         review.takeIf { it>0 }?.let { "$it para revisão" },
+                        failures.takeIf { it>0 }?.let { "$it falha(s) na tentativa" },
                         interrupted.takeIf { it>0 }?.let { "$it interrompida(s)" },
                         verify.takeIf { it>0 }?.let { "$it verificar armazenamento" }
                     ).joinToString(" · ")
@@ -394,8 +396,10 @@ private fun SoulseekAutoTrackList(
                         Downloads.AutoTrackStage.MANUAL_REVIEW -> "Revisão manual"
                         Downloads.AutoTrackStage.CANCELLED -> "Cancelada"
                         Downloads.AutoTrackStage.INTERRUPTED -> "Não iniciada · busca interrompida"
+                        Downloads.AutoTrackStage.ATTEMPT_FAILED ->
+                            "Tentativa falhou · arquivo não salvo"
                         Downloads.AutoTrackStage.VERIFY_STORAGE ->
-                            "Verificar biblioteca · tentativa protegida"
+                            "Verificar biblioteca · publicação incerta"
                     }
                     Row(verticalAlignment=Alignment.CenterVertically) {
                         if(track.stage in setOf(
@@ -411,6 +415,7 @@ private fun SoulseekAutoTrackList(
                             if(track.stage in setOf(
                                 Downloads.AutoTrackStage.CANCELLED,
                                 Downloads.AutoTrackStage.INTERRUPTED,
+                                Downloads.AutoTrackStage.ATTEMPT_FAILED,
                                 Downloads.AutoTrackStage.VERIFY_STORAGE))
                                 MaterialTheme.colorScheme.error
                             else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -578,7 +583,7 @@ private fun DownloadManagerRow(
                         val state=when(row.status) {
                             A0AutoBatchExecutor.TrackStatus.PUBLISHED -> "Salva"
                             A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW -> "Revisão manual"
-                            A0AutoBatchExecutor.TrackStatus.ATTEMPT_FAILED -> "Tentativa falhou · conferir biblioteca"
+                            A0AutoBatchExecutor.TrackStatus.ATTEMPT_FAILED -> "Tentativa falhou · arquivo não salvo"
                             A0AutoBatchExecutor.TrackStatus.RECONCILE -> "Verificar armazenamento"
                             A0AutoBatchExecutor.TrackStatus.CANCELLED -> "Cancelada"
                             A0AutoBatchExecutor.TrackStatus.NOT_STARTED -> "Não iniciada"
