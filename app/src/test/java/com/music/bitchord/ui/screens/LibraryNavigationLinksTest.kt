@@ -46,7 +46,7 @@ class LibraryNavigationLinksTest {
         assertEquals(
             listOf(
                 "Playlists", "Artistas", "Álbuns", "Músicas",
-                "Rádios", "Minhas avaliações", "Downloads",
+                "Rádios", "Downloads",
             ),
             result.map { it.item.title },
         )
