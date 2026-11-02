@@ -29,6 +29,8 @@ internal val smartConditionCategories = listOf(
         SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD,
         SmartPlaylistRuleField.BPM, SmartPlaylistRuleField.STYLE,
         SmartPlaylistRuleField.COMPOSER,
+        SmartPlaylistRuleField.DISC_NUMBER, SmartPlaylistRuleField.RELEASE_GROUP_TYPE,
+        SmartPlaylistRuleField.LOCAL_GENRE, SmartPlaylistRuleField.ARTIST_COUNTRY,
     )),
     SmartConditionCategory("ratings", "Avaliações", "Notas em estrelas e data da nota local", listOf(
         SmartPlaylistRuleField.EXPLICIT_RATING, SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING,
@@ -46,6 +48,7 @@ internal val smartConditionCategories = listOf(
     SmartConditionCategory("library", "Biblioteca e pastas", "Origem das músicas e localização dos arquivos", listOf(
         SmartPlaylistRuleField.SOURCE_KIND,
         SmartPlaylistRuleField.FILE_PATH, SmartPlaylistRuleField.FOLDER_PATH,
+        SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleField.LOCAL_FILE_PATH,
     )),
     SmartConditionCategory("audio", "Áudio", "Duração comprovada das faixas", listOf(
         SmartPlaylistRuleField.DURATION_MS, SmartPlaylistRuleField.LOCAL_FILE_EXTENSION,
@@ -187,6 +190,15 @@ internal fun smartConditionSearch(
             SmartPlaylistRuleField.COMPOSER -> "compositor autoria composicao"
             SmartPlaylistRuleField.FOLDER_PATH -> "pasta de origem diretorio folder"
             SmartPlaylistRuleField.FILE_PATH -> "caminho completo arquivo filepath"
+            SmartPlaylistRuleField.LOCAL_FOLDER -> "pasta diretorio local caminho mediastore"
+            SmartPlaylistRuleField.LOCAL_FILE_PATH -> "arquivo caminho pasta filepath path mediastore"
+            SmartPlaylistRuleField.LOCAL_FILE_EXTENSION -> "formato extensão extensao mp3 flac m4a"
+            SmartPlaylistRuleField.DISC_NUMBER -> "disco numero disc medium faixa"
+            SmartPlaylistRuleField.RELEASE_GROUP_TYPE -> "single álbum album ep tipo lançamento"
+            SmartPlaylistRuleField.LOCAL_GENRE -> "genero gênero musica tag"
+            SmartPlaylistRuleField.ARTIST_COUNTRY -> "país origem artista musicbrainz country"
+            SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR -> "ano original lançamento data"
+            SmartPlaylistRuleField.LOCAL_BITRATE_KBPS -> "bitrate kbps taxa bits áudio"
             SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "capa artwork imagem album"
             SmartPlaylistRuleField.DURATION_MS -> "duracao segundos tempo audio"
             SmartPlaylistRuleField.TOTAL_SKIPS -> "pulos puladas skips total quantidade"
