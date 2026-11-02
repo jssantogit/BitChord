@@ -50,3 +50,25 @@ internal fun canonicalLibraryEntityHasMatchingTracks(
     memberRecordingIds: Collection<String>,
     visibleRecordingIds: Set<String>,
 ): Boolean = memberRecordingIds.any { it in visibleRecordingIds }
+
+/**
+ * The row's stars must follow the same scoped MediaAssets as source/rating
+ * filtering. A Recording-local score is valid across its sources; remote notes
+ * only belong to exact eligible MediaAsset IDs. Multiple distinct remote notes
+ * stay visible as separate strips rather than being arbitrarily merged.
+ */
+internal fun canonicalLibraryVisibleRatings(
+    track: CanonicalBrowseTrack,
+    snapshot: CanonicalRatingDisplaySnapshot,
+): List<RatingDisplay> {
+    val local = snapshot.byRecordingId[track.recordingId]?.localValue
+    val remote = track.availableAssets.mapNotNull {
+        snapshot.byMediaAssetId[it.mediaAssetId]?.remoteValue
+    }.distinct()
+    if (remote.size <= 1) {
+        val combined = RatingDisplay(localValue = local, remoteValue = remote.singleOrNull())
+        return if (combined.visibleStarValues().isEmpty()) emptyList() else listOf(combined)
+    }
+    return listOfNotNull(local?.let { RatingDisplay(localValue = it) }) +
+        remote.map { RatingDisplay(remoteValue = it) }
+}
