@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.TextButton
@@ -60,6 +62,9 @@ import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.catalog.CanonicalLibraryBrowseRepository
+import com.music.bitchord.data.catalog.CanonicalMultiSourceBrowseRepository
+import com.music.bitchord.data.catalog.RoomCanonicalMultiSourceBrowseStore
+import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.catalog.RoomCanonicalLibraryBrowseStore
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.CanonicalContextualFilterLibrary
@@ -83,6 +88,12 @@ import com.music.bitchord.playback.playCanonicalRemote
 import com.music.bitchord.playback.rememberMediaController
 import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
+import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
+import com.music.bitchord.ui.components.RatingDisplay
+import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.TopBarContentHeight
+import com.music.bitchord.ui.components.TopBarContentGap
+import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.canonical_rating_song_options
 import com.music.bitchord.sharedui.resources.recording_feedback_edit
@@ -128,6 +139,8 @@ internal fun CanonicalRemoteLibraryScreen(
     providerKey: String,
     title: String,
     onClose: () -> Unit,
+    unified: Boolean = false,
+    initialContext: CanonicalSmartFilterContext = CanonicalSmartFilterContext.SONGS,
 ) {
     val context = LocalContext.current
     val controller = rememberMediaController()
@@ -146,8 +159,31 @@ internal fun CanonicalRemoteLibraryScreen(
     val artworkLoader = remember(context.applicationContext) {
         androidOpenSubsonicArtworkLoader(context.applicationContext)
     }
-    val libraryFlow = remember(repository, providerKey) { repository.observe(providerKey) }
+    val sourceAccounts = remember(context.applicationContext) {
+        SharedPrefsOpenSubsonicAccountPersistence(context.applicationContext)
+    }
+    val availableKeys by produceState(
+        initialValue = listOf("local-mediastore"), key1 = sourceAccounts,
+    ) {
+        if (unified) {
+            sourceAccounts.observe().collectLatest {
+                value = canonicalAvailablePlaylistSourceKeys(context.applicationContext)
+            }
+        }
+    }
+    var selectedSource by remember(unified) { mutableStateOf<String?>(null) }
+    var selectedStars by remember(unified) { mutableStateOf<Int?>(null) }
+    val sources = if (unified) availableKeys else listOf(providerKey)
+    val multiRepository = remember(catalogDao) {
+        CanonicalMultiSourceBrowseRepository(RoomCanonicalMultiSourceBrowseStore(catalogDao))
+    }
+    val libraryFlow = remember(repository, multiRepository, sources, providerKey, unified) {
+        if (unified) multiRepository.observe(sources.toSet())
+        else repository.observe(providerKey)
+    }
     val library by libraryFlow.collectAsStateWithLifecycle(initialValue = CanonicalBrowseLibrary.EMPTY)
+    val ratingsSnapshot = LocalCanonicalRatingDisplay.current
+    val executeLibraryTrack = rememberSmartCollectionBatchAction(controller)
     // Preserve native RecordingId-scoped rating edits from the main branch.
     var editingRecordingId by remember { mutableStateOf<String?>(null) }
     val filterRepo = remember(context.applicationContext) {
@@ -167,8 +203,8 @@ internal fun CanonicalRemoteLibraryScreen(
             filtersUnavailable = true
         }
     }
-    var selectedContext by remember(providerKey) {
-        mutableStateOf(CanonicalSmartFilterContext.SONGS)
+    var selectedContext by remember(providerKey, initialContext) {
+        mutableStateOf(initialContext)
     }
     var selectedEntity by remember(providerKey, selectedContext) {
         mutableStateOf<CanonicalSelectedEntity?>(null)
@@ -178,7 +214,7 @@ internal fun CanonicalRemoteLibraryScreen(
     }
     val compatible = remember(filters, selectedContext, providerKey) {
         filters.filter { filter ->
-            when (selectedContext) {
+            !unified && when (selectedContext) {
                 CanonicalSmartFilterContext.SONGS ->
                     filter.isSupportedForCanonicalSongBrowse(providerKey)
                 CanonicalSmartFilterContext.ALBUMS ->
@@ -200,13 +236,18 @@ internal fun CanonicalRemoteLibraryScreen(
         initialValue = CanonicalSongFilterState.Loading,
         key1 = library.tracks, key2 = selectedFilterId,
         key3 = Triple(selectedContext, selected, filtersUnavailable) to tagEvidenceRevision,
+        key4 = Triple(selectedSource, selectedStars, ratingsSnapshot),
     ) {
         value = try {
             when {
                 selectedContext != CanonicalSmartFilterContext.SONGS ->
                     CanonicalSongFilterState.Ready(emptyList())
                 filtersUnavailable && selectedFilterId != null -> CanonicalSongFilterState.Failed
-                selectedFilterId == null -> CanonicalSongFilterState.Ready(library.tracks)
+                selectedFilterId == null -> CanonicalSongFilterState.Ready(
+                    if (unified) filterCanonicalLibraryTracks(
+                        library.tracks, selectedSource, selectedStars, ratingsSnapshot,
+                    ) else library.tracks,
+                )
                 selected == null -> CanonicalSongFilterState.Failed
                 else -> {
                     val tagRows = if (selected.rules.referencedFields().any {
