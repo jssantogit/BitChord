@@ -6460,6 +6460,95 @@ private fun FrostedFolderMenu(
     }
 }
 
+/**
+ * The two menus belong to the very same native frosted panel as LocalFolder.
+ * Source selection is distinct from sort/rating and never changes the route.
+ */
+@Composable
+private fun FrostedUnifiedLibrarySourceMenu(
+    hazeState: HazeState,
+    sources: List<String>,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    FrostedMenuPanel(hazeState = hazeState, onDismiss = onDismiss) {
+        FrostedMenuRow("Todas as fontes", selected == null, { onSelect(null) })
+        sources.forEach { key ->
+            val navidrome = sources.filter { it.startsWith("opensubsonic:") }
+            val title = when {
+                key == "local-mediastore" -> "Música local"
+                key.startsWith("opensubsonic:") ->
+                    if (navidrome.size > 1) "Navidrome $" + "{navidrome.indexOf(key) + 1}"
+                    else "Navidrome"
+                else -> "Outra fonte"
+            }
+            FrostedMenuRow(title, selected == key, { onSelect(key) })
+        }
+    }
+}
+
+@Composable
+private fun FrostedUnifiedLibrarySortMenu(
+    hazeState: HazeState,
+    sort: LocalMusicSort,
+    viewType: LibraryViewType,
+    stars: Int?,
+    onSort: (LocalMusicSort) -> Unit,
+    onToggleViewType: () -> Unit,
+    onStars: (Int?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    FrostedMenuPanel(hazeState = hazeState, onDismiss = onDismiss) {
+        val grid = viewType == LibraryViewType.GRID
+        FrostedMenuRow(
+            label = stringResource(if (grid) R.string.switch_to_list_view else R.string.switch_to_grid_view),
+            checked = false,
+            onClick = onToggleViewType,
+            icon = if (grid) BitChordIcons.ListView else BitChordIcons.GridView,
+        )
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 4.dp),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        )
+        LocalMusicSort.entries.forEach { option ->
+            FrostedMenuRow(
+                label = option.localizedLabel(),
+                checked = option == sort,
+                onClick = { onSort(option) },
+            )
+        }
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 4.dp),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        )
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .padding(start = 20.dp, end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Avaliação", style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.width(12.dp))
+            (1..5).forEach { value ->
+                IconButton(
+                    onClick = { onStars(if (stars == value) null else value) },
+                    modifier = Modifier.size(30.dp),
+                ) {
+                    Icon(
+                        if (stars != null && value <= stars) Icons.Rounded.Star
+                        else Icons.Rounded.StarBorder,
+                        contentDescription = "Filtrar $" + "{value} estrelas",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
 /** The scrim and frosted panel both top-bar menus are drawn on. */
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
