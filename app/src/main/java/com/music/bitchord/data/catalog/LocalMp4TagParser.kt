@@ -79,6 +79,7 @@ internal object LocalMp4TagParser {
             val children = atoms(item.data, item.end) ?: return false
             val supported = when (item.type) {
                 "©gen" -> "GENRE"
+                "©wrt" -> "COMPOSER"
                 "tmpo" -> "BPM"
                 "----" -> "FREEFORM"
                 else -> return true // Never confuse grouping (©grp) with style.
@@ -93,7 +94,7 @@ internal object LocalMp4TagParser {
                 }
                 if (fullBoxText(namespace) != "com.apple.iTunes") return true
                 val key = fullBoxText(named)?.uppercase() ?: return false
-                if (key !in setOf("GENRE", "MOOD", "STYLE", "BPM")) return true
+                if (key !in setOf("GENRE", "MOOD", "STYLE", "BPM", "COMPOSER")) return true
                 val atom = children.firstOrNull { it.type == "data" } ?: return false
                 val (type, bytes) = dataValue(atom) ?: return false
                 if (type != 1) return false
