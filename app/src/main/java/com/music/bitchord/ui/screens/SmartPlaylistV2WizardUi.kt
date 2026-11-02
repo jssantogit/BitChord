@@ -1,7 +1,6 @@
 package com.music.bitchord.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -181,14 +180,11 @@ private fun WizardCard(
 ) {
     // This is the exact surface and row shared with Android Settings, not
     // a separate Material3 Card with duplicated paddings and chevrons.
-    SettingsGroupSurface(
-        modifier = if (!showChevron && onClick != null)
-            Modifier.clickable(onClick = onClick) else Modifier,
-    ) {
+    SettingsGroupSurface {
         SettingsRow(
             title = title,
             subtitle = subtitle.ifBlank { null },
-            onClick = if (showChevron) onClick else null,
+            onClick = onClick,
             reserveIconSpace = false,
             trailing = if (showChevron) null else ({}),
         )
