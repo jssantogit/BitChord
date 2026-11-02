@@ -2,6 +2,8 @@ package com.music.bitchord.acquisition.a0
 
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.io.EOFException
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
@@ -32,6 +34,32 @@ internal object A0PeerFolderContentsWire {
         val frame=ByteArrayOutputStream()
         u32(frame,body.size()+4);u32(frame,36);frame.write(body.toByteArray())
         return frame.toByteArray()
+    }
+
+    fun readResponse(input:InputStream,expectedToken:Int,folder:String):
+        List<A0SoulseekSearchFile> {
+        val prefix=ByteArray(4)
+        exact(input,prefix)
+        val n=(prefix[0].toInt() and 255) or
+            ((prefix[1].toInt() and 255) shl 8) or
+            ((prefix[2].toInt() and 255) shl 16) or
+            ((prefix[3].toInt() and 255) shl 24)
+        if(n !in 8..MAX_WIRE-4)bad()
+        val bytes=ByteArray(n+4)
+        System.arraycopy(prefix,0,bytes,0,4)
+        val payload=ByteArray(n)
+        exact(input,payload)
+        System.arraycopy(payload,0,bytes,4,n)
+        return parse(bytes,expectedToken,folder)
+    }
+
+    private fun exact(input:InputStream,bytes:ByteArray) {
+        var offset=0
+        while(offset<bytes.size) {
+            val read=input.read(bytes,offset,bytes.size-offset)
+            if(read<=0)throw EOFException("Incomplete peer folder response")
+            offset+=read
+        }
     }
 
     fun parse(frame:ByteArray,expectedToken:Int,folder:String):
