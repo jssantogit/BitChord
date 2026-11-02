@@ -2076,7 +2076,7 @@ internal fun AboutSection(
 }
 
 @Composable
-private fun SectionHeading(
+internal fun SectionHeading(
     title: String,
     palette: ArtworkPalette,
     onShowAll: (() -> Unit)? = null,
