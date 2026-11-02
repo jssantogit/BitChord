@@ -357,7 +357,9 @@ internal object A0AutoCandidateSelectionPolicy {
             return review(Reason.NO_READY_SOURCE,observed.size,strong.size,funnel,details)
         val ordered=reliability.sequentialFallbacks(
             ready.map { A0PeerReliabilityEvidence.Alternative(
-                it.choice.peerUsername,"same-claim",it.choice.peerAvailability.tier) },
+                it.choice.peerUsername,"same-claim",it.choice.peerAvailability.tier,
+                queueLength=it.choice.peerAvailability.queueLength,
+                speedKiBps=it.choice.peerAvailability.speedKiBps) },
             claimKey="same-claim",failedPeers=emptySet(),maxPeers=3)
         val alternatives=ordered.mapNotNull { peer ->
             ready.firstOrNull { it.choice.peerUsername==peer }?.choice
