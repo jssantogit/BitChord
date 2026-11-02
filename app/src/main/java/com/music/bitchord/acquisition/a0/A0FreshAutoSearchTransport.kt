@@ -166,6 +166,7 @@ internal class A0FreshAutoSearchTransport(
                                 if(!publishParsed(parsed,parsed.peerUsername))
                                     throw IOException("Soulseek direct claim was invalid")
                                 validDirect.incrementAndGet()
+                                tickets.creditValidated(parsed.token)
                             },
                             acceptedSearchTokens=tickets.accepted
                         )
@@ -240,6 +241,7 @@ internal class A0FreshAutoSearchTransport(
                                                         if(!publishParsed(parsed,offer.username))
                                                             throw IOException("Invalid Soulseek indirect reply")
                                                         validIndirect.incrementAndGet()
+                                                        tickets.creditValidated(parsed.token)
                                                     }
                                                 },
                                                 acceptedSearchTokens=tickets.accepted
@@ -374,11 +376,15 @@ internal class A0FreshAutoSearchTransport(
             holder.markReadersStopped()
             val snapshot=holder.releaseShadowSnapshot()
             val counts=holder.screening()
+            val replyByTicket=tickets.responseCounts()
             val reachability=A0SearchReachabilityDiagnosis.classify(
                 directAccepted.get(),indirectOffers.get(),indirectConnected.get(),
                 counts.responses,snapshot.choices.size)
             Log.d("BitChord","soulseek_auto_search replies=${snapshot.choices.size}" +
                 " tickets_sent=${tickets.accepted.size.coerceIn(1,3)}" +
+                " initial_replies=${replyByTicket[0]}" +
+                " fallback_1_replies=${replyByTicket[1]}" +
+                " fallback_2_replies=${replyByTicket[2]}" +
                 " valid_direct=${validDirect.get().coerceIn(0,160)}" +
                 " valid_indirect=${validIndirect.get().coerceIn(0,160)}" +
                 " release_queries=${releaseWideSent.size.coerceIn(0,8)}" +
