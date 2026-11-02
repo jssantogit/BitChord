@@ -116,6 +116,26 @@ class A0SearchWindowBudgetTest {
         second.close()
     }
 
+    @Test fun manualAndAutomaticSearchesConsumeTheSameBudgetWithoutHiddenVariants() {
+        val shared=A0SearchWindowBudget(3,220_000L)
+        val automated=checkNotNull(shared.tryAcquireUpTo(3,100L))
+        assertTrue(automated.commit(101L))
+        automated.close()
+        // A later manual search may only reserve two slots. Its third
+        // variation cannot silently bypass the automated search charge.
+        val manual=checkNotNull(shared.tryAcquireUpTo(3,110L))
+        assertEquals(2,manual.remaining())
+        assertTrue(manual.commit(111L))
+        assertTrue(manual.commit(112L))
+        assertEquals(0,manual.remaining())
+        assertFalse(manual.reserveOneMore(113L))
+        assertNull(shared.tryAcquireUpTo(3,114L))
+        manual.close()
+        assertEquals(0,shared.available(115L))
+        assertEquals(219_986L,shared.waitMillis(1,115L))
+        assertNotNull(shared.tryAcquireUpTo(3,220_102L))
+    }
+
     @Test fun reservationIsSharedAcrossIndependentSearchSessions() {
         val shared=A0SearchWindowBudget(4,220_000L)
         val first=checkNotNull(shared.tryAcquire(3,100L))

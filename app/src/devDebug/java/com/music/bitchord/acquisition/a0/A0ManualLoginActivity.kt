@@ -418,7 +418,47 @@ class A0ManualLoginActivity : Activity() {
                 var loginReplyProgress: A0LoginReadProgress? = null
                 var saveLedger:A3AcquisitionLedger?=null
                 var saveJobId:String?=null
+                var searchLease:A0SearchWindowBudget.Lease?=null
                 try {
+                    if(performSearch) {
+                        // Manual and automatic searches use the SAME account-
+                        // wide process budget. Wait before login, without
+                        // keeping a server connection idle for the rate limit.
+                        val budget=A0GlobalSearchWindowBudget.shared
+                        var announced=false
+                        var totalWaitMs=0L
+                        while(searchLease==null && !stopping &&
+                            lifecycleGate.isCurrent(lifecycleToken) &&
+                            SoulseekActiveSession.isCurrent(accountGeneration) &&
+                            !Thread.currentThread().isInterrupted) {
+                            val now=android.os.SystemClock.elapsedRealtime()
+                            searchLease=budget.tryAcquireUpTo(3,now)
+                            if(searchLease==null) {
+                                val delay=budget.waitMillis(1,now).coerceIn(1L,1000L)
+                                if(!announced) {
+                                    announced=true
+                                    runOnUiThread {
+                                        if(!stopping && lifecycleGate.isCurrent(lifecycleToken))
+                                            status.text="Aguardando limite seguro de pesquisas Soulseek. " +
+                                                "A espera pode ser cancelada."
+                                    }
+                                }
+                                Thread.sleep(delay)
+                                totalWaitMs+=delay
+                            }
+                        }
+                        if(searchLease==null || stopping ||
+                            !lifecycleGate.isCurrent(lifecycleToken) ||
+                            !SoulseekActiveSession.isCurrent(accountGeneration))
+                            throw IOException("Soulseek manual search admission cancelled")
+                        com.music.bitchord.data.DebugLog.d("BitChord",
+                            "soulseek_manual_search rate_budget_wait_ms=" +
+                                totalWaitMs.coerceIn(0L,300_000L))
+                        if(announced)runOnUiThread {
+                            if(!stopping && lifecycleGate.isCurrent(lifecycleToken))
+                                status.text="Janela de pesquisa disponível. Conectando ao Soulseek."
+                        }
+                    }
                     if(saveToDevice) {
                         val ledger=A3AndroidAcquisitionLedger.get(this@A0ManualLoginActivity)
                         val id=UUID.randomUUID().toString()
@@ -490,6 +530,8 @@ class A0ManualLoginActivity : Activity() {
                                 } else null
                                 connection.getOutputStream().apply {
                                     write(A0OneShotPublicSearchWire.setWaitPort(listener.localPort))
+                                    check(checkNotNull(searchLease).commit(
+                                        android.os.SystemClock.elapsedRealtime()))
                                     write(A0OneShotPublicSearchWire.fileSearch(
                                         token, checkNotNull(requestedSearch)
                                     ))
@@ -757,6 +799,14 @@ class A0ManualLoginActivity : Activity() {
                                             val variant=recovery.next(elapsedMillis,
                                                 handoff?.hasRelevantCandidateForSearchRecovery()==true,
                                                 sent) ?: return
+                                            val lease=checkNotNull(searchLease)
+                                            val now=android.os.SystemClock.elapsedRealtime()
+                                            if(lease.remaining()==0 && !lease.reserveOneMore(now)) {
+                                                com.music.bitchord.data.DebugLog.d("BitChord",
+                                                    "soulseek_manual_search fallback_budget_skipped=true")
+                                                return
+                                            }
+                                            if(!lease.commit(now))return
                                             try {
                                                 connection.getOutputStream().apply {
                                                     write(A0OneShotPublicSearchWire.fileSearch(token,variant))
@@ -858,6 +908,10 @@ class A0ManualLoginActivity : Activity() {
                                     }
                                     trace.note(A0SmokeTrace.Stage.SEARCH_COMPLETED, finalOutcome)
                                 } finally {
+                                    // Release optional queries before any lengthy manual
+                                    // selection or P/F transfer; sent ones stay charged.
+                                    searchLease?.close()
+                                    searchLease=null
                                     readerGate.stop()
                                     if(transferObserved && !stopping) {
                                         // Do not interrupt a server Socket read then
@@ -1461,6 +1515,8 @@ class A0ManualLoginActivity : Activity() {
                             "Nenhum novo item foi confirmado na biblioteca."
                     else "ERRO NO TESTE. Nenhuma credencial foi armazenada."
                 } finally {
+                    searchLease?.close()
+                    searchLease=null
                     val id=saveJobId
                     val journal=saveLedger
                     if(id!=null && journal!=null)runCatching {
