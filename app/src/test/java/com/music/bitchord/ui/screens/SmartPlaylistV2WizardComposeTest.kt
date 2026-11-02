@@ -12,6 +12,11 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.runtime.CompositionLocalProvider
+import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
+import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
+import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
 import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
@@ -174,7 +179,7 @@ class SmartPlaylistV2WizardComposeTest {
         // The LazyColumn virtualizes cards on compact phone windows; assert
         // each group when it is visible rather than requiring both composed.
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
-        compose.onNodeWithText("Fontes do catálogo").assertExists()
+        compose.onNodeWithText("Fontes de origem").assertExists()
         assertEquals(true, compose.onAllNodesWithTag("native-settings-group-surface")
             .fetchSemanticsNodes().isNotEmpty())
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
@@ -716,7 +721,7 @@ class SmartPlaylistV2WizardComposeTest {
         // Identity now includes a 112dp neutral artwork preview; the sources
         // card is below the fold on Robolectric's compact test window.
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
-        compose.onNodeWithText("Fontes do catálogo").assertExists()
+        compose.onNodeWithText("Fontes de origem").assertExists()
         compose.onNodeWithText("Continuar").performClick()
         compose.onNodeWithText("Regras da playlist").assertExists()
         compose.onNodeWithText("Grupo 1").assertExists()
@@ -724,8 +729,23 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Revisar e criar").assertExists()
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
         compose.onNodeWithText("Músicas selecionadas").assertExists()
-        compose.onNodeWithText("Ainda não calculada para estas regras").assertExists()
+        compose.onNodeWithText("Preparando prévia automaticamente…").assertExists()
         compose.onNodeWithText("Criar playlist").assertIsNotEnabled()
+    }
+
+    @Test fun playlistTrackRowShowsTrustedNativeAndRemoteStarsWithoutPerRowLookup() {
+        compose.setContent {
+            CompositionLocalProvider(LocalCanonicalRatingDisplay provides
+                CanonicalRatingDisplaySnapshot(byRecordingId = mapOf(
+                    "rated" to RatingDisplay(remoteValue = 5),
+                ))) {
+                CanonicalPlaylistTrackRow(
+                    track = V2DisplayRow(id = "rated", title = "Faixa", artist = "Artista"),
+                    onPlay = {},
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("5/5", substring = true).assertExists()
     }
 
     @Test fun conditionCatalogAddsOnlyTheSelectedFieldAndPreservesExistingGroup() {
@@ -776,6 +796,7 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Músicas e metadados").assertExists()
         compose.onNodeWithText("Músicas e metadados").performClick()
         compose.onNodeWithText("Título da música").performClick()
+        compose.onNodeWithContentDescription("Texto a comparar").performTextInput("novo")
         compose.onNodeWithText("Adicionar condição").performClick()
         compose.runOnIdle {
             val root = state.value as SmartPlaylistRule.Group
@@ -783,7 +804,8 @@ class SmartPlaylistV2WizardComposeTest {
             assertEquals(original, group.children.first())
             assertEquals(SmartPlaylistRule.Comparison(
                 SmartPlaylistRuleField.TITLE,
-                SmartPlaylistRuleOperator.IS_PRESENT,
+                SmartPlaylistRuleOperator.CONTAINS,
+                textValue = "novo",
             ), group.children.last())
         }
     }
