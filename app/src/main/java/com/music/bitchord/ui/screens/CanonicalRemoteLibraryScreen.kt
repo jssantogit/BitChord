@@ -535,11 +535,38 @@ internal fun CanonicalRemoteLibraryScreen(
                         else -> emptyList()
                     }
                 }
-                canonicalLibraryEntityArtworkById(coverLinks, eligibleTracks)
+                canonicalLibraryEntityArtworkById(coverLinks, eligibleTracks).also { matched ->
+                    // Counts only: a physical smoke can identify missing
+                    // artwork links without logging any titles, IDs or URLs.
+                    runCatching {
+                        Diagnostics.event(
+                            category = DiagnosticCategory.CATALOG,
+                            name = "unified_library_artwork_v1",
+                            metadata = mapOf(
+                                "category" to selectedContext.name,
+                                "coverLinkCount" to coverLinks.size.toString(),
+                                "resolvedCount" to matched.size.toString(),
+                                "eligibleTrackCount" to eligibleTracks.size.toString(),
+                                "sourceMode" to when {
+                                    selectedSource == null -> "all"
+                                    selectedSource == "local-mediastore" -> "local"
+                                    else -> "remote"
+                                },
+                            ),
+                        )
+                    }
+                }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
+            runCatching {
+                Diagnostics.event(
+                    category = DiagnosticCategory.CATALOG,
+                    name = "unified_library_artwork_v1",
+                    metadata = mapOf("category" to selectedContext.name, "phase" to "failed"),
+                )
+            }
             emptyMap()
         }
     }
