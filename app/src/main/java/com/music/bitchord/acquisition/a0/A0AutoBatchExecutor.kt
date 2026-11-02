@@ -23,6 +23,8 @@ internal class A0AutoBatchExecutor(
         val attempts:Int,
         /** Physical peer paths actually published, used only within one album. */
         val publishedSourceKeys:Set<Pair<String,String>> = emptySet(),
+        /** In-memory only, no peer identifiers in diagnostics or receipts. */
+        val preAcceptFailedPeers:Set<String> = emptySet(),
     ) {
         val published:Int get()=results.count { it==TrackStatus.PUBLISHED }
         val manualReview:Int get()=results.count { it==TrackStatus.MANUAL_REVIEW }
@@ -82,6 +84,7 @@ internal class A0AutoBatchExecutor(
         // One physical peer path must NEVER be automatically published as two
         // different canonical album slots. Reprises need separate evidence.
         val publishedSources=HashSet<Pair<String,String>>()
+        val rejectedPeers=HashSet<String>()
         for(index in entries.indices) {
             if(isCancelled() || !stillAuthorized() ||
                 Thread.currentThread().isInterrupted) {
@@ -112,7 +115,10 @@ internal class A0AutoBatchExecutor(
             }catch(_:Exception) {
                 null
             }
-            if(result!=null)attempts+=result.attempts
+            if(result!=null) {
+                attempts+=result.attempts
+                rejectedPeers.addAll(result.preAcceptFailedPeers)
+            }
             if(result?.status==A0AutoAcquisitionExecutor.Status.PUBLISHED)
                 result.selectedSource?.let {
                     publishedSources.add(it.peerUsername to it.remotePath)
@@ -134,6 +140,6 @@ internal class A0AutoBatchExecutor(
                 break
             }
         }
-        return Report(status,attempts,publishedSources.toSet())
+        return Report(status,attempts,publishedSources.toSet(),rejectedPeers.toSet())
     }
 }
