@@ -2350,13 +2350,7 @@ private fun BitChordApp(
     var unifiedLibraryCategory by remember {
         mutableStateOf<com.music.bitchord.data.listening.CanonicalSmartFilterContext?>(null)
     }
-    var unifiedLibrarySourceKey by remember { mutableStateOf<String?>(null) }
-    var unifiedLibrarySourceKeys by remember { mutableStateOf(listOf("local-mediastore")) }
-    var unifiedLibraryStars by remember { mutableStateOf<Int?>(null) }
-    var unifiedLibrarySort by remember { mutableStateOf(LocalMusicSort.TITLE_ASC) }
-    var unifiedLibraryViewType by remember { mutableStateOf(LibraryViewType.LIST) }
-    var unifiedLibrarySortMenuOpen by remember { mutableStateOf(false) }
-    var unifiedLibrarySourceMenuOpen by remember { mutableStateOf(false) }
+    val unifiedControls = remember { UnifiedLibraryUiControls() }
     var unifiedLibrarySearching by remember { mutableStateOf(false) }
     var unifiedLibraryDetailOpen by remember { mutableStateOf(false) }
     var unifiedLibraryBackToken by remember { mutableIntStateOf(0) }
@@ -3100,17 +3094,11 @@ private fun BitChordApp(
                                 else -> "Músicas"
                             },
                             unified = true,
-                            selectedSourceKey = unifiedLibrarySourceKey,
-                            selectedStarsFilter = unifiedLibraryStars,
-                            unifiedSort = unifiedLibrarySort,
-                            unifiedViewType = unifiedLibraryViewType,
-                            onSourceKeysChanged = { keys ->
-                                unifiedLibrarySourceKeys = keys
-                                if (unifiedLibrarySourceKey != null &&
-                                    unifiedLibrarySourceKey !in keys) {
-                                    unifiedLibrarySourceKey = null
-                                }
-                            },
+                            selectedSourceKey = unifiedControls.sourceKey,
+                            selectedStarsFilter = unifiedControls.stars,
+                            unifiedSort = unifiedControls.sort,
+                            unifiedViewType = unifiedControls.viewType,
+                            onSourceKeysChanged = unifiedControls::updateAvailableSources,
                             searchVisible = unifiedLibrarySearching,
                             detailBackToken = unifiedLibraryBackToken,
                             onDetailChanged = { unifiedLibraryDetailOpen = it },
@@ -4312,19 +4300,10 @@ private fun BitChordApp(
                     } else null,
                     actions = {
                         if (unifiedLibraryCategory != null && !showSettings && detail == null) {
-                            NativeCollectionSearchAction(
+                            UnifiedLibraryToolbarActions(
                                 searching = unifiedLibrarySearching,
-                                contentDescription = if (unifiedLibrarySearching)
-                                    "Fechar pesquisa da biblioteca" else "Pesquisar na biblioteca",
-                                onClick = { unifiedLibrarySearching = !unifiedLibrarySearching },
-                            )
-                            IconButton(onClick = { unifiedLibrarySourceMenuOpen = true }) {
-                                Icon(Icons.Rounded.Layers, contentDescription = "Fonte das músicas",
-                                    tint = MaterialTheme.colorScheme.onSurface)
-                            }
-                            NativeCollectionSortAction(
-                                contentDescription = "Ordenar e filtrar biblioteca",
-                                onClick = { unifiedLibrarySortMenuOpen = true },
+                                onSearch = { unifiedLibrarySearching = !unifiedLibrarySearching },
+                                controls = unifiedControls,
                             )
                         }
                         if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null &&
@@ -5385,33 +5364,11 @@ private fun BitChordApp(
             )
         }
 
-        if (unifiedLibraryCategory != null && unifiedLibrarySourceMenuOpen) {
-            BackHandler { unifiedLibrarySourceMenuOpen = false }
-            FrostedUnifiedLibrarySourceMenu(
-                hazeState = hazeState,
-                sources = unifiedLibrarySourceKeys,
-                selected = unifiedLibrarySourceKey,
-                onSelect = { unifiedLibrarySourceKey = it; unifiedLibrarySourceMenuOpen = false },
-                onDismiss = { unifiedLibrarySourceMenuOpen = false },
-            )
-        }
-        if (unifiedLibraryCategory != null && unifiedLibrarySortMenuOpen) {
-            BackHandler { unifiedLibrarySortMenuOpen = false }
-            FrostedUnifiedLibrarySortMenu(
-                hazeState = hazeState,
-                sort = unifiedLibrarySort,
-                viewType = unifiedLibraryViewType,
-                stars = unifiedLibraryStars,
-                onSort = { unifiedLibrarySort = it; unifiedLibrarySortMenuOpen = false },
-                onToggleViewType = {
-                    unifiedLibraryViewType = if (unifiedLibraryViewType == LibraryViewType.LIST)
-                        LibraryViewType.GRID else LibraryViewType.LIST
-                    unifiedLibrarySortMenuOpen = false
-                },
-                onStars = { value -> unifiedLibraryStars = value },
-                onDismiss = { unifiedLibrarySortMenuOpen = false },
-            )
-        }
+        UnifiedLibraryMenus(
+            visible = unifiedLibraryCategory != null,
+            hazeState = hazeState,
+            controls = unifiedControls,
+        )
 
         val menuFolder = detail?.browseId?.takeIf { it.isDeviceFolder() }
         if (folderMenuOpen && menuFolder != null) {
@@ -6457,6 +6414,96 @@ private fun FrostedFolderMenu(
                 onClick = { onSort(option) },
             )
         }
+    }
+}
+
+/**
+ * Retain the Library's native presentation controls outside BitChordApp.
+ * The parent app was already near the JVM method-size ceiling; keeping menus
+ * and their event state here prevents adding their Compose bytecode to it.
+ */
+private class UnifiedLibraryUiControls {
+    var sourceKey by mutableStateOf<String?>(null)
+    var sourceKeys by mutableStateOf(listOf("local-mediastore"))
+    var stars by mutableStateOf<Int?>(null)
+    var sort by mutableStateOf(LocalMusicSort.TITLE_ASC)
+    var viewType by mutableStateOf(LibraryViewType.LIST)
+    var sortMenuOpen by mutableStateOf(false)
+    var sourceMenuOpen by mutableStateOf(false)
+
+    fun updateAvailableSources(keys: List<String>) {
+        sourceKeys = keys
+        if (sourceKey != null && sourceKey !in keys) sourceKey = null
+    }
+}
+
+@Composable
+private fun UnifiedLibraryToolbarActions(
+    searching: Boolean,
+    onSearch: () -> Unit,
+    controls: UnifiedLibraryUiControls,
+) {
+    NativeCollectionSearchAction(
+        searching = searching,
+        contentDescription = if (searching)
+            "Fechar pesquisa da biblioteca" else "Pesquisar na biblioteca",
+        onClick = onSearch,
+    )
+    IconButton(onClick = { controls.sourceMenuOpen = true }) {
+        Icon(
+            Icons.Rounded.Layers, contentDescription = "Fonte das músicas",
+            tint = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+    NativeCollectionSortAction(
+        contentDescription = "Ordenar e filtrar biblioteca",
+        onClick = { controls.sortMenuOpen = true },
+    )
+}
+
+@Composable
+private fun UnifiedLibraryMenus(
+    visible: Boolean,
+    hazeState: HazeState,
+    controls: UnifiedLibraryUiControls,
+) {
+    if (!visible) {
+        controls.sourceMenuOpen = false
+        controls.sortMenuOpen = false
+        return
+    }
+    if (controls.sourceMenuOpen) {
+        BackHandler { controls.sourceMenuOpen = false }
+        FrostedUnifiedLibrarySourceMenu(
+            hazeState = hazeState,
+            sources = controls.sourceKeys,
+            selected = controls.sourceKey,
+            onSelect = {
+                controls.sourceKey = it
+                controls.sourceMenuOpen = false
+            },
+            onDismiss = { controls.sourceMenuOpen = false },
+        )
+    }
+    if (controls.sortMenuOpen) {
+        BackHandler { controls.sortMenuOpen = false }
+        FrostedUnifiedLibrarySortMenu(
+            hazeState = hazeState,
+            sort = controls.sort,
+            viewType = controls.viewType,
+            stars = controls.stars,
+            onSort = {
+                controls.sort = it
+                controls.sortMenuOpen = false
+            },
+            onToggleViewType = {
+                controls.viewType = if (controls.viewType == LibraryViewType.LIST)
+                    LibraryViewType.GRID else LibraryViewType.LIST
+                controls.sortMenuOpen = false
+            },
+            onStars = { value -> controls.stars = value },
+            onDismiss = { controls.sortMenuOpen = false },
+        )
     }
 }
 
