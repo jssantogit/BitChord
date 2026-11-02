@@ -78,6 +78,12 @@ internal sealed interface SmartCollectionActionSource {
     data class RecentLocalTrack(val recordingId: String) : SmartCollectionActionSource
     /** Library row: optionally restrict playback to a selected source/account. */
     data class LibraryTrack(val recordingId: String, val sourceKey: String?) : SmartCollectionActionSource
+    /** Native unified Library Play/Shuffle: snapshot of visible canonical IDs, not fake Song IDs. */
+    data class LibraryTracks(
+        val recordingIds: List<String>,
+        val sourceKey: String?,
+        val shuffle: Boolean,
+    ) : SmartCollectionActionSource
     data class SavedStaticPlaylist(val id: String, val shuffle: Boolean = false) : SmartCollectionActionSource
     /** Click a real row: verify current saved membership before playing its ordered suffix. */
     data class SavedStaticPlaylistFromTrack(
@@ -152,6 +158,7 @@ internal class SmartCollectionBatchHandoff(
                 is SmartCollectionActionSource.Adaptive -> "adaptive"
                 is SmartCollectionActionSource.RecentLocalTrack -> "recent_local"
                 is SmartCollectionActionSource.LibraryTrack -> "library_track"
+                is SmartCollectionActionSource.LibraryTracks -> "library_tracks"
                 is SmartCollectionActionSource.SavedDefinition -> "saved"
                 is SmartCollectionActionSource.PreviewQuery -> "preview"
                 is SmartCollectionActionSource.SavedV2Definition -> "saved_v2"
@@ -177,7 +184,8 @@ internal class SmartCollectionBatchHandoff(
                 mark("rejected", mapOf("reason" to "ids_zero"))
                 return SmartCollectionBatchResult.Empty
             }
-            if (selected.size > CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE) {
+            if (selected.size > CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE &&
+                source !is SmartCollectionActionSource.LibraryTracks) {
                 mark("rejected", mapOf("reason" to "limit_exceeded"))
                 return SmartCollectionBatchResult.LimitExceeded
             }
@@ -186,44 +194,65 @@ internal class SmartCollectionBatchHandoff(
                 when (source) {
                     is SmartCollectionActionSource.SavedStaticPlaylist -> source.shuffle
                     is SmartCollectionActionSource.SavedV2Definition -> source.shuffle
+                    is SmartCollectionActionSource.LibraryTracks -> source.shuffle
                     else -> false
                 }
             val ids = canonicalSavedPlaylistOrder(selected, shuffleRequested)
-            val library = sourceLimit(source, browseSelected(ids))
-            mark("catalog", mapOf("trackCount" to library.tracks.size.toString()))
-            // A rated remote preference is never an exception to a chosen source.
-            val currentAssets = library.tracks.associate { track ->
-                track.recordingId to track.availableAssets.toSet()
+            // A Library with >500 recordings uses several B10-safe commands:
+            // play the first verified chunk, then append the remaining chunks.
+            // No individual request may exceed the Media3 service batch policy.
+            val chunks = if (source is SmartCollectionActionSource.LibraryTracks)
+                ids.chunked(CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE)
+                else listOf(ids)
+            for ((chunkIndex, chunk) in chunks.withIndex()) {
+                val library = sourceLimit(source, browseSelected(chunk))
+                mark("catalog", mapOf(
+                    "chunk" to (chunkIndex + 1).toString(),
+                    "chunkCount" to chunks.size.toString(),
+                    "trackCount" to library.tracks.size.toString(),
+                ))
+                val currentAssets = library.tracks.associate { track ->
+                    track.recordingId to track.availableAssets.toSet()
+                }
+                val scopedRemote = verifiedRemoteAssets(source).filter { (id, hint) ->
+                    currentAssets[id]?.contains(hint) == true
+                }
+                mark("asset_evidence", mapOf("uniqueRatedAssets" to scopedRemote.size.toString()))
+                val chunkIntent = if (chunkIndex == 0) intent else CanonicalCollectionIntent.ADD_TO_QUEUE
+                val plan = planner.preview(
+                    chunk, chunkIntent, library,
+                    preferSingleLocalCopy = true,
+                    verifiedRemoteAssetByRecording = scopedRemote,
+                )
+                val reasons = plan.rejected.groupingBy { it.reason.name }.eachCount()
+                    .toSortedMap().entries.joinToString(",") { "${it.key}:${it.value}" }
+                mark("planned", mapOf(
+                    "eligibleCount" to chunk.size.toString(),
+                    "selectionCount" to plan.selections.size.toString(),
+                    "rejectedCount" to plan.rejected.size.toString(),
+                    "rejectionCodes" to reasons.ifEmpty { "none" },
+                    "chunk" to (chunkIndex + 1).toString(),
+                ))
+                if (plan.rejected.isNotEmpty() || plan.selections.size != chunk.size) {
+                    mark("rejected", mapOf(
+                        "reason" to "planning_failed",
+                        "completedChunks" to chunkIndex.toString(),
+                    ))
+                    return SmartCollectionBatchResult.Rejected(plan.rejected.size)
+                }
+                if (plan.selections.isEmpty()) {
+                    mark("rejected", mapOf("reason" to "selections_zero"))
+                    return SmartCollectionBatchResult.Empty
+                }
+                val sent = submit(plan.copy(traceRef = attempt))
+                mark("media3", mapOf(
+                    "result" to if (sent) "command_accepted" else "command_failed",
+                    "chunk" to (chunkIndex + 1).toString(),
+                    "chunkCount" to chunks.size.toString(),
+                ))
+                if (!sent) return SmartCollectionBatchResult.ExecutionFailed
             }
-            val scopedRemote = verifiedRemoteAssets(source).filter { (id, hint) ->
-                currentAssets[id]?.contains(hint) == true
-            }
-            mark("asset_evidence", mapOf("uniqueRatedAssets" to scopedRemote.size.toString()))
-            val plan = planner.preview(
-                ids, intent, library,
-                preferSingleLocalCopy = true,
-                verifiedRemoteAssetByRecording = scopedRemote,
-            )
-            val reasons = plan.rejected.groupingBy { it.reason.name }.eachCount()
-                .toSortedMap().entries.joinToString(",") { "${it.key}:${it.value}" }
-            mark("planned", mapOf(
-                "eligibleCount" to ids.size.toString(),
-                "selectionCount" to plan.selections.size.toString(),
-                "rejectedCount" to plan.rejected.size.toString(),
-                "rejectionCodes" to reasons.ifEmpty { "none" },
-            ))
-            if (plan.rejected.isNotEmpty() || plan.selections.size != ids.size) {
-                mark("rejected", mapOf("reason" to "planning_failed"))
-                return SmartCollectionBatchResult.Rejected(plan.rejected.size)
-            }
-            if (plan.selections.isEmpty()) {
-                mark("rejected", mapOf("reason" to "selections_zero"))
-                return SmartCollectionBatchResult.Empty
-            }
-            val sent = submit(plan.copy(traceRef = attempt))
-            mark("media3", mapOf("result" to if (sent) "command_accepted" else "command_failed"))
-            return if (sent) SmartCollectionBatchResult.Submitted
-                else SmartCollectionBatchResult.ExecutionFailed
+            return SmartCollectionBatchResult.Submitted
         } catch (cancelled: CancellationException) {
             mark("cancelled")
             throw cancelled
@@ -242,6 +271,7 @@ private suspend fun currentSmartCollectionIds(
     return when (source) {
     is SmartCollectionActionSource.RecentLocalTrack -> listOf(source.recordingId)
     is SmartCollectionActionSource.LibraryTrack -> listOf(source.recordingId)
+    is SmartCollectionActionSource.LibraryTracks -> source.recordingIds.distinct()
     is SmartCollectionActionSource.Adaptive -> {
         val fresh = persistentAdaptiveCollectionsReader(context).load()
             as? AdaptiveCollectionsUiState.Ready ?: return null
@@ -360,6 +390,7 @@ private suspend fun currentScopedRatedAssetHints(
         is SmartCollectionActionSource.Adaptive -> null
         is SmartCollectionActionSource.RecentLocalTrack -> null
         is SmartCollectionActionSource.LibraryTrack -> null
+        is SmartCollectionActionSource.LibraryTracks -> null
         is SmartCollectionActionSource.SavedStaticPlaylist -> null
         is SmartCollectionActionSource.SavedStaticPlaylistFromTrack -> null
         is SmartCollectionActionSource.PreviewQuery -> source.query.minimumExplicitRating
@@ -573,6 +604,9 @@ internal fun rememberSmartCollectionBatchAction(
                     is SmartCollectionActionSource.RecentLocalTrack ->
                         canonicalBrowseOnlyProvider(library, RoomCanonicalQueueResolver.LOCAL_PROVIDER)
                     is SmartCollectionActionSource.LibraryTrack ->
+                        if (source.sourceKey == null) library
+                        else canonicalBrowseOnlyProvider(library, source.sourceKey)
+                    is SmartCollectionActionSource.LibraryTracks ->
                         if (source.sourceKey == null) library
                         else canonicalBrowseOnlyProvider(library, source.sourceKey)
                     is SmartCollectionActionSource.SavedStaticPlaylist,
