@@ -1526,6 +1526,11 @@ fun NowPlayingScreen(
                 onOpenOutput = openAudioOutput,
                 onOpenMembers = openListenTogetherMembers,
             )
+        } else {
+            // Do not let removing the device label grow the weighted artwork
+            // region and push the top credits/lyrics controls down. The old
+            // caption footprint remains empty, retaining the prior geometry.
+            Spacer(Modifier.height(NowPlayingChrome.hiddenOutputCaptionFootprintDp.dp))
         }
     }
 
