@@ -144,6 +144,8 @@ data class Song(
     val localMoods: List<String>? = null,
     /** Optional tempo tag(s) from the local file, never inferred from playback. */
     val localBpms: List<Double>? = null,
+    /** Optional local embedded author credits, never Recording-wide truth. */
+    val localComposers: List<String>? = null,
     /** MediaStore size is part of the incremental local tag-header cache key. */
     val localSizeBytes: Long? = null,
 ) {
