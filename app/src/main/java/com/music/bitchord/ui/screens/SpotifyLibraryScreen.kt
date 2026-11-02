@@ -166,6 +166,7 @@ internal fun LibraryRow(
     trailing: (@Composable () -> Unit)? = null,
     horizontalPadding: Dp = 20.dp,
     artworkSize: Dp = 52.dp,
+    artworkShape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(8.dp),
     titleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onBackground,
     subtitleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
@@ -176,7 +177,7 @@ internal fun LibraryRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Box(Modifier.size(artworkSize).clip(RoundedCornerShape(8.dp))) {
+        Box(Modifier.size(artworkSize).clip(artworkShape)) {
             when {
                 artwork != null -> artwork()
                 !imageUrl.isNullOrBlank() -> AsyncImage(
