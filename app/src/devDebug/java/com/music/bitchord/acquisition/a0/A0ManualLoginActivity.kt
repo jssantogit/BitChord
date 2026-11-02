@@ -1586,6 +1586,13 @@ class A0ManualLoginActivity : Activity() {
             }
         }
         if (fromSongDownload) {
+            var reviewSlotSelected=!manualRecovery
+            if(manualRecovery) {
+                // No first-song default in a bulk recovery. The user must
+                // choose one of the remaining slots before starting a search.
+                searchInput.setText("")
+                albumInput.setText("")
+            }
             // The old A0 diagnostic actions remain available only to internal
             // test callers. A normal Download tap immediately enters a guided
             // search, not a second login form or a technical transport menu.
@@ -1597,6 +1604,10 @@ class A0ManualLoginActivity : Activity() {
             fun confirmSearch() {
                 if(batch?.isComplete==true || batch?.currentSaved==true ||
                     (batch==null && completedSingle.get()))return
+                if(manualRecovery && !reviewSlotSelected) {
+                    status.text="Escolha uma das faixas pendentes antes de pesquisar."
+                    return
+                }
                 val saved = accountVault.read()
                 if (saved == null) {
                     status.text = "Configure sua conta em Configurações → Downloads → Soulseek."
@@ -1661,6 +1672,7 @@ class A0ManualLoginActivity : Activity() {
                         val slot=indices[position]
                         if(!guided.selectPending(slot))return@setItems
                         val entry=checkNotNull(guided.current)
+                        reviewSlotSelected=true
                         searchInput.setText(entry.query)
                         albumInput.setText(entry.album.orEmpty())
                         intent.putExtra("bitchord.soulseek.manual.duration_seconds",
@@ -1717,6 +1729,7 @@ class A0ManualLoginActivity : Activity() {
                         status.text="Lote finalizado. Confira Biblioteca → Música local."
                     }else {
                         val entry=checkNotNull(batch.current)
+                        reviewSlotSelected=!manualRecovery
                         searchInput.setText(entry.query)
                         albumInput.setText(entry.album.orEmpty())
                         intent.putExtra("bitchord.soulseek.manual.duration_seconds",
