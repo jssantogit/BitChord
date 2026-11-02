@@ -10,6 +10,27 @@ class SmartPlaylistV2RuleEngineTest {
     private val now = 90L * 86_400_000L
     private val planner = SmartPlaylistV2RuleEngine(nowEpochMs = { now })
 
+    @Test fun universalPathConditionsUseVerifiedLocalFileAndSegmentBoundaries() {
+        val rows = listOf(
+            RuleBasedRecordingCandidate("target", null, 0, null, 180_000, true).copy(
+                sourceKinds = setOf(SmartPlaylistSourceKind.LOCAL),
+                localFilePaths = listOf("Music/ILLIT/Pop.flac"),
+                localFilePathsComplete = true),
+            RuleBasedRecordingCandidate("other", null, 0, null, 180_000, true).copy(
+                sourceKinds = setOf(SmartPlaylistSourceKind.LOCAL),
+                localFilePaths = listOf("Music/ILLIT-Backup/Pop.flac"),
+                localFilePathsComplete = true),
+        )
+        val folder = SmartPlaylistRule.Comparison(SmartPlaylistRuleField.FOLDER_PATH,
+            SmartPlaylistRuleOperator.CONTAINS, textValue = "ILLIT")
+        assertEquals(listOf("target"), planner.preview(rows,
+            SmartPlaylistV2Query(folder)).map { it.recordingId })
+        val file = SmartPlaylistRule.Comparison(SmartPlaylistRuleField.FILE_PATH,
+            SmartPlaylistRuleOperator.ENDS_WITH, textValue = "Pop.flac")
+        assertEquals(listOf("target", "other"), planner.preview(rows,
+            SmartPlaylistV2Query(file)).map { it.recordingId })
+    }
+
     @Test fun universalGenreMatchesLocalAndRemoteEvidence() {
         val rows = listOf(
             RuleBasedRecordingCandidate("local", null, 0, null, 180_000, true).copy(

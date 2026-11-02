@@ -1284,17 +1284,7 @@ internal fun SmartPlaylistV2WizardUi(
                                 WizardCard("Sem músicas", "Você pode salvar uma playlist vazia e adicionar músicas depois.")
                             }
                             items(normalSelectedRows, key = { it.id }) { row ->
-                                LibraryRow(
-                                    title = row.title,
-                                    subtitle = row.artist,
-                                    imageUrl = null,
-                                    horizontalPadding = 0.dp,
-                                    artwork = {
-                                        SmartPlaylistPreviewArtwork(
-                                            row = row, modifier = Modifier.fillMaxSize(),
-                                        )
-                                    },
-                                )
+                                PlaylistReviewRatedRow(row)
                             }
                         } else {
                         item {

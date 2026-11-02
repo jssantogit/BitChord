@@ -114,7 +114,9 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
         val localPathsById = if (
             SmartPlaylistRuleField.LOCAL_FOLDER in requiredFields ||
             SmartPlaylistRuleField.LOCAL_FILE_PATH in requiredFields ||
-            SmartPlaylistRuleField.LOCAL_FILE_EXTENSION in requiredFields
+            SmartPlaylistRuleField.LOCAL_FILE_EXTENSION in requiredFields ||
+            SmartPlaylistRuleField.FILE_PATH in requiredFields ||
+            SmartPlaylistRuleField.FOLDER_PATH in requiredFields
         ) {
             catalog.localPathsByRecordingIds(
                 CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, recordingIds,
@@ -122,6 +124,7 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
         } else emptyMap()
         val localAudioTagsById = if (
             SmartPlaylistRuleField.LOCAL_GENRE in requiredFields ||
+            SmartPlaylistRuleField.GENRE in requiredFields ||
             SmartPlaylistRuleField.LOCAL_BITRATE_KBPS in requiredFields
         ) {
             catalog.localAudioTagsByRecordingIds(

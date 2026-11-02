@@ -912,8 +912,12 @@ internal class SmartPlaylistV2RuleEngine(
                 SmartPlaylistRuleField.MOOD -> row.moods
                 SmartPlaylistRuleField.STYLE -> row.styles
                 SmartPlaylistRuleField.COMPOSER -> row.composers
-                SmartPlaylistRuleField.FILE_PATH -> row.filePaths
-                SmartPlaylistRuleField.FOLDER_PATH -> row.folderPaths
+                SmartPlaylistRuleField.FILE_PATH -> row.filePaths +
+                    row.localFilePaths.mapNotNull(::normalizeLocalSmartFilterPath)
+                SmartPlaylistRuleField.FOLDER_PATH -> row.folderPaths +
+                    row.localFilePaths.mapNotNull(::normalizeLocalSmartFilterPath)
+                        .mapNotNull { path -> path.substringBeforeLast('/', "")
+                            .takeIf(String::isNotBlank) }
                 SmartPlaylistRuleField.ALBUM_ARTIST,
                 SmartPlaylistRuleField.TRACK_ARTIST,
                 SmartPlaylistRuleField.SOURCE_KIND -> emptyList()
@@ -930,8 +934,10 @@ internal class SmartPlaylistV2RuleEngine(
                 SmartPlaylistRuleField.MOOD -> row.moodEvidenceUnknown
                 SmartPlaylistRuleField.STYLE -> row.styleEvidenceUnknown
                 SmartPlaylistRuleField.COMPOSER -> row.composerEvidenceUnknown
-                SmartPlaylistRuleField.FILE_PATH -> row.filePathEvidenceUnknown
-                SmartPlaylistRuleField.FOLDER_PATH -> row.folderPathEvidenceUnknown
+                SmartPlaylistRuleField.FILE_PATH -> row.filePathEvidenceUnknown ||
+                    (SmartPlaylistSourceKind.LOCAL in row.sourceKinds && !row.localFilePathsComplete)
+                SmartPlaylistRuleField.FOLDER_PATH -> row.folderPathEvidenceUnknown ||
+                    (SmartPlaylistSourceKind.LOCAL in row.sourceKinds && !row.localFilePathsComplete)
                 else -> false
             }
             if ((rule.field == SmartPlaylistRuleField.TITLE ||
@@ -963,7 +969,10 @@ internal class SmartPlaylistV2RuleEngine(
                     SmartPlaylistRuleOperator.EQUAL,
                     SmartPlaylistRuleOperator.NOT_EQUAL -> actual == expected
                     SmartPlaylistRuleOperator.CONTAINS,
-                    SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> actual.contains(expected)
+                    SmartPlaylistRuleOperator.DOES_NOT_CONTAIN ->
+                        if (rule.field == SmartPlaylistRuleField.FOLDER_PATH)
+                            "/${actual.trim('/')}/".contains("/${expected.trim('/')}/")
+                        else actual.contains(expected)
                     SmartPlaylistRuleOperator.STARTS_WITH -> actual.startsWith(expected)
                     SmartPlaylistRuleOperator.ENDS_WITH -> actual.endsWith(expected)
                     else -> return RuleTruth.UNKNOWN
