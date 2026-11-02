@@ -17,8 +17,14 @@ class A0ObservedCandidateHandoffTest {
                 "Shared\\ILLIT\\BREAK EVEN\\ILLIT - More $n.flac",
                 38_000_000L,"flac",mapOf(1 to 173,4 to 44_100,5 to 16))
         }
+        val unrelated=(0 until 240).map { n ->
+            A0SoulseekSearchFile(
+                "Shared\\ILLIT\\Other Album\\Unrelated Song $n.flac",
+                38_000_000L,"flac",mapOf(1 to 173,4 to 44_100,5 to 16))
+        }
         assertTrue(handoff.offerParsed(A0SoulseekSearchResponse(
-            "peer",81,files,emptyList(),true,128_000,0),"peer"))
+            "peer",81,unrelated+files,emptyList(),true,128_000,0),"peer"))
+        assertEquals(240,handoff.screening().validBeforeLimit)
         assertTrue(handoff.choices().isEmpty())
         assertEquals(64,handoff.releaseShadowChoices().size)
         assertTrue(handoff.releaseShadowSnapshot().shadowDroppedAtPeerLimit>0)
