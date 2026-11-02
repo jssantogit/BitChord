@@ -15,6 +15,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Reusable READ-ONLY Soulseek discovery for a future opted-in Android worker.
@@ -116,6 +118,18 @@ internal class A0FreshAutoSearchTransport(
                 A0AcquisitionDiagnostics.Phase.SEARCH_READER_READY,
                 elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart)
             val holder=checkNotNull(handoff)
+            val maxPublishMillis=AtomicLong()
+            val slowPublishCount=AtomicInteger()
+            fun publishParsed(reply:A0SoulseekSearchResponse,claimed:String):Boolean {
+                val started=System.nanoTime()
+                return try {
+                    holder.offerParsed(reply,claimed)
+                } finally {
+                    val elapsed=TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-started)
+                    maxPublishMillis.updateAndGet { maxOf(it,elapsed) }
+                    if(elapsed>=500)slowPublishCount.incrementAndGet()
+                }
+            }
             connection.getOutputStream().apply {
                 write(A0OneShotPublicSearchWire.setWaitPort(checkNotNull(listener).localPort))
                 write(A0OneShotPublicSearchWire.fileSearch(token,normalized))
@@ -134,7 +148,7 @@ internal class A0FreshAutoSearchTransport(
                         A0OneShotPublicSearchWire.readOneDirectPeerReply(
                             peer.getInputStream(),token,
                             onValidatedParsedReply={ parsed ->
-                                if(!holder.offerParsed(parsed,parsed.peerUsername))
+                                if(!publishParsed(parsed,parsed.peerUsername))
                                     throw IOException("Soulseek direct claim was invalid")
                             }
                         )
@@ -201,7 +215,7 @@ internal class A0FreshAutoSearchTransport(
                                                 onValidatedParsedReply={ parsed ->
                                                     workerStages.inStage(
                                                         A0PeerWorkStageCounts.Stage.PUBLISHING) {
-                                                        if(!holder.offerParsed(parsed,offer.username))
+                                                        if(!publishParsed(parsed,offer.username))
                                                             throw IOException("Invalid Soulseek indirect reply")
                                                     }
                                                 }
@@ -267,7 +281,11 @@ internal class A0FreshAutoSearchTransport(
             // Always join BOTH peer pools: short-circuiting on a slow direct
             // pool used to skip indirect cleanup and strand the next slots.
             val directJoined=directCollector.stop(4500)
-            val indirectJoined=peerWorkers.stop(4500)
+            // The bulk of inbound replies can already be parsed while a
+            // few large release shadows finish the synchronized bounded
+            // in-memory update. Allow a strict 8s drain after closing P
+            // sockets; never reuse a still-running snapshot for transfer.
+            val indirectJoined=peerWorkers.stop(8000)
             val joined=readerJoined && directJoined && indirectJoined
             if(!joined || readerFailed.get() || stopped()) {
                 val revoked=stopped()
@@ -287,6 +305,8 @@ internal class A0FreshAutoSearchTransport(
                     " indirect_queued=${peerStats.queuedNow.coerceIn(0,128)}" +
                     " indirect_open_sockets=${activePeers.count { !it.isClosed }.coerceIn(0,12)}" +
                     " indirect_stages=${workerStages.summary()}" +
+                    " max_publish_ms=${maxPublishMillis.get().coerceIn(0,60000)}" +
+                    " slow_publish_replies=${slowPublishCount.get().coerceIn(0,160)}" +
                     " readerFailed=${readerFailed.get()} revoked=$revoked")
                 // Failed peer-pool drain is not necessarily a protocol or
                 // account failure. Discard its incomplete snapshot while
@@ -309,7 +329,9 @@ internal class A0FreshAutoSearchTransport(
                 " peer_limit=${counts.perPeerDropped}" +
                 " shadow_evicted=${snapshot.shadowEvicted}" +
                 " shadow_global_dropped=${snapshot.shadowDroppedAtGlobalLimit}" +
-                " shadow_peer_dropped=${snapshot.shadowDroppedAtPeerLimit}")
+                " shadow_peer_dropped=${snapshot.shadowDroppedAtPeerLimit}" +
+                " max_publish_ms=${maxPublishMillis.get().coerceIn(0,60000)}" +
+                " slow_publish_replies=${slowPublishCount.get().coerceIn(0,160)}")
             return if(snapshot.choices.isEmpty() && snapshot.truncatedSlots.isEmpty())
                 A0AutoDiscoveryCoordinator.SearchResult.NoReply
             else A0AutoDiscoveryCoordinator.SearchResult.Found(
