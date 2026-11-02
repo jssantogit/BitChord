@@ -84,6 +84,21 @@ class CanonicalLibraryStarSourceFiltersTest {
             divergent.flatMap { it.visibleStarValues() })
     }
 
+    @Test fun browseOnlyArtistGroupsCoverFullVisibleLibraryWithoutHundredResultCap() {
+        val tracks = (1..151).map { index ->
+            CanonicalBrowseTrack(
+                "recording-$index", "Track $index", "Uncredited $index",
+                100_000L, null, listOf(local),
+            )
+        }
+        val names = canonicalLibraryDisplayArtistNames(tracks, emptySet())
+        assertEquals(151, names.size)
+        assertTrue("Uncredited 151" in names)
+        assertFalse("Uncredited 1" in canonicalLibraryDisplayArtistNames(
+            tracks, setOf("uncredited 1"),
+        ))
+    }
+
     @Test fun albumOrArtistIsEligibleOnlyIfItContainsVisibleProvenMember() {
         val visible = setOf("song-1", "song-2")
         assertTrue(canonicalLibraryEntityHasMatchingTracks(
