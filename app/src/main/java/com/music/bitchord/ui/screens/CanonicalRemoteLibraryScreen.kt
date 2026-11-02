@@ -1172,9 +1172,9 @@ private fun NativeUnifiedLibraryBody(
     val minutes = tracks.sumOf { it.durationMs ?: 0L } / 60_000
     val label = when (selectedContext) {
         CanonicalSmartFilterContext.SONGS ->
-            "$" + "{count} faixas" + if (completeDuration) " · $" + "{minutes / 60}h $" + "{minutes % 60}m" else ""
-        CanonicalSmartFilterContext.ALBUMS -> "$" + "{count} álbuns"
-        CanonicalSmartFilterContext.ARTISTS -> "$" + "{count} artistas"
+            "${count} faixas" + if (completeDuration) " · $" + "{minutes / 60}h $" + "{minutes % 60}m" else ""
+        CanonicalSmartFilterContext.ALBUMS -> "${count} álbuns"
+        CanonicalSmartFilterContext.ARTISTS -> "${count} artistas"
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val sleeve = (maxWidth * 0.76f).coerceAtMost(maxHeight * 0.6f)
