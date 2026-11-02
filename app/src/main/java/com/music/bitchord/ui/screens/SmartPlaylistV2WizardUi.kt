@@ -44,6 +44,11 @@ import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.DeleteOutline
 import com.music.bitchord.ui.components.ConfirmationAlert
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -323,7 +328,8 @@ internal fun <T> WizardChoiceDialog(
             ) {
                 Text(title, style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onBackground)
-                PlaylistWizardCompactAction(label = "Fechar", onClick = onClose)
+                PlaylistWizardCompactAction(label = "Fechar", onClick = onClose,
+                    icon = Icons.Rounded.Close)
             }
             SettingsGroupSurface(modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
                 LazyColumn(Modifier.heightIn(max = 480.dp)) {
@@ -368,6 +374,7 @@ internal fun SmartPlaylistV2WizardUi(
     onChooseCover: () -> Unit = {},
     onClearCover: () -> Unit = {},
     onRuleChange: (SmartPlaylistRule) -> Unit,
+    onClearRules: () -> Unit = {},
     onSortChange: (SmartPlaylistV2Sort) -> Unit,
     onLimitChange: (String) -> Unit,
     onSeedChange: (String) -> Unit,
@@ -420,6 +427,8 @@ internal fun SmartPlaylistV2WizardUi(
     }
     var selectedPath by remember { mutableStateOf<List<Int>>(emptyList()) }
     var expandedGroups by remember { mutableStateOf(setOf<Int>()) }
+    var pendingRuleDeletion by remember { mutableStateOf<List<Int>?>(null) }
+    var pendingRuleDeletionIsGroup by remember { mutableStateOf(false) }
     var targetGroupPath by remember { mutableStateOf<List<Int>>(emptyList()) }
     var selectedCategory by remember { mutableStateOf(smartConditionCategories.first()) }
     var search by remember { mutableStateOf("") }
@@ -852,9 +861,21 @@ internal fun SmartPlaylistV2WizardUi(
                                     Spacer(Modifier.weight(1f))
                                     PlaylistWizardCompactAction(
                                         label = if (expanded) "Recolher" else "Expandir",
+                                        icon = if (expanded) Icons.Rounded.KeyboardArrowUp
+                                            else Icons.Rounded.KeyboardArrowDown,
                                         onClick = {
                                             expandedGroups = if (expanded) expandedGroups - index
                                                 else expandedGroups + index
+                                        },
+                                    )
+                                    PlaylistWizardCompactAction(
+                                        label = if (core is SmartPlaylistRule.Group)
+                                            "Excluir grupo" else "Excluir condição",
+                                        icon = Icons.Rounded.DeleteOutline,
+                                        onClick = {
+                                            pendingRuleDeletion = path
+                                            pendingRuleDeletionIsGroup =
+                                                core is SmartPlaylistRule.Group
                                         },
                                     )
                                 }
@@ -956,20 +977,30 @@ internal fun SmartPlaylistV2WizardUi(
                                     "Condição ${i + 1}",
                                     ruleUiSummary(child, names),
                                     onClick = { editAt(path, WizardStep.GROUP) },
+                                    showChevron = false,
                                 ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.End,
+                                        verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         Box {
                                             PlaylistWizardCompactAction(
                                                 label = "Opções",
+                                                icon = Icons.Rounded.MoreVert,
                                                 onClick = { actionsOpen = true },
                                             )
                                             androidx.compose.material3.DropdownMenu(
                                                 expanded = actionsOpen,
                                                 onDismissRequest = { actionsOpen = false },
                                             ) {
+                                                androidx.compose.material3.DropdownMenuItem(
+                                                    text = { Text("Editar condição") },
+                                                    onClick = {
+                                                        actionsOpen = false
+                                                        editAt(path, WizardStep.GROUP)
+                                                    },
+                                                )
                                                 if (i > 0) {
                                                     androidx.compose.material3.DropdownMenuItem(
                                                         text = { Text("Mover para cima") },
@@ -994,17 +1025,22 @@ internal fun SmartPlaylistV2WizardUi(
                                                         },
                                                     )
                                                 }
-                                                if (group.children.size > 1) {
-                                                    androidx.compose.material3.DropdownMenuItem(
-                                                        text = { Text("Remover condição") },
-                                                        onClick = {
-                                                            actionsOpen = false
-                                                            onRuleChange(smartRuleRemoveAt(rule, path))
-                                                        },
-                                                    )
-                                                }
                                             }
                                         }
+                                        PlaylistWizardCompactAction(
+                                            label = if (child is SmartPlaylistRule.Group ||
+                                                child is SmartPlaylistRule.Not &&
+                                                child.child is SmartPlaylistRule.Group)
+                                                "Excluir grupo" else "Excluir condição",
+                                            icon = Icons.Rounded.DeleteOutline,
+                                            onClick = {
+                                                pendingRuleDeletion = path
+                                                pendingRuleDeletionIsGroup =
+                                                    child is SmartPlaylistRule.Group ||
+                                                    child is SmartPlaylistRule.Not &&
+                                                    child.child is SmartPlaylistRule.Group
+                                            },
+                                        )
                                     }
                                 }
                             }
@@ -1313,37 +1349,7 @@ internal fun SmartPlaylistV2WizardUi(
                                     else "Prévia atualizada após aplicar regras, limite e ordenação.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                if (preview != null &&
-                                    preview.size > CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE) {
-                                    Text("Play/Fila aceitam no máximo " +
-                                        "${CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE} músicas.",
-                                        style = MaterialTheme.typography.bodySmall)
-                                }
-                                if (onPreviewAction != null && currentPreviewQuery != null &&
-                                    preview != null && preview.isNotEmpty() &&
-                                    preview.size <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        PlaylistWizardCompactAction(
-                                            label = stringResource(Res.string.smart_collection_batch_play),
-                                            modifier = Modifier.weight(1f),
-                                            onClick = {
-                                                onPreviewAction(currentPreviewQuery, editingId,
-                                                    CanonicalCollectionIntent.PLAY_NOW)
-                                            },
-                                        )
-                                        PlaylistWizardCompactAction(
-                                            label = stringResource(Res.string.smart_collection_batch_queue),
-                                            modifier = Modifier.weight(1f),
-                                            onClick = {
-                                                onPreviewAction(currentPreviewQuery, editingId,
-                                                    CanonicalCollectionIntent.ADD_TO_QUEUE)
-                                            },
-                                        )
-                                    }
-                                }
+
                             }
                         }
                         items(preview.orEmpty().take(24), key = { it.id }) { row ->
@@ -1521,6 +1527,27 @@ internal fun SmartPlaylistV2WizardUi(
                 onDeleteNormal()
             },
             onDismiss = { confirmDeleteNormal = false },
+        )
+    }
+
+    pendingRuleDeletion?.let { path ->
+        ConfirmationAlert(
+            hazeState = null,
+            title = if (pendingRuleDeletionIsGroup) "Excluir grupo de regras?"
+                else "Excluir condição?",
+            description = "Esta exclusão altera a lógica da playlist. " +
+                "Nenhuma música original será apagada.",
+            confirmLabel = "Excluir",
+            destructive = true,
+            onConfirm = {
+                val updated = smartRuleRemovePruningEmptyGroups(rule, path)
+                pendingRuleDeletion = null
+                if (updated == null) onClearRules() else onRuleChange(updated)
+                selectedPath = emptyList()
+                expandedGroups = emptySet()
+                page = WizardStep.RULES
+            },
+            onDismiss = { pendingRuleDeletion = null },
         )
     }
 
