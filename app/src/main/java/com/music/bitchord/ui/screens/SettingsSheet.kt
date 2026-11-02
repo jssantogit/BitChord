@@ -194,6 +194,7 @@ internal fun SettingsScreen(
     onAccountScrobbling: () -> Unit,
     onEqualizer: () -> Unit,
     onOpenReplay: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
     onLyricsSources: () -> Unit,
     onTranslationLanguage: () -> Unit,
     onSources: () -> Unit,
@@ -1508,7 +1509,7 @@ internal fun SettingsScreen(
                         icon = Icons.Rounded.Tune,
                         title = diagnosticsTitle,
                         subtitle = stringResource(R.string.settings_nav_diagnostics_subtitle),
-                        onClick = { DiagnosticsUiEntry.open(context) },
+                        onClick = onOpenDiagnostics,
                     )
                 }
             }
