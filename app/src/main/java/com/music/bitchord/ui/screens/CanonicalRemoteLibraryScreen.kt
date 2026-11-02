@@ -117,7 +117,7 @@ private sealed interface CanonicalEntityBrowseState {
     data object Loading : CanonicalEntityBrowseState
     data object Failed : CanonicalEntityBrowseState
     data class Albums(val releases: List<ReleaseEntity>) : CanonicalEntityBrowseState
-    data class Artists(val artists: List<ArtistEntity>) : CanonicalEntityBrowseState
+    data class Artists(val artists: List<CanonicalSelectedEntity>) : CanonicalEntityBrowseState
 }
 
 private sealed interface CanonicalDetailBrowseState {
@@ -330,7 +330,7 @@ internal fun CanonicalRemoteLibraryScreen(
                         val keys = if (unified) sources.filter {
                             selectedSource == null || selectedSource == it
                         } else listOf(providerKey)
-                        val all = keys.flatMap { key ->
+                        val canonical = keys.flatMap { key ->
                             if (selected == null || unified) catalogDao.providerScopedArtists(key)
                             else contextualReader.artists(key, selected)
                         }.distinctBy { it.id }
@@ -338,7 +338,25 @@ internal fun CanonicalRemoteLibraryScreen(
                             eligibleTracks.map { it.recordingId }.chunked(400)
                                 .flatMap { catalogDao.artistIdsForVisibleRecordings(it) }.toSet()
                         } else null
-                        all.filter { ratedIds == null || it.id in ratedIds }
+                        val credited = canonical.filter { ratedIds == null || it.id in ratedIds }
+                            .map { CanonicalSelectedEntity(it.id, it.name) }
+                        // Uncredited provider recordings remain discoverable
+                        // via the SAME browse-only display groups used by the
+                        // native playlist picker. No fabricated ArtistId.
+                        val displayOnly = if (!unified) emptyList() else {
+                            val creditedNames = credited.mapTo(HashSet()) {
+                                it.name.lowercase()
+                            }
+                            keys.flatMap { key ->
+                                catalogDao.playlistDisplayArtistNames(key, "")
+                            }.distinct().filter { name ->
+                                name.lowercase() !in creditedNames &&
+                                    eligibleTracks.any { it.artistDisplay == name }
+                            }.map { name ->
+                                CanonicalSelectedEntity(playlistDisplayArtistGroupId(name), name)
+                            }
+                        }
+                        (credited + displayOnly).distinctBy { it.id }
                             .filter { !unified || libraryQuery.isBlank() ||
                                 it.name.contains(libraryQuery, ignoreCase = true) }
                             .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
@@ -371,7 +389,9 @@ internal fun CanonicalRemoteLibraryScreen(
                             CanonicalSmartFilterContext.ALBUMS ->
                                 catalogDao.providerScopedReleaseRecordingIds(key, entity.id)
                             CanonicalSmartFilterContext.ARTISTS ->
-                                catalogDao.providerScopedArtistRecordingIds(key, entity.id)
+                                playlistDisplayArtistNameFromGroupId(entity.id)?.let { name ->
+                                    catalogDao.playlistDisplayArtistRecordingIds(key, name)
+                                } ?: catalogDao.providerScopedArtistRecordingIds(key, entity.id)
                             CanonicalSmartFilterContext.SONGS -> emptyList()
                         }
                     }.distinct()
@@ -539,9 +559,7 @@ internal fun CanonicalRemoteLibraryScreen(
                         is CanonicalEntityBrowseState.Artists -> {
                             RemoteBrowseMessage("${state.artists.size} artistas vinculados à fonte")
                             RemoteCanonicalEntityList(
-                                entries = state.artists.map { artist ->
-                                    CanonicalSelectedEntity(artist.id, artist.name) to ""
-                                },
+                                entries = state.artists.map { artist -> artist to "" },
                                 onSelect = { selectedEntity = it },
                                 emptyText = "Nenhum artista canônico disponível nesta fonte.",
                             )
