@@ -111,6 +111,31 @@ class A0SearchRecoveryPlanTest {
             6000,false,setOf(A0SearchQuery.normalize(alias))))
     }
 
+    @Test fun shortKoreanTitleStillSupportsAlbumSpecificSiblingDiscovery() {
+        val original="BTS - 노래"
+        assertNull(A0SearchQuery.titleOnlyFallback(original))
+        val plan=A0SearchRecoveryPlan(original,"화양연화",releaseWide=true)
+        val sent=mutableSetOf(A0SearchQuery.normalize(original))
+        assertEquals("BTS 화양연화",plan.releaseWideQuery)
+        assertEquals("BTS 화양연화",plan.next(6000,false,sent))
+        sent.add("BTS 화양연화")
+        assertEquals("BTS 화양연화 노래",plan.next(12000,false,sent))
+        val standalone=A0SearchRecoveryPlan(original)
+        assertNull(standalone.next(6000,false,setOf("BTS 노래")))
+        // Artist+album+title is specific enough; title-only "Go" is not.
+        assertEquals("Artist Album Go",
+            A0SearchRecoveryPlan("Artist - Go","Album")
+                .next(6000,false,setOf("Artist Go")))
+    }
+
+    @Test fun malformedCanonicalTitleCannotBootstrapAnAlbumWideSearch() {
+        val plan=A0SearchRecoveryPlan("BTS - ---","화양연화",releaseWide=true)
+        assertNull(plan.releaseWideQuery)
+        assertNull(plan.next(6000,false,setOf("BTS")))
+        assertNull(A0SearchRecoveryPlan("BTS - 노래",album="",
+            releaseWide=true).releaseWideQuery)
+    }
+
     @Test fun releaseSearchCannotDegradeIntoArtistOnlyWhenAlbumIsUnspecified() {
         val track="BTS (방탄소년단) - 상남자 (Boy In Luv)"
         val empty=A0SearchRecoveryPlan(track,album="",releaseWide=true)

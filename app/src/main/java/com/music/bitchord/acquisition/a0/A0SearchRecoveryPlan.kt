@@ -41,25 +41,36 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
     // admission gates are unchanged.
     private val albumQualified=runCatching {
         val originalNormalized=A0SearchQuery.normalize(original)
-        val title=latinTitleAlias ?: A0SearchQuery.titleOnlyFallback(original) ?: return@runCatching null
+        val parts=original.split(Regex("\\s+[-–—]\\s+"),limit=2)
+        if(parts.size!=2 || parts.any { it.isBlank() })return@runCatching null
+        // A short title must not be searched by itself, but adding both
+        // canonical artist and album still produces a bounded specific query.
+        // This matters for two-syllable Korean songs and "Go"-type titles.
+        val title=latinTitleAlias ?: A0SearchQuery.titleOnlyFallback(original)
+            ?: A0SearchQuery.normalize(parts[1]).takeIf { it.length>=2 }
+            ?:return@runCatching null
         val albumNormalized=A0SearchQuery.normalize(album.orEmpty())
         val originalTokens=originalNormalized.lowercase().split(' ')
         val albumTokens=albumNormalized.lowercase().split(' ')
         val titleTokens=title.lowercase().split(' ')
         if(albumTokens.all { it in originalTokens } ||
             albumTokens.all { it in titleTokens })return@runCatching null
-        val artist=original.split(Regex("\\s+[-–—]\\s+"),limit=2).first()
+        val artist=parts[0]
         A0SearchQuery.normalize("$artist $albumNormalized $title")
     }.getOrNull()
     // Read-only album + artist query can discover many independently eligible
     // sibling slots in a release, rather than 18s of per-track searches.
     // Never used for an isolated single-track manual search.
     private val albumWide=if(releaseWide)runCatching {
-        val artist=original.split(Regex("\\s+[-–—]\\s+"),limit=2).first()
-            .substringBefore('(').trim()
+        val parts=original.split(Regex("\\s+[-–—]\\s+"),limit=2)
+        if(parts.size!=2 || parts.any { it.isBlank() })return@runCatching null
+        // Album-wide discovery uses artist+album, not a naked short title.
+        // Validate the canonical title but do not require that the title
+        // itself be safe for an unqualified title-only fallback.
+        A0SearchQuery.normalize(parts[1])
+        val artist=parts[0].substringBefore('(').trim()
         val normalizedAlbum=A0SearchQuery.normalize(album.orEmpty())
-        if(artist.isBlank() || A0SearchQuery.titleOnlyFallback(original)==null)
-            return@runCatching null
+        if(artist.isBlank())return@runCatching null
         A0SearchQuery.normalize("$artist $normalizedAlbum")
     }.getOrNull() else null
 
