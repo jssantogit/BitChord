@@ -110,7 +110,13 @@ internal fun SmartPlaylistRuleField.isTextField(): Boolean =
         this == SmartPlaylistRuleField.STYLE ||
         this == SmartPlaylistRuleField.COMPOSER ||
         this == SmartPlaylistRuleField.FILE_PATH ||
-        this == SmartPlaylistRuleField.FOLDER_PATH
+        this == SmartPlaylistRuleField.FOLDER_PATH ||
+        this == SmartPlaylistRuleField.LOCAL_FOLDER ||
+        this == SmartPlaylistRuleField.LOCAL_FILE_PATH ||
+        this == SmartPlaylistRuleField.LOCAL_FILE_EXTENSION ||
+        this == SmartPlaylistRuleField.LOCAL_GENRE ||
+        this == SmartPlaylistRuleField.ARTIST_COUNTRY ||
+        this == SmartPlaylistRuleField.RELEASE_GROUP_TYPE
 
 internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOperator> =
     if (this == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) listOf(
