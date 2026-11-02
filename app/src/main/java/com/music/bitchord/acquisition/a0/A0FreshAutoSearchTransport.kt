@@ -473,9 +473,11 @@ internal class A0FreshAutoSearchTransport(
                 " shadow_peer_dropped=${snapshot.shadowDroppedAtPeerLimit}" +
                 " max_publish_ms=${maxPublishMillis.get().coerceIn(0,60000)}" +
                 " slow_publish_replies=${slowPublishCount.get().coerceIn(0,160)}")
-            return if(snapshot.choices.isEmpty() && snapshot.truncatedSlots.isEmpty())
-                A0AutoDiscoveryCoordinator.SearchResult.NoReply
-            else A0AutoDiscoveryCoordinator.SearchResult.Found(
+            return if(snapshot.choices.isEmpty() && snapshot.truncatedSlots.isEmpty()) {
+                if(counts.responses>0)
+                    A0AutoDiscoveryCoordinator.SearchResult.ScreenedOut
+                else A0AutoDiscoveryCoordinator.SearchResult.NoReply
+            } else A0AutoDiscoveryCoordinator.SearchResult.Found(
                 snapshot.choices,snapshot.truncatedSlots)
         }catch(error:Exception) {
             A0AcquisitionDiagnostics.emit(traceScope,

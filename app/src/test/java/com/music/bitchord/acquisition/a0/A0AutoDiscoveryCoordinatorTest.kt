@@ -674,6 +674,30 @@ class A0AutoDiscoveryCoordinatorTest {
             it.second=="alternate-peer" }.map { it.first })
     }
 
+    @Test fun screenedOutRepliesBreakTrueNoResponseStreakWithoutHidingSearchAttempts() {
+        var calls=0
+        val search=FakeSearch {
+            calls++
+            if(calls==2)
+                A0AutoDiscoveryCoordinator.SearchResult.ScreenedOut
+            else
+                A0AutoDiscoveryCoordinator.SearchResult.NoReply
+        }
+        val actions=mutableListOf<A0AutoDiscoveryCoordinator.CacheAction>()
+        val report=A0AutoDiscoveryCoordinator(
+            search,batch(mutableListOf())).run(
+            entries.take(3),quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true},
+            onCacheEvidence={_,event -> actions.add(event.action)})
+        assertEquals(3,report.searches)
+        assertEquals(2,report.noReplySearches)
+        assertEquals(1,report.screenedOutSearches)
+        assertEquals(1,report.longestNoReplyStreak)
+        assertTrue(A0AutoDiscoveryCoordinator.CacheAction.SEARCH_SCREENED_OUT in actions)
+        assertEquals(3,report.batch.manualReview)
+        assertEquals(1,report.withReservationReleased(true).screenedOutSearches)
+    }
+
     @Test fun threeEmptySearchesAreReportedAsOneStreakWithoutPeerMetadata() {
         val discovery=FakeSearch { A0AutoDiscoveryCoordinator.SearchResult.NoReply }
         val result=A0AutoDiscoveryCoordinator(
