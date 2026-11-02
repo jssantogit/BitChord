@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import com.music.bitchord.data.catalog.CanonicalBrowseMediaAsset
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
+import com.music.bitchord.data.catalog.CanonicalPlaylistAlbumCoverRow
 import com.music.bitchord.data.catalog.CanonicalEntitySortDateRow
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
@@ -98,6 +99,21 @@ internal fun canonicalLibraryDisplayArtistNames(
     .distinct()
     .sortedWith(String.CASE_INSENSITIVE_ORDER)
     .toList()
+
+/**
+ * Covers may be drawn only from a canonical Release/Artist membership proven
+ * in Room, and only when its Recording is still visible in the active source.
+ * Names, album titles and account URLs are never artwork identity keys.
+ */
+internal fun canonicalLibraryEntityArtworkById(
+    coverLinks: List<CanonicalPlaylistAlbumCoverRow>,
+    eligibleTracks: List<CanonicalBrowseTrack>,
+): Map<String, CanonicalBrowseTrack> {
+    val eligibleById = eligibleTracks.associateBy(CanonicalBrowseTrack::recordingId)
+    return coverLinks.mapNotNull { link ->
+        eligibleById[link.recordingId]?.let { track -> link.groupId to track }
+    }.toMap()
+}
 
 /** Keep the native LocalFolder sort semantics on the unified canonical list.
  * Unknown source timestamps stay last; they are never invented from sync time.
