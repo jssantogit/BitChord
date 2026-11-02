@@ -9,12 +9,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -24,12 +26,15 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.DropdownMenu
@@ -68,6 +73,12 @@ import com.music.bitchord.R
 import com.music.bitchord.data.catalog.CanonicalBrowseLibrary
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.UnifiedLocalCatalogIndex
+import com.music.bitchord.data.settings.LocalMusicSort
+import com.music.bitchord.data.settings.LibraryViewType
+import com.music.bitchord.ui.components.CoverPlaceholder
+import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.theme.rememberArtworkPalette
 import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.catalog.CanonicalLibraryBrowseRepository
@@ -153,6 +164,11 @@ internal fun CanonicalRemoteLibraryScreen(
     detailBackToken: Int = 0,
     onDetailChanged: (Boolean) -> Unit = {},
     initialContext: CanonicalSmartFilterContext = CanonicalSmartFilterContext.SONGS,
+    selectedSourceKey: String? = null,
+    selectedStarsFilter: Int? = null,
+    unifiedSort: LocalMusicSort = LocalMusicSort.TITLE_ASC,
+    unifiedViewType: LibraryViewType = LibraryViewType.LIST,
+    onSourceKeysChanged: (List<String>) -> Unit = {},
 ) {
     val context = LocalContext.current
     val controller = rememberMediaController()
@@ -185,10 +201,22 @@ internal fun CanonicalRemoteLibraryScreen(
             }
         }
     }
-    var selectedSource by remember(unified) { mutableStateOf<String?>(null) }
+    val selectedSource = if (unified) selectedSourceKey else null
     var libraryQuery by remember(unified) { mutableStateOf("") }
     LaunchedEffect(searchVisible) { if (!searchVisible) libraryQuery = "" }
-    var selectedStars by remember(unified) { mutableStateOf<Int?>(null) }
+    val selectedStars = if (unified) selectedStarsFilter else null
+    LaunchedEffect(unified) {
+        if (unified) {
+            try {
+                UnifiedLocalCatalogIndex.ensure(context.applicationContext)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // Keep remote rows visible if local media scan is unavailable.
+            }
+        }
+    }
+    LaunchedEffect(availableKeys) { if (unified) onSourceKeysChanged(availableKeys) }
     val sources = if (unified) availableKeys else listOf(providerKey)
     val multiRepository = remember(catalogDao) {
         CanonicalMultiSourceBrowseRepository(RoomCanonicalMultiSourceBrowseStore(catalogDao))
@@ -464,7 +492,23 @@ internal fun CanonicalRemoteLibraryScreen(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
-        Column(
+        if (unified && selectedEntity == null) {
+            NativeUnifiedLibraryBody(
+                title = title,
+                selectedContext = selectedContext,
+                tracks = sortCanonicalUnifiedTracks(displayedTracks, unifiedSort),
+                filteredState = filteredState,
+                entityState = entityState,
+                artworkLoader = artworkLoader,
+                query = libraryQuery,
+                onQueryChange = { libraryQuery = it },
+                searching = searchVisible,
+                viewType = unifiedViewType,
+                onTrackPlay = playTrack,
+                onTrackEditRating = editRating,
+                onEntitySelect = { selectedEntity = it },
+            )
+        } else Column(
             modifier = Modifier.fillMaxSize()
                 .statusBarsPadding().navigationBarsPadding()
                 .then(if (unified) Modifier.padding(
@@ -516,14 +560,6 @@ internal fun CanonicalRemoteLibraryScreen(
                     onSubmit = {},
                     placeholder = "Pesquisar na biblioteca",
                     modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 6.dp),
-                )
-                if (unified) NativeCanonicalLibraryFilters(
-                    availableKeys = availableKeys,
-                    selectedSource = selectedSource,
-                    onSourceChange = { selectedSource = it },
-                    selectedStars = selectedStars,
-                    onStarsChange = { selectedStars = it },
-                    requestToken = filterActionToken,
                 )
                 if (compatible.isNotEmpty() || selectedFilterId != null) {
                     RemoteSongSavedFilterMenu(
