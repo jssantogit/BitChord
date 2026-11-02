@@ -167,7 +167,9 @@ internal fun CanonicalRemoteLibraryScreen(
     ) {
         if (unified) {
             sourceAccounts.observe().collectLatest {
-                value = canonicalAvailablePlaylistSourceKeys(context.applicationContext)
+                value = withContext(Dispatchers.IO) {
+                    canonicalAvailablePlaylistSourceKeys(context.applicationContext)
+                }
             }
         }
     }
@@ -235,8 +237,8 @@ internal fun CanonicalRemoteLibraryScreen(
     val filteredState by produceState<CanonicalSongFilterState>(
         initialValue = CanonicalSongFilterState.Loading,
         key1 = library.tracks, key2 = selectedFilterId,
-        key3 = Triple(selectedContext, selected, filtersUnavailable) to tagEvidenceRevision,
-        key4 = Triple(selectedSource, selectedStars, ratingsSnapshot),
+        key3 = (Triple(selectedContext, selected, filtersUnavailable) to tagEvidenceRevision)
+            to Triple(selectedSource, selectedStars, ratingsSnapshot),
     ) {
         value = try {
             when {
