@@ -31,7 +31,7 @@ class LocalEmbeddedTagEnricherTest {
             val first = LocalEmbeddedTagEnricher.processPending(db) {
                 reads++
                 LocalEmbeddedTags(listOf("Dream Pop"), listOf("Calm"),
-                    listOf(128.5), listOf("Shoegaze"))
+                    listOf(128.5), listOf("Shoegaze"), listOf("Alice"))
             }
             assertEquals(1, first.updated)
             assertEquals(1, reads)
@@ -40,6 +40,7 @@ class LocalEmbeddedTagEnricherTest {
             assertEquals("[\"Calm\"]", tagged.moodsJson)
             assertEquals("[128.5]", tagged.bpmsJson)
             assertEquals("[\"Shoegaze\"]", tagged.stylesJson)
+            assertEquals("[\"Alice\"]", tagged.composersJson)
             assertEquals("v3:10:100", tagged.localParsedFingerprint)
             LocalEmbeddedTagEnricher.processPending(db) {
                 reads++; error("unchanged tag was reopened")
@@ -78,13 +79,15 @@ class LocalEmbeddedTagEnricherTest {
                 CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, sourceUri))
             dao.upsertMediaAssetTags(requireNotNull(dao.mediaAssetTagsById(asset.id)).copy(
                 moodsJson = "[\"Calm\"]", bpmsJson = "[120.0]",
-                stylesJson = "[\"House\"]", localParsedFingerprint = "v3:100:1000",
+                stylesJson = "[\"House\"]", composersJson = "[\"Alice\"]",
+                localParsedFingerprint = "v3:100:1000",
             ))
             CanonicalLocalLibrary.syncWithDatabase(context, db, listOf(original))
             var after = requireNotNull(dao.mediaAssetTagsById(asset.id))
             assertEquals("[\"Calm\"]", after.moodsJson)
             assertEquals("[120.0]", after.bpmsJson)
             assertEquals("[\"House\"]", after.stylesJson)
+            assertEquals("[\"Alice\"]", after.composersJson)
             assertEquals("v3:100:1000", after.localParsedFingerprint)
 
             CanonicalLocalLibrary.syncWithDatabase(context, db, listOf(
@@ -94,6 +97,7 @@ class LocalEmbeddedTagEnricherTest {
             assertNull(after.moodsJson)
             assertNull(after.bpmsJson)
             assertNull(after.stylesJson)
+            assertNull(after.composersJson)
             assertEquals("v3:100:1001", after.localSourceFingerprint)
             assertNull(after.localParsedFingerprint)
         } finally { db.close() }
