@@ -28,6 +28,7 @@ internal val smartConditionCategories = listOf(
         SmartPlaylistRuleField.TRACK_ARTIST, SmartPlaylistRuleField.TRACK_NUMBER,
         SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD,
         SmartPlaylistRuleField.BPM, SmartPlaylistRuleField.STYLE,
+        SmartPlaylistRuleField.COMPOSER,
     )),
     SmartConditionCategory("ratings", "Avaliações", "Notas em estrelas e data da nota local", listOf(
         SmartPlaylistRuleField.EXPLICIT_RATING, SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING,
@@ -41,6 +42,7 @@ internal val smartConditionCategories = listOf(
     )),
     SmartConditionCategory("library", "Biblioteca e origens", "Fontes comprovadas do catálogo", listOf(
         SmartPlaylistRuleField.SOURCE_KIND,
+        SmartPlaylistRuleField.FILE_PATH, SmartPlaylistRuleField.FOLDER_PATH,
     )),
     SmartConditionCategory("audio", "Áudio", "Duração comprovada das faixas", listOf(
         SmartPlaylistRuleField.DURATION_MS,
@@ -62,6 +64,9 @@ internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (
     SmartPlaylistRuleField.MOOD -> "Clima / mood"
     SmartPlaylistRuleField.BPM -> "Ritmo (BPM)"
     SmartPlaylistRuleField.STYLE -> "Estilo musical"
+    SmartPlaylistRuleField.COMPOSER -> "Compositor"
+    SmartPlaylistRuleField.FILE_PATH -> "Caminho do arquivo"
+    SmartPlaylistRuleField.FOLDER_PATH -> "Pasta do arquivo"
     SmartPlaylistRuleField.TRACK_NUMBER -> "Número da faixa"
     SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "Álbum com referência de capa"
     SmartPlaylistRuleField.EXPLICIT_RATING -> "Avaliação em estrelas"
@@ -95,6 +100,12 @@ internal fun smartConditionDescription(field: SmartPlaylistRuleField): String = 
         "Compara o ritmo informado em batidas por minuto, sem supor BPM zero para tags ausentes."
     SmartPlaylistRuleField.STYLE ->
         "Filtra o estilo informado pela biblioteca local ou fonte remota, sem adivinhar tags ausentes."
+    SmartPlaylistRuleField.COMPOSER ->
+        "Compositores informados pelos créditos locais ou pela fonte ativa."
+    SmartPlaylistRuleField.FILE_PATH ->
+        "Compara o caminho comprovado de um arquivo local ou remoto, quando disponível."
+    SmartPlaylistRuleField.FOLDER_PATH ->
+        "Compara a pasta que contém o arquivo, mantendo o escopo da origem."
     SmartPlaylistRuleField.TRACK_NUMBER ->
         "Compare a posição conhecida da música no lançamento."
     SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE ->
