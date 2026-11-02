@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +27,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.music.bitchord.ui.components.PillTextField
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.ArtworkPageBackButton
@@ -123,18 +126,26 @@ internal fun PlaylistWizardCompactAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    icon: ImageVector? = null,
 ) {
+    // Same native outlined control; optional native icon instead of visible text.
+    // Keep the label as the accessibility description and minimum touch target.
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.heightIn(min = 42.dp),
+        modifier = if (icon == null) modifier.heightIn(min = 42.dp)
+            else modifier.size(48.dp),
         shape = GroupShape,
+        contentPadding = if (icon == null) ButtonDefaults.ContentPadding
+            else PaddingValues(0.dp),
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = MaterialTheme.colorScheme.onSurface,
         ),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
+        if (icon != null) Icon(icon, contentDescription = label,
+            modifier = Modifier.size(22.dp))
+        else Text(label, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
