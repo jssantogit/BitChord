@@ -246,3 +246,22 @@ Coletar capturas e diagnóstico físico. Mesmo com CI verde, NÃO declarar funci
 6. **Regressões:** reprodução direta em Adições recentes, avaliações locais/remote, criação/revisão/salvar playlist normal/inteligente sem flash, capas, fontes Navidrome. Relatório físico + capturas antes de aceite.
 
 **Lacuna a verificar separadamente:** o APK anterior mostrava 1 álbum (“Proof”), possivelmente só releases com ligação `catalog_release_track`; não declarar paridade total do catálogo Navidrome pelo teste visual. Falta evidence de cobertura remota/local; não fabricar Album/ArtistId por semelhança de strings. PR continua draft até aceite explícito.
+
+
+## Smoke físico — restauração nativa da Biblioteca unificada (#205, 02/11/2026)
+
+**Autorização de compilação isolada:** código da [PR #205](https://github.com/jssantogit/BitChord/pull/205) no SHA `8d9083da85ed03482682ef862b08c6f9f1155770`; [Android CI #41527892611](https://github.com/jssantogit/BitChord/actions/runs/41527892611) SUCCESS. Esta solicitação documental dispara apenas APK Dev Debug na branch temporária `smoke/205-native-unified-library-20261102`, sem merge na #193 nem em main. O workflow de smoke repete os testes Android antes de gerar artefato.
+
+**Referência visual aprovada:** APK #41474086844 (Músicas/Álbuns/Artistas com capa grande, contagem, Tocar/Aleatório, busca, linha com capa, menu nativo de ordem/grade). APK reprovado #41510818189 não serve como base visual.
+
+**Roteiro do Galaxy A54:**
+1. Em dispositivo com 594 músicas locais, abrir Músicas/Álbuns/Artistas **sem sincronização Navidrome** e confirmar os arquivos MediaStore e suas capas; em instalação sem permissão de áudio, conceder a permissão sem perder o acesso a conteúdos remotos.
+2. Com Navidrome sincronizado, confirmar mesma lista e agrupamentos para mídias de ambas as fontes, sem novas telas e sem contagens incorretas de álbuns/artistas.
+3. Ícone independente de origem (Todas, Música local, Navidrome) abre painel `FrostedMenuPanel` igual ao de ordem; alternar opções sem mudar rota nem deixar fontes erradas visíveis.
+4. Ícone de três traços abre menu original de ordem A–Z/Z–A, data de adição/modificação, lista/grade e linha de 5 estrelas; tocar 1, 3 e 5, e tocar novamente para limpar.
+5. Comparar capas de músicas, álbuns e artistas (lista/grade e cabeçalho do detalhe), inclusive participações com nomes diferentes e múltiplas fontes; observar capas ausentes ou de artistas homônimos.
+6. Pesquisar na própria lista; abrir e voltar de detalhe sem o filtro reabrir involuntariamente. Testar ordenação por data para MediaStore e ausência de data remota comprovada.
+7. Acionar Tocar e Aleatório com biblioteca de 501+ faixas, verificar primeiro lote no Media3 e os lotes seguintes na fila, sem repetição/omissão de RecordingIds ou mix de conta.
+8. Regressões: Home/perfil, Now Playing, Logs e fluxos de criar/editar playlists continuam como na PR #193.
+
+**Diagnósticos:** exportar logs contendo `unified_library_local_index_v1`, `unified_library_browse_v1`, `unified_library_artwork_v1` e `smart_collection_action_v1`, com contagens e falhas sem paths/títulos/contas. Smoke físico e aceite do proprietário são obrigatórios antes de integração ou merge.
