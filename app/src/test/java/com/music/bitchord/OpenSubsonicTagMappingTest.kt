@@ -25,8 +25,13 @@ class OpenSubsonicTagMappingTest {
                             "id":"album-1","name":"Test","songCount":4,"song":[
                                 {"id":"song-1","title":"Tagged","genres":[
                                     {"name":"Dream Pop"},{"name":"K-Pop"}],
-                                    "moods":["Calm","Bright"],"bpm":134},
-                                {"id":"song-2","title":"Untagged","genres":[],"moods":[],"bpm":0},
+                                    "moods":["Calm","Bright"],"bpm":134,
+                                    "path":"Artist/Album/01.flac",
+                                    "displayComposer":"Alice",
+                                    "contributors":[{"role":"composer","artist":{"id":"comp-2","name":"Bob"}},
+                                                    {"role":"performer","artist":{"id":"p-1","name":"Singer"}}]},
+                                {"id":"song-2","title":"Untagged","genres":[],"moods":[],"bpm":0,
+                                 "path":"Artist/Album/02.flac","contributors":[]},
                                 {"id":"song-3","title":"Unsupported"},
                                 {"id":"song-4","title":"Legacy","genre":"Rock"}
                             ]
@@ -45,6 +50,10 @@ class OpenSubsonicTagMappingTest {
         assertEquals(listOf("Dream Pop", "K-Pop"), tracks.getValue("song-1").genres)
         assertEquals(listOf("Calm", "Bright"), tracks.getValue("song-1").moods)
         assertEquals(134, tracks.getValue("song-1").bpm)
+        assertEquals("Artist/Album/01.flac", tracks.getValue("song-1").path)
+        assertEquals(listOf("Bob", "Alice"), tracks.getValue("song-1").composers)
+        assertEquals(emptyList<String>(), tracks.getValue("song-2").composers)
+        assertNull(tracks.getValue("song-3").composers)
         assertEquals(0, tracks.getValue("song-2").bpm)
         assertNull(tracks.getValue("song-3").bpm)
         assertEquals(emptyList<String>(), tracks.getValue("song-2").genres)
