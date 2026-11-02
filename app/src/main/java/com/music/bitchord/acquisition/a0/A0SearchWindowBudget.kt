@@ -3,7 +3,8 @@ package com.music.bitchord.acquisition.a0
 /**
  * Conservative in-process sliding window for the Soulseek server's
  * empirically observed search-rate protections. A session reserves up to
- * three query slots BEFORE login; only actually sent queries are charged.
+ * three query slots BEFORE login, but can start with one available slot;
+ * only actually sent queries are charged.
  *
  * This is not a server-provided quota. The 27/220s default leaves headroom
  * below the 34/220s empirical cap documented by third-party Soulseek clients.
@@ -24,6 +25,9 @@ internal class A0SearchWindowBudget(
 
     inner class Lease internal constructor(private val leaseId:Long):AutoCloseable {
         private var closed=false
+        /** Unsent reservations belonging to this live session. */
+        @Synchronized fun remaining():Int =
+            if(closed) 0 else unusedSlots(leaseId)
         @Synchronized fun commit(nowMillis:Long):Boolean {
             if(closed)return false
             return commitSlot(leaseId,nowMillis)
@@ -59,6 +63,22 @@ internal class A0SearchWindowBudget(
         if(maxRequests-entries.size<count)return null
         val id=nextLeaseId++
         repeat(count) { entries.add(Entry(id,nowMillis)) }
+        return Lease(id)
+    }
+
+    @Synchronized private fun unusedSlots(leaseId:Long):Int =
+        entries.count { it.leaseId==leaseId && !it.committed }
+
+    /** Reserve at least one search, without waiting for optional fallbacks.
+     * This still atomically counts every reserved slot toward the same cap.
+     */
+    @Synchronized fun tryAcquireUpTo(count:Int,nowMillis:Long):Lease? {
+        require(count in 1..maxRequests)
+        prune(nowMillis)
+        val reserved=minOf(count,maxRequests-entries.size)
+        if(reserved<=0)return null
+        val id=nextLeaseId++
+        repeat(reserved) { entries.add(Entry(id,nowMillis)) }
         return Lease(id)
     }
 

@@ -50,6 +50,38 @@ class A0SearchWindowBudgetTest {
         assertEquals(3,budget.available(30_001L))
     }
 
+    @Test fun partialCapacityStartsTheInitialSearchWithoutThreeFreeSlots() {
+        val budget=A0SearchWindowBudget(3,220_000L)
+        val earlier=checkNotNull(budget.tryAcquire(2,100L))
+        assertTrue(earlier.commit(101L))
+        assertTrue(earlier.commit(102L))
+        earlier.close()
+
+        val search=checkNotNull(budget.tryAcquireUpTo(3,200L))
+        assertEquals(1,search.remaining())
+        assertTrue(search.commit(201L))
+        assertEquals(0,search.remaining())
+        assertFalse(search.commit(202L)) // no unauthorized optional fallback
+        assertNull(budget.tryAcquireUpTo(3,203L))
+        search.close()
+        assertEquals(0,budget.available(204L))
+        assertEquals(219_897L,budget.waitMillis(1,204L))
+    }
+
+    @Test fun fullCapacityStillReservesThreeAndUnusedFallbacksReturn() {
+        val budget=A0SearchWindowBudget(3,220_000L)
+        val search=checkNotNull(budget.tryAcquireUpTo(3,100L))
+        assertEquals(3,search.remaining())
+        assertTrue(search.commit(110L))
+        assertEquals(2,search.remaining())
+        search.close()
+        assertEquals(0,search.remaining())
+        assertEquals(2,budget.available(120L))
+        val next=checkNotNull(budget.tryAcquireUpTo(3,121L))
+        assertEquals(2,next.remaining())
+        next.close()
+    }
+
     @Test fun reservationIsSharedAcrossIndependentSearchSessions() {
         val shared=A0SearchWindowBudget(4,220_000L)
         val first=checkNotNull(shared.tryAcquire(3,100L))

@@ -101,13 +101,13 @@ internal class A0FreshAutoSearchTransport(
             var waitAnnounced=false
             while(!stopped() && searchLease==null) {
                 val now=android.os.SystemClock.elapsedRealtime()
-                searchLease=rateBudget.tryAcquire(3,now)
+                searchLease=rateBudget.tryAcquireUpTo(3,now)
                 if(searchLease==null) {
-                    val delay=rateBudget.waitMillis(3,now).coerceIn(1L,1000L)
+                    val delay=rateBudget.waitMillis(1,now).coerceIn(1L,1000L)
                     if(!waitAnnounced) {
                         waitAnnounced=true
                         com.music.bitchord.data.DebugLog.d("BitChord",
-                            "soulseek_auto_search rate_budget_wait=true reserved=3")
+                            "soulseek_auto_search rate_budget_wait=true reserved_up_to=3")
                     }
                     Thread.sleep(delay)
                     searchThrottleWaitMs+=delay
@@ -302,6 +302,7 @@ internal class A0FreshAutoSearchTransport(
             val sent=mutableSetOf(normalized)
             val marks=mutableSetOf<Int>()
             var nextCompletionCheckMs=8000L
+            var budgetSkippedFallbacks=0
             while(System.nanoTime()<deadline && !stopped()) {
                 val elapsed=TimeUnit.NANOSECONDS.toMillis(
                     18L.let {TimeUnit.SECONDS.toNanos(it)}-(deadline-System.nanoTime()))
@@ -318,7 +319,7 @@ internal class A0FreshAutoSearchTransport(
                         var variant=recovery.next(
                             at.toLong(),found,sent,missingSiblings=missingSiblings)
                         if(variant!=null && variant==recovery.releaseWideQuery &&
-                            !releaseWideSent.add(variant)) {
+                            variant in releaseWideSent) {
                             // Track the skipped variation only in this local
                             // search, so the next bounded alternative can run.
                             sent.add(variant)
@@ -326,23 +327,31 @@ internal class A0FreshAutoSearchTransport(
                             variant=recovery.next(at.toLong(),found,sent)
                         }
                         if(variant!=null && !stopped()) {
-                            // Register a unique correlation ticket before
-                            // sending each fallback wire query.
-                            val variantTicket=generateSequence {
-                                SecureRandom().nextInt(Int.MAX_VALUE-1)+1
-                            }.take(8).firstOrNull(tickets::register)
-                            if(variantTicket==null)continue
-                            check(checkNotNull(searchLease).commit(
-                                android.os.SystemClock.elapsedRealtime()))
-                            connection.getOutputStream().apply {
-                                write(A0OneShotPublicSearchWire.fileSearch(variantTicket,variant))
-                                flush()
+                            if(checkNotNull(searchLease).remaining()==0) {
+                                // Leave the unsent album query eligible for
+                                // the next slot; never exceed the shared cap.
+                                budgetSkippedFallbacks++
+                            } else {
+                                // Register a unique correlation ticket before
+                                // sending each fallback wire query.
+                                val variantTicket=generateSequence {
+                                    SecureRandom().nextInt(Int.MAX_VALUE-1)+1
+                                }.take(8).firstOrNull(tickets::register)
+                                if(variantTicket==null)continue
+                                check(checkNotNull(searchLease).commit(
+                                    android.os.SystemClock.elapsedRealtime()))
+                                connection.getOutputStream().apply {
+                                    write(A0OneShotPublicSearchWire.fileSearch(variantTicket,variant))
+                                    flush()
+                                }
+                                sent.add(variant)
+                                if(variant==recovery.releaseWideQuery)
+                                    releaseWideSent.add(variant)
+                                A0AcquisitionDiagnostics.emit(traceScope,
+                                    A0AcquisitionDiagnostics.Phase.SEARCH_RECOVERY_SENT,
+                                    elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart,
+                                    count=sent.size)
                             }
-                            sent.add(variant)
-                            A0AcquisitionDiagnostics.emit(traceScope,
-                                A0AcquisitionDiagnostics.Phase.SEARCH_RECOVERY_SENT,
-                                elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart,
-                                count=sent.size)
                         }
                     }
                 }
@@ -423,6 +432,7 @@ internal class A0FreshAutoSearchTransport(
             Log.d("BitChord","soulseek_auto_search replies=${snapshot.choices.size}" +
                 " tickets_sent=${tickets.accepted.size.coerceIn(1,3)}" +
                 " rate_budget_wait_ms=${searchThrottleWaitMs.coerceIn(0,300000)}" +
+                " fallback_budget_skipped=${budgetSkippedFallbacks.coerceIn(0,2)}" +
                 " initial_replies=${replyByTicket[0]}" +
                 " fallback_1_replies=${replyByTicket[1]}" +
                 " fallback_2_replies=${replyByTicket[2]}" +
