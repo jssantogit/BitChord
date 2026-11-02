@@ -48,7 +48,7 @@ internal class A0AutoDiscoveryCoordinator(
     }
 
     enum class CacheAction {
-        REUSED, SEARCH_REQUIRED, PEER_SUPPRESSED,
+        REUSED, SEARCH_REQUIRED, SEARCH_NO_REPLY, PEER_SUPPRESSED,
         SIBLING_RESCUE, SIBLING_RESCUE_SKIPPED,
         FOLDER_BROWSE_ADDED, FOLDER_BROWSE_EMPTY
     }
@@ -72,10 +72,14 @@ internal class A0AutoDiscoveryCoordinator(
          */
         val unusedReservationReleased:Boolean=false,
         val folderQueries:Int=0,
+        val noReplySearches:Int=0,
+        val longestNoReplyStreak:Int=0,
+        val suppressedOffers:Int=0,
     ) {
         fun withReservationReleased(released:Boolean)=Report(
             searches,batch,unusedReservationReleased=released,
-            folderQueries=folderQueries)
+            folderQueries=folderQueries,noReplySearches=noReplySearches,
+            longestNoReplyStreak=longestNoReplyStreak,suppressedOffers=suppressedOffers)
         override fun toString()=
             "A0AutoDiscoveryReport(searches=$searches,published=${batch.published})"
     }
@@ -132,6 +136,10 @@ internal class A0AutoDiscoveryCoordinator(
         // A failed lookup is not grounds for a retry storm.
         val inspectedFolders=HashSet<Pair<String,String>>()
         var folderQueries=0
+        var noReplySearches=0
+        var consecutiveNoReply=0
+        var longestNoReplyStreak=0
+        var suppressedOffers=0
         // Two extra direct-peer probes for short albums; four for long
         // releases. Never let unsupported browse clients multiply network
         // waiting time for every title in a user-requested batch.
@@ -146,7 +154,10 @@ internal class A0AutoDiscoveryCoordinator(
         }
         fun finish():Report=Report(searches,
             A0AutoBatchExecutor.Report(statuses.toList(),attempts,
-                publishedPaths.toSet()),folderQueries=folderQueries)
+                publishedPaths.toSet()),folderQueries=folderQueries,
+            noReplySearches=noReplySearches,
+            longestNoReplyStreak=longestNoReplyStreak,
+            suppressedOffers=suppressedOffers)
         // Only an ambiguous, fully observed slot may use independent
         // release-wide sibling coverage to break a peer-claim tie.
         // The executor still re-runs the unchanged per-track preview on
@@ -201,6 +212,7 @@ internal class A0AutoDiscoveryCoordinator(
                 // 512-offer buckets. Only the current slot is relevant here.
                 val activeCached=allowedSources(cached)
                 if(activeCached.size<cached.size)try {
+                    suppressedOffers+=(cached.size-activeCached.size)
                     onCacheEvidence(index,CacheEvidence(
                         CacheAction.PEER_SUPPRESSED,
                         (cached.size-activeCached.size).coerceIn(0,512),
@@ -229,9 +241,20 @@ internal class A0AutoDiscoveryCoordinator(
                         break
                     }
                     when(result) {
-                        is SearchResult.Found ->
+                        is SearchResult.Found -> {
+                            consecutiveNoReply=0
                             pooled.add(result.choices,result.truncatedSlots)
-                        SearchResult.NoReply -> Unit
+                        }
+                        SearchResult.NoReply -> {
+                            noReplySearches++
+                            consecutiveNoReply++
+                            longestNoReplyStreak=maxOf(
+                                longestNoReplyStreak,consecutiveNoReply)
+                            try {onCacheEvidence(index,CacheEvidence(
+                                CacheAction.SEARCH_NO_REPLY,
+                                consecutiveNoReply.coerceIn(0,64),
+                                false,null))}catch(_:Exception){}
+                        }
                         SearchResult.TeardownIncomplete -> {
                             // The failing search's observation is unusable.
                             // Do not retry the slot or resurrect it from later
