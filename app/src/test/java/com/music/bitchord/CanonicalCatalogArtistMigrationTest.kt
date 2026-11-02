@@ -94,7 +94,7 @@ class CanonicalCatalogArtistMigrationTest {
         }
         sql.query("PRAGMA user_version").use { cursor ->
             assertTrue(cursor.moveToFirst())
-            assertEquals(12, cursor.getInt(0))
+            assertEquals(15, cursor.getInt(0))
         }
         sql.query("SELECT COUNT(*) FROM catalog_artist").use { cursor ->
             assertTrue(cursor.moveToFirst())
