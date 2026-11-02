@@ -51,8 +51,10 @@ class SmartPlaylistWizardModelTest {
         assertEquals("Outros · avançado", smartConditionCategories.last().title)
         assertEquals(listOf(SmartPlaylistRuleField.SOURCE_KIND), smartConditionSearch("fonte"))
         assertEquals(listOf(SmartPlaylistRuleField.DURATION_MS), smartConditionSearch("duracao"))
-        assertTrue(smartConditionSearch("pasta de origem").isEmpty())
-        assertTrue(smartConditionSearch("compositor").isEmpty())
+        assertEquals(listOf(SmartPlaylistRuleField.FOLDER_PATH),
+            smartConditionSearch("pasta de origem"))
+        assertEquals(listOf(SmartPlaylistRuleField.COMPOSER),
+            smartConditionSearch("compositor"))
         assertEquals(listOf(SmartPlaylistRuleField.EXPLICIT_RATING),
             smartConditionSearch("estrelas"))
     }
