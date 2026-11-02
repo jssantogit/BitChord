@@ -347,12 +347,9 @@ internal fun CanonicalRemoteLibraryScreen(
                             val creditedNames = credited.mapTo(HashSet()) {
                                 it.name.lowercase()
                             }
-                            keys.flatMap { key ->
-                                catalogDao.playlistDisplayArtistNames(key, "")
-                            }.distinct().filter { name ->
-                                name.lowercase() !in creditedNames &&
-                                    eligibleTracks.any { it.artistDisplay == name }
-                            }.map { name ->
+                            canonicalLibraryDisplayArtistNames(
+                                eligibleTracks, creditedNames,
+                            ).map { name ->
                                 CanonicalSelectedEntity(playlistDisplayArtistGroupId(name), name)
                             }
                         }
