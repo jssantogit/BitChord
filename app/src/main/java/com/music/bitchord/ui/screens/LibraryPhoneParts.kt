@@ -157,11 +157,6 @@ fun libraryLinks(): List<LibraryLink> {
 }
 
 /**
- * Main Library uses the existing folder navigation contract and the existing
- * LocalFolder tab state. Categories are routes, not one-off playlist shelves.
- * The standalone playlist page owns its own saved collection list.
- */
-/**
  * A unified category remains navigable when local audio permission is absent:
  * Navidrome rows must not be hidden behind an Android permission dialog.
  * A successful grant asynchronously indexes MediaStore on the same screen.
@@ -175,6 +170,11 @@ internal fun openUnifiedLibraryCategory(
     if (!hasMediaPermission) onRequestPermission()
 }
 
+/**
+ * Main Library uses the existing folder navigation contract and the existing
+ * LocalFolder tab state. Categories are routes, not one-off playlist shelves.
+ * The standalone playlist page owns its own saved collection list.
+ */
 fun libraryNavigationLinks(
     deviceLinks: List<LibraryLink>,
     onOpenPlaylists: () -> Unit,
