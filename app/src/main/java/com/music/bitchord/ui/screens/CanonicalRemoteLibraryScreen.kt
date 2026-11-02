@@ -961,13 +961,7 @@ private fun CanonicalTrackRow(
             .heightIn(min = 68.dp)
             .padding(horizontal = 20.dp, vertical = 8.dp),
     ) {
-        RemoteTrackArtwork(
-            mediaAssetId = track.availableAssets.firstOrNull()?.mediaAssetId,
-            artworkRevision = track.artworkUri,
-            title = track.title,
-            artworkLoader = artworkLoader,
-            modifier = Modifier.size(48.dp),
-        )
+        CanonicalUnifiedArtwork(track, artworkLoader, Modifier.size(48.dp))
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -1260,12 +1254,9 @@ private fun NativeUnifiedLibraryBody(
                                 modifier = Modifier.fillMaxWidth()
                                     .clickable { onTrackPlay(track) },
                             ) {
-                                RemoteTrackArtwork(
-                                    mediaAssetId = track.availableAssets.firstOrNull()?.mediaAssetId,
-                                    artworkRevision = track.artworkUri,
-                                    title = track.title,
-                                    artworkLoader = artworkLoader,
-                                    modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                                CanonicalUnifiedArtwork(
+                                    track, artworkLoader,
+                                    Modifier.fillMaxWidth().aspectRatio(1f),
                                 )
                                 Text(track.title, maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -1351,5 +1342,38 @@ private fun NativeUnifiedLibraryBody(
                 }
             }
         }
+    }
+}
+
+/** Coil handles the verified on-device cover URI; authenticated remote artwork
+ * remains inside the OpenSubsonic provider loader (never a raw URL in Compose).
+ */
+@Composable
+private fun CanonicalUnifiedArtwork(
+    track: CanonicalBrowseTrack,
+    loader: OpenSubsonicArtworkLoader,
+    modifier: Modifier = Modifier,
+) {
+    val localArt = track.artworkUri?.takeIf {
+        track.availableAssets.any { a -> a.providerKey == "local-mediastore" } &&
+            (it.startsWith("content://") || it.startsWith("file://"))
+    }
+    if (localArt != null) {
+        AsyncImage(
+            model = localArt,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier.clip(RoundedCornerShape(8.dp)),
+        )
+    } else {
+        RemoteTrackArtwork(
+            mediaAssetId = track.availableAssets.firstOrNull {
+                it.providerKey.startsWith("opensubsonic:")
+            }?.mediaAssetId,
+            artworkRevision = track.artworkUri,
+            title = track.title,
+            artworkLoader = loader,
+            modifier = modifier,
+        )
     }
 }
