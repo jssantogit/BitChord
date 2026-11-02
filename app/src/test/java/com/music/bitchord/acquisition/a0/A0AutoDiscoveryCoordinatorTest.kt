@@ -459,7 +459,7 @@ class A0AutoDiscoveryCoordinatorTest {
         val song=A0SoulseekSearchFile(
             "Shared\\ILLIT\\SUPER REAL ME\\${two[0].query}.mp3",
             two[0].durationSeconds!!.toLong()*40_000L,"mp3",
-            mapOf(0 to 320,1 to two[0].durationSeconds))
+            mapOf(0 to 320,1 to two[0].durationSeconds!!))
         congested.offerParsed(A0SoulseekSearchResponse(
             "congested-peer",177,listOf(song),emptyList(),true,128_000,40),
             "congested-peer")
