@@ -1622,9 +1622,61 @@ class A0ManualLoginActivity : Activity() {
                         saveConsent.isChecked = true
                         start(true, transferObserved = true, saveToDevice = true)
                     }
-                    .setNegativeButton("Cancelar") { _, _ -> finish() }
-                    .setOnCancelListener { finish() }
+                    .apply {
+                        // A bulk review is a navigable set of pending tracks;
+                        // cancelling one search prompt must not discard the
+                        // other 22 untouched slots or the review lease.
+                        if(manualRecovery)
+                            setNegativeButton("Voltar",null)
+                        else {
+                            setNegativeButton("Cancelar") { _, _ -> finish() }
+                            setOnCancelListener { finish() }
+                        }
+                    }
                     .show()
+            }
+            // Only the existing manual picker may authorize a transfer.
+            // Show the full review set before proposing any one-track search.
+            val chooseReviewTrack=if(manualRecovery && batch!=null)
+                Button(this).apply {
+                    isAllCaps=false
+                    text="Escolher faixa para revisar"
+                    page.addView(this,page.childCount-1)
+                }else null
+            fun showPendingReviewTracks() {
+                val guided=batch ?: return
+                if(!manualRecovery || !action.isEnabled || guided.isComplete)return
+                val indices=guided.pendingIndices
+                if(indices.isEmpty())return
+                val titles=indices.map { slot ->
+                    "${slot+1}. ${guided.entries[slot].query}"
+                }.toTypedArray()
+                AlertDialog.Builder(this)
+                    .setTitle("Revisar ${indices.size} faixa(s) pendente(s)")
+                    .setMessage("Escolha uma faixa para pesquisar manualmente. " +
+                        "As outras permanecem pendentes. Nenhum arquivo será baixado " +
+                        "antes de você selecionar e autorizar um candidato.")
+                    .setItems(titles) { _,position ->
+                        if(!action.isEnabled)return@setItems
+                        val slot=indices[position]
+                        if(!guided.selectPending(slot))return@setItems
+                        val entry=checkNotNull(guided.current)
+                        searchInput.setText(entry.query)
+                        albumInput.setText(entry.album.orEmpty())
+                        intent.putExtra("bitchord.soulseek.manual.duration_seconds",
+                            entry.durationSeconds ?: 0)
+                        batchStatus?.text="Revisão: faixa ${slot+1} de " +
+                            "${guided.entries.size} · ${guided.pendingIndices.size} pendentes · " +
+                            "${guided.succeeded} salvas · ${guided.skipped} puladas."
+                        nextTrack?.isEnabled=false
+                        status.text="Faixa selecionada. Use Pesquisar candidatos para " +
+                            "escolher e autorizar um arquivo."
+                    }
+                    .setNegativeButton("Voltar",null)
+                    .show()
+            }
+            chooseReviewTrack?.setOnClickListener {
+                if(action.isEnabled)showPendingReviewTracks()
             }
             val retry = Button(this).apply {
                 text = "Pesquisar candidatos"
@@ -1674,11 +1726,13 @@ class A0ManualLoginActivity : Activity() {
                             "${batch.skipped} puladas."
                         nextTrack?.isEnabled=false
                         status.text="Faixa ${batch.index+1} preparada. Selecione um candidato."
-                        confirmSearch()
+                        if(manualRecovery)showPendingReviewTracks()
+                        else confirmSearch()
                     }
                 }
             }
-            confirmSearch()
+            if(manualRecovery)showPendingReviewTracks()
+            else confirmSearch()
         }
     }
 
