@@ -45,7 +45,10 @@ internal interface SmartPlaylistV2FilterDao {
     suspend fun remove(id: String)
 }
 
-internal class SmartPlaylistV2FilterRepository(private val dao: SmartPlaylistV2FilterDao) {
+internal class SmartPlaylistV2FilterRepository(
+    private val dao: SmartPlaylistV2FilterDao,
+    private val savedDefinitions: suspend () -> List<SavedSmartPlaylistV2Definition> = { emptyList() },
+) {
     private val json = Json {
         encodeDefaults = true
         ignoreUnknownKeys = false
@@ -65,7 +68,10 @@ internal class SmartPlaylistV2FilterRepository(private val dao: SmartPlaylistV2F
         val name = validateFilterName(value.name)
         // Reuse the engine's AST bounds and field/operator validation; no media
         // queries are executed by storing a filter.
-        SmartPlaylistV2Query(rules = value.rules)
+        val query = SmartPlaylistV2Query(rules = value.rules)
+        // Saved references inside a filter are live references to *playlists*.
+        // Never persist a fragment whose targets are absent or cyclic.
+        resolveSmartPlaylistReferences(query, savedDefinitions())
         val payload = json.encodeToString<SmartPlaylistRule>(value.rules)
         require(payload.length <= 32_768) { "Saved filter is too large" }
         dao.upsert(SmartPlaylistV2FilterEntity(value.id, name, 1, payload))
@@ -89,6 +95,34 @@ internal class SmartPlaylistV2FilterRepository(private val dao: SmartPlaylistV2F
         val rules = json.decodeFromString<SmartPlaylistRule>(rulesJson)
         SmartPlaylistV2Query(rules = rules)
         return SavedSmartPlaylistV2Filter(id, name, rules)
+    }
+}
+
+/** Applying to an unconfigured editor must NOT combine with its internal seed rule. */
+internal enum class SavedFilterApplication { REPLACE, ALL, ANY }
+
+/** Copies immutable saved rule trees; original filters are never linked or mutated. */
+internal fun applySavedFilterToDraft(
+    current: SmartPlaylistRule,
+    hasConfiguredRules: Boolean,
+    filter: SavedSmartPlaylistV2Filter,
+    application: SavedFilterApplication,
+): SmartPlaylistRule = when {
+    !hasConfiguredRules || application == SavedFilterApplication.REPLACE -> filter.rules
+    else -> SmartPlaylistRule.Group(
+        if (application == SavedFilterApplication.ALL) SmartPlaylistRuleJoin.ALL
+        else SmartPlaylistRuleJoin.ANY,
+        listOf(current, filter.rules),
+    )
+}.also { SmartPlaylistV2Query(it) }
+
+/** A saved filter may itself refer to a playlist. Do not orphan that reference. */
+internal fun validateSmartPlaylistDeletionAgainstFilters(
+    playlistId: String,
+    filters: List<SavedSmartPlaylistV2Filter>,
+) {
+    require(filters.none { playlistId in it.rules.referencedPlaylistIds() }) {
+        "A saved filter still references this smart playlist"
     }
 }
 

@@ -58,6 +58,8 @@ internal interface ListeningEventDao {
             SUM(CASE WHEN type = 'PLAYBACK_COMPLETED' THEN 1 ELSE 0 END) AS completions,
             SUM(CASE WHEN type = 'PLAYBACK_SKIPPED_EARLY' THEN 1 ELSE 0 END) AS earlySkips,
             SUM(CASE WHEN type = 'PLAYBACK_SKIPPED_LATE' THEN 1 ELSE 0 END) AS lateSkips,
+            MAX(CASE WHEN type IN ('PLAYBACK_SKIPPED_EARLY', 'PLAYBACK_SKIPPED_LATE')
+                     THEN occurredAtEpochMs ELSE NULL END) AS lastSkippedAtEpochMs,
             MAX(CASE WHEN type = 'PLAYBACK_COMPLETED' AND listenedDurationMs > 0
                      THEN occurredAtEpochMs ELSE NULL END) AS lastAudibleAtEpochMs
         FROM listening_event

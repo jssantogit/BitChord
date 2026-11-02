@@ -76,6 +76,39 @@ class SavedSmartPlaylistFilterTest {
         }
     }
 
+    @Test fun applyingFilterToUnconfiguredDraftDoesNotImportPlaceholderCompletionRule() {
+        val filter = SavedSmartPlaylistV2Filter("filter:artist", "Artista", cleanRule)
+        val placeholder = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
+            SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+            value = 1.0,
+        )
+        for (mode in SavedFilterApplication.entries) {
+            val actual = applySavedFilterToDraft(placeholder, false, filter, mode)
+            assertEquals(cleanRule, actual)
+            SmartPlaylistV2Query(actual)
+        }
+    }
+
+    @Test fun configuredDraftCanReplaceIntersectOrUnionWithIndependentSavedFilter() {
+        val filter = SavedSmartPlaylistV2Filter("filter:artist", "Artista", cleanRule)
+        val existing = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.DURATION_MS, SmartPlaylistRuleOperator.IS_PRESENT,
+        )
+        assertEquals(cleanRule, applySavedFilterToDraft(
+            existing, true, filter, SavedFilterApplication.REPLACE,
+        ))
+        val all = applySavedFilterToDraft(existing, true, filter, SavedFilterApplication.ALL)
+            as SmartPlaylistRule.Group
+        assertEquals(SmartPlaylistRuleJoin.ALL, all.join)
+        assertEquals(listOf(existing, cleanRule), all.children)
+        val any = applySavedFilterToDraft(existing, true, filter, SavedFilterApplication.ANY)
+            as SmartPlaylistRule.Group
+        assertEquals(SmartPlaylistRuleJoin.ANY, any.join)
+        assertEquals(listOf(existing, cleanRule), any.children)
+        assertEquals(cleanRule, filter.rules)
+    }
+
     @Test fun templatesCanBeCombinedWithAllWithoutApplyingAnArtificial100SongLimit() {
         val template = SavedSmartPlaylistV2Filter("filter:one", "Reproduzidas", cleanRule)
         val root = SmartPlaylistRule.Comparison(
@@ -94,6 +127,33 @@ class SavedSmartPlaylistFilterTest {
         assertEquals(250, results.size)
         assertEquals(2, (combined as SmartPlaylistRule.Group).children.size)
         assertEquals(cleanRule, template.rules)
+    }
+
+    @Test fun referencedFiltersRequireSavedSmartPlaylistAndBlockOrphaningDeletion() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val db = Room.inMemoryDatabaseBuilder(context, SmartPlaylistDefinitionDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val playlistRepo = SmartPlaylistV2DefinitionRepository(db.v2DefinitionDao())
+            val filterRepo = SmartPlaylistV2FilterRepository(
+                db.v2FilterDao(), savedDefinitions = { playlistRepo.list() },
+            )
+            val rule = SmartPlaylistRule.Reference("referenced:1")
+            val dependent = SavedSmartPlaylistV2Filter("filter:ref", "Referência", rule)
+            assertTrue(runCatching { filterRepo.save(dependent) }.isFailure)
+            assertTrue(filterRepo.list().isEmpty())
+            playlistRepo.save(SavedSmartPlaylistV2Definition(
+                "referenced:1", "Origem", SmartPlaylistV2Query(cleanRule),
+            ))
+            filterRepo.save(dependent)
+            assertEquals(dependent, filterRepo.list().single())
+            assertThrows(IllegalArgumentException::class.java) {
+                validateSmartPlaylistDeletionAgainstFilters("referenced:1", listOf(dependent))
+            }
+            validateSmartPlaylistDeletionAgainstFilters("other", listOf(dependent))
+        } finally {
+            db.close()
+        }
     }
 
     @Test fun invalidAndFutureFilterPayloadsFailClosed() = runTest {
@@ -158,6 +218,8 @@ class SavedSmartPlaylistFilterTest {
                 SmartPlaylistDefinitionDatabase.MIGRATION_2_3,
             SmartPlaylistDefinitionDatabase.MIGRATION_3_4,
             SmartPlaylistDefinitionDatabase.MIGRATION_4_5,
+            SmartPlaylistDefinitionDatabase.MIGRATION_5_6,
+            SmartPlaylistDefinitionDatabase.MIGRATION_6_7,
             ).allowMainThreadQueries().build()
         try {
             assertEquals("Old", db.definitionDao().all().single().name)

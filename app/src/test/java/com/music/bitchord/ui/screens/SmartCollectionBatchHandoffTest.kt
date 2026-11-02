@@ -26,6 +26,30 @@ import org.junit.Test
 
 /** A read-only fake of B9's resolver, never legacy-title identity inference. */
 class SmartCollectionBatchHandoffTest {
+    @Test fun shuffledSavedPlaylistRetainsOnlyFreshUniqueRecordingMembership() {
+        val ids = listOf("rec-a", "rec-b", "rec-b", "rec-c", "rec-d")
+        val normal = canonicalSavedPlaylistOrder(ids, shuffle = false, random = kotlin.random.Random(2))
+        val shuffled = canonicalSavedPlaylistOrder(ids, shuffle = true, random = kotlin.random.Random(2))
+        assertEquals(listOf("rec-a", "rec-b", "rec-c", "rec-d"), normal)
+        assertEquals(normal.toSet(), shuffled.toSet())
+        assertEquals(normal.size, shuffled.size)
+    }
+
+    @Test fun clickingPlaylistTrackUsesFreshMembershipAndRemainingOrder() {
+        val members = listOf("rec-first", "rec-second", "rec-third")
+        assertEquals(
+            listOf("rec-second", "rec-third"),
+            playlistPlaybackSuffix(members, "rec-second"),
+        )
+        assertEquals(null, playlistPlaybackSuffix(members, "rec-not-in-playlist"))
+        assertEquals(null, playlistPlaybackSuffix(emptyList(), "rec-second"))
+        assertEquals(
+            listOf("rec-second"),
+            playlistPlaybackSelection(members, "rec-second", includeFollowing = false),
+        )
+        assertNull(playlistPlaybackSelection(members, "rec-not-in-playlist", includeFollowing = false))
+    }
+
     private class Resolver : CanonicalQueueResolver {
         var calls = 0
         override suspend fun identifyAll(songs: List<Song>): List<CanonicalQueueIdentity?> =

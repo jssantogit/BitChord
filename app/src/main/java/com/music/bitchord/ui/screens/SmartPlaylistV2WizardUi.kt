@@ -5,13 +5,19 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.runtime.produceState
+import coil3.compose.AsyncImage
+import com.music.bitchord.data.canvas.AppleArtistArtRepository
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -21,11 +27,14 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.AddCircleOutline
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.LibraryMusic
@@ -35,7 +44,7 @@ import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.AlertDialog
+import com.music.bitchord.ui.components.ConfirmationAlert
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -49,6 +58,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -71,6 +81,11 @@ import com.music.bitchord.data.listening.allowedOperators
 import com.music.bitchord.data.listening.isTextField
 import com.music.bitchord.data.listening.moveChild
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.CoverPlaceholder
+import com.music.bitchord.ui.components.ArtworkPageBackButton
+import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
+import com.music.bitchord.ui.components.NativeTrackRowText
+import com.music.bitchord.ui.theme.themeArtworkPalette
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.sharedui.resources.Res
@@ -81,7 +96,14 @@ import org.jetbrains.compose.resources.stringResource
 // Respect DESIGN.md: SF Pro Display and semantic ColorScheme from BitChordTheme,
 // the shared 16.dp PAGE_GUTTER, and locally rounded neutral cards.
 // Do not invent new global color or shape tokens for this flow.
-private enum class WizardStep { IDENTITY, SONGS, RULES, GROUP, CATEGORIES, FIELDS, EDITOR, REVIEW }
+/** Shared singular/plural copy for the editor and saved-filter manager. */
+internal fun smartConditionCountLabel(count: Int, configured: Boolean = false): String {
+    val label = "$count ${if (count == 1) "condição" else "condições"}"
+    return if (configured) "$label ${if (count == 1) "configurada" else "configuradas"}"
+    else label
+}
+
+private enum class WizardStep { IDENTITY, EDIT, SONGS, RULES, GROUP, CATEGORIES, FIELDS, EDITOR, REVIEW }
 
 private fun operatorUiLabel(operator: SmartPlaylistRuleOperator): String = when (operator) {
     SmartPlaylistRuleOperator.EQUAL -> "É igual a"
@@ -90,8 +112,8 @@ private fun operatorUiLabel(operator: SmartPlaylistRuleOperator): String = when 
     SmartPlaylistRuleOperator.GREATER_OR_EQUAL -> "Pelo menos"
     SmartPlaylistRuleOperator.LESS_THAN -> "É menor que"
     SmartPlaylistRuleOperator.LESS_OR_EQUAL -> "No máximo"
-    SmartPlaylistRuleOperator.IS_PRESENT -> "Possui valor conhecido"
-    SmartPlaylistRuleOperator.IS_MISSING -> "Sem valor confirmado"
+    SmartPlaylistRuleOperator.IS_PRESENT -> "Tem informação cadastrada"
+    SmartPlaylistRuleOperator.IS_MISSING -> "Não tem informação cadastrada"
     SmartPlaylistRuleOperator.CONTAINS -> "Contém"
     SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> "Não contém"
     SmartPlaylistRuleOperator.STARTS_WITH -> "Começa com"
@@ -146,40 +168,86 @@ private fun WizardCard(
     onClick: (() -> Unit)? = null,
     content: @Composable (() -> Unit)? = null,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth().then(
-            if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
-        ),
-        shape = RoundedCornerShape(15.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(PAGE_GUTTER),
-            verticalArrangement = Arrangement.spacedBy(9.dp),
-        ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(title, style = MaterialTheme.typography.titleMedium)
-                    if (subtitle.isNotBlank()) {
-                        Text(subtitle, style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                if (onClick != null) Icon(Icons.Rounded.ChevronRight, contentDescription = null)
+    // This is the exact surface and row shared with Android Settings, not
+    // a separate Material3 Card with duplicated paddings and chevrons.
+    SettingsGroupSurface {
+        SettingsRow(
+            title = title,
+            subtitle = subtitle.ifBlank { null },
+            onClick = onClick,
+            reserveIconSpace = false,
+        )
+        if (content != null) {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(start = ROW_INSET, end = ROW_INSET, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                content()
             }
-            content?.invoke()
         }
     }
 }
 
 @Composable
 private fun WizardHeading(title: String, detail: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = MaterialTheme.typography.headlineLarge)
-        Text(detail, style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            title,
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            detail,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Same release hero as the native playlist detail, with actual RecordingId art. */
+@Composable
+private fun WizardReviewHeader(
+    name: String,
+    description: String,
+    cover: V2DisplayRow?,
+    customCoverUri: String? = null,
+) {
+    val palette = themeArtworkPalette()
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        NativeReleaseHeaderLayout(
+            title = name.ifBlank { "Sem nome" },
+            credit = "",
+            meta = description,
+            palette = palette,
+            sleeveSize = maxWidth * 0.76f,
+            topInset = 0.dp,
+            artwork = {
+                if (customCoverUri != null) {
+                    Box(Modifier.fillMaxSize()) {
+                        if (cover != null) {
+                            SmartPlaylistPreviewArtwork(cover, Modifier.fillMaxSize())
+                        } else {
+                            PlaylistWizardArtworkPlaceholder(224.dp)
+                        }
+                        AsyncImage(
+                            model = customCoverUri,
+                            contentDescription = "Capa escolhida da playlist",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                    }
+                } else if (cover != null) {
+                    SmartPlaylistPreviewArtwork(cover, Modifier.fillMaxSize())
+                } else {
+                    CoverPlaceholder(
+                        icon = Icons.Rounded.LibraryMusic,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            },
+            actions = {},
+        )
     }
 }
 
@@ -215,70 +283,52 @@ private fun iconForConditionCategory(id: String) = when (id) {
 }
 
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun <T> WizardChoiceDialog(
+internal fun <T> WizardChoiceDialog(
     title: String,
     options: List<T>,
     label: (T) -> String,
     onChosen: (T) -> Unit,
     onClose: () -> Unit,
 ) {
-    // Dialog windows do not always inherit Material's LocalContentColor.
-    // Capture the active palette OUTSIDE the window and apply foreground
-    // explicitly: black text on a black sheet fails basic night-mode contrast.
-    val palette = MaterialTheme.colorScheme
-    val sheetForeground = palette.onSurface
-    Dialog(
+    // The app already uses ModalBottomSheet for details/actions. A second
+    // full-screen Dialog with a hand-drawn scrim is not needed.
+    androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onClose,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
         ),
+        containerColor = MaterialTheme.colorScheme.background,
     ) {
-        Box(
-            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.48f)),
-            contentAlignment = Alignment.BottomCenter,
+        Column(
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp),
         ) {
-            Column(
+            Row(
                 modifier = Modifier.fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
-                    .background(palette.surface)
-                    .navigationBarsPadding().padding(bottom = 12.dp),
+                    .padding(start = PAGE_GUTTER, end = 8.dp, bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .padding(start = PAGE_GUTTER, end = 8.dp, top = 6.dp, bottom = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(title, style = MaterialTheme.typography.titleLarge,
-                        color = sheetForeground)
-                    TextButton(onClick = onClose) {
-                        Text("Fechar", color = sheetForeground)
-                    }
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                Text(title, style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground)
+                PlaylistWizardCompactAction(label = "Fechar", onClick = onClose)
+            }
+            SettingsGroupSurface(modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
                 LazyColumn(Modifier.heightIn(max = 480.dp)) {
                     items(options) { option ->
-                        Text(
-                            label(option),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = sheetForeground,
-                            modifier = Modifier.fillMaxWidth()
-                                .clickable { onChosen(option); onClose() }
-                                .padding(horizontal = PAGE_GUTTER, vertical = 17.dp),
+                        SettingsRow(
+                            title = label(option),
+                            onClick = { onChosen(option); onClose() },
+                            reserveIconSpace = false,
                         )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = PAGE_GUTTER),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
-                        )
+                        RowDivider()
                     }
                 }
             }
         }
     }
 }
-
 
 @Composable
 internal fun SmartPlaylistV2WizardUi(
@@ -293,8 +343,16 @@ internal fun SmartPlaylistV2WizardUi(
     error: String?,
     editingId: String?,
     editingFilterId: String?,
+    creatingFilter: Boolean = false,
+    filterNotice: String? = null,
+    hasExportedFilter: Boolean = false,
     savedDefinitions: List<SavedSmartPlaylistV2Definition>,
     onNameChange: (String) -> Unit,
+    description: String = "",
+    onDescriptionChange: (String) -> Unit = {},
+    coverUri: String? = null,
+    onChooseCover: () -> Unit = {},
+    onClearCover: () -> Unit = {},
     onRuleChange: (SmartPlaylistRule) -> Unit,
     onSortChange: (SmartPlaylistV2Sort) -> Unit,
     onLimitChange: (String) -> Unit,
@@ -304,6 +362,8 @@ internal fun SmartPlaylistV2WizardUi(
     onSaveFilter: () -> Unit,
     normalMode: Boolean = false,
     editingNormalId: String? = null,
+    openingAsEdit: Boolean = false,
+    startOnNormalSongs: Boolean = false,
     normalRows: List<V2DisplayRow> = emptyList(),
     normalSelectedRows: List<V2DisplayRow> = emptyList(),
     normalSelectedIds: List<String> = emptyList(),
@@ -321,15 +381,29 @@ internal fun SmartPlaylistV2WizardUi(
     onNormalModeChange: (Boolean) -> Unit = {},
     onNormalSearchChange: (String) -> Unit = {},
     onToggleNormalTrack: (String) -> Unit = {},
+    onAddNormalAlbum: (CanonicalPlaylistBrowseGroup) -> Unit = {},
+    normalAddingAlbumId: String? = null,
+    normalGroupMembers: Map<String, List<String>> = emptyMap(),
+    onAddNormalArtist: (CanonicalPlaylistBrowseGroup) -> Unit = {},
     onMoveNormalTrack: (String, Boolean) -> Unit = { _, _ -> },
     onSaveNormal: () -> Unit = {},
     onDeleteNormal: () -> Unit = {},
+    onDeleteSmart: () -> Unit = {},
     onPreviewAction: ((SmartPlaylistV2Query, String?, CanonicalCollectionIntent) -> Unit)?,
     currentPreviewQuery: SmartPlaylistV2Query?,
     onManage: () -> Unit,
     onBack: () -> Unit,
 ) {
-    var page by remember { mutableStateOf(WizardStep.IDENTITY) }
+    val filterMode = editingFilterId != null || creatingFilter
+    val isEditing = openingAsEdit ||
+        editingId != null || editingNormalId != null || filterMode
+    var page by remember {
+        mutableStateOf(when {
+            isEditing && normalMode && startOnNormalSongs -> WizardStep.SONGS
+            isEditing -> WizardStep.EDIT
+            else -> WizardStep.IDENTITY
+        })
+    }
     var selectedPath by remember { mutableStateOf<List<Int>>(emptyList()) }
     var targetGroupPath by remember { mutableStateOf<List<Int>>(emptyList()) }
     var selectedCategory by remember { mutableStateOf(smartConditionCategories.first()) }
@@ -342,6 +416,7 @@ internal fun SmartPlaylistV2WizardUi(
     var picker by remember { mutableStateOf<String?>(null) }
     var confirmDiscard by remember { mutableStateOf(false) }
     var confirmDeleteNormal by remember { mutableStateOf(false) }
+    var confirmDeleteSmart by remember { mutableStateOf(false) }
     val names = savedDefinitions.associate { it.id to it.name }
 
     fun openField(field: SmartPlaylistRuleField) {
@@ -367,16 +442,20 @@ internal fun SmartPlaylistV2WizardUi(
     }
     fun back() {
         page = when (page) {
+            WizardStep.EDIT -> {
+                confirmDiscard = true
+                WizardStep.EDIT
+            }
             WizardStep.IDENTITY -> {
-                if (name.isNotBlank() || editingId != null || editingFilterId != null) {
+                if (name.isNotBlank() || description.isNotBlank() || editingId != null || filterMode) {
                     confirmDiscard = true
                 } else {
                     onBack()
                 }
                 WizardStep.IDENTITY
             }
-            WizardStep.SONGS -> WizardStep.IDENTITY
-            WizardStep.RULES -> WizardStep.IDENTITY
+            WizardStep.SONGS -> if (isEditing) WizardStep.EDIT else WizardStep.IDENTITY
+            WizardStep.RULES -> if (isEditing) WizardStep.EDIT else WizardStep.IDENTITY
             WizardStep.GROUP -> WizardStep.RULES
             WizardStep.CATEGORIES -> if (addingGroup || targetGroupPath.isEmpty())
                 WizardStep.RULES else WizardStep.GROUP
@@ -389,19 +468,16 @@ internal fun SmartPlaylistV2WizardUi(
 
     val header = when (page) {
         WizardStep.IDENTITY -> "Nova playlist"
-        WizardStep.SONGS -> "Adicionar músicas"
-        WizardStep.RULES -> "Regras da playlist"
+        WizardStep.EDIT -> if (filterMode) {
+            if (editingFilterId != null) "Editar filtro" else "Novo filtro"
+        } else "Editar playlist"
+        WizardStep.SONGS -> if (isEditing) "Editar músicas" else "Adicionar músicas"
+        WizardStep.RULES -> if (filterMode) "Regras do filtro" else "Regras da playlist"
         WizardStep.GROUP -> "Editar grupo de regras"
         WizardStep.CATEGORIES -> "Adicionar condição"
         WizardStep.FIELDS -> selectedCategory.title
         WizardStep.EDITOR -> smartConditionLabel(draft.field)
         WizardStep.REVIEW -> "Revisar e criar"
-    }
-    val stepNote = when (page) {
-        WizardStep.IDENTITY -> "ETAPA 1 DE 3"
-        WizardStep.SONGS, WizardStep.RULES, WizardStep.GROUP, WizardStep.CATEGORIES,
-        WizardStep.FIELDS, WizardStep.EDITOR -> "ETAPA 2 DE 3"
-        WizardStep.REVIEW -> "ETAPA 3 DE 3"
     }
     // Every stage has its own scroll origin. Reusing one LazyColumn state
     // caused the condition catalog to open midway down after editing a
@@ -423,20 +499,20 @@ internal fun SmartPlaylistV2WizardUi(
                     .heightIn(min = 56.dp)
                     .padding(horizontal = PAGE_GUTTER),
             ) {
-                TextButton(
-                    modifier = Modifier.align(Alignment.CenterStart),
+                ArtworkPageBackButton(
                     onClick = ::back,
-                ) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null)
-                    Text("Voltar")
-                }
-                Text(stepNote,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.Center))
-                if (page == WizardStep.IDENTITY) {
-                    TextButton(modifier = Modifier.align(Alignment.CenterEnd),
-                        onClick = onManage) { Text("Filtros") }
+                    hazeState = null,
+                    modifier = Modifier.align(Alignment.CenterStart),
+                )
+                if (page == WizardStep.IDENTITY || page == WizardStep.EDIT) {
+                    Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                        CircleIconButton(
+                            icon = Icons.Rounded.Tune,
+                            contentDescription = "Filtros reutilizáveis",
+                            onClick = onManage,
+                            size = 50.dp,
+                        )
+                    }
                 }
             }
             LazyColumn(
@@ -446,11 +522,16 @@ internal fun SmartPlaylistV2WizardUi(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
                     start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 28.dp,
                 ),
-                verticalArrangement = Arrangement.spacedBy(15.dp),
+                verticalArrangement = Arrangement.spacedBy(
+                    if (page == WizardStep.SONGS) 0.dp else 15.dp,
+                ),
             ) {
                 item {
-                    WizardHeading(header, when (page) {
+                    val headingDetail = when (page) {
                         WizardStep.IDENTITY -> "Dê um nome e escolha como a biblioteca será organizada."
+                        WizardStep.EDIT -> if (filterMode)
+                            "Configure o nome e as regras deste filtro reutilizável."
+                        else "Atualize a capa, a descrição e as faixas ou regras desta playlist."
                         WizardStep.SONGS -> "Escolha as faixas que farão parte desta playlist, na ordem desejada."
                         WizardStep.RULES -> "Organize condições em grupos. As opções avançadas ficam dentro de cada grupo."
                         WizardStep.GROUP -> "Ajuste as condições, a combinação e a ordem deste grupo."
@@ -460,92 +541,147 @@ internal fun SmartPlaylistV2WizardUi(
                         WizardStep.REVIEW -> if (normalMode)
                             "Confira as músicas escolhidas antes de salvar." else
                             "Confira fontes, regras e músicas antes de salvar."
-                    })
+                    }
+                    WizardHeading(header, headingDetail)
                 }
 
                 when (page) {
-                    WizardStep.IDENTITY -> {
-                        item {
-                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                PlaylistWizardArtworkPlaceholder()
+                    WizardStep.IDENTITY, WizardStep.EDIT -> {
+                        if (page == WizardStep.EDIT) {
+                            item {
+                                WizardCard(
+                                    title = if (normalMode) "Editar músicas" else "Editar regras",
+                                    subtitle = if (normalMode)
+                                        "${normalSelectedIds.size} músicas selecionadas"
+                                    else smartConditionCountLabel(smartRuleLeafCount(rule), configured = true),
+                                    onClick = {
+                                        page = if (normalMode) WizardStep.SONGS else WizardStep.RULES
+                                    },
+                                )
                             }
                         }
-                        item {
-                            PlaylistWizardTextEntry(
-                                value = name,
-                                onValueChange = onNameChange,
-                                label = "Nome da playlist",
-                                hint = "Obrigatório · até 80 caracteres",
-                                error = name.length > 80,
-                            )
-                        }
-                        item {
-                            if (normalMode) {
-                                WizardCard(
-                                    "Fonte da playlist",
-                                    "Escolha onde as músicas desta playlist serão encontradas.",
-                                ) {
-                                    PlaylistWizardSelectionRow(
-                                        label = "Todas as fontes",
-                                        selected = normalSourceProviderKey == null,
-                                        onClick = { onNormalSourceChange(null) },
-                                    )
-                                    availableSourceKeys.forEach { provider ->
-                                        val title = if (provider == "local-mediastore")
-                                            "Música local" else "Servidor (Navidrome)"
-                                        PlaylistWizardSelectionRow(
-                                            label = title,
-                                            selected = normalSourceProviderKey == provider,
-                                            onClick = { onNormalSourceChange(provider) },
-                                        )
-                                    }
-                                    if (normalSourceProviderKey != null &&
-                                        normalSourceProviderKey !in availableSourceKeys) {
-                                        Text(
-                                            "A fonte salva não está conectada. As músicas permanecem na playlist.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.error,
-                                        )
+                        if (!filterMode) item {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                // Preview real canonical member art when available,
+                                // as the Library's own playlist page does.
+                                val automaticCoverRows = if (normalMode)
+                                    normalSelectedRows else preview.orEmpty()
+                                // Mirror the native Detail release hero (76% of available
+                                // width). The sleeve is measured independently of action
+                                // buttons, so adding "Remover capa" cannot shrink it.
+                                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                                    val coverDimension = maxWidth * 0.76f
+                                    Box(
+                                        modifier = Modifier.size(coverDimension)
+                                            .align(Alignment.Center)
+                                            .clip(RoundedCornerShape(12.dp)),
+                                    ) {
+                                        if (automaticCoverRows.isNotEmpty()) {
+                                            CanonicalPlaylistCoverArt(
+                                                rows = automaticCoverRows,
+                                                modifier = Modifier.fillMaxSize(),
+                                            )
+                                        } else {
+                                            PlaylistWizardArtworkPlaceholder(coverDimension)
+                                        }
+                                        if (coverUri != null) {
+                                            AsyncImage(
+                                                model = coverUri,
+                                                contentDescription = "Capa escolhida da playlist",
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop,
+                                            )
+                                        }
                                     }
                                 }
-                            } else {
-                                WizardCard(
-                                    "Fonte da playlist",
-                                    "Esta escolha limita todas as condições, inclusive grupos E/OU.",
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
                                 ) {
-                                    val selected = if (hasConfiguredRules)
-                                        smartRuleGlobalSource(rule) else null
-                                    PlaylistWizardSelectionRow(
-                                        label = "Todas as fontes",
-                                        selected = selected == null,
-                                        onClick = { onSmartSourceChange(null) },
+                                    PlaylistWizardSecondaryAction(
+                                        label = "Escolher capa",
+                                        onClick = onChooseCover,
                                     )
-                                    PlaylistWizardSelectionRow(
-                                        label = "Música local",
-                                        selected = selected == "local",
-                                        onClick = { onSmartSourceChange("local") },
-                                    )
-                                    if (availableSourceKeys.any {
-                                        it.startsWith("opensubsonic:")
-                                    }) {
-                                        PlaylistWizardSelectionRow(
-                                            label = "Servidor (Navidrome)",
-                                            selected = selected == "opensubsonic",
-                                            onClick = { onSmartSourceChange("opensubsonic") },
-                                        )
-                                    } else if (selected == "opensubsonic") {
-                                        Text(
-                                            "Servidor selecionado, mas nenhuma conta está conectada.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.error,
+                                    if (coverUri != null) {
+                                        PlaylistWizardSecondaryAction(
+                                            label = "Remover capa",
+                                            onClick = onClearCover,
                                         )
                                     }
                                 }
                             }
                         }
                         item {
+                            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                PlaylistWizardTextEntry(
+                                    value = name,
+                                    onValueChange = onNameChange,
+                                    label = if (filterMode) "Nome do filtro"
+                                        else "Nome da playlist",
+                                    hint = "Obrigatório · até 80 caracteres",
+                                    error = name.length > 80,
+                                    emphasized = true,
+                                )
+                                if (!filterMode) {
+                                    PlaylistWizardTextEntry(
+                                        value = description,
+                                        onValueChange = {
+                                            if (it.length <= 5000) onDescriptionChange(it)
+                                        },
+                                        label = "Descrição (opcional)",
+                                        hint = "Exibida em Sobre a playlist · até 5.000 caracteres",
+                                        multiline = true,
+                                        emphasized = true,
+                                    )
+                                }
+                            }
+                        }
+                        item {
+                            WizardCard(
+                                "Fontes do catálogo",
+                                "Escolha onde procurar músicas. Toque para alterar.",
+                            ) {
+                                val selected = if (normalMode) normalSourceProviderKey
+                                    else if (hasConfiguredRules) smartRuleGlobalSource(rule)
+                                    else null
+                                val label = if (normalMode) when {
+                                    selected == null -> "Todas as fontes disponíveis"
+                                    selected == "local-mediastore" -> "Música local"
+                                    selected in availableSourceKeys -> "Navidrome"
+                                    else -> "Fonte desconectada"
+                                } else when (selected) {
+                                    "local" -> "Música local"
+                                    "opensubsonic" -> "Navidrome"
+                                    else -> "Todas as fontes disponíveis"
+                                }
+                                PlaylistWizardSecondaryAction(
+                                    label = "Origem: $label  ▾",
+                                    onClick = { picker = "source" },
+                                )
+                                if (normalMode && selected != null &&
+                                    selected !in availableSourceKeys) {
+                                    Text(
+                                        "A fonte salva está desconectada; as músicas continuam na playlist.",
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                                if (!normalMode && selected == "opensubsonic" &&
+                                    availableSourceKeys.none { it.startsWith("opensubsonic:") }) {
+                                    Text(
+                                        "Nenhum servidor Navidrome está conectado.",
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                            }
+                        }
+                        if (page == WizardStep.IDENTITY) item {
                             WizardCard("Tipo de playlist", "Normal: escolha manual de músicas. Inteligente: seleção por regras.") {
-                                if (editingId != null || editingFilterId != null || editingNormalId != null) {
+                                if (editingId != null || filterMode || editingNormalId != null) {
                                     Text(if (normalMode) "Normal" else "Inteligente",
                                         style = MaterialTheme.typography.bodyMedium)
                                 } else {
@@ -558,51 +694,21 @@ internal fun SmartPlaylistV2WizardUi(
                                 }
                             }
                         }
-                        // Capas/descrição não são persistidas no V2 atual.
-                        // Não apresentar linguagem técnica de implementação ao usuário.
                     }
                     WizardStep.SONGS -> {
                         item {
-                            Row(
-                                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .padding(4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                CanonicalPlaylistBrowseType.entries.forEach { type ->
-                                    val label = when (type) {
-                                        CanonicalPlaylistBrowseType.TRACKS -> "Músicas"
-                                        CanonicalPlaylistBrowseType.ALBUMS -> "Álbuns"
-                                        CanonicalPlaylistBrowseType.ARTISTS -> "Artistas"
-                                    }
-                                    TextButton(
-                                        onClick = { onNormalBrowseTypeChange(type) },
-                                        modifier = Modifier.weight(1f)
-                                            .clip(RoundedCornerShape(11.dp))
-                                            .background(
-                                                if (normalBrowseType == type)
-                                                    MaterialTheme.colorScheme.outline
-                                                else Color.Transparent,
-                                            ),
-                                    ) {
-                                        Text(label, style = MaterialTheme.typography.bodyMedium,
-                                            color = if (normalBrowseType == type)
-                                                MaterialTheme.colorScheme.onBackground
-                                            else MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                }
+                            Box(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                                SegmentedControl(
+                                    options = listOf("Músicas", "Álbuns", "Artistas"),
+                                    selectedIndex = CanonicalPlaylistBrowseType.entries.indexOf(normalBrowseType),
+                                    onSelect = { index ->
+                                        onNormalBrowseTypeChange(CanonicalPlaylistBrowseType.entries[index])
+                                    },
+                                )
                             }
                         }
-                        if (normalBrowseGroup != null) {
-                            item {
-                                TextButton(onClick = { onNormalBrowseGroupChange(null) }) {
-                                    Icon(Icons.AutoMirrored.Rounded.ArrowBack,
-                                        contentDescription = null)
-                                    Text(normalBrowseGroup.title)
-                                }
-                            }
-                        } else {
-                            item {
+                        item {
+                            Box(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
                                 PlaylistWizardSearchEntry(
                                     value = normalSearch,
                                     onValueChange = onNormalSearchChange,
@@ -614,74 +720,67 @@ internal fun SmartPlaylistV2WizardUi(
                                 )
                             }
                         }
-                        item {
-                            WizardCard("Selecionadas: ${normalSelectedIds.size}",
-                                "A seleção permanece ao alternar entre músicas, álbuns e artistas.")
-                        }
-                        if (normalBrowseGroup == null &&
-                            normalBrowseType != CanonicalPlaylistBrowseType.TRACKS) {
+                        if (normalBrowseType != CanonicalPlaylistBrowseType.TRACKS) {
                             if (normalGroups.isEmpty() && !normalLoading) item {
                                 Text("Nenhum item disponível para esta pesquisa.",
                                     style = MaterialTheme.typography.bodyMedium)
                             }
-                            items(normalGroups, key = { it.type.name + it.id }) { group ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable { onNormalBrowseGroupChange(group) }
-                                        .padding(vertical = 13.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    Icon(
-                                        if (group.type == CanonicalPlaylistBrowseType.ALBUMS)
-                                            Icons.Rounded.LibraryMusic else Icons.Rounded.MusicNote,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(36.dp),
+                            normalGroups.forEach { group ->
+                                val members = normalGroupMembers[group.id].orEmpty()
+                                val selected = allCanonicalGroupMembersSelected(members, normalSelectedIds)
+                                item(key = "group-${group.type}-${group.id}") {
+                                    CanonicalPlaylistPickerGroupRow(
+                                        group = group,
+                                        selected = selected,
+                                        loading = normalAddingAlbumId != null,
+                                        onOpen = {
+                                            if (group.type == CanonicalPlaylistBrowseType.ALBUMS) {
+                                                onNormalBrowseGroupChange(
+                                                    if (normalBrowseGroup?.id == group.id) null else group,
+                                                )
+                                            } else {
+                                                onAddNormalArtist(group)
+                                            }
+                                        },
+                                        onToggleGroup = {
+                                            if (group.type == CanonicalPlaylistBrowseType.ALBUMS)
+                                                onAddNormalAlbum(group)
+                                            else onAddNormalArtist(group)
+                                        },
                                     )
-                                    Text(group.title, modifier = Modifier.weight(1f),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Icon(Icons.Rounded.ChevronRight, contentDescription = null)
+                                    PickerRowDivider()
+                                }
+                                if (group.type == CanonicalPlaylistBrowseType.ALBUMS &&
+                                    normalBrowseGroup?.id == group.id) {
+                                    items(normalRows, key = { "member-${group.id}-${it.id}" }) { row ->
+                                        Box(Modifier.padding(start = PAGE_GUTTER)) {
+                                            NormalPlaylistTrackPickerRow(
+                                                row, row.id in normalSelectedIds,
+                                                onToggleNormalTrack,
+                                            )
+                                        }
+                                    }
+                                    if (normalRows.isEmpty() && !normalLoading) item {
+                                        Text("Nenhuma faixa disponível neste álbum.",
+                                            style = MaterialTheme.typography.bodyMedium)
+                                    }
                                 }
                             }
-                        }
-                        if (normalRows.size >= 200) item {
-                            Text("Exibindo até 200 resultados. Refine a busca para encontrar outras músicas.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        if (normalRows.isEmpty() && !normalLoading &&
-                            (normalBrowseType == CanonicalPlaylistBrowseType.TRACKS ||
-                                normalBrowseGroup != null)) item {
-                            Text("Nenhuma música disponível para esta pesquisa.",
-                                style = MaterialTheme.typography.bodyMedium)
-                        }
-                        items(normalRows, key = { it.id }) { row ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable { onToggleNormalTrack(row.id) }
-                                    .padding(vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                SmartPlaylistPreviewArtwork(row = row, modifier = Modifier.size(48.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(row.title, style = MaterialTheme.typography.titleMedium,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(row.artist, style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                                if (row.id in normalSelectedIds) {
-                                    Icon(Icons.Rounded.Check, contentDescription = "Selecionada",
-                                        tint = MaterialTheme.colorScheme.primary)
-                                } else {
-                                    Icon(Icons.Rounded.Add, contentDescription = "Adicionar música",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
+                        } else {
+                            if (normalRows.size >= 200) item {
+                                Text("Exibindo até 200 resultados. Refine a busca para encontrar outras músicas.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            if (normalRows.isEmpty() && !normalLoading) item {
+                                Text("Nenhuma música disponível para esta pesquisa.",
+                                    style = MaterialTheme.typography.bodyMedium)
+                            }
+                            items(normalRows, key = { it.id }) { row ->
+                                NormalPlaylistTrackPickerRow(
+                                    row, row.id in normalSelectedIds, onToggleNormalTrack,
+                                )
+                                PickerRowDivider()
                             }
                         }
                     }
@@ -720,7 +819,7 @@ internal fun SmartPlaylistV2WizardUi(
                                     page = WizardStep.GROUP
                                 },
                             ) {
-                                Text("${smartRuleLeafCount(child)} condição(ões)",
+                                Text(smartConditionCountLabel(smartRuleLeafCount(child)),
                                     style = MaterialTheme.typography.labelMedium)
                             }
                         }
@@ -738,12 +837,11 @@ internal fun SmartPlaylistV2WizardUi(
                                 },
                             )
                         }
-                        item {
+                        if (!filterMode) item {
                             WizardCard("Limite e ordenação",
                                 "Aplicados depois de avaliar todas as condições") {
-                                PlaylistWizardSelectionRow(
+                                PlaylistWizardSecondaryAction(
                                     label = "Ordenar: " + sortUiLabel(sort),
-                                    selected = false,
                                     onClick = { picker = "sort" },
                                 )
                                 PlaylistWizardTextEntry(
@@ -752,6 +850,7 @@ internal fun SmartPlaylistV2WizardUi(
                                     label = "Máximo de músicas",
                                     hint = "De 1 a 10.000",
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    emphasized = true,
                                 )
                                 if (sort == SmartPlaylistV2Sort.STABLE_RANDOM ||
                                     sort == SmartPlaylistV2Sort.STABLE_RANDOM_ALBUMS) {
@@ -760,6 +859,7 @@ internal fun SmartPlaylistV2WizardUi(
                                         onValueChange = onSeedChange,
                                         label = "Semente aleatória",
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        emphasized = true,
                                     )
                                 }
                             }
@@ -794,9 +894,10 @@ internal fun SmartPlaylistV2WizardUi(
                                         horizontalArrangement = Arrangement.End,
                                     ) {
                                         Box {
-                                            TextButton(onClick = { actionsOpen = true }) {
-                                                Text("Opções")
-                                            }
+                                            PlaylistWizardCompactAction(
+                                                label = "Opções",
+                                                onClick = { actionsOpen = true },
+                                            )
                                             androidx.compose.material3.DropdownMenu(
                                                 expanded = actionsOpen,
                                                 onDismissRequest = { actionsOpen = false },
@@ -864,14 +965,18 @@ internal fun SmartPlaylistV2WizardUi(
                                 )
                             }
                             if (savedDefinitions.isNotEmpty()) item {
-                                TextButton(onClick = { picker = "reference" }) {
-                                    Text("+ Usar playlist salva como condição")
-                                }
+                                PlaylistWizardSecondaryAction(
+                                    label = "Usar playlist salva como condição",
+                                    onClick = { picker = "reference" },
+                                )
                             }
                             if (selected is SmartPlaylistRule.Not) item {
-                                TextButton(onClick = {
-                                    onRuleChange(smartRuleReplaceAt(rule, selectedPath, selected.child))
-                                }) { Text("Retirar NÃO deste grupo") }
+                                PlaylistWizardSecondaryAction(
+                                    label = "Retirar NÃO deste grupo",
+                                    onClick = {
+                                        onRuleChange(smartRuleReplaceAt(rule, selectedPath, selected.child))
+                                    },
+                                )
                             }
                         } else if (selected != null) {
                             item {
@@ -890,14 +995,18 @@ internal fun SmartPlaylistV2WizardUi(
                                 )
                             }
                             if (selected is SmartPlaylistRule.Not) item {
-                                TextButton(onClick = {
-                                    onRuleChange(smartRuleReplaceAt(rule, selectedPath, selected.child))
-                                }) { Text("Remover negação") }
+                                PlaylistWizardSecondaryAction(
+                                    label = "Remover negação",
+                                    onClick = {
+                                        onRuleChange(smartRuleReplaceAt(rule, selectedPath, selected.child))
+                                    },
+                                )
                             }
                             if (core is SmartPlaylistRule.Reference) item {
-                                TextButton(onClick = { picker = "replaceReference" }) {
-                                    Text("Trocar playlist referenciada")
-                                }
+                                PlaylistWizardSecondaryAction(
+                                    label = "Trocar playlist referenciada",
+                                    onClick = { picker = "replaceReference" },
+                                )
                             }
                         }
                     }
@@ -955,23 +1064,30 @@ internal fun SmartPlaylistV2WizardUi(
                         }
                         if (matches.isEmpty()) item { Text("Nenhuma condição encontrada.") }
                         if (selectedCategory.id == "library") item {
-                            Text("Pasta de origem, disponibilidade offline e caminho de arquivo " +
-                                "ainda não possuem o vínculo autorizado exigido pelo motor. " +
-                                "Não serão oferecidos como regras funcionais.",
+                            Text("Filtros de pasta e caminho consultam somente arquivos locais " +
+                                "com localização comprovada. Disponibilidade offline de fontes remotas " +
+                                "ainda requer evidência independente.",
                                 style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     WizardStep.EDITOR -> {
                         item {
                             WizardCard("Condição", smartConditionLabel(draft.field)) {
-                                PlaylistWizardSelectionRow(
-                                    label = operatorUiLabel(draft.operator),
-                                    selected = false,
+                                PlaylistWizardSecondaryAction(
+                                    label = "Comparação: " + operatorUiLabel(draft.operator),
                                     onClick = { picker = "operator" },
                                 )
                                 val presence = draft.operator == SmartPlaylistRuleOperator.IS_PRESENT ||
                                     draft.operator == SmartPlaylistRuleOperator.IS_MISSING
-                                if (!presence) {
+                                if (presence) {
+                                    Text(
+                                        "Não precisa digitar um valor: verifica se o campo “" +
+                                            smartConditionLabel(draft.field) +
+                                            "” tem uma informação registrada.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                } else {
                                     if (draft.field == SmartPlaylistRuleField.SOURCE_KIND) {
                                         PlaylistWizardSegmented(
                                             first = "Dispositivo",
@@ -991,7 +1107,24 @@ internal fun SmartPlaylistV2WizardUi(
                                             onValueChange = {
                                                 draft = draft.copy(textValue = it, value = null)
                                             },
-                                            label = "Texto a comparar",
+                                            label = when (draft.field) {
+                                                SmartPlaylistRuleField.RELEASE_GROUP_TYPE ->
+                                                    "Tipo (ex.: Single, Album, EP)"
+                                                SmartPlaylistRuleField.LOCAL_GENRE ->
+                                                    "Gênero da música (ex.: K-pop)"
+                                                SmartPlaylistRuleField.ARTIST_COUNTRY ->
+                                                    "Código do país (ex.: BR, KR)"
+                                                SmartPlaylistRuleField.LOCAL_FOLDER ->
+                                                    "Pasta (ex.: Music/Kpop)"
+                                                SmartPlaylistRuleField.LOCAL_FILE_PATH ->
+                                                    "Caminho do arquivo"
+                                                SmartPlaylistRuleField.LOCAL_FILE_EXTENSION ->
+                                                    "Extensão (ex.: FLAC)"
+                                                SmartPlaylistRuleField.RELEASE_TITLE ->
+                                                    "Nome do álbum"
+                                                else -> "Texto a comparar"
+                                            },
+                                            emphasized = true,
                                         )
                                     } else {
                                         var numericText by remember(draft.field, editingPath) {
@@ -1009,9 +1142,24 @@ internal fun SmartPlaylistV2WizardUi(
                                                         it * 1000.0 else it
                                                 }, textValue = null)
                                             },
-                                            label = if (draft.field == SmartPlaylistRuleField.DURATION_MS)
-                                                "Duração (segundos)" else "Valor numérico",
+                                            label = when (draft.field) {
+                                                SmartPlaylistRuleField.DURATION_MS -> "Duração (segundos)"
+                                                SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR ->
+                                                    "Ano do primeiro lançamento (ex.: 2018)"
+                                                SmartPlaylistRuleField.RELEASE_YEAR ->
+                                                    "Ano desta edição (ex.: 2024)"
+                                                SmartPlaylistRuleField.DISC_NUMBER ->
+                                                    "Número do disco (ex.: 2)"
+                                                SmartPlaylistRuleField.TOTAL_SKIPS ->
+                                                    "Quantidade total de pulos"
+                                                SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP ->
+                                                    "Dias desde a última pulada"
+                                                SmartPlaylistRuleField.LOCAL_BITRATE_KBPS ->
+                                                    "Bitrate (kbps)"
+                                                else -> "Valor numérico"
+                                            },
                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                            emphasized = true,
                                         )
                                     }
                                 }
@@ -1020,45 +1168,40 @@ internal fun SmartPlaylistV2WizardUi(
                         item {
                             WizardCard("Inverter condição",
                                 "Exclui músicas que correspondem; dados desconhecidos continuam excluídos da prévia.") {
-                                PlaylistWizardSelectionRow(
-                                    label = if (negated) "Negação ativa" else "Inverter resultado",
-                                    selected = negated,
+                                PlaylistWizardSecondaryAction(
+                                    label = if (negated) "Inverter resultado · Ativado"
+                                        else "Inverter resultado · Desativado",
                                     onClick = { negated = !negated },
                                 )
                             }
                         }
                     }
                     WizardStep.REVIEW -> {
+                        item {
+                            WizardReviewHeader(
+                                name = name.trim(),
+                                description = if (normalMode)
+                                    "Playlist normal · ${normalSelectedIds.size} músicas"
+                                else "Playlist inteligente · ${smartRuleLeafCount(rule)} condições",
+                                cover = if (normalMode) normalSelectedRows.firstOrNull()
+                                    else preview?.firstOrNull(),
+                                customCoverUri = coverUri,
+                            )
+                        }
+                        if (description.isNotBlank()) {
+                            item(key = "playlist-review-description") {
+                                AboutSection(
+                                    title = "Sobre a playlist",
+                                    text = description,
+                                    palette = themeArtworkPalette(),
+                                    horizontalPadding = 0.dp,
+                                )
+                            }
+                        }
                         if (normalMode) {
                             item {
-                                WizardCard(name.trim().ifEmpty { "Sem nome" },
-                                    "Playlist normal · ${normalSelectedIds.size} músicas") {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    ) {
-                                        val cover = normalSelectedRows.firstOrNull()
-                                        if (cover != null) {
-                                            SmartPlaylistPreviewArtwork(
-                                                row = cover,
-                                                modifier = Modifier.size(72.dp),
-                                            )
-                                        } else {
-                                            PlaylistWizardArtworkPlaceholder(72.dp)
-                                        }
-                                        Text(
-                                            "Músicas na ordem em que foram adicionadas.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                    }
-                                }
-                            }
-                            item {
                                 WizardCard(
-                                    "Fonte da playlist",
+                                    "Fontes do catálogo",
                                     when (normalSourceProviderKey) {
                                         null -> "Todas as fontes disponíveis"
                                         "local-mediastore" -> "Música local"
@@ -1072,47 +1215,23 @@ internal fun SmartPlaylistV2WizardUi(
                             if (normalSelectedIds.isEmpty()) item {
                                 WizardCard("Sem músicas", "Você pode salvar uma playlist vazia e adicionar músicas depois.")
                             }
-                            items(normalSelectedRows.take(50), key = { it.id }) { row ->
-                                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    SmartPlaylistPreviewArtwork(row = row, modifier = Modifier.size(48.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(row.title, style = MaterialTheme.typography.titleMedium,
-                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text(row.artist, style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                }
-                            }
-                            if (normalSelectedIds.size > 50) item {
-                                Text("Exibindo as primeiras 50 músicas selecionadas.",
-                                    style = MaterialTheme.typography.bodySmall)
+                            items(normalSelectedRows, key = { it.id }) { row ->
+                                LibraryRow(
+                                    title = row.title,
+                                    subtitle = row.artist,
+                                    imageUrl = null,
+                                    horizontalPadding = 0.dp,
+                                    artwork = {
+                                        SmartPlaylistPreviewArtwork(
+                                            row = row, modifier = Modifier.fillMaxSize(),
+                                        )
+                                    },
+                                )
                             }
                         } else {
                         item {
-                            WizardCard(name.trim().ifEmpty { "Sem nome" },
-                                "Playlist inteligente · ${smartRuleLeafCount(rule)} condições") {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(top = 3.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    PlaylistWizardArtworkPlaceholder(60.dp)
-                                    Text(
-                                        "A seleção será atualizada conforme as regras " +
-                                            "e as fontes disponíveis.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                }
-                            }
-                        }
-                        item {
                             WizardCard(
-                                "Fonte da playlist",
+                                "Fontes do catálogo",
                                 when (smartRuleGlobalSource(rule)) {
                                     "local" -> "Somente música local"
                                     "opensubsonic" -> "Somente servidor atual (Navidrome)"
@@ -1150,40 +1269,42 @@ internal fun SmartPlaylistV2WizardUi(
                                 if (onPreviewAction != null && currentPreviewQuery != null &&
                                     preview != null && preview.isNotEmpty() &&
                                     preview.size <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        TextButton(onClick = {
-                                            onPreviewAction(currentPreviewQuery, editingId,
-                                                CanonicalCollectionIntent.PLAY_NOW)
-                                        }) { Text(stringResource(Res.string.smart_collection_batch_play)) }
-                                        TextButton(onClick = {
-                                            onPreviewAction(currentPreviewQuery, editingId,
-                                                CanonicalCollectionIntent.ADD_TO_QUEUE)
-                                        }) { Text(stringResource(Res.string.smart_collection_batch_queue)) }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        PlaylistWizardCompactAction(
+                                            label = stringResource(Res.string.smart_collection_batch_play),
+                                            modifier = Modifier.weight(1f),
+                                            onClick = {
+                                                onPreviewAction(currentPreviewQuery, editingId,
+                                                    CanonicalCollectionIntent.PLAY_NOW)
+                                            },
+                                        )
+                                        PlaylistWizardCompactAction(
+                                            label = stringResource(Res.string.smart_collection_batch_queue),
+                                            modifier = Modifier.weight(1f),
+                                            onClick = {
+                                                onPreviewAction(currentPreviewQuery, editingId,
+                                                    CanonicalCollectionIntent.ADD_TO_QUEUE)
+                                            },
+                                        )
                                     }
                                 }
                             }
                         }
                         items(preview.orEmpty().take(24), key = { it.id }) { row ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                SmartPlaylistPreviewArtwork(
-                                    row = row,
-                                    modifier = Modifier.size(48.dp),
-                                )
-                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                    Text(row.title,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis)
-                                    Text(row.artist, style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis)
-                                }
-                            }
+                            LibraryRow(
+                                title = row.title,
+                                subtitle = row.artist,
+                                imageUrl = null,
+                                horizontalPadding = 0.dp,
+                                artwork = {
+                                    SmartPlaylistPreviewArtwork(
+                                        row = row, modifier = Modifier.fillMaxSize(),
+                                    )
+                                },
+                            )
                         }
                         if ((preview?.size ?: 0) > 24) item {
                             Text("Exibindo as primeiras 24 músicas da prévia.",
@@ -1191,6 +1312,10 @@ internal fun SmartPlaylistV2WizardUi(
                         }
                         }
                     }
+                }
+                if (filterNotice != null) item {
+                    Text(filterNotice, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium)
                 }
                 if (error != null) item {
                     Text(error, color = MaterialTheme.colorScheme.error,
@@ -1203,21 +1328,56 @@ internal fun SmartPlaylistV2WizardUi(
                     .padding(start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 12.dp, top = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
+                if (page == WizardStep.SONGS) {
+                    WizardCard("Selecionadas: ${normalSelectedIds.size}",
+                        if (normalAddingAlbumId != null) "Adicionando músicas do álbum…" else "")
+                }
                 when (page) {
+                    WizardStep.EDIT -> {
+                        PlaylistWizardPrimaryAction(
+                            label = if (filterMode) "Salvar filtro" else "Salvar alterações",
+                            enabled = canContinue && !loading &&
+                                (normalMode || canReview) &&
+                                !normalLoading && normalAddingAlbumId == null,
+                            onClick = if (filterMode) onSaveFilter
+                                else if (normalMode) onSaveNormal else onSave,
+                        )
+                        if (!normalMode && !filterMode) {
+                            PlaylistWizardSecondaryAction(
+                                label = if (hasExportedFilter)
+                                    "Atualizar filtro reutilizável" else
+                                    "Salvar como filtro reutilizável",
+                                enabled = canReview && !loading,
+                                onClick = onSaveFilter,
+                            )
+                        }
+                        if (!filterMode &&
+                            (editingNormalId != null || editingId != null)
+                        ) {
+                            PlaylistWizardSecondaryAction(
+                                label = "Excluir playlist",
+                                enabled = !loading,
+                                onClick = {
+                                    if (normalMode) confirmDeleteNormal = true
+                                    else confirmDeleteSmart = true
+                                },
+                            )
+                        }
+                    }
                     WizardStep.IDENTITY -> PlaylistWizardPrimaryAction(
                         label = "Continuar",
                         enabled = canContinue,
                         onClick = { page = if (normalMode) WizardStep.SONGS else WizardStep.RULES },
                     )
                     WizardStep.SONGS -> PlaylistWizardPrimaryAction(
-                        label = "Revisar playlist",
-                        enabled = canContinue && !normalLoading,
-                        onClick = { page = WizardStep.REVIEW },
+                        label = if (isEditing) "Concluir seleção" else "Revisar playlist",
+                        enabled = canContinue && !normalLoading && normalAddingAlbumId == null,
+                        onClick = { page = if (isEditing) WizardStep.EDIT else WizardStep.REVIEW },
                     )
                     WizardStep.RULES -> PlaylistWizardPrimaryAction(
-                        label = "Revisar playlist",
+                        label = if (isEditing) "Concluir regras" else "Revisar playlist",
                         enabled = canReview,
-                        onClick = { page = WizardStep.REVIEW },
+                        onClick = { page = if (isEditing) WizardStep.EDIT else WizardStep.REVIEW },
                     )
                     WizardStep.GROUP -> PlaylistWizardPrimaryAction(
                         label = "Salvar grupo",
@@ -1260,7 +1420,8 @@ internal fun SmartPlaylistV2WizardUi(
                             label = if (editingId != null || editingNormalId != null)
                                 "Salvar alterações" else "Criar playlist",
                             onClick = if (normalMode) onSaveNormal else onSave,
-                            enabled = if (normalMode) canContinue && !loading && !normalLoading
+                            enabled = if (normalMode) canContinue && !loading && !normalLoading &&
+                                normalAddingAlbumId == null
                                 else canReview && !loading &&
                                     currentPreviewQuery != null && preview != null,
                         )
@@ -1269,18 +1430,12 @@ internal fun SmartPlaylistV2WizardUi(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        if (normalMode && editingNormalId != null) {
-                            TextButton(
-                                onClick = { confirmDeleteNormal = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !loading,
-                            ) { Text("Excluir playlist", color = MaterialTheme.colorScheme.error) }
-                        }
-                        if (!normalMode) TextButton(onClick = onSaveFilter, enabled = canReview && !loading,
-                            modifier = Modifier.fillMaxWidth()) {
-                            Text(if (editingFilterId == null) "Salvar como filtro reutilizável"
-                                else "Atualizar filtro reutilizável")
-                        }
+                        if (!normalMode) PlaylistWizardSecondaryAction(
+                            label = if (editingFilterId != null || hasExportedFilter)
+                                "Atualizar filtro reutilizável" else "Salvar como filtro reutilizável",
+                            enabled = canReview && !loading,
+                            onClick = onSaveFilter,
+                        )
                     }
                     WizardStep.CATEGORIES, WizardStep.FIELDS -> Unit
                 }
@@ -1288,41 +1443,82 @@ internal fun SmartPlaylistV2WizardUi(
         }
     }
 
+    // The full-screen editor captures back itself; an open native alert must
+    // dismiss before that back action attempts to leave the draft.
+    BackHandler(enabled = confirmDiscard || confirmDeleteNormal || confirmDeleteSmart) {
+        confirmDiscard = false
+        confirmDeleteNormal = false
+        confirmDeleteSmart = false
+    }
     if (confirmDiscard) {
-        AlertDialog(
-            onDismissRequest = { confirmDiscard = false },
-            title = { Text("Descartar alterações?") },
-            text = { Text("O rascunho desta playlist não será salvo.") },
-            confirmButton = {
-                TextButton(onClick = { confirmDiscard = false; onBack() }) {
-                    Text("Descartar")
-                }
+        ConfirmationAlert(
+            hazeState = null, // Wizard lives in a separate full-screen Dialog.
+            title = "Descartar alterações?",
+            description = "O rascunho desta playlist não será salvo.",
+            confirmLabel = "Descartar",
+            dismissLabel = "Continuar editando",
+            destructive = true,
+            onConfirm = {
+                confirmDiscard = false
+                onBack()
             },
-            dismissButton = {
-                TextButton(onClick = { confirmDiscard = false }) {
-                    Text("Continuar editando")
-                }
-            },
+            onDismiss = { confirmDiscard = false },
         )
     }
 
     if (confirmDeleteNormal) {
-        AlertDialog(
-            onDismissRequest = { confirmDeleteNormal = false },
-            title = { Text("Excluir playlist normal?") },
-            text = { Text("A lista de músicas selecionadas será removida do dispositivo. As músicas originais não serão apagadas.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmDeleteNormal = false
-                    onDeleteNormal()
-                }) { Text("Excluir", color = MaterialTheme.colorScheme.error) }
+        ConfirmationAlert(
+            hazeState = null,
+            title = "Excluir playlist normal?",
+            description = "A lista de músicas selecionadas será removida do dispositivo. As músicas originais não serão apagadas.",
+            confirmLabel = "Excluir",
+            destructive = true,
+            onConfirm = {
+                confirmDeleteNormal = false
+                onDeleteNormal()
             },
-            dismissButton = {
-                TextButton(onClick = { confirmDeleteNormal = false }) { Text("Cancelar") }
-            },
+            onDismiss = { confirmDeleteNormal = false },
         )
     }
 
+    if (confirmDeleteSmart) {
+        ConfirmationAlert(
+            hazeState = null,
+            title = "Excluir playlist inteligente?",
+            description = "A playlist salva será removida do dispositivo. Suas músicas originais não serão apagadas. Playlists que dependem dela podem impedir a exclusão.",
+            confirmLabel = "Excluir",
+            destructive = true,
+            onConfirm = {
+                confirmDeleteSmart = false
+                onDeleteSmart()
+            },
+            onDismiss = { confirmDeleteSmart = false },
+        )
+    }
+    if (picker == "source") {
+        val normalOptions: List<Pair<String?, String>> =
+            listOf(null to "Todas as fontes disponíveis") +
+                availableSourceKeys.distinct().mapIndexed { index, provider ->
+                    provider to if (provider == "local-mediastore") "Música local"
+                        else if (availableSourceKeys.count { it.startsWith("opensubsonic:") } > 1)
+                            "Navidrome ${index + 1}"
+                        else "Navidrome"
+                }
+        val smartOptions: List<Pair<String?, String>> =
+            listOf(null to "Todas as fontes disponíveis", "local" to "Música local") +
+                if (availableSourceKeys.any { it.startsWith("opensubsonic:") })
+                    listOf("opensubsonic" to "Navidrome") else emptyList()
+        WizardChoiceDialog(
+            title = "Origem das músicas",
+            options = if (normalMode) normalOptions else smartOptions,
+            label = { it.second },
+            onChosen = { (source, _) ->
+                if (normalMode) onNormalSourceChange(source)
+                else onSmartSourceChange(source)
+            },
+            onClose = { picker = null },
+        )
+    }
     if (picker == "sort") {
         WizardChoiceDialog("Ordenar músicas", SmartPlaylistV2Sort.entries, ::sortUiLabel,
             onChosen = onSortChange, onClose = { picker = null })
@@ -1361,5 +1557,141 @@ internal fun SmartPlaylistV2WizardUi(
                         SmartPlaylistRule.Reference(saved.id)))
                 }
             }, onClose = { picker = null })
+    }
+}
+
+/** The same cached Apple Music artist photograph as DetailScreen, with art fallback. */
+@Composable
+private fun PlaylistWizardArtistArtwork(group: CanonicalPlaylistBrowseGroup) {
+    val art by produceState(
+        initialValue = AppleArtistArtRepository.cached(group.title),
+        key1 = group.title,
+    ) { value = AppleArtistArtRepository.artFor(group.title) }
+    if (art != null) {
+        AsyncImage(
+            model = art?.heroUrl, contentDescription = null,
+            contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
+        )
+    } else if (group.artworkRow != null) {
+        SmartPlaylistPreviewArtwork(group.artworkRow, Modifier.fillMaxSize())
+    } else PlaylistWizardArtworkPlaceholder(52.dp)
+}
+
+/** A native SongRow-size divider, indented past the 52dp artwork. */
+@Composable
+private fun PickerRowDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 66.dp),
+        thickness = 0.5.dp,
+        color = MaterialTheme.colorScheme.outline,
+    )
+}
+
+/** Reuses SongRow's native frame, thumbnail width, baseline and selection glyph. */
+@Composable
+private fun CanonicalPlaylistPickerGroupRow(
+    group: CanonicalPlaylistBrowseGroup,
+    selected: Boolean,
+    loading: Boolean,
+    onOpen: () -> Unit,
+    onToggleGroup: () -> Unit,
+) {
+    val album = group.type == CanonicalPlaylistBrowseType.ALBUMS
+    NativeDetailTrackRowFrame(
+        onClick = onOpen,
+        modifier = Modifier.testTag("canonical-${if (album) "album" else "artist"}-picker-${group.id}"),
+        horizontalInset = 0.dp,
+        background = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+            else Color.Transparent,
+    ) {
+        val artworkShape = if (album) RoundedCornerShape(8.dp) else CircleShape
+        Box(Modifier.size(52.dp).clip(artworkShape)) {
+            if (!album) PlaylistWizardArtistArtwork(group)
+            else if (group.artworkRow != null) {
+                SmartPlaylistPreviewArtwork(group.artworkRow, Modifier.fillMaxSize())
+            } else PlaylistWizardArtworkPlaceholder(52.dp)
+        }
+        Spacer(Modifier.width(14.dp))
+        NativeTrackRowText(
+            title = {
+                Text(
+                    group.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+            subtitle = {
+                Text(
+                    if (album) group.artworkRow?.artist.orEmpty() else "Artista",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+        )
+        IconButton(onClick = onToggleGroup, enabled = !loading) {
+            Icon(
+                if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline,
+                contentDescription = when {
+                    album && selected -> "Remover álbum selecionado"
+                    album -> "Adicionar álbum inteiro"
+                    selected -> "Remover artista selecionado"
+                    else -> "Adicionar artista inteiro"
+                },
+                tint = if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun NormalPlaylistTrackPickerRow(
+    row: V2DisplayRow,
+    selected: Boolean,
+    onToggle: (String) -> Unit,
+) {
+    NativeDetailTrackRowFrame(
+        onClick = { onToggle(row.id) },
+        modifier = Modifier.testTag("canonical-track-picker-${row.id}"),
+        horizontalInset = 0.dp,
+        background = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+            else Color.Transparent,
+    ) {
+        Box(Modifier.size(52.dp).clip(RoundedCornerShape(8.dp))) {
+            SmartPlaylistPreviewArtwork(row, Modifier.fillMaxSize())
+        }
+        Spacer(Modifier.width(14.dp))
+        NativeTrackRowText(
+            title = {
+                Text(
+                    row.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+            subtitle = {
+                Text(
+                    row.artist,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+        )
+        IconButton(onClick = { onToggle(row.id) }) {
+            Icon(
+                if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline,
+                contentDescription = if (selected) "Remover música" else "Adicionar música",
+                tint = if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }

@@ -39,6 +39,64 @@ class CanonicalNormalPlaylistPickerTest {
             filterCanonicalPlaylistBrowseGroups(listOf(album, artist), "NEW"))
     }
 
+    @Test fun artistDisplayFallbackIsOnlyABrowseKeyNotARecordingId() {
+        assertEquals(
+            "browse-display-artist:NewJeans",
+            playlistDisplayArtistGroupId("NewJeans"),
+        )
+        assertEquals(
+            "browse-display-artist:aespa, G-Dragon",
+            playlistDisplayArtistGroupId("aespa, G-Dragon"),
+        )
+    }
+
+    @Test fun canonicalPickerIncludesLocalSourceWithoutConfiguredRemoteAccounts() {
+        assertEquals(listOf("local-mediastore"),
+            canonicalPlaylistProviderKeys(emptyList(), null))
+        assertEquals(listOf("local-mediastore", "opensubsonic:server-a"),
+            canonicalPlaylistProviderKeys(setOf("opensubsonic:server-a"), null))
+        assertEquals(listOf("local-mediastore"),
+            canonicalPlaylistProviderKeys(listOf("opensubsonic:server-a"), "local-mediastore"))
+        assertEquals(listOf("opensubsonic:server-a"),
+            canonicalPlaylistProviderKeys(listOf("opensubsonic:server-a"), "opensubsonic:server-a"))
+        assertEquals(listOf("local-mediastore", "opensubsonic:server-a"),
+            canonicalPlaylistProviderKeys(listOf("opensubsonic:server-a"), null))
+        assertEquals(emptyList<String>(),
+            canonicalPlaylistProviderKeys(emptyList(), "opensubsonic:offline"))
+    }
+
+    @Test fun localArtistCategoryOpensExistingArtistDetailScreenInsteadOfOther() {
+        assertEquals(
+            com.music.bitchord.data.model.BrowseType.ARTIST,
+            com.music.bitchord.data.LocalGroups.typeOf(
+                com.music.bitchord.data.LocalGroups.artistPageId("local:all", "ILLIT"),
+            ),
+        )
+    }
+
+    @Test fun albumSelectionIsCompleteOnlyWhenEveryCurrentMemberIsSelected() {
+        val album = listOf("rec-a", "rec-b", "rec-c")
+        assertEquals(false, allCanonicalGroupMembersSelected(album, listOf("rec-a")))
+        assertEquals(true, allCanonicalGroupMembersSelected(album, album))
+        // An incomplete album selection completes the whole album, not only
+        // the missing track: already selected tracks remain members.
+        assertEquals(album,
+            toggleCanonicalGroupMembers(album, listOf("rec-a", "rec-b")))
+        assertEquals(emptyList<String>(), toggleCanonicalGroupMembers(album, album))
+        assertEquals(listOf("rec-external", "rec-a", "rec-b", "rec-c"),
+            toggleCanonicalGroupMembers(album, listOf("rec-external")))
+    }
+
+    @Test fun localOnlySourceDefaultsToLocalButNeverOverridesMultisourceOrEditing() {
+        assertEquals("local-mediastore", defaultCanonicalNormalPlaylistSource(
+            listOf("local-mediastore"),
+        ))
+        assertEquals(null, defaultCanonicalNormalPlaylistSource(
+            listOf("local-mediastore", "opensubsonic:server-a"),
+        ))
+        assertEquals(null, defaultCanonicalNormalPlaylistSource(emptyList()))
+    }
+
     @Test fun noDuplicateRecordingIsIntroducedByRepeatedSelection() {
         val first = toggleCanonicalStaticMember(emptyList(), "rec-a")
         val second = toggleCanonicalStaticMember(first, "rec-a")

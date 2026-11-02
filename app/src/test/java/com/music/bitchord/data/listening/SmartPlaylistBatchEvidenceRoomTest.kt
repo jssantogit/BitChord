@@ -22,6 +22,135 @@ import org.robolectric.annotation.ConscryptMode
 @Config(application = Application::class, sdk = [35])
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class SmartPlaylistBatchEvidenceRoomTest {
+    @Test fun musicBrainzDiscAndGroupTypeAreBoundToOfficialEdition() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:linked", "Song", "Artist", 180_000L))
+            dao.upsertRecording(RecordingEntity("rec:missing", "Song", "Artist", 180_000L))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "rel:linked", "Official Single", "Artist", null))
+            dao.upsertRelease(com.music.bitchord.data.catalog.ReleaseEntity(
+                "rel:missing", "Same Name", "Artist", null))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "rel:linked", "rec:linked", 2))
+            dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
+                "rel:missing", "rec:missing", 1))
+            dao.upsertCatalogReleaseGroup(
+                com.music.bitchord.data.catalog.CatalogReleaseGroupEntity(
+                    "grp:linked", "Official Single", "Artist", "Single", "2024-01-01"))
+            dao.upsertCatalogReleaseGroupEdition(
+                com.music.bitchord.data.catalog.CatalogReleaseGroupEditionEntity(
+                    "grp:linked", "rel:linked"))
+            dao.upsertCatalogMusicBrainzTrack(
+                com.music.bitchord.data.catalog.CatalogMusicBrainzTrackEntity(
+                    "track:linked", "rel:linked", "rec:linked", 3, 2, "Song", 180_000L))
+            val rows = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            ).read(listOf("rec:linked", "rec:missing"),
+                setOf(SmartPlaylistRuleField.DISC_NUMBER,
+                    SmartPlaylistRuleField.RELEASE_GROUP_TYPE))
+            val linked = rows.single { it.recordingId == "rec:linked" }
+            assertEquals(listOf(3), linked.discNumbers)
+            assertTrue(!linked.discNumberEvidenceUnknown)
+            assertEquals(listOf("Single"), linked.releaseGroupTypes)
+            assertTrue(!linked.releaseGroupTypeEvidenceUnknown)
+            val missing = rows.single { it.recordingId == "rec:missing" }
+            assertTrue(missing.discNumbers.isEmpty())
+            assertTrue(missing.discNumberEvidenceUnknown)
+            assertTrue(missing.releaseGroupTypes.isEmpty())
+            assertTrue(missing.releaseGroupTypeEvidenceUnknown)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
+    @Test fun localAudioTagsAreVerifiedPerAssetAndNeverPromotedFromRemote() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:genre", "Song", "Artist", 123_000L))
+            dao.upsertMediaAsset(com.music.bitchord.data.catalog.MediaAssetEntity(
+                id = "asset:local", recordingId = "rec:genre",
+                provider = "local-mediastore", sourceKey = "local-1",
+                uri = "content://media/external/audio/media/1",
+                path = "/storage/emulated/0/Music/Song.flac",
+                dateAddedSeconds = null, dateModifiedSeconds = null, artworkUri = null,
+                localGenre = "Synthpop", localBitrateBps = 320_000L,
+            ))
+            dao.upsertMediaAsset(com.music.bitchord.data.catalog.MediaAssetEntity(
+                id = "asset:remote", recordingId = "rec:genre",
+                provider = "opensubsonic", sourceKey = "remote",
+                uri = "https://server.invalid/stream",
+                path = "/remote/irrelevant", dateAddedSeconds = null,
+                dateModifiedSeconds = null, artworkUri = null,
+                localGenre = "Should never appear", localBitrateBps = 1000L,
+            ))
+            val result = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            ).read(listOf("rec:genre"), setOf(
+                SmartPlaylistRuleField.LOCAL_GENRE, SmartPlaylistRuleField.LOCAL_BITRATE_KBPS,
+            )).single()
+            assertEquals(listOf("Synthpop"), result.localGenres)
+            assertTrue(result.localGenresComplete)
+            assertEquals(listOf(320.0), result.localBitratesKbps)
+            assertTrue(result.localBitrateEvidenceComplete)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
+    @Test fun localPathEvidenceOnlyReadsMediaStoreAndDoesNotPromoteMissingPaths() = runTest {
+        val context = RuntimeEnvironment.getApplication()
+        val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
+            .allowMainThreadQueries().build()
+        val listening = Room.inMemoryDatabaseBuilder(context, ListeningEventDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val dao = catalog.catalogDao()
+            dao.upsertRecording(RecordingEntity("rec:one", "Song", "Artist", 200_000L))
+            dao.upsertRecording(RecordingEntity("rec:missing", "Other", "Artist", 200_000L))
+            dao.upsertMediaAsset(com.music.bitchord.data.catalog.MediaAssetEntity(
+                "asset:local", "rec:one", "local-mediastore", "local-1",
+                "content://media/external/audio/media/1",
+                "/storage/emulated/0/Music/Rock/Song.FLAC", null, null, null,
+            ))
+            dao.upsertMediaAsset(com.music.bitchord.data.catalog.MediaAssetEntity(
+                "asset:remote", "rec:one", "opensubsonic", "remote-1",
+                "https://music.example/stream", "/remote/somewhere/not-real.mp3",
+                null, null, null,
+            ))
+            dao.upsertMediaAsset(com.music.bitchord.data.catalog.MediaAssetEntity(
+                "asset:unknown", "rec:missing", "local-mediastore", "local-2",
+                "content://media/external/audio/media/2", null, null, null, null,
+            ))
+            val rows = RoomSmartPlaylistBatchEvidenceReader(
+                dao, listening.listeningEventDao(), listening.recordingRatingDao(),
+            ).read(listOf("rec:one", "rec:missing"), setOf(
+                SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleField.LOCAL_FILE_PATH,
+            ))
+            val known = rows.single { it.recordingId == "rec:one" }
+            assertEquals(listOf("/storage/emulated/0/music/rock/song.flac"), known.localFilePaths)
+            assertTrue(known.localFilePathsComplete)
+            val missing = rows.single { it.recordingId == "rec:missing" }
+            assertTrue(missing.localFilePaths.isEmpty())
+            assertTrue(!missing.localFilePathsComplete)
+        } finally {
+            catalog.close()
+            listening.close()
+        }
+    }
+
     @Test fun realRoomBatchPreservesAudibleCompletionAndOneStarRating() = runTest {
         val context = RuntimeEnvironment.getApplication()
         val catalog = Room.inMemoryDatabaseBuilder(context, CanonicalCatalogDatabase::class.java)
@@ -244,9 +373,10 @@ class SmartPlaylistBatchEvidenceRoomTest {
         try {
             catalog.catalogDao().upsertRecording(RecordingEntity("rec:skip", "Skip", "Artist", 200_000L))
             var index = 0
+            var nowMs = 1_000_000L
             val playback = RoomListeningEventStore(
                 listening.listeningEventDao(),
-                clock = ListeningClock { 1_000_000L },
+                clock = ListeningClock { nowMs },
                 idGenerator = ListeningIdGenerator { "event-" + (++index) },
             )
             playback.recordPlaybackStarted(PlaybackStart(recordingId = "rec:skip"))
@@ -254,11 +384,13 @@ class SmartPlaylistBatchEvidenceRoomTest {
                 recordingId = "rec:skip", listenedDurationMs = 10_000L,
                 recordingDurationMs = 200_000L, endCause = PlaybackEndCause.NEXT,
             ))
+            nowMs = 2_000_000L
             playback.recordPlaybackStarted(PlaybackStart(recordingId = "rec:skip"))
             playback.recordPlaybackEnded(PlaybackEnd(
                 recordingId = "rec:skip", listenedDurationMs = 100_000L,
                 recordingDurationMs = 200_000L, endCause = PlaybackEndCause.MANUAL_CHANGE,
             ))
+            nowMs = 3_000_000L
             playback.recordPlaybackStarted(PlaybackStart(recordingId = "rec:skip"))
             playback.recordPlaybackEnded(PlaybackEnd(
                 recordingId = "rec:skip", listenedDurationMs = 10_000L,
@@ -269,6 +401,8 @@ class SmartPlaylistBatchEvidenceRoomTest {
             ).read(listOf("rec:skip")).single()
             assertEquals(1L, row.earlySkips)
             assertEquals(1L, row.lateSkips)
+            assertEquals(2L, row.earlySkips + row.lateSkips)
+            assertEquals(2_000_000L, row.lastSkippedAtEpochMs)
             assertEquals(0L, row.audibleCompletions)
         } finally {
             catalog.close()

@@ -25,6 +25,285 @@ class SmartPlaylistV2RuleEngineTest {
         value: Double? = null,
     ) = SmartPlaylistRule.Comparison(field, operator, value)
 
+    @Test fun musicBrainzArtistCountryUsesProvenCreditsNotArtistDisplay() {
+        val rows = listOf(
+            candidate("kr").copy(artistCountryCodes = listOf("KR"),
+                artistCountryEvidenceUnknown = false),
+            candidate("us").copy(artistCountryCodes = listOf("US"),
+                artistCountryEvidenceUnknown = false),
+            candidate("unknown").copy(artistDisplay = "Korean Star"),
+            candidate("partial").copy(artistCountryCodes = listOf("US"),
+                artistCountryEvidenceUnknown = true),
+        )
+        val country = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.ARTIST_COUNTRY,
+            SmartPlaylistRuleOperator.EQUAL, textValue = "KR",
+        )
+        assertEquals(listOf("kr"), planner.preview(rows, SmartPlaylistV2Query(country))
+            .map { it.recordingId })
+        assertEquals(listOf("us"), planner.preview(rows, SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(country))).map { it.recordingId })
+    }
+
+    @Test fun firstReleaseGroupYearDoesNotBorrowAnEditionDate() {
+        val rows = listOf(
+            candidate("first").copy(originalReleaseYears = listOf(2018),
+                originalReleaseYearEvidenceUnknown = false, releaseYears = listOf(2024)),
+            candidate("reissue").copy(originalReleaseYears = listOf(2017),
+                originalReleaseYearEvidenceUnknown = false, releaseYears = listOf(2024)),
+            candidate("unknown").copy(releaseYears = listOf(2018)),
+        )
+        val originalYear = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR,
+            SmartPlaylistRuleOperator.EQUAL, value = 2018.0,
+        )
+        assertEquals(listOf("first"), planner.preview(rows, SmartPlaylistV2Query(originalYear))
+            .map { it.recordingId })
+        assertEquals(listOf("reissue"), planner.preview(rows, SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(originalYear))).map { it.recordingId })
+    }
+
+    @Test fun discNumberRequiresMusicBrainzMediumAndProtectsUnknownUnderNot() {
+        val rows = listOf(
+            candidate("d2").copy(discNumbers = listOf(2),
+                discNumberEvidenceUnknown = false, trackNumbers = listOf(1)),
+            candidate("d1").copy(discNumbers = listOf(1),
+                discNumberEvidenceUnknown = false),
+            candidate("unknown"),
+            candidate("partial").copy(discNumbers = listOf(2),
+                discNumberEvidenceUnknown = true),
+        )
+        val disc2 = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.DISC_NUMBER,
+            SmartPlaylistRuleOperator.EQUAL, value = 2.0,
+        )
+        assertEquals(listOf("d2", "partial"),
+            planner.preview(rows, SmartPlaylistV2Query(disc2)).map { it.recordingId })
+        assertEquals(listOf("d1"), planner.preview(rows, SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(disc2),
+        )).map { it.recordingId })
+        for (bad in listOf(0.0, -1.0, 1.5, 100_000.0)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                SmartPlaylistV2Query(disc2.copy(value = bad))
+            }
+        }
+    }
+
+    @Test fun releaseGroupSingleFilterNeverBorrowsUnknownTypes() {
+        val rows = listOf(
+            candidate("single").copy(releaseGroupTypes = listOf("Single"),
+                releaseGroupTypeEvidenceUnknown = false),
+            candidate("album").copy(releaseGroupTypes = listOf("Album"),
+                releaseGroupTypeEvidenceUnknown = false),
+            candidate("unknown"),
+            candidate("partial").copy(releaseGroupTypes = listOf("Album"),
+                releaseGroupTypeEvidenceUnknown = true),
+        )
+        val isSingle = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.RELEASE_GROUP_TYPE,
+            SmartPlaylistRuleOperator.EQUAL, textValue = "single",
+        )
+        assertEquals(listOf("single"), planner.preview(rows, SmartPlaylistV2Query(isSingle))
+            .map { it.recordingId })
+        assertEquals(listOf("album"), planner.preview(rows, SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(isSingle),
+        )).map { it.recordingId })
+    }
+
+    @Test fun symfoniumTotalSkipsSumOnlyClassifiedTerminalEvents() {
+        val rows = listOf(
+            candidate("both").copy(earlySkips = 2, lateSkips = 1),
+            candidate("early").copy(earlySkips = 1),
+            candidate("never"),
+        )
+        val atLeastTwo = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.TOTAL_SKIPS,
+            SmartPlaylistRuleOperator.GREATER_OR_EQUAL, value = 2.0,
+        )
+        assertEquals(listOf("both"), planner.preview(
+            rows, SmartPlaylistV2Query(atLeastTwo),
+        ).map { it.recordingId })
+        assertEquals(listOf("early", "never"), planner.preview(
+            rows, SmartPlaylistV2Query(SmartPlaylistRule.Not(atLeastTwo)),
+        ).map { it.recordingId })
+        for (invalid in listOf(-1.0, 0.5, Double.NaN)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                SmartPlaylistV2Query(atLeastTwo.copy(value = invalid))
+            }
+        }
+    }
+
+    @Test fun symfoniumLastSkipAgeKeepsUnknownAndFutureEventsOutOfNegation() {
+        val day = 86_400_000L
+        val rows = listOf(
+            candidate("recent").copy(earlySkips = 1,
+                lastSkippedAtEpochMs = now - 2 * day),
+            candidate("old").copy(lateSkips = 1,
+                lastSkippedAtEpochMs = now - 12 * day),
+            candidate("never"),
+            candidate("future").copy(earlySkips = 1,
+                lastSkippedAtEpochMs = now + day),
+        )
+        val recent = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP,
+            SmartPlaylistRuleOperator.LESS_OR_EQUAL, value = 3.0,
+        )
+        assertEquals(listOf("recent"), planner.preview(rows,
+            SmartPlaylistV2Query(recent)).map { it.recordingId })
+        assertEquals(listOf("old"), planner.preview(rows,
+            SmartPlaylistV2Query(SmartPlaylistRule.Not(recent))).map { it.recordingId })
+        assertEquals(listOf("old", "recent"), planner.preview(rows,
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP,
+                SmartPlaylistRuleOperator.IS_PRESENT,
+            ))).map { it.recordingId })
+        for (invalid in listOf(-1.0, 1.5, 100_001.0)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                SmartPlaylistV2Query(recent.copy(value = invalid))
+            }
+        }
+    }
+
+    @Test fun localGenreIsPositiveOnlyWhenSourceTagIsProven() {
+        val known = candidate("known").copy(localGenres = listOf("Synthpop"),
+            localGenresComplete = true)
+        val uncertain = candidate("uncertain").copy(localGenresComplete = false)
+        val partlyUnknown = candidate("partial").copy(localGenres = listOf("Rock"),
+            localGenresComplete = false)
+        val rows = listOf(known, uncertain, partlyUnknown)
+        fun matches(op: SmartPlaylistRuleOperator, text: String) =
+            planner.preview(rows, SmartPlaylistV2Query(
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.LOCAL_GENRE, op, textValue = text,
+                ),
+            )).map { it.recordingId }
+        assertEquals(listOf("known"), matches(SmartPlaylistRuleOperator.EQUAL, "SYNTHPOP"))
+        assertEquals(listOf("known"), matches(SmartPlaylistRuleOperator.DOES_NOT_CONTAIN, "rock"))
+        assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.LOCAL_GENRE,
+                SmartPlaylistRuleOperator.IS_MISSING,
+            ))
+        }
+    }
+
+    @Test fun localBitrateRejectsNegativeAndNonnumericRateValues() {
+        for (invalid in listOf(-1.0, 0.0, Double.NaN, Double.POSITIVE_INFINITY)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.LOCAL_BITRATE_KBPS,
+                    SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+                    value = invalid,
+                ))
+            }
+        }
+    }
+
+    @Test fun localBitrateUsesKbpsWithUnknownFailClosedAcrossAssets() {
+        val known = candidate("known").copy(localBitratesKbps = listOf(320.0),
+            localBitrateEvidenceComplete = true)
+        val uncertain = candidate("uncertain").copy(localBitrateEvidenceComplete = false)
+        val partial = candidate("partial").copy(localBitratesKbps = listOf(128.0),
+            localBitrateEvidenceComplete = false)
+        val rows = listOf(known, uncertain, partial)
+        val greater = SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.LOCAL_BITRATE_KBPS,
+            SmartPlaylistRuleOperator.GREATER_OR_EQUAL, value = 256.0,
+        ))
+        assertEquals(listOf("known"), planner.preview(rows, greater).map { it.recordingId })
+        val inverse = SmartPlaylistV2Query(SmartPlaylistRule.Not(
+            SmartPlaylistRule.Comparison(SmartPlaylistRuleField.LOCAL_BITRATE_KBPS,
+                SmartPlaylistRuleOperator.GREATER_OR_EQUAL, value = 256.0),
+        ))
+        assertEquals(emptyList<String>(), planner.preview(listOf(uncertain, partial), inverse)
+            .map { it.recordingId })
+    }
+
+    @Test fun fileExtensionUsesActualLocalAssetNameNotGuessedCodec() {
+        val rows = listOf(
+            candidate("flac").copy(
+                localFilePaths = listOf("/sdcard/Music/Track.FLAC"),
+                localFilePathsComplete = true,
+            ),
+            candidate("no_extension").copy(
+                localFilePaths = listOf("/sdcard/Music/Track"),
+                localFilePathsComplete = true,
+            ),
+            candidate("unverified").copy(localFilePathsComplete = false),
+        )
+        val query = SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.LOCAL_FILE_EXTENSION,
+            SmartPlaylistRuleOperator.EQUAL, textValue = "FLAC",
+        ), sort = SmartPlaylistV2Sort.RECORDING_ID_ASC)
+        assertEquals(listOf("flac"),
+            planner.preview(rows, query).map { it.recordingId })
+        val inverse = SmartPlaylistV2Query(SmartPlaylistRule.Not(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.LOCAL_FILE_EXTENSION,
+                SmartPlaylistRuleOperator.EQUAL, textValue = "flac",
+            ),
+        ), sort = SmartPlaylistV2Sort.RECORDING_ID_ASC)
+        assertEquals(listOf("no_extension"),
+            planner.preview(rows, inverse).map { it.recordingId })
+    }
+
+    @Test fun localFolderAndFullPathEvaluateOnlyProvenMediaStoreAssets() {
+        val known = candidate("local").copy(
+            localFilePaths = listOf("/storage/emulated/0/Music/Kpop/Track.FLAC"),
+            localFilePathsComplete = true,
+        )
+        val unknown = candidate("unknown").copy(
+            localFilePaths = emptyList(), localFilePathsComplete = false,
+        )
+        val incomplete = candidate("mixed").copy(
+            localFilePaths = listOf("/storage/emulated/0/Music/Jazz/Track.mp3"),
+            localFilePathsComplete = false,
+        )
+        val rows = listOf(known, unknown, incomplete)
+        fun match(field: SmartPlaylistRuleField, op: SmartPlaylistRuleOperator, input: String) =
+            planner.preview(rows, SmartPlaylistV2Query(
+                SmartPlaylistRule.Comparison(field, op, textValue = input),
+                sort = SmartPlaylistV2Sort.RECORDING_ID_ASC,
+            )).map { it.recordingId }
+        assertEquals(listOf("local"),
+            match(SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.CONTAINS, "music/kpop"))
+        assertEquals(listOf("local"),
+            match(SmartPlaylistRuleField.LOCAL_FILE_PATH, SmartPlaylistRuleOperator.ENDS_WITH, ".flac"))
+        // A verified positive prefix remains true even when other asset paths are missing.
+        assertEquals(listOf("local", "mixed"),
+            match(SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.STARTS_WITH, "/storage/emulated/0/music"))
+        // A complete Kpop path disproves Jazz; the incomplete Jazz candidate cannot prove a negative.
+        assertEquals(listOf("local"),
+            match(SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.DOES_NOT_CONTAIN, "jazz"))
+        val sibling = candidate("sibling").copy(
+            localFilePaths = listOf("/storage/emulated/0/Music/Kpop-Backup/Other.FLAC"),
+            localFilePathsComplete = true,
+        )
+        val boundaryRows = listOf(known, sibling)
+        val boundaryQuery = SmartPlaylistV2Query(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.CONTAINS,
+                textValue = "music/kpop",
+            ),
+        )
+        assertEquals(listOf("local"),
+            planner.preview(boundaryRows, boundaryQuery).map { it.recordingId })
+        val ancestorQuery = SmartPlaylistV2Query(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.STARTS_WITH,
+                textValue = "/storage/emulated/0/music/kpop",
+            ),
+        )
+        assertEquals(listOf("local"),
+            planner.preview(boundaryRows, ancestorQuery).map { it.recordingId })
+        assertEquals(emptyList<String>(), planner.preview(rows, SmartPlaylistV2Query(
+            SmartPlaylistRule.Not(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleOperator.CONTAINS,
+                textValue = "music/jazz",
+            )),
+        )).map { it.recordingId }.filter { it == "unknown" || it == "mixed" })
+    }
+
     @Test fun nestedAllAnySelectsExactlyTheMatchingRecording() {
         val query = SmartPlaylistV2Query(
             rules = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(

@@ -60,7 +60,9 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
             it == SmartPlaylistRuleField.AUDIBLE_COMPLETIONS ||
                 it == SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE ||
                 it == SmartPlaylistRuleField.EARLY_SKIPS ||
-                it == SmartPlaylistRuleField.LATE_SKIPS
+                it == SmartPlaylistRuleField.LATE_SKIPS ||
+                it == SmartPlaylistRuleField.TOTAL_SKIPS ||
+                it == SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP
         }
         val needsRatings = SmartPlaylistRuleField.EXPLICIT_RATING in requiredFields ||
             SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING in requiredFields
@@ -82,16 +84,47 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
         val trackPositionsById = if (SmartPlaylistRuleField.TRACK_NUMBER in requiredFields) {
             catalog.recordingTrackPositionsByIds(recordingIds).groupBy { it.recordingId }
         } else emptyMap()
+        val discNumbersById = if (SmartPlaylistRuleField.DISC_NUMBER in requiredFields) {
+            catalog.recordingDiscNumbersByIds(recordingIds).groupBy { it.recordingId }
+        } else emptyMap()
+        val groupTypesById = if (SmartPlaylistRuleField.RELEASE_GROUP_TYPE in requiredFields) {
+            catalog.recordingReleaseGroupTypesByIds(recordingIds).groupBy { it.recordingId }
+        } else emptyMap()
         val trackArtistsById = if (SmartPlaylistRuleField.TRACK_ARTIST in requiredFields) {
             catalog.recordingTrackArtistCreditsByIds(recordingIds).groupBy { it.recordingId }
         } else emptyMap()
         val artworkById = if (SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE in requiredFields) {
             catalog.recordingReleaseArtworkByIds(recordingIds).groupBy { it.recordingId }
         } else emptyMap()
+        val countriesById = if (SmartPlaylistRuleField.ARTIST_COUNTRY in requiredFields) {
+            catalog.recordingArtistCountriesByIds(recordingIds).groupBy { it.recordingId }
+        } else emptyMap()
+        val originalReleaseDatesById = if (
+            SmartPlaylistRuleField.ORIGINAL_RELEASE_YEAR in requiredFields
+        ) {
+            catalog.recordingOriginalReleaseDatesByIds(recordingIds).groupBy { it.recordingId }
+        } else emptyMap()
         val localAddedById = if (
             SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED in requiredFields
         ) {
             catalog.localAddedDatesByRecordingIds(
+                CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, recordingIds,
+            ).groupBy { it.recordingId }
+        } else emptyMap()
+        val localPathsById = if (
+            SmartPlaylistRuleField.LOCAL_FOLDER in requiredFields ||
+            SmartPlaylistRuleField.LOCAL_FILE_PATH in requiredFields ||
+            SmartPlaylistRuleField.LOCAL_FILE_EXTENSION in requiredFields
+        ) {
+            catalog.localPathsByRecordingIds(
+                CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, recordingIds,
+            ).groupBy { it.recordingId }
+        } else emptyMap()
+        val localAudioTagsById = if (
+            SmartPlaylistRuleField.LOCAL_GENRE in requiredFields ||
+            SmartPlaylistRuleField.LOCAL_BITRATE_KBPS in requiredFields
+        ) {
+            catalog.localAudioTagsByRecordingIds(
                 CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, recordingIds,
             ).groupBy { it.recordingId }
         } else emptyMap()
@@ -104,8 +137,27 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
             val parsedYears = datedReleases.map { parseTrustedMusicBrainzReleaseYear(it.releaseDate) }
             val albumArtistRows = albumArtistRowsById[id].orEmpty()
             val trackPositionRows = trackPositionsById[id].orEmpty()
+            val discRows = discNumbersById[id].orEmpty()
+            val groupTypeRows = groupTypesById[id].orEmpty()
             val trackArtistRows = trackArtistsById[id].orEmpty()
+            val artistCountryRows = countriesById[id].orEmpty()
+            val originalDateRows = originalReleaseDatesById[id].orEmpty()
+            val parsedOriginalYears = originalDateRows.map {
+                parseTrustedMusicBrainzReleaseYear(it.firstReleaseDate)
+            }
             val addedRows = localAddedById[id].orEmpty()
+            val localPathRows = localPathsById[id].orEmpty()
+            val audioTagRows = localAudioTagsById[id].orEmpty()
+            val trustedGenres = audioTagRows.mapNotNull {
+                it.localGenre?.trim()?.takeIf(String::isNotBlank)
+            }.distinct().sorted()
+            val trustedBitrates = audioTagRows.mapNotNull {
+                it.localBitrateBps?.takeIf { bitrate -> bitrate > 0L }
+                    ?.toDouble()?.div(1000.0)
+            }.distinct().sorted()
+            val usablePaths = localPathRows.mapNotNull {
+                normalizeLocalSmartFilterPath(it.path)
+            }.distinct().sorted()
             val addedValues = addedRows.map { row ->
                 row.dateAddedSeconds?.takeIf { second ->
                     second > 0L && second <= Long.MAX_VALUE / 1000L
@@ -122,6 +174,7 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                 artistDisplay = recording.artistDisplay,
                 earlySkips = events?.earlySkips ?: 0L,
                 lateSkips = events?.lateSkips ?: 0L,
+                lastSkippedAtEpochMs = events?.lastSkippedAtEpochMs,
                 releaseTitles = releaseMembershipsById[id].orEmpty()
                     .map { it.releaseTitle }.distinct().sorted(),
                 releaseYears = parsedYears.filterNotNull().distinct().sorted(),
@@ -152,8 +205,39 @@ internal class RoomSmartPlaylistBatchEvidenceReader(
                 localAddedEpochMs = addedValues.filterNotNull().distinct().sorted(),
                 localAddedDateEvidenceUnknown = addedRows.isEmpty() ||
                     addedValues.any { it == null },
+                localFilePaths = usablePaths,
+                localFilePathsComplete = localPathRows.isNotEmpty() &&
+                    localPathRows.all { normalizeLocalSmartFilterPath(it.path) != null },
+                localGenres = trustedGenres,
+                localGenresComplete = audioTagRows.isNotEmpty() &&
+                    audioTagRows.all { !it.localGenre.isNullOrBlank() },
+                localBitratesKbps = trustedBitrates,
+                localBitrateEvidenceComplete = audioTagRows.isNotEmpty() &&
+                    audioTagRows.all { (it.localBitrateBps ?: 0L) > 0L },
                 canonicalReleaseIds = releaseMembershipsById[id].orEmpty()
                     .map { it.releaseId }.distinct().sorted(),
+                artistCountryCodes = artistCountryRows.mapNotNull {
+                    it.country?.trim()?.uppercase(java.util.Locale.ROOT)
+                        ?.takeIf { code -> code.length == 2 && code.all(Char::isLetter) }
+                }.distinct().sorted(),
+                artistCountryEvidenceUnknown = artistCountryRows.isEmpty() ||
+                    artistCountryRows.any { row ->
+                        row.country?.trim()?.let { code ->
+                            code.length != 2 || !code.all(Char::isLetter)
+                        } != false
+                    },
+                originalReleaseYears = parsedOriginalYears.filterNotNull().distinct().sorted(),
+                originalReleaseYearEvidenceUnknown = originalDateRows.isEmpty() ||
+                    parsedOriginalYears.any { it == null },
+                discNumbers = discRows.mapNotNull { it.discNumber?.takeIf { n -> n > 0 } }
+                    .distinct().sorted(),
+                discNumberEvidenceUnknown = discRows.isEmpty() ||
+                    discRows.any { (it.discNumber ?: 0) <= 0 },
+                releaseGroupTypes = groupTypeRows.mapNotNull {
+                    it.primaryType?.trim()?.takeIf(String::isNotBlank)
+                }.distinct().sorted(),
+                releaseGroupTypeEvidenceUnknown = groupTypeRows.isEmpty() ||
+                    groupTypeRows.any { it.primaryType.isNullOrBlank() },
             )
         }
     }

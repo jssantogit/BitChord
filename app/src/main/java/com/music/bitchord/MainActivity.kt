@@ -74,7 +74,10 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sort
+import androidx.compose.material.icons.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Upgrade
 import com.music.bitchord.data.listentogether.ServerConnectionState
 import androidx.compose.material3.DropdownMenu
@@ -633,6 +636,7 @@ private fun BitChordApp(
     // A Library shelf's "Show all" — the shelf it was opened from, so its own
     // cards can be laid out again as a full-screen grid. See [LibraryGridPage].
     var libraryShowAll by remember { mutableStateOf<HomeShelf?>(null) }
+    var showAllLocalRecentAdditions by rememberSaveable { mutableStateOf(false) }
     var detailActiveShelf by remember { mutableStateOf<HomeShelf?>(null) }
     var librarySortMenuOpen by remember { mutableStateOf(false) }
     var showLyricsSources by remember { mutableStateOf(false) }
@@ -2338,9 +2342,42 @@ private fun BitChordApp(
     var rediscoveryRecordingId by rememberSaveable { mutableStateOf<String?>(null) }
     var showCanonicalMyRatings by rememberSaveable { mutableStateOf(false) }
     var showPlaylistLibrary by rememberSaveable { mutableStateOf(false) }
+    var openedCanonicalPlaylist by remember {
+        mutableStateOf<com.music.bitchord.ui.screens.LibraryPlaylistCard?>(null)
+    }
+    var playlistLibraryQuery by rememberSaveable { mutableStateOf("") }
+    var playlistLibrarySearching by remember { mutableStateOf(false) }
+    var playlistLibrarySort by rememberSaveable {
+        mutableStateOf(com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT)
+    }
+    var playlistLibraryFilter by rememberSaveable {
+        mutableStateOf(com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.ALL)
+    }
+    var playlistLibrarySortMenu by remember { mutableStateOf(false) }
+    var playlistLibraryOptionsMenu by remember { mutableStateOf(false) }
+    var playlistLibraryCount by remember { mutableIntStateOf(0) }
+    val playlistLibraryListState = rememberLazyListState()
+    val playlistDetailListState = rememberLazyListState()
+    var playlistDetailSearching by remember { mutableStateOf(false) }
+    var playlistDetailQuery by rememberSaveable { mutableStateOf("") }
+    var playlistDetailRows by remember { mutableStateOf<List<com.music.bitchord.ui.screens.V2DisplayRow>?>(null) }
+    var playlistDetailSort by rememberSaveable {
+        mutableStateOf(com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT)
+    }
+    var playlistDetailSortMenu by remember { mutableStateOf(false) }
+    var playlistDetailOptionsMenu by remember { mutableStateOf(false) }
+    LaunchedEffect(openedCanonicalPlaylist?.id) {
+        playlistDetailRows = null
+        playlistDetailOptionsMenu = false
+        playlistDetailSortMenu = false
+        playlistDetailSearching = false
+        playlistDetailQuery = ""
+        playlistDetailSort = com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT
+    }
     var showSmartPlaylistBuilder by rememberSaveable { mutableStateOf(false) }
     var editingSmartPlaylistId by remember { mutableStateOf<String?>(null) }
     var editingNormalPlaylistId by remember { mutableStateOf<String?>(null) }
+    var startNormalPlaylistSongPicker by remember { mutableStateOf(false) }
     val replayOpen = showReplay || replayStory != null || showReplayShare ||
         (selectedTab == TAB_LIBRARY && detail == null && !showSettings)
     val (replay, setReplayPeriod) = rememberReplayState(replayOpen)
@@ -2787,10 +2824,15 @@ private fun BitChordApp(
         // BackHandler below has to close first, or back would skip past it
         // straight to Library. See [onLibraryItemClick].
         BackHandler(enabled = libraryShowAll != null && detail == null) { libraryShowAll = null }
+        BackHandler(enabled = showAllLocalRecentAdditions && detail == null) { showAllLocalRecentAdditions = false }
         BackHandler(enabled = detailActiveShelf != null) { detailActiveShelf = null }
         BackHandler(enabled = rediscoveryRecordingId != null) { rediscoveryRecordingId = null }
         BackHandler(enabled = showCanonicalMyRatings) { showCanonicalMyRatings = false }
-        BackHandler(enabled = showPlaylistLibrary && detail == null) { showPlaylistLibrary = false }
+        BackHandler(enabled = showPlaylistLibrary && detail == null &&
+            !showSmartPlaylistBuilder) {
+            if (openedCanonicalPlaylist != null) openedCanonicalPlaylist = null
+            else showPlaylistLibrary = false
+        }
         BackHandler(enabled = showSmartPlaylistBuilder) { showSmartPlaylistBuilder = false }
 
         // On a tablet the page and the player stand side by side rather than
@@ -2812,6 +2854,7 @@ private fun BitChordApp(
                         // give way to the `detail != null` branch below it
                         // rather than keep showing the grid underneath.
                         libraryShowAll != null && detail == null -> "library_show_all"
+                        showAllLocalRecentAdditions && detail == null -> "local_recent_additions"
                         // When a sub-screen overlay is active, keep SettingsSheet
                         // mounted so its scroll position survives.  The overlay is
                         // rendered below the AnimatedContent block.
@@ -2830,8 +2873,10 @@ private fun BitChordApp(
                         detail != null -> detail.browseId
                         rediscoveryRecordingId != null -> "rediscovery:" + rediscoveryRecordingId
                         showCanonicalMyRatings -> "my_ratings"
-                        showPlaylistLibrary -> "canonical_playlist_library"
+                        // The wizard is pushed FROM the playlist category. It must win
+                        // over that category while editing or creating a playlist.
                         showSmartPlaylistBuilder -> "smart_playlist_builder"
+                        showPlaylistLibrary -> "canonical_playlist_library"
                         else -> "$TAB_KEY$selectedTab"
                     },
                     // Tabs swap outright; everything else crossfades.
@@ -2919,16 +2964,25 @@ private fun BitChordApp(
                         com.music.bitchord.ui.screens.UnifiedPlaylistLibraryShelf(
                             normalPlaylists = localPlaylistItems,
                             onNewSmartPlaylist = {
+                                startNormalPlaylistSongPicker = false
                                 editingSmartPlaylistId = null
                                 editingNormalPlaylistId = null
                                 showSmartPlaylistBuilder = true
                             },
                             onOpenSmartPlaylist = { id ->
+                                startNormalPlaylistSongPicker = false
                                 editingSmartPlaylistId = id
                                 editingNormalPlaylistId = null
                                 showSmartPlaylistBuilder = true
                             },
                             onOpenCanonicalNormalPlaylist = { id ->
+                                startNormalPlaylistSongPicker = false
+                                editingNormalPlaylistId = id
+                                editingSmartPlaylistId = null
+                                showSmartPlaylistBuilder = true
+                            },
+                            onAddSongsToCanonicalNormalPlaylist = { id ->
+                                startNormalPlaylistSongPicker = true
                                 editingNormalPlaylistId = id
                                 editingSmartPlaylistId = null
                                 showSmartPlaylistBuilder = true
@@ -2944,6 +2998,58 @@ private fun BitChordApp(
                                     SmartCollectionActionSource.SavedStaticPlaylist(id), intent,
                                 )
                             },
+                            onSmartShuffle = { id ->
+                                executeSmartCollection(
+                                    SmartCollectionActionSource.SavedV2Definition(id, shuffle = true),
+                                    com.music.bitchord.playback.CanonicalCollectionIntent.PLAY_NOW,
+                                )
+                            },
+                            onCanonicalNormalShuffle = { id ->
+                                executeSmartCollection(
+                                    SmartCollectionActionSource.SavedStaticPlaylist(id, shuffle = true),
+                                    com.music.bitchord.playback.CanonicalCollectionIntent.PLAY_NOW,
+                                )
+                            },
+                            onSmartTrackAction = { id, recordingId, intent, includeFollowing ->
+                                executeSmartCollection(
+                                    SmartCollectionActionSource.SavedV2PlaylistFromTrack(
+                                        id, recordingId, includeFollowing,
+                                    ),
+                                    intent,
+                                )
+                            },
+                            onCanonicalNormalTrackAction = {
+                                id, recordingId, intent, includeFollowing ->
+                                executeSmartCollection(
+                                    SmartCollectionActionSource.SavedStaticPlaylistFromTrack(
+                                        id, recordingId, includeFollowing,
+                                    ),
+                                    intent,
+                                )
+                            },
+                            contentPadding = listPadding,
+                            query = playlistLibraryQuery,
+                            searching = playlistLibrarySearching,
+                            onSearchingChange = { playlistLibrarySearching = it },
+                            onQueryChange = { playlistLibraryQuery = it },
+                            sort = playlistLibrarySort,
+                            filter = playlistLibraryFilter,
+                            onResetFilters = {
+                                playlistLibraryQuery = ""
+                                playlistLibraryFilter =
+                                    com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.ALL
+                            },
+                            selectedCard = openedCanonicalPlaylist,
+                            onSelectedCardChange = { openedCanonicalPlaylist = it },
+                            listState = playlistLibraryListState,
+                            detailListState = playlistDetailListState,
+                            detailSearching = playlistDetailSearching,
+                            onDetailSearchingChange = { playlistDetailSearching = it },
+                            detailQuery = playlistDetailQuery,
+                            onDetailQueryChange = { playlistDetailQuery = it },
+                            onDetailRowsReady = { playlistDetailRows = it },
+                            detailSort = playlistDetailSort,
+                            onPlaylistCountChange = { playlistLibraryCount = it },
                         )
                     } else if (key == "my_ratings") {
                         CanonicalMyRatingsScreen(onBack = { showCanonicalMyRatings = false })
@@ -2953,9 +3059,11 @@ private fun BitChordApp(
                                 showSmartPlaylistBuilder = false
                                 editingSmartPlaylistId = null
                                 editingNormalPlaylistId = null
+                                startNormalPlaylistSongPicker = false
                             },
                             initialV2Id = editingSmartPlaylistId,
                             initialNormalId = editingNormalPlaylistId,
+                            startOnNormalSongs = startNormalPlaylistSongPicker,
                             onSavedAction = { id, intent ->
                                 executeSmartCollection(SmartCollectionActionSource.SavedDefinition(id), intent)
                             },
@@ -2989,6 +3097,21 @@ private fun BitChordApp(
                             onSongSwipe = onSongSwipe,
                             onRetry = viewModel::loadHistory,
                             contentPadding = listPadding,
+                        )
+                    } else if (key == "local_recent_additions") {
+                        com.music.bitchord.ui.screens.CanonicalLocalRecentAdditions(
+                            showAll = true,
+                            contentPadding = listPadding,
+                            onOpenSongs = {
+                                showAllLocalRecentAdditions = false
+                                localFolderStates.getOrPut("local:all") { LocalFolderState() }
+                                    .tab = com.music.bitchord.ui.screens.LocalFolderTab.SONGS
+                                onLibraryItemClick(ShelfItem(
+                                    title = "Músicas", subtitle = "",
+                                    thumbnailUrl = null, videoId = null,
+                                    browseId = "local:all",
+                                ))
+                            },
                         )
                     } else if (key == "library_show_all") {
                         libraryShowAll?.let { shelf ->
@@ -3172,10 +3295,13 @@ private fun BitChordApp(
                             val downloadCollections = remember(folderSongs, savedCollections, isDownloads) {
                                 if (isDownloads) Downloads.collectionsAmong(folderSongs) else emptyList()
                             }
+                            val folderState = localFolderStates.getOrPut(page.browseId) { LocalFolderState() }
                             LocalFolder(
-                                state = localFolderStates.getOrPut(page.browseId) { LocalFolderState() },
+                                state = folderState,
                                 sort = folderSortOf(page.browseId),
-                                viewType = folderViewTypeOf(page.browseId),
+                                viewType = folderState.viewTypeFor(
+                                    folderState.tab, folderViewTypeOf(page.browseId),
+                                ),
                                 collections = downloadCollections,
                                 selectable = isDownloads,
                                 onOpenGroup = viewModel::openLocalGroup,
@@ -3741,6 +3867,8 @@ private fun BitChordApp(
                             navigationHome = true,
                             localAdditions = {
                                 com.music.bitchord.ui.screens.CanonicalLocalRecentAdditions(
+                                    refreshRequested = MainViewModel.Feed.LIBRARY in refreshing,
+                                    onSeeAll = { showAllLocalRecentAdditions = true },
                                     onOpenSongs = {
                                         localFolderStates.getOrPut("local:all") { LocalFolderState() }
                                             .tab = com.music.bitchord.ui.screens.LocalFolderTab.SONGS
@@ -3976,7 +4104,10 @@ private fun BitChordApp(
                         showDiscord -> "Discord"
                         showHistory -> stringResource(R.string.history)
                         libraryShowAll != null && detail == null -> libraryShowAll?.title.orEmpty()
-                        showPlaylistLibrary && detail == null -> "Playlists"
+                        showAllLocalRecentAdditions && detail == null -> "Adições recentes"
+                        showSmartPlaylistBuilder && detail == null -> "Nova playlist"
+                        showPlaylistLibrary && detail == null ->
+                            openedCanonicalPlaylist?.title ?: "Playlists"
                         showAccountScrobbling -> stringResource(R.string.account_scrobbling)
                         showSources -> stringResource(R.string.sources)
                         showListenTogether -> stringResource(R.string.listen_together)
@@ -4010,8 +4141,16 @@ private fun BitChordApp(
                             showEqualizer ||
                             showDiscord || showHistory ||
                             (libraryShowAll != null && detail == null) ||
+                            (showAllLocalRecentAdditions && detail == null) ||
                             (detail != null && detailActiveShelf != null) ||
                             selectedMoodGenre != null -> true
+                        showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null ->
+                            // Always identify the Library's playlists collection.
+                            // The in-list header can be scrolled off or restored
+                            // at an old position; the native top bar must not be blank.
+                            openedCanonicalPlaylist == null ||
+                                playlistDetailListState.firstVisibleItemIndex > 0 ||
+                                playlistDetailListState.firstVisibleItemScrollOffset > 64
                         // The page leads with its own large "Replay", so the bar
                         // stays out of the way until that has been scrolled off.
                         showReplay -> replayScrolled
@@ -4025,7 +4164,16 @@ private fun BitChordApp(
                         showDiscord -> ({ showDiscord = false })
                         showHistory -> ({ showHistory = false })
                         libraryShowAll != null && detail == null -> ({ libraryShowAll = null })
-                        showPlaylistLibrary && detail == null -> ({ showPlaylistLibrary = false })
+                        showAllLocalRecentAdditions && detail == null -> ({ showAllLocalRecentAdditions = false })
+                        showSmartPlaylistBuilder && detail == null -> ({
+                            showSmartPlaylistBuilder = false
+                            editingSmartPlaylistId = null
+                            editingNormalPlaylistId = null
+                        })
+                        showPlaylistLibrary && detail == null -> ({
+                            if (openedCanonicalPlaylist != null) openedCanonicalPlaylist = null
+                            else showPlaylistLibrary = false
+                        })
                         showAccountScrobbling -> ({
                             showAccountScrobbling = false
                             if (settingsSubScreen == "account_scrobbling") settingsSubScreen = null
@@ -4095,64 +4243,41 @@ private fun BitChordApp(
                         }
                     } else null,
                     actions = {
-                        // This is intentionally scoped to Listen together: the
-                        // round-trip time is meaningful while coordinating a
-                        // party, but would be noise in the rest of the app.
+                        if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null &&
+                            !showSettings && !showAccountScrobbling) {
+                            CanonicalPlaylistToolbarActions(
+                                hasDetail = openedCanonicalPlaylist != null,
+                                showCreate = com.music.bitchord.ui.screens.showPlaylistHeaderCreateAction(
+                                    playlistLibraryCount,
+                                ),
+                                searching = if (openedCanonicalPlaylist == null)
+                                    playlistLibrarySearching else playlistDetailSearching,
+                                onCreate = {
+                                    editingSmartPlaylistId = null
+                                    editingNormalPlaylistId = null
+                                    showSmartPlaylistBuilder = true
+                                },
+                                onSearch = {
+                                    if (openedCanonicalPlaylist == null) {
+                                        playlistLibrarySearching = !playlistLibrarySearching
+                                        if (!playlistLibrarySearching) playlistLibraryQuery = ""
+                                    } else {
+                                        playlistDetailSearching = !playlistDetailSearching
+                                        if (!playlistDetailSearching) playlistDetailQuery = ""
+                                    }
+                                },
+                                onSortOrFilter = {
+                                    if (openedCanonicalPlaylist == null) playlistLibraryOptionsMenu = true
+                                    else playlistDetailSortMenu = true
+                                },
+                                onOverflow = {
+                                    if (openedCanonicalPlaylist == null) playlistLibrarySortMenu = true
+                                    else playlistDetailOptionsMenu = true
+                                },
+                            )
+                        }
                         if (showListenTogether) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 8.dp),
-                            ) {
-                                when (val state = partyServerStatus) {
-                                    is ServerConnectionState.CustomFallback -> {
-                                        Icon(
-                                            Icons.Rounded.CloudOff,
-                                            contentDescription = stringResource(R.string.listen_together_top_bar_fallback, stringResource(R.string.listen_together_ping, state.latencyMs)),
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(14.dp),
-                                        )
-                                        Spacer(Modifier.width(4.dp))
-                                        Text(
-                                            text = stringResource(R.string.listen_together_ping, state.latencyMs),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.error,
-                                            maxLines = 1,
-                                        )
-                                    }
-                                    is ServerConnectionState.CustomOnline -> {
-                                        Text(
-                                            text = stringResource(R.string.listen_together_ping, state.latencyMs),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            maxLines = 1,
-                                        )
-                                    }
-                                    is ServerConnectionState.DefaultOnline -> {
-                                        Text(
-                                            text = stringResource(R.string.listen_together_ping, state.latencyMs),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            maxLines = 1,
-                                        )
-                                    }
-                                    ServerConnectionState.Checking -> {
-                                        Text(
-                                            text = stringResource(R.string.listen_together_server_checking),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                        )
-                                    }
-                                    ServerConnectionState.Offline -> {
-                                        Text(
-                                            text = stringResource(R.string.listen_together_server_offline_dash),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.error,
-                                            maxLines = 1,
-                                        )
-                                    }
-                                }
-                            }
+                            ListenTogetherLatencyBadge(partyServerStatus)
                         }
                         // Only worth surfacing where there's room for it and it won't
                         // be mistaken for a per-page action — Home, at rest.
@@ -4174,7 +4299,7 @@ private fun BitChordApp(
                                 }
                             }
                         }
-                        if (!showSettings && !showAccountScrobbling) {
+                        if (!showSettings && !showAccountScrobbling && !showPlaylistLibrary) {
                             // Left of the account photo, and only on Library itself:
                             // a history is a record of what was played, which reads
                             // as that tab's business rather than every tab's.
@@ -4239,31 +4364,26 @@ private fun BitChordApp(
                             if ((isReleaseDetail || isLocalDetail) && detail != null) {
                                 val releaseSongs = (detail.songs as? UiState.Success)?.data.orEmpty()
                                 if (releaseSongs.isNotEmpty()) {
-                                    IconButton(onClick = { detailSearching = !detailSearching }) {
-                                        Icon(
-                                            if (detailSearching) Icons.Rounded.Close else BitChordIcons.Search,
-                                            contentDescription = stringResource(
-                                                if (detailSearching) R.string.close_search else R.string.search_this_list,
-                                            ),
-                                            tint = MaterialTheme.colorScheme.onSurface,
-                                        )
-                                    }
+                                    NativeCollectionSearchAction(
+                                        searching = detailSearching,
+                                        contentDescription = stringResource(
+                                            if (detailSearching) R.string.close_search else R.string.search_this_list,
+                                        ),
+                                        onClick = { detailSearching = !detailSearching },
+                                    )
                                 }
                                 // The menu itself is [FrostedSortMenu], composed
                                 // with the app's other frosted overlays further
                                 // down — in the main hierarchy, where the haze
                                 // can see the content it blurs.
-                                IconButton(
-                                    onClick = { if (isLocalDetail) folderMenuOpen = true else songSortMenuOpen = true },
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Sort,
-                                        contentDescription = stringResource(
-                                            if (isLocalDetail) R.string.sort_music else R.string.sort_songs,
-                                        ),
-                                        tint = MaterialTheme.colorScheme.onSurface,
-                                    )
-                                }
+                                NativeCollectionSortAction(
+                                    contentDescription = stringResource(
+                                        if (isLocalDetail) R.string.sort_music else R.string.sort_songs,
+                                    ),
+                                    onClick = {
+                                        if (isLocalDetail) folderMenuOpen = true else songSortMenuOpen = true
+                                    },
+                                )
                                 if (isReleaseDetail && releaseSongs.isNotEmpty()) {
                                     // The page's own tracks, in the order the page
                                     // shows them, so the sheet has them already and
@@ -4273,7 +4393,8 @@ private fun BitChordApp(
                                     // tracks arrive stamped with the album they came
                                     // off, which is what the download record groups
                                     // them under.
-                                    IconButton(
+                                    NativeCollectionOverflowAction(
+                                        contentDescription = stringResource(R.string.more),
                                         onClick = {
                                             browseActions = BrowseTarget(
                                                 browseId = detail.browseId,
@@ -4292,13 +4413,7 @@ private fun BitChordApp(
                                                 downloadId = downloadIdFor(detail.browseId),
                                             )
                                         },
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.MoreHoriz,
-                                            contentDescription = stringResource(R.string.more),
-                                            tint = MaterialTheme.colorScheme.onSurface,
-                                        )
-                                    }
+                                    )
                                 }
                             }
                             // Share the artist's name without inventing a provider-specific link.
@@ -4380,6 +4495,7 @@ private fun BitChordApp(
                     showHistory = false
                     libraryShowAll = null
                     showPlaylistLibrary = false
+                    openedCanonicalPlaylist = null
                     selectedTab = index
 
                     // Every search tab tap resets the field, focuses it, and opens
@@ -4664,370 +4780,266 @@ private fun BitChordApp(
             }
         }
 
-        // ---- Album / playlist detail ----
-        // ---- Long-press track actions ----
-        // One body for both presentations of the track menu: the sheet the ⋮
-        // and the player open, and the popup a held row lifts into. Every
-        // callback below is the same in either; only the frame differs.
-        val songMenuBody: @Composable (Song, SongActionsPresentation) -> Unit = { song, presentation ->
-            // Set by whoever opened it — see [menuFromPlayer]. It cannot be
-            // read off the player's own visibility any more, because on a
-            // tablet the player is visible whatever the menu was opened from.
-            val fromPlayer = menuFromPlayer
-            val share: () -> Unit = {
-                val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, musicOnlyShareText(song.title, song.artist))
+        // Keep contextual menus and playlist sheets in a separate Compose
+        // lambda, so BitChordApp's JVM method stays below the 64 KiB limit.
+        val contextualActionOverlays: @Composable () -> Unit = {
+            // ---- Album / playlist detail ----
+            // ---- Long-press track actions ----
+            // One body for both presentations of the track menu: the sheet the ⋮
+            // and the player open, and the popup a held row lifts into. Every
+            // callback below is the same in either; only the frame differs.
+            val songMenuBody: @Composable (Song, SongActionsPresentation) -> Unit = { song, presentation ->
+                // Set by whoever opened it — see [menuFromPlayer]. It cannot be
+                // read off the player's own visibility any more, because on a
+                // tablet the player is visible whatever the menu was opened from.
+                val fromPlayer = menuFromPlayer
+                val share: () -> Unit = {
+                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, musicOnlyShareText(song.title, song.artist))
+                    }
+                    context.startActivity(Intent.createChooser(sendIntent, song.title))
+                    songActions = null
                 }
-                context.startActivity(Intent.createChooser(sendIntent, song.title))
-                songActions = null
-            }
-            // Navigating has to take the player down with the sheet, or the
-            // page it opens lands behind a still-covering player.
-            // The track's cover stands in for an album's, but never for an
-            // artist's picture — that page loads its own.
-            val openPage: (String, String, String, BrowseType) -> Unit = { id, title, sub, type ->
-                songActions = null
-                dismissPlayer()
-                val art = song.thumbnailUrl.takeUnless { type == BrowseType.ARTIST }
-                viewModel.openDetail(id, title, sub, art, type)
-            }
-            // "Remove from this playlist" is only a sentence on a playlist
-            // page the account can actually edit, and only for a row that
-            // carries the per-entry id a removal is expressed in.
-            val editable = viewModel.editablePlaylist(detail?.browseId)
-                ?.takeIf { !fromPlayer && song.setVideoId != null }
-            SongActionsSheet(
-                song = song,
-                presentation = presentation,
-                preloadedArtworkModel = if (fromPlayer) {
-                    com.music.bitchord.ui.player.preloadedMenuArtworkFor(
-                        song, openedPlayerArtwork?.first, openedPlayerArtwork?.second,
-                    )
-                } else null,
-                signedIn = signedIn,
-                canonicalRatingContent = { CanonicalSongMenuRating(song) },
-                onPlayNext = { playNext(song); songActions = null },
-                onAddToQueue = { addToQueue(song); songActions = null },
-                onStartRadio = { startRadio(song); songActions = null },
-                // Stays open: the row it replaces itself with is the
-                // progress, and closing the sheet would hide the only
-                // answer to "did that work?".
-                onDownload = { downloadSong(song) },
-                // The other direction: a device file going up to the
-                // server. Closed first, unlike a download — progress and
-                // the summary notice live outside the sheet.
-                onUploadToWebDav =
-                    if (com.music.bitchord.data.webdav.WebDavConfig.isConfigured(webdavUrl) &&
-                        com.music.bitchord.data.webdav.WebDavUploads.isUploadable(song)
-                    ) {
+                // Navigating has to take the player down with the sheet, or the
+                // page it opens lands behind a still-covering player.
+                // The track's cover stands in for an album's, but never for an
+                // artist's picture — that page loads its own.
+                val openPage: (String, String, String, BrowseType) -> Unit = { id, title, sub, type ->
+                    songActions = null
+                    dismissPlayer()
+                    val art = song.thumbnailUrl.takeUnless { type == BrowseType.ARTIST }
+                    viewModel.openDetail(id, title, sub, art, type)
+                }
+                // "Remove from this playlist" is only a sentence on a playlist
+                // page the account can actually edit, and only for a row that
+                // carries the per-entry id a removal is expressed in.
+                val editable = viewModel.editablePlaylist(detail?.browseId)
+                    ?.takeIf { !fromPlayer && song.setVideoId != null }
+                SongActionsSheet(
+                    song = song,
+                    presentation = presentation,
+                    preloadedArtworkModel = if (fromPlayer) {
+                        com.music.bitchord.ui.player.preloadedMenuArtworkFor(
+                            song, openedPlayerArtwork?.first, openedPlayerArtwork?.second,
+                        )
+                    } else null,
+                    signedIn = signedIn,
+                    canonicalRatingContent = { CanonicalSongMenuRating(song) },
+                    onPlayNext = { playNext(song); songActions = null },
+                    onAddToQueue = { addToQueue(song); songActions = null },
+                    onStartRadio = { startRadio(song); songActions = null },
+                    // Stays open: the row it replaces itself with is the
+                    // progress, and closing the sheet would hide the only
+                    // answer to "did that work?".
+                    onDownload = { downloadSong(song) },
+                    // The other direction: a device file going up to the
+                    // server. Closed first, unlike a download — progress and
+                    // the summary notice live outside the sheet.
+                    onUploadToWebDav =
+                        if (com.music.bitchord.data.webdav.WebDavConfig.isConfigured(webdavUrl) &&
+                            com.music.bitchord.data.webdav.WebDavUploads.isUploadable(song)
+                        ) {
+                            {
+                                songActions = null
+                                uploadToWebDav(listOf(song))
+                            }
+                        } else {
+                            null
+                        },
+                    onAddToPlaylist = {
+                        songActions = null
+                        viewModel.loadPlaylists()
+                        playlistTarget = song
+                    },
+                    onRemoveFromPlaylist = editable?.let {
                         {
                             songActions = null
-                            uploadToWebDav(listOf(song))
+                            viewModel.removeFromPlaylist(it.browseId, song)
                         }
-                    } else {
-                        null
                     },
-                onAddToPlaylist = {
-                    songActions = null
-                    viewModel.loadPlaylists()
-                    playlistTarget = song
-                },
-                onRemoveFromPlaylist = editable?.let {
-                    {
-                        songActions = null
-                        viewModel.removeFromPlaylist(it.browseId, song)
-                    }
-                },
-                onOpenAlbum = { id ->
-                    openPage(
-                        id,
-                        song.albumName ?: song.title,
-                        song.artist,
-                        BrowseType.ALBUM,
-                    )
-                },
-                onOpenArtist = { id ->
-                    openPage(id, song.artist, context.getString(R.string.artist), BrowseType.ARTIST)
-                },
-                // Only the player's copy of a track is ever missing these
-                // and backfilling — a row opened from a list already has
-                // whatever ids it's ever going to have.
-                resolvingLinks = fromPlayer && linksLoading,
-                onShare = share,
-            )
-        }
-        songActions?.takeIf { songMenuOrigin == null }?.let { song ->
-            ModalBottomSheet(
-                onDismissRequest = { songActions = null },
-                // The sheet paints itself in the track's own colours, corners
-                // and drag handle included — see SongActionsSheet.
-                containerColor = Color.Transparent,
-                dragHandle = null,
-            ) {
-                songMenuBody(song, SongActionsPresentation.Sheet)
-            }
-        }
-        // Drawn over everything, tab bar and mini player included, and kept
-        // composed through its own exit — so it is not gated on songActions.
-        HeldContextMenu(
-            item = songActions,
-            held = songMenuOrigin,
-            hazeState = hazeState,
-            onDismiss = { songActions = null },
-            // Tapping the lifted track opens its album, as Apple Music's does.
-            onPreviewClick = { song ->
-                song.albumId?.let { id ->
-                    songActions = null
-                    viewModel.openDetail(id, song.albumName ?: song.title, song.artist, song.thumbnailUrl, BrowseType.ALBUM)
-                }
-            },
-        ) { song ->
-            songMenuBody(song, SongActionsPresentation.Menu)
-        }
-        // A closed menu forgets where it was held, so whatever opens it next
-        // — the ⋮, the player — starts from the sheet.
-        LaunchedEffect(songActions == null) {
-            if (songActions == null) {
-                songMenuOrigin = null
-                openedPlayerArtwork = null // Release the handed-off Drawable on dismiss.
-            }
-        }
-
-        // ---- Download manager ----
-        // The batch view of what the top-bar indicator is counting. Dismissing
-        // it is what marks the batch seen, and marking it on the way *out*
-        // rather than on the way in is deliberate: it is the outcome the user is
-        // signing off on, and while the sheet is up there may not be one yet.
-        if (showDownloadManager) {
-            val closeDownloadManager = {
-                showDownloadManager = false
-                DownloadSession.markSeen()
-            }
-            BackHandler(onBack = closeDownloadManager)
-            ModalBottomSheet(
-                onDismissRequest = closeDownloadManager,
-                containerColor = MaterialTheme.colorScheme.background,
-            ) {
-                DownloadManagerSheet(onDismiss = closeDownloadManager)
-            }
-        }
-
-        // ---- Add to playlist / new playlist ----
-        // One sheet for both, because they are one decision: the list of
-        // playlists with a way to make another. `creatingPlaylist` opens it
-        // straight onto the form, which is what the Library tile means.
-        if (playlistTarget != null || creatingPlaylist) {
-            val target = playlistTarget
-            val dismiss = {
-                playlistTarget = null
-                creatingPlaylist = false
-            }
-            ModalBottomSheet(
-                onDismissRequest = dismiss,
-                containerColor = MaterialTheme.colorScheme.background,
-            ) {
-                PlaylistPickerSheet(
-                    playlists = playlists,
-                    loading = playlistsLoading,
-                    song = target,
-                    startCreating = target == null,
-                    onAdd = { picked ->
-                        target?.let { song ->
-                            viewModel.addToPlaylists(picked, song) { added, alreadyThere, failed ->
-                                // One line for the whole batch, saying the
-                                // outcome that matters most: what went in, else
-                                // that it was all there already, else that it
-                                // didn't work.
-                                showQueueNotice(
-                                    when {
-                                        added > 1 -> context.resources.getQuantityString(
-                                            R.plurals.added_to_playlists_notice, added, added,
-                                        )
-                                        added == 1 -> context.getString(R.string.song_added_to_playlist)
-                                        alreadyThere > 0 && failed == 0 ->
-                                            context.getString(R.string.song_already_in_playlist)
-                                        else -> context.getString(R.string.failed)
-                                    },
-                                )
-                            }
-                        }
-                        dismiss()
+                    onOpenAlbum = { id ->
+                        openPage(
+                            id,
+                            song.albumName ?: song.title,
+                            song.artist,
+                            BrowseType.ALBUM,
+                        )
                     },
-                    onCreate = { title, privacy ->
-                        viewModel.createPlaylist(title, privacy, target)
-                        dismiss()
+                    onOpenArtist = { id ->
+                        openPage(id, song.artist, context.getString(R.string.artist), BrowseType.ARTIST)
                     },
+                    // Only the player's copy of a track is ever missing these
+                    // and backfilling — a row opened from a list already has
+                    // whatever ids it's ever going to have.
+                    resolvingLinks = fromPlayer && linksLoading,
+                    onShare = share,
                 )
             }
-        }
-
-        if (showSpotifyImportDialog) {
-            BackHandler { showSpotifyImportDialog = false }
-            SpotifyImportAlert(
-                hazeState = hazeState,
-                signedIn = signedIn,
-                allowYoutubeMatching = {
-                    shouldRunLegacyYoutubeVersionLookup(
-                        canonicalMode = AppSettings.canonicalDiscoveryEnabled.value,
-                        configs = SourceRegistry.configs.value,
-                    )
-                },
-                onImported = { title, privacy, songs ->
-                    viewModel.createPlaylistWithVideoIds(
-                        title,
-                        privacy,
-                        songs.map { it.videoId },
-                        songs,
-                    ) { browseId, pTitle, savedLocally ->
-                        showQueueNotice(
-                            context.getString(
-                                if (savedLocally && signedIn) R.string.spotify_import_local_fallback
-                                else R.string.spotify_import_done,
-                                pTitle,
-                            ),
-                        )
-                        browseId?.let { id ->
-                            viewModel.openDetail(id, pTitle, "${songs.size} songs", songs.firstOrNull()?.thumbnailUrl)
-                        }
-                    }
-                },
-                onDismiss = { showSpotifyImportDialog = false },
-            )
-        }
-
-        // ---- Album / playlist actions ----
-        // Opened by holding a card on any tab, or from the release page's own
-        // overflow. What a track's long-press menu is to one song, this is to
-        // the whole release — the queue rows above all.
-        // One body for the sheet and the popup alike — see songMenuBody.
-        val browseMenuBody: @Composable (BrowseTarget, SongActionsPresentation) -> Unit = { target, presentation ->
-            // Every row here closes the menu first: the tracks may still have to
-            // be fetched, and leaving the sheet up over a request nothing on it
-            // reports on reads as a tap that didn't land.
-            val act: ((List<Song>) -> Unit) -> () -> Unit = { action ->
-                {
-                    browseActions = null
-                    withBrowseSongs(target, action)
+            songActions?.takeIf { songMenuOrigin == null }?.let { song ->
+                ModalBottomSheet(
+                    onDismissRequest = { songActions = null },
+                    // The sheet paints itself in the track's own colours, corners
+                    // and drag handle included — see SongActionsSheet.
+                    containerColor = Color.Transparent,
+                    dragHandle = null,
+                ) {
+                    songMenuBody(song, SongActionsPresentation.Sheet)
                 }
             }
-            // Whose playlist this is, asked here rather than carried in by
-            // whatever opened the sheet.
-            //
-            // Only the playlist's own page states it (see
-            // InnertubeParser.parsePlaylistOwned), so a card has to send for the
-            // answer and the sheet is already up by the time it lands — hence
-            // read as state rather than settled once when the target was built.
-            // Rename and Delete are absent until the answer says they apply, so
-            // the sheet's worst moment is a beat without them on the user's own
-            // playlist, rather than offering to delete a stranger's.
-            LaunchedEffect(target.browseId) {
-                viewModel.resolvePlaylistOwnership(target.browseId)
-            }
-            // Spelt out here rather than left to MainViewModel.editablePlaylist,
-            // which is the same rule over the same two lists: that reads them as
-            // plain values, which is right for a click handler and invisible to
-            // Compose. Both are read from collected state so this sheet actually
-            // recomposes when the answer arrives.
-            val ownedPlaylists by viewModel.playlistOwned.collectAsStateWithLifecycle()
-            val playlist = target.browseId
-                ?.takeIf { signedIn && ownedPlaylists[it] == true }
-                ?.let { id -> playlists.firstOrNull { it.browseId == id } }
-            val remote = target.browseId?.startsWith("local:") == false
-            val pinnedPlaylists by AppSettings.pinnedPlaylists.collectAsStateWithLifecycle()
-            val pinnableId = target.browseId?.takeIf { target.type == BrowseType.PLAYLIST }
-            BrowseActionsSheet(
-                // The live answer, not the one the target was built with.
-                target = target.copy(playlist = playlist),
-                presentation = presentation,
-                onRenameInSheet = {
-                    browseRenameInSheet = true
-                    browseMenuOrigin = null
+            // Drawn over everything, tab bar and mini player included, and kept
+            // composed through its own exit — so it is not gated on songActions.
+            HeldContextMenu(
+                item = songActions,
+                held = songMenuOrigin,
+                hazeState = hazeState,
+                onDismiss = { songActions = null },
+                // Tapping the lifted track opens its album, as Apple Music's does.
+                onPreviewClick = { song ->
+                    song.albumId?.let { id ->
+                        songActions = null
+                        viewModel.openDetail(id, song.albumName ?: song.title, song.artist, song.thumbnailUrl, BrowseType.ALBUM)
+                    }
                 },
-                startRenaming = browseRenameInSheet,
-                onPlayNext = act(playSongsNext),
-                onAddToQueue = act(addSongsToQueue),
-                onPlay = act { songs -> play(songs, 0) }.takeIf { target.fromCard },
-                onShuffle = act { songs ->
-                    // As on a release page: shuffle goes on before the queue
-                    // is built, so it is built shuffled rather than played
-                    // out of order.
-                    QueueShuffle.enableForNextQueue()
-                    play(songs, songs.indices.random())
-                }.takeIf { target.fromCard },
-                onOpen = target.browseId
-                    ?.takeIf { target.fromCard }
-                    ?.let { id ->
-                        {
-                            browseActions = null
-                            viewModel.openDetail(
-                                browseId = id,
-                                title = target.title,
-                                subtitle = target.subtitle,
-                                thumbnailUrl = target.thumbnailUrl,
-                                type = target.type,
+            ) { song ->
+                songMenuBody(song, SongActionsPresentation.Menu)
+            }
+            // A closed menu forgets where it was held, so whatever opens it next
+            // — the ⋮, the player — starts from the sheet.
+            LaunchedEffect(songActions == null) {
+                if (songActions == null) {
+                    songMenuOrigin = null
+                    openedPlayerArtwork = null // Release the handed-off Drawable on dismiss.
+                }
+            }
+
+            // ---- Download manager ----
+            // The batch view of what the top-bar indicator is counting. Dismissing
+            // it is what marks the batch seen, and marking it on the way *out*
+            // rather than on the way in is deliberate: it is the outcome the user is
+            // signing off on, and while the sheet is up there may not be one yet.
+            if (showDownloadManager) {
+                val closeDownloadManager = {
+                    showDownloadManager = false
+                    DownloadSession.markSeen()
+                }
+                BackHandler(onBack = closeDownloadManager)
+                ModalBottomSheet(
+                    onDismissRequest = closeDownloadManager,
+                    containerColor = MaterialTheme.colorScheme.background,
+                ) {
+                    DownloadManagerSheet(onDismiss = closeDownloadManager)
+                }
+            }
+
+            // ---- Add to playlist / new playlist ----
+            // One sheet for both, because they are one decision: the list of
+            // playlists with a way to make another. `creatingPlaylist` opens it
+            // straight onto the form, which is what the Library tile means.
+            if (playlistTarget != null || creatingPlaylist) {
+                val target = playlistTarget
+                val dismiss = {
+                    playlistTarget = null
+                    creatingPlaylist = false
+                }
+                ModalBottomSheet(
+                    onDismissRequest = dismiss,
+                    containerColor = MaterialTheme.colorScheme.background,
+                ) {
+                    PlaylistPickerSheet(
+                        playlists = playlists,
+                        loading = playlistsLoading,
+                        song = target,
+                        startCreating = target == null,
+                        onAdd = { picked ->
+                            target?.let { song ->
+                                viewModel.addToPlaylists(picked, song) { added, alreadyThere, failed ->
+                                    // One line for the whole batch, saying the
+                                    // outcome that matters most: what went in, else
+                                    // that it was all there already, else that it
+                                    // didn't work.
+                                    showQueueNotice(
+                                        when {
+                                            added > 1 -> context.resources.getQuantityString(
+                                                R.plurals.added_to_playlists_notice, added, added,
+                                            )
+                                            added == 1 -> context.getString(R.string.song_added_to_playlist)
+                                            alreadyThere > 0 && failed == 0 ->
+                                                context.getString(R.string.song_already_in_playlist)
+                                            else -> context.getString(R.string.failed)
+                                        },
+                                    )
+                                }
+                            }
+                            dismiss()
+                        },
+                        onCreate = { title, privacy ->
+                            viewModel.createPlaylist(title, privacy, target)
+                            dismiss()
+                        },
+                    )
+                }
+            }
+
+            if (showSpotifyImportDialog) {
+                BackHandler { showSpotifyImportDialog = false }
+                SpotifyImportAlert(
+                    hazeState = hazeState,
+                    signedIn = signedIn,
+                    allowYoutubeMatching = {
+                        shouldRunLegacyYoutubeVersionLookup(
+                            canonicalMode = AppSettings.canonicalDiscoveryEnabled.value,
+                            configs = SourceRegistry.configs.value,
+                        )
+                    },
+                    onImported = { title, privacy, songs ->
+                        viewModel.createPlaylistWithVideoIds(
+                            title,
+                            privacy,
+                            songs.map { it.videoId },
+                            songs,
+                        ) { browseId, pTitle, savedLocally ->
+                            showQueueNotice(
+                                context.getString(
+                                    if (savedLocally && signedIn) R.string.spotify_import_local_fallback
+                                    else R.string.spotify_import_done,
+                                    pTitle,
+                                ),
                             )
+                            browseId?.let { id ->
+                                viewModel.openDetail(id, pTitle, "${songs.size} songs", songs.firstOrNull()?.thumbnailUrl)
+                            }
                         }
                     },
-                // The one place a whole release is asked for, from a card and
-                // from the release's own page alike — its header spends that
-                // spot on the search now. Nothing on this device needs
-                // fetching to be on it, so a local page is the exception.
-                // What the target carries that the tracks don't is the
-                // release's own name and cover, which is exactly what the
-                // record wants.
-                onDownloadAll = act { songs ->
-                    startDownload(
-                        songs,
-                        target.browseId
-                            ?.takeIf { target.type != BrowseType.ARTIST }
-                            ?.let { id ->
-                                DownloadTarget(
-                                    id = id,
-                                    title = target.title,
-                                    subtitle = target.subtitle,
-                                    thumbnailUrl = target.thumbnailUrl,
-                                    playlist = target.type == BrowseType.PLAYLIST,
-                                )
-                            },
-                    )
-                }.takeIf { remote },
-                // Share music metadata until canonical, provider-neutral links exist.
-                onShare = if (target.type == BrowseType.ALBUM || target.type == BrowseType.PLAYLIST) {
-                    {
-                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, musicOnlyShareText(target.title, target.subtitle))
-                        }
-                        context.startActivity(Intent.createChooser(sendIntent, target.title))
-                        browseActions = null
-                    }
-                } else null,
-                isPinned = pinnableId != null && pinnableId in pinnedPlaylists,
-                onTogglePin = pinnableId?.let { id ->
-                    {
-                        val nowPinned = AppSettings.togglePinnedPlaylist(id)
-                        if (!nowPinned && id !in pinnedPlaylists) {
-                            Toast.makeText(
-                                context,
-                                context.getString(
-                                    R.string.pinned_playlist_limit,
-                                    AppSettings.MAX_PINNED_PLAYLISTS,
-                                ),
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                        }
-                        browseActions = null
-                    }
-                },
-                onRename = playlist?.let { p ->
-                    { name: String ->
-                        browseActions = null
-                        viewModel.renamePlaylist(p, name)
-                    }
-                },
-                onReorder = playlist?.let { p ->
-                    {
+                    onDismiss = { showSpotifyImportDialog = false },
+                )
+            }
+
+            // ---- Album / playlist actions ----
+            // Opened by holding a card on any tab, or from the release page's own
+            // overflow. What a track's long-press menu is to one song, this is to
+            // the whole release — the queue rows above all.
+            // One body for the sheet and the popup alike — see songMenuBody.
+            val browseMenuBody: @Composable (BrowseTarget, SongActionsPresentation) -> Unit = { target, presentation ->
+                LegacyBrowseActionsMenuBody(
+                    target = target,
+                    presentation = presentation,
+                    viewModel = viewModel,
+                    context = context,
+                    signedIn = signedIn,
+                    playlists = playlists,
+                    startRenaming = browseRenameInSheet,
+                    onBeginRename = {
+                        browseRenameInSheet = true
+                        browseMenuOrigin = null
+                    },
+                    onDismissBrowse = { browseActions = null },
+                    withBrowseSongs = withBrowseSongs,
+                    playSongsNext = playSongsNext,
+                    addSongsToQueue = addSongsToQueue,
+                    play = play,
+                    startDownload = startDownload,
+                    onBeginReorder = { p ->
                         browseActions = null
                         reorderTarget = p
                         reorderEntries = UiState.Loading
@@ -5039,98 +5051,89 @@ private fun BitChordApp(
                                 onFailure = { UiState.Error(context.getString(R.string.failed)) },
                             )
                         }
-                    }
-                },
-                onDelete = playlist?.let { p ->
-                    {
-                        browseActions = null
-                        viewModel.deletePlaylist(p)
-                    }
-                },
-                onDeleteDownload = target.downloadId?.let { id ->
-                    {
-                        browseActions = null
-                        scope.launch { Downloads.deleteCollection(context, id) }
-                    }
-                },
-            )
-        }
-        browseActions?.takeIf { browseMenuOrigin == null }?.let { target ->
-            ModalBottomSheet(
-                onDismissRequest = { browseActions = null },
-                containerColor = MaterialTheme.colorScheme.background,
-            ) {
-                browseMenuBody(target, SongActionsPresentation.Sheet)
-            }
-        }
-        HeldContextMenu(
-            item = browseActions,
-            held = browseMenuOrigin,
-            hazeState = hazeState,
-            onDismiss = { browseActions = null },
-            // Tapping the lifted card opens it, as a tap on it in the list
-            // would have. Not for a Local Music grouping, which has no page.
-            onPreviewClick = { target ->
-                target.browseId?.let { id ->
-                    browseActions = null
-                    viewModel.openDetail(
-                        browseId = id,
-                        title = target.title,
-                        subtitle = target.subtitle,
-                        thumbnailUrl = target.thumbnailUrl,
-                        type = target.type,
-                    )
-                }
-            },
-        ) { target ->
-            browseMenuBody(target, SongActionsPresentation.Menu)
-        }
-        LaunchedEffect(browseActions == null) {
-            if (browseActions == null) {
-                browseMenuOrigin = null
-                browseRenameInSheet = false
-            }
-        }
-
-        // ---- Reorder playlist ----
-        // Full height, and the list never hands its leftover scroll to the
-        // sheet: every vertical drag inside it is meant for a row or the list,
-        // and one that pulled the sheet down instead would throw the new order
-        // away. (Material3 1.3 has no sheetGesturesEnabled; the row drags
-        // consume their own events, so the list's overscroll is the only path.)
-        reorderTarget?.let { target ->
-            val close = { reorderTarget = null }
-            val keepSheetStill = remember {
-                object : NestedScrollConnection {
-                    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) = available
-                    override suspend fun onPostFling(consumed: Velocity, available: Velocity) = available
-                }
-            }
-            ModalBottomSheet(
-                onDismissRequest = close,
-                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                containerColor = MaterialTheme.colorScheme.background,
-            ) {
-                ReorderPlaylistSheet(
-                    modifier = Modifier.nestedScroll(keepSheetStill),
-                    playlist = target,
-                    entries = reorderEntries,
-                    saving = reorderSaving,
-                    onClose = close,
-                    onSave = { reordered ->
-                        val original = (reorderEntries as? UiState.Success)?.data.orEmpty()
-                        reorderSaving = true
-                        viewModel.reorderPlaylist(target, original, reordered) { saved ->
-                            reorderSaving = false
-                            showQueueNotice(
-                                context.getString(if (saved) R.string.playlist_reordered else R.string.reorder_failed),
-                            )
-                            if (saved && reorderTarget == target) reorderTarget = null
-                        }
                     },
+                    onDeleteDownload = { id -> scope.launch { Downloads.deleteCollection(context, id) } },
                 )
             }
+            browseActions?.takeIf { browseMenuOrigin == null }?.let { target ->
+                ModalBottomSheet(
+                    onDismissRequest = { browseActions = null },
+                    containerColor = MaterialTheme.colorScheme.background,
+                ) {
+                    browseMenuBody(target, SongActionsPresentation.Sheet)
+                }
+            }
+            HeldContextMenu(
+                item = browseActions,
+                held = browseMenuOrigin,
+                hazeState = hazeState,
+                onDismiss = { browseActions = null },
+                // Tapping the lifted card opens it, as a tap on it in the list
+                // would have. Not for a Local Music grouping, which has no page.
+                onPreviewClick = { target ->
+                    target.browseId?.let { id ->
+                        browseActions = null
+                        viewModel.openDetail(
+                            browseId = id,
+                            title = target.title,
+                            subtitle = target.subtitle,
+                            thumbnailUrl = target.thumbnailUrl,
+                            type = target.type,
+                        )
+                    }
+                },
+            ) { target ->
+                browseMenuBody(target, SongActionsPresentation.Menu)
+            }
+            LaunchedEffect(browseActions == null) {
+                if (browseActions == null) {
+                    browseMenuOrigin = null
+                    browseRenameInSheet = false
+                }
+            }
+
+            // ---- Reorder playlist ----
+            // Full height, and the list never hands its leftover scroll to the
+            // sheet: every vertical drag inside it is meant for a row or the list,
+            // and one that pulled the sheet down instead would throw the new order
+            // away. (Material3 1.3 has no sheetGesturesEnabled; the row drags
+            // consume their own events, so the list's overscroll is the only path.)
+            reorderTarget?.let { target ->
+                val close = { reorderTarget = null }
+                val keepSheetStill = remember {
+                    object : NestedScrollConnection {
+                        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) = available
+                        override suspend fun onPostFling(consumed: Velocity, available: Velocity) = available
+                    }
+                }
+                ModalBottomSheet(
+                    onDismissRequest = close,
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                    containerColor = MaterialTheme.colorScheme.background,
+                ) {
+                    ReorderPlaylistSheet(
+                        modifier = Modifier.nestedScroll(keepSheetStill),
+                        playlist = target,
+                        entries = reorderEntries,
+                        saving = reorderSaving,
+                        onClose = close,
+                        onSave = { reordered ->
+                            val original = (reorderEntries as? UiState.Success)?.data.orEmpty()
+                            reorderSaving = true
+                            viewModel.reorderPlaylist(target, original, reordered) { saved ->
+                                reorderSaving = false
+                                showQueueNotice(
+                                    context.getString(if (saved) R.string.playlist_reordered else R.string.reorder_failed),
+                                )
+                                if (saved && reorderTarget == target) reorderTarget = null
+                            }
+                        },
+                    )
+                }
+            }
+
         }
+        contextualActionOverlays()
 
         // ---- Welcome (once; under the sign-in WebView it can open) ----
         // There from the first frame, so no way in; on the way out it drops
@@ -5155,91 +5158,18 @@ private fun BitChordApp(
 
         // ---- Google sign-in (full screen WebView) ----
         webSession?.let { mode ->
-            BackHandler { webSession = null }
-            // Raised by "Use this channel", read by the browser as "take the
-            // session from the page as it now stands". A counter rather than a
-            // flag so a second tap, after a failed first one, is still a new
-            // request rather than a value that was already true.
-            var captureRequest by remember(mode) { mutableIntStateOf(0) }
-            var captureFailed by remember(mode) { mutableStateOf(false) }
-            var pageReady by remember(mode) { mutableStateOf(false) }
-            var confirmingProfile by remember(mode) { mutableStateOf(false) }
-            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                Column(Modifier.fillMaxSize()) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconButton(onClick = { webSession = null }) {
-                            Icon(
-                                Icons.Rounded.Close,
-                                contentDescription = stringResource(R.string.close),
-                                tint = MaterialTheme.colorScheme.onBackground,
-                            )
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = when (mode) {
-                                    WebSessionMode.SIGN_IN -> stringResource(R.string.sign_in_youtube_music)
-                                    WebSessionMode.SWITCH_CHANNEL -> stringResource(R.string.choose_profile)
-                                },
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onBackground,
-                            )
-                            if (pageReady) {
-                                Text(
-                                    text = if (captureFailed) {
-                                         stringResource(R.string.profile_unavailable)
-                                     } else {
-                                         stringResource(R.string.switch_profile_hint)
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2,
-                                )
-                            }
-                        }
-                        if (pageReady) {
-                            TextButton(onClick = {
-                                captureFailed = false
-                                confirmingProfile = true
-                                captureRequest++
-                            }, enabled = !confirmingProfile) {
-                                Text(
-                                    if (confirmingProfile) stringResource(R.string.checking)
-                                    else stringResource(R.string.use_this_profile),
-                                )
-                            }
-                        }
-                    }
-                    YtMusicLoginScreen(
-                        mode = mode,
-                        initialCookie = if (mode == WebSessionMode.SWITCH_CHANNEL) {
-                            googleAccounts.firstOrNull { it.accountId == activeAccountId }?.cookie
-                        } else null,
-                        captureRequest = captureRequest,
-                        onPageReady = { pageReady = it },
-                        onCaptureUnavailable = {
-                            confirmingProfile = false
-                            captureFailed = true
-                        },
-                        onCaptured = { session ->
-                            viewModel.onWebSession(session, mode) { accepted ->
-                                confirmingProfile = false
-                                if (accepted) {
-                                    webSession = null
-                                    if (mode == WebSessionMode.SIGN_IN) selectedTab = 2
-                                } else {
-                                    captureFailed = true
-                                }
-                            }
-                        },
-                    )
-                }
-            }
+            WebSessionOverlay(
+                mode = mode,
+                initialCookie = if (mode == WebSessionMode.SWITCH_CHANNEL) {
+                    googleAccounts.firstOrNull { it.accountId == activeAccountId }?.cookie
+                } else null,
+                viewModel = viewModel,
+                onClose = { webSession = null },
+                onAccepted = {
+                    webSession = null
+                    if (mode == WebSessionMode.SIGN_IN) selectedTab = TAB_LIBRARY
+                },
+            )
         }
 
         // ---- Update available (once per launch; held until the welcome is done) ----
@@ -5285,6 +5215,59 @@ private fun BitChordApp(
             )
         }
 
+        if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null) {
+            CanonicalPlaylistMenus(
+                hazeState = hazeState,
+                librarySortOpen = playlistLibrarySortMenu,
+                onLibrarySortDismiss = { playlistLibrarySortMenu = false },
+                librarySort = playlistLibrarySort,
+                onLibrarySort = { playlistLibrarySort = it },
+                libraryFilterOpen = playlistLibraryOptionsMenu,
+                onLibraryFilterDismiss = { playlistLibraryOptionsMenu = false },
+                libraryFilter = playlistLibraryFilter,
+                onLibraryFilter = { playlistLibraryFilter = it },
+                detailSortOpen = playlistDetailSortMenu,
+                onDetailSortDismiss = { playlistDetailSortMenu = false },
+                detailSort = playlistDetailSort,
+                onDetailSort = { playlistDetailSort = it },
+                detailOptionsOpen = playlistDetailOptionsMenu,
+                onDetailOptionsDismiss = { playlistDetailOptionsMenu = false },
+                selectedCard = openedCanonicalPlaylist,
+                detailRows = playlistDetailRows,
+                onDetailQueue = { selected, intent ->
+                    when (selected) {
+                        is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart ->
+                            executeSmartCollection(
+                                SmartCollectionActionSource.SavedV2Definition(selected.definition.id),
+                                intent,
+                            )
+                        is com.music.bitchord.ui.screens.LibraryPlaylistCard.CanonicalNormal ->
+                            executeSmartCollection(
+                                SmartCollectionActionSource.SavedStaticPlaylist(selected.definition.id),
+                                intent,
+                            )
+                        else -> Unit
+                    }
+                },
+                onDetailEdit = { selected ->
+                    openedCanonicalPlaylist = null
+                    when (selected) {
+                        is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart -> {
+                            editingSmartPlaylistId = selected.definition.id
+                            editingNormalPlaylistId = null
+                            showSmartPlaylistBuilder = true
+                        }
+                        is com.music.bitchord.ui.screens.LibraryPlaylistCard.CanonicalNormal -> {
+                            editingNormalPlaylistId = selected.definition.id
+                            editingSmartPlaylistId = null
+                            showSmartPlaylistBuilder = true
+                        }
+                        else -> Unit
+                    }
+                },
+            )
+        }
+
         if (songSortMenuOpen) {
             BackHandler { songSortMenuOpen = false }
             FrostedSortMenu(
@@ -5316,7 +5299,9 @@ private fun BitChordApp(
         if (folderMenuOpen && menuFolder != null) {
             BackHandler { folderMenuOpen = false }
             val downloadsFolder = menuFolder == "local:downloads"
-            val viewType = folderViewTypeOf(menuFolder)
+            val folderState = localFolderStates.getOrPut(menuFolder) { LocalFolderState() }
+            val selectedFolderTab = folderState.tab
+            val viewType = folderState.viewTypeFor(selectedFolderTab, folderViewTypeOf(menuFolder))
             FrostedFolderMenu(
                 hazeState = hazeState,
                 sort = folderSortOf(menuFolder),
@@ -5328,8 +5313,7 @@ private fun BitChordApp(
                 },
                 onToggleViewType = {
                     val next = if (viewType == LibraryViewType.GRID) LibraryViewType.LIST else LibraryViewType.GRID
-                    if (downloadsFolder) AppSettings.setDownloadedMusicViewType(next)
-                    else AppSettings.setLocalMusicViewType(next)
+                    folderState.setViewTypeFor(selectedFolderTab, next)
                     folderMenuOpen = false
                 },
                 onDismiss = { folderMenuOpen = false },
@@ -5376,158 +5360,20 @@ private fun BitChordApp(
             )
         }
 
-        if (showListenBrainzLogin) {
-            var tokenInput by remember { mutableStateOf(listenBrainzToken) }
-            ListenBrainzTokenAlert(
-                hazeState = hazeState,
-                tokenInput = tokenInput,
-                onTokenInputChange = { tokenInput = it },
-                onSave = {
-                    AppSettings.setListenBrainzToken(tokenInput.trim())
-                    showListenBrainzLogin = false
-                },
-                onDismiss = { showListenBrainzLogin = false },
-            )
-        }
-
-        if (showLastfmLogin) {
-            var usernameInput by remember { mutableStateOf("") }
-            var passwordInput by remember { mutableStateOf("") }
-            var lastfmError by remember { mutableStateOf<String?>(null) }
-            var lastfmLoading by remember { mutableStateOf(false) }
-            LastfmLoginAlert(
-                hazeState = hazeState,
-                usernameInput = usernameInput,
-                onUsernameInputChange = { usernameInput = it },
-                passwordInput = passwordInput,
-                onPasswordInputChange = { passwordInput = it },
-                error = lastfmError,
-                loading = lastfmLoading,
-                onSignIn = {
-                    lastfmLoading = true
-                    lastfmError = null
-                    scope.launch {
-                        try {
-                            LastFM.initialize(
-                                apiKey = AppSettings.lastfmApiKey.value,
-                                secret = AppSettings.lastfmSecret.value,
-                            )
-                            LastFM.getMobileSession(usernameInput.trim(), passwordInput)
-                                .onSuccess { auth ->
-                                    AppSettings.setLastfmSessionKey(auth.session.key)
-                                    AppSettings.setLastfmUsername(auth.session.name)
-                                    AppSettings.setLastfmEnabled(true)
-                                    showLastfmLogin = false
-                                }
-                                .onFailure { e ->
-                                    lastfmError = e.message ?: context.getString(R.string.login_failed)
-                                }
-                        } catch (e: Exception) {
-                            lastfmError = e.message ?: context.getString(R.string.login_failed)
-                        } finally {
-                            lastfmLoading = false
-                        }
-                    }
-                },
-                onDismiss = { if (!lastfmLoading) showLastfmLogin = false },
-            )
-        }
-
-        if (showWebDavEditor) {
-            BackHandler { showWebDavEditor = false }
-            ServerEditorHost(
-                hazeState = hazeState,
-                title = stringResource(R.string.webdav),
-                description = stringResource(R.string.webdav_description),
-                fields = listOf(
-                    FieldConfig(
-                        initial = AppSettings.webdavUrl.value,
-                        placeholder = stringResource(R.string.webdav_server_url_hint),
-                        keyboardType = KeyboardType.Uri,
-                    ),
-                    FieldConfig(
-                        initial = AppSettings.webdavUsername.value,
-                        placeholder = stringResource(R.string.username),
-                    ),
-                    FieldConfig(
-                        initial = AppSettings.webdavPassword.value,
-                        placeholder = stringResource(R.string.password),
-                        keyboardType = KeyboardType.Password,
-                        isPassword = true,
-                    ),
-                ),
-                canSubmit = { it[0].isNotBlank() },
-                testFailedRes = R.string.webdav_test_failed,
-                onTest = { (url, username, password) ->
-                    com.music.bitchord.data.webdav.WebDavRepository.testConnection(
-                        url.trim(),
-                        username.trim(),
-                        password,
-                    )
-                },
-                onSave = { (url, username, password) ->
-                    AppSettings.setWebDavUrl(url.trim())
-                    AppSettings.setWebDavUsername(username.trim())
-                    AppSettings.setWebDavPassword(password)
-                    showWebDavEditor = false
-                },
-                onDismiss = { showWebDavEditor = false },
-            )
-        }
-
-        if (showSmbEditor) {
-            BackHandler { showSmbEditor = false }
-            ServerEditorHost(
-                hazeState = hazeState,
-                title = stringResource(R.string.smb),
-                description = stringResource(R.string.smb_description),
-                fields = listOf(
-                    FieldConfig(
-                        initial = AppSettings.smbHost.value,
-                        placeholder = stringResource(R.string.smb_server_hint),
-                        keyboardType = KeyboardType.Uri,
-                    ),
-                    FieldConfig(
-                        initial = AppSettings.smbShare.value,
-                        placeholder = stringResource(R.string.smb_share_hint),
-                    ),
-                    FieldConfig(
-                        initial = AppSettings.smbBasePath.value,
-                        placeholder = stringResource(R.string.smb_folder_hint),
-                    ),
-                    FieldConfig(
-                        initial = AppSettings.smbUsername.value,
-                        placeholder = stringResource(R.string.username),
-                    ),
-                    FieldConfig(
-                        initial = AppSettings.smbPassword.value,
-                        placeholder = stringResource(R.string.password),
-                        keyboardType = KeyboardType.Password,
-                        isPassword = true,
-                    ),
-                ),
-                canSubmit = { it[0].isNotBlank() && it[1].isNotBlank() },
-                testFailedRes = R.string.smb_test_failed,
-                onTest = { (host, share, folder, username, password) ->
-                    com.music.bitchord.data.smb.SmbRepository.testConnection(
-                        host.trim(),
-                        share.trim(),
-                        folder.trim(),
-                        username.trim(),
-                        password,
-                    )
-                },
-                onSave = { (host, share, folder, username, password) ->
-                    AppSettings.setSmbHost(host.trim())
-                    AppSettings.setSmbShare(share.trim())
-                    AppSettings.setSmbBasePath(folder.trim())
-                    AppSettings.setSmbUsername(username.trim())
-                    AppSettings.setSmbPassword(password)
-                    showSmbEditor = false
-                },
-                onDismiss = { showSmbEditor = false },
-            )
-        }
+        ConnectionEditors(
+            hazeState = hazeState,
+            context = context,
+            scope = scope,
+            listenBrainzToken = listenBrainzToken,
+            listenBrainzOpen = showListenBrainzLogin,
+            lastfmOpen = showLastfmLogin,
+            webDavOpen = showWebDavEditor,
+            smbOpen = showSmbEditor,
+            onCloseListenBrainz = { showListenBrainzLogin = false },
+            onCloseLastfm = { showLastfmLogin = false },
+            onCloseWebDav = { showWebDavEditor = false },
+            onCloseSmb = { showSmbEditor = false },
+        )
 
         // A clash mid-upload, answered here so the scrim covers the tab bar
         // and mini player like every other alert. Backing out is a skip —
@@ -5555,85 +5401,14 @@ private fun BitChordApp(
             )
         }
 
-        // ---- Discord sign-in (full screen WebView) ----
-        if (showDiscordLogin) {
-            BackHandler { showDiscordLogin = false }
-            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                Column(Modifier.fillMaxSize()) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconButton(onClick = { showDiscordLogin = false }) {
-                            Icon(
-                                Icons.Rounded.Close,
-                                contentDescription = stringResource(R.string.close),
-                                tint = MaterialTheme.colorScheme.onBackground,
-                            )
-                        }
-                        Text(
-                            "Sign in to Discord",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onBackground,
-                        )
-                    }
-                    DiscordLoginScreen(
-                        onTokenCaptured = { token ->
-                            AppSettings.setDiscordToken(token)
-                            showDiscordLogin = false
-                        },
-                    )
-                }
-            }
-        }
-
-        // ---- Spotify sign-in (full screen WebView) ----
-        // Out here with Discord's rather than on the Spotify page itself: see
-        // SpotifyLoginScreen for what the blurred content tree does to a WebView.
-        if (showSpotifyLogin) {
-            BackHandler { showSpotifyLogin = false }
-            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                Column(Modifier.fillMaxSize()) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconButton(onClick = { showSpotifyLogin = false }) {
-                            Icon(
-                                Icons.Rounded.Close,
-                                contentDescription = stringResource(R.string.close),
-                                tint = MaterialTheme.colorScheme.onBackground,
-                            )
-                        }
-                        Text(
-                            stringResource(R.string.spotify_sign_in),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onBackground,
-                        )
-                    }
-                    SpotifyLoginScreen(
-                        modifier = Modifier.navigationBarsPadding(),
-                        onConnected = { token ->
-                            AppSettings.setSpotifySpdcToken(token)
-                            showSpotifyLogin = false
-                        },
-                    )
-                }
-            }
-        }
-
-        if (showSpotifyCanvasAuth) {
-            BackHandler { showSpotifyCanvasAuth = false }
-            SpotifyCanvasAuthScreen(
-                onNavigateUp = { showSpotifyCanvasAuth = false }
-            )
-        }
+        ExternalAccountLoginOverlays(
+            showDiscordLogin = showDiscordLogin,
+            onDismissDiscord = { showDiscordLogin = false },
+            showSpotifyLogin = showSpotifyLogin,
+            onDismissSpotify = { showSpotifyLogin = false },
+            showSpotifyCanvasAuth = showSpotifyCanvasAuth,
+            onDismissSpotifyCanvasAuth = { showSpotifyCanvasAuth = false },
+        )
 
         discordDialog?.let { which ->
             DiscordDialogHost(
@@ -5690,6 +5465,766 @@ private fun BitChordApp(
             )
         }
 
+    }
+}
+
+@Composable
+private fun ExternalAccountLoginOverlays(
+    showDiscordLogin: Boolean,
+    onDismissDiscord: () -> Unit,
+    showSpotifyLogin: Boolean,
+    onDismissSpotify: () -> Unit,
+    showSpotifyCanvasAuth: Boolean,
+    onDismissSpotifyCanvasAuth: () -> Unit,
+) {
+    // ---- Discord sign-in (full screen WebView) ----
+    if (showDiscordLogin) {
+        BackHandler { onDismissDiscord() }
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(Modifier.fillMaxSize()) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = { onDismissDiscord() }) {
+                        Icon(
+                            Icons.Rounded.Close,
+                            contentDescription = stringResource(R.string.close),
+                            tint = MaterialTheme.colorScheme.onBackground,
+                        )
+                    }
+                    Text(
+                        "Sign in to Discord",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                }
+                DiscordLoginScreen(
+                    onTokenCaptured = { token ->
+                        AppSettings.setDiscordToken(token)
+                        onDismissDiscord()
+                    },
+                )
+            }
+        }
+    }
+
+    // ---- Spotify sign-in (full screen WebView) ----
+    // Out here with Discord's rather than on the Spotify page itself: see
+    // SpotifyLoginScreen for what the blurred content tree does to a WebView.
+    if (showSpotifyLogin) {
+        BackHandler { onDismissSpotify() }
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(Modifier.fillMaxSize()) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = { onDismissSpotify() }) {
+                        Icon(
+                            Icons.Rounded.Close,
+                            contentDescription = stringResource(R.string.close),
+                            tint = MaterialTheme.colorScheme.onBackground,
+                        )
+                    }
+                    Text(
+                        stringResource(R.string.spotify_sign_in),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                }
+                SpotifyLoginScreen(
+                    modifier = Modifier.navigationBarsPadding(),
+                    onConnected = { token ->
+                        AppSettings.setSpotifySpdcToken(token)
+                        onDismissSpotify()
+                    },
+                )
+            }
+        }
+    }
+
+    if (showSpotifyCanvasAuth) {
+        BackHandler { onDismissSpotifyCanvasAuth() }
+        SpotifyCanvasAuthScreen(
+            onNavigateUp = { onDismissSpotifyCanvasAuth() }
+        )
+    }
+
+}
+
+@Composable
+private fun LegacyBrowseActionsMenuBody(
+    target: BrowseTarget,
+    presentation: SongActionsPresentation,
+    viewModel: MainViewModel,
+    context: Context,
+    signedIn: Boolean,
+    playlists: List<UserPlaylist>,
+    startRenaming: Boolean,
+    onBeginRename: () -> Unit,
+    onDismissBrowse: () -> Unit,
+    withBrowseSongs: (BrowseTarget, (List<Song>) -> Unit) -> Unit,
+    playSongsNext: (List<Song>) -> Unit,
+    addSongsToQueue: (List<Song>) -> Unit,
+    play: (List<Song>, Int) -> Unit,
+    startDownload: (List<Song>, DownloadTarget?) -> Unit,
+    onBeginReorder: (UserPlaylist) -> Unit,
+    onDeleteDownload: (String) -> Unit,
+) {
+    // Every row here closes the menu first: the tracks may still have to
+    // be fetched, and leaving the sheet up over a request nothing on it
+    // reports on reads as a tap that didn't land.
+    val act: ((List<Song>) -> Unit) -> () -> Unit = { action ->
+        {
+            onDismissBrowse()
+            withBrowseSongs(target, action)
+        }
+    }
+    // Whose playlist this is, asked here rather than carried in by
+    // whatever opened the sheet.
+    //
+    // Only the playlist's own page states it (see
+    // InnertubeParser.parsePlaylistOwned), so a card has to send for the
+    // answer and the sheet is already up by the time it lands — hence
+    // read as state rather than settled once when the target was built.
+    // Rename and Delete are absent until the answer says they apply, so
+    // the sheet's worst moment is a beat without them on the user's own
+    // playlist, rather than offering to delete a stranger's.
+    LaunchedEffect(target.browseId) {
+        viewModel.resolvePlaylistOwnership(target.browseId)
+    }
+    // Spelt out here rather than left to MainViewModel.editablePlaylist,
+    // which is the same rule over the same two lists: that reads them as
+    // plain values, which is right for a click handler and invisible to
+    // Compose. Both are read from collected state so this sheet actually
+    // recomposes when the answer arrives.
+    val ownedPlaylists by viewModel.playlistOwned.collectAsStateWithLifecycle()
+    val playlist = target.browseId
+        ?.takeIf { signedIn && ownedPlaylists[it] == true }
+        ?.let { id -> playlists.firstOrNull { it.browseId == id } }
+    val remote = target.browseId?.startsWith("local:") == false
+    val pinnedPlaylists by AppSettings.pinnedPlaylists.collectAsStateWithLifecycle()
+    val pinnableId = target.browseId?.takeIf { target.type == BrowseType.PLAYLIST }
+    BrowseActionsSheet(
+        // The live answer, not the one the target was built with.
+        target = target.copy(playlist = playlist),
+        presentation = presentation,
+        onRenameInSheet = {
+            onBeginRename()
+        },
+        startRenaming = startRenaming,
+        onPlayNext = act(playSongsNext),
+        onAddToQueue = act(addSongsToQueue),
+        onPlay = act { songs -> play(songs, 0) }.takeIf { target.fromCard },
+        onShuffle = act { songs ->
+            // As on a release page: shuffle goes on before the queue
+            // is built, so it is built shuffled rather than played
+            // out of order.
+            QueueShuffle.enableForNextQueue()
+            play(songs, songs.indices.random())
+        }.takeIf { target.fromCard },
+        onOpen = target.browseId
+            ?.takeIf { target.fromCard }
+            ?.let { id ->
+                {
+                    onDismissBrowse()
+                    viewModel.openDetail(
+                        browseId = id,
+                        title = target.title,
+                        subtitle = target.subtitle,
+                        thumbnailUrl = target.thumbnailUrl,
+                        type = target.type,
+                    )
+                }
+            },
+        // The one place a whole release is asked for, from a card and
+        // from the release's own page alike — its header spends that
+        // spot on the search now. Nothing on this device needs
+        // fetching to be on it, so a local page is the exception.
+        // What the target carries that the tracks don't is the
+        // release's own name and cover, which is exactly what the
+        // record wants.
+        onDownloadAll = act { songs ->
+            startDownload(
+                songs,
+                target.browseId
+                    ?.takeIf { target.type != BrowseType.ARTIST }
+                    ?.let { id ->
+                        DownloadTarget(
+                            id = id,
+                            title = target.title,
+                            subtitle = target.subtitle,
+                            thumbnailUrl = target.thumbnailUrl,
+                            playlist = target.type == BrowseType.PLAYLIST,
+                        )
+                    },
+            )
+        }.takeIf { remote },
+        // Share music metadata until canonical, provider-neutral links exist.
+        onShare = if (target.type == BrowseType.ALBUM || target.type == BrowseType.PLAYLIST) {
+            {
+                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, musicOnlyShareText(target.title, target.subtitle))
+                }
+                context.startActivity(Intent.createChooser(sendIntent, target.title))
+                onDismissBrowse()
+            }
+        } else null,
+        isPinned = pinnableId != null && pinnableId in pinnedPlaylists,
+        onTogglePin = pinnableId?.let { id ->
+            {
+                val nowPinned = AppSettings.togglePinnedPlaylist(id)
+                if (!nowPinned && id !in pinnedPlaylists) {
+                    Toast.makeText(
+                        context,
+                        context.getString(
+                            R.string.pinned_playlist_limit,
+                            AppSettings.MAX_PINNED_PLAYLISTS,
+                        ),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+                onDismissBrowse()
+            }
+        },
+        onRename = playlist?.let { p ->
+            { name: String ->
+                onDismissBrowse()
+                viewModel.renamePlaylist(p, name)
+            }
+        },
+        onReorder = playlist?.let { p -> { onBeginReorder(p) } },
+        onDelete = playlist?.let { p ->
+            {
+                onDismissBrowse()
+                viewModel.deletePlaylist(p)
+            }
+        },
+        onDeleteDownload = target.downloadId?.let { id ->
+            {
+                onDismissBrowse()
+                onDeleteDownload(id)
+            }
+        },
+    )
+}
+
+/** Shared status representation for the floating top bar. */
+@Composable
+private fun ListenTogetherLatencyBadge(status: ServerConnectionState) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp),
+                            ) {
+                                when (val state = status) {
+                                    is ServerConnectionState.CustomFallback -> {
+                                        Icon(
+                                            Icons.Rounded.CloudOff,
+                                            contentDescription = stringResource(R.string.listen_together_top_bar_fallback, stringResource(R.string.listen_together_ping, state.latencyMs)),
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(14.dp),
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            text = stringResource(R.string.listen_together_ping, state.latencyMs),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.error,
+                                            maxLines = 1,
+                                        )
+                                    }
+                                    is ServerConnectionState.CustomOnline -> {
+                                        Text(
+                                            text = stringResource(R.string.listen_together_ping, state.latencyMs),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                        )
+                                    }
+                                    is ServerConnectionState.DefaultOnline -> {
+                                        Text(
+                                            text = stringResource(R.string.listen_together_ping, state.latencyMs),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                        )
+                                    }
+                                    ServerConnectionState.Checking -> {
+                                        Text(
+                                            text = stringResource(R.string.listen_together_server_checking),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                        )
+                                    }
+                                    ServerConnectionState.Offline -> {
+                                        Text(
+                                            text = stringResource(R.string.listen_together_server_offline_dash),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.error,
+                                            maxLines = 1,
+                                        )
+                                    }
+                                }
+                            }
+
+}
+
+/** Full-screen sign-in remains isolated from the large BitChordApp Compose method. */
+@Composable
+private fun WebSessionOverlay(
+    mode: WebSessionMode,
+    initialCookie: String?,
+    viewModel: MainViewModel,
+    onClose: () -> Unit,
+    onAccepted: () -> Unit,
+) {
+    BackHandler { onClose() }
+    var captureRequest by remember(mode) { mutableIntStateOf(0) }
+    var captureFailed by remember(mode) { mutableStateOf(false) }
+    var pageReady by remember(mode) { mutableStateOf(false) }
+    var confirmingProfile by remember(mode) { mutableStateOf(false) }
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(Modifier.fillMaxSize()) {
+            Row(
+                Modifier.fillMaxWidth().statusBarsPadding()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Rounded.Close,
+                        contentDescription = stringResource(R.string.close),
+                        tint = MaterialTheme.colorScheme.onBackground)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = when (mode) {
+                            WebSessionMode.SIGN_IN -> stringResource(R.string.sign_in_youtube_music)
+                            WebSessionMode.SWITCH_CHANNEL -> stringResource(R.string.choose_profile)
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                    if (pageReady) {
+                        Text(
+                            text = if (captureFailed) {
+                                stringResource(R.string.profile_unavailable)
+                            } else {
+                                stringResource(R.string.switch_profile_hint)
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                        )
+                    }
+                }
+                if (pageReady) {
+                    TextButton(
+                        onClick = {
+                            captureFailed = false
+                            confirmingProfile = true
+                            captureRequest++
+                        },
+                        enabled = !confirmingProfile,
+                    ) {
+                        Text(
+                            if (confirmingProfile) stringResource(R.string.checking)
+                            else stringResource(R.string.use_this_profile),
+                        )
+                    }
+                }
+            }
+            YtMusicLoginScreen(
+                mode = mode,
+                initialCookie = initialCookie,
+                captureRequest = captureRequest,
+                onPageReady = { pageReady = it },
+                onCaptureUnavailable = {
+                    confirmingProfile = false
+                    captureFailed = true
+                },
+                onCaptured = { session ->
+                    viewModel.onWebSession(session, mode) { accepted ->
+                        confirmingProfile = false
+                        if (accepted) onAccepted()
+                        else captureFailed = true
+                    }
+                },
+            )
+        }
+    }
+}
+
+/**
+ * First-party account and server editors are owned by a separate composable:
+ * no duplicate UI, and BitChordApp no longer emits their bytecode inline.
+ */
+@Composable
+private fun ConnectionEditors(
+    hazeState: HazeState,
+    context: android.content.Context,
+    scope: kotlinx.coroutines.CoroutineScope,
+    listenBrainzToken: String,
+    listenBrainzOpen: Boolean,
+    lastfmOpen: Boolean,
+    webDavOpen: Boolean,
+    smbOpen: Boolean,
+    onCloseListenBrainz: () -> Unit,
+    onCloseLastfm: () -> Unit,
+    onCloseWebDav: () -> Unit,
+    onCloseSmb: () -> Unit,
+) {
+        if (listenBrainzOpen) {
+            var tokenInput by remember { mutableStateOf(listenBrainzToken) }
+            ListenBrainzTokenAlert(
+                hazeState = hazeState,
+                tokenInput = tokenInput,
+                onTokenInputChange = { tokenInput = it },
+                onSave = {
+                    AppSettings.setListenBrainzToken(tokenInput.trim())
+                    onCloseListenBrainz()
+                },
+                onDismiss = { onCloseListenBrainz() },
+            )
+        }
+
+        if (lastfmOpen) {
+            var usernameInput by remember { mutableStateOf("") }
+            var passwordInput by remember { mutableStateOf("") }
+            var lastfmError by remember { mutableStateOf<String?>(null) }
+            var lastfmLoading by remember { mutableStateOf(false) }
+            LastfmLoginAlert(
+                hazeState = hazeState,
+                usernameInput = usernameInput,
+                onUsernameInputChange = { usernameInput = it },
+                passwordInput = passwordInput,
+                onPasswordInputChange = { passwordInput = it },
+                error = lastfmError,
+                loading = lastfmLoading,
+                onSignIn = {
+                    lastfmLoading = true
+                    lastfmError = null
+                    scope.launch {
+                        try {
+                            LastFM.initialize(
+                                apiKey = AppSettings.lastfmApiKey.value,
+                                secret = AppSettings.lastfmSecret.value,
+                            )
+                            LastFM.getMobileSession(usernameInput.trim(), passwordInput)
+                                .onSuccess { auth ->
+                                    AppSettings.setLastfmSessionKey(auth.session.key)
+                                    AppSettings.setLastfmUsername(auth.session.name)
+                                    AppSettings.setLastfmEnabled(true)
+                                    onCloseLastfm()
+                                }
+                                .onFailure { e ->
+                                    lastfmError = e.message ?: context.getString(R.string.login_failed)
+                                }
+                        } catch (e: Exception) {
+                            lastfmError = e.message ?: context.getString(R.string.login_failed)
+                        } finally {
+                            lastfmLoading = false
+                        }
+                    }
+                },
+                onDismiss = { if (!lastfmLoading) onCloseLastfm() },
+            )
+        }
+
+        if (webDavOpen) {
+            BackHandler { onCloseWebDav() }
+            ServerEditorHost(
+                hazeState = hazeState,
+                title = stringResource(R.string.webdav),
+                description = stringResource(R.string.webdav_description),
+                fields = listOf(
+                    FieldConfig(
+                        initial = AppSettings.webdavUrl.value,
+                        placeholder = stringResource(R.string.webdav_server_url_hint),
+                        keyboardType = KeyboardType.Uri,
+                    ),
+                    FieldConfig(
+                        initial = AppSettings.webdavUsername.value,
+                        placeholder = stringResource(R.string.username),
+                    ),
+                    FieldConfig(
+                        initial = AppSettings.webdavPassword.value,
+                        placeholder = stringResource(R.string.password),
+                        keyboardType = KeyboardType.Password,
+                        isPassword = true,
+                    ),
+                ),
+                canSubmit = { it[0].isNotBlank() },
+                testFailedRes = R.string.webdav_test_failed,
+                onTest = { (url, username, password) ->
+                    com.music.bitchord.data.webdav.WebDavRepository.testConnection(
+                        url.trim(),
+                        username.trim(),
+                        password,
+                    )
+                },
+                onSave = { (url, username, password) ->
+                    AppSettings.setWebDavUrl(url.trim())
+                    AppSettings.setWebDavUsername(username.trim())
+                    AppSettings.setWebDavPassword(password)
+                    onCloseWebDav()
+                },
+                onDismiss = { onCloseWebDav() },
+            )
+        }
+
+        if (smbOpen) {
+            BackHandler { onCloseSmb() }
+            ServerEditorHost(
+                hazeState = hazeState,
+                title = stringResource(R.string.smb),
+                description = stringResource(R.string.smb_description),
+                fields = listOf(
+                    FieldConfig(
+                        initial = AppSettings.smbHost.value,
+                        placeholder = stringResource(R.string.smb_server_hint),
+                        keyboardType = KeyboardType.Uri,
+                    ),
+                    FieldConfig(
+                        initial = AppSettings.smbShare.value,
+                        placeholder = stringResource(R.string.smb_share_hint),
+                    ),
+                    FieldConfig(
+                        initial = AppSettings.smbBasePath.value,
+                        placeholder = stringResource(R.string.smb_folder_hint),
+                    ),
+                    FieldConfig(
+                        initial = AppSettings.smbUsername.value,
+                        placeholder = stringResource(R.string.username),
+                    ),
+                    FieldConfig(
+                        initial = AppSettings.smbPassword.value,
+                        placeholder = stringResource(R.string.password),
+                        keyboardType = KeyboardType.Password,
+                        isPassword = true,
+                    ),
+                ),
+                canSubmit = { it[0].isNotBlank() && it[1].isNotBlank() },
+                testFailedRes = R.string.smb_test_failed,
+                onTest = { (host, share, folder, username, password) ->
+                    com.music.bitchord.data.smb.SmbRepository.testConnection(
+                        host.trim(),
+                        share.trim(),
+                        folder.trim(),
+                        username.trim(),
+                        password,
+                    )
+                },
+                onSave = { (host, share, folder, username, password) ->
+                    AppSettings.setSmbHost(host.trim())
+                    AppSettings.setSmbShare(share.trim())
+                    AppSettings.setSmbBasePath(folder.trim())
+                    AppSettings.setSmbUsername(username.trim())
+                    AppSettings.setSmbPassword(password)
+                    onCloseSmb()
+                },
+                onDismiss = { onCloseSmb() },
+            )
+        }
+
+
+}
+
+/** Native toolbar actions shared by library and canonical playlist details.
+ * The same icon controls as other browse screens, with no UI logic in BitChordApp.
+ */
+@Composable
+private fun CanonicalPlaylistToolbarActions(
+    hasDetail: Boolean,
+    showCreate: Boolean,
+    searching: Boolean,
+    onCreate: () -> Unit,
+    onSearch: () -> Unit,
+    onSortOrFilter: () -> Unit,
+    onOverflow: () -> Unit,
+) {
+    if (!hasDetail && showCreate) {
+        IconButton(onClick = onCreate) {
+            Icon(
+                Icons.Rounded.PlaylistAdd,
+                contentDescription = "Nova playlist",
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+    NativeCollectionSearchAction(
+        searching = searching,
+        contentDescription = if (hasDetail) "Buscar na playlist" else "Pesquisar playlists",
+        onClick = onSearch,
+    )
+    NativeCollectionSortAction(
+        contentDescription = if (hasDetail) "Ordenar músicas" else "Filtrar playlists",
+        onClick = onSortOrFilter,
+    )
+    NativeCollectionOverflowAction(
+        contentDescription = if (hasDetail) "Opções da playlist" else "Ordenar playlists",
+        onClick = onOverflow,
+    )
+}
+
+/**
+ * The same top-bar actions used by native album/playlist details and canonical
+ * playlist list/details. Keep icon geometry and tint in one place.
+ */
+@Composable
+private fun NativeCollectionSearchAction(
+    searching: Boolean,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick) {
+        Icon(
+            if (searching) Icons.Rounded.Close else BitChordIcons.Search,
+            contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun NativeCollectionSortAction(contentDescription: String, onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(Icons.Rounded.Sort, contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+@Composable
+private fun NativeCollectionOverflowAction(contentDescription: String, onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(Icons.Rounded.MoreHoriz, contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+/**
+ * Native playlist menus live outside BitChordApp to keep its JVM method small.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CanonicalPlaylistMenus(
+    hazeState: HazeState,
+    librarySortOpen: Boolean,
+    onLibrarySortDismiss: () -> Unit,
+    librarySort: com.music.bitchord.ui.screens.PlaylistLibrarySort,
+    onLibrarySort: (com.music.bitchord.ui.screens.PlaylistLibrarySort) -> Unit,
+    libraryFilterOpen: Boolean,
+    onLibraryFilterDismiss: () -> Unit,
+    libraryFilter: com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter,
+    onLibraryFilter: (com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter) -> Unit,
+    detailSortOpen: Boolean,
+    onDetailSortDismiss: () -> Unit,
+    detailSort: com.music.bitchord.ui.screens.PlaylistLibrarySort,
+    onDetailSort: (com.music.bitchord.ui.screens.PlaylistLibrarySort) -> Unit,
+    detailOptionsOpen: Boolean,
+    onDetailOptionsDismiss: () -> Unit,
+    selectedCard: com.music.bitchord.ui.screens.LibraryPlaylistCard?,
+    detailRows: List<com.music.bitchord.ui.screens.V2DisplayRow>?,
+    onDetailQueue: (
+        com.music.bitchord.ui.screens.LibraryPlaylistCard,
+        com.music.bitchord.playback.CanonicalCollectionIntent,
+    ) -> Unit,
+    onDetailEdit: (com.music.bitchord.ui.screens.LibraryPlaylistCard) -> Unit,
+) {
+    if (librarySortOpen && selectedCard == null) {
+        BackHandler { onLibrarySortDismiss() }
+        FrostedMenuPanel(hazeState = hazeState, onDismiss = onLibrarySortDismiss) {
+            listOf(
+                com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT to "Ordem padrão",
+                com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_ASC to "Nome: A a Z",
+                com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_DESC to "Nome: Z a A",
+            ).forEach { (choice, label) ->
+                FrostedMenuRow(
+                    label = label,
+                    checked = librarySort == choice,
+                    onClick = { onLibrarySort(choice); onLibrarySortDismiss() },
+                )
+            }
+        }
+    }
+    if (libraryFilterOpen && selectedCard == null) {
+        BackHandler { onLibraryFilterDismiss() }
+        FrostedMenuPanel(hazeState = hazeState, onDismiss = onLibraryFilterDismiss) {
+            listOf(
+                com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.ALL to "Todas as playlists",
+                com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.NORMAL to "Playlists normais",
+                com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.SMART to "Playlists inteligentes",
+            ).forEach { (choice, label) ->
+                FrostedMenuRow(
+                    label = label,
+                    checked = libraryFilter == choice,
+                    onClick = { onLibraryFilter(choice); onLibraryFilterDismiss() },
+                )
+            }
+        }
+    }
+    if (detailSortOpen && selectedCard != null) {
+        BackHandler { onDetailSortDismiss() }
+        FrostedMenuPanel(hazeState = hazeState, onDismiss = onDetailSortDismiss) {
+            listOf(
+                com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT to "Ordem da playlist",
+                com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_ASC to "Música: A a Z",
+                com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_DESC to "Música: Z a A",
+            ).forEach { (choice, label) ->
+                FrostedMenuRow(
+                    label = label,
+                    checked = detailSort == choice,
+                    onClick = { onDetailSort(choice); onDetailSortDismiss() },
+                )
+            }
+        }
+    }
+    if (detailOptionsOpen && selectedCard != null) {
+        val selected = selectedCard
+        val queue: (com.music.bitchord.playback.CanonicalCollectionIntent) -> Unit = { intent ->
+            onDetailOptionsDismiss()
+            onDetailQueue(selected, intent)
+        }
+        ModalBottomSheet(
+            onDismissRequest = onDetailOptionsDismiss,
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            BrowseActionsSheet(
+                target = BrowseTarget(
+                    browseId = null,
+                    title = selected.title,
+                    subtitle = com.music.bitchord.ui.screens.canonicalPlaylistDetailMeta(
+                        smart = selected is com.music.bitchord.ui.screens.LibraryPlaylistCard.Smart,
+                        rows = detailRows,
+                    ),
+                    type = BrowseType.PLAYLIST,
+                    fromCard = false,
+                ),
+                onPlayNext = {
+                    queue(com.music.bitchord.playback.CanonicalCollectionIntent.ADD_NEXT)
+                },
+                onAddToQueue = {
+                    queue(com.music.bitchord.playback.CanonicalCollectionIntent.ADD_TO_QUEUE)
+                },
+                headerArtwork = {
+                    com.music.bitchord.ui.screens.CanonicalPlaylistCoverArt(
+                        rows = detailRows.orEmpty(),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                },
+                onEdit = {
+                    onDetailOptionsDismiss()
+                    onDetailEdit(selected)
+                },
+            )
+        }
     }
 }
 

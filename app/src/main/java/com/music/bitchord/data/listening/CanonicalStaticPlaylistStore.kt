@@ -1,6 +1,7 @@
 package com.music.bitchord.data.listening
 
 import androidx.room.Dao
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.Query
@@ -8,6 +9,15 @@ import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
+
+/** The cover must be a document explicitly selected by the user, not a network URL. */
+internal fun validateCanonicalPlaylistCoverUri(uri: String?) {
+    require(uri == null || (
+        uri.length <= 2048 &&
+        uri.startsWith("content://") &&
+        uri.none { it.isWhitespace() || it.isISOControl() }
+    )) { "Invalid custom playlist cover document" }
+}
 
 /**
  * A normal playlist is an ordered, user-authored list of canonical RecordingIds.
@@ -21,6 +31,9 @@ internal data class SavedCanonicalStaticPlaylist(
     val schemaVersion: Int = 1,
     /** Null means all available sources; otherwise an exact configured provider. */
     val sourceProviderKey: String? = null,
+    val description: String = "",
+    /** User-picked document URI with persistable read grant; never inferred from a track. */
+    val coverUri: String? = null,
 )
 
 @Entity(tableName = "canonical_static_playlist")
@@ -30,6 +43,8 @@ internal data class CanonicalStaticPlaylistEntity(
     val schemaVersion: Int,
     val recordingIdsJson: String,
     val sourceProviderKey: String?,
+    @ColumnInfo(defaultValue = "''") val description: String = "",
+    val coverUri: String? = null,
 )
 
 @Dao
@@ -63,6 +78,8 @@ internal class CanonicalStaticPlaylistRepository(
             id = value.id, name = value.name.trim(),
             schemaVersion = value.schemaVersion, recordingIdsJson = json.toString(),
             sourceProviderKey = value.sourceProviderKey,
+            description = value.description.trim(),
+            coverUri = value.coverUri,
         ))
     }
 
@@ -84,7 +101,7 @@ internal class CanonicalStaticPlaylistRepository(
             require(members.opt(index) is String) { "Invalid canonical member" }
             members.getString(index)
         }
-        return SavedCanonicalStaticPlaylist(id, name, ids, schemaVersion, sourceProviderKey)
+        return SavedCanonicalStaticPlaylist(id, name, ids, schemaVersion, sourceProviderKey, description, coverUri)
             .also(::validate)
     }
 
@@ -95,6 +112,8 @@ internal class CanonicalStaticPlaylistRepository(
             "Invalid playlist id"
         }
         require(value.name.trim().length in 1..80) { "Invalid playlist name" }
+        require(value.description.length <= 5000 && value.description.none { it.isISOControl() && it != '\n' && it != '\t' }) { "Invalid playlist description" }
+        validateCanonicalPlaylistCoverUri(value.coverUri)
         val provider = value.sourceProviderKey
         require(provider == null || provider == "local-mediastore" ||
             (provider.startsWith("opensubsonic:") && provider.length in 15..180 &&
