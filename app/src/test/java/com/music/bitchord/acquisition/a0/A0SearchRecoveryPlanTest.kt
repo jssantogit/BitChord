@@ -93,6 +93,19 @@ class A0SearchRecoveryPlanTest {
             setOf(A0SearchQuery.normalize(title))))
     }
 
+    @Test fun firstTrackAlreadyEligibleStillPermitsOneAlbumSearchForMissingSiblings() {
+        val plan=A0SearchRecoveryPlan("ILLIT - Magnetic","SUPER REAL ME",
+            releaseWide=true)
+        val sent=mutableSetOf("ILLIT Magnetic")
+        assertEquals("ILLIT SUPER REAL ME",plan.next(
+            6000,true,sent,missingSiblings=true))
+        sent.add("ILLIT SUPER REAL ME")
+        assertNull(plan.next(12000,true,sent,missingSiblings=true))
+        assertNull(plan.next(6000,true,setOf("ILLIT Magnetic"),
+            missingSiblings=false))
+        assertFalse(plan.authorizesTransfer)
+    }
+
     @Test fun genericTrackReceivesAlbumSpecificRecoveryBeforeBroadTitleOnly() {
         val recovery=A0SearchRecoveryPlan("BTS - Normal",album="ARIRANG")
         val already=mutableSetOf("BTS Normal")
