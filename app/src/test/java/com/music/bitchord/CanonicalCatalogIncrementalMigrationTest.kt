@@ -38,6 +38,19 @@ class CanonicalCatalogIncrementalMigrationTest {
             null
         } as SupportSQLiteDatabase
         try {
+            // A v14 database already contains canonical media assets; migration
+            // 14→15 must alter their REAL pre-migration table, not a partial
+            // v7 MusicBrainz-only fixture that never created media assets.
+            raw.execSQL("""CREATE TABLE catalog_media_asset(
+                id TEXT NOT NULL PRIMARY KEY, recordingId TEXT NOT NULL,
+                provider TEXT NOT NULL, sourceKey TEXT NOT NULL,
+                uri TEXT NOT NULL, path TEXT, dateAddedSeconds INTEGER,
+                dateModifiedSeconds INTEGER, artworkUri TEXT
+            )""")
+            raw.execSQL("""INSERT INTO catalog_media_asset
+                (id,recordingId,provider,sourceKey,uri,path,dateAddedSeconds,dateModifiedSeconds,artworkUri)
+                VALUES ('legacy-asset','old-recording','local-mediastore','legacy:1',
+                'content://media/external/audio/media/1','Music/Legacy/01.flac',100,101,NULL)""")
             raw.execSQL("""CREATE TABLE catalog_release_group(
                 id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL,
                 artistDisplay TEXT, primaryType TEXT, firstReleaseDate TEXT
@@ -103,6 +116,15 @@ class CanonicalCatalogIncrementalMigrationTest {
                 while (columns.moveToNext()) names += columns.getString(1)
                 org.junit.Assert.assertTrue("local genre must be migrated", "localGenre" in names)
                 org.junit.Assert.assertTrue("bitrate must be migrated", "localBitrateBps" in names)
+            }
+            raw.rawQuery(
+                "SELECT path,localGenre,localBitrateBps FROM catalog_media_asset WHERE id='legacy-asset'",
+                null,
+            ).use {
+                org.junit.Assert.assertTrue("v14 asset survives migration v15", it.moveToFirst())
+                assertEquals("Music/Legacy/01.flac", it.getString(0))
+                assertNull(it.getString(1))
+                assertNull(it.getString(2))
             }
 
             raw.rawQuery(
