@@ -64,7 +64,9 @@ class SoulseekBatchPlanTest {
         assertTrue(session.selectPending(12))
         assertEquals("BTS - Song 12",session.current?.query)
         assertEquals(0,session.skipped)
+        assertEquals(23,session.pendingIndices.size)
         assertTrue(session.markSaved())
+        assertEquals(22,session.pendingIndices.size)
         assertFalse(session.selectPending(12)) // A3-published slot never revisited
         assertTrue(session.selectPending(3))
         assertEquals("BTS - Song 3",session.current?.query)
