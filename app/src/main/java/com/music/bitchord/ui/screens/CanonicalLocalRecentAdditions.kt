@@ -124,7 +124,7 @@ internal object RecentLocalAdditionsSnapshot {
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 internal fun CanonicalLocalRecentAdditions(
-    onOpenSongs: () -> Unit,
+    onPlayTrack: (String) -> Unit,
     onSeeAll: () -> Unit = {},
     showAll: Boolean = false,
     contentPadding: PaddingValues = PaddingValues(),
@@ -201,13 +201,13 @@ internal fun CanonicalLocalRecentAdditions(
             modifier = Modifier.fillMaxSize(),
         ) {
             CanonicalRecentAdditionsGrid(
-                recent.orEmpty(), onOpenSongs, contentPadding,
+                recent.orEmpty(), onPlayTrack, contentPadding,
                 loading = recent == null && !loadFailed,
                 error = loadFailed,
             )
         }
     } else if (recent != null) {
-        CanonicalRecentAdditionsShelf(recent.orEmpty(), onOpenSongs, onSeeAll)
+        CanonicalRecentAdditionsShelf(recent.orEmpty(), onPlayTrack, onSeeAll)
     } else {
         Text(
             if (loadFailed) "Não foi possível consultar as adições locais."
@@ -222,7 +222,7 @@ internal fun CanonicalLocalRecentAdditions(
 @Composable
 internal fun CanonicalRecentAdditionsShelf(
     recent: List<V2DisplayRow>,
-    onOpenSongs: () -> Unit,
+    onPlayTrack: (String) -> Unit,
     onSeeAll: () -> Unit = {},
 ) {
     if (recent.isEmpty()) return
@@ -253,7 +253,7 @@ internal fun CanonicalRecentAdditionsShelf(
                 CanonicalRecentAdditionCard(
                     track = track,
                     modifier = Modifier.width(142.dp),
-                    onClick = onOpenSongs,
+                    onClick = { onPlayTrack(track.id) },
                 )
             }
         }
@@ -297,7 +297,7 @@ private fun CanonicalRecentAdditionCard(
 @Composable
 internal fun CanonicalRecentAdditionsGrid(
     recent: List<V2DisplayRow>,
-    onOpenSongs: () -> Unit,
+    onPlayTrack: (String) -> Unit,
     contentPadding: PaddingValues = PaddingValues(),
     loading: Boolean = false,
     error: Boolean = false,
@@ -320,7 +320,7 @@ internal fun CanonicalRecentAdditionsGrid(
         gridRows(recent, columns = 2, key = { it.id }) { track ->
             CanonicalRecentAdditionCard(
                 track = track, modifier = Modifier.fillMaxWidth(),
-                onClick = onOpenSongs,
+                onClick = { onPlayTrack(track.id) },
             )
         }
     }
