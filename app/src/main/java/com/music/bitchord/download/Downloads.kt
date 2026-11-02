@@ -1401,6 +1401,9 @@ object Downloads {
                     " requested=${request.entries.size}" +
                     " searches=${outcome.searches}" +
                     " folder_queries=${outcome.folderQueries}" +
+                    " empty_searches=${outcome.noReplySearches}" +
+                    " max_empty_streak=${outcome.longestNoReplyStreak}" +
+                    " suppressed_offers=${outcome.suppressedOffers}" +
                     " attempts=${report.attempts}" +
                     " published=${report.published}" +
                     " review=${report.results.count {
