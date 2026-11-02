@@ -109,6 +109,7 @@ internal class A0FreshAutoSearchTransport(
                 requestedAlbum=entry.album,qualityProfile=quality,
                 collectReleaseShadow=true,
                 releaseQueries=releaseSlots.map {it.query},
+                collectManualCandidates=false,
             )
             activeHandoff=handoff
             A0AcquisitionDiagnostics.emit(traceScope,
