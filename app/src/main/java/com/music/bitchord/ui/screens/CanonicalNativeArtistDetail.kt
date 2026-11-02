@@ -74,6 +74,7 @@ internal fun CanonicalNativeArtistDetail(
     artworkLoader: OpenSubsonicArtworkLoader,
     query: String,
     onQueryChange: (String) -> Unit,
+    searching: Boolean,
     nestedBackToken: Int,
     onNestedDetailChanged: (Boolean) -> Unit,
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
@@ -255,7 +256,7 @@ internal fun CanonicalNativeArtistDetail(
             }
             item(key = "artist-search") {
                 DetailSearchField(query, onQueryChange, onClose = { onQueryChange("") },
-                    autoFocus = false, onFocused = {}, palette = palette)
+                    autoFocus = searching, onFocused = {}, palette = palette)
             }
             if (shownTracks.isNotEmpty()) {
                 item(key = "artist-tracks-title") {
