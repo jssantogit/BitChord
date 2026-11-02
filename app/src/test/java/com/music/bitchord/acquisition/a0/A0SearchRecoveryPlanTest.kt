@@ -15,6 +15,27 @@ class A0SearchRecoveryPlanTest {
         already.add("Jóga")
         assertNull(recovery.next(15000,false,already))
     }
+    @Test fun genericTrackReceivesAlbumSpecificRecoveryBeforeBroadTitleOnly() {
+        val recovery=A0SearchRecoveryPlan("BTS - Normal",album="ARIRANG")
+        val already=mutableSetOf("BTS Normal")
+        assertNull(recovery.next(1000,false,already))
+        val first=recovery.next(6000,false,already)
+        assertEquals("BTS ARIRANG Normal",first)
+        already.add(checkNotNull(first))
+        assertEquals("Normal",recovery.next(12000,false,already))
+        assertNull(recovery.next(12000,true,already))
+        assertFalse(recovery.authorizesTransfer)
+    }
+
+    @Test fun invalidAlbumNeverProducesUnboundedOrCrossReleaseSearch() {
+        val original="ILLIT - More"
+        for(album in listOf("", " ", "../", "X".repeat(140), "MoRE")) {
+            val next=A0SearchRecoveryPlan(original,album=album)
+                .next(6000,false,setOf("ILLIT More"))
+            assertEquals("More",next)
+        }
+    }
+
     @Test fun ordinarySongGetsOneAdditionalSearchNotRepeatedFlood() {
         val recovery=A0SearchRecoveryPlan("ILLIT - Magnetic")
         val sent=mutableSetOf("ILLIT Magnetic")
