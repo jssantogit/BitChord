@@ -686,6 +686,7 @@ internal fun CanonicalRemoteLibraryScreen(
                     artworkLoader = artworkLoader,
                     query = detailQuery,
                     onQueryChange = { detailQuery = it },
+                    searching = searchVisible,
                     nestedBackToken = artistNestedBackToken,
                     onNestedDetailChanged = { artistNestedReleaseOpen = it },
                     onTrackPlay = playTrack,
