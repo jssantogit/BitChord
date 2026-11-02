@@ -3127,15 +3127,11 @@ private fun BitChordApp(
                         com.music.bitchord.ui.screens.CanonicalLocalRecentAdditions(
                             showAll = true,
                             contentPadding = listPadding,
-                            onOpenSongs = {
-                                showAllLocalRecentAdditions = false
-                                localFolderStates.getOrPut("local:all") { LocalFolderState() }
-                                    .tab = com.music.bitchord.ui.screens.LocalFolderTab.SONGS
-                                onLibraryItemClick(ShelfItem(
-                                    title = "Músicas", subtitle = "",
-                                    thumbnailUrl = null, videoId = null,
-                                    browseId = "local:all",
-                                ))
+                            onPlayTrack = { recordingId ->
+                                executeSmartCollection(
+                                    SmartCollectionActionSource.RecentLocalTrack(recordingId),
+                                    CanonicalCollectionIntent.PLAY_NOW,
+                                )
                             },
                         )
                     } else if (key == "library_show_all") {
@@ -3920,14 +3916,11 @@ private fun BitChordApp(
                                 com.music.bitchord.ui.screens.CanonicalLocalRecentAdditions(
                                     refreshRequested = MainViewModel.Feed.LIBRARY in refreshing,
                                     onSeeAll = { showAllLocalRecentAdditions = true },
-                                    onOpenSongs = {
-                                        localFolderStates.getOrPut("local:all") { LocalFolderState() }
-                                            .tab = com.music.bitchord.ui.screens.LocalFolderTab.SONGS
-                                        onLibraryItemClick(ShelfItem(
-                                            title = "Músicas", subtitle = "",
-                                            thumbnailUrl = null, videoId = null,
-                                            browseId = "local:all",
-                                        ))
+                                    onPlayTrack = { recordingId ->
+                                        executeSmartCollection(
+                                            SmartCollectionActionSource.RecentLocalTrack(recordingId),
+                                            CanonicalCollectionIntent.PLAY_NOW,
+                                        )
                                     },
                                 )
                             },
