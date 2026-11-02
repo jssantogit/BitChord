@@ -115,6 +115,8 @@ internal class A0FreshAutoSearchTransport(
             val directDropped=AtomicInteger()
             val directFailed=AtomicInteger()
             val indirectOffers=AtomicInteger()
+            val rejectedServerOffers=AtomicInteger()
+            val ignoredServerFrames=AtomicInteger()
             val indirectSubmitted=AtomicInteger()
             val indirectConnected=AtomicInteger()
             val indirectFailed=AtomicInteger()
@@ -209,9 +211,12 @@ internal class A0FreshAutoSearchTransport(
                     while(readerGate.isOpen() && !stopped() &&
                         System.nanoTime()<deadline && accepted<160) {
                         val offer=try {
-                            framed.readEvent()
+                            framed.readEvent { _ -> ignoredServerFrames.incrementAndGet() }
                         }catch(_:SocketTimeoutException) {continue}
-                        catch(_:A0IndirectSearchWire.RejectedPeerOffer) {continue}
+                        catch(_:A0IndirectSearchWire.RejectedPeerOffer) {
+                            rejectedServerOffers.incrementAndGet()
+                            continue
+                        }
                         if(offer==null || !readerGate.isOpen())continue
                         indirectOffers.incrementAndGet()
                         if(!gate.accept(offer.username,offer.token))continue
@@ -379,7 +384,8 @@ internal class A0FreshAutoSearchTransport(
             val replyByTicket=tickets.responseCounts()
             val reachability=A0SearchReachabilityDiagnosis.classify(
                 directAccepted.get(),indirectOffers.get(),indirectConnected.get(),
-                counts.responses,snapshot.choices.size)
+                counts.responses,snapshot.choices.size,
+                rejectedServerOffers.get())
             Log.d("BitChord","soulseek_auto_search replies=${snapshot.choices.size}" +
                 " tickets_sent=${tickets.accepted.size.coerceIn(1,3)}" +
                 " initial_replies=${replyByTicket[0]}" +
@@ -394,6 +400,8 @@ internal class A0FreshAutoSearchTransport(
                 " direct_dropped=${directDropped.get().coerceIn(0,512)}" +
                 " direct_failed=${directFailed.get().coerceIn(0,512)}" +
                 " indirect_offers=${indirectOffers.get().coerceIn(0,512)}" +
+                " server_offers_rejected=${rejectedServerOffers.get().coerceIn(0,512)}" +
+                " server_frames_ignored=${ignoredServerFrames.get().coerceIn(0,512)}" +
                 " indirect_submitted=${indirectSubmitted.get().coerceIn(0,512)}" +
                 " indirect_connected=${indirectConnected.get().coerceIn(0,512)}" +
                 " indirect_failed=${indirectFailed.get().coerceIn(0,512)}" +
