@@ -2823,7 +2823,8 @@ private fun BitChordApp(
             showEqualizer = false
             if (settingsSubScreen == "equalizer") settingsSubScreen = null
         }
-        BackHandler(enabled = settingsSubScreen == "soulseek") {
+        BackHandler(enabled = settingsSubScreen == "soulseek" ||
+            settingsSubScreen == "diagnostics") {
             settingsSubScreen = null
         }
         // One back step out of Settings, or out of any tab but Home, lands on
@@ -3339,6 +3340,7 @@ private fun BitChordApp(
                                 replayLandingPage = ReplayStoryPage.INTRO
                                 showReplay = true
                             },
+                            onOpenDiagnostics = { settingsSubScreen = "diagnostics" },
                             onLyricsSources = { showLyricsSources = true },
                             onTranslationLanguage = { showTranslationLanguage = true },
                             onSources = {
@@ -4026,6 +4028,20 @@ private fun BitChordApp(
                             SoulseekAccountSettingsScreen(contentPadding = listPadding)
                         }
                     }
+                    "diagnostics" -> {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = MaterialTheme.colorScheme.background,
+                        ) {
+                            com.music.bitchord.diagnostics.DiagnosticsPanel(
+                                onBack = { settingsSubScreen = null },
+                                onShare = {
+                                    com.music.bitchord.ui.screens.DiagnosticsUiEntry.openShare(context)
+                                },
+                                embedded = true,
+                            )
+                        }
+                    }
                     "sources" -> {
                         Surface(
                             modifier = Modifier.fillMaxSize(),
@@ -4189,6 +4205,7 @@ private fun BitChordApp(
                         showListenTogether -> stringResource(R.string.listen_together)
                         showWearOs -> stringResource(R.string.wear_os_page_title)
                         showEqualizer -> stringResource(R.string.equalizer)
+                        settingsSubScreen == "diagnostics" -> "Logs"
                         showSettings -> settingsSection?.let { stringResource(it.titleRes) }
                             ?: stringResource(R.string.settings)
                         showReplay -> stringResource(R.string.replay)
