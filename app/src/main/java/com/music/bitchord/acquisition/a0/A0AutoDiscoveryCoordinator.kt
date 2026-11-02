@@ -268,7 +268,7 @@ internal class A0AutoDiscoveryCoordinator(
                             (it.peerUsername to it.remotePath) in outcome.publishedSourceKeys
                         }
                         val directory=source?.remotePath?.replace('\\','/')
-                            ?.substringBeforeLast('/','')
+                            ?.substringBeforeLast('/',"")
                         val folderKey=if(source!=null && !directory.isNullOrBlank())
                             source.peerUsername to directory else null
                         if(source!=null && folderKey!=null &&
