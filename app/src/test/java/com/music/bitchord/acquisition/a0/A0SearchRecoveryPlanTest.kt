@@ -39,6 +39,15 @@ class A0SearchRecoveryPlanTest {
         assertEquals("Normal",noAlbum.next(6000,false,setOf("BTS Normal")))
     }
 
+    @Test fun repeatedAlbumQueryCanBeSkippedWithoutLosingTheTitleFallback() {
+        val original="BTS (방탄소년단) - Boy In Luv"
+        val recovery=A0SearchRecoveryPlan(original,"Proof",releaseWide=true)
+        val sent=mutableSetOf(A0SearchQuery.normalize(original))
+        assertEquals("BTS Proof",recovery.releaseWideQuery)
+        sent.add(checkNotNull(recovery.releaseWideQuery)) // already sought by earlier slot
+        assertEquals("Boy In Luv",recovery.next(6000,false,sent))
+        assertEquals(2,sent.size)
+    }
     @Test fun genericTrackReceivesAlbumSpecificRecoveryBeforeBroadTitleOnly() {
         val recovery=A0SearchRecoveryPlan("BTS - Normal",album="ARIRANG")
         val already=mutableSetOf("BTS Normal")

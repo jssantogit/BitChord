@@ -48,6 +48,8 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
         }
         ordered.filter { it.length>=3 }.distinct().take(2)
     }
+    /** Search-only key; a release query should be issued once per batch. */
+    internal val releaseWideQuery:String? get()=albumWide
     val authorizesTransfer:Boolean get()=false
 
     fun next(

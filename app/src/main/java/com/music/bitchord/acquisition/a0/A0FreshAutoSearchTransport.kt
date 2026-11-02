@@ -39,6 +39,9 @@ internal class A0FreshAutoSearchTransport(
     private val app=context.applicationContext
     private val closed=AtomicBoolean(false)
     private val folderProbe=A0FreshPeerFolderTransport(app,generation,quality)
+    // One release-wide search per explicit batch, never a repeated query storm.
+    private val releaseWideSent=ConcurrentHashMap.newKeySet<String>()
+    private val releaseWideSkipped=AtomicInteger()
     private val activePeers=ConcurrentHashMap.newKeySet<Socket>()
     @Volatile private var activeServer:Socket?=null
     @Volatile private var activeListener:ServerSocket?=null
@@ -258,8 +261,16 @@ internal class A0FreshAutoSearchTransport(
                     18L.let {TimeUnit.SECONDS.toNanos(it)}-(deadline-System.nanoTime()))
                 for(at in listOf(6000,12000)) {
                     if(elapsed>=at && marks.add(at)) {
-                        val variant=recovery.next(
-                            at.toLong(),holder.hasAutoReadyCandidateForSearchRecovery(entry,quality),sent)
+                        val found=holder.hasAutoReadyCandidateForSearchRecovery(entry,quality)
+                        var variant=recovery.next(at.toLong(),found,sent)
+                        if(variant!=null && variant==recovery.releaseWideQuery &&
+                            !releaseWideSent.add(variant)) {
+                            // Track the skipped variation only in this local
+                            // search, so the next bounded alternative can run.
+                            sent.add(variant)
+                            releaseWideSkipped.incrementAndGet()
+                            variant=recovery.next(at.toLong(),found,sent)
+                        }
                         if(variant!=null && !stopped()) {
                             // Register a unique correlation ticket before
                             // sending each fallback wire query.
@@ -352,6 +363,8 @@ internal class A0FreshAutoSearchTransport(
                 " tickets_sent=${tickets.accepted.size.coerceIn(1,3)}" +
                 " valid_direct=${validDirect.get().coerceIn(0,160)}" +
                 " valid_indirect=${validIndirect.get().coerceIn(0,160)}" +
+                " release_queries=${releaseWideSent.size.coerceIn(0,8)}" +
+                " release_dedup=${releaseWideSkipped.get().coerceIn(0,64)}" +
                 " truncated_slots=${snapshot.truncatedSlots.size}" +
                 " raw_responses=${counts.responses} public_files=${counts.publicFiles}" +
                 " admitted_before_limit=${counts.validBeforeLimit}" +
