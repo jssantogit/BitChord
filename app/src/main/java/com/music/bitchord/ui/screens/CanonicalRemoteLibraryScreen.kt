@@ -1134,7 +1134,7 @@ private fun CanonicalTrackRow(
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .heightIn(min = 68.dp)
-            .padding(horizontal = 20.dp, vertical = 8.dp),
+            .padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
     ) {
         CanonicalUnifiedArtwork(track, artworkLoader, Modifier.size(48.dp))
         Spacer(Modifier.width(16.dp))
@@ -1383,11 +1383,9 @@ private fun NativeUnifiedLibraryBody(
         CanonicalSmartFilterContext.ALBUMS -> albums.size
         CanonicalSmartFilterContext.ARTISTS -> artists.size
     }
-    val completeDuration = tracks.isNotEmpty() && tracks.all { (it.durationMs ?: 0L) > 0 }
-    val minutes = tracks.sumOf { it.durationMs ?: 0L } / 60_000
     val label = when (selectedContext) {
         CanonicalSmartFilterContext.SONGS ->
-            "${count} faixas" + if (completeDuration) " · $" + "{minutes / 60}h $" + "{minutes % 60}m" else ""
+            nativeUnifiedTrackCountLabel(count, tracks.map { it.durationMs })
         CanonicalSmartFilterContext.ALBUMS -> "${count} álbuns"
         CanonicalSmartFilterContext.ARTISTS -> "${count} artistas"
     }
