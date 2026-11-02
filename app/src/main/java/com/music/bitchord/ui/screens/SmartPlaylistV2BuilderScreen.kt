@@ -841,10 +841,9 @@ internal fun SmartPlaylistV2BuilderScreen(
                                             coverUri = coverUri,
                                         ))
                                     }
-                                    reset()
-                                    // The Library owns saved playlists now. Close back
-                                    // to that live shelf rather than opening a second
-                                    // "Minhas playlists" manager after creation.
+                                    // The saved draft stays intact until the parent
+                                    // removes this Dialog; resetting it first flashed
+                                    // a brand-new creation screen during dismissal.
                                     onBack()
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
@@ -1009,7 +1008,8 @@ internal fun SmartPlaylistV2BuilderScreen(
                                             coverUri = coverUri,
                                         ))
                                     }
-                                    reset()
+                                    // Keep this completed draft mounted until close;
+                                    // don't show a new blank wizard on the exit frame.
                                     onBack()
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
