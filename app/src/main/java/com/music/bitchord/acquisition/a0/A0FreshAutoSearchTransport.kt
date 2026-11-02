@@ -327,9 +327,12 @@ internal class A0FreshAutoSearchTransport(
                             variant=recovery.next(at.toLong(),found,sent)
                         }
                         if(variant!=null && !stopped()) {
-                            if(checkNotNull(searchLease).remaining()==0) {
-                                // Leave the unsent album query eligible for
-                                // the next slot; never exceed the shared cap.
+                            val lease=checkNotNull(searchLease)
+                            if(lease.remaining()==0 &&
+                                !lease.reserveOneMore(android.os.SystemClock.elapsedRealtime())) {
+                                // No capacity: leave the unsent album query
+                                // available to another slot. Never wait on
+                                // the authenticated socket or exceed 3 sends.
                                 budgetSkippedFallbacks++
                             } else {
                                 // Register a unique correlation ticket before

@@ -23,8 +23,21 @@ internal class A0SearchWindowBudget(
     private val entries=ArrayList<Entry>()
     private var nextLeaseId=1L
 
-    inner class Lease internal constructor(private val leaseId:Long):AutoCloseable {
+    inner class Lease internal constructor(
+        private val leaseId:Long,
+        private val maxSlots:Int,
+        private var allocated:Int,
+    ):AutoCloseable {
         private var closed=false
+        /** A fallback can use capacity that expires during the 18s session.
+         * The same lease still permits at most maxSlots total reservations.
+         */
+        @Synchronized fun reserveOneMore(nowMillis:Long):Boolean {
+            if(closed || allocated>=maxSlots)return false
+            if(!allocateSlot(leaseId,nowMillis))return false
+            allocated++
+            return true
+        }
         /** Unsent reservations belonging to this live session. */
         @Synchronized fun remaining():Int =
             if(closed) 0 else unusedSlots(leaseId)
@@ -63,7 +76,7 @@ internal class A0SearchWindowBudget(
         if(maxRequests-entries.size<count)return null
         val id=nextLeaseId++
         repeat(count) { entries.add(Entry(id,nowMillis)) }
-        return Lease(id)
+        return Lease(id,count,count)
     }
 
     @Synchronized private fun unusedSlots(leaseId:Long):Int =
@@ -79,7 +92,14 @@ internal class A0SearchWindowBudget(
         if(reserved<=0)return null
         val id=nextLeaseId++
         repeat(reserved) { entries.add(Entry(id,nowMillis)) }
-        return Lease(id)
+        return Lease(id,count,reserved)
+    }
+
+    @Synchronized private fun allocateSlot(leaseId:Long,nowMillis:Long):Boolean {
+        prune(nowMillis)
+        if(entries.size>=maxRequests)return false
+        entries.add(Entry(leaseId,nowMillis))
+        return true
     }
 
     @Synchronized private fun commitSlot(leaseId:Long,nowMillis:Long):Boolean {

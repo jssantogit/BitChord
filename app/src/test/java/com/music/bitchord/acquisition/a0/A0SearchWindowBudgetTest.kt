@@ -82,6 +82,40 @@ class A0SearchWindowBudgetTest {
         next.close()
     }
 
+    @Test fun aPartialSearchCanUseSlotsThatExpireDuringDiscovery() {
+        val budget=A0SearchWindowBudget(3,220_000L)
+        val preceding=checkNotNull(budget.tryAcquire(2,1_000L))
+        assertTrue(preceding.commit(1_000L))
+        assertTrue(preceding.commit(1_001L))
+        preceding.close()
+        val current=checkNotNull(budget.tryAcquireUpTo(3,220_990L))
+        assertEquals(1,current.remaining())
+        assertTrue(current.commit(220_991L))
+        assertFalse(current.reserveOneMore(220_995L))
+        // The preceding two committed queries age out while this session runs.
+        assertTrue(current.reserveOneMore(221_002L))
+        assertTrue(current.commit(221_003L))
+        assertTrue(current.reserveOneMore(221_004L))
+        assertTrue(current.commit(221_005L))
+        assertFalse(current.reserveOneMore(221_006L)) // max 3 for session
+        assertFalse(current.commit(221_006L))
+        current.close()
+        assertEquals(0,budget.available(221_007L))
+    }
+
+    @Test fun extensionRespectsOtherSessionsAndClosedLease() {
+        val budget=A0SearchWindowBudget(3,220_000L)
+        val first=checkNotNull(budget.tryAcquireUpTo(3,1_000L))
+        assertEquals(3,first.remaining())
+        assertFalse(first.reserveOneMore(1_001L))
+        first.close()
+        assertFalse(first.reserveOneMore(1_002L))
+        val second=checkNotNull(budget.tryAcquire(3,1_003L))
+        assertEquals(3,second.remaining())
+        assertFalse(first.commit(1_004L))
+        second.close()
+    }
+
     @Test fun reservationIsSharedAcrossIndependentSearchSessions() {
         val shared=A0SearchWindowBudget(4,220_000L)
         val first=checkNotNull(shared.tryAcquire(3,100L))
