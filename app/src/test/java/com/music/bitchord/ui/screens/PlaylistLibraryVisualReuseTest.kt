@@ -190,17 +190,20 @@ class PlaylistLibraryVisualReuseTest {
     }
 
     @Test fun recentAdditionsHeaderAndCanonicalTrackMetadataRemainVisible() {
+        var playedRecordingId: String? = null
         compose.setContent {
             CanonicalRecentAdditionsShelf(
                 recent = listOf(V2DisplayRow(
                     id = "recording:one", title = "Hurt", artist = "NewJeans",
                 )),
-                onOpenSongs = {},
+                onPlayTrack = { playedRecordingId = it },
             )
         }
         compose.onNodeWithText("Adições recentes").assertExists()
         compose.onNodeWithText("Hurt").assertExists()
         compose.onNodeWithText("NewJeans").assertExists()
+        compose.onNodeWithText("Hurt").performClick()
+        compose.runOnIdle { assertEquals("recording:one", playedRecordingId) }
     }
 
     @Test fun recentAdditionsShowFallbackInsteadOfBlankTitle() {
@@ -209,7 +212,7 @@ class PlaylistLibraryVisualReuseTest {
                 recent = listOf(V2DisplayRow(
                     id = "recording:missing-title", title = " ", artist = "NewJeans",
                 )),
-                onOpenSongs = {},
+                onPlayTrack = {},
             )
         }
         compose.onNodeWithText("Título indisponível").assertExists()
