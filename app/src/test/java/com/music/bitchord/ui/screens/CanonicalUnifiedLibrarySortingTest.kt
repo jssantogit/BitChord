@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import com.music.bitchord.data.catalog.CanonicalBrowseMediaAsset
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
+import com.music.bitchord.data.catalog.CanonicalEntitySortDateRow
 import com.music.bitchord.data.settings.LocalMusicSort
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -40,6 +41,33 @@ class CanonicalUnifiedLibrarySortingTest {
             track("new", "B", added = 22))
         assertEquals(listOf("new", "old", "unknown"),
             sortCanonicalUnifiedTracks(input, LocalMusicSort.DATE_ADDED).map { it.recordingId })
+    }
+
+    private data class Entry(val id: String, val label: String)
+
+    @Test fun albumAndArtistSortUseRealLinkedAssetDates() {
+        val entries = listOf(Entry("unknown", "Zulu"), Entry("older", "Alpha"),
+            Entry("newer", "Beta"))
+        val dates = mapOf(
+            "older" to CanonicalEntitySortDateRow("older", 10, 100),
+            "newer" to CanonicalEntitySortDateRow("newer", 20, 50),
+        )
+        val added = sortCanonicalUnifiedEntities(
+            entries, LocalMusicSort.DATE_ADDED, dates,
+            id = { it.id }, title = { it.label },
+        )
+        assertEquals(listOf("newer", "older", "unknown"), added.map { it.id })
+
+        val modified = sortCanonicalUnifiedEntities(
+            entries, LocalMusicSort.DATE_MODIFIED, dates,
+            id = { it.id }, title = { it.label },
+        )
+        assertEquals(listOf("older", "newer", "unknown"), modified.map { it.id })
+        val reverse = sortCanonicalUnifiedEntities(
+            entries, LocalMusicSort.TITLE_DESC, dates,
+            id = { it.id }, title = { it.label },
+        )
+        assertEquals(listOf("unknown", "newer", "older"), reverse.map { it.id })
     }
 
     @Test fun modifiedDateDoesNotFallBackToAdded() {
