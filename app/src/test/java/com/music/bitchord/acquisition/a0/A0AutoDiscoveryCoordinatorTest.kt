@@ -605,6 +605,75 @@ class A0AutoDiscoveryCoordinatorTest {
             result.batch.results[2])
     }
 
+    @Test fun twoPeerPreacceptFailuresTriggerFreshSearchInsteadOfRepeatedUnsafeSource() {
+        val songs=entries
+        var searches=0
+        val attempted=mutableListOf<Pair<String,String>>()
+        val fetched=mutableListOf<String>()
+        fun offers(peer:String)=A0ObservedCandidateHandoff(
+            Socket(),"local",177,true,searchPhrase=songs[0].query,
+            requestedAlbum="SUPER REAL ME",expectedDurationSeconds=120,
+            qualityProfile=quality,collectReleaseShadow=true
+        ).let { handoff ->
+            val files=songs.map { item ->
+                A0SoulseekSearchFile(
+                    "Shared\\ILLIT\\SUPER REAL ME\\${item.query}.mp3",
+                    item.durationSeconds!!.toLong()*40_000L,
+                    "mp3",mapOf(0 to 320,1 to item.durationSeconds))
+            }
+            handoff.offerParsed(A0SoulseekSearchResponse(
+                peer,177,files,emptyList(),true,128_000,0),peer)
+            handoff.releaseShadowChoices()
+        }
+        val discovery=FakeSearch {
+            searches++
+            A0AutoDiscoveryCoordinator.SearchResult.Found(
+                offers(if(searches==1) "bad-peer" else "alternate-peer"))
+        }
+        val executor=A0AutoBatchExecutor { entry ->
+            object:A0AutoAcquisitionExecutor.Port {
+                override fun fetch(candidate:A0ObservedCandidateHandoff.Choice,
+                    isCancelled:()->Boolean):A0AutoAcquisitionExecutor.FetchResult {
+                    attempted.add(entry.trackId to candidate.peerUsername)
+                    if(candidate.peerUsername=="bad-peer")
+                        return A0AutoAcquisitionExecutor.FetchResult.RetryableConnectionFailure
+                    val file=File.createTempFile("peer-suppress-", ".mp3")
+                    RandomAccessFile(file,"rw").use {
+                        it.setLength(entry.durationSeconds!!.toLong()*40_000L)
+                    }
+                    return A0AutoAcquisitionExecutor.FetchResult.Received(
+                        A0VerifiedByteStager.Receipt(file,file.length(),
+                            "a".repeat(64),"ID3_HEADER_ONLY"))
+                }
+                override fun inspect(receipt:A0VerifiedByteStager.Receipt,
+                    expectedExtension:String,isCancelled:()->Boolean)=
+                    A0AutoPostTransferTechnicalGate.Decoded(
+                        A0CanonicalAcquisitionIntent.Codec.MP3,"mp3",
+                        entry.durationSeconds!!.toLong()*1000L,320,44100,null,true)
+                override fun publish(receipt:A0VerifiedByteStager.Receipt,
+                    safeName:String,isCancelled:()->Boolean)
+                    :A0AutoAcquisitionExecutor.PublishResult {
+                    fetched.add(entry.trackId)
+                    return A0AutoAcquisitionExecutor.PublishResult.DURABLE
+                }
+                override fun cleanup(receipt:A0VerifiedByteStager.Receipt) {
+                    assertTrue(receipt.file.delete())
+                }
+            }
+        }
+        val result=A0AutoDiscoveryCoordinator(discovery,executor).run(
+            songs,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(2,searches)
+        assertEquals(2,result.batch.attemptFailures)
+        assertEquals(2,result.batch.published)
+        assertEquals(listOf("three","four"),fetched)
+        assertEquals(listOf("one","two"),attempted.filter {
+            it.second=="bad-peer" }.map { it.first })
+        assertEquals(listOf("three","four"),attempted.filter {
+            it.second=="alternate-peer" }.map { it.first })
+    }
+
     @Test fun noExplicitOptInNeverOpensSearchOrTransfer() {
         val search=FakeSearch {
             throw AssertionError("Network must remain OFF")
