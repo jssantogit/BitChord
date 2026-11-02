@@ -1400,6 +1400,7 @@ object Downloads {
                 Log.d(TAG,"soulseek_auto_summary diagnostic_schema=2" +
                     " requested=${request.entries.size}" +
                     " searches=${outcome.searches}" +
+                    " folder_queries=${outcome.folderQueries}" +
                     " attempts=${report.attempts}" +
                     " published=${report.published}" +
                     " review=${report.results.count {
