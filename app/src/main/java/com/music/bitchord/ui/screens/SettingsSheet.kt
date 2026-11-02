@@ -2398,9 +2398,10 @@ internal fun SettingsRow(
     iconTint: Color = MaterialTheme.colorScheme.onBackground,
     /** Allows a full-width editor category to breathe, retaining native row internals. */
     minHeight: Dp = 52.dp,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .then(if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier)
             .alpha(if (enabled) 1f else 0.45f)
