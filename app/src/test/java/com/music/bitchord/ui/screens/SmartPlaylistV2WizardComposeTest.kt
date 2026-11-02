@@ -819,6 +819,9 @@ class SmartPlaylistV2WizardComposeTest {
             )
         }
         compose.onNodeWithText("Continuar").performClick()
+        // The condition card follows the heading and join card in the LazyColumn.
+        // Scroll it into the viewport before injecting a physical touch.
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(2)
         compose.onNodeWithContentDescription("Excluir condição").performClick()
         compose.onNodeWithText("Excluir").performClick()
         compose.runOnIdle { assertEquals(1, cleared) }
@@ -844,6 +847,7 @@ class SmartPlaylistV2WizardComposeTest {
             )
         }
         compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(2)
         compose.onNodeWithContentDescription("Expandir").performClick()
         compose.onNodeWithContentDescription("Recolher").assertExists()
         compose.onAllNodesWithText("Recolher").assertCountEquals(0)
