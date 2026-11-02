@@ -679,6 +679,7 @@ internal fun CanonicalRemoteLibraryScreen(
                 CanonicalNativeArtistDetail(
                     artistName = detail.name,
                     tracks = sortCanonicalUnifiedTracks(scopedDetailTracks, unifiedSort),
+                    availableLibraryTracks = eligibleTracks,
                     sourceKeys = sources,
                     selectedSourceKey = selectedSource,
                     heroArtworkTrack = entityArtworkById[detail.id]
