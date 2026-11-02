@@ -39,6 +39,9 @@ internal class A0AutoDiscoveryCoordinator(
             val truncatedSlots:Set<Int> = emptySet(),
         ):SearchResult
         data object NoReply:SearchResult
+        /** The slot's query cannot be represented on the search wire.
+         * This is not an authentication or peer-connectivity failure. */
+        data object QueryRejected:SearchResult
         /** A finished search couldn't drain its peer readers. Its observation
          * is discarded, but this is NOT an auth/protocol/account stop; fresh
          * sibling searches may proceed with independent closed sessions. */
@@ -48,7 +51,7 @@ internal class A0AutoDiscoveryCoordinator(
     }
 
     enum class CacheAction {
-        REUSED, SEARCH_REQUIRED, SEARCH_NO_REPLY, PEER_SUPPRESSED,
+        REUSED, SEARCH_REQUIRED, SEARCH_NO_REPLY, QUERY_REJECTED, PEER_SUPPRESSED,
         SIBLING_RESCUE, SIBLING_RESCUE_SKIPPED,
         FOLDER_BROWSE_ADDED, FOLDER_BROWSE_EMPTY
     }
@@ -75,11 +78,13 @@ internal class A0AutoDiscoveryCoordinator(
         val noReplySearches:Int=0,
         val longestNoReplyStreak:Int=0,
         val suppressedOffers:Int=0,
+        val rejectedQueries:Int=0,
     ) {
         fun withReservationReleased(released:Boolean)=Report(
             searches,batch,unusedReservationReleased=released,
             folderQueries=folderQueries,noReplySearches=noReplySearches,
-            longestNoReplyStreak=longestNoReplyStreak,suppressedOffers=suppressedOffers)
+            longestNoReplyStreak=longestNoReplyStreak,suppressedOffers=suppressedOffers,
+            rejectedQueries=rejectedQueries)
         override fun toString()=
             "A0AutoDiscoveryReport(searches=$searches,published=${batch.published})"
     }
@@ -138,6 +143,7 @@ internal class A0AutoDiscoveryCoordinator(
         var folderQueries=0
         var noReplySearches=0
         var consecutiveNoReply=0
+        var rejectedQueries=0
         var longestNoReplyStreak=0
         var suppressedOffers=0
         // Two extra direct-peer probes for short albums; four for long
@@ -157,7 +163,7 @@ internal class A0AutoDiscoveryCoordinator(
                 publishedPaths.toSet()),folderQueries=folderQueries,
             noReplySearches=noReplySearches,
             longestNoReplyStreak=longestNoReplyStreak,
-            suppressedOffers=suppressedOffers)
+            suppressedOffers=suppressedOffers,rejectedQueries=rejectedQueries)
         // Only an ambiguous, fully observed slot may use independent
         // release-wide sibling coverage to break a peer-claim tie.
         // The executor still re-runs the unchanged per-track preview on
@@ -254,6 +260,17 @@ internal class A0AutoDiscoveryCoordinator(
                                 CacheAction.SEARCH_NO_REPLY,
                                 consecutiveNoReply.coerceIn(0,64),
                                 false,null))}catch(_:Exception){}
+                        }
+                        SearchResult.QueryRejected -> {
+                            // No query reached the wire. Keep scanning this
+                            // album; a later sibling may provide safe reusable
+                            // evidence for this unsearchable entry.
+                            searches--
+                            rejectedQueries++
+                            consecutiveNoReply=0
+                            try {onCacheEvidence(index,CacheEvidence(
+                                CacheAction.QUERY_REJECTED,0,false,null))
+                            }catch(_:Exception){}
                         }
                         SearchResult.TeardownIncomplete -> {
                             // The failing search's observation is unusable.

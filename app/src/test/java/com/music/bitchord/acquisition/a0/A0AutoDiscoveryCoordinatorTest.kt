@@ -702,6 +702,46 @@ class A0AutoDiscoveryCoordinatorTest {
         assertEquals(0,search.requests.size)
     }
 
+    @Test fun invalidQueryDoesNotAbortSiblingsAndCanBeRescuedWithoutNewSearch() {
+        val two=entries.take(2)
+        val search=FakeSearch { slot ->
+            if(slot.trackId=="one")
+                A0AutoDiscoveryCoordinator.SearchResult.QueryRejected
+            else
+                A0AutoDiscoveryCoordinator.SearchResult.Found(claims(two))
+        }
+        val done=mutableListOf<String>()
+        val actions=mutableListOf<A0AutoDiscoveryCoordinator.CacheAction>()
+        val result=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            two,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true},
+            onCacheEvidence={_,event -> actions.add(event.action)})
+        assertEquals(listOf("one","two"),search.requests)
+        assertEquals(1,result.searches)
+        assertEquals(1,result.rejectedQueries)
+        assertEquals(0,result.noReplySearches)
+        assertTrue(A0AutoDiscoveryCoordinator.CacheAction.QUERY_REJECTED in actions)
+        assertEquals(2,result.batch.published)
+        assertEquals(setOf("one","two"),done.toSet())
+    }
+
+    @Test fun severalUnsearchableQueriesAreNotMiscountedAsEmptyNetworkResponses() {
+        val search=FakeSearch {
+            A0AutoDiscoveryCoordinator.SearchResult.QueryRejected
+        }
+        val result=A0AutoDiscoveryCoordinator(
+            search,batch(mutableListOf())).run(
+            entries.take(3),quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(0,result.searches)
+        assertEquals(3,result.rejectedQueries)
+        assertEquals(0,result.noReplySearches)
+        assertEquals(0,result.longestNoReplyStreak)
+        assertEquals(3,result.batch.manualReview)
+        assertEquals(3,search.requests.size)
+        assertEquals(3,result.withReservationReleased(true).rejectedQueries)
+    }
+
     @Test fun authenticationFailureStopsAllWithoutPartialAutoTransfers() {
         val search=FakeSearch {
             A0AutoDiscoveryCoordinator.SearchResult.Stop

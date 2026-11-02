@@ -81,7 +81,13 @@ internal class A0FreshAutoSearchTransport(
         }
         val normalized=runCatching {
             A0SearchQuery.normalize(entry.query)
-        }.getOrElse {return A0AutoDiscoveryCoordinator.SearchResult.Stop}
+        }.getOrElse {
+            A0AcquisitionDiagnostics.emit(traceScope,
+                A0AcquisitionDiagnostics.Phase.SEARCH_STOP,
+                reason=A0AcquisitionDiagnostics.Fault.ARGUMENT,
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart)
+            return A0AutoDiscoveryCoordinator.SearchResult.QueryRejected
+        }
         // A single reservation covers this session's initial query and up
         // to two optional fallbacks. Waiting occurs BEFORE authentication,
         // so we do not hold an idle Soulseek server socket for minutes.
