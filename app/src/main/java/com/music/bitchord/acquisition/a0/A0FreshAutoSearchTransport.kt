@@ -308,7 +308,15 @@ internal class A0FreshAutoSearchTransport(
                 for(at in listOf(6000,12000)) {
                     if(elapsed>=at && marks.add(at)) {
                         val found=holder.hasAutoReadyCandidateForSearchRecovery(entry,quality)
-                        var variant=recovery.next(at.toLong(),found,sent)
+                        // Use the released shadow to discover siblings even
+                        // when the current song already has a safe candidate.
+                        // No extra title-only searches in that case.
+                        val missingSiblings=releaseSlots.size>=4 &&
+                            recovery.releaseWideQuery!=null &&
+                            !A0AutoSearchEarlyExitPolicy.hasCompleteEligibleRelease(
+                                releaseSlots,quality,holder.releaseShadowSnapshot())
+                        var variant=recovery.next(
+                            at.toLong(),found,sent,missingSiblings=missingSiblings)
                         if(variant!=null && variant==recovery.releaseWideQuery &&
                             !releaseWideSent.add(variant)) {
                             // Track the skipped variation only in this local
