@@ -25,8 +25,20 @@ internal object A0SearchQuery {
     fun variants(userEntered: String): List<String> {
         val first = normalize(userEntered)
         val variants = linkedSetOf(first)
-        val ascii = java.text.Normalizer.normalize(first, java.text.Normalizer.Form.NFKD)
-            .replace(Regex("\\p{M}+"), "")
+        // NFKD on an entire Korean title decomposes Hangul syllables into
+        // Jamo, yielding an unhelpful search variation that displaces the
+        // real title-only fallback. Remove accents from LATIN characters only.
+        // Preserve Korean, Japanese and other scripts byte-for-byte.
+        val accentMarks=Regex("\\p{M}+")
+        val ascii=buildString {
+            for (character in first) {
+                if(Character.UnicodeScript.of(character.code)==
+                    Character.UnicodeScript.LATIN) {
+                    append(java.text.Normalizer.normalize(character.toString(),
+                        java.text.Normalizer.Form.NFKD).replace(accentMarks,""))
+                } else append(character)
+            }
+        }
         if (ascii != first) variants.add(normalize(ascii))
         val parts = userEntered.split(Regex("\\s+[-–—]\\s+"), limit = 2)
         if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) {

@@ -13,6 +13,17 @@ class A0SearchQueryTest {
         assertEquals("Daft Punk", A0SearchQuery.normalize("Daft   Punk"))
     }
 
+    @Test fun latinAccentFallbackNeverDecomposesKoreanIntoJamo() {
+        assertEquals(listOf("BTS 노래 Live","노래 Live"),
+            A0SearchQuery.variants("BTS - 노래 (Live)"))
+        assertEquals(listOf("Björk Jóga","Bjork Joga","Jóga"),
+            A0SearchQuery.variants("Björk - Jóga"))
+        val multilingual=A0SearchQuery.variants("Björk - 상남자 (Live)")
+        assertEquals("Bjork 상남자 Live",multilingual[1])
+        assertEquals("상남자 Live",multilingual[2])
+        assertFalse(multilingual.any { it.contains("ᄉ") || it.contains("ᅡ") })
+    }
+
     @Test fun userQueryReallyReplacesPreviouslyHardcodedSearchOnWire() {
         val one = A0OneShotPublicSearchWire.fileSearch(42, "newjeans - omg")
         val two = A0OneShotPublicSearchWire.fileSearch(42, "naruto*")
