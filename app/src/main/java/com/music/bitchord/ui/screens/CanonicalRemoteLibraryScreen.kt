@@ -145,7 +145,11 @@ private sealed interface CanonicalDetailBrowseState {
     data class Ready(val recordingIds: Set<String>) : CanonicalDetailBrowseState
 }
 
-private data class CanonicalSelectedEntity(val id: String, val name: String)
+private data class CanonicalSelectedEntity(
+    val id: String,
+    val name: String,
+    val artworkUri: String? = null,
+)
 
 /**
  * Offline-first browse for a provider's persisted canonical availability.
@@ -260,6 +264,7 @@ internal fun CanonicalRemoteLibraryScreen(
     var selectedEntity by remember(providerKey, selectedContext) {
         mutableStateOf<CanonicalSelectedEntity?>(null)
     }
+    var detailQuery by remember(selectedEntity?.id) { mutableStateOf("") }
     LaunchedEffect(detailBackToken) {
         if (detailBackToken > 0) selectedEntity = null
     }
@@ -494,22 +499,37 @@ internal fun CanonicalRemoteLibraryScreen(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
-        if (unified && selectedEntity == null) {
+        if (unified) {
+            // Selected albums/artists keep the exact native page chrome.
+            // Only their revalidated RecordingId membership changes.
+            val detail = selectedEntity
+            val detailMatches = if (detail == null) emptyList() else scopedDetailTracks.filter {
+                detailQuery.isBlank() ||
+                    it.title.contains(detailQuery, ignoreCase = true) ||
+                    it.artistDisplay.contains(detailQuery, ignoreCase = true)
+            }
+            val shownTracks = if (detail != null) detailMatches else
+                if (selectedContext == CanonicalSmartFilterContext.SONGS)
+                    displayedTracks else eligibleTracks
+            val shownState = if (detail == null) filteredState else when (detailState) {
+                CanonicalDetailBrowseState.Loading -> CanonicalSongFilterState.Loading
+                CanonicalDetailBrowseState.Failed -> CanonicalSongFilterState.Failed
+                is CanonicalDetailBrowseState.Ready -> CanonicalSongFilterState.Ready(detailMatches)
+            }
             NativeUnifiedLibraryBody(
-                title = title,
-                selectedContext = selectedContext,
-                tracks = sortCanonicalUnifiedTracks(
-                    if (selectedContext == CanonicalSmartFilterContext.SONGS)
-                        displayedTracks else eligibleTracks,
-                    unifiedSort,
-                ),
-                filteredState = filteredState,
+                title = detail?.name ?: title,
+                selectedContext = if (detail == null) selectedContext
+                    else CanonicalSmartFilterContext.SONGS,
+                tracks = sortCanonicalUnifiedTracks(shownTracks, unifiedSort),
+                filteredState = shownState,
                 entityState = entityState,
                 artworkLoader = artworkLoader,
-                query = libraryQuery,
-                onQueryChange = { libraryQuery = it },
+                query = if (detail == null) libraryQuery else detailQuery,
+                onQueryChange = { if (detail == null) libraryQuery = it else detailQuery = it },
                 searching = searchVisible,
                 viewType = unifiedViewType,
+                heroArtworkUri = detail?.artworkUri,
+                heroArtworkTrack = if (detail == null) null else scopedDetailTracks.firstOrNull(),
                 onTrackPlay = playTrack,
                 onTrackEditRating = editRating,
                 onPlayAll = { visible, shuffle ->
@@ -1163,6 +1183,8 @@ private fun NativeUnifiedLibraryBody(
     onQueryChange: (String) -> Unit,
     searching: Boolean,
     viewType: LibraryViewType,
+    heroArtworkUri: String? = null,
+    heroArtworkTrack: CanonicalBrowseTrack? = null,
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
     onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
@@ -1199,7 +1221,22 @@ private fun NativeUnifiedLibraryBody(
                     meta = label,
                     palette = palette,
                     sleeveSize = sleeve,
-                    artwork = { CoverPlaceholder(Icons.Rounded.Folder, Modifier.fillMaxSize()) },
+                    artwork = {
+                        when {
+                            !heroArtworkUri.isNullOrBlank() &&
+                                (heroArtworkUri.startsWith("content://") ||
+                                    heroArtworkUri.startsWith("file://")) -> AsyncImage(
+                                model = heroArtworkUri,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            heroArtworkTrack != null -> CanonicalUnifiedArtwork(
+                                heroArtworkTrack, artworkLoader, Modifier.fillMaxSize(),
+                            )
+                            else -> CoverPlaceholder(Icons.Rounded.Folder, Modifier.fillMaxSize())
+                        }
+                    },
                     topInset = 18.dp,
                     actions = {
                         if (count > 0 && tracks.isNotEmpty()) {
@@ -1302,7 +1339,7 @@ private fun NativeUnifiedLibraryBody(
                                     imageUrl = album.artworkUri,
                                     isArtist = false,
                                     onClick = {
-                                        onEntitySelect(CanonicalSelectedEntity(album.id, album.title))
+                                        onEntitySelect(CanonicalSelectedEntity(album.id, album.title, album.artworkUri))
                                     },
                                 )
                             }
@@ -1311,7 +1348,7 @@ private fun NativeUnifiedLibraryBody(
                                 title = album.title,
                                 subtitle = album.artistDisplay.orEmpty(),
                                 imageUrl = album.artworkUri,
-                                onClick = { onEntitySelect(CanonicalSelectedEntity(album.id, album.title)) },
+                                onClick = { onEntitySelect(CanonicalSelectedEntity(album.id, album.title, album.artworkUri)) },
                                 artworkSize = 64.dp,
                                 horizontalPadding = PAGE_GUTTER,
                             )
