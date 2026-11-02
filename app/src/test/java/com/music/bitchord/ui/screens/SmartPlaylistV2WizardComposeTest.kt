@@ -850,7 +850,7 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithContentDescription("Recolher").assertExists()
         compose.onAllNodesWithText("Recolher").assertCountEquals(0)
         compose.onNodeWithText("Fonte").performClick()
-        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(2)
         compose.onNodeWithContentDescription("Opções").assertExists()
         compose.onNodeWithContentDescription("Excluir condição").assertExists()
         compose.onAllNodesWithText("Opções").assertCountEquals(0)
