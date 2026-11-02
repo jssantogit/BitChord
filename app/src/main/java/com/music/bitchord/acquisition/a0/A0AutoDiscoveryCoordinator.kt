@@ -223,12 +223,18 @@ internal class A0AutoDiscoveryCoordinator(
                 // The old selectionPreview() recomputed every one of 64 slots
                 // before EACH next slot: quadratic and expensive with large
                 // 512-offer buckets. Only the current slot is relevant here.
-                val activeCached=allowedSources(cached)
-                if(activeCached.size<cached.size)try {
-                    suppressedOffers+=(cached.size-activeCached.size)
+                // A file already durably published for another canonical
+                // slot cannot prove that this slot is ready. Filter spent
+                // physical paths BEFORE deciding whether to skip discovery.
+                val unspentCached=cached.filterNot {
+                    (it.peerUsername to it.remotePath) in publishedPaths
+                }
+                val activeCached=allowedSources(unspentCached)
+                if(activeCached.size<unspentCached.size)try {
+                    suppressedOffers+=(unspentCached.size-activeCached.size)
                     onCacheEvidence(index,CacheEvidence(
                         CacheAction.PEER_SUPPRESSED,
-                        (cached.size-activeCached.size).coerceIn(0,512),
+                        (unspentCached.size-activeCached.size).coerceIn(0,512),
                         cacheTruncated,null))
                 }catch(_:Exception){}
                 val currentPreview=A0AutoCandidateSelectionPolicy.preview(
@@ -346,7 +352,12 @@ internal class A0AutoDiscoveryCoordinator(
                         val (offers,clipped)=checkNotNull(pooled.slotEvidence(next))
                         // Account for release-cohesion-based eligibility,
                         // not just a single-track preview.
-                        val (_,choice)=select(next,allowedSources(offers),clipped,false)
+                        // The upcoming slot also needs independent unspent
+                        // evidence; the already published file is not it.
+                        val unspent=offers.filterNot {
+                            (it.peerUsername to it.remotePath) in publishedPaths
+                        }
+                        val (_,choice)=select(next,allowedSources(unspent),clipped,false)
                         choice.status!=
                             A0AutoCandidateSelectionPolicy.Status.PROVISIONAL
                     }

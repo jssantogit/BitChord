@@ -284,6 +284,58 @@ class A0AutoDiscoveryCoordinatorTest {
         assertEquals(1,result.folderQueries)
     }
 
+    @Test fun spentPhysicalFileMustNotSuppressSearchForDuplicateCanonicalSong() {
+        // Two distinct slots may share artist/title/duration while still
+        // requiring independent physical files. Reusing the SAME peer/path
+        // is prohibited after its first durable publication.
+        val duplicates=listOf(
+            SoulseekBatchPlan.Entry("duplicate-a","ILLIT - Magnetic",
+                "SUPER REAL ME",161),
+            SoulseekBatchPlan.Entry("duplicate-b","ILLIT - Magnetic",
+                "SUPER REAL ME",161),
+        )
+        val search=FakeSearch { slot ->
+            A0AutoDiscoveryCoordinator.SearchResult.Found(
+                if(slot.trackId=="duplicate-a")claims(listOf(slot))
+                else alternatePeerClaims(listOf(slot)))
+        }
+        val done=mutableListOf<String>()
+        val actions=mutableListOf<A0AutoDiscoveryCoordinator.CacheAction>()
+        val report=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            duplicates,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true},
+            onCacheEvidence={_,event -> actions.add(event.action)})
+        assertEquals(listOf("duplicate-a","duplicate-b"),search.requests)
+        assertEquals(2,report.searches)
+        assertEquals(2,report.batch.published)
+        assertEquals(0,report.batch.manualReview)
+        assertEquals(listOf("duplicate-a","duplicate-b"),done)
+        assertTrue(A0AutoDiscoveryCoordinator.CacheAction.SEARCH_REQUIRED in actions)
+    }
+
+    @Test fun spentPhysicalFileStillCannotBeReusedIfSecondSearchFindsNoAlternative() {
+        val duplicates=listOf(
+            SoulseekBatchPlan.Entry("duplicate-a","ILLIT - Magnetic",
+                "SUPER REAL ME",161),
+            SoulseekBatchPlan.Entry("duplicate-b","ILLIT - Magnetic",
+                "SUPER REAL ME",161),
+        )
+        val search=FakeSearch { slot ->
+            if(slot.trackId=="duplicate-a")
+                A0AutoDiscoveryCoordinator.SearchResult.Found(claims(listOf(slot)))
+            else A0AutoDiscoveryCoordinator.SearchResult.NoReply
+        }
+        val done=mutableListOf<String>()
+        val report=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            duplicates,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(2,report.searches)
+        assertEquals(listOf("duplicate-a","duplicate-b"),search.requests)
+        assertEquals(1,report.batch.published)
+        assertEquals(1,report.batch.manualReview)
+        assertEquals(listOf("duplicate-a"),done)
+    }
+
     @Test fun firstQueryCoveringAllFourAlbumSlotsAvoidsThreeRedundantSearches() {
         val search=FakeSearch {
             A0AutoDiscoveryCoordinator.SearchResult.Found(claims(entries))
