@@ -107,6 +107,39 @@ class SmartCollectionBatchHandoffTest {
         assertEquals(CanonicalCollectionIntent.ADD_TO_QUEUE, submitted.single().intent)
     }
 
+    @Test fun recentLocalCardPlaysOnlyItsVerifiedLocalAsset() = runBlocking {
+        val library = CanonicalBrowseLibrary(listOf(
+            CanonicalBrowseTrack("rec-recent", "Recent", "Artist", 120_000L, null,
+                listOf(
+                    CanonicalBrowseMediaAsset("local-id", "local-mediastore"),
+                    CanonicalBrowseMediaAsset("remote-id", "opensubsonic:other"),
+                )),
+        ))
+        val submitted = mutableListOf<CanonicalCollectionIntentPlan>()
+        val handoff = SmartCollectionBatchHandoff(
+            refreshIds = { listOf("rec-recent") },
+            browse = { library },
+            browseSelected = { library },
+            sourceLimit = { _, browse -> canonicalBrowseOnlyProvider(browse, "local-mediastore") },
+            planner = CanonicalCollectionIntentPlanner(Resolver()),
+            submit = { submitted += it; true },
+        )
+        assertEquals(SmartCollectionBatchResult.Submitted,
+            handoff.execute(SmartCollectionActionSource.RecentLocalTrack("rec-recent"),
+                CanonicalCollectionIntent.PLAY_NOW))
+        assertEquals(listOf("local-id"),
+            submitted.single().selections.map { it.mediaAssetId })
+        assertEquals(CanonicalCollectionIntent.PLAY_NOW, submitted.single().intent)
+
+        val remoteOnly = canonicalBrowseOnlyProvider(
+            library.copy(tracks = listOf(library.tracks.single().copy(
+                availableAssets = listOf(CanonicalBrowseMediaAsset("remote-id", "opensubsonic:other")),
+            ))),
+            "local-mediastore",
+        )
+        assertTrue(remoteOnly.tracks.isEmpty())
+    }
+
     @Test fun selectedNormalSourceDoesNotFallBackToAnotherProvider() = runBlocking {
         val both = CanonicalBrowseLibrary(listOf(
             CanonicalBrowseTrack(
