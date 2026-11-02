@@ -17,6 +17,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
+import com.music.bitchord.data.catalog.CanonicalBrowseAssetRow
 import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
 import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
@@ -95,6 +96,31 @@ class SmartPlaylistV2WizardComposeTest {
                 .map { it.id }.toSet()
             assertEquals(emptySet<String>(), last.intersect(next))
         }
+    }
+
+    @Test fun previewRemoteRatingAssetIsIndependentOfArtworkAndNeverGuessBetweenRenditions() {
+        // Local art and an unrated image must not suppress a verified remote
+        // MediaAsset's rating. Neither a foreign account nor two renditions
+        // may be chosen arbitrarily.
+        val remote = CanonicalBrowseAssetRow(
+            recordingId = "rec-1", mediaAssetId = "remote:1",
+            providerKey = "opensubsonic:active", title = "Track",
+            artistDisplay = "Artist", durationMs = 180_000L, artworkUri = null,
+        )
+        val local = remote.copy(
+            mediaAssetId = "local:1", providerKey = "local-mediastore",
+            artworkUri = "content://media/cover",
+        )
+        assertEquals("remote:1", playlistRemoteRatingAssetId(
+            listOf(local, remote), "opensubsonic:active",
+        ))
+        assertEquals(null, playlistRemoteRatingAssetId(
+            listOf(local, remote), "opensubsonic:another",
+        ))
+        assertEquals(null, playlistRemoteRatingAssetId(
+            listOf(local, remote, remote.copy(mediaAssetId = "remote:2")),
+            "opensubsonic:active",
+        ))
     }
 
     @Test fun universalGenreAsksForTextAndLegacyLocalGenreRemainsReadable() {
