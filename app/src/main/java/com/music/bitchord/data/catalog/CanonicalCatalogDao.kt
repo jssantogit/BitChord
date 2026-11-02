@@ -90,6 +90,16 @@ internal data class CanonicalReleaseArtistCreditNameRow(
     val artistName: String?,
 )
 
+/**
+ * Date evidence for a real canonical ReleaseId/ArtistId, from assets in the
+ * currently eligible providers only. A null value is an unknown timestamp.
+ */
+internal data class CanonicalEntitySortDateRow(
+    val entityId: String,
+    val dateAddedSeconds: Long?,
+    val dateModifiedSeconds: Long?,
+)
+
 internal data class CanonicalRecordingLocalAddedRow(
     val recordingId: String,
     val dateAddedSeconds: Long?,
@@ -1776,6 +1786,58 @@ internal interface CanonicalCatalogDao {
         """,
     )
     fun observeMultiSourceBrowseAssets(providerKeys: List<String>): Flow<List<CanonicalBrowseAssetRow>>
+
+    /**
+     * Native album ordering, sourced from actual linked recordings/assets.
+     * Unlike a per-release query loop, this scans all eligible associations
+     * in a single grouped SQL projection.
+     */
+    @Query(
+        """
+        SELECT tracks.releaseId AS entityId,
+               MAX(asset.dateAddedSeconds) AS dateAddedSeconds,
+               MAX(asset.dateModifiedSeconds) AS dateModifiedSeconds
+        FROM catalog_release_track AS tracks
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = tracks.recordingId
+        WHERE asset.provider IN (:providerKeys)
+        GROUP BY tracks.releaseId
+        """,
+    )
+    suspend fun unifiedReleaseSortDates(
+        providerKeys: List<String>,
+    ): List<CanonicalEntitySortDateRow>
+
+    /**
+     * Canonical artist ordering includes both recording credits and release
+     * credits. Neither artist names nor release titles are identity keys.
+     */
+    @Query(
+        """
+        SELECT evidence.entityId AS entityId,
+               MAX(evidence.dateAddedSeconds) AS dateAddedSeconds,
+               MAX(evidence.dateModifiedSeconds) AS dateModifiedSeconds
+        FROM (
+            SELECT credit.artistId AS entityId,
+                   asset.dateAddedSeconds AS dateAddedSeconds,
+                   asset.dateModifiedSeconds AS dateModifiedSeconds
+            FROM catalog_recording_artist_credit AS credit
+            INNER JOIN catalog_media_asset AS asset ON asset.recordingId = credit.recordingId
+            WHERE asset.provider IN (:providerKeys)
+            UNION ALL
+            SELECT credit.artistId AS entityId,
+                   asset.dateAddedSeconds AS dateAddedSeconds,
+                   asset.dateModifiedSeconds AS dateModifiedSeconds
+            FROM catalog_release_artist_credit AS credit
+            INNER JOIN catalog_release_track AS tracks ON tracks.releaseId = credit.releaseId
+            INNER JOIN catalog_media_asset AS asset ON asset.recordingId = tracks.recordingId
+            WHERE asset.provider IN (:providerKeys)
+        ) AS evidence
+        GROUP BY evidence.entityId
+        """,
+    )
+    suspend fun unifiedArtistSortDates(
+        providerKeys: List<String>,
+    ): List<CanonicalEntitySortDateRow>
 
     /**
      * B9 requires ONLY the already-revalidated RecordingIds. Do not fetch
