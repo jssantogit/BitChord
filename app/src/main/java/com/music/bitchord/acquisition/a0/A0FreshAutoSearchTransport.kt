@@ -89,6 +89,15 @@ internal class A0FreshAutoSearchTransport(
                 elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart)
             return A0AutoDiscoveryCoordinator.SearchResult.QueryRejected
         }
+        // Real release searches often return no result for a rare edition
+        // but answer the artist+album query with eligible sibling files.
+        // Ask that release-wide query FIRST once per batch (>=4 slots), so
+        // the six-second fallback delay no longer blocks sibling discovery.
+        // The original canonical song still owns ALL identity/quality gates.
+        val recovery=A0SearchRecoveryPlan(entry.query,entry.album,
+            releaseWide=releaseSlots.size>1)
+        val initialQuery=A0ReleaseInitialQueryPolicy.choose(
+            normalized,recovery.releaseWideQuery,releaseSlots.size,releaseWideSent)
         // A single reservation covers this session's initial query and up
         // to two optional fallbacks. Waiting occurs BEFORE authentication,
         // so we do not hold an idle Soulseek server socket for minutes.
@@ -180,9 +189,11 @@ internal class A0FreshAutoSearchTransport(
                 write(A0OneShotPublicSearchWire.setWaitPort(checkNotNull(listener).localPort))
                 check(checkNotNull(searchLease).commit(
                     android.os.SystemClock.elapsedRealtime()))
-                write(A0OneShotPublicSearchWire.fileSearch(token,normalized))
+                write(A0OneShotPublicSearchWire.fileSearch(token,initialQuery.query))
                 flush()
             }
+            if(initialQuery.kind==A0ReleaseInitialQueryPolicy.Kind.ALBUM_WIDE)
+                releaseWideSent.add(initialQuery.query)
             if(stopped())return A0AutoDiscoveryCoordinator.SearchResult.Stop
             val deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(18)
             val gate=A0PeerOfferGate(160)
@@ -304,9 +315,7 @@ internal class A0FreshAutoSearchTransport(
                 }
             }
 
-            val recovery=A0SearchRecoveryPlan(entry.query,entry.album,
-                releaseWide=releaseSlots.size>1)
-            val sent=mutableSetOf(normalized)
+            val sent=mutableSetOf(initialQuery.query)
             val marks=mutableSetOf<Int>()
             var nextCompletionCheckMs=8000L
             var budgetSkippedFallbacks=0
@@ -326,6 +335,7 @@ internal class A0FreshAutoSearchTransport(
                                 releaseSlots,quality,holder.releaseShadowSnapshot())
                         val releaseQuery=recovery.releaseWideQuery
                         if(!releaseWideSkipCounted &&
+                            releaseQuery!=initialQuery.query &&
                             (missingSiblings || !found) &&
                             releaseQuery!=null && releaseQuery in releaseWideSent) {
                             releaseWideSkipped.incrementAndGet()
@@ -441,6 +451,7 @@ internal class A0FreshAutoSearchTransport(
                 counts.responses,snapshot.choices.size,
                 rejectedServerOffers.get())
             Log.d("BitChord","soulseek_auto_search replies=${snapshot.choices.size}" +
+                " initial_query_kind=${initialQuery.kind.name}" +
                 " tickets_sent=${tickets.accepted.size.coerceIn(1,3)}" +
                 " rate_budget_wait_ms=${searchThrottleWaitMs.coerceIn(0,300000)}" +
                 " fallback_budget_skipped=${budgetSkippedFallbacks.coerceIn(0,2)}" +
