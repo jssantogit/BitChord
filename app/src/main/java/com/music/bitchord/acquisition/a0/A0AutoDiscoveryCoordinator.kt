@@ -22,6 +22,14 @@ internal class A0AutoDiscoveryCoordinator(
             releaseSlots:List<SoulseekBatchPlan.Entry>,
             isCancelled:()->Boolean,
         ):SearchResult
+        /** Read-only, best-effort browse of the EXACT folder of a peer
+         * already proven to publish a sibling. Default never touches network.
+         * Every returned file is still an untrusted candidate claim. */
+        fun inspectPublishedFolder(
+            source:A0ObservedCandidateHandoff.Choice,
+            releaseSlots:List<SoulseekBatchPlan.Entry>,
+            isCancelled:()->Boolean,
+        ):SearchResult=SearchResult.NoReply
         fun close()
     }
 
@@ -40,7 +48,8 @@ internal class A0AutoDiscoveryCoordinator(
     }
 
     enum class CacheAction {
-        REUSED, SEARCH_REQUIRED, SIBLING_RESCUE, SIBLING_RESCUE_SKIPPED
+        REUSED, SEARCH_REQUIRED, SIBLING_RESCUE, SIBLING_RESCUE_SKIPPED,
+        FOLDER_BROWSE_ADDED, FOLDER_BROWSE_EMPTY
     }
     /** Aggregate-only evidence: never exposes a filename, peer or path. */
     data class CacheEvidence(
@@ -61,6 +70,7 @@ internal class A0AutoDiscoveryCoordinator(
          * of the same identity is safe; never set this from peer claims.
          */
         val unusedReservationReleased:Boolean=false,
+        val folderQueries:Int=0,
     ) {
         override fun toString()=
             "A0AutoDiscoveryReport(searches=$searches,published=${batch.published})"
@@ -108,6 +118,10 @@ internal class A0AutoDiscoveryCoordinator(
         // A slot that never began P/F may benefit from sibling evidence
         // discovered later in this SAME explicitly requested release.
         val reviewWithoutTransfer=LinkedHashSet<Int>()
+        // No repeat browsing of a published peer/folder inside one album.
+        // A failed lookup is not grounds for a retry storm.
+        val inspectedFolders=HashSet<Pair<String,String>>()
+        var folderQueries=0
         // An account/protocol stop or uncertain A3 publication terminates
         // the entire automatic session, including late-evidence rescue.
         var mayRescueLateSlots=true
@@ -118,7 +132,7 @@ internal class A0AutoDiscoveryCoordinator(
         }
         fun finish():Report=Report(searches,
             A0AutoBatchExecutor.Report(statuses.toList(),attempts,
-                publishedPaths.toSet()))
+                publishedPaths.toSet()),folderQueries=folderQueries)
         // Only an ambiguous, fully observed slot may use independent
         // release-wide sibling coverage to break a peer-claim tie.
         // The executor still re-runs the unchanged per-track preview on
@@ -236,6 +250,52 @@ internal class A0AutoDiscoveryCoordinator(
                     ?: A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW
                 // The executor already delivered this slot's progress.
                 statuses.add(status)
+                if(status==A0AutoBatchExecutor.TrackStatus.PUBLISHED &&
+                    index < count-1 && !shouldStop()) {
+                    // A correct publication is a useful source hint, not
+                    // blanket permission for any other file in its folder.
+                    // Query only when an upcoming slot actually lacks an
+                    // individually eligible, untruncated cached candidate.
+                    val needsSiblingEvidence=(index+1 until count).any { next ->
+                        val (offers,clipped)=checkNotNull(pooled.slotEvidence(next))
+                        A0AutoCandidateSelectionPolicy.preview(
+                            entries[next],offers,quality,
+                            sampleTruncated=clipped).status!=
+                            A0AutoCandidateSelectionPolicy.Status.PROVISIONAL
+                    }
+                    if(needsSiblingEvidence && folderQueries<4) {
+                        val source=selected.firstOrNull {
+                            (it.peerUsername to it.remotePath) in outcome.publishedSourceKeys
+                        }
+                        val directory=source?.remotePath?.replace('\\','/')
+                            ?.substringBeforeLast('/','')
+                        val folderKey=if(source!=null && !directory.isNullOrBlank())
+                            source.peerUsername to directory else null
+                        if(source!=null && folderKey!=null &&
+                            inspectedFolders.add(folderKey)) {
+                            folderQueries++
+                            val browsed=try {
+                                discovery.inspectPublishedFolder(
+                                    source,entries,::shouldStop)
+                            }catch(_:Exception){SearchResult.NoReply}
+                            if(!shouldStop()) {
+                                if(browsed is SearchResult.Found) {
+                                    pooled.add(browsed.choices,browsed.truncatedSlots)
+                                    try {onCacheEvidence(index,CacheEvidence(
+                                        CacheAction.FOLDER_BROWSE_ADDED,
+                                        browsed.choices.size.coerceIn(0,512),
+                                        browsed.truncatedSlots.isNotEmpty(),null
+                                    ))}catch(_:Exception){}
+                                }else {
+                                    try {onCacheEvidence(index,CacheEvidence(
+                                        CacheAction.FOLDER_BROWSE_EMPTY,
+                                        0,false,null
+                                    ))}catch(_:Exception){}
+                                }
+                            }
+                        }
+                    }
+                }
                 if(status==A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW &&
                     decision.status==A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW &&
                     decision.reason in setOf(
