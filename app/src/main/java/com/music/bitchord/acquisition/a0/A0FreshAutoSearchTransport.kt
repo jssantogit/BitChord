@@ -160,6 +160,9 @@ internal class A0FreshAutoSearchTransport(
             val indirectSubmitted=AtomicInteger()
             val indirectConnected=AtomicInteger()
             val indirectFailed=AtomicInteger()
+            val indirectConnectFailed=AtomicInteger()
+            val indirectInitFailed=AtomicInteger()
+            val indirectReplyFailed=AtomicInteger()
             handoff=A0ObservedCandidateHandoff(
                 connection,checkNotNull(session).username,token,
                 searchPhrase=entry.query,saveFormatsOnly=true,
@@ -268,17 +271,21 @@ internal class A0FreshAutoSearchTransport(
                             if(!stopped() && readerGate.isOpen()) {
                                 Socket().use { peer ->
                                     activePeers.add(peer)
+                                    var connected=false
+                                    var initSent=false
                                     try {
                                         workerStages.inStage(
                                             A0PeerWorkStageCounts.Stage.CONNECTING) {
                                             peer.connect(InetSocketAddress(
                                                 offer.address,offer.port),1800)
+                                            connected=true
                                             indirectConnected.incrementAndGet()
                                             peer.soTimeout=2300
                                             peer.getOutputStream().apply {
                                                 write(A0IndirectSearchWire.pierceFirewall(offer.token))
                                                 flush()
                                             }
+                                            initSent=true
                                         }
                                         workerStages.inStage(
                                             A0PeerWorkStageCounts.Stage.READING) {
@@ -298,6 +305,18 @@ internal class A0FreshAutoSearchTransport(
                                         }
                                     }catch(_:IOException) {
                                         indirectFailed.incrementAndGet()
+                                        // Connection / peer-init / response are
+                                        // distinct failure modes. Only bounded
+                                        // counts are logged, never identities.
+                                        when(A0IndirectPeerFailureStage.classify(
+                                            connected,initSent)) {
+                                            A0IndirectPeerFailureStage.Phase.CONNECT ->
+                                                indirectConnectFailed.incrementAndGet()
+                                            A0IndirectPeerFailureStage.Phase.INIT ->
+                                                indirectInitFailed.incrementAndGet()
+                                            A0IndirectPeerFailureStage.Phase.RESPONSE ->
+                                                indirectReplyFailed.incrementAndGet()
+                                        }
                                         // Ignore one peer; retain validated replies.
                                     }finally {
                                         activePeers.remove(peer)
@@ -448,6 +467,7 @@ internal class A0FreshAutoSearchTransport(
             val snapshot=holder.releaseShadowSnapshot()
             val counts=holder.screening()
             val replyByTicket=tickets.responseCounts()
+            val successWorkers=peerWorkers.snapshot()
             val reachability=A0SearchReachabilityDiagnosis.classify(
                 directAccepted.get(),indirectOffers.get(),indirectConnected.get(),
                 counts.responses,snapshot.choices.size,
@@ -474,6 +494,12 @@ internal class A0FreshAutoSearchTransport(
                 " indirect_submitted=${indirectSubmitted.get().coerceIn(0,512)}" +
                 " indirect_connected=${indirectConnected.get().coerceIn(0,512)}" +
                 " indirect_failed=${indirectFailed.get().coerceIn(0,512)}" +
+                " indirect_connect_failed=${indirectConnectFailed.get().coerceIn(0,512)}" +
+                " indirect_init_failed=${indirectInitFailed.get().coerceIn(0,512)}" +
+                " indirect_reply_failed=${indirectReplyFailed.get().coerceIn(0,512)}" +
+                " indirect_workers_started=${successWorkers.started.coerceIn(0,512)}" +
+                " indirect_workers_not_started=${(successWorkers.accepted-successWorkers.started).coerceIn(0,512)}" +
+                " indirect_queue_peak=${successWorkers.peakQueued.coerceIn(0,128)}" +
                 " truncated_slots=${snapshot.truncatedSlots.size}" +
                 " raw_responses=${counts.responses} public_files=${counts.publicFiles}" +
                 " admitted_before_limit=${counts.validBeforeLimit}" +
