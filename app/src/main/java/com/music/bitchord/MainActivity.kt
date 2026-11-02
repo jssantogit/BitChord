@@ -2964,9 +2964,20 @@ private fun BitChordApp(
                         detailListStates.getOrPut(key) { LazyListState() }
                     }
                     if (key == "canonical_playlist_library") {
+                        LaunchedEffect(key) {
+                            com.music.bitchord.diagnostics.Diagnostics.event(
+                                category = com.music.bitchord.diagnostics.DiagnosticCategory.UI,
+                                name = "canonical_playlist_library_entered",
+                            )
+                        }
                         com.music.bitchord.ui.screens.UnifiedPlaylistLibraryShelf(
                             normalPlaylists = localPlaylistItems,
                             onNewSmartPlaylist = {
+                                com.music.bitchord.diagnostics.Diagnostics.event(
+                                    category = com.music.bitchord.diagnostics.DiagnosticCategory.UI,
+                                    name = "playlist_create_requested",
+                                    metadata = mapOf("origin" to "playlist_library"),
+                                )
                                 startNormalPlaylistSongPicker = false
                                 editingSmartPlaylistId = null
                                 editingNormalPlaylistId = null
@@ -3057,6 +3068,16 @@ private fun BitChordApp(
                     } else if (key == "my_ratings") {
                         CanonicalMyRatingsScreen(onBack = { showCanonicalMyRatings = false })
                     } else if (key == "smart_playlist_builder") {
+                        LaunchedEffect(key) {
+                            com.music.bitchord.diagnostics.Diagnostics.event(
+                                category = com.music.bitchord.diagnostics.DiagnosticCategory.UI,
+                                name = "playlist_wizard_entered",
+                                metadata = mapOf(
+                                    "mode" to if (editingSmartPlaylistId != null ||
+                                        editingNormalPlaylistId != null) "edit" else "create",
+                                ),
+                            )
+                        }
                         SmartPlaylistBuilderScreen(
                             onBack = {
                                 showSmartPlaylistBuilder = false
@@ -4280,6 +4301,11 @@ private fun BitChordApp(
                                 searching = if (openedCanonicalPlaylist == null)
                                     playlistLibrarySearching else playlistDetailSearching,
                                 onCreate = {
+                                    com.music.bitchord.diagnostics.Diagnostics.event(
+                                        category = com.music.bitchord.diagnostics.DiagnosticCategory.UI,
+                                        name = "playlist_create_requested",
+                                        metadata = mapOf("origin" to "toolbar"),
+                                    )
                                     editingSmartPlaylistId = null
                                     editingNormalPlaylistId = null
                                     showSmartPlaylistBuilder = true
