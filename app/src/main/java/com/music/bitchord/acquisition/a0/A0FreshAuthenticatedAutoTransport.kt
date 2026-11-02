@@ -172,13 +172,24 @@ internal class A0FreshAuthenticatedAutoTransport(
             if(lastPhase==A0ServerAssociatedTransfer.Phase.F_ESTABLISHED ||
                 lastPhase==A0ServerAssociatedTransfer.Phase.BYTES_RECEIVED)
                 receiveCheckpoint("FAILED")
+            val failureKind=when(error) {
+                is java.net.SocketTimeoutException -> "SOCKET_TIMEOUT"
+                is java.io.EOFException -> "PEER_EOF"
+                is java.net.SocketException -> "SOCKET_DISCONNECT"
+                is java.io.IOException -> "OTHER_IO"
+                else -> "OTHER"
+            }
+            com.music.bitchord.data.DebugLog.d("BitChord",
+                "soulseek_auto_peer_failure category=$failureKind" +
+                    " phase=${lastPhase?.name ?: "NONE"}" +
+                    " retryable=$retryable scope=$diagnosticScope")
             if(retryable) {
                 // No upload accepted, no F opened, no receipt received.
                 // The executor may try only the NEXT metadata-equivalent
                 // source and will never switch to another edition on a tie.
                 com.music.bitchord.data.DebugLog.d("BitChord",
                     "soulseek_auto_retry eligibility=PRE_ACCEPT_ONLY" +
-                        " cause=TIMEOUT" +
+                        " cause=$failureKind" +
                         " phase=${lastPhase?.name ?: "NONE"}" +
                         " scope=$diagnosticScope")
                 return A0AutoAcquisitionExecutor.FetchResult.RetryableConnectionFailure
