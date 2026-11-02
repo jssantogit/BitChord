@@ -72,6 +72,9 @@ internal class A0AutoDiscoveryCoordinator(
         val unusedReservationReleased:Boolean=false,
         val folderQueries:Int=0,
     ) {
+        fun withReservationReleased(released:Boolean)=Report(
+            searches,batch,unusedReservationReleased=released,
+            folderQueries=folderQueries)
         override fun toString()=
             "A0AutoDiscoveryReport(searches=$searches,published=${batch.published})"
     }
