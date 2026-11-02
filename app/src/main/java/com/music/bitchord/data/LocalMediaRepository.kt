@@ -215,27 +215,26 @@ object LocalMediaRepository {
         // for — a content URI fails its id check on purpose, since most rows
         // here really are just local files with nothing to sync.
         val videoIdByUri = Downloads.saved.value.entries.associate { (id, uri) -> uri to id }
-        val projection = buildList {
-            addAll(listOf(
-                MediaStore.Audio.Media._ID,
-                MediaStore.Audio.Media.DISPLAY_NAME,
-                MediaStore.Audio.Media.TITLE,
+        val mandatoryProjection = arrayOf(
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.DISPLAY_NAME,
+            MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DATA,
             MediaStore.Audio.Media.DATE_ADDED,
-                MediaStore.Audio.Media.DATE_MODIFIED,
-                MediaStore.Audio.Media.TRACK,
-                MediaStore.Audio.Media.SIZE,
-            ))
-            // Android 11+ provides an indexed genre without opening every file.
-            // Keep this a one-query scan at 50k tracks; other tags need their
-            // own bounded, fingerprint-aware extractor rather than N file reads.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                add(MediaStore.Audio.Media.GENRE)
-            }
+            MediaStore.Audio.Media.DATE_MODIFIED,
+            MediaStore.Audio.Media.TRACK,
+            MediaStore.Audio.Media.SIZE,
+        )
+        // Optional columns vary among Android/OEM MediaStore implementations.
+        // Query in bulk first; fallback MUST preserve the playable library.
+        val projection = buildList {
+            addAll(mandatoryProjection.toList())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) add(MediaStore.Audio.Media.GENRE)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) add(MediaStore.MediaColumns.BITRATE)
         }.toTypedArray()
 
         val filterNonMusic = AppSettings.filterNonMusicAudio.value
@@ -268,32 +267,18 @@ object LocalMediaRepository {
             null
         }
         val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
-        val mandatoryProjection = projection.filterNot {
-            it == MediaStore.Audio.Media.GENRE || it == MediaStore.MediaColumns.BITRATE
-        }.toTypedArray()
-
         runCatching {
-            // An OEM MediaStore may not implement an optional genre column.
-            // Retry the old projection rather than letting an optional tag
-            // break the complete playable local-library enumeration.
+            // An optional genre or bitrate lookup can fail on some OEM ROMs.
+            // Even a null cursor must retry mandatory columns, not show an empty library.
             val cursor = runCatching {
                 context.contentResolver.query(
                     MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                    projection,
-                    selection,
-                    selectionArgs,
-                    sortOrder,
+                    projection, selection, selectionArgs, sortOrder,
                 )
-            }.getOrElse { cause ->
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) throw cause
-                context.contentResolver.query(
-                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                    projection.dropLast(1).toTypedArray(),
-                    selection,
-                    selectionArgs,
-                    sortOrder,
-                )
-            }
+            }.getOrNull() ?: context.contentResolver.query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                mandatoryProjection, selection, selectionArgs, sortOrder,
+            )
             cursor?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
                 val displayNameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
@@ -309,6 +294,9 @@ object LocalMediaRepository {
                 val sizeCol = cursor.getColumnIndex(MediaStore.Audio.Media.SIZE)
                 val genreCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     cursor.getColumnIndex(MediaStore.Audio.Media.GENRE)
+                } else -1
+                val bitrateCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    cursor.getColumnIndex(MediaStore.MediaColumns.BITRATE)
                 } else -1
 
                 val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
