@@ -17,6 +17,18 @@ class A0SearchReachabilityDiagnosisTest {
             stage(0,3,2,0,0))
     }
 
+    @Test fun invalidServerOffersAreDistinguishableFromNoOffers() {
+        assertEquals(A0SearchReachabilityDiagnosis.Stage.UNSUPPORTED_SERVER_OFFERS,
+            A0SearchReachabilityDiagnosis.classify(
+                0,0,0,0,0,rejectedServerOffers=7))
+        assertEquals(A0SearchReachabilityDiagnosis.Stage.NO_PEER_ROUTES_OBSERVED,
+            A0SearchReachabilityDiagnosis.classify(
+                0,0,0,0,0,rejectedServerOffers=0))
+        assertEquals(A0SearchReachabilityDiagnosis.Stage.INDIRECT_OFFERS_ONLY,
+            A0SearchReachabilityDiagnosis.classify(
+                0,2,0,0,0,rejectedServerOffers=5))
+    }
+
     @Test fun receivedPeerRepliesCanStillFailToRetainAnyCandidate() {
         assertEquals(A0SearchReachabilityDiagnosis.Stage.VALID_REPLY_NO_RETAINED_CHOICES,
             stage(1,2,1,6,0))
