@@ -1209,9 +1209,9 @@ private fun NativeUnifiedLibraryBody(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val sleeve = (maxWidth * 0.76f).coerceAtMost(maxHeight * 0.6f)
         LazyColumn(
-            modifier = Modifier.fillMaxSize()
-                .statusBarsPadding().navigationBarsPadding()
-                .padding(top = 72.dp),
+            // Same insets as DetailScreen: the hero itself clears the frosted
+            // toolbar. A second 72dp/status inset pushed the artwork too low.
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 112.dp),
         ) {
             item(key = "native-library-header") {
@@ -1237,7 +1237,6 @@ private fun NativeUnifiedLibraryBody(
                             else -> CoverPlaceholder(Icons.Rounded.Folder, Modifier.fillMaxSize())
                         }
                     },
-                    topInset = 18.dp,
                     actions = {
                         if (count > 0 && tracks.isNotEmpty()) {
                             Spacer(Modifier.height(18.dp))
