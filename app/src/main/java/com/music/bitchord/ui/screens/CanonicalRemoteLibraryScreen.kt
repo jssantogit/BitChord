@@ -497,7 +497,11 @@ internal fun CanonicalRemoteLibraryScreen(
             NativeUnifiedLibraryBody(
                 title = title,
                 selectedContext = selectedContext,
-                tracks = sortCanonicalUnifiedTracks(displayedTracks, unifiedSort),
+                tracks = sortCanonicalUnifiedTracks(
+                    if (selectedContext == CanonicalSmartFilterContext.SONGS)
+                        displayedTracks else eligibleTracks,
+                    unifiedSort,
+                ),
                 filteredState = filteredState,
                 entityState = entityState,
                 artworkLoader = artworkLoader,
@@ -507,6 +511,14 @@ internal fun CanonicalRemoteLibraryScreen(
                 viewType = unifiedViewType,
                 onTrackPlay = playTrack,
                 onTrackEditRating = editRating,
+                onPlayAll = { visible, shuffle ->
+                    executeLibraryTrack(
+                        SmartCollectionActionSource.LibraryTracks(
+                            visible.map { it.recordingId }, selectedSource, shuffle,
+                        ),
+                        CanonicalCollectionIntent.PLAY_NOW,
+                    )
+                },
                 onEntitySelect = { selectedEntity = it },
             )
         } else Column(
@@ -1158,6 +1170,7 @@ private fun NativeUnifiedLibraryBody(
     viewType: LibraryViewType,
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
     onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
+    onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
     onEntitySelect: (CanonicalSelectedEntity) -> Unit,
 ) {
     val palette = rememberArtworkPalette(imageUrl = null)
@@ -1194,7 +1207,7 @@ private fun NativeUnifiedLibraryBody(
                     artwork = { CoverPlaceholder(Icons.Rounded.Folder, Modifier.fillMaxSize()) },
                     topInset = 18.dp,
                     actions = {
-                        if (count > 0) {
+                        if (count > 0 && tracks.isNotEmpty()) {
                             Spacer(Modifier.height(18.dp))
                             Row(
                                 Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
@@ -1203,14 +1216,14 @@ private fun NativeUnifiedLibraryBody(
                                 ActionPill(
                                     icon = BitChordIcons.Play,
                                     label = stringResource(R.string.play),
-                                    onClick = { tracks.firstOrNull()?.let(onTrackPlay) },
+                                    onClick = { onPlayAll(tracks, false) },
                                     filled = true,
                                     modifier = Modifier.weight(1f),
                                 )
                                 ActionPill(
                                     icon = BitChordIcons.Shuffle,
                                     label = stringResource(R.string.shuffle),
-                                    onClick = { tracks.randomOrNull()?.let(onTrackPlay) },
+                                    onClick = { onPlayAll(tracks, true) },
                                     filled = false,
                                     modifier = Modifier.weight(1f),
                                 )
