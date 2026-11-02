@@ -31,8 +31,14 @@ class A0SearchQueryTest {
             A0SearchQuery.variants(decomposed))
         assertEquals("BTS 노래",A0SearchQuery.normalize(
             "BTS - \u1102\u1169\u1105\u1162"))
-        assertEquals("노래",A0SearchQuery.titleOnlyFallback(
+        // A two-syllable title remains below the conservative
+        // three-character minimum for a broad title-only search.
+        assertNull(A0SearchQuery.titleOnlyFallback(
             "BTS - \u1102\u1169\u1105\u1162"))
+        // The same canonical-composition path still permits a sufficiently
+        // specific Korean title without decomposing its Hangul syllables.
+        assertEquals("사랑해",A0SearchQuery.titleOnlyFallback(
+            "BTS - \u1109\u1161\u1105\u1161\u11bc\u1112\u1162"))
     }
 
     @Test fun combiningMarksWithinRealWordsAreRetainedButMarkOnlyQueryIsRejected() {
