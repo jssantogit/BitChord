@@ -94,30 +94,42 @@ internal class SoulseekBatchSession(val entries: List<SoulseekBatchPlan.Entry>) 
     init { require(entries.size in 2..SoulseekBatchPlan.MAX_TRACKS) }
     var index:Int=0
         private set
-    var succeeded:Int=0
-        private set
-    var skipped:Int=0
-        private set
-    private var savedCurrent=false
+    // Never count a navigation-only selection as a manual skip. A bulk
+    // recovery can jump between 23 pending slots without losing any of them.
+    private val savedIndices=HashSet<Int>()
+    private val skippedIndices=HashSet<Int>()
+    val succeeded:Int get()=savedIndices.size
+    val skipped:Int get()=skippedIndices.size
 
     val current:SoulseekBatchPlan.Entry?
         get()=entries.getOrNull(index)
-    val isComplete:Boolean get()=index>=entries.size
-    val currentSaved:Boolean get()=savedCurrent
+    val isComplete:Boolean
+        get()=savedIndices.size+skippedIndices.size==entries.size
+    val currentSaved:Boolean get()=index in savedIndices
 
-    fun markSaved():Boolean {
-        if(isComplete || savedCurrent)return false
-        savedCurrent=true
-        succeeded++
+    /** Explicit navigation only; never authorizes P/F or changes A3 state. */
+    fun selectPending(targetIndex:Int):Boolean {
+        if(isComplete || targetIndex !in entries.indices ||
+            targetIndex in savedIndices || targetIndex in skippedIndices)
+            return false
+        index=targetIndex
         return true
     }
-    /** The user moves on intentionally; every failed/unselected track counts
-     * as skipped and does not affect the next item's authorization. */
+
+    fun markSaved():Boolean {
+        if(isComplete || index !in entries.indices ||
+            currentSaved || index in skippedIndices)return false
+        return savedIndices.add(index)
+    }
+
+    /** A user-confirmed skip, not an implicit consequence of selection. */
     fun advance():Boolean {
-        if(isComplete)return false
-        if(!savedCurrent)skipped++
-        index++
-        savedCurrent=false
-        return !isComplete
+        if(isComplete || index !in entries.indices)return false
+        if(!currentSaved)skippedIndices.add(index)
+        val next=(1..entries.size).asSequence()
+            .map { (index+it)%entries.size }
+            .firstOrNull { it !in savedIndices && it !in skippedIndices }
+        index=next ?: entries.size
+        return next!=null
     }
 }
