@@ -42,3 +42,20 @@ internal fun canonicalArtistReleaseSections(
         .thenBy { it.second.id })?.second
     return CanonicalArtistReleaseSections(albums, singles, other, recent)
 }
+
+/** Album detail includes all currently eligible recordings in this release,
+ * not just recordings credited to the artist that led to this page. */
+internal fun canonicalArtistReleaseTrackIds(
+    availableRecordingIds: List<String>,
+    releaseRecordingIds: Set<String>,
+): List<String> = availableRecordingIds.filter { it in releaseRecordingIds }.distinct()
+
+/** A recording or album cover is not evidence of an artist portrait. */
+internal fun canonicalArtistHeroPhotoUrl(
+    artistPhotoUrl: String?,
+    recordingArtworkUrl: String?,
+): String? = artistPhotoUrl?.takeIf { it.isNotBlank() }
+
+/** Keep the original DetailScreen contract: search opens from the toolbar. */
+internal fun shouldShowNativeArtistSearch(searching: Boolean, query: String): Boolean =
+    searching || query.isNotBlank()
