@@ -156,7 +156,7 @@ class A0AutoDiscoveryCoordinatorTest {
                     expectedDurationSeconds=entry.durationSeconds,
                     qualityProfile=quality,collectReleaseShadow=true
                 )
-                val filename="Shared\\\\Unique-${entry.trackId}\\\\SUPER REAL ME\\\\${entry.query}.mp3"
+                val filename="Shared\\Unique-${entry.trackId}\\SUPER REAL ME\\${entry.query}.mp3"
                 observation.offerParsed(A0SoulseekSearchResponse(
                     "ready-peer",177,
                     listOf(A0SoulseekSearchFile(
