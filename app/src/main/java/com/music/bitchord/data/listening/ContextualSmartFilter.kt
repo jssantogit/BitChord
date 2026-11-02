@@ -37,7 +37,9 @@ internal fun SavedSmartPlaylistV2Filter.isSupportedForCanonicalSongBrowse(
                 rule.field == SmartPlaylistRuleField.DURATION_MS ||
                 rule.field == SmartPlaylistRuleField.SOURCE_KIND ||
                 (rule.field in setOf(SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD,
-                    SmartPlaylistRuleField.BPM, SmartPlaylistRuleField.STYLE) &&
+                    SmartPlaylistRuleField.BPM, SmartPlaylistRuleField.STYLE,
+                    SmartPlaylistRuleField.COMPOSER, SmartPlaylistRuleField.FILE_PATH,
+                    SmartPlaylistRuleField.FOLDER_PATH) &&
                     verifiedContextualSourceKind(providerKey) != null) ||
                 (rule.field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED &&
                     providerKey == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
@@ -100,7 +102,9 @@ internal fun filterCanonicalBrowseSongs(
     }
     val needsTags = filter.rules.referencedFields().any {
         it == SmartPlaylistRuleField.GENRE || it == SmartPlaylistRuleField.MOOD ||
-            it == SmartPlaylistRuleField.BPM || it == SmartPlaylistRuleField.STYLE
+            it == SmartPlaylistRuleField.BPM || it == SmartPlaylistRuleField.STYLE ||
+            it == SmartPlaylistRuleField.COMPOSER ||
+            it == SmartPlaylistRuleField.FILE_PATH || it == SmartPlaylistRuleField.FOLDER_PATH
     }
     if (needsTags) require(scopedTagRowsByRecording != null) {
         "Provider tag rules require a current scoped Room snapshot"
@@ -133,6 +137,9 @@ internal fun filterCanonicalBrowseSongs(
             val moods = validRows.map { parseScopedAssetTags(it.moodsJson) }
             val bpms = validRows.map { parseScopedBpmValues(it.bpmsJson) }
             val styles = validRows.map { parseScopedAssetTags(it.stylesJson) }
+            val composers = validRows.map { parseScopedAssetTags(it.composersJson) }
+            val paths = validRows.map { canonicalAssetFilePath(it.assetPath) }
+            val folders = validRows.map { canonicalAssetFolderPath(it.assetPath) }
             RuleBasedRecordingCandidate(
                 recordingId = song.recordingId,
                 explicitRating = null,
@@ -151,6 +158,12 @@ internal fun filterCanonicalBrowseSongs(
                 bpmEvidenceUnknown = !completeRows || bpms.any { it == null },
                 styles = styles.filterNotNull().flatten().distinct(),
                 styleEvidenceUnknown = !completeRows || styles.any { it == null },
+                composers = composers.filterNotNull().flatten().distinct(),
+                composerEvidenceUnknown = !completeRows || composers.any { it == null },
+                filePaths = paths.filterNotNull().distinct(),
+                filePathEvidenceUnknown = !completeRows || paths.any { it == null },
+                folderPaths = folders.filterNotNull().distinct(),
+                folderPathEvidenceUnknown = !completeRows || folders.any { it == null },
                 localAddedEpochMs = validTimestamps,
                 localAddedDateEvidenceUnknown = timestampsUnknown,
             )
