@@ -205,8 +205,7 @@ internal object A0AndroidAutoAcquisitionEngine {
                     onSlotEvidence=onSlotEvidence)
             }
         }
-        return A0AutoDiscoveryCoordinator.Report(
-            outcome.value.searches,outcome.value.batch,
-            unusedReservationReleased=outcome.unusedReservationReleased)
+        // Rewrap without discarding the coordinator's measured browse count.
+        return outcome.value.withReservationReleased(outcome.unusedReservationReleased)
     }
 }
