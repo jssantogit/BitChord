@@ -26,6 +26,24 @@ com mediana e amostras em milissegundos; variação observada do heap JVM
 não alocação total e não medição de bateria. Os tempos e a memória não têm
 limites rígidos por dependerem do runner compartilhado da CI.
 
+## Extensão 01/11/2026 — 50.123 ativos, tags e caminho de pasta
+
+O mesmo fixture agora também insere **50.123 `catalog_media_asset` e
+50.123 `catalog_media_asset_tags`** com nomes de compositor explicitamente
+vazios ou conhecidos e caminho de arquivo comprovado. Uma leitura real da
+`CanonicalLibraryAvailabilityRepository` sobre a fonte local autorizada
+agrega exatamente 50.123 evidências por gravação, sem N+1 e com IDs vinculados
+aos assets. Em seguida, a V2 avalia `COMPOSER = Alice AND
+FOLDER_PATH = Music/Batch/1`, verificando os **500 primeiros
+RecordingIds exatos** em ordem determinística.
+
+As métricas `metadata_scoped_room_read_ms` e
+`metadata_scoped_v2_evaluation_ms` são coletadas como **uma amostra
+informativa** cada, separadas das três medições já existentes de título e
+duração; elas não podem ser comparadas diretamente como se o ambiente de
+execução ou o cache fossem equivalentes. Esse cenário não atesta renderização
+Compose, comportamento de armazenamento real ou uso de memória no Galaxy A54.
+
 ## Onde os resultados aparecem
 
 No workflow [Android CI](../../.github/workflows/check.yml), a execução
