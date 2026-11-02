@@ -31,6 +31,8 @@ internal fun filterCanonicalLibraryTracks(
         }
         track.copy(
             availableAssets = available,
+            artworkUri = if (sourceKey == null) track.artworkUri else
+                available.firstNotNullOfOrNull { it.artworkUri?.takeIf(String::isNotBlank) },
             dateAddedSeconds = available.mapNotNull { it.dateAddedSeconds }.maxOrNull(),
             dateModifiedSeconds = available.mapNotNull { it.dateModifiedSeconds }.maxOrNull(),
         )
