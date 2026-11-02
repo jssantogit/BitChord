@@ -1,0 +1,83 @@
+package com.music.bitchord.acquisition.a0
+
+/**
+ * Conservative in-process sliding window for the Soulseek server's
+ * empirically observed search-rate protections. A session reserves up to
+ * three query slots BEFORE login; only actually sent queries are charged.
+ *
+ * This is not a server-provided quota. The 27/220s default leaves headroom
+ * below the 34/220s empirical cap documented by third-party Soulseek clients.
+ * No user identity, query, peer or account is persisted.
+ */
+internal class A0SearchWindowBudget(
+    private val maxRequests:Int=27,
+    private val windowMillis:Long=220_000L,
+) {
+    init {
+        require(maxRequests in 3..128)
+        require(windowMillis in 1_000L..3_600_000L)
+    }
+
+    private data class Entry(val leaseId:Long, var timestamp:Long, var committed:Boolean=false)
+    private val entries=ArrayList<Entry>()
+    private var nextLeaseId=1L
+
+    inner class Lease internal constructor(private val leaseId:Long):AutoCloseable {
+        private var closed=false
+        @Synchronized fun commit(nowMillis:Long):Boolean {
+            if(closed)return false
+            return commitSlot(leaseId,nowMillis)
+        }
+        @Synchronized override fun close() {
+            if(closed)return
+            closed=true
+            releaseUnused(leaseId)
+        }
+    }
+
+    @Synchronized private fun prune(nowMillis:Long) {
+        entries.removeAll { it.timestamp <= nowMillis-windowMillis }
+    }
+
+    @Synchronized fun available(nowMillis:Long):Int {
+        prune(nowMillis)
+        return maxRequests-entries.size
+    }
+
+    @Synchronized fun waitMillis(count:Int,nowMillis:Long):Long {
+        require(count in 1..maxRequests)
+        prune(nowMillis)
+        val missing=count-(maxRequests-entries.size)
+        if(missing<=0)return 0
+        val expireAt=entries.map { it.timestamp+windowMillis }.sorted()
+        return (expireAt[missing-1]-nowMillis).coerceAtLeast(1L)
+    }
+
+    @Synchronized fun tryAcquire(count:Int,nowMillis:Long):Lease? {
+        require(count in 1..maxRequests)
+        prune(nowMillis)
+        if(maxRequests-entries.size<count)return null
+        val id=nextLeaseId++
+        repeat(count) { entries.add(Entry(id,nowMillis)) }
+        return Lease(id)
+    }
+
+    @Synchronized private fun commitSlot(leaseId:Long,nowMillis:Long):Boolean {
+        val slot=entries.firstOrNull { it.leaseId==leaseId && !it.committed }
+            ?:return false
+        // Charged at the actual send, never before. If the transport fails
+        // after this step, keep the conservative charge until expiry.
+        slot.committed=true
+        slot.timestamp=nowMillis
+        return true
+    }
+
+    @Synchronized private fun releaseUnused(leaseId:Long) {
+        entries.removeAll { it.leaseId==leaseId && !it.committed }
+    }
+}
+
+/** One process-wide budget across albums and successive automatic batches. */
+internal object A0GlobalSearchWindowBudget {
+    val shared=A0SearchWindowBudget()
+}
