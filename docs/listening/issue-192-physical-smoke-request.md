@@ -107,3 +107,35 @@ Checklist para o Galaxy A54:
 **Escopo:** APK Dev Debug exclusivamente para smoke físico. Sem merge,
 sem alteração da `main`, sem assinatura/release de produção, sem fechamento
 da issue. O código desse build não é uma `main` reconciliada.
+
+
+## Smoke físico — paridade funcional e extração universal, 01/11/2026
+
+Autorizado explicitamente na conversa pelo usuário: **“Ok, dispara o apk.”**
+
+**Base de código previamente validada:** `99788fd4cd65021017584419ded2dda119836384`.
+- [Android CI #41374189224](https://github.com/jssantogit/BitChord/actions/runs/41374189224): SUCCESS.
+- [Integration Queue Tests #41374189200](https://github.com/jssantogit/BitChord/actions/runs/41374189200): SUCCESS.
+- A PR #193 continua draft e a issue #192 continua aberta.
+
+**Único disparo autorizado nesta rodada:** push deste arquivo-gatilho
+`docs/listening/issue-192-physical-smoke-request.md` na branch
+`listening/smart-playlists-v2-192`, conforme
+`.github/workflows/physical-smoke-apk.yml`. O workflow deve repetir
+`:app:testDevDebugUnitTest`, compilar `:app:assembleDevDebug` e
+publicar o APK como artifact associado ao SHA exato deste commit.
+
+**Plano do Galaxy A54:**
+- Tags reais em MP3/ID3, FLAC, Ogg/Opus e M4A: gênero, mood, estilo, BPM e compositor.
+- Pasta e caminho do arquivo: separadores Windows/Linux, diretórios semelhantes e tags desconhecidas.
+- Regras aninhadas E/OU/NÃO, valores múltiplos, `IS_PRESENT`/`IS_MISSING`,
+  fonte remota vs MediaStore local, troca de conta sem vazamentos.
+- Filtros reutilizáveis, prévia ao editar/reabrir, cache após varredura,
+  listas de playlists normais/inteligentes e ações Media3 Play/Fila até 500.
+- Capturar diagnósticos `local_tag_enrichment_v1` e
+  `smart_playlist_preview_v2`, incluindo contadores e tempos.
+- Se houver biblioteca grande, conferir responsividade e repetição de prévia;
+  benchmark CI de 50.123 ativos NÃO substitui teste físico.
+
+**Fora do escopo:** merge da PR, assinatura de produção, alteração da
+`main`, fechamento de #192 e afirmação de paridade Symfonium completa.
