@@ -185,6 +185,11 @@ internal fun CanonicalRemoteLibraryScreen(
     }
     val library by libraryFlow.collectAsStateWithLifecycle(initialValue = CanonicalBrowseLibrary.EMPTY)
     val ratingsSnapshot = LocalCanonicalRatingDisplay.current
+    val eligibleTracks = remember(library.tracks, selectedSource, selectedStars, ratingsSnapshot, unified) {
+        if (unified) filterCanonicalLibraryTracks(
+            library.tracks, selectedSource, selectedStars, ratingsSnapshot,
+        ) else library.tracks
+    }
     val executeLibraryTrack = rememberSmartCollectionBatchAction(controller)
     // Preserve native RecordingId-scoped rating edits from the main branch.
     var editingRecordingId by remember { mutableStateOf<String?>(null) }
@@ -245,11 +250,7 @@ internal fun CanonicalRemoteLibraryScreen(
                 selectedContext != CanonicalSmartFilterContext.SONGS ->
                     CanonicalSongFilterState.Ready(emptyList())
                 filtersUnavailable && selectedFilterId != null -> CanonicalSongFilterState.Failed
-                selectedFilterId == null -> CanonicalSongFilterState.Ready(
-                    if (unified) filterCanonicalLibraryTracks(
-                        library.tracks, selectedSource, selectedStars, ratingsSnapshot,
-                    ) else library.tracks,
-                )
+                selectedFilterId == null -> CanonicalSongFilterState.Ready(eligibleTracks)
                 selected == null -> CanonicalSongFilterState.Failed
                 else -> {
                     val tagRows = if (selected.rules.referencedFields().any {
@@ -283,7 +284,8 @@ internal fun CanonicalRemoteLibraryScreen(
     val entityState by produceState<CanonicalEntityBrowseState>(
         initialValue = CanonicalEntityBrowseState.Loading,
         key1 = providerKey, key2 = selectedContext,
-        key3 = selectedFilterId to selected to filtersUnavailable,
+        key3 = (selectedFilterId to selected to filtersUnavailable) to
+            Triple(sources, selectedSource, eligibleTracks),
     ) {
         if (selectedContext == CanonicalSmartFilterContext.SONGS) return@produceState
         catalogDb.invalidationTracker.createFlow(
@@ -300,12 +302,34 @@ internal fun CanonicalRemoteLibraryScreen(
                         CanonicalEntityBrowseState.Failed
                     selectedContext == CanonicalSmartFilterContext.ALBUMS ->
                         CanonicalEntityBrowseState.Albums(withContext(Dispatchers.IO) {
-                            if (selected == null) catalogDao.providerScopedReleases(providerKey)
-                            else contextualReader.albums(providerKey, selected)
+                            val keys = if (unified) sources.filter {
+                                selectedSource == null || selectedSource == it
+                            } else listOf(providerKey)
+                            val all = keys.flatMap { key ->
+                                if (selected == null || unified) catalogDao.providerScopedReleases(key)
+                                else contextualReader.albums(key, selected)
+                            }.distinctBy { it.id }
+                            val ratedIds = if (unified && selectedStars != null) {
+                                eligibleTracks.map { it.recordingId }.chunked(400)
+                                    .flatMap { catalogDao.releaseIdsForVisibleRecordings(it) }.toSet()
+                            } else null
+                            all.filter { ratedIds == null || it.id in ratedIds }
+                                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
                         })
                     else -> CanonicalEntityBrowseState.Artists(withContext(Dispatchers.IO) {
-                        if (selected == null) catalogDao.providerScopedArtists(providerKey)
-                        else contextualReader.artists(providerKey, selected)
+                        val keys = if (unified) sources.filter {
+                            selectedSource == null || selectedSource == it
+                        } else listOf(providerKey)
+                        val all = keys.flatMap { key ->
+                            if (selected == null || unified) catalogDao.providerScopedArtists(key)
+                            else contextualReader.artists(key, selected)
+                        }.distinctBy { it.id }
+                        val ratedIds = if (unified && selectedStars != null) {
+                            eligibleTracks.map { it.recordingId }.chunked(400)
+                                .flatMap { catalogDao.artistIdsForVisibleRecordings(it) }.toSet()
+                        } else null
+                        all.filter { ratedIds == null || it.id in ratedIds }
+                            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
                     })
                 }
             } catch (cancelled: CancellationException) {
@@ -317,7 +341,8 @@ internal fun CanonicalRemoteLibraryScreen(
     }
     val detailState by produceState<CanonicalDetailBrowseState>(
         initialValue = CanonicalDetailBrowseState.Loading,
-        key1 = providerKey, key2 = selectedContext, key3 = selectedEntity,
+        key1 = providerKey, key2 = selectedContext,
+        key3 = Triple(selectedEntity, sources, selectedSource),
     ) {
         val entity = selectedEntity ?: return@produceState
         catalogDb.invalidationTracker.createFlow(
@@ -326,13 +351,18 @@ internal fun CanonicalRemoteLibraryScreen(
         ).collectLatest {
             value = try {
                 val ids = withContext(Dispatchers.IO) {
-                    when (selectedContext) {
-                        CanonicalSmartFilterContext.ALBUMS ->
-                            catalogDao.providerScopedReleaseRecordingIds(providerKey, entity.id)
-                        CanonicalSmartFilterContext.ARTISTS ->
-                            catalogDao.providerScopedArtistRecordingIds(providerKey, entity.id)
-                        CanonicalSmartFilterContext.SONGS -> emptyList()
-                    }
+                    val keys = if (unified) sources.filter {
+                        selectedSource == null || selectedSource == it
+                    } else listOf(providerKey)
+                    keys.flatMap { key ->
+                        when (selectedContext) {
+                            CanonicalSmartFilterContext.ALBUMS ->
+                                catalogDao.providerScopedReleaseRecordingIds(key, entity.id)
+                            CanonicalSmartFilterContext.ARTISTS ->
+                                catalogDao.providerScopedArtistRecordingIds(key, entity.id)
+                            CanonicalSmartFilterContext.SONGS -> emptyList()
+                        }
+                    }.distinct()
                 }
                 CanonicalDetailBrowseState.Ready(ids.toSet())
             } catch (cancelled: CancellationException) {
@@ -343,10 +373,8 @@ internal fun CanonicalRemoteLibraryScreen(
         }
     }
     val scopedDetailTracks = when (val d = detailState) {
-        is CanonicalDetailBrowseState.Ready -> library.tracks.filter { track ->
-            track.recordingId in d.recordingIds &&
-                track.availableAssets.isNotEmpty() &&
-                track.availableAssets.all { it.providerKey == providerKey }
+        is CanonicalDetailBrowseState.Ready -> eligibleTracks.filter { track ->
+            track.recordingId in d.recordingIds && track.availableAssets.isNotEmpty()
         }
         else -> emptyList()
     }
