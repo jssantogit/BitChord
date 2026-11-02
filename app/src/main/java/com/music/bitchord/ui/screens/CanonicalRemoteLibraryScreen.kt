@@ -383,23 +383,30 @@ internal fun CanonicalRemoteLibraryScreen(
     BackHandler(enabled = selectedEntity == null, onBack = onClose)
 
     val playTrack: (CanonicalBrowseTrack) -> Unit = { track ->
-        track.availableAssets.firstOrNull { it.providerKey == providerKey }?.let { asset ->
-            controller?.playCanonicalRemote(
-                request = CanonicalRemotePlaybackRequest(
-                    recordingId = track.recordingId,
-                    mediaAssetId = asset.mediaAssetId,
-                    providerKey = providerKey,
-                ),
-                metadata = CanonicalRemotePlaybackMetadata(
-                    title = track.title,
-                    artistDisplay = track.artistDisplay,
-                ),
+        if (unified) {
+            executeLibraryTrack(
+                SmartCollectionActionSource.LibraryTrack(track.recordingId, selectedSource),
+                CanonicalCollectionIntent.PLAY_NOW,
             )
+        } else {
+            track.availableAssets.firstOrNull { it.providerKey == providerKey }?.let { asset ->
+                controller?.playCanonicalRemote(
+                    request = CanonicalRemotePlaybackRequest(
+                        recordingId = track.recordingId,
+                        mediaAssetId = asset.mediaAssetId,
+                        providerKey = providerKey,
+                    ),
+                    metadata = CanonicalRemotePlaybackMetadata(
+                        title = track.title,
+                        artistDisplay = track.artistDisplay,
+                    ),
+                )
+            }
         }
     }
 
     val editRating: (CanonicalBrowseTrack) -> Unit = { track ->
-        if (track.availableAssets.any { it.providerKey == providerKey }) {
+        if (unified || track.availableAssets.any { it.providerKey == providerKey }) {
             editingRecordingId = track.recordingId
         }
     }
@@ -410,9 +417,12 @@ internal fun CanonicalRemoteLibraryScreen(
     ) {
         Column(
             modifier = Modifier.fillMaxSize()
-                .statusBarsPadding().navigationBarsPadding(),
+                .statusBarsPadding().navigationBarsPadding()
+                .then(if (unified) Modifier.padding(
+                    top = TopBarContentHeight + TopBarContentGap,
+                ) else Modifier),
         ) {
-            RemoteBrowseTopBar(
+            if (!unified) RemoteBrowseTopBar(
                 title = selectedEntity?.name ?: title,
                 onBack = if (selectedEntity != null) { { selectedEntity = null } } else onClose,
             )
@@ -443,6 +453,13 @@ internal fun CanonicalRemoteLibraryScreen(
                 RemoteBrowseContextTabs(
                     selected = selectedContext,
                     onSelect = { selectedContext = it },
+                )
+                if (unified) NativeCanonicalLibraryFilters(
+                    availableKeys = availableKeys,
+                    selectedSource = selectedSource,
+                    onSourceChange = { selectedSource = it },
+                    selectedStars = selectedStars,
+                    onStarsChange = { selectedStars = it },
                 )
                 if (compatible.isNotEmpty() || selectedFilterId != null) {
                     RemoteSongSavedFilterMenu(
