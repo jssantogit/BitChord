@@ -16,6 +16,7 @@ internal data class LocalEmbeddedTags(
     val moods: List<String>,
     val bpms: List<Double>,
     val styles: List<String>,
+    val composers: List<String> = emptyList(),
 )
 
 internal object LocalEmbeddedTagParser {
@@ -97,6 +98,7 @@ internal object LocalEmbeddedTagParser {
         val genres = linkedSetOf<String>()
         val moods = linkedSetOf<String>()
         val styles = linkedSetOf<String>()
+        val composers = linkedSetOf<String>()
         val bpms = linkedSetOf<Double>()
 
         fun add(kind: String, raw: String): Boolean {
@@ -104,13 +106,14 @@ internal object LocalEmbeddedTagParser {
             // Ignore arbitrary large artwork/custom Vorbis comments instead of
             // failing all trustworthy genre/mood/tempo evidence in the file.
             if (normalized !in setOf("GENRE", "TCON", "MOOD", "TMOO",
-                    "STYLE", "BPM", "TBPM")) return true
+                    "STYLE", "BPM", "TBPM", "COMPOSER", "TCOM")) return true
             val value = raw.trim().takeIf { it.length <= MAX_FIELD_LENGTH } ?: return false
             if (value.isEmpty()) return true
             when (normalized) {
                 "GENRE", "TCON" -> genres.add(value)
                 "MOOD", "TMOO" -> moods.add(value)
                 "STYLE" -> styles.add(value)
+                "COMPOSER", "TCOM" -> composers.add(value)
                 "BPM", "TBPM" -> {
                     val bpm = value.toDoubleOrNull()?.takeIf {
                         it.isFinite() && it > 0.0 && it <= 999.0
@@ -118,11 +121,11 @@ internal object LocalEmbeddedTagParser {
                     bpms.add(bpm)
                 }
             }
-            return listOf(genres, moods, styles, bpms).all { it.size <= MAX_VALUES }
+            return listOf(genres, moods, styles, composers, bpms).all { it.size <= MAX_VALUES }
         }
 
         fun result() = LocalEmbeddedTags(
-            genres.toList(), moods.toList(), bpms.toList(), styles.toList(),
+            genres.toList(), moods.toList(), bpms.toList(), styles.toList(), composers.toList(),
         )
     }
 
@@ -165,11 +168,11 @@ internal object LocalEmbeddedTagParser {
             val frameFlags = u(bytes, pos + 8) or u(bytes, pos + 9)
             if (frameFlags != 0 || len > MAX_HEADER_BYTES ||
                 len > (end - pos - 10)) return null
-            if (id in setOf("TCON", "TMOO", "TBPM", "TXXX")) {
+            if (id in setOf("TCON", "TMOO", "TBPM", "TCOM", "TXXX")) {
                 val values = readId3Text(bytes, pos + 10, len.toInt()) ?: return null
                 if (id == "TXXX") {
                     val description = values.firstOrNull()?.trim()?.uppercase()
-                    if (description in setOf("GENRE", "MOOD", "BPM", "STYLE")) {
+                    if (description in setOf("GENRE", "MOOD", "BPM", "STYLE", "COMPOSER")) {
                         for (value in values.drop(1)) if (!collector.add(description!!, value)) return null
                     }
                 } else {
