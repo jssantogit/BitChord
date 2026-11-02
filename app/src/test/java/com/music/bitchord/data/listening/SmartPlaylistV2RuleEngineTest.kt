@@ -10,6 +10,35 @@ class SmartPlaylistV2RuleEngineTest {
     private val now = 90L * 86_400_000L
     private val planner = SmartPlaylistV2RuleEngine(nowEpochMs = { now })
 
+    @Test fun universalGenreMatchesLocalAndRemoteEvidence() {
+        val rows = listOf(
+            RuleBasedRecordingCandidate("local", null, 0, null, 180_000, true).copy(
+                sourceKinds = setOf(SmartPlaylistSourceKind.LOCAL),
+                localGenres = listOf("K-pop"), localGenresComplete = true),
+            RuleBasedRecordingCandidate("remote", null, 0, null, 180_000, true).copy(
+                sourceKinds = setOf(SmartPlaylistSourceKind.OPENSUBSONIC),
+                genres = listOf("K-pop"), genreEvidenceUnknown = false),
+            RuleBasedRecordingCandidate("unknown", null, 0, null, 180_000, true),
+        )
+        val rule = SmartPlaylistRule.Comparison(SmartPlaylistRuleField.GENRE,
+            SmartPlaylistRuleOperator.CONTAINS, textValue = "pop")
+        assertEquals(listOf("local", "remote"), planner.preview(rows,
+            SmartPlaylistV2Query(rule)).map { it.recordingId })
+    }
+
+    @Test fun ruleGroupNameIsMetadataNotACondition() {
+        val leaf = SmartPlaylistRule.Comparison(SmartPlaylistRuleField.EXPLICIT_RATING,
+            SmartPlaylistRuleOperator.EQUAL, 5.0)
+        val group = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(leaf),
+            name = "Cinco estrelas")
+        assertEquals(listOf("high"), planner.preview(listOf(
+            candidate("high", rating = 5.0), candidate("low", rating = 4.0)),
+            SmartPlaylistV2Query(group)).map { it.recordingId })
+        assertThrows(IllegalArgumentException::class.java) {
+            SmartPlaylistV2Query(group.copy(name = "x".repeat(81)))
+        }
+    }
+
     private fun candidate(
         id: String,
         rating: Double? = null,

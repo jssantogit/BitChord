@@ -30,7 +30,7 @@ internal val smartConditionCategories = listOf(
         SmartPlaylistRuleField.BPM, SmartPlaylistRuleField.STYLE,
         SmartPlaylistRuleField.COMPOSER,
         SmartPlaylistRuleField.DISC_NUMBER, SmartPlaylistRuleField.RELEASE_GROUP_TYPE,
-        SmartPlaylistRuleField.LOCAL_GENRE, SmartPlaylistRuleField.ARTIST_COUNTRY,
+        SmartPlaylistRuleField.ARTIST_COUNTRY,
     )),
     SmartConditionCategory("ratings", "Avaliações", "Notas em estrelas e data da nota local", listOf(
         SmartPlaylistRuleField.EXPLICIT_RATING, SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING,
@@ -48,7 +48,6 @@ internal val smartConditionCategories = listOf(
     SmartConditionCategory("library", "Biblioteca e pastas", "Origem das músicas e localização dos arquivos", listOf(
         SmartPlaylistRuleField.SOURCE_KIND,
         SmartPlaylistRuleField.FILE_PATH, SmartPlaylistRuleField.FOLDER_PATH,
-        SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleField.LOCAL_FILE_PATH,
     )),
     SmartConditionCategory("audio", "Áudio", "Duração comprovada das faixas", listOf(
         SmartPlaylistRuleField.DURATION_MS, SmartPlaylistRuleField.LOCAL_FILE_EXTENSION,
@@ -64,11 +63,11 @@ internal val smartConditionCategories = listOf(
 internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (field) {
     SmartPlaylistRuleField.TITLE -> "Título da música"
     SmartPlaylistRuleField.ARTIST_DISPLAY -> "Artista"
-    SmartPlaylistRuleField.RELEASE_TITLE -> "Álbum ou lançamento"
+    SmartPlaylistRuleField.RELEASE_TITLE -> "Nome do álbum ou lançamento"
     SmartPlaylistRuleField.ALBUM_ARTIST -> "Artista do álbum"
     SmartPlaylistRuleField.TRACK_ARTIST -> "Créditos do artista da faixa"
     SmartPlaylistRuleField.GENRE -> "Gênero musical"
-    SmartPlaylistRuleField.MOOD -> "Clima / mood"
+    SmartPlaylistRuleField.MOOD -> "Humor"
     SmartPlaylistRuleField.BPM -> "Ritmo (BPM)"
     SmartPlaylistRuleField.STYLE -> "Estilo musical"
     SmartPlaylistRuleField.COMPOSER -> "Compositor"
@@ -76,7 +75,7 @@ internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (
     SmartPlaylistRuleField.FOLDER_PATH -> "Pasta do arquivo"
     SmartPlaylistRuleField.TRACK_NUMBER -> "Número da faixa"
     SmartPlaylistRuleField.DISC_NUMBER -> "Número do disco"
-    SmartPlaylistRuleField.RELEASE_GROUP_TYPE -> "Tipo de lançamento (álbum, single, EP)"
+    SmartPlaylistRuleField.RELEASE_GROUP_TYPE -> "Classificação do lançamento (álbum, single, EP)"
     SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE -> "Capa cadastrada no álbum"
     SmartPlaylistRuleField.EXPLICIT_RATING -> "Avaliação em estrelas"
     SmartPlaylistRuleField.DAYS_SINCE_LOCAL_RATING -> "Dias desde alteração da avaliação"
@@ -113,7 +112,7 @@ internal fun smartConditionDescription(field: SmartPlaylistRuleField): String = 
     SmartPlaylistRuleField.GENRE ->
         "Filtra gêneros informados pelas fontes disponíveis, locais ou remotas."
     SmartPlaylistRuleField.MOOD ->
-        "Filtra climas informados pelas fontes disponíveis; valores desconhecidos não contam como ausentes."
+        "Filtra o humor registrado nos metadados locais ou remotos; valores ausentes não são inventados."
     SmartPlaylistRuleField.BPM ->
         "Compara o ritmo informado em batidas por minuto, sem supor BPM zero para tags ausentes."
     SmartPlaylistRuleField.STYLE ->
@@ -334,10 +333,12 @@ internal fun smartRuleNewComparison(field: SmartPlaylistRuleField): SmartPlaylis
             field, SmartPlaylistRuleOperator.EQUAL,
         )
         else -> {
-            val op = if (SmartPlaylistRuleOperator.IS_PRESENT in field.allowedOperators())
-                SmartPlaylistRuleOperator.IS_PRESENT
-            else field.allowedOperators().first()
-            SmartPlaylistRule.Comparison(field, op)
+            val op = if (field.isTextField() &&
+                SmartPlaylistRuleOperator.CONTAINS in field.allowedOperators()
+            ) SmartPlaylistRuleOperator.CONTAINS
+            else SmartPlaylistRuleOperator.EQUAL
+            SmartPlaylistRule.Comparison(field, op,
+                textValue = if (field.isTextField()) "" else null)
         }
     }
 

@@ -44,7 +44,11 @@ class SmartPlaylistWizardModelTest {
 
     @Test fun catalogHasEveryAndOnlyAnImplementedV2FieldExactlyOnce() {
         val fields = smartConditionCategories.flatMap { it.fields }
-        assertEquals(SmartPlaylistRuleField.entries.toSet(), fields.toSet())
+        assertEquals(SmartPlaylistRuleField.entries.toSet() - setOf(
+            SmartPlaylistRuleField.LOCAL_GENRE,
+            SmartPlaylistRuleField.LOCAL_FOLDER,
+            SmartPlaylistRuleField.LOCAL_FILE_PATH,
+        ), fields.toSet())
         assertEquals(fields.size, fields.distinct().size)
         assertEquals(listOf(SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE),
             smartConditionCategories.last().fields)
@@ -113,6 +117,24 @@ class SmartPlaylistWizardModelTest {
         assertEquals(listOf(first, ref),
             (current.child as SmartPlaylistRule.Group).children)
         assertEquals(wrapped, smartRuleAtPath(root, listOf(0)))
+    }
+
+    @Test fun newCatalogUsesUniversalGenreAndSensibleTextDefaults() {
+        assertTrue(SmartPlaylistRuleField.LOCAL_GENRE !in smartConditionCategories.first().fields)
+        assertEquals("Humor", smartConditionLabel(SmartPlaylistRuleField.MOOD))
+        assertEquals("Nome do álbum ou lançamento",
+            smartConditionLabel(SmartPlaylistRuleField.RELEASE_TITLE))
+        assertEquals(SmartPlaylistRuleOperator.CONTAINS,
+            smartRuleNewComparison(SmartPlaylistRuleField.GENRE).operator)
+    }
+
+    @Test fun namedGroupsSurviveSourceScoping() {
+        val named = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(
+            smartRuleNewComparison(SmartPlaylistRuleField.GENRE),
+        ), name = "Favoritas")
+        val scoped = smartRuleWithGlobalSource(named, "local", true)
+            as SmartPlaylistRule.Group
+        assertEquals("Favoritas", (scoped.children.first() as SmartPlaylistRule.Group).name)
     }
 
     @Test fun sourceCardDescribesRequestedRulesWithoutClaimingProviderSelection() {

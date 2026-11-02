@@ -15,6 +15,7 @@ internal sealed interface SmartPlaylistRule {
     data class Group(
         val join: SmartPlaylistRuleJoin,
         val children: List<SmartPlaylistRule>,
+        val name: String = "", // author label, backward-compatible JSON default
     ) : SmartPlaylistRule
 
     @Serializable
@@ -208,6 +209,9 @@ internal data class SmartPlaylistV2Query(
             require(count <= 128) { "Too many smart playlist rules" }
             when (node) {
                 is SmartPlaylistRule.Group -> {
+                    require(node.name.length <= 80 && node.name.none { it.isISOControl() }) {
+                        "Invalid rule group name"
+                    }
                     require(node.children.isNotEmpty()) { "An empty group cannot match" }
                     node.children.forEach { validate(it, depth + 1) }
                 }
@@ -904,7 +908,7 @@ internal class SmartPlaylistV2RuleEngine(
                 SmartPlaylistRuleField.TITLE -> listOfNotNull(row.title)
                 SmartPlaylistRuleField.ARTIST_DISPLAY -> listOfNotNull(row.artistDisplay)
                 SmartPlaylistRuleField.RELEASE_TITLE -> row.releaseTitles
-                SmartPlaylistRuleField.GENRE -> row.genres
+                SmartPlaylistRuleField.GENRE -> row.genres + row.localGenres
                 SmartPlaylistRuleField.MOOD -> row.moods
                 SmartPlaylistRuleField.STYLE -> row.styles
                 SmartPlaylistRuleField.COMPOSER -> row.composers
@@ -921,7 +925,8 @@ internal class SmartPlaylistV2RuleEngine(
             val incomplete = rawValues.size != rawValues.count {
                 it.normalizedSmartPlaylistText() != null
             } || when (rule.field) {
-                SmartPlaylistRuleField.GENRE -> row.genreEvidenceUnknown
+                SmartPlaylistRuleField.GENRE -> row.genreEvidenceUnknown ||
+                    (SmartPlaylistSourceKind.LOCAL in row.sourceKinds && !row.localGenresComplete)
                 SmartPlaylistRuleField.MOOD -> row.moodEvidenceUnknown
                 SmartPlaylistRuleField.STYLE -> row.styleEvidenceUnknown
                 SmartPlaylistRuleField.COMPOSER -> row.composerEvidenceUnknown
