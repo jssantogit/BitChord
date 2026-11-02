@@ -54,6 +54,7 @@ import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.diagnostics.DiagnosticLevel
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.CanonicalBrowseAssetRow
 import com.music.bitchord.data.catalog.CanonicalLocalLibrary
 import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
@@ -183,6 +184,22 @@ internal data class V2DisplayRow(
     val remoteMediaAssetId: String? = null,
     val remoteArtworkRevision: String? = null,
 )
+
+/** Choose an exact rating rendition only if the current account has ONE
+ * canonical MediaAsset. Never select a random album version or other account.
+ * Artwork availability and local cover priority are irrelevant to this ID. */
+internal fun playlistRemoteRatingAssetId(
+    assets: List<CanonicalBrowseAssetRow>,
+    activeProviderKey: String?,
+): String? {
+    if (activeProviderKey.isNullOrBlank()) return null
+    return assets.asSequence()
+        .filter { it.providerKey == activeProviderKey }
+        .map { it.mediaAssetId }
+        .distinct()
+        .toList()
+        .singleOrNull()
+}
 
 /**
  * Initial Android V2 editing surface. Legacy playlists remain available via
@@ -624,10 +641,11 @@ internal fun SmartPlaylistV2BuilderScreen(
                 .associateBy { it.id }
             // Lookup stays bounded to IDs selected by the existing evaluator.
             // No title/artist heuristic and no whole-library artwork scan.
+            // Rating identity is independent of artwork availability. Keep
+            // assets without a cover so a Navidrome rating cannot disappear.
             val assets = ids.chunked(400).flatMap {
                 catalog.browseAssetsForRecordingIds(providerKeys, it)
-            }.filter { it.artworkUri?.isNotBlank() == true }
-                .groupBy { it.recordingId }
+            }.groupBy { it.recordingId }
             matched.mapNotNull { item ->
                 val info = known[item.recordingId] ?: return@mapNotNull null
                 val linked = assets[item.recordingId].orEmpty()
@@ -637,16 +655,16 @@ internal fun SmartPlaylistV2BuilderScreen(
                          it.artworkUri?.startsWith("file://") == true ||
                          it.artworkUri?.startsWith("https://") == true)
                 }
+                val activeRemoteProvider = accountId?.let { "opensubsonic:$it" }
                 val remote = linked.firstOrNull {
-                    it.providerKey.startsWith("opensubsonic:") &&
-                        it.providerKey == accountId?.let { id -> "opensubsonic:$id" }
+                    it.providerKey == activeRemoteProvider && !it.artworkUri.isNullOrBlank()
                 }
                 V2DisplayRow(
                     id = info.id,
                     title = info.title,
                     artist = info.artistDisplay,
                     localArtworkUri = local?.artworkUri,
-                    remoteMediaAssetId = if (local == null) remote?.mediaAssetId else null,
+                    remoteMediaAssetId = playlistRemoteRatingAssetId(linked, activeRemoteProvider),
                     remoteArtworkRevision = if (local == null) remote?.artworkUri else null,
                 )
             }
