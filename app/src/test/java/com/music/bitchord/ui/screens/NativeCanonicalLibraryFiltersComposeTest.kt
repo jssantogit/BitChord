@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -46,7 +47,8 @@ class NativeCanonicalLibraryFiltersComposeTest {
         compose.onNodeWithText("Filtrar biblioteca").assertDoesNotExist()
         compose.runOnIdle { actionToken.intValue++ }
         compose.onNodeWithText("Filtrar biblioteca").assertExists()
-        compose.onNodeWithText("Música local").performClick()
+        // Click the native SettingsRow itself, not its non-interactive Text child.
+        compose.onNodeWithTag("library-source-local-mediastore").performClick()
         compose.runOnIdle { assertEquals("local-mediastore", source.value) }
     }
 }
