@@ -891,12 +891,14 @@ private fun CanonicalTrackRow(
             modifier = Modifier.padding(start = 8.dp),
             horizontalAlignment = Alignment.End,
         ) {
-            CanonicalRatingStars(
-                track.availableAssets.firstOrNull()?.mediaAssetId?.let {
-                    LocalCanonicalRatingDisplay.current.byMediaAssetId[it]
-                },
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            canonicalLibraryVisibleRatings(
+                track, LocalCanonicalRatingDisplay.current,
+            ).forEach { rating ->
+                CanonicalRatingStars(
+                    rating,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
             formatDuration(track.durationMs)?.let { duration ->
                 Text(
                     text = duration,
