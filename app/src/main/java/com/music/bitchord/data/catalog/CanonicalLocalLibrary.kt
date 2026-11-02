@@ -216,7 +216,7 @@ internal object CanonicalLocalLibrary {
             moods = normalizedLocalTagList(song.localMoods),
             bpms = normalizedLocalBpmList(song.localBpms),
             sourceFingerprint = song.localDateModifiedSeconds?.takeIf { it > 0L }
-                ?.let { modified -> "v1:$modified:${song.localSizeBytes ?: -1L}" },
+                ?.let { modified -> "v2:$modified:${song.localSizeBytes ?: -1L}" },
             youtubeVideoId = song.videoId.takeIf { id ->
                 id != uri &&
                     !id.startsWith("content://", ignoreCase = true) &&
