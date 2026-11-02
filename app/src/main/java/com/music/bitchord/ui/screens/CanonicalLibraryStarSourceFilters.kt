@@ -73,3 +73,19 @@ internal fun canonicalLibraryVisibleRatings(
     return listOfNotNull(local?.let { RatingDisplay(localValue = it) }) +
         remote.map { RatingDisplay(remoteValue = it) }
 }
+
+/**
+ * For uncredited artists the canonical Recording's own display string is a
+ * browse-only grouping key; it must never become a new ArtistId. Source and
+ * star filters run first, so groups cannot leak unavailable renditions. Unlike
+ * database search helpers capped at 100, Library browse includes every group.
+ */
+internal fun canonicalLibraryDisplayArtistNames(
+    tracks: List<CanonicalBrowseTrack>,
+    creditedNamesLowercase: Set<String>,
+): List<String> = tracks.asSequence()
+    .map { it.artistDisplay }
+    .filter { it.isNotBlank() && it.lowercase() !in creditedNamesLowercase }
+    .distinct()
+    .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    .toList()
