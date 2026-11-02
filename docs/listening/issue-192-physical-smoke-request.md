@@ -207,3 +207,27 @@ Coletar capturas e diagnóstico físico. Mesmo com CI verde, NÃO declarar funci
 5. Excluir grupo e condição exige confirmação, preserva outras regras e não permite salvar grupo vazio inválido; conferir a última condição e E/OU/NÃO.
 
 **Regressão adicional:** preservar Home/perfil, Biblioteca→Playlists, fonte Navidrome/local, avaliação remota cinco estrelas, edição, prévia automática, capa e reprodução de playlist; coletar capturas e novo diagnóstico, observar travamentos recuperados separadamente. Não realizar merge sem aceite expresso do smoke.
+
+
+## Smoke físico — oito refinamentos da Biblioteca e Playlists, 02/11/2026
+
+**Escopo autorizado pela continuação do trabalho pré-merge:** validação física dos oito pontos recentes após a correção do último gate. Somente Dev Debug no Galaxy A54; não mesclar a `main`, não assinar release, não fechar issue ou PR.
+
+**Árvore de código aprovada:** `815bfb4b4ce55ad89d312e89c0248c0daca6067f` da PR #193, integrada somente à branch `listening/smart-playlists-v2-192`.
+- [Android CI #41498476776](https://github.com/jssantogit/BitChord/actions/runs/41498476776): COMPLETED / SUCCESS.
+- [Integration Queue #41498476662](https://github.com/jssantogit/BitChord/actions/runs/41498476662): COMPLETED / SUCCESS.
+- Último conserto do gate é apenas o fixture `Resolver` do teste, usando URI local no MediaStore em vez de URI canônica remota. O bloqueio de identidade local/remota permanece ativo.
+
+**Gatilho exclusivo:** atualizar somente este documento, executando o workflow `.github/workflows/physical-smoke-apk.yml` via filtro de push na branch, reexecutando teste Android e `assembleDevDebug`. Este novo commit não muda código nem o design aprovado.
+
+**Checklist de aceite Galaxy A54:**
+1. Home: perfil e overflow dentro da mesma pílula, sem menu Material3 solto nem deslocamento.
+2. Now Playing: cabeçalho superior na altura antiga, sem reintroduzir “This Phone”; controles de letras/áudio intactos.
+3. Biblioteca: ausência da navegação “Minhas avaliações” mas ratings locais preservados/editáveis.
+4. Músicas/Álbuns/Artistas: filtros por estrelas exatas 1–5, com 1/3/5 e ausência de notas; nos álbuns/artistas, somente entidades com membros comprovados.
+5. Local + Navidrome: músicas, álbuns e artistas de ambas as fontes; filtro por fonte local, servidor atual e todas; notas locais por RecordingId e notas remotas exatas por MediaAssetId; troca de conta sem vazamento.
+6. Adições recentes: toque em música reproduz a gravação exata via Media3 sem abrir a aba Músicas; arquivo local excluído ou com duas cópias ambíguas não inicia reprodução errada.
+7. Logs (Dev Debug) e Configurações: tipografia, pílulas, cards, linhas e ícones nativos; funções originais, pesquisa, captura e exportação intactas.
+8. Criar/editar/salvar playlist normal e inteligente: após concluir revisão e salvar não pisca nova tela de criação; preservar capa, grupos, exclusão, preview, fonte, reprodução.
+
+**Observar no diagnóstico:** erros do `smart_collection_batch`, source/rating, falhas de reprodução e `main_thread_stall`; screenshots e log antes do único merge. CI verde não equivale a aceite físico.
