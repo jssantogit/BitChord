@@ -85,6 +85,14 @@ internal object LocalEmbeddedTagParser {
         }
     }
 
+    /** Shared strict normalization for ID3, Vorbis and iTunes custom tags. */
+    internal fun tagsFromPairs(pairs: List<Pair<String, String>>): LocalEmbeddedTags? {
+        if (pairs.size > 128) return null
+        val collector = Collector()
+        for ((kind, value) in pairs) if (!collector.add(kind, value)) return null
+        return collector.result()
+    }
+
     private class Collector {
         val genres = linkedSetOf<String>()
         val moods = linkedSetOf<String>()
