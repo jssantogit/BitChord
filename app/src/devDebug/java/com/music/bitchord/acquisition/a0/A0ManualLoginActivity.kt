@@ -1668,7 +1668,8 @@ class A0ManualLoginActivity : Activity() {
                     "${slot+1}. ${guided.entries[slot].query}"
                 }.toTypedArray()
                 AlertDialog.Builder(this)
-                    .setTitle("Revisar ${indices.size} faixa(s) pendente(s)")
+                    .setTitle("${indices.size} " +
+                        if(indices.size==1) "faixa pendente" else "faixas pendentes")
                     .setMessage("Escolha uma faixa para pesquisar manualmente. " +
                         "As outras permanecem pendentes. Nenhum arquivo será baixado " +
                         "antes de você selecionar e autorizar um candidato.")
