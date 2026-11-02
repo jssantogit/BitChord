@@ -639,8 +639,15 @@ internal fun NativeCanonicalLibraryFilters(
     // The native top-bar filter icon owns this single sheet. No duplicate
     // filter buttons or Material3 chips in the Library content itself.
     var open by remember { mutableStateOf(false) }
+    // A detail page removes this sheet from composition. On return, the
+    // toolbar request counter is still positive; that OLD tap must not
+    // reopen the filters. Only a new increment is a user request.
+    var observedRequestToken by remember { androidx.compose.runtime.mutableIntStateOf(requestToken) }
     LaunchedEffect(requestToken) {
-        if (requestToken > 0) open = true
+        if (requestToken != observedRequestToken) {
+            observedRequestToken = requestToken
+            if (requestToken > 0) open = true
+        }
     }
     if (!open) return
 
