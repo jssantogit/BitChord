@@ -2342,6 +2342,11 @@ private fun BitChordApp(
     // Page navigation is keyed by the canonical RecordingId, never provider/source IDs.
     var rediscoveryRecordingId by rememberSaveable { mutableStateOf<String?>(null) }
     var showCanonicalMyRatings by rememberSaveable { mutableStateOf(false) }
+    // One native Library destination shared by local and current-account
+    // OpenSubsonic assets. This replaces the local-only category routes.
+    var unifiedLibraryCategory by remember {
+        mutableStateOf<com.music.bitchord.data.listening.CanonicalSmartFilterContext?>(null)
+    }
     var showPlaylistLibrary by rememberSaveable { mutableStateOf(false) }
     var openedCanonicalPlaylist by remember {
         mutableStateOf<com.music.bitchord.ui.screens.LibraryPlaylistCard?>(null)
@@ -2829,6 +2834,9 @@ private fun BitChordApp(
         BackHandler(enabled = detailActiveShelf != null) { detailActiveShelf = null }
         BackHandler(enabled = rediscoveryRecordingId != null) { rediscoveryRecordingId = null }
         BackHandler(enabled = showCanonicalMyRatings) { showCanonicalMyRatings = false }
+        BackHandler(enabled = unifiedLibraryCategory != null) {
+            unifiedLibraryCategory = null
+        }
         BackHandler(enabled = showPlaylistLibrary && detail == null &&
             !showSmartPlaylistBuilder) {
             if (openedCanonicalPlaylist != null) openedCanonicalPlaylist = null
@@ -2878,6 +2886,7 @@ private fun BitChordApp(
                         detail != null -> detail.browseId
                         rediscoveryRecordingId != null -> "rediscovery:" + rediscoveryRecordingId
                         showCanonicalMyRatings -> "my_ratings"
+                        unifiedLibraryCategory != null -> "unified_library"
                         // The wizard is pushed FROM the playlist category. It must win
                         // over that category while editing or creating a playlist.
                         playlistRoute != null -> playlistRoute
@@ -3065,6 +3074,21 @@ private fun BitChordApp(
                             onDetailRowsReady = { playlistDetailRows = it },
                             detailSort = playlistDetailSort,
                             onPlaylistCountChange = { playlistLibraryCount = it },
+                        )
+                    } else if (key == "unified_library") {
+                        com.music.bitchord.ui.screens.CanonicalRemoteLibraryScreen(
+                            providerKey = "library:unified",
+                            title = when (unifiedLibraryCategory) {
+                                com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS ->
+                                    "Álbuns"
+                                com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS ->
+                                    "Artistas"
+                                else -> "Músicas"
+                            },
+                            unified = true,
+                            initialContext = unifiedLibraryCategory
+                                ?: com.music.bitchord.data.listening.CanonicalSmartFilterContext.SONGS,
+                            onClose = { unifiedLibraryCategory = null },
                         )
                     } else if (key == "my_ratings") {
                         CanonicalMyRatingsScreen(onBack = { showCanonicalMyRatings = false })
@@ -3888,21 +3912,14 @@ private fun BitChordApp(
                                 deviceLinks = libraryLinks(),
                                 onOpenPlaylists = { showPlaylistLibrary = true },
                                 onOpenLocalCategory = { category ->
-                                    localFolderStates.getOrPut("local:all") { LocalFolderState() }
-                                        .tab = category
-                                    onLibraryItemClick(
-                                        ShelfItem(
-                                            title = when (category) {
-                                                com.music.bitchord.ui.screens.LocalFolderTab.ARTISTS -> "Artistas"
-                                                com.music.bitchord.ui.screens.LocalFolderTab.ALBUMS -> "Álbuns"
-                                                com.music.bitchord.ui.screens.LocalFolderTab.SONGS -> "Músicas"
-                                            },
-                                            subtitle = "",
-                                            thumbnailUrl = null,
-                                            videoId = null,
-                                            browseId = "local:all",
-                                        ),
-                                    )
+                                    unifiedLibraryCategory = when (category) {
+                                        com.music.bitchord.ui.screens.LocalFolderTab.ARTISTS ->
+                                            com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS
+                                        com.music.bitchord.ui.screens.LocalFolderTab.ALBUMS ->
+                                            com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS
+                                        com.music.bitchord.ui.screens.LocalFolderTab.SONGS ->
+                                            com.music.bitchord.data.listening.CanonicalSmartFilterContext.SONGS
+                                    }
                                 },
                             ),
                             deviceItems = emptyList(),
