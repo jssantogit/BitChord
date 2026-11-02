@@ -812,6 +812,18 @@ internal fun SmartPlaylistV2BuilderScreen(
                         previewQuery = null
                         error = null
                     },
+                    onClearRules = {
+                        // The AST placeholder is not an actual user condition.
+                        // An empty editor must not serialize an invalid Group.
+                        rule = SmartPlaylistRule.Group(
+                            SmartPlaylistRuleJoin.ALL, listOf(newRule()),
+                        )
+                        hasConfiguredRules = false
+                        filterNotice = null
+                        preview = null
+                        previewQuery = null
+                        error = null
+                    },
                     onSortChange = { sort = it; preview = null; previewQuery = null },
                     onLimitChange = { limit = it; preview = null; previewQuery = null },
                     onSeedChange = { seed = it; preview = null; previewQuery = null },
