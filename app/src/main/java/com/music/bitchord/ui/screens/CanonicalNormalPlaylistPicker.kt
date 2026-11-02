@@ -64,6 +64,11 @@ private const val DISPLAY_ARTIST_PREFIX = "browse-display-artist:"
 
 internal fun playlistDisplayArtistGroupId(name: String) = DISPLAY_ARTIST_PREFIX + name
 
+/** Browse-only group IDs never masquerade as canonical ArtistIds. */
+internal fun playlistDisplayArtistNameFromGroupId(id: String): String? =
+    id.takeIf { it.startsWith(DISPLAY_ARTIST_PREFIX) }
+        ?.removePrefix(DISPLAY_ARTIST_PREFIX)
+
 internal fun filterCanonicalPlaylistBrowseGroups(
     groups: List<CanonicalPlaylistBrowseGroup>, term: String,
 ): List<CanonicalPlaylistBrowseGroup> =
