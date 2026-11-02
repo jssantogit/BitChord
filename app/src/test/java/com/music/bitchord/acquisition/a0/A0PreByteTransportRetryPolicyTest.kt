@@ -14,6 +14,17 @@ class A0PreByteTransportRetryPolicyTest {
             Phase.P_ESTABLISHED,SocketTimeoutException(),false,true))
     }
 
+    @Test fun peerDisconnectBeforeAcceptanceCanUseIndependentEquivalentFallback() {
+        assertTrue(A0PreByteTransportRetryPolicy.canRetry(
+            Phase.QUEUE_UPLOAD_SENT,java.io.EOFException(),false,true))
+        assertTrue(A0PreByteTransportRetryPolicy.canRetry(
+            Phase.QUEUE_UPLOAD_SENT,java.net.SocketException("Connection reset"),false,true))
+        assertFalse(A0PreByteTransportRetryPolicy.canRetry(
+            Phase.TRANSFER_ACCEPTED,java.io.EOFException(),false,true))
+        assertFalse(A0PreByteTransportRetryPolicy.canRetry(
+            Phase.QUEUE_UPLOAD_SENT,java.io.IOException("invalid protocol frame"),false,true))
+    }
+
     @Test fun noRetryAfterTransferAcceptedOrAnyPossibleFileBytes() {
         for(phase in listOf(
             Phase.TRANSFER_ACCEPTED,Phase.F_WAIT_STARTED,
