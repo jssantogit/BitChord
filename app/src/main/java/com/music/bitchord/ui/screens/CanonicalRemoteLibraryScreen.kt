@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CloudDone
@@ -1293,7 +1294,19 @@ private fun NativeUnifiedLibraryBody(
                         if (albums.isEmpty()) item {
                             RemoteBrowseMessage("Nenhum álbum nesta seleção.")
                         }
-                        items(albums, key = { it.id }) { album ->
+                        if (viewType == LibraryViewType.GRID) {
+                            gridRows(albums, 2, key = { it.id }) { album ->
+                                NativeLibraryEntityCard(
+                                    title = album.title,
+                                    subtitle = album.artistDisplay.orEmpty(),
+                                    imageUrl = album.artworkUri,
+                                    isArtist = false,
+                                    onClick = {
+                                        onEntitySelect(CanonicalSelectedEntity(album.id, album.title))
+                                    },
+                                )
+                            }
+                        } else items(albums, key = { it.id }) { album ->
                             LibraryRow(
                                 title = album.title,
                                 subtitle = album.artistDisplay.orEmpty(),
@@ -1322,11 +1335,38 @@ private fun NativeUnifiedLibraryBody(
                         if (artists.isEmpty()) item {
                             RemoteBrowseMessage("Nenhum artista nesta seleção.")
                         }
-                        items(artists, key = { it.id }) { artist ->
+                        if (viewType == LibraryViewType.GRID) {
+                            gridRows(artists, 2, key = { it.id }) { artist ->
+                                val art = tracks.firstOrNull {
+                                    it.artistDisplay.equals(artist.name, ignoreCase = true)
+                                }
+                                NativeLibraryEntityCard(
+                                    title = artist.name,
+                                    subtitle = "",
+                                    imageUrl = null,
+                                    isArtist = true,
+                                    artwork = art?.let { candidate ->
+                                        { CanonicalUnifiedArtwork(
+                                            candidate, artworkLoader, Modifier.fillMaxSize(),
+                                        ) }
+                                    },
+                                    onClick = { onEntitySelect(artist) },
+                                )
+                            }
+                        } else items(artists, key = { it.id }) { artist ->
+                            val art = tracks.firstOrNull {
+                                it.artistDisplay.equals(artist.name, ignoreCase = true)
+                            }
                             LibraryRow(
                                 title = artist.name,
                                 subtitle = "",
                                 imageUrl = null,
+                                artwork = art?.let { candidate ->
+                                    { CanonicalUnifiedArtwork(
+                                        candidate, artworkLoader, Modifier.fillMaxSize(),
+                                    ) }
+                                },
+                                artworkShape = CircleShape,
                                 onClick = { onEntitySelect(artist) },
                                 artworkSize = 64.dp,
                                 horizontalPadding = PAGE_GUTTER,
@@ -1375,5 +1415,44 @@ private fun CanonicalUnifiedArtwork(
             artworkLoader = loader,
             modifier = modifier,
         )
+    }
+}
+
+/** Same cell spacing as LocalFolder's grid; artist artwork is circular. */
+@Composable
+private fun NativeLibraryEntityCard(
+    title: String,
+    subtitle: String,
+    imageUrl: String?,
+    isArtist: Boolean,
+    onClick: () -> Unit,
+    artwork: (@Composable () -> Unit)? = null,
+) {
+    val shape = if (isArtist) CircleShape else RoundedCornerShape(12.dp)
+    Column(
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(4.dp),
+    ) {
+        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(shape)) {
+            when {
+                artwork != null -> artwork()
+                imageUrl != null -> AsyncImage(
+                    model = imageUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                else -> CoverPlaceholder(
+                    if (isArtist) Icons.Rounded.MusicNote else Icons.Rounded.Album,
+                    Modifier.fillMaxSize(),
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.titleMedium)
+        if (subtitle.isNotBlank()) {
+            Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
