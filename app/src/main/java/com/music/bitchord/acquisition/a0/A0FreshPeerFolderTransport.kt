@@ -49,15 +49,18 @@ internal class A0FreshPeerFolderTransport(
                 return A0AutoDiscoveryCoordinator.SearchResult.NoReply
             }
         val started=System.nanoTime()
-        var stage="CONNECT"
+        // Fresh authentication is included in the entire probe budget.
+        // The socket's short read timeout additionally limits a slow peer.
+        val deadline=started+TimeUnit.SECONDS.toNanos(20)
+        var stage="LOGIN"
+        var resultLabel="FAILED"
         var retained=0
         val outcome=try {
             A0AutoAuthenticatedServer.open(
                 app,generation,::stopped,onSocketReady={activeServer=it}
             ).use { session ->
                 val server=session.socket
-                val deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(14)
-                server.soTimeout=3000
+                server.soTimeout=2000
                 server.getOutputStream().apply {
                     write(A0PeerRendezvousWire.getPeerAddress(source.peerUsername))
                     flush()
@@ -76,6 +79,7 @@ internal class A0FreshPeerFolderTransport(
                 if(stopped() || address==null)
                     throw IOException("Peer folder address unavailable")
                 val endpoint=checkNotNull(address)
+                if(System.nanoTime()>=deadline)throw IOException("Folder budget exhausted")
                 A0ServerAssociatedTransfer.requireEndpoint(
                     endpoint.address,allowLoopbackForLocalTest=false)
                 if(stopped())throw IOException("Peer folder cancelled")
@@ -87,20 +91,23 @@ internal class A0FreshPeerFolderTransport(
                     try {
                         peer.connect(InetSocketAddress(
                             endpoint.address,endpoint.port),2800)
-                        peer.soTimeout=2400
+                        peer.soTimeout=2000
                         peer.getOutputStream().apply {
                             write(A0PeerRendezvousWire.directPeerInit(session.username))
                             write(request)
                             flush()
                         }
-                        if(stopped())throw IOException("Peer folder cancelled")
+                        if(stopped() || System.nanoTime()>=deadline)
+                            throw IOException("Peer folder cancelled or expired")
                         stage="REPLY"
                         val files=A0PeerFolderContentsWire.readResponse(
                             peer.getInputStream(),token,folder,
-                            deadlineNanos=System.nanoTime()+TimeUnit.SECONDS.toNanos(7))
+                            deadlineNanos=deadline)
                         if(stopped())throw IOException("Peer folder cancelled")
-                        if(files.isEmpty())
+                        if(files.isEmpty()) {
+                            resultLabel="EMPTY"
                             return@use A0AutoDiscoveryCoordinator.SearchResult.NoReply
+                        }
                         // The last advertisement is an availability hint, NOT
                         // authenticated truth about a peer's current queue.
                         val speed=source.peerAvailability.speedKiBps
@@ -125,6 +132,8 @@ internal class A0FreshPeerFolderTransport(
                         handoff.markReadersStopped()
                         val snapshot=handoff.releaseShadowSnapshot()
                         retained=snapshot.choices.size
+                        resultLabel=if(snapshot.truncatedSlots.isNotEmpty())
+                            "TRUNCATED" else if(retained>0)"RETAINED" else "EMPTY"
                         if(snapshot.choices.isEmpty() &&
                             snapshot.truncatedSlots.isEmpty())
                             A0AutoDiscoveryCoordinator.SearchResult.NoReply
@@ -136,13 +145,18 @@ internal class A0FreshPeerFolderTransport(
                     }
                 }
             }
-        }catch(_:Exception){
+        }catch(error:Exception){
+            resultLabel=when(error) {
+                is java.net.SocketTimeoutException -> "TIMEOUT"
+                is IOException -> "IO_OR_PROTOCOL"
+                else -> "REJECTED"
+            }
             A0AutoDiscoveryCoordinator.SearchResult.NoReply
         }finally {
             activeP=null
             activeServer=null
             com.music.bitchord.data.DebugLog.d("BitChord",
-                "soulseek_folder_browse stage=$stage" +
+                "soulseek_folder_browse stage=$stage result=$resultLabel" +
                     " retained=${retained.coerceIn(0,512)}" +
                     " elapsed_ms=${TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-started).coerceIn(0,30000)}")
         }
