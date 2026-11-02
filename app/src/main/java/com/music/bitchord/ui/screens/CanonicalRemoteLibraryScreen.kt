@@ -3,6 +3,7 @@ package com.music.bitchord.ui.screens
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,11 +25,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CloudDone
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.TextButton
@@ -545,18 +548,105 @@ private fun RemoteBrowseContextTabs(
     selected: CanonicalSmartFilterContext,
     onSelect: (CanonicalSmartFilterContext) -> Unit,
 ) {
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-        for (tab in CanonicalSmartFilterContext.entries) {
-            TextButton(onClick = { onSelect(tab) }, modifier = Modifier.weight(1f)) {
+    // Reuse the very same native segmented tabs used by the local Library.
+    SegmentedControl(
+        options = listOf("Músicas", "Álbuns", "Artistas"),
+        selectedIndex = selected.ordinal,
+        onSelect = { onSelect(CanonicalSmartFilterContext.entries[it]) },
+        modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+    )
+}
+
+/**
+ * Existing neutral outlined buttons and Settings rows, not another ad-hoc
+ * Material3 filter menu. The picker holds real provider identities and
+ * numeric star values; labels have no authority over song matching.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NativeCanonicalLibraryFilters(
+    availableKeys: List<String>,
+    selectedSource: String?,
+    onSourceChange: (String?) -> Unit,
+    selectedStars: Int?,
+    onStarsChange: (Int?) -> Unit,
+) {
+    var picker by remember { mutableStateOf<String?>(null) }
+    val sourceLabel = when {
+        selectedSource == null -> "Todas"
+        selectedSource == "local-mediastore" -> "Local"
+        selectedSource in availableKeys -> "Navidrome"
+        else -> "Indisponível"
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        PlaylistWizardCompactAction(
+            label = "Fonte: $sourceLabel",
+            onClick = { picker = "source" },
+            modifier = Modifier.weight(1f),
+        )
+        PlaylistWizardCompactAction(
+            label = if (selectedStars == null) "Avaliação: Todas"
+                else "Avaliação: $selectedStars ★",
+            onClick = { picker = "rating" },
+            modifier = Modifier.weight(1f),
+        )
+    }
+    if (picker != null) {
+        ModalBottomSheet(
+            onDismissRequest = { picker = null },
+            containerColor = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(Modifier.padding(bottom = 20.dp)) {
                 Text(
-                    when (tab) {
-                        CanonicalSmartFilterContext.SONGS -> "Músicas"
-                        CanonicalSmartFilterContext.ALBUMS -> "Álbuns"
-                        CanonicalSmartFilterContext.ARTISTS -> "Artistas"
-                    },
-                    color = if (selected == tab) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    if (picker == "source") "Fonte de origem" else "Avaliação das músicas",
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
                 )
+                SettingsGroupSurface(modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
+                    if (picker == "source") {
+                        val options = listOf<String?>(null) + availableKeys
+                        options.forEachIndexed { index, key ->
+                            val label = when {
+                                key == null -> "Todas as fontes"
+                                key == "local-mediastore" -> "Música local"
+                                availableKeys.count { it.startsWith("opensubsonic:") } > 1 ->
+                                    "Navidrome " + (availableKeys.filter {
+                                        it.startsWith("opensubsonic:")
+                                    }.indexOf(key) + 1)
+                                else -> "Navidrome"
+                            }
+                            SettingsRow(
+                                title = label,
+                                reserveIconSpace = false,
+                                onClick = { onSourceChange(key); picker = null },
+                                trailing = if (selectedSource == key) {
+                                    { Icon(Icons.Rounded.Check, contentDescription = null) }
+                                } else ({}),
+                            )
+                        }
+                    } else {
+                        (listOf<Int?>(null) + (1..5).map { it }).forEach { value ->
+                            SettingsRow(
+                                title = value?.let { "$it estrelas" } ?: "Todas as avaliações",
+                                reserveIconSpace = false,
+                                onClick = { onStarsChange(value); picker = null },
+                                trailing = {
+                                    if (value != null) CanonicalRatingStars(
+                                        RatingDisplay(localValue = value.toDouble()),
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                    if (selectedStars == value) Icon(
+                                        Icons.Rounded.Check, contentDescription = null,
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
             }
         }
     }
