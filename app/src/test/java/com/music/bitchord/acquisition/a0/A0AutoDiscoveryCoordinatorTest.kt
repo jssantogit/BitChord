@@ -457,7 +457,7 @@ class A0AutoDiscoveryCoordinatorTest {
             expectedDurationSeconds=two[0].durationSeconds,
             qualityProfile=quality,collectReleaseShadow=true)
         val song=A0SoulseekSearchFile(
-            "Shared\\\\ILLIT\\\\SUPER REAL ME\\\\${two[0].query}.mp3",
+            "Shared\\ILLIT\\SUPER REAL ME\\${two[0].query}.mp3",
             two[0].durationSeconds!!.toLong()*40_000L,"mp3",
             mapOf(0 to 320,1 to two[0].durationSeconds))
         congested.offerParsed(A0SoulseekSearchResponse(
