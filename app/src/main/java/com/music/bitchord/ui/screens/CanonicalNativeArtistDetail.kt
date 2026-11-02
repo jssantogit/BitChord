@@ -289,6 +289,7 @@ internal fun CanonicalNativeArtistDetail(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(releases, key = { it.id }) { release ->
+                            Box(Modifier.width(152.dp)) {
                             NativeLibraryEntityCard(
                                 title = release.title,
                                 subtitle = release.artistDisplay.orEmpty(),
@@ -300,6 +301,7 @@ internal fun CanonicalNativeArtistDetail(
                                 },
                                 onClick = { openedRelease = release },
                             )
+                            }
                         }
                     }
                 }
