@@ -22,7 +22,7 @@ class OpenSubsonicTagMappingTest {
                     """.trimIndent()
                     "getAlbum" -> """
                         {"subsonic-response":{"status":"ok","album":{
-                            "id":"album-1","name":"Test","songCount":4,"song":[
+                            "id":"album-1","name":"Test","songCount":5,"song":[
                                 {"id":"song-1","title":"Tagged","genres":[
                                     {"name":"Dream Pop"},{"name":"K-Pop"}],
                                     "moods":["Calm","Bright"],"bpm":134,
@@ -33,7 +33,10 @@ class OpenSubsonicTagMappingTest {
                                 {"id":"song-2","title":"Untagged","genres":[],"moods":[],"bpm":0,
                                  "path":"Artist/Album/02.flac","contributors":[]},
                                 {"id":"song-3","title":"Unsupported"},
-                                {"id":"song-4","title":"Legacy","genre":"Rock"}
+                                {"id":"song-4","title":"Legacy","genre":"Rock"},
+                                {"id":"song-5","title":"Malformed composer",
+                                 "displayComposer":"Alice",
+                                 "contributors":[{"role":"composer"}]}
                             ]
                         }}}
                     """.trimIndent()
@@ -54,6 +57,8 @@ class OpenSubsonicTagMappingTest {
         assertEquals(listOf("Bob", "Alice"), tracks.getValue("song-1").composers)
         assertEquals(emptyList<String>(), tracks.getValue("song-2").composers)
         assertNull(tracks.getValue("song-3").composers)
+        assertNull("malformed credits cannot prove complete composer evidence",
+            tracks.getValue("song-5").composers)
         assertEquals(0, tracks.getValue("song-2").bpm)
         assertNull(tracks.getValue("song-3").bpm)
         assertEquals(emptyList<String>(), tracks.getValue("song-2").genres)
