@@ -40,7 +40,6 @@ class LibraryNavigationLinksTest {
                 deviceLink("Música local", "local:all"),
             ),
             onOpenPlaylists = {},
-            onOpenRatings = {},
             onOpenLocalCategory = {},
         )
         assertEquals(
