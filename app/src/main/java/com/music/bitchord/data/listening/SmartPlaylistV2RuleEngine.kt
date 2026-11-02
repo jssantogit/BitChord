@@ -929,14 +929,20 @@ internal class SmartPlaylistV2RuleEngine(
             val incomplete = rawValues.size != rawValues.count {
                 it.normalizedSmartPlaylistText() != null
             } || when (rule.field) {
-                SmartPlaylistRuleField.GENRE -> row.genreEvidenceUnknown ||
+                SmartPlaylistRuleField.GENRE ->
+                    (row.genreEvidenceUnknown && (row.sourceKinds == null ||
+                        SmartPlaylistSourceKind.OPENSUBSONIC in row.sourceKinds)) ||
                     (SmartPlaylistSourceKind.LOCAL in row.sourceKinds && !row.localGenresComplete)
                 SmartPlaylistRuleField.MOOD -> row.moodEvidenceUnknown
                 SmartPlaylistRuleField.STYLE -> row.styleEvidenceUnknown
                 SmartPlaylistRuleField.COMPOSER -> row.composerEvidenceUnknown
-                SmartPlaylistRuleField.FILE_PATH -> row.filePathEvidenceUnknown ||
+                SmartPlaylistRuleField.FILE_PATH ->
+                    (row.filePathEvidenceUnknown && (row.sourceKinds == null ||
+                        SmartPlaylistSourceKind.OPENSUBSONIC in row.sourceKinds)) ||
                     (SmartPlaylistSourceKind.LOCAL in row.sourceKinds && !row.localFilePathsComplete)
-                SmartPlaylistRuleField.FOLDER_PATH -> row.folderPathEvidenceUnknown ||
+                SmartPlaylistRuleField.FOLDER_PATH ->
+                    (row.folderPathEvidenceUnknown && (row.sourceKinds == null ||
+                        SmartPlaylistSourceKind.OPENSUBSONIC in row.sourceKinds)) ||
                     (SmartPlaylistSourceKind.LOCAL in row.sourceKinds && !row.localFilePathsComplete)
                 else -> false
             }

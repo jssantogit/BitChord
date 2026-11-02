@@ -25,6 +25,10 @@ class SmartPlaylistV2RuleEngineTest {
             SmartPlaylistRuleOperator.CONTAINS, textValue = "ILLIT")
         assertEquals(listOf("target"), planner.preview(rows,
             SmartPlaylistV2Query(folder)).map { it.recordingId })
+        val notFolder = SmartPlaylistRule.Comparison(SmartPlaylistRuleField.FOLDER_PATH,
+            SmartPlaylistRuleOperator.DOES_NOT_CONTAIN, textValue = "ILLIT")
+        assertEquals(listOf("other"), planner.preview(rows,
+            SmartPlaylistV2Query(notFolder)).map { it.recordingId })
         val file = SmartPlaylistRule.Comparison(SmartPlaylistRuleField.FILE_PATH,
             SmartPlaylistRuleOperator.ENDS_WITH, textValue = "Pop.flac")
         assertEquals(listOf("target", "other"), planner.preview(rows,
@@ -45,6 +49,10 @@ class SmartPlaylistV2RuleEngineTest {
             SmartPlaylistRuleOperator.CONTAINS, textValue = "pop")
         assertEquals(listOf("local", "remote"), planner.preview(rows,
             SmartPlaylistV2Query(rule)).map { it.recordingId })
+        val negative = rule.copy(operator = SmartPlaylistRuleOperator.DOES_NOT_CONTAIN,
+            textValue = "metal")
+        assertEquals(listOf("local", "remote"), planner.preview(rows,
+            SmartPlaylistV2Query(negative)).map { it.recordingId })
     }
 
     @Test fun ruleGroupNameIsMetadataNotACondition() {
