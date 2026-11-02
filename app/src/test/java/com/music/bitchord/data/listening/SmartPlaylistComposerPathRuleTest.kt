@@ -63,6 +63,15 @@ class SmartPlaylistComposerPathRuleTest {
             SmartPlaylistRuleField.FILE_PATH, SmartPlaylistRuleOperator.IS_PRESENT))
     }
 
+    @Test fun windowsPathsMatchUserInputRegardlessOfSeparatorDirection() {
+        val rows = listOf(row("win",
+            paths = listOf("D:/Music/Albums/01.flac"), pathUnknown = false,
+            folders = listOf("D:/Music/Albums"), folderUnknown = false))
+        assertEquals(listOf("win"), matching(rows,
+            SmartPlaylistRuleField.FOLDER_PATH, SmartPlaylistRuleOperator.EQUAL,
+            "D:\\Music\\Albums"))
+    }
+
     @Test fun pathAndComposerDoNotAcceptNumericComparisons() {
         for (field in listOf(SmartPlaylistRuleField.FOLDER_PATH,
                 SmartPlaylistRuleField.FILE_PATH, SmartPlaylistRuleField.COMPOSER)) {
