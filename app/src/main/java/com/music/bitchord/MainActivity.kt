@@ -2349,6 +2349,8 @@ private fun BitChordApp(
     }
     var unifiedLibraryFilterToken by remember { mutableIntStateOf(0) }
     var unifiedLibrarySearching by remember { mutableStateOf(false) }
+    var unifiedLibraryDetailOpen by remember { mutableStateOf(false) }
+    var unifiedLibraryBackToken by remember { mutableIntStateOf(0) }
     var showPlaylistLibrary by rememberSaveable { mutableStateOf(false) }
     var openedCanonicalPlaylist by remember {
         mutableStateOf<com.music.bitchord.ui.screens.LibraryPlaylistCard?>(null)
@@ -2837,7 +2839,8 @@ private fun BitChordApp(
         BackHandler(enabled = rediscoveryRecordingId != null) { rediscoveryRecordingId = null }
         BackHandler(enabled = showCanonicalMyRatings) { showCanonicalMyRatings = false }
         BackHandler(enabled = unifiedLibraryCategory != null) {
-            unifiedLibraryCategory = null
+            if (unifiedLibraryDetailOpen) unifiedLibraryBackToken++
+            else unifiedLibraryCategory = null
         }
         BackHandler(enabled = showPlaylistLibrary && detail == null &&
             !showSmartPlaylistBuilder) {
@@ -3090,6 +3093,8 @@ private fun BitChordApp(
                             unified = true,
                             filterActionToken = unifiedLibraryFilterToken,
                             searchVisible = unifiedLibrarySearching,
+                            detailBackToken = unifiedLibraryBackToken,
+                            onDetailChanged = { unifiedLibraryDetailOpen = it },
                             initialContext = unifiedLibraryCategory
                                 ?: com.music.bitchord.data.listening.CanonicalSmartFilterContext.SONGS,
                             onClose = { unifiedLibraryCategory = null },
@@ -3917,6 +3922,9 @@ private fun BitChordApp(
                                 onOpenPlaylists = { showPlaylistLibrary = true },
                                 onOpenLocalCategory = { category ->
                                     unifiedLibrarySearching = false
+                                    unifiedLibraryFilterToken = 0
+                                    unifiedLibraryDetailOpen = false
+                                    unifiedLibraryBackToken = 0
                                     unifiedLibraryCategory = when (category) {
                                         com.music.bitchord.ui.screens.LocalFolderTab.ARTISTS ->
                                             com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS
@@ -4199,7 +4207,10 @@ private fun BitChordApp(
                         showHistory -> ({ showHistory = false })
                         libraryShowAll != null && detail == null -> ({ libraryShowAll = null })
                         showAllLocalRecentAdditions && detail == null -> ({ showAllLocalRecentAdditions = false })
-                        unifiedLibraryCategory != null -> ({ unifiedLibraryCategory = null })
+                        unifiedLibraryCategory != null -> ({
+                            if (unifiedLibraryDetailOpen) unifiedLibraryBackToken++
+                            else unifiedLibraryCategory = null
+                        })
                         showSmartPlaylistBuilder && detail == null -> ({
                             showSmartPlaylistBuilder = false
                             editingSmartPlaylistId = null
