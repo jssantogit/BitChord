@@ -74,6 +74,8 @@ internal fun CanonicalNativeArtistDetail(
     artworkLoader: OpenSubsonicArtworkLoader,
     query: String,
     onQueryChange: (String) -> Unit,
+    nestedBackToken: Int,
+    onNestedDetailChanged: (Boolean) -> Unit,
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
     onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
@@ -127,6 +129,10 @@ internal fun CanonicalNativeArtistDetail(
 
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     var openedRelease by remember(artistName) { mutableStateOf<ReleaseEntity?>(null) }
+    LaunchedEffect(openedRelease?.id) { onNestedDetailChanged(openedRelease != null) }
+    LaunchedEffect(nestedBackToken) {
+        if (nestedBackToken > 0) openedRelease = null
+    }
     val releaseRecordingIds by produceState(
         initialValue = emptySet<String>(),
         key1 = openedRelease?.id,
