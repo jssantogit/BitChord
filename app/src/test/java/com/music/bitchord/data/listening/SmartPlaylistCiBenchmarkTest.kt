@@ -3,6 +3,9 @@ package com.music.bitchord.data.listening
 import android.app.Application
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityRepository
+import com.music.bitchord.data.catalog.CanonicalLibraryProviderConfigurationReader
+import com.music.bitchord.data.catalog.RoomCanonicalLibraryAvailabilityStore
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -50,6 +53,16 @@ class SmartPlaylistCiBenchmarkTest {
             val db = catalog.openHelper.writableDatabase
             db.beginTransaction()
             try {
+                val insertAsset = db.compileStatement(
+                    "INSERT INTO catalog_media_asset " +
+                        "(id,recordingId,provider,sourceKey,uri,path,dateAddedSeconds,dateModifiedSeconds,artworkUri) " +
+                        "VALUES (?,?,?,?,?,?,NULL,NULL,NULL)",
+                )
+                val insertTags = db.compileStatement(
+                    "INSERT INTO catalog_media_asset_tags " +
+                        "(mediaAssetId,genresJson,moodsJson,bpmsJson,stylesJson,composersJson,localSourceFingerprint,localParsedFingerprint) " +
+                        "VALUES (?,?,NULL,NULL,NULL,?,NULL,NULL)",
+                )
                 val insert = db.compileStatement(
                     "INSERT INTO catalog_recording (id, title, artistDisplay, durationMs) " +
                         "VALUES (?, ?, ?, ?)",
@@ -64,6 +77,21 @@ class SmartPlaylistCiBenchmarkTest {
                     insert.bindString(3, "Benchmark artist")
                     insert.bindLong(4, if (i % 17 == 0) 120_000L else 210_000L)
                     insert.executeInsert()
+                    val id = "rec:" + i.toString().padStart(6, '0')
+                    val assetId = "asset:" + i.toString().padStart(6, '0')
+                    insertAsset.clearBindings()
+                    insertAsset.bindString(1, assetId)
+                    insertAsset.bindString(2, id)
+                    insertAsset.bindString(3, "local-mediastore")
+                    insertAsset.bindString(4, "local:" + i)
+                    insertAsset.bindString(5, "content://media/external/audio/media/" + i)
+                    insertAsset.bindString(6, "Music/Batch/" + i % 20 + "/" + i + ".flac")
+                    insertAsset.executeInsert()
+                    insertTags.clearBindings()
+                    insertTags.bindString(1, assetId)
+                    insertTags.bindString(2, if (i % 7 == 0) "[\"Jazz\"]" else "[]")
+                    insertTags.bindString(3, if (i % 3 == 0) "[\"Alice\"]" else "[]")
+                    insertTags.executeInsert()
                 }
                 db.setTransactionSuccessful()
             } finally {
@@ -135,6 +163,46 @@ class SmartPlaylistCiBenchmarkTest {
                 )
             }
 
+            // The same 50,123 physical MediaAsset and tag rows also exercise
+            // the source-neutral Composer + Folder path query end-to-end.
+            // Each provider account stays isolated: no global Recording tags.
+            val scopedReader = CanonicalLibraryAvailabilityRepository(
+                RoomCanonicalLibraryAvailabilityStore(catalog.catalogDao()),
+                CanonicalLibraryProviderConfigurationReader { setOf("local-mediastore") },
+            )
+            val scopedRule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+                SmartPlaylistRule.Comparison(SmartPlaylistRuleField.COMPOSER,
+                    SmartPlaylistRuleOperator.EQUAL, textValue = "Alice"),
+                SmartPlaylistRule.Comparison(SmartPlaylistRuleField.FOLDER_PATH,
+                    SmartPlaylistRuleOperator.EQUAL, textValue = "Music/Batch/1"),
+            ))
+            val scopedQuery = SmartPlaylistV2Query(scopedRule,
+                sort = SmartPlaylistV2Sort.RECORDING_ID_ASC, limit = LIMIT)
+            val scopedStart = System.nanoTime()
+            val tags = scopedReader.availableRecordingTags(ids)
+            val scopedReadMs = (System.nanoTime() - scopedStart) / 1_000_000L
+            assertEquals(RECORD_COUNT, tags.size)
+            val taggedCandidates = tags.map { tag -> RuleBasedRecordingCandidate(
+                recordingId = tag.recordingId, explicitRating = null,
+                audibleCompletions = 0L, lastAudibleAtEpochMs = null,
+                durationMs = null, available = true,
+                composers = tag.composers,
+                composerEvidenceUnknown = tag.composerEvidenceUnknown,
+                filePaths = tag.filePaths,
+                filePathEvidenceUnknown = tag.filePathEvidenceUnknown,
+                folderPaths = tag.folderPaths,
+                folderPathEvidenceUnknown = tag.folderPathEvidenceUnknown,
+            ) }
+            val scopedEvalStart = System.nanoTime()
+            val scopedResult = engine.preview(taggedCandidates, scopedQuery)
+            val scopedEvalMs = (System.nanoTime() - scopedEvalStart) / 1_000_000L
+            val scopedExpected = (0 until RECORD_COUNT).asSequence()
+                .filter { it % 3 == 0 && it % 20 == 1 }.take(LIMIT)
+                .map { "rec:" + it.toString().padStart(6, '0') }.toList()
+            assertEquals(scopedExpected, scopedResult.map { it.recordingId })
+            assertEquals(LIMIT, scopedResult.size)
+            assertTrue(scopedReadMs >= 0 && scopedEvalMs >= 0)
+
             runPass() // JIT/Room warm-up: not included in reported samples.
             val samples = (0 until MEASUREMENTS).map { runPass() }
             fun median(values: List<Long>): Long = values.sorted()[values.size / 2]
@@ -164,7 +232,12 @@ class SmartPlaylistCiBenchmarkTest {
                   "heap_delta_bytes": ${heapDelta.joinToString(prefix = "[", postfix = "]")},
                   "median_room_read_ms": $medianRead,
                   "median_evaluation_ms": $medianEvaluate,
-                  "median_heap_delta_bytes": $medianHeapDelta
+                  "median_heap_delta_bytes": $medianHeapDelta,
+                  "metadata_scoped_filter": "COMPOSER = Alice AND FOLDER_PATH = Music/Batch/1",
+                  "metadata_scoped_records": $RECORD_COUNT,
+                  "metadata_scoped_matched": ${scopedResult.size},
+                  "metadata_scoped_room_read_ms": $scopedReadMs,
+                  "metadata_scoped_v2_evaluation_ms": $scopedEvalMs
                 }
             """.trimIndent()
             File(reportDir, "metrics.json").writeText(json + "\n")
@@ -174,6 +247,8 @@ class SmartPlaylistCiBenchmarkTest {
                     "- Batches por medição: ${batches.size}, máximo $MAX_BATCH IDs\n" +
                     "- Resultados validados: $LIMIT músicas, IDs determinísticos, sem truncamento\n" +
                     "- Mediana leitura Room: ${medianRead} ms (3 medições, após aquecimento)\n" +
+                    "- Metadados locais (50.123 assets): compositor+pasta, $LIMIT IDs exatos\n" +
+                    "- Metadados: leitura Room ${scopedReadMs} ms; avaliação V2 ${scopedEvalMs} ms (1 amostra informativa)\n" +
                     "- Mediana motor V2: ${medianEvaluate} ms\n" +
                     "- Variação mediana observada de heap: ${medianHeapDelta} bytes (não é pico de memória)\n" +
                     "- Tempo e heap **informativos**, sem limites rígidos devido à variabilidade dos runners\n" +
