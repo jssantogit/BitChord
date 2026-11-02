@@ -36,10 +36,11 @@ internal object A0PeerFolderContentsWire {
         return frame.toByteArray()
     }
 
-    fun readResponse(input:InputStream,expectedToken:Int,folder:String):
+    fun readResponse(input:InputStream,expectedToken:Int,folder:String,
+        deadlineNanos:Long=Long.MAX_VALUE):
         List<A0SoulseekSearchFile> {
         val prefix=ByteArray(4)
-        exact(input,prefix)
+        exact(input,prefix,deadlineNanos)
         val n=(prefix[0].toInt() and 255) or
             ((prefix[1].toInt() and 255) shl 8) or
             ((prefix[2].toInt() and 255) shl 16) or
@@ -48,14 +49,15 @@ internal object A0PeerFolderContentsWire {
         val bytes=ByteArray(n+4)
         System.arraycopy(prefix,0,bytes,0,4)
         val payload=ByteArray(n)
-        exact(input,payload)
+        exact(input,payload,deadlineNanos)
         System.arraycopy(payload,0,bytes,4,n)
         return parse(bytes,expectedToken,folder)
     }
 
-    private fun exact(input:InputStream,bytes:ByteArray) {
+    private fun exact(input:InputStream,bytes:ByteArray,deadlineNanos:Long) {
         var offset=0
         while(offset<bytes.size) {
+            if(System.nanoTime()>=deadlineNanos)bad()
             val read=input.read(bytes,offset,bytes.size-offset)
             if(read<=0)throw EOFException("Incomplete peer folder response")
             offset+=read
