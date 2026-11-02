@@ -37,13 +37,16 @@ class OpenSubsonicTagSyncRoomTest {
                             {"subsonic-response":{"status":"ok","album":{
                                 "id":"a","songCount":1,"song":[
                                     {"id":"1","title":"A","artist":"B",
-                                     "genres":[{"name":"Trip Hop"}],"moods":["Calm"],"bpm":124}
+                                     "genres":[{"name":"Trip Hop"}],"moods":["Calm"],"bpm":124,
+                                     "path":"Artist/Album/01.flac",
+                                     "contributors":[{"role":"composer","artist":{"id":"1","name":"Alice"}}]}
                                 ]
                             }}}
                         """.trimIndent() else """
                             {"subsonic-response":{"status":"ok","album":{
                                 "id":"a","songCount":1,"song":[
-                                    {"id":"1","title":"A","artist":"B","genres":[],"moods":[],"bpm":0}
+                                    {"id":"1","title":"A","artist":"B","genres":[],"moods":[],"bpm":0,
+                                     "path":"Artist/Album/01.flac","contributors":[]}
                                 ]
                             }}}
                         """.trimIndent()
@@ -64,12 +67,16 @@ class OpenSubsonicTagSyncRoomTest {
             assertEquals("[\"Trip Hop\"]", tags.genresJson)
             assertEquals("[\"Calm\"]", tags.moodsJson)
             assertEquals("[124.0]", tags.bpmsJson)
+            assertEquals("[\\"Alice\\"]", tags.composersJson)
+            assertEquals("Artist/Album/01.flac", tags.assetPath)
             untagged = true
             assertTrue(OpenSubsonicCatalogSync.sync(db, provider) is ProviderSyncResult.Success)
             tags = dao.providerScopedTagRows("opensubsonic:home", ids).single()
             assertEquals("[]", tags.genresJson)
             assertEquals("[]", tags.moodsJson)
             assertEquals("[]", tags.bpmsJson)
+            assertEquals("[]", tags.composersJson)
+            assertEquals("Artist/Album/01.flac", tags.assetPath)
             dao.deleteAllMediaAssets("opensubsonic:home")
             assertTrue(dao.providerScopedTagRows("opensubsonic:home", ids).isEmpty())
         } finally {
