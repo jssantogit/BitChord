@@ -240,7 +240,7 @@ internal class A0FreshAutoSearchTransport(
                 }
             }
 
-            val recovery=A0SearchRecoveryPlan(entry.query)
+            val recovery=A0SearchRecoveryPlan(entry.query,entry.album)
             val sent=mutableSetOf(normalized)
             val marks=mutableSetOf<Int>()
             while(System.nanoTime()<deadline && !stopped()) {
