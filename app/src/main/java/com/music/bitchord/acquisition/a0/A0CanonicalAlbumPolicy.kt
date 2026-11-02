@@ -79,7 +79,26 @@ internal object A0CanonicalAlbumPolicy {
         val artist=normalize(target.expectedArtist)
         val exactArtistAlbum=claim.source == ClaimSource.DIRECTORY_HINT &&
             artist.isNotEmpty() && observed == "$artist $expected"
-        if (observed != expected && !singleDescriptor && !exactArtistAlbum) {
+        // Directory decorations such as "(2026)" and "[EP]" describe a
+        // calendar year/release type, not a new title or alternate master.
+        // Accept only the exact requested album (optionally exact artist)
+        // after removing these narrowly allowlisted edge descriptors.
+        // This remains an UNVERIFIED folder claim, never release identity.
+        val neutralYearEpFolder=claim.source==ClaimSource.DIRECTORY_HINT &&
+            run {
+                val words=observed.split(' ').toMutableList()
+                fun annotation(token:String):Boolean=
+                    token=="ep" || token.matches(Regex("(?:19|20)[0-9]{2}"))
+                while(words.isNotEmpty() && annotation(words.first()))
+                    words.removeAt(0)
+                while(words.isNotEmpty() && annotation(words.last()))
+                    words.removeAt(words.lastIndex)
+                val cleaned=words.joinToString(" ")
+                cleaned==expected || (artist.isNotEmpty() &&
+                    cleaned=="$artist $expected")
+            }
+        if (observed != expected && !singleDescriptor &&
+            !exactArtistAlbum && !neutralYearEpFolder) {
             // A peer's folder often combines artist, release, year and codec,
             // e.g. "ILLIT - BREAK EVEN [FLAC]". Exact album matching must
             // remain STRICT, but the composite hint cannot prove a conflict.
