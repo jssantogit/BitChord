@@ -25,6 +25,9 @@ internal class A0ObservedCandidateHandoff(
     private val peerReliability:A0PeerReliabilityEvidence=A0PeerReliabilityEvidence(),
     private val collectReleaseShadow:Boolean=false,
     private val releaseQueries:List<String> = emptyList(),
+    // Automatic discovery consumes release shadow only; avoid rebuilding the
+    // separate sorted manual selector for each untrusted peer file.
+    private val collectManualCandidates:Boolean=true,
 ) {
     class Choice internal constructor(
         val displayName:String,
@@ -407,7 +410,8 @@ internal class A0ObservedCandidateHandoff(
                 qualityEvidence=qualityAssessment,
                 claim=incomingClaim
             )
-            A0StableCandidateInsertion.add(candidates,observedChoice,choiceOrder)
+            if(collectManualCandidates)
+                A0StableCandidateInsertion.add(candidates,observedChoice,choiceOrder)
             if(collectReleaseShadow) {
                 val peer=result.peerUsername
                 val peerCount=releaseShadowPerPeer[peer] ?: 0
@@ -448,6 +452,7 @@ internal class A0ObservedCandidateHandoff(
                     }
                 }
             }
+            if(collectManualCandidates) {
             // A single enthusiastic peer cannot displace every other source.
             val fromPeer=candidates.withIndex()
                 .filter { it.value.peerUsername==result.peerUsername }
@@ -474,6 +479,7 @@ internal class A0ObservedCandidateHandoff(
             if(candidates.size>384) {
                 candidates.removeAt(candidates.lastIndex)
                 capDropped=(capDropped+1).coerceAtMost(100000)
+            }
             }
         }
         return true
