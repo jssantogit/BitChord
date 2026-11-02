@@ -212,7 +212,10 @@ internal fun CanonicalRemoteLibraryScreen(
                     val tagRows = if (selected.rules.referencedFields().any {
                         it == SmartPlaylistRuleField.GENRE || it == SmartPlaylistRuleField.MOOD ||
                             it == SmartPlaylistRuleField.BPM ||
-                            it == SmartPlaylistRuleField.STYLE
+                            it == SmartPlaylistRuleField.STYLE ||
+                            it == SmartPlaylistRuleField.COMPOSER ||
+                            it == SmartPlaylistRuleField.FILE_PATH ||
+                            it == SmartPlaylistRuleField.FOLDER_PATH
                     }) withContext(Dispatchers.IO) {
                         library.tracks.map { it.recordingId }.chunked(400).flatMap { ids ->
                             catalogDao.providerScopedTagRows(providerKey, ids)
