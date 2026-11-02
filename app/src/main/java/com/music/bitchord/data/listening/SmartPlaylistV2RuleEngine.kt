@@ -59,6 +59,9 @@ internal enum class SmartPlaylistRuleField {
     MOOD,
     STYLE,
     BPM,
+    COMPOSER,
+    FILE_PATH,
+    FOLDER_PATH,
     DAYS_SINCE_LOCAL_RATING,
     RELEASE_ARTWORK_REFERENCE,
     DAYS_SINCE_LOCAL_FILE_ADDED,
@@ -93,7 +96,10 @@ internal fun SmartPlaylistRuleField.isTextField(): Boolean =
         this == SmartPlaylistRuleField.TRACK_ARTIST ||
         this == SmartPlaylistRuleField.GENRE ||
         this == SmartPlaylistRuleField.MOOD ||
-        this == SmartPlaylistRuleField.STYLE
+        this == SmartPlaylistRuleField.STYLE ||
+        this == SmartPlaylistRuleField.COMPOSER ||
+        this == SmartPlaylistRuleField.FILE_PATH ||
+        this == SmartPlaylistRuleField.FOLDER_PATH
 
 internal fun SmartPlaylistRuleField.allowedOperators(): List<SmartPlaylistRuleOperator> =
     if (this == SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE) listOf(
@@ -716,6 +722,9 @@ internal class SmartPlaylistV2RuleEngine(
                 SmartPlaylistRuleField.GENRE -> row.genres
                 SmartPlaylistRuleField.MOOD -> row.moods
                 SmartPlaylistRuleField.STYLE -> row.styles
+                SmartPlaylistRuleField.COMPOSER -> row.composers
+                SmartPlaylistRuleField.FILE_PATH -> row.filePaths
+                SmartPlaylistRuleField.FOLDER_PATH -> row.folderPaths
                 SmartPlaylistRuleField.ALBUM_ARTIST,
                 SmartPlaylistRuleField.TRACK_ARTIST,
                 SmartPlaylistRuleField.SOURCE_KIND -> emptyList()
@@ -730,6 +739,9 @@ internal class SmartPlaylistV2RuleEngine(
                 SmartPlaylistRuleField.GENRE -> row.genreEvidenceUnknown
                 SmartPlaylistRuleField.MOOD -> row.moodEvidenceUnknown
                 SmartPlaylistRuleField.STYLE -> row.styleEvidenceUnknown
+                SmartPlaylistRuleField.COMPOSER -> row.composerEvidenceUnknown
+                SmartPlaylistRuleField.FILE_PATH -> row.filePathEvidenceUnknown
+                SmartPlaylistRuleField.FOLDER_PATH -> row.folderPathEvidenceUnknown
                 else -> false
             }
             if ((rule.field == SmartPlaylistRuleField.TITLE ||
@@ -800,7 +812,8 @@ internal class SmartPlaylistV2RuleEngine(
             SmartPlaylistRuleField.TRACK_NUMBER,
             SmartPlaylistRuleField.TRACK_ARTIST,
             SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD,
-            SmartPlaylistRuleField.STYLE,
+            SmartPlaylistRuleField.STYLE, SmartPlaylistRuleField.COMPOSER,
+            SmartPlaylistRuleField.FILE_PATH, SmartPlaylistRuleField.FOLDER_PATH,
             SmartPlaylistRuleField.BPM,
             SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE,
             SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED -> null
