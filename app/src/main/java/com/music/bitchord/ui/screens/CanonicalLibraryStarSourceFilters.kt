@@ -124,7 +124,7 @@ internal fun nativeUnifiedTrackCountLabel(
     val prefix = "$count $noun"
     if (count == 0 || durationsMs.size != count ||
         durationsMs.any { it == null || it <= 0L }) return prefix
-    val totalMinutes = durationsMs.filterNotNull().sumOf { it / 60_000L }
+    val totalMinutes = durationsMs.filterNotNull().sumOf { it } / 60_000L
     return "$prefix · ${totalMinutes / 60}h ${(totalMinutes % 60).toString().padStart(2, '0')}m"
 }
 
