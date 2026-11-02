@@ -262,11 +262,26 @@ internal fun CanonicalNativeArtistDetail(
                 item(key = "artist-tracks-title") {
                     SectionHeading("Faixas", palette)
                 }
-                items(shownTracks, key = { it.recordingId }) { track ->
-                    CanonicalTrackRow(track, artworkLoader,
-                        onClick = { onTrackPlay(track) },
-                        onEditRating = { onTrackEditRating(track) },
-                    )
+                // Like DetailScreen's native artist page, the songs page
+                // sideways in four-row columns; they must not push all the
+                // album/single carousels several screens below the fold.
+                item(key = "artist-tracks-carousel") {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(shownTracks.chunked(4), key = { it.first().recordingId }) { column ->
+                            Column(Modifier.width(312.dp)) {
+                                column.forEach { track ->
+                                    CanonicalTrackRow(
+                                        track, artworkLoader,
+                                        onClick = { onTrackPlay(track) },
+                                        onEditRating = { onTrackEditRating(track) },
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
