@@ -78,6 +78,16 @@ class A0AutoCandidateSelectionPolicyTest {
         assertFalse(selection.canTransfer)
     }
 
+    @Test fun equallyValidSameClaimFavorsShortQueueAndFastAdvertisedSource() {
+        val slow=offers("slow",speed=70_000,queue=1)
+        val fast=offers("fast",speed=4_000_000,queue=0)
+        val selection=A0AutoCandidateSelectionPolicy.preview(target,slow+fast,profile)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,selection.status)
+        assertEquals("fast",selection.sequentialAlternatives.first().peerUsername)
+        assertEquals(2,selection.sequentialAlternatives.size)
+        assertFalse(selection.canTransfer)
+    }
+
     @Test fun harmlessTrackNumberPrefixWithIdenticalTechnicalClaimsDoesNotForceReview() {
         val a=offers("one")
         val b=offers("two",name="01 ILLIT - Magnetic.mp3")
