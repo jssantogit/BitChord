@@ -59,11 +59,14 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
         val generic=title==null || title.length<8 || title.split(' ').size<2
         val normal=A0SearchQuery.variants(original).drop(1)
         val ordered=when {
+            albumWide!=null && generic -> listOfNotNull(albumWide,albumQualified,title)+normal
             albumWide!=null -> listOfNotNull(albumWide,title,albumQualified)+normal
             generic -> listOfNotNull(albumQualified)+normal
             else -> listOfNotNull(title,albumQualified)+normal
         }
-        ordered.filter { it.length>=3 }.distinct().take(2)
+        // Keep the ranked candidates, not merely the first two raw choices.
+        // An album-wide query sent by a sibling must not consume a fallback.
+        ordered.filter { it.length>=3 }.distinct()
     }
     /** Search-only key; a release query should be issued once per batch. */
     internal val releaseWideQuery:String? get()=albumWide
@@ -74,6 +77,7 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
         hasRelevantCandidate:Boolean,
         alreadySent:Set<String>,
         missingSiblings:Boolean=false,
+        excludedQueries:Set<String> = emptySet(),
     ):String? {
         if(elapsedMillis<6000 || elapsedMillis>15000 ||
             alreadySent.size>=3)return null
@@ -81,9 +85,10 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
         // are present. Allow only the *one* album-wide discovery variant
         // in that case, not redundant searches for the already-ready title.
         if(hasRelevantCandidate)
-            return if(missingSiblings)albumWide?.takeIf { it !in alreadySent }
+            return if(missingSiblings)
+                albumWide?.takeIf { it !in alreadySent && it !in excludedQueries }
                 else null
-        return variants.firstOrNull { it !in alreadySent }
+        return variants.firstOrNull { it !in alreadySent && it !in excludedQueries }
     }
 
     override fun toString()="A0SearchRecoveryPlan(redacted)"

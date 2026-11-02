@@ -303,6 +303,7 @@ internal class A0FreshAutoSearchTransport(
             val marks=mutableSetOf<Int>()
             var nextCompletionCheckMs=8000L
             var budgetSkippedFallbacks=0
+            var releaseWideSkipCounted=false
             while(System.nanoTime()<deadline && !stopped()) {
                 val elapsed=TimeUnit.NANOSECONDS.toMillis(
                     18L.let {TimeUnit.SECONDS.toNanos(it)}-(deadline-System.nanoTime()))
@@ -316,16 +317,16 @@ internal class A0FreshAutoSearchTransport(
                             recovery.releaseWideQuery!=null &&
                             !A0AutoSearchEarlyExitPolicy.hasCompleteEligibleRelease(
                                 releaseSlots,quality,holder.releaseShadowSnapshot())
-                        var variant=recovery.next(
-                            at.toLong(),found,sent,missingSiblings=missingSiblings)
-                        if(variant!=null && variant==recovery.releaseWideQuery &&
-                            variant in releaseWideSent) {
-                            // Track the skipped variation only in this local
-                            // search, so the next bounded alternative can run.
-                            sent.add(variant)
+                        val releaseQuery=recovery.releaseWideQuery
+                        if(!releaseWideSkipCounted &&
+                            (missingSiblings || !found) &&
+                            releaseQuery!=null && releaseQuery in releaseWideSent) {
                             releaseWideSkipped.incrementAndGet()
-                            variant=recovery.next(at.toLong(),found,sent)
+                            releaseWideSkipCounted=true
                         }
+                        val variant=recovery.next(
+                            at.toLong(),found,sent,missingSiblings=missingSiblings,
+                            excludedQueries=releaseWideSent)
                         if(variant!=null && !stopped()) {
                             val lease=checkNotNull(searchLease)
                             if(lease.remaining()==0 &&

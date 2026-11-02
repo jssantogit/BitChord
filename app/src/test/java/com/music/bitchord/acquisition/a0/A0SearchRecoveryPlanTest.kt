@@ -39,6 +39,33 @@ class A0SearchRecoveryPlanTest {
         assertEquals("Normal",noAlbum.next(6000,false,setOf("BTS Normal")))
     }
 
+    @Test fun globallySearchedAlbumDoesNotConsumeAQuerySlotOrHideSpecificFallback() {
+        val plan=A0SearchRecoveryPlan("BTS - Normal","ARIRANG",releaseWide=true)
+        val sent=mutableSetOf("BTS Normal")
+        val albumAlreadySearched=setOf("BTS ARIRANG")
+        assertEquals("BTS ARIRANG Normal",plan.next(
+            6000,false,sent,excludedQueries=albumAlreadySearched))
+        sent.add("BTS ARIRANG Normal")
+        assertEquals("Normal",plan.next(
+            12000,false,sent,excludedQueries=albumAlreadySearched))
+        sent.add("Normal")
+        assertNull(plan.next(14000,false,sent,excludedQueries=albumAlreadySearched))
+    }
+
+    @Test fun descriptiveTitleCanStillUseSpecificAlbumRecoveryAfterGlobalDedup() {
+        val title="BTS (방탄소년단) - Boy In Luv"
+        val plan=A0SearchRecoveryPlan(title,"Proof",releaseWide=true)
+        val sent=mutableSetOf(A0SearchQuery.normalize(title))
+        val global=setOf("BTS Proof")
+        assertEquals("Boy In Luv",plan.next(
+            6000,false,sent,excludedQueries=global))
+        sent.add("Boy In Luv")
+        assertEquals(A0SearchQuery.normalize("BTS (방탄소년단) Proof Boy In Luv"),
+            plan.next(12000,false,sent,excludedQueries=global))
+        assertNull(plan.next(14000,true,setOf(A0SearchQuery.normalize(title)),
+            missingSiblings=true,excludedQueries=global))
+    }
+
     @Test fun repeatedAlbumQueryCanBeSkippedWithoutLosingTheTitleFallback() {
         val original="BTS (방탄소년단) - Boy In Luv"
         val recovery=A0SearchRecoveryPlan(original,"Proof",releaseWide=true)
