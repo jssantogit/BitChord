@@ -306,6 +306,38 @@ internal fun smartRuleRemoveAt(root: SmartPlaylistRule, path: List<Int>): SmartP
     }
 }
 
+/**
+ * Remove any selected rule, including a named group or the last condition.
+ * Empty ancestor groups are pruned recursively, never persisted as invalid
+ * rule trees. Null is a deliberate editor empty state (the builder owns its
+ * non-persisted placeholder); no empty V2 query is saved.
+ */
+internal fun smartRuleRemovePruningEmptyGroups(
+    root: SmartPlaylistRule,
+    path: List<Int>,
+): SmartPlaylistRule? {
+    if (path.isEmpty()) return null
+    fun remove(node: SmartPlaylistRule, indices: List<Int>): SmartPlaylistRule? =
+        when (node) {
+            is SmartPlaylistRule.Not ->
+                remove(node.child, indices)?.let(SmartPlaylistRule::Not)
+            is SmartPlaylistRule.Group -> {
+                val index = indices.first()
+                require(index in node.children.indices) { "Invalid rule index" }
+                val kept = node.children.mapIndexedNotNull { i, child ->
+                    when {
+                        i != index -> child
+                        indices.size == 1 -> null
+                        else -> remove(child, indices.drop(1))
+                    }
+                }
+                if (kept.isEmpty()) null else node.copy(children = kept)
+            }
+            else -> throw IllegalArgumentException("Target has no child rules")
+        }
+    return remove(root, path)
+}
+
 internal fun smartRuleNewComparison(field: SmartPlaylistRuleField): SmartPlaylistRule.Comparison =
     when (field) {
         SmartPlaylistRuleField.SOURCE_KIND -> SmartPlaylistRule.Comparison(
