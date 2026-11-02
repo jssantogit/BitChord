@@ -3526,7 +3526,9 @@ private fun BitChordApp(
                                         onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
                                     )
                                 },
-                                title = stringResource(R.string.listen_now),
+                                // Canonical and legacy Home share the native
+                                // "Início" heading; no legacy "Ouvir agora" split.
+                                title = stringResource(R.string.home),
                                 signedIn = true,
                                 leadHero = true,
                                 currentSong = player.song,
