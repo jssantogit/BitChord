@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLocalLibrary
+import com.music.bitchord.data.catalog.UnifiedLocalCatalogIndex
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.ShelfRow
 import kotlinx.coroutines.CancellationException
@@ -97,6 +98,12 @@ private fun localRecentMediaStoreLabels(
 }
 
 /** A process-local snapshot avoids re-querying and re-reading MediaStore on every navigation. */
+/** An empty pre-index snapshot must not permanently hide the recent shelf. */
+internal fun shouldRequeryRecentLocalAdditions(
+    cachedIds: List<String>?,
+    explicitRefresh: Boolean,
+): Boolean = explicitRefresh || cachedIds.isNullOrEmpty()
+
 internal object RecentLocalAdditionsSnapshot {
     private var all: List<V2DisplayRow>? = null
     private var shelf: List<V2DisplayRow>? = null
@@ -137,17 +144,24 @@ internal fun CanonicalLocalRecentAdditions(
     var refreshing by remember { mutableStateOf(false) }
     var loadFailed by remember { mutableStateOf(false) }
     val recent by produceState<List<V2DisplayRow>?>(
-        initialValue = RecentLocalAdditionsSnapshot.get(showAll),
+        initialValue = RecentLocalAdditionsSnapshot.get(showAll)?.takeIf { it.isNotEmpty() },
         key1 = dao, key2 = showAll, key3 = refreshSerial to refreshRequested,
     ) {
         val prior = RecentLocalAdditionsSnapshot.get(showAll)
-        if (refreshSerial == 0 && !refreshRequested && prior != null) {
+        if (!shouldRequeryRecentLocalAdditions(
+                prior?.map { it.id }, explicitRefresh = refreshSerial > 0 || refreshRequested,
+            )
+        ) {
             value = prior
             return@produceState
         }
         refreshing = refreshSerial > 0
         try {
             val fresh = withContext(Dispatchers.IO) {
+                    // Home used to read an empty Room table before the first
+                    // unified-category visit indexed MediaStore. Index once
+                    // before reading; an empty pre-index cache is not final.
+                    UnifiedLocalCatalogIndex.ensure(context)
                     val recentRows = dao.recentLocalAdditions(
                         CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER,
                         limit = if (showAll) Int.MAX_VALUE else 12,
