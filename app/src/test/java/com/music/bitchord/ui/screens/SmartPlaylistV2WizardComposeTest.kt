@@ -738,6 +738,19 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Criar playlist").assertIsNotEnabled()
     }
 
+    @Test fun playlistRatingPrefersExactRemoteAssetAndSafelyFallsBackToRecording() {
+        val snapshot = CanonicalRatingDisplaySnapshot(
+            byMediaAssetId = mapOf("active:1" to RatingDisplay(remoteValue = 5)),
+            byRecordingId = mapOf("rec" to RatingDisplay(localValue = 4.0)),
+        )
+        assertEquals(5, V2DisplayRow("rec", "Faixa", "Artista",
+            remoteMediaAssetId = "active:1").canonicalPlaylistRating(snapshot)?.remoteValue)
+        assertEquals(4.0, V2DisplayRow("rec", "Faixa", "Artista",
+            remoteMediaAssetId = "absent").canonicalPlaylistRating(snapshot)?.localValue)
+        assertEquals(null, V2DisplayRow("unknown", "Faixa", "Artista",
+            remoteMediaAssetId = "other-account:1").canonicalPlaylistRating(snapshot))
+    }
+
     @Test fun playlistTrackRowShowsTrustedNativeAndRemoteStarsWithoutPerRowLookup() {
         compose.setContent {
             CompositionLocalProvider(LocalCanonicalRatingDisplay provides

@@ -68,6 +68,8 @@ import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
 import com.music.bitchord.ui.components.NativeTrackRowText
 import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
+import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
+import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import com.music.bitchord.ui.icons.BitChordIcons
@@ -207,6 +209,13 @@ internal fun V2DisplayRow.isAvailablePlaylistMember(): Boolean =
 
 /** The same native Library row used everywhere, wired to canonical playback. */
 /** Native SongRow's proven dimensions and controls, but canonical RecordingIds. */
+/** Match the chosen remote rendition first; only fall back to a proven
+ * canonical recording rating. No title joins, no provider IO in list rows. */
+internal fun V2DisplayRow.canonicalPlaylistRating(
+    snapshot: CanonicalRatingDisplaySnapshot,
+): RatingDisplay? = remoteMediaAssetId?.let(snapshot.byMediaAssetId::get)
+    ?: snapshot.byRecordingId[id]
+
 internal fun canonicalTrackDuration(durationMs: Long?): String? =
     durationMs?.takeIf { it > 0 }?.let { ms ->
         val seconds = ms / 1000L
@@ -259,7 +268,7 @@ internal fun CanonicalPlaylistTrackRow(
         Spacer(Modifier.width(8.dp))
         Column(horizontalAlignment = Alignment.End) {
             CanonicalRatingStars(
-                rating = LocalCanonicalRatingDisplay.current.byRecordingId[track.id],
+                rating = track.canonicalPlaylistRating(LocalCanonicalRatingDisplay.current),
                 color = titleColor,
             )
             canonicalTrackDuration(track.durationMs)?.let {

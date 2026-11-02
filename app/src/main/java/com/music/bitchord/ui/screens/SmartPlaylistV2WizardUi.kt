@@ -1621,7 +1621,7 @@ private fun PlaylistReviewRatedRow(row: V2DisplayRow) {
             )
         }
         CanonicalRatingStars(
-            rating = LocalCanonicalRatingDisplay.current.byRecordingId[row.id],
+            rating = row.canonicalPlaylistRating(LocalCanonicalRatingDisplay.current),
             modifier = Modifier.padding(end = 8.dp),
             color = MaterialTheme.colorScheme.onBackground,
         )
