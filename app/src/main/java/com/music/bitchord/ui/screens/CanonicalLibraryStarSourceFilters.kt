@@ -5,6 +5,8 @@ import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.components.visibleStarValues
+import com.music.bitchord.data.settings.LocalMusicSort
+import java.util.Locale
 
 /**
  * One provider-neutral Library projection for Songs, Albums and Artists.
@@ -27,7 +29,11 @@ internal fun filterCanonicalLibraryTracks(
         if (stars != null && !matchesCanonicalLibraryStar(track.recordingId, available, ratings, stars)) {
             return@mapNotNull null
         }
-        track.copy(availableAssets = available)
+        track.copy(
+            availableAssets = available,
+            dateAddedSeconds = available.mapNotNull { it.dateAddedSeconds }.maxOrNull(),
+            dateModifiedSeconds = available.mapNotNull { it.dateModifiedSeconds }.maxOrNull(),
+        )
     }
 }
 
@@ -89,3 +95,28 @@ internal fun canonicalLibraryDisplayArtistNames(
     .distinct()
     .sortedWith(String.CASE_INSENSITIVE_ORDER)
     .toList()
+
+/** Keep the native LocalFolder sort semantics on the unified canonical list.
+ * Unknown source timestamps stay last; they are never invented from sync time.
+ */
+internal fun sortCanonicalUnifiedTracks(
+    tracks: List<CanonicalBrowseTrack>,
+    sort: LocalMusicSort,
+): List<CanonicalBrowseTrack> {
+    val alphabetic = compareBy<CanonicalBrowseTrack> { it.title.lowercase(Locale.ROOT) }
+        .thenBy { it.recordingId }
+    return when (sort) {
+        LocalMusicSort.TITLE_ASC -> tracks.sortedWith(alphabetic)
+        LocalMusicSort.TITLE_DESC -> tracks.sortedWith(alphabetic.reversed())
+        LocalMusicSort.DATE_ADDED -> tracks.sortedWith(
+            compareBy<CanonicalBrowseTrack> { it.dateAddedSeconds == null }
+                .thenByDescending { it.dateAddedSeconds }
+                .then(alphabetic),
+        )
+        LocalMusicSort.DATE_MODIFIED -> tracks.sortedWith(
+            compareBy<CanonicalBrowseTrack> { it.dateModifiedSeconds == null }
+                .thenByDescending { it.dateModifiedSeconds }
+                .then(alphabetic),
+        )
+    }
+}
