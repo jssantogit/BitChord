@@ -74,6 +74,68 @@ class A0AutoDiscoveryCoordinatorTest {
         }
     }
 
+    @Test fun successfulPublishedFolderBrowseAvoidsRemainingThreePublicSearches() {
+        val search=object:A0AutoDiscoveryCoordinator.SearchPort {
+            var searches=0
+            var folderReads=0
+            override fun search(
+                entry:SoulseekBatchPlan.Entry,
+                releaseSlots:List<SoulseekBatchPlan.Entry>,
+                isCancelled:()->Boolean,
+            ):A0AutoDiscoveryCoordinator.SearchResult {
+                searches++
+                return A0AutoDiscoveryCoordinator.SearchResult.Found(
+                    claims(listOf(entry)))
+            }
+            override fun inspectPublishedFolder(
+                source:A0ObservedCandidateHandoff.Choice,
+                releaseSlots:List<SoulseekBatchPlan.Entry>,
+                isCancelled:()->Boolean,
+            ):A0AutoDiscoveryCoordinator.SearchResult {
+                folderReads++
+                return A0AutoDiscoveryCoordinator.SearchResult.Found(
+                    claims(entries.drop(1)))
+            }
+            override fun close() {}
+        }
+        val done=mutableListOf<String>()
+        val result=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            entries,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(1,search.searches)
+        assertEquals(1,search.folderReads)
+        assertEquals(1,result.folderQueries)
+        assertEquals(4,result.batch.published)
+        assertEquals(entries.map {it.trackId},done)
+    }
+
+    @Test fun unresponsiveFolderBrowseFallsBackToNormalPublicSearch() {
+        val search=object:A0AutoDiscoveryCoordinator.SearchPort {
+            var searches=0
+            override fun search(entry:SoulseekBatchPlan.Entry,
+                releaseSlots:List<SoulseekBatchPlan.Entry>,
+                isCancelled:()->Boolean):A0AutoDiscoveryCoordinator.SearchResult {
+                searches++
+                return A0AutoDiscoveryCoordinator.SearchResult.Found(
+                    claims(listOf(entry)))
+            }
+            override fun inspectPublishedFolder(
+                source:A0ObservedCandidateHandoff.Choice,
+                releaseSlots:List<SoulseekBatchPlan.Entry>,
+                isCancelled:()->Boolean,
+            ):A0AutoDiscoveryCoordinator.SearchResult =
+                A0AutoDiscoveryCoordinator.SearchResult.NoReply
+            override fun close() {}
+        }
+        val done=mutableListOf<String>()
+        val result=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            entries.take(2),quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(2,search.searches)
+        assertEquals(2,result.batch.published)
+        assertEquals(1,result.folderQueries)
+    }
+
     @Test fun firstQueryCoveringAllFourAlbumSlotsAvoidsThreeRedundantSearches() {
         val search=FakeSearch {
             A0AutoDiscoveryCoordinator.SearchResult.Found(claims(entries))
