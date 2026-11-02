@@ -320,7 +320,7 @@ internal fun smartRuleRemovePruningEmptyGroups(
     fun remove(node: SmartPlaylistRule, indices: List<Int>): SmartPlaylistRule? =
         when (node) {
             is SmartPlaylistRule.Not ->
-                remove(node.child, indices)?.let(SmartPlaylistRule::Not)
+                remove(node.child, indices)?.let { SmartPlaylistRule.Not(it) }
             is SmartPlaylistRule.Group -> {
                 val index = indices.first()
                 require(index in node.children.indices) { "Invalid rule index" }
