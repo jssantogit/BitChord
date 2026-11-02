@@ -67,7 +67,7 @@ class OpenSubsonicTagSyncRoomTest {
             assertEquals("[\"Trip Hop\"]", tags.genresJson)
             assertEquals("[\"Calm\"]", tags.moodsJson)
             assertEquals("[124.0]", tags.bpmsJson)
-            assertEquals("[\\"Alice\\"]", tags.composersJson)
+            assertEquals("[\"Alice\"]", tags.composersJson)
             assertEquals("Artist/Album/01.flac", tags.assetPath)
             untagged = true
             assertTrue(OpenSubsonicCatalogSync.sync(db, provider) is ProviderSyncResult.Success)
