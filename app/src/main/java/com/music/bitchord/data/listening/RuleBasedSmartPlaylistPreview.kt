@@ -2,6 +2,8 @@ package com.music.bitchord.data.listening
 
 import com.music.bitchord.data.catalog.CanonicalCatalogDao
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReader
+import com.music.bitchord.diagnostics.Diagnostics
+import com.music.bitchord.diagnostics.DiagnosticCategory
 
 /**
  * Canonical, read-only numeric evidence; Catalog validates the current account scope.
@@ -304,6 +306,7 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
         query: SmartPlaylistV2Query,
         ownerId: String? = null,
     ): List<SmartPlaylistV2Match> {
+        val startedNanos = System.nanoTime()
         // Resolve a single bounded DAG first; missing/cyclic definitions fail the
         // entire preview, including under NOT/ANY, instead of returning false.
         val graph = if (query.rules.referencedPlaylistIds().isEmpty()) emptyList()
@@ -319,9 +322,28 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
             includeSourceEvidence = queries.any { it.rules.needsSourceKinds() },
             requiredFields = fields,
         )
+        val readNanos = System.nanoTime() - startedNanos
         // A referenced playlist's ordering and limit are applied to the SAME
         // account-scoped candidate snapshot; Playback re-runs this on tap.
-        return previewSmartPlaylistReferences(rows, query, graph, v2Planner)
+        val matches = previewSmartPlaylistReferences(rows, query, graph, v2Planner)
+        val totalNanos = System.nanoTime() - startedNanos
+        // Per-preview on-device evidence, bounded and free of track names, IDs,
+        // paths, provider accounts or user rule values.
+        Diagnostics.event(
+            category = DiagnosticCategory.CATALOG,
+            name = "smart_playlist_preview_v2",
+            durationNanos = totalNanos,
+            metadata = mapOf(
+                "candidateCount" to rows.size.toString(),
+                "matchedCount" to matches.size.toString(),
+                "readMs" to (readNanos / 1_000_000L).toString(),
+                "evaluateMs" to ((totalNanos - readNanos) / 1_000_000L).toString(),
+                "fieldsCount" to fields.size.toString(),
+                "referenceCount" to graph.size.toString(),
+                "limit" to query.limit.toString(),
+            ),
+        )
+        return matches
     }
 
     /** One account-scoped snapshot, then 400-id chunks with bounded read pressure. */
