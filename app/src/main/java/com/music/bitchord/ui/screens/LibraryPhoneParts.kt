@@ -164,7 +164,6 @@ fun libraryLinks(): List<LibraryLink> {
 fun libraryNavigationLinks(
     deviceLinks: List<LibraryLink>,
     onOpenPlaylists: () -> Unit,
-    onOpenRatings: () -> Unit,
     onOpenLocalCategory: (LocalFolderTab) -> Unit,
 ): List<LibraryLink> {
     fun destination(title: String, icon: ImageVector, onClick: () -> Unit) =
@@ -189,7 +188,6 @@ fun libraryNavigationLinks(
             onOpenLocalCategory(LocalFolderTab.SONGS)
         },
         radios,
-        destination("Minhas avaliações", Icons.Rounded.Star, onOpenRatings),
     ) + deviceLinks.filter { it.item.browseId == "local:downloads" }
 }
 
