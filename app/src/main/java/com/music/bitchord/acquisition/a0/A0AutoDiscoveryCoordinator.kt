@@ -48,6 +48,10 @@ internal class A0AutoDiscoveryCoordinator(
         val observed:Int,
         val truncated:Boolean,
         val decisionReason:A0AutoCandidateSelectionPolicy.Reason?,
+        // Only aggregate counts for diagnostics. Peer/path never leave RAM.
+        val publishedFolderCount:Int=0,
+        val samePeerOffers:Int=0,
+        val samePeerFolderOffers:Int=0,
     )
 
     class Report(
@@ -270,13 +274,21 @@ internal class A0AutoDiscoveryCoordinator(
                     val publishedFolders=publishedPaths.map {
                         it.first to parent(it.second)
                     }.toSet()
+                    val publishedPeers=publishedPaths.map { it.first }.toSet()
+                    val samePeerOffers=unspent.count {
+                        it.peerUsername in publishedPeers
+                    }
+                    val samePeerFolderOffers=unspent.count {
+                        (it.peerUsername to parent(it.remotePath)) in publishedFolders
+                    }
                     val lateOffers=if(truncated)unspent.filter {
                         (it.peerUsername to parent(it.remotePath)) in publishedFolders
                     } else unspent
                     if(lateOffers.isEmpty()) {
                         if(truncated)try { onCacheEvidence(index,CacheEvidence(
                             CacheAction.SIBLING_RESCUE_SKIPPED,0,true,
-                            A0AutoCandidateSelectionPolicy.Reason.INCOMPLETE_SAMPLE
+                            A0AutoCandidateSelectionPolicy.Reason.INCOMPLETE_SAMPLE,
+                            publishedFolders.size,samePeerOffers,samePeerFolderOffers
                         )) }catch(_:Exception) {}
                         continue
                     }
@@ -284,13 +296,15 @@ internal class A0AutoDiscoveryCoordinator(
                     if(late.status!=A0AutoCandidateSelectionPolicy.Status.PROVISIONAL) {
                         if(truncated)try { onCacheEvidence(index,CacheEvidence(
                             CacheAction.SIBLING_RESCUE_SKIPPED,
-                            lateOffers.size.coerceIn(0,512),true,late.reason
+                            lateOffers.size.coerceIn(0,512),true,late.reason,
+                            publishedFolders.size,samePeerOffers,samePeerFolderOffers
                         )) }catch(_:Exception) {}
                         continue
                     }
                     if(truncated)try { onCacheEvidence(index,CacheEvidence(
                         CacheAction.SIBLING_RESCUE,lateOffers.size.coerceIn(0,512),
-                        true,late.reason
+                        true,late.reason,
+                        publishedFolders.size,samePeerOffers,samePeerFolderOffers
                     )) }catch(_:Exception) {}
                     try {onCandidateDecision(index,late)}catch(_:Exception){}
                     try {onSlotEvidence(index,unspent.toList())}catch(_:Exception){}
