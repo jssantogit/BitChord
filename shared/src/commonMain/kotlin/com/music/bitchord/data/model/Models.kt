@@ -179,6 +179,8 @@ data class Song(
         playbackSource: String? = null,
         playbackSourceType: PlaybackSourceType? = null,
         playbackSourceId: String? = null,
+        localGenre: String? = null,
+        localBitrateBps: Long? = null,
     ) : this(
         videoId = videoId,
         title = title,
@@ -206,6 +208,8 @@ data class Song(
         playbackSource = playbackSource,
         playbackSourceType = playbackSourceType,
         playbackSourceId = playbackSourceId,
+        localGenre = localGenre,
+        localBitrateBps = localBitrateBps,
     )
 }
 
