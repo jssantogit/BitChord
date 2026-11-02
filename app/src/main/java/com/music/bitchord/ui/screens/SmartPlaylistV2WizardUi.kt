@@ -59,7 +59,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.RadioButton
+import com.music.bitchord.ui.components.CanonicalRatingStars
+import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -112,8 +116,8 @@ private fun operatorUiLabel(operator: SmartPlaylistRuleOperator): String = when 
     SmartPlaylistRuleOperator.GREATER_OR_EQUAL -> "Pelo menos"
     SmartPlaylistRuleOperator.LESS_THAN -> "É menor que"
     SmartPlaylistRuleOperator.LESS_OR_EQUAL -> "No máximo"
-    SmartPlaylistRuleOperator.IS_PRESENT -> "Tem informação cadastrada"
-    SmartPlaylistRuleOperator.IS_MISSING -> "Não tem informação cadastrada"
+    SmartPlaylistRuleOperator.IS_PRESENT -> "Possui valor informado"
+    SmartPlaylistRuleOperator.IS_MISSING -> "Não possui valor informado"
     SmartPlaylistRuleOperator.CONTAINS -> "Contém"
     SmartPlaylistRuleOperator.DOES_NOT_CONTAIN -> "Não contém"
     SmartPlaylistRuleOperator.STARTS_WITH -> "Começa com"
@@ -158,7 +162,8 @@ private fun ruleUiSummary(
     is SmartPlaylistRule.Reference -> "Playlist: " +
         (names[rule.playlistId] ?: "Referência indisponível")
     is SmartPlaylistRule.Group ->
-        "${smartRuleLeafCount(rule)} condições · " + smartRuleJoinLabel(rule.join)
+        listOfNotNull(rule.name.ifBlank { null },
+            "${smartRuleLeafCount(rule)} condições · ${smartRuleJoinLabel(rule.join)}").joinToString(" · ")
 }
 
 @Composable
@@ -166,16 +171,21 @@ private fun WizardCard(
     title: String,
     subtitle: String,
     onClick: (() -> Unit)? = null,
+    showChevron: Boolean = true,
     content: @Composable (() -> Unit)? = null,
 ) {
     // This is the exact surface and row shared with Android Settings, not
     // a separate Material3 Card with duplicated paddings and chevrons.
-    SettingsGroupSurface {
+    SettingsGroupSurface(
+        modifier = if (!showChevron && onClick != null)
+            Modifier.clickable(onClick = onClick) else Modifier,
+    ) {
         SettingsRow(
             title = title,
             subtitle = subtitle.ifBlank { null },
-            onClick = onClick,
+            onClick = if (showChevron) onClick else null,
             reserveIconSpace = false,
+            trailing = if (showChevron) null else ({}),
         )
         if (content != null) {
             Column(
@@ -291,6 +301,7 @@ internal fun <T> WizardChoiceDialog(
     label: (T) -> String,
     onChosen: (T) -> Unit,
     onClose: () -> Unit,
+    radioSelected: ((T) -> Boolean)? = null,
 ) {
     // The app already uses ModalBottomSheet for details/actions. A second
     // full-screen Dialog with a hand-drawn scrim is not needed.
@@ -321,6 +332,9 @@ internal fun <T> WizardChoiceDialog(
                             title = label(option),
                             onClick = { onChosen(option); onClose() },
                             reserveIconSpace = false,
+                            trailing = if (radioSelected != null) ({
+                                RadioButton(selected = radioSelected(option), onClick = null)
+                            }) else null,
                         )
                         RowDivider()
                     }
@@ -405,6 +419,7 @@ internal fun SmartPlaylistV2WizardUi(
         })
     }
     var selectedPath by remember { mutableStateOf<List<Int>>(emptyList()) }
+    var expandedGroups by remember { mutableStateOf(setOf<Int>()) }
     var targetGroupPath by remember { mutableStateOf<List<Int>>(emptyList()) }
     var selectedCategory by remember { mutableStateOf(smartConditionCategories.first()) }
     var search by remember { mutableStateOf("") }
@@ -489,6 +504,13 @@ internal fun SmartPlaylistV2WizardUi(
     val canReview = hasConfiguredRules && canContinue && runCatching {
         SmartPlaylistV2Query(rule, sort, limit.toInt(), seed.toInt())
     }.isSuccess
+
+    // Review recomputes automatically, without a request loop on loading/preview changes.
+    LaunchedEffect(page, rule, sort, limit, seed, normalMode) {
+        if (page == WizardStep.REVIEW && !normalMode && preview == null && canReview) {
+            onPreview()
+        }
+    }
 
     // Do not mix the editor with the app's own scrollable library screen.
     // The caller hosts this in a full-width Dialog over the library tab bar.
@@ -641,7 +663,7 @@ internal fun SmartPlaylistV2WizardUi(
                         }
                         item {
                             WizardCard(
-                                "Fontes do catálogo",
+                                "Fontes de origem",
                                 "Escolha onde procurar músicas. Toque para alterar.",
                             ) {
                                 val selected = if (normalMode) normalSourceProviderKey
@@ -658,7 +680,7 @@ internal fun SmartPlaylistV2WizardUi(
                                     else -> "Todas as fontes disponíveis"
                                 }
                                 PlaylistWizardSecondaryAction(
-                                    label = "Origem: $label  ▾",
+                                    label = "Origem: $label",
                                     onClick = { picker = "source" },
                                 )
                                 if (normalMode && selected != null &&
@@ -811,16 +833,40 @@ internal fun SmartPlaylistV2WizardUi(
                         }
                         itemsIndexed(children, key = { index, _ -> "group-$index" }) { index, child ->
                             val path = if (root == null) emptyList() else listOf(index)
+                            val core = if (child is SmartPlaylistRule.Not) child.child else child
+                            val named = (core as? SmartPlaylistRule.Group)?.name.orEmpty()
+                            val expanded = index in expandedGroups
                             WizardCard(
-                                "Grupo ${index + 1}",
+                                named.ifBlank { "Grupo ${index + 1}" },
                                 ruleUiSummary(child, names),
                                 onClick = {
                                     selectedPath = path
                                     page = WizardStep.GROUP
                                 },
+                                showChevron = false,
                             ) {
-                                Text(smartConditionCountLabel(smartRuleLeafCount(child)),
-                                    style = MaterialTheme.typography.labelMedium)
+                                Row(verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()) {
+                                    Text(smartConditionCountLabel(smartRuleLeafCount(child)),
+                                        style = MaterialTheme.typography.labelMedium)
+                                    Spacer(Modifier.weight(1f))
+                                    PlaylistWizardCompactAction(
+                                        label = if (expanded) "Recolher" else "Expandir",
+                                        onClick = {
+                                            expandedGroups = if (expanded) expandedGroups - index
+                                                else expandedGroups + index
+                                        },
+                                    )
+                                }
+                                if (expanded) {
+                                    val conditions = (core as? SmartPlaylistRule.Group)?.children
+                                        ?: listOf(child)
+                                    conditions.forEachIndexed { i, condition ->
+                                        Text("${i + 1}. " + ruleUiSummary(condition, names),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
                             }
                         }
                         item {
@@ -869,6 +915,28 @@ internal fun SmartPlaylistV2WizardUi(
                         val selected = runCatching { smartRuleAtPath(rule, selectedPath) }.getOrNull()
                         val core = if (selected is SmartPlaylistRule.Not) selected.child else selected
                         val group = core as? SmartPlaylistRule.Group
+                        if (selected != null) item {
+                            WizardCard("Nome do grupo", "Identifique a lógica deste conjunto") {
+                                PlaylistWizardTextEntry(
+                                    value = group?.name.orEmpty(),
+                                    onValueChange = { text ->
+                                        if (text.length <= 80) {
+                                            val changed = if (group != null) {
+                                                smartRuleUpdateGroup(rule, selectedPath) {
+                                                    it.copy(name = text)
+                                                }
+                                            } else smartRuleReplaceAt(rule, selectedPath,
+                                                SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL,
+                                                    listOf(selected), name = text))
+                                            onRuleChange(changed)
+                                        }
+                                    },
+                                    label = "Nome (opcional)",
+                                    hint = "Até 80 caracteres",
+                                    emphasized = true,
+                                )
+                            }
+                        }
                         if (group != null) {
                             item {
                                 WizardCard("Combinar condições",
@@ -1081,9 +1149,9 @@ internal fun SmartPlaylistV2WizardUi(
                                     draft.operator == SmartPlaylistRuleOperator.IS_MISSING
                                 if (presence) {
                                     Text(
-                                        "Não precisa digitar um valor: verifica se o campo “" +
+                                        "Esta opção verifica somente a presença do metadado “" +
                                             smartConditionLabel(draft.field) +
-                                            "” tem uma informação registrada.",
+                                            "”. Para comparar palavras, escolha Contém ou É igual a.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -1201,7 +1269,7 @@ internal fun SmartPlaylistV2WizardUi(
                         if (normalMode) {
                             item {
                                 WizardCard(
-                                    "Fontes do catálogo",
+                                    "Fontes de origem",
                                     when (normalSourceProviderKey) {
                                         null -> "Todas as fontes disponíveis"
                                         "local-mediastore" -> "Música local"
@@ -1231,7 +1299,7 @@ internal fun SmartPlaylistV2WizardUi(
                         } else {
                         item {
                             WizardCard(
-                                "Fontes do catálogo",
+                                "Fontes de origem",
                                 when (smartRuleGlobalSource(rule)) {
                                     "local" -> "Somente música local"
                                     "opensubsonic" -> "Somente servidor atual (Navidrome)"
@@ -1251,13 +1319,8 @@ internal fun SmartPlaylistV2WizardUi(
                                     null -> "Ainda não calculada para estas regras"
                                     else -> "${preview.size} músicas após ordenação e limite"
                                 }) {
-                                PlaylistWizardSecondaryAction(
-                                    label = if (preview == null)
-                                        "Calcular prévia" else "Atualizar prévia",
-                                    enabled = !loading,
-                                    onClick = onPreview,
-                                )
-                                Text("Resultado da consulta, após aplicar limite e ordenação.",
+                                Text(if (preview == null) "Preparando prévia automaticamente…"
+                                    else "Prévia atualizada após aplicar regras, limite e ordenação.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 if (preview != null &&
@@ -1294,17 +1357,7 @@ internal fun SmartPlaylistV2WizardUi(
                             }
                         }
                         items(preview.orEmpty().take(24), key = { it.id }) { row ->
-                            LibraryRow(
-                                title = row.title,
-                                subtitle = row.artist,
-                                imageUrl = null,
-                                horizontalPadding = 0.dp,
-                                artwork = {
-                                    SmartPlaylistPreviewArtwork(
-                                        row = row, modifier = Modifier.fillMaxSize(),
-                                    )
-                                },
-                            )
+                            PlaylistReviewRatedRow(row)
                         }
                         if ((preview?.size ?: 0) > 24) item {
                             Text("Exibindo as primeiras 24 músicas da prévia.",
@@ -1517,6 +1570,10 @@ internal fun SmartPlaylistV2WizardUi(
                 else onSmartSourceChange(source)
             },
             onClose = { picker = null },
+            radioSelected = { (source, _) ->
+                source == (if (normalMode) normalSourceProviderKey
+                    else smartRuleGlobalSource(rule))
+            },
         )
     }
     if (picker == "sort") {
@@ -1557,6 +1614,27 @@ internal fun SmartPlaylistV2WizardUi(
                         SmartPlaylistRule.Reference(saved.id)))
                 }
             }, onClose = { picker = null })
+    }
+}
+
+/** Native list row plus canonical, account-scoped rating strip. */
+@Composable
+private fun PlaylistReviewRatedRow(row: V2DisplayRow) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f)) {
+            LibraryRow(
+                title = row.title, subtitle = row.artist, imageUrl = null,
+                horizontalPadding = 0.dp,
+                artwork = {
+                    SmartPlaylistPreviewArtwork(row = row, modifier = Modifier.fillMaxSize())
+                },
+            )
+        }
+        CanonicalRatingStars(
+            rating = LocalCanonicalRatingDisplay.current.byRecordingId[row.id],
+            modifier = Modifier.padding(end = 8.dp),
+            color = MaterialTheme.colorScheme.onBackground,
+        )
     }
 }
 

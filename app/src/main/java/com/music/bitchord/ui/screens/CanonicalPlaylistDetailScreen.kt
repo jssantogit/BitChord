@@ -66,6 +66,8 @@ import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.ActionRow
 import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
 import com.music.bitchord.ui.components.NativeTrackRowText
+import com.music.bitchord.ui.components.CanonicalRatingStars
+import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import com.music.bitchord.ui.icons.BitChordIcons
@@ -251,6 +253,11 @@ internal fun CanonicalPlaylistTrackRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             },
+        )
+        // Shared reactive recording-ID snapshot: no per-row network or Room IO.
+        CanonicalRatingStars(
+            rating = LocalCanonicalRatingDisplay.current.byRecordingId[track.id],
+            color = titleColor,
         )
         canonicalTrackDuration(track.durationMs)?.let {
             Spacer(Modifier.width(8.dp))
