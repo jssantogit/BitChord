@@ -85,6 +85,8 @@ internal object CanonicalLocalLibrary {
                         dateAddedSeconds = candidate.dateAddedSeconds,
                         dateModifiedSeconds = candidate.dateModifiedSeconds,
                         artworkUri = candidate.artworkUri,
+                        localGenre = candidate.localGenre,
+                        localBitrateBps = candidate.localBitrateBps,
                     ),
                 )
                 // Preserve completed embedded-tag evidence only if the source
@@ -212,6 +214,8 @@ internal object CanonicalLocalLibrary {
             artworkUri = song.thumbnailUrl,
             uri = uri,
             path = song.localPath,
+            localGenre = song.localGenre,
+            localBitrateBps = song.localBitrateBps,
             dateAddedSeconds = song.localDateAddedSeconds,
             dateModifiedSeconds = song.localDateModifiedSeconds,
             trackNumber = song.trackNumber,
