@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import android.graphics.BitmapFactory
+import coil3.compose.AsyncImage
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -1007,6 +1008,20 @@ internal fun RemoteTrackArtwork(
         }
     }
 
+    // Local MediaStore sleeves use the native Coil path already used in the
+    // playlist editor. A content URI is not an authenticated provider URL;
+    // never feed remote provider artwork IDs to Coil.
+    if (artworkRevision?.startsWith("content://") == true ||
+        artworkRevision?.startsWith("file://") == true
+    ) {
+        AsyncImage(
+            model = artworkRevision,
+            contentDescription = title,
+            contentScale = ContentScale.Crop,
+            modifier = modifier.clip(RoundedCornerShape(8.dp)),
+        )
+        return
+    }
     val loaded = bitmap
     if (loaded != null) {
         Image(
