@@ -154,6 +154,8 @@ data class MediaAssetTagsEntity(
     /** JSON array of validated BPMs; NULL = unsupported, [] = known absent. */
     val bpmsJson: String? = null,
     val stylesJson: String? = null,
+    /** Composer names are source-scoped, never Recording-level truth. */
+    val composersJson: String? = null,
     /** Fingerprint from last MediaStore scan; no raw path or source ID embedded. */
     val localSourceFingerprint: String? = null,
     /** Versioned fingerprint of the completed bounded local header probe. */
