@@ -577,7 +577,7 @@ fun DetailScreen(
                 ) {
             item(key = "header") {
                 if (isArtist) {
-                    ArtistHeader(page = page, palette = palette, artHeight = artHeight, appleArt = appleArt, signature = signature)
+                    ArtistHeader(artistName = page.title, palette = palette, artHeight = artHeight, appleArt = appleArt, signature = signature)
                 } else {
                     ReleaseHeader(
                         page = page,
@@ -1397,8 +1397,8 @@ internal fun List<Song>.matching(query: String): List<IndexedValue<Song>> {
  * reserves the room, the background fills it.
  */
 @Composable
-private fun ArtistHeader(
-    page: DetailPage,
+internal fun ArtistHeader(
+    artistName: String,
     palette: ArtworkPalette,
     artHeight: Dp,
     appleArt: AppleArtistArt?,
@@ -1472,7 +1472,7 @@ private fun ArtistHeader(
             ) {
             AsyncImage(
                 model = request,
-                contentDescription = page.title,
+                contentDescription = artistName,
                 contentScale = ContentScale.Fit,
                 colorFilter = tint,
                 onState = { state ->
@@ -1501,7 +1501,7 @@ private fun ArtistHeader(
             )
             if (isSignature && logoShown) {
                 SignedByCaption(
-                    name = page.title,
+                    name = artistName,
                     palette = palette,
                     modifier = Modifier.padding(horizontal = HEADER_GUTTER).padding(bottom = 20.dp),
                 )
@@ -1509,7 +1509,7 @@ private fun ArtistHeader(
             }
         }
         if (!logoShown) Text(
-            text = page.title,
+            text = artistName,
             style = MaterialTheme.typography.displayLarge,
             color = palette.onBackground,
             textAlign = TextAlign.Center,
@@ -1542,8 +1542,8 @@ private fun ArtistHeader(
  * on the first frame and only composited after that.
  */
 @Composable
-private fun PageBackground(
-    page: DetailPage,
+internal fun PageBackground(
+    page: DetailPage? = null,
     palette: ArtworkPalette,
     canvas: CanvasArtwork?,
     artHeight: Dp,
@@ -1556,7 +1556,7 @@ private fun PageBackground(
     // freeze the bottom of the video into the wrong picture.
     val softenFoot = canvas == null && !reduceDynamicBlur &&
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val art = heroUrl ?: page.thumbnailUrl.artworkAt(HEADER_ART_PX)
+    val art = heroUrl ?: page?.thumbnailUrl.artworkAt(HEADER_ART_PX)
 
     Box(modifier.clipToBounds()) {
         Box(
