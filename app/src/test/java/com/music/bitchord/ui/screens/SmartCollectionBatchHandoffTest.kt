@@ -58,8 +58,16 @@ class SmartCollectionBatchHandoffTest {
             calls++
             return identities.map { identity ->
                 identity?.let {
-                    CanonicalPlayableAsset(it, CanonicalRemotePlaybackUri.encode(
-                        CanonicalRemotePlaybackRequest(it.recordingId, it.mediaAssetId!!, it.providerKey!!)))
+                    CanonicalPlayableAsset(
+                        it,
+                        if (it.providerKey == "local-mediastore")
+                            "content://media/external/audio/media/42"
+                        else CanonicalRemotePlaybackUri.encode(
+                            CanonicalRemotePlaybackRequest(
+                                it.recordingId, it.mediaAssetId!!, it.providerKey!!,
+                            ),
+                        ),
+                    )
                 }
             }
         }
