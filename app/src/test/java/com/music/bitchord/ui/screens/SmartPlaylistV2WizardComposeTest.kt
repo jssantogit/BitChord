@@ -24,6 +24,7 @@ import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
 import com.music.bitchord.data.listening.SmartPlaylistV2Sort
 import com.music.bitchord.data.listening.SmartPlaylistV2Query
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
