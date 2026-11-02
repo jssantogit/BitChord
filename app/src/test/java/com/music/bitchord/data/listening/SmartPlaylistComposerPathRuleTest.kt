@@ -55,9 +55,8 @@ class SmartPlaylistComposerPathRuleTest {
         assertEquals(listOf("alpha"), matching(rows,
             SmartPlaylistRuleField.FOLDER_PATH, SmartPlaylistRuleOperator.EQUAL,
             "/storage/music/albums"))
-        assertEquals(listOf("alpha"), matching(rows,
-            SmartPlaylistRuleField.FILE_PATH, SmartPlaylistRuleOperator.ENDS_WITH, "/01.mp3")
-                .filter { it == "alpha" })
+        assertEquals(listOf("alpha", "beta"), matching(rows,
+            SmartPlaylistRuleField.FILE_PATH, SmartPlaylistRuleOperator.ENDS_WITH, "/01.mp3"))
         assertEquals(emptyList<String>(), matching(rows,
             SmartPlaylistRuleField.FOLDER_PATH, SmartPlaylistRuleOperator.IS_MISSING))
         assertEquals(listOf("alpha", "beta"), matching(rows,
