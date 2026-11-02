@@ -21,6 +21,28 @@ class A0ReleaseInitialQueryPolicyTest {
             setOf("BTS Proof"),excludedQueries=setOf("BTS Proof")))
     }
 
+    @Test fun aMixedBatchDoesNotPretendEverySongSharesOneRelease() {
+        val mixed=listOf(
+            com.music.bitchord.download.SoulseekBatchPlan.Entry(
+                "a","Artist - First","EP",180),
+            com.music.bitchord.download.SoulseekBatchPlan.Entry(
+                "b","Other - Second","EP",180),
+            com.music.bitchord.download.SoulseekBatchPlan.Entry(
+                "c","Artist - Third","Different EP",180),
+            com.music.bitchord.download.SoulseekBatchPlan.Entry(
+                "d","artist - Fourth","ep",180))
+        val cohort=A0ReleaseInitialQueryPolicy.cohortSize(mixed[0],mixed)
+        assertEquals(2,cohort)
+        assertEquals(A0ReleaseInitialQueryPolicy.Kind.TRACK,
+            A0ReleaseInitialQueryPolicy.choose(
+                "Artist First","Artist EP",cohort,emptySet()).kind)
+        val same=mixed.take(1)+List(3) { index ->
+            com.music.bitchord.download.SoulseekBatchPlan.Entry(
+                "extra-$index","Artist - Extra $index","EP",180)
+        }
+        assertEquals(4,A0ReleaseInitialQueryPolicy.cohortSize(same[0],same))
+    }
+
     @Test fun soloShortReleaseOrMissingAlbumStaysTrackSpecific() {
         for(size in 1..3) {
             assertEquals(A0ReleaseInitialQueryPolicy.Kind.TRACK,

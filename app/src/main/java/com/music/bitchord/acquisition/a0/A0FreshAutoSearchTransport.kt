@@ -96,8 +96,10 @@ internal class A0FreshAutoSearchTransport(
         // The original canonical song still owns ALL identity/quality gates.
         val recovery=A0SearchRecoveryPlan(entry.query,entry.album,
             releaseWide=releaseSlots.size>1)
+        val sameReleaseCount=A0ReleaseInitialQueryPolicy.cohortSize(
+            entry,releaseSlots)
         val initialQuery=A0ReleaseInitialQueryPolicy.choose(
-            normalized,recovery.releaseWideQuery,releaseSlots.size,releaseWideSent)
+            normalized,recovery.releaseWideQuery,sameReleaseCount,releaseWideSent)
         // A single reservation covers this session's initial query and up
         // to two optional fallbacks. Waiting occurs BEFORE authentication,
         // so we do not hold an idle Soulseek server socket for minutes.

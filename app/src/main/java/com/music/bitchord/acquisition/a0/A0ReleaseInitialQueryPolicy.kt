@@ -1,5 +1,7 @@
 package com.music.bitchord.acquisition.a0
 
+import com.music.bitchord.download.SoulseekBatchPlan
+
 /**
  * Order discovery-only public queries for a multi-track release.
  * Never changes the canonical artist/title, eligibility, consent or A3.
@@ -7,6 +9,28 @@ package com.music.bitchord.acquisition.a0
  * user-requested batch, with the exact track query available as fallback.
  */
 internal object A0ReleaseInitialQueryPolicy {
+    /**
+     * A queued batch can contain unrelated artists and albums. Only tracks
+     * actually sharing the SAME artist + release justify an album-wide
+     * initial query; one song inside a mixed 48-item queue is not a cohort.
+     */
+    fun cohortSize(
+        entry:SoulseekBatchPlan.Entry,
+        entries:List<SoulseekBatchPlan.Entry>,
+    ):Int {
+        val album=entry.album?.trim()?.takeIf { it.isNotEmpty() } ?:return 0
+        val delimiter=Regex("\\s+[-–—]\\s+")
+        val parts=entry.query.split(delimiter,limit=2)
+        if(parts.size!=2 || parts[0].isBlank() || parts[1].isBlank())return 0
+        val artist=parts[0].trim()
+        return entries.count { sibling ->
+            val other=sibling.query.split(delimiter,limit=2)
+            other.size==2 && other[1].isNotBlank() &&
+                other[0].trim().equals(artist,ignoreCase=true) &&
+                sibling.album?.trim()?.equals(album,ignoreCase=true)==true
+        }
+    }
+
     enum class Kind { TRACK, ALBUM_WIDE }
     data class Selection(val query:String,val kind:Kind)
 
