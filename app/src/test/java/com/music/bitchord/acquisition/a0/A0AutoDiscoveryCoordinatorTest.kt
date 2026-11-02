@@ -247,10 +247,19 @@ class A0AutoDiscoveryCoordinatorTest {
         }
         val done=mutableListOf<String>()
         val actions=mutableListOf<A0AutoDiscoveryCoordinator.CacheAction>()
+        val rescueEvidence=mutableListOf<A0AutoDiscoveryCoordinator.CacheEvidence>()
         val result=A0AutoDiscoveryCoordinator(search,batch(done)).run(
             two,quality,userRequested=true,optedIn=true,
             isCancelled={false},stillAuthorized={true},
-            onCacheEvidence={_,e -> actions.add(e.action)})
+            onCacheEvidence={_,e ->
+                actions.add(e.action)
+                if(e.action==A0AutoDiscoveryCoordinator.CacheAction.SIBLING_RESCUE_SKIPPED)
+                    rescueEvidence.add(e)
+            })
+        assertEquals(1,rescueEvidence.size)
+        assertEquals(1,rescueEvidence.single().publishedFolderCount)
+        assertEquals(0,rescueEvidence.single().samePeerFolderOffers)
+        assertEquals(0,rescueEvidence.single().samePeerOffers)
         assertEquals(2,result.searches)
         assertEquals(listOf("two"),done)
         assertTrue(A0AutoDiscoveryCoordinator.CacheAction.SIBLING_RESCUE_SKIPPED in actions)
