@@ -53,7 +53,9 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
     // compilation album. Generic one-word titles still prefer the album.
     // The original canonical track and quality gates are never changed.
     private val variants=run {
-        val title=A0SearchQuery.titleOnlyFallback(original)
+        // Use the extracted Latin title in the actual two outbound slots,
+        // rather than merely when composing the optional album-specific text.
+        val title=latinTitleAlias ?: A0SearchQuery.titleOnlyFallback(original)
         val generic=title==null || title.length<8 || title.split(' ').size<2
         val normal=A0SearchQuery.variants(original).drop(1)
         val ordered=when {
