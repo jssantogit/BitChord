@@ -27,5 +27,5 @@ internal class A0SearchTicketRegistry(initial:Int) {
     }
 
     /** An aggregate, not tokens or peer identities. */
-    fun responseCounts():List<Int>=(0..2).map { replies.get(it).coerceIn(0,160) }
+    fun responseCounts(): List<Int> = (0..2).map { replies.get(it).coerceIn(0,160) }
 }
