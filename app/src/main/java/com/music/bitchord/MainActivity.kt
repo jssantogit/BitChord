@@ -2131,13 +2131,33 @@ private fun BitChordApp(
                 .show()
         }
     }
+    // Permission may arrive after the unified page has already mounted and
+    // attempted its first offline scan. Re-index in that case without closing
+    // or replacing the Navidrome catalogue on screen.
+    var pendingUnifiedLibraryScan by remember { mutableStateOf(false) }
     val mediaPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
+        val indexUnified = pendingUnifiedLibraryScan
+        pendingUnifiedLibraryScan = false
         if (granted) {
             viewModel.reloadLocalDetail("local:all")
             viewModel.reloadLocalDetail("local:downloads")
             viewModel.loadLibrarySongs()
+            if (indexUnified) {
+                com.music.bitchord.data.catalog.UnifiedLocalCatalogIndex.invalidate()
+                scope.launch {
+                    try {
+                        com.music.bitchord.data.catalog.UnifiedLocalCatalogIndex.ensure(
+                            context.applicationContext,
+                        )
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        // Index telemetry records failure; remote content stays visible.
+                    }
+                }
+            }
         } else {
             Toast.makeText(context, context.getString(R.string.storage_required_read), Toast.LENGTH_SHORT).show()
         }
@@ -3931,17 +3951,26 @@ private fun BitChordApp(
                                 deviceLinks = libraryLinks(),
                                 onOpenPlaylists = { showPlaylistLibrary = true },
                                 onOpenLocalCategory = { category ->
-                                    unifiedLibrarySearching = false
-                                    unifiedLibraryDetailOpen = false
-                                    unifiedLibraryBackToken = 0
-                                    unifiedLibraryCategory = when (category) {
-                                        com.music.bitchord.ui.screens.LocalFolderTab.ARTISTS ->
-                                            com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS
-                                        com.music.bitchord.ui.screens.LocalFolderTab.ALBUMS ->
-                                            com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS
-                                        com.music.bitchord.ui.screens.LocalFolderTab.SONGS ->
-                                            com.music.bitchord.data.listening.CanonicalSmartFilterContext.SONGS
-                                    }
+                                    com.music.bitchord.ui.screens.openUnifiedLibraryCategory(
+                                        hasMediaPermission = LocalMediaRepository.hasStoragePermission(context),
+                                        onOpenCategory = {
+                                            unifiedLibrarySearching = false
+                                            unifiedLibraryDetailOpen = false
+                                            unifiedLibraryBackToken = 0
+                                            unifiedLibraryCategory = when (category) {
+                                                com.music.bitchord.ui.screens.LocalFolderTab.ARTISTS ->
+                                                    com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS
+                                                com.music.bitchord.ui.screens.LocalFolderTab.ALBUMS ->
+                                                    com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS
+                                                com.music.bitchord.ui.screens.LocalFolderTab.SONGS ->
+                                                    com.music.bitchord.data.listening.CanonicalSmartFilterContext.SONGS
+                                            }
+                                        },
+                                        onRequestPermission = {
+                                            pendingUnifiedLibraryScan = true
+                                            mediaPermissionLauncher.launch(mediaPermission)
+                                        },
+                                    )
                                 },
                             ),
                             deviceItems = emptyList(),
