@@ -38,6 +38,12 @@ internal data class CanonicalAvailableRecordingTags(
     val styleEvidenceUnknown: Boolean = true,
     val bpms: List<Double> = emptyList(),
     val bpmEvidenceUnknown: Boolean = true,
+    val composers: List<String> = emptyList(),
+    val composerEvidenceUnknown: Boolean = true,
+    val filePaths: List<String> = emptyList(),
+    val filePathEvidenceUnknown: Boolean = true,
+    val folderPaths: List<String> = emptyList(),
+    val folderPathEvidenceUnknown: Boolean = true,
 )
 
 internal fun interface CanonicalLibraryAvailabilityReader {
@@ -149,10 +155,16 @@ internal class CanonicalLibraryAvailabilityRepository(
             val moods: MutableSet<String> = linkedSetOf(),
             val styles: MutableSet<String> = linkedSetOf(),
             val bpms: MutableSet<Double> = linkedSetOf(),
+            val composers: MutableSet<String> = linkedSetOf(),
+            val filePaths: MutableSet<String> = linkedSetOf(),
+            val folderPaths: MutableSet<String> = linkedSetOf(),
             var genreUnknown: Boolean = false,
             var moodUnknown: Boolean = false,
             var styleUnknown: Boolean = false,
             var bpmUnknown: Boolean = false,
+            var composerUnknown: Boolean = false,
+            var pathUnknown: Boolean = false,
+            var folderUnknown: Boolean = false,
             var hasAsset: Boolean = false,
         )
         val byRecording = ids.associateWith { MutableTagEvidence() }
@@ -165,10 +177,16 @@ internal class CanonicalLibraryAvailabilityRepository(
                     val moods = parseAvailableTagList(row.moodsJson)
                     val styles = parseAvailableTagList(row.stylesJson)
                     val bpms = parseAvailableBpms(row.bpmsJson)
+                    val composers = parseAvailableTagList(row.composersJson)
+                    val path = canonicalAssetFilePath(row.assetPath)
+                    val folder = canonicalAssetFolderPath(row.assetPath)
                     if (genres == null) target.genreUnknown = true else target.genres.addAll(genres)
                     if (moods == null) target.moodUnknown = true else target.moods.addAll(moods)
                     if (styles == null) target.styleUnknown = true else target.styles.addAll(styles)
                     if (bpms == null) target.bpmUnknown = true else target.bpms.addAll(bpms)
+                    if (composers == null) target.composerUnknown = true else target.composers.addAll(composers)
+                    if (path == null) target.pathUnknown = true else target.filePaths.add(path)
+                    if (folder == null) target.folderUnknown = true else target.folderPaths.add(folder)
                 }
             }
         }
@@ -184,6 +202,12 @@ internal class CanonicalLibraryAvailabilityRepository(
                 styleEvidenceUnknown = !value.hasAsset || value.styleUnknown,
                 bpms = value.bpms.toList(),
                 bpmEvidenceUnknown = !value.hasAsset || value.bpmUnknown,
+                composers = value.composers.toList(),
+                composerEvidenceUnknown = !value.hasAsset || value.composerUnknown,
+                filePaths = value.filePaths.toList(),
+                filePathEvidenceUnknown = !value.hasAsset || value.pathUnknown,
+                folderPaths = value.folderPaths.toList(),
+                folderPathEvidenceUnknown = !value.hasAsset || value.folderUnknown,
             )
         }
     }
