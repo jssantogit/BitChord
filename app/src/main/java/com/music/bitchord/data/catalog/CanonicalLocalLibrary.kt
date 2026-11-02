@@ -436,6 +436,8 @@ internal data class LocalMediaCandidate(
     val bpms: List<Double>? = null,
     val composers: List<String>? = null,
     val sourceFingerprint: String? = null,
+    val localGenre: String? = null,
+    val localBitrateBps: Long? = null,
 )
 
 internal data class MediaStoreSourceLookup(
