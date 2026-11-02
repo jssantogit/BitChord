@@ -441,6 +441,17 @@ internal class OpenSubsonicProvider(
                 values.map(String::trim).takeIf { names -> names.none(String::isEmpty) }?.distinct()
             },
             bpm = song.bpm,
+            path = song.path?.trim()?.takeIf(String::isNotBlank),
+            composers = song.contributors?.let { credits ->
+                val names = credits.filter { it.role.equals("composer", ignoreCase = true) }
+                    .map { it.artist?.name.clean() }
+                if (names.any { it == null }) null else names.filterNotNull().distinct()
+            }?.let { names ->
+                song.displayComposer?.clean()?.let { display -> (names + display).distinct() }
+                    ?: names
+            } ?: song.displayComposer?.let { display ->
+                display.clean()?.let(::listOf) ?: emptyList()
+            },
 
             isrcs = IsrcNormalizer.normalizeDistinct(song.isrc.orEmpty()),
             remoteRating = ProviderRemoteRating(
@@ -624,6 +635,12 @@ private data class SubsonicAlbum(
 private data class SubsonicGenre(val name: String? = null)
 
 @Serializable
+private data class SubsonicContributor(
+    val role: String? = null,
+    val artist: SubsonicArtist? = null,
+)
+
+@Serializable
 private data class SubsonicSong(
     val id: String,
     val isDir: Boolean = false,
@@ -649,6 +666,9 @@ private data class SubsonicSong(
     val genres: List<SubsonicGenre>? = null,
     val moods: List<String>? = null,
     val bpm: Int? = null,
+    val path: String? = null,
+    val displayComposer: String? = null,
+    val contributors: List<SubsonicContributor>? = null,
     val userRating: JsonElement? = null,
     val starred: JsonElement? = null,
 )
