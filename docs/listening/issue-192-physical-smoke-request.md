@@ -231,3 +231,18 @@ Coletar capturas e diagnóstico físico. Mesmo com CI verde, NÃO declarar funci
 8. Criar/editar/salvar playlist normal e inteligente: após concluir revisão e salvar não pisca nova tela de criação; preservar capa, grupos, exclusão, preview, fonte, reprodução.
 
 **Observar no diagnóstico:** erros do `smart_collection_batch`, source/rating, falhas de reprodução e `main_thread_stall`; screenshots e log antes do único merge. CI verde não equivale a aceite físico.
+
+
+## Smoke visual pós-regressão — Biblioteca, Home, Logs e Now Playing (02/11/2026)
+
+**Gatilho exclusivamente documental:** revisão UI consolidada na PR #193 OPEN/DRAFT, árvore Android aprovada `7f632cafb2f8afbbf2e8d879dea830e804fae2ce`. [Android CI #41509886078](https://github.com/jssantogit/BitChord/actions/runs/41509886078) SUCCESS, [Integration Queue #41509885844](https://github.com/jssantogit/BitChord/actions/runs/41509885844) SUCCESS. Somente APK Dev Debug para Galaxy A54. Sem merge, sem release pública, sem alteração na main.
+
+**Inspeção física obrigatória:**
+1. **Home:** nenhum menu ⋮ nem folha duplicada; o perfil é parte da pílula existente e abre Configurações, e a ação de atualização (Upgrade) permanece acessível quando disponível.
+2. **Biblioteca (Músicas, Álbuns, Artistas):** restaurar linhas de conteúdo nativas `LibraryRow` e capas, sem botões “Fonte: Todas” e “Avaliação: Todas” no corpo nem tabs paralelas; pesquisar e filtrar pelo ícone superior do próprio app. Testar abrir, voltar de álbum/artista, busca e listas vazias.
+3. **Filtro superior:** mesmo painel nativo contém Fonte (Todas/Local/Navidrome por conta) e Avaliação (Todas/1 a 5 estrelas); testagem manual de toque real, fonte exata e nenhum vazamento de estrelas entre contas. Teste Robolectric acionou `OnClick` semântico, não comprovou toque físico da folha.
+4. **Now Playing:** retirar indicador visual de arraste marcado em verde, preservar swipe de fechar/abrir fila, altura e botão de menu, sem texto “This Phone”.
+5. **Logs Dev Debug:** apenas captura/status, modo, limpar e compartilhar em `SettingsGroupSurface`/`SettingsRow` e ações nativas; não reaparecer Reiniciar/capturar inicialização, Privacidade do relatório, Retained crash, Atualizar eventos, Triagem de incidentes, filtros técnicos e dump bruto na interface. Exportação diagnóstica completa deve continuar funcionando.
+6. **Regressões:** reprodução direta em Adições recentes, avaliações locais/remote, criação/revisão/salvar playlist normal/inteligente sem flash, capas, fontes Navidrome. Relatório físico + capturas antes de aceite.
+
+**Lacuna a verificar separadamente:** o APK anterior mostrava 1 álbum (“Proof”), possivelmente só releases com ligação `catalog_release_track`; não declarar paridade total do catálogo Navidrome pelo teste visual. Falta evidence de cobertura remota/local; não fabricar Album/ArtistId por semelhança de strings. PR continua draft até aceite explícito.
