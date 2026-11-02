@@ -87,7 +87,7 @@ internal fun DiagnosticsPanel(
 
     Column(
         modifier = Modifier.fillMaxSize()
-            .then(if (embedded) Modifier.padding(top = 84.dp) else Modifier.statusBarsPadding())
+            .then(if (embedded) Modifier.padding(top = 148.dp) else Modifier.statusBarsPadding())
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = PAGE_GUTTER, vertical = 20.dp),
