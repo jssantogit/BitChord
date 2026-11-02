@@ -24,6 +24,17 @@ class A0SearchQueryTest {
         assertFalse(multilingual.any { it.contains("ᄉ") || it.contains("ᅡ") })
     }
 
+    @Test fun canonicallyDecomposedUnicodeNeverSplitsArtistOrKoreanSyllables() {
+        val decomposed="Bjo\u0308rk - Jo\u0301ga"
+        assertEquals("Björk Jóga",A0SearchQuery.normalize(decomposed))
+        assertEquals(listOf("Björk Jóga","Bjork Joga","Jóga"),
+            A0SearchQuery.variants(decomposed))
+        assertEquals("BTS 노래",A0SearchQuery.normalize(
+            "BTS - \u1102\u1169\u1105\u1162"))
+        assertEquals("노래",A0SearchQuery.titleOnlyFallback(
+            "BTS - \u1102\u1169\u1105\u1162"))
+    }
+
     @Test fun userQueryReallyReplacesPreviouslyHardcodedSearchOnWire() {
         val one = A0OneShotPublicSearchWire.fileSearch(42, "newjeans - omg")
         val two = A0OneShotPublicSearchWire.fileSearch(42, "naruto*")

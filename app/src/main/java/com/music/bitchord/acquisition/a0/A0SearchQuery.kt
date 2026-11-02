@@ -68,7 +68,13 @@ internal object A0SearchQuery {
         require(userEntered.none { it == '\n' || it == '\r' || it == '\t' }) {
             "A0 search must be on one line"
         }
-        val normalized = userEntered.replace(punctuation, " ")
+        // Library tags may contain canonically decomposed Unicode
+        // (e.g. "o" + combining diaeresis). Compose BEFORE punctuation
+        // cleanup so accents never turn into accidental word boundaries.
+        // NFC preserves Hangul syllables and all canonical identifiers.
+        val composed=java.text.Normalizer.normalize(
+            userEntered,java.text.Normalizer.Form.NFC)
+        val normalized = composed.replace(punctuation, " ")
             .trim()
             .replace(whitespace, " ")
         require(normalized.isNotEmpty() &&
