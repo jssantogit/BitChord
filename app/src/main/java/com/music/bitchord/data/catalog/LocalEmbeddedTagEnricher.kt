@@ -181,6 +181,8 @@ internal object LocalEmbeddedTagEnricher {
                             ?: current.bpmsJson,
                         stylesJson = parsed?.styles?.let { mergeText(current.stylesJson, it) }
                             ?: current.stylesJson,
+                        composersJson = parsed?.composers?.let { mergeText(current.composersJson, it) }
+                            ?: current.composersJson,
                         localParsedFingerprint = row.sourceFingerprint,
                     ))
                     updated++
