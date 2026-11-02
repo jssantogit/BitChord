@@ -26,6 +26,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -68,6 +69,7 @@ private data class CanonicalArtistNativeReleases(
 internal fun CanonicalNativeArtistDetail(
     artistName: String,
     tracks: List<CanonicalBrowseTrack>,
+    availableLibraryTracks: List<CanonicalBrowseTrack>,
     sourceKeys: List<String>,
     selectedSourceKey: String?,
     heroArtworkTrack: CanonicalBrowseTrack?,
@@ -120,13 +122,16 @@ internal fun CanonicalNativeArtistDetail(
         }
     }
 
-    val palette = rememberArtworkPalette(imageUrl = null)
     var appleArt by remember(artistName) {
         mutableStateOf(AppleArtistArtRepository.cached(artistName))
     }
     LaunchedEffect(artistName) {
         appleArt = AppleArtistArtRepository.artFor(artistName) ?: appleArt
     }
+    val palette = rememberArtworkPalette(
+        imageUrl = appleArt?.heroUrl,
+        keyColors = appleArt?.keyColors(),
+    )
 
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     var openedRelease by remember(artistName) { mutableStateOf<ReleaseEntity?>(null) }
@@ -154,7 +159,10 @@ internal fun CanonicalNativeArtistDetail(
 
     val selectedAlbum = openedRelease
     if (selectedAlbum != null) {
-        val albumTracks = tracks.filter { it.recordingId in releaseRecordingIds }
+        val albumIds = canonicalArtistReleaseTrackIds(
+            availableLibraryTracks.map { it.recordingId }, releaseRecordingIds,
+        ).toSet()
+        val albumTracks = availableLibraryTracks.filter { it.recordingId in albumIds }
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val sleeve = (maxWidth * 0.76f).coerceAtMost(maxHeight * 0.6f)
             LazyColumn(contentPadding = PaddingValues(bottom = 112.dp)) {
@@ -219,9 +227,10 @@ internal fun CanonicalNativeArtistDetail(
             canvas = null,
             artHeight = photoHeight,
             listState = listState,
-            heroUrl = appleArt?.heroUrl ?: heroArtworkTrack?.artworkUri?.takeIf {
-                it.startsWith("content://") || it.startsWith("file://")
-            },
+            // Never stretch a song/album sleeve into a claimed artist photo.
+            heroUrl = canonicalArtistHeroPhotoUrl(
+                appleArt?.heroUrl, heroArtworkTrack?.artworkUri,
+            ),
             modifier = Modifier.fillMaxSize(),
         )
         LazyColumn(
@@ -235,28 +244,24 @@ internal fun CanonicalNativeArtistDetail(
                     artHeight = photoHeight, appleArt = appleArt, signature = null,
                 )
             }
-            item(key = "artist-actions") {
-                Column(Modifier.padding(top = 12.dp)) {
-                    Text(
-                        nativeUnifiedTrackCountLabel(tracks.size, tracks.map { it.durationMs }),
-                        modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
+            if (shownTracks.isNotEmpty()) {
+                item(key = "artist-actions") {
+                    // The native artist page uses three circular buttons,
+                    // not the wide album/folder action pills.
+                    ActionRow(
+                        onPlay = { onPlayAll(shownTracks, false) },
+                        onShuffle = { onPlayAll(shownTracks, true) },
+                        playColor = appleArt?.keyColor?.let { Color(it) },
                     )
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        ActionPill(BitChordIcons.Play, "Tocar",
-                            onClick = { onPlayAll(shownTracks, false) }, filled = true,
-                            modifier = Modifier.weight(1f))
-                        ActionPill(BitChordIcons.Shuffle, "Aleatório",
-                            onClick = { onPlayAll(shownTracks, true) }, filled = false,
-                            modifier = Modifier.weight(1f))
-                    }
                 }
             }
-            item(key = "artist-search") {
-                DetailSearchField(query, onQueryChange, onClose = { onQueryChange("") },
-                    autoFocus = searching, onFocused = {}, palette = palette)
+            if (shouldShowNativeArtistSearch(searching, query)) {
+                item(key = "artist-search") {
+                    DetailSearchField(
+                        query, onQueryChange, onClose = { onQueryChange("") },
+                        autoFocus = searching, onFocused = {}, palette = palette,
+                    )
+                }
             }
             if (shownTracks.isNotEmpty()) {
                 item(key = "artist-tracks-title") {
@@ -270,7 +275,7 @@ internal fun CanonicalNativeArtistDetail(
                         contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        items(shownTracks.chunked(4), key = { it.first().recordingId }) { column ->
+                        items(shownTracks.take(20).chunked(4), key = { it.first().recordingId }) { column ->
                             Column(Modifier.width(312.dp)) {
                                 column.forEach { track ->
                                     CanonicalTrackRow(
