@@ -25,7 +25,7 @@ class LocalEmbeddedTagEnricherTest {
                 "song", "content://media/audio/1", null, null, 10L, null))
             dao.upsertMediaAssetTags(MediaAssetTagsEntity(
                 "asset", "[\"Pop\"]", null,
-                localSourceFingerprint = "v2:10:100",
+                localSourceFingerprint = "v3:10:100",
             ))
             var reads = 0
             val first = LocalEmbeddedTagEnricher.processPending(db) {
@@ -40,7 +40,7 @@ class LocalEmbeddedTagEnricherTest {
             assertEquals("[\"Calm\"]", tagged.moodsJson)
             assertEquals("[128.5]", tagged.bpmsJson)
             assertEquals("[\"Shoegaze\"]", tagged.stylesJson)
-            assertEquals("v2:10:100", tagged.localParsedFingerprint)
+            assertEquals("v3:10:100", tagged.localParsedFingerprint)
             LocalEmbeddedTagEnricher.processPending(db) {
                 reads++; error("unchanged tag was reopened")
             }
@@ -48,7 +48,7 @@ class LocalEmbeddedTagEnricherTest {
 
             dao.upsertMediaAssetTags(MediaAssetTagsEntity(
                 "asset", "[\"New Index Genre\"]", null,
-                localSourceFingerprint = "v2:11:100",
+                localSourceFingerprint = "v3:11:100",
             ))
             LocalEmbeddedTagEnricher.processPending(db) {
                 reads++; LocalEmbeddedTags(emptyList(), emptyList(),
@@ -78,14 +78,14 @@ class LocalEmbeddedTagEnricherTest {
                 CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, sourceUri))
             dao.upsertMediaAssetTags(requireNotNull(dao.mediaAssetTagsById(asset.id)).copy(
                 moodsJson = "[\"Calm\"]", bpmsJson = "[120.0]",
-                stylesJson = "[\"House\"]", localParsedFingerprint = "v2:100:1000",
+                stylesJson = "[\"House\"]", localParsedFingerprint = "v3:100:1000",
             ))
             CanonicalLocalLibrary.syncWithDatabase(context, db, listOf(original))
             var after = requireNotNull(dao.mediaAssetTagsById(asset.id))
             assertEquals("[\"Calm\"]", after.moodsJson)
             assertEquals("[120.0]", after.bpmsJson)
             assertEquals("[\"House\"]", after.stylesJson)
-            assertEquals("v2:100:1000", after.localParsedFingerprint)
+            assertEquals("v3:100:1000", after.localParsedFingerprint)
 
             CanonicalLocalLibrary.syncWithDatabase(context, db, listOf(
                 original.copy(localSizeBytes = 1001L),
@@ -94,7 +94,7 @@ class LocalEmbeddedTagEnricherTest {
             assertNull(after.moodsJson)
             assertNull(after.bpmsJson)
             assertNull(after.stylesJson)
-            assertEquals("v2:100:1001", after.localSourceFingerprint)
+            assertEquals("v3:100:1001", after.localSourceFingerprint)
             assertNull(after.localParsedFingerprint)
         } finally { db.close() }
     }
@@ -109,7 +109,7 @@ class LocalEmbeddedTagEnricherTest {
                 CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER,
                 "local:1", "content://media/audio/1", null, null, 1L, null))
             dao.upsertMediaAssetTags(MediaAssetTagsEntity(
-                "asset", null, null, localSourceFingerprint = "v2:1:10",
+                "asset", null, null, localSourceFingerprint = "v3:1:10",
             ))
             val failed = LocalEmbeddedTagEnricher.processPending(db) {
                 error("Permission transiently denied")
@@ -134,11 +134,11 @@ class LocalEmbeddedTagEnricherTest {
                 "asset", "r", CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER,
                 "song", "content://media/audio/1", null, null, 10L, null))
             dao.upsertMediaAssetTags(MediaAssetTagsEntity(
-                "asset", null, null, localSourceFingerprint = "v2:10:100",
+                "asset", null, null, localSourceFingerprint = "v3:10:100",
             ))
             val result = LocalEmbeddedTagEnricher.processPending(db) {
                 dao.upsertMediaAssetTags(MediaAssetTagsEntity(
-                    "asset", null, null, localSourceFingerprint = "v2:11:101",
+                    "asset", null, null, localSourceFingerprint = "v3:11:101",
                 ))
                 LocalEmbeddedTags(listOf("STALE"), emptyList(), listOf(120.0), emptyList())
             }
