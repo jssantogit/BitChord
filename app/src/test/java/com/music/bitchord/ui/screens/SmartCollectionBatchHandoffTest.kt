@@ -115,6 +115,56 @@ class SmartCollectionBatchHandoffTest {
         assertEquals(CanonicalCollectionIntent.ADD_TO_QUEUE, submitted.single().intent)
     }
 
+    @Test fun unifiedLibraryPlayOverBatchLimitAppendsRestWithoutDroppingTracks() = runBlocking {
+        val ids = (1..501).map { "library-$it" }
+        val submitted = mutableListOf<CanonicalCollectionIntentPlan>()
+        val handoff = SmartCollectionBatchHandoff(
+            refreshIds = { source ->
+                assertTrue(source is SmartCollectionActionSource.LibraryTracks)
+                ids
+            },
+            browse = { CanonicalBrowseLibrary.EMPTY },
+            browseSelected = { chunk -> CanonicalBrowseLibrary(chunk.map { track(it) }) },
+            planner = CanonicalCollectionIntentPlanner(Resolver()),
+            submit = { submitted += it; true },
+        )
+        val source = SmartCollectionActionSource.LibraryTracks(ids, null, shuffle = false)
+        assertEquals(SmartCollectionBatchResult.Submitted,
+            handoff.execute(source, CanonicalCollectionIntent.PLAY_NOW))
+        assertEquals(2, submitted.size)
+        assertEquals(500, submitted[0].selections.size)
+        assertEquals(1, submitted[1].selections.size)
+        assertEquals(CanonicalCollectionIntent.PLAY_NOW, submitted[0].intent)
+        assertEquals(CanonicalCollectionIntent.ADD_TO_QUEUE, submitted[1].intent)
+        assertEquals(ids, submitted.flatMap { it.selections.map { row -> row.recordingId } })
+        assertEquals(submitted[0].traceRef, submitted[1].traceRef)
+    }
+
+    @Test fun revokedSecondChunkFailsClosedAndReportsPartialPlayback() = runBlocking {
+        val ids = (1..501).map { "library-$it" }
+        val submitted = mutableListOf<CanonicalCollectionIntentPlan>()
+        val trace = mutableListOf<Map<String, String>>()
+        val handoff = SmartCollectionBatchHandoff(
+            refreshIds = { ids },
+            browse = { CanonicalBrowseLibrary.EMPTY },
+            browseSelected = { chunk ->
+                val available = if (chunk.size == 1) emptyList() else chunk.map { track(it) }
+                CanonicalBrowseLibrary(available)
+            },
+            planner = CanonicalCollectionIntentPlanner(Resolver()),
+            submit = { submitted += it; true },
+            trace = { trace += it },
+        )
+        assertTrue(
+            handoff.execute(SmartCollectionActionSource.LibraryTracks(ids, null, false),
+                CanonicalCollectionIntent.PLAY_NOW) is SmartCollectionBatchResult.Rejected,
+        )
+        assertEquals(1, submitted.size)
+        assertTrue(trace.any {
+            it["stage"] == "rejected" && it["completedChunks"] == "1"
+        })
+    }
+
     @Test fun recentLocalCardPlaysOnlyItsVerifiedLocalAsset() = runBlocking {
         val library = CanonicalBrowseLibrary(listOf(
             CanonicalBrowseTrack("rec-recent", "Recent", "Artist", 120_000L, null,
