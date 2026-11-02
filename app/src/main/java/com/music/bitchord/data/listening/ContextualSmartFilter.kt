@@ -154,6 +154,11 @@ internal fun filterCanonicalBrowseSongs(
                 sourceKinds = sourceKind?.let(::setOf),
                 genres = genres.filterNotNull().flatten().distinct(),
                 genreEvidenceUnknown = !completeRows || genres.any { it == null },
+                // This scoped adapter has ALREADY loaded the active local
+                // provider's genre snapshot. Avoid treating the separate
+                // full-library audio-tag reader's default as missing evidence.
+                localGenresComplete = sourceKind == SmartPlaylistSourceKind.LOCAL &&
+                    completeRows && genres.all { it != null },
                 moods = moods.filterNotNull().flatten().distinct(),
                 moodEvidenceUnknown = !completeRows || moods.any { it == null },
                 bpms = bpms.filterNotNull().flatten().distinct(),
@@ -166,6 +171,8 @@ internal fun filterCanonicalBrowseSongs(
                 filePathEvidenceUnknown = !completeRows || paths.any { it == null },
                 folderPaths = folders.filterNotNull().distinct(),
                 folderPathEvidenceUnknown = !completeRows || folders.any { it == null },
+                localFilePathsComplete = sourceKind == SmartPlaylistSourceKind.LOCAL &&
+                    completeRows && paths.all { it != null } && folders.all { it != null },
                 localAddedEpochMs = validTimestamps,
                 localAddedDateEvidenceUnknown = timestampsUnknown,
             )
