@@ -72,6 +72,8 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
         val attempts:Int,
         /** In-memory only, never logged or persisted. */ 
         internal val selectedSource:A0ObservedCandidateHandoff.Choice?=null,
+        /** Transient, bounded per-run evidence; never logged or persisted. */
+        internal val preAcceptFailedPeers:Set<String> = emptySet(),
     ) {
         override fun toString()="AutoAcquisitionResult(status=$status,reason=$reason,attempts=$attempts)"
     }
@@ -118,13 +120,16 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                 optIn=true,
                 equivalentClaimsConfirmed=choice.preByteFallbacks.isEmpty(),
                 independentlyEligibleExactScore=choice.preByteFallbacks.isNotEmpty())
+            val rejectedPeers=LinkedHashSet<String>()
+            fun report(result:Result)=Result(result.status,result.reason,
+                result.attempts,result.selectedSource,rejectedPeers.toSet())
             while(true) {
                 if(revoked()) {
                     sequence.cancel()
-                    return cancelled(sequence.attemptsStarted)
+                    return report(cancelled(sequence.attemptsStarted))
                 }
                 val attempt=sequence.begin()
-                    ?: return manual(Reason.EXHAUSTED_PEERS,sequence.attemptsStarted)
+                    ?: return report(manual(Reason.EXHAUSTED_PEERS,sequence.attemptsStarted))
                 val candidate=order[attempt.alternativeIndex]
                 diagnostic(DiagnosticStage.FETCH_STARTED)
                 val download=try {
@@ -133,11 +138,14 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                     diagnostic(DiagnosticStage.FETCH_EXCEPTION,
                         A0AcquisitionDiagnostics.fault(error))
                     sequence.cancel()
-                    return if(revoked())cancelled(sequence.attemptsStarted)
-                        else manual(Reason.TRANSPORT_FAILURE,sequence.attemptsStarted)
+                    return report(if(revoked())cancelled(sequence.attemptsStarted)
+                        else manual(Reason.TRANSPORT_FAILURE,sequence.attemptsStarted))
                 }
                 when(download) {
                     FetchResult.RetryableConnectionFailure -> {
+                        // No accepted upload or F bytes. Only this outcome
+                        // can influence peer preference for later album slots.
+                        rejectedPeers.add(candidate.peerUsername)
                         diagnostic(DiagnosticStage.FETCH_RETRYABLE)
                         sequence.complete(attempt,false)
                         continue
@@ -231,14 +239,14 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                                 // AFTER a durable AVAILABLE commit. Never
                                 // request the same track again automatically.
                                 sequence.cancel()
-                                return Result(
+                                return report(Result(
                                     if(result.status in setOf(Status.PUBLISHED,Status.RECONCILE))
                                         result.status else Status.MANUAL_REVIEW,
                                     Reason.CLEANUP_FAILURE,sequence.attemptsStarted,
-                                    if(result.status==Status.PUBLISHED)candidate else null)
+                                    if(result.status==Status.PUBLISHED)candidate else null))
                             }
                         }
-                        return result
+                        return report(result)
                     }
                 }
             }
