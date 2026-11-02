@@ -2,6 +2,43 @@
 
 Issue: [#192](https://github.com/jssantogit/BitChord/issues/192) · Baseline: 2026-10-27 · Status: **in progress — NOT parity achieved**.
 
+## Current canonical state — 01/11/2026, PR #193 (not merged)
+
+The historical tables and dated notes below remain preserved as evidence of the
+iterative development. **Do not read their old MISSING/partial labels as the
+current state.** This is the authoritative snapshot for this PR, pending the
+exact-HEAD CI after new benchmark changes and a real-device review.
+
+| Capability | #193 implemented and tested in CI | Remaining verification |
+| --- | --- | --- |
+| V2 nested ALL / ANY / NOT, rule references | Typed validated persisted rules; DAG/cycle detection; preview/play/queue revalidation | Physical UI / account-switching smoke |
+| Saved reusable filters, album/artist contexts | Scoped canonical Songs filters; narrower canonical Album and Artist filter surfaces | Exact field/operator parity and full local-library presentation |
+| Ratings, plays, skips, duration, title/artist, release linkage, sort/limit | Current first-party evidence, deterministic ordering, up to 10,000-result preview; up to 500 atomically queued | Physical Media3 handoff and high-cardinality UI |
+| Multi-valued GENRE, MOOD, STYLE | Same source-neutral AST for local and OpenSubsonic; unknown-vs-known-empty; no invented tags | Vendor tag format and local parser variants |
+| Numeric BPM | Source-neutral finite numeric comparisons, multiple evidence values, safe negative predicates | Parser/provider variations and real-device scan |
+| COMPOSER | Per-asset ID3 TCOM, FLAC/Ogg Vorbis COMPOSER, MP4 ©wrt/custom, OpenSubsonic optional composer-role contributors | Nested role variations/real files; album/artist-scope specifics |
+| FILE_PATH and FOLDER_PATH | Per-asset verified path, Windows/Unix normalization and parent directory; source/account isolation | Actual Android scoped-storage and remote server paths |
+| Local tag scanners and cache | Bounded ID3v2, FLAC, Ogg Vorbis/Opus, MP4/M4A readers, background batches, versioned fingerprint, Room schema v14 | Physical scan, partial/malformed variants and storage-provider compatibility |
+| 50,123-recording CI perf | Real Room+Robolectric 126 batches; title/duration and newly added composer+folder evidence benchmark | Android Galaxy A54 latency/RSS/thermal/energy measurement |
+| Original release date, Favorite Date, album release type, record label | **Not implemented or lacking sufficient trusted per-field evidence** | Catalog metadata contract + field/operator proof |
+| Local thumbnail absence, provider-visibility Inherit, complete copy-to-static UX | **Not proven at Symfonium parity** | Accurate data provenance and UX audit |
+| All Song, Album and Artist fields and per-field operators of Symfonium stable v15.1.0 | **Not version-locked by an on-device field-by-field audit** | Mandatory reference inspection; user-provided screenshots help but are not automatically complete |
+
+**Universal means source-neutral predicates, not that all file formats and
+providers have every tag.** Per-MediaAsset, per-account provenance is always
+retained. `null` means unavailable/unknown and `[]` is only an observed empty
+field. A missing path cannot be fabricated from a `content://` URI. A
+`contributor` without a verified composer role cannot count as composer.
+Never infer favorite dates from rating dates or original release dates from
+edition release dates.
+
+**Blocking closure:** Symfonium 15.1.0 (official current stable, 30 Sep 2026)
+version-specific Android menus for Songs/Albums/Artists and operators, plus
+a real-device Galaxy A54 smoke and measured 50k performance. CI-host timing
+is explicitly informational, not a physical device benchmark. No APK, merge
+or closure until these gates have evidence. Version 16 Beta 1 may exist but
+does not replace the chosen stable parity baseline without a new decision.
+
 ## Primary sources and evidence policy
 
 1. [Official Smart filters](https://docs.symfonium.app/wiki/other/smart-filters/): filter targets depend on the media type; rule configuration depends on data type; nested groups with `All` and `Any`; reusable saved filters and export as smart playlist.
@@ -64,7 +101,7 @@ The historical baseline column is frozen at 27 October; the PR column below is u
 10. **50k scale**: deterministic 50,000-candidate title sort test, matched against RecordingId tie-break and a capped 100-result slice. This is a correctness test, **not** an Android latency or memory benchmark.
 11. **Verified remote hints**: Only a V2 rating condition provably required on every matching path may select a unique currently verified Navidrome asset; an OR with an unrated branch, NOT, incomplete account snapshot or ambiguous assets cannot grant it.
 
-## Current technical boundary
+## Historical technical boundary (28/10 baseline; superseded by current snapshot above)
 
 The PR now contains a Compose V2 builder, Room 1→2→3 migration retaining V1/V2 definitions, separate stored rule-only reusable filters, explicit copy-to-V2 workflow, persisted typed nested rules, the V2 preview/Play/Queue revalidation path, canonical recording/release-title batch reads, first-party Listening counters and rating-safe remote asset hints.
 
