@@ -240,13 +240,16 @@ private suspend fun canonicalNormalRows(
     providerKeys: List<String>,
 ): List<V2DisplayRow> {
     if (recordings.isEmpty()) return emptyList()
-    val artworkById = if (providerKeys.isEmpty()) emptyMap() else recordings
+    // Ratings must be resolved even when an asset has no cover. Artwork
+    // remains a separate choice and may use a different source.
+    val assetsById = if (providerKeys.isEmpty()) emptyMap() else recordings
         .map { it.id }.chunked(400)
         .flatMap { dao.browseAssetsForRecordingIds(providerKeys, it) }
-        .filter { !it.artworkUri.isNullOrBlank() }
         .groupBy { it.recordingId }
+    val remoteRatingProvider = providerKeys
+        .filter { it.startsWith("opensubsonic:") }.singleOrNull()
     return recordings.map { info ->
-        val assets = artworkById[info.id].orEmpty()
+        val assets = assetsById[info.id].orEmpty()
         val local = assets.firstOrNull {
             it.providerKey == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER &&
                 (it.artworkUri?.startsWith("content://") == true ||
@@ -254,12 +257,12 @@ private suspend fun canonicalNormalRows(
                  it.artworkUri?.startsWith("https://") == true)
         }
         val remote = assets.firstOrNull { it.providerKey.startsWith("opensubsonic:") &&
-            it.providerKey in providerKeys }
+            it.providerKey in providerKeys && !it.artworkUri.isNullOrBlank() }
         V2DisplayRow(
             id = info.id, title = info.title, artist = info.artistDisplay,
             durationMs = info.durationMs,
             localArtworkUri = local?.artworkUri,
-            remoteMediaAssetId = if (local == null) remote?.mediaAssetId else null,
+            remoteMediaAssetId = playlistRemoteRatingAssetId(assets, remoteRatingProvider),
             remoteArtworkRevision = if (local == null) remote?.artworkUri else null,
         )
     }
