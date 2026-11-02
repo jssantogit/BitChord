@@ -31,4 +31,32 @@ class CanonicalArtistReleaseSectionsTest {
         assertNull(canonicalArtistReleaseSections(releases,
             mapOf("newer" to CanonicalArtistReleaseEvidence("newer", "Album", "2025"))).recentAlbum)
     }
+    @Test fun openedReleaseIncludesItsEntireVisibleTrackMembershipNotOnlySelectedArtistRows() {
+        val allVisible = listOf("artist-song", "featured-collaboration", "unrelated")
+        val membership = setOf("artist-song", "featured-collaboration")
+        val artistRows = listOf("artist-song")
+        assertEquals(
+            listOf("artist-song", "featured-collaboration"),
+            canonicalArtistReleaseTrackIds(allVisible, membership),
+        )
+        assertEquals(
+            listOf("artist-song"),
+            canonicalArtistReleaseTrackIds(artistRows, membership),
+        )
+    }
+
+    @Test fun artistHeaderMustNotUseAnAlbumCoverAsLargeArtistPhoto() {
+        assertNull(canonicalArtistHeroPhotoUrl(null, "content://media/album-cover"))
+        assertEquals(
+            "https://images.example/verified-artist.jpg",
+            canonicalArtistHeroPhotoUrl("https://images.example/verified-artist.jpg", "content://media/album-cover"),
+        )
+    }
+
+    @Test fun artistSearchIsHiddenUnlessInvokedOrHoldingQuery() {
+        assertEquals(false, shouldShowNativeArtistSearch(false, ""))
+        assertEquals(true, shouldShowNativeArtistSearch(true, ""))
+        assertEquals(true, shouldShowNativeArtistSearch(false, "aespa"))
+    }
+
 }
