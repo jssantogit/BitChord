@@ -3934,7 +3934,6 @@ private fun BitChordApp(
                             links = com.music.bitchord.ui.screens.libraryNavigationLinks(
                                 deviceLinks = libraryLinks(),
                                 onOpenPlaylists = { showPlaylistLibrary = true },
-                                onOpenRatings = { showCanonicalMyRatings = true },
                                 onOpenLocalCategory = { category ->
                                     localFolderStates.getOrPut("local:all") { LocalFolderState() }
                                         .tab = category
