@@ -76,6 +76,8 @@ internal sealed interface SmartCollectionActionSource {
     data class SavedV2Definition(val id: String, val shuffle: Boolean = false) : SmartCollectionActionSource
     /** A recent-addition card refers to one canonical recording, never a URL or title. */
     data class RecentLocalTrack(val recordingId: String) : SmartCollectionActionSource
+    /** Library row: optionally restrict playback to a selected source/account. */
+    data class LibraryTrack(val recordingId: String, val sourceKey: String?) : SmartCollectionActionSource
     data class SavedStaticPlaylist(val id: String, val shuffle: Boolean = false) : SmartCollectionActionSource
     /** Click a real row: verify current saved membership before playing its ordered suffix. */
     data class SavedStaticPlaylistFromTrack(
@@ -149,6 +151,7 @@ internal class SmartCollectionBatchHandoff(
             "source" to when (source) {
                 is SmartCollectionActionSource.Adaptive -> "adaptive"
                 is SmartCollectionActionSource.RecentLocalTrack -> "recent_local"
+                is SmartCollectionActionSource.LibraryTrack -> "library_track"
                 is SmartCollectionActionSource.SavedDefinition -> "saved"
                 is SmartCollectionActionSource.PreviewQuery -> "preview"
                 is SmartCollectionActionSource.SavedV2Definition -> "saved_v2"
@@ -238,6 +241,7 @@ private suspend fun currentSmartCollectionIds(
 ): List<String>? {
     return when (source) {
     is SmartCollectionActionSource.RecentLocalTrack -> listOf(source.recordingId)
+    is SmartCollectionActionSource.LibraryTrack -> listOf(source.recordingId)
     is SmartCollectionActionSource.Adaptive -> {
         val fresh = persistentAdaptiveCollectionsReader(context).load()
             as? AdaptiveCollectionsUiState.Ready ?: return null
@@ -355,6 +359,7 @@ private suspend fun currentScopedRatedAssetHints(
     val minimum = when (source) {
         is SmartCollectionActionSource.Adaptive -> null
         is SmartCollectionActionSource.RecentLocalTrack -> null
+        is SmartCollectionActionSource.LibraryTrack -> null
         is SmartCollectionActionSource.SavedStaticPlaylist -> null
         is SmartCollectionActionSource.SavedStaticPlaylistFromTrack -> null
         is SmartCollectionActionSource.PreviewQuery -> source.query.minimumExplicitRating
@@ -567,6 +572,9 @@ internal fun rememberSmartCollectionBatchAction(
                 when (source) {
                     is SmartCollectionActionSource.RecentLocalTrack ->
                         canonicalBrowseOnlyProvider(library, RoomCanonicalQueueResolver.LOCAL_PROVIDER)
+                    is SmartCollectionActionSource.LibraryTrack ->
+                        if (source.sourceKey == null) library
+                        else canonicalBrowseOnlyProvider(library, source.sourceKey)
                     is SmartCollectionActionSource.SavedStaticPlaylist,
                     is SmartCollectionActionSource.SavedStaticPlaylistFromTrack -> {
                         val id = when (source) {
