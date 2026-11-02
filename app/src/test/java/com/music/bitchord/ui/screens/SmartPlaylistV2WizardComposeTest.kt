@@ -10,6 +10,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -791,6 +794,92 @@ class SmartPlaylistV2WizardComposeTest {
             }
         }
         compose.onNodeWithContentDescription("5/5", substring = true).assertExists()
+    }
+
+    @Test fun lastRuleCanBeDeletedWithNativeIconAndReturnsToUnconfiguredState() {
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE,
+                SmartPlaylistRuleOperator.CONTAINS,
+                textValue = "illit",
+            ),
+        ))
+        var cleared = 0
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Nova", rule = rule, normalMode = false,
+                sort = SmartPlaylistV2Sort.RATING_DESC, limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {},
+                onClearRules = { cleared++ },
+                onSortChange = {}, onLimitChange = {}, onSeedChange = {},
+                onPreview = {}, onSave = {}, onSaveFilter = {},
+                onPreviewAction = null, currentPreviewQuery = null,
+                onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithContentDescription("Excluir condição").performClick()
+        compose.onNodeWithText("Excluir").performClick()
+        compose.runOnIdle { assertEquals(1, cleared) }
+    }
+
+    @Test fun ruleGroupExpansionAndOptionsUseAccessibleIconsInsteadOfTextButtons() {
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+                smartRuleNewComparison(SmartPlaylistRuleField.SOURCE_KIND)
+            ), name = "Fonte"),
+        ))
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Teste", rule = rule,
+                sort = SmartPlaylistV2Sort.RATING_DESC, limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {},
+                onSortChange = {}, onLimitChange = {}, onSeedChange = {},
+                onPreview = {}, onSave = {}, onSaveFilter = {},
+                onPreviewAction = null, currentPreviewQuery = null,
+                onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithContentDescription("Expandir").performClick()
+        compose.onNodeWithContentDescription("Recolher").assertExists()
+        compose.onAllNodesWithText("Recolher").assertCountEquals(0)
+        compose.onNodeWithText("Fonte").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
+        compose.onNodeWithContentDescription("Opções").assertExists()
+        compose.onNodeWithContentDescription("Excluir condição").assertExists()
+        compose.onAllNodesWithText("Opções").assertCountEquals(0)
+    }
+
+    @Test fun smartPreviewDoesNotOfferPlaybackOrQueueControlsDuringCreation() {
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            smartRuleNewComparison(SmartPlaylistRuleField.SOURCE_KIND),
+        ))
+        val query = SmartPlaylistV2Query(rule)
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Teste", rule = rule,
+                sort = query.sort, limit = "100", seed = "0",
+                preview = listOf(V2DisplayRow("r1", "Música", "Artista")),
+                loading = false, error = null,
+                editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {},
+                onSortChange = {}, onLimitChange = {}, onSeedChange = {},
+                onPreview = {}, onSave = {}, onSaveFilter = {},
+                onPreviewAction = { _, _, _ -> error("Preview playback must be absent") },
+                currentPreviewQuery = query, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithText("Revisar playlist").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
+        compose.onNodeWithText("Músicas selecionadas").assertExists()
+        compose.onAllNodesWithText("Reproduzir").assertCountEquals(0)
+        compose.onAllNodesWithText("Adicionar à fila").assertCountEquals(0)
     }
 
     @Test fun conditionCatalogAddsOnlyTheSelectedFieldAndPreservesExistingGroup() {
