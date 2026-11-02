@@ -214,6 +214,23 @@ class A0AutoAcquisitionExecutorTest {
         assertEquals(0,invalid.publishes)
     }
 
+    @Test fun retryablePreAcceptanceFailureReportsOnlyTheFailedPeerInMemory() {
+        val port=FakePort().apply { failCount=1; decoded=this@A0AutoAcquisitionExecutorTest.decoded }
+        val success=A0AutoAcquisitionExecutor(port).run(
+            target,choices("weak")+choices("strong"),quality,
+            userRequested=true,optedIn=true,stillAuthorized={true})
+        assertEquals(A0AutoAcquisitionExecutor.Status.PUBLISHED,success.status)
+        assertEquals(setOf("weak"),success.preAcceptFailedPeers)
+        assertEquals(listOf("weak","strong"),port.fetchedPeers)
+        assertFalse(success.toString().contains("weak"))
+        val single=FakePort().apply { failCount=10 }
+        val failure=A0AutoAcquisitionExecutor(single).run(
+            target,choices("weak"),quality,
+            userRequested=true,optedIn=true,stillAuthorized={true})
+        assertEquals(A0AutoAcquisitionExecutor.Status.MANUAL_REVIEW,failure.status)
+        assertEquals(setOf("weak"),failure.preAcceptFailedPeers)
+    }
+
     @Test fun ambiguousVersionsAndDisabledSourceReturnToManualWithoutIOMutation() {
         val port=FakePort()
         val ambiguous=choices("p1")+choices("p2")
