@@ -1586,8 +1586,8 @@ class A0ManualLoginActivity : Activity() {
             }
         }
         if (fromSongDownload) {
-            var reviewSlotSelected=!manualRecovery
-            if(manualRecovery) {
+            var reviewSlotSelected=!manualRecovery || batch==null
+            if(manualRecovery && batch!=null) {
                 // No first-song default in a bulk recovery. The user must
                 // choose one of the remaining slots before starting a search.
                 searchInput.setText("")
@@ -1604,7 +1604,7 @@ class A0ManualLoginActivity : Activity() {
             fun confirmSearch() {
                 if(batch?.isComplete==true || batch?.currentSaved==true ||
                     (batch==null && completedSingle.get()))return
-                if(manualRecovery && !reviewSlotSelected) {
+                if(manualRecovery && batch!=null && !reviewSlotSelected) {
                     com.music.bitchord.data.DebugLog.d("BitChord",
                         "soulseek_manual_review_navigation action=SEARCH_BLOCKED_NO_SELECTION")
                     status.text="Escolha uma das faixas pendentes antes de pesquisar."
@@ -1753,7 +1753,7 @@ class A0ManualLoginActivity : Activity() {
                     }
                 }
             }
-            if(manualRecovery)showPendingReviewTracks()
+            if(manualRecovery && batch!=null)showPendingReviewTracks()
             else confirmSearch()
         }
     }
