@@ -82,6 +82,12 @@ internal class A0FreshAutoSearchTransport(
         val normalized=runCatching {
             A0SearchQuery.normalize(entry.query)
         }.getOrElse {return A0AutoDiscoveryCoordinator.SearchResult.Stop}
+        // A single reservation covers this session's initial query and up
+        // to two optional fallbacks. Waiting occurs BEFORE authentication,
+        // so we do not hold an idle Soulseek server socket for minutes.
+        val rateBudget=A0GlobalSearchWindowBudget.shared
+        var searchLease:A0SearchWindowBudget.Lease?=null
+        var searchThrottleWaitMs=0L
         var session:A0AutoAuthenticatedServer.Session?=null
         var listener:ServerSocket?=null
         var handoff:A0ObservedCandidateHandoff?=null
@@ -92,6 +98,22 @@ internal class A0FreshAutoSearchTransport(
         val readerFailed=AtomicBoolean(false)
         val workerStages=A0PeerWorkStageCounts()
         try {
+            var waitAnnounced=false
+            while(!stopped() && searchLease==null) {
+                val now=android.os.SystemClock.elapsedRealtime()
+                searchLease=rateBudget.tryAcquire(3,now)
+                if(searchLease==null) {
+                    val delay=rateBudget.waitMillis(3,now).coerceIn(1L,1000L)
+                    if(!waitAnnounced) {
+                        waitAnnounced=true
+                        com.music.bitchord.data.DebugLog.d("BitChord",
+                            "soulseek_auto_search rate_budget_wait=true reserved=3")
+                    }
+                    Thread.sleep(delay)
+                    searchThrottleWaitMs+=delay
+                }
+            }
+            if(stopped())return A0AutoDiscoveryCoordinator.SearchResult.Stop
             session=A0AutoAuthenticatedServer.open(
                 app,generation,::stopped,onSocketReady={activeServer=it},
                 onStage={stage ->
@@ -149,6 +171,8 @@ internal class A0FreshAutoSearchTransport(
             }
             connection.getOutputStream().apply {
                 write(A0OneShotPublicSearchWire.setWaitPort(checkNotNull(listener).localPort))
+                check(checkNotNull(searchLease).commit(
+                    android.os.SystemClock.elapsedRealtime()))
                 write(A0OneShotPublicSearchWire.fileSearch(token,normalized))
                 flush()
             }
@@ -300,6 +324,8 @@ internal class A0FreshAutoSearchTransport(
                                 SecureRandom().nextInt(Int.MAX_VALUE-1)+1
                             }.take(8).firstOrNull(tickets::register)
                             if(variantTicket==null)continue
+                            check(checkNotNull(searchLease).commit(
+                                android.os.SystemClock.elapsedRealtime()))
                             connection.getOutputStream().apply {
                                 write(A0OneShotPublicSearchWire.fileSearch(variantTicket,variant))
                                 flush()
@@ -388,6 +414,7 @@ internal class A0FreshAutoSearchTransport(
                 rejectedServerOffers.get())
             Log.d("BitChord","soulseek_auto_search replies=${snapshot.choices.size}" +
                 " tickets_sent=${tickets.accepted.size.coerceIn(1,3)}" +
+                " rate_budget_wait_ms=${searchThrottleWaitMs.coerceIn(0,300000)}" +
                 " initial_replies=${replyByTicket[0]}" +
                 " fallback_1_replies=${replyByTicket[1]}" +
                 " fallback_2_replies=${replyByTicket[2]}" +
@@ -437,6 +464,7 @@ internal class A0FreshAutoSearchTransport(
             readers?.shutdownNow()
             handoff?.cancel()
             session?.close()
+            searchLease?.close()
             activeHandoff=null
             activeListener=null
             activeDirect=null
