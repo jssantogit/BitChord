@@ -249,30 +249,21 @@ private fun DiagnosticsPanel(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        OutlinedButton(
+        PlaylistWizardSecondaryAction(
+            label = if (mode == DiagnosticMode.STANDARD) "Modo: Padrão"
+                else "Modo: Detalhado",
+            enabled = !busy,
             onClick = {
                 val target = if (mode == DiagnosticMode.STANDARD) {
                     DiagnosticMode.VERBOSE
-                } else {
-                    DiagnosticMode.STANDARD
-                }
-                runControl("Diagnostics mode changed to ${target.name.lowercase()}") {
+                } else DiagnosticMode.STANDARD
+                runControl("Modo de diagnóstico alterado") {
                     check(Diagnostics.setDiagnosticMode(target)) {
-                        "Could not persist diagnostics mode"
+                        "Não foi possível salvar o modo"
                     }
                 }
             },
-            enabled = !busy,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                if (mode == DiagnosticMode.STANDARD) {
-                    "Mode: Standard"
-                } else {
-                    "Mode: Verbose"
-                },
-            )
-        }
+        )
         Text(
             if (mode == DiagnosticMode.STANDARD) {
                 "Standard records structured traces plus legacy warnings/errors. Legacy Debug/Info free-text is suppressed."
@@ -326,10 +317,13 @@ private fun DiagnosticsPanel(
         ) {
             Text("Compartilhar relatório")
         }
-        Text(
-            "The report shared from this screen is the canonical diagnostics artifact.",
-            style = MaterialTheme.typography.bodySmall,
-        )
+        SettingsGroupSurface {
+            SettingsRow(
+                title = "Privacidade do relatório",
+                subtitle = "O diagnóstico pode conter informações sensíveis da sessão. Confira o arquivo antes de compartilhar.",
+                reserveIconSpace = false,
+            )
+        }
 
         message?.let {
             Text(it, style = MaterialTheme.typography.bodySmall)
