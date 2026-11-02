@@ -31,7 +31,8 @@ class SmartPlaylistV2RuleEngineTest {
             SmartPlaylistV2Query(notFolder)).map { it.recordingId })
         val file = SmartPlaylistRule.Comparison(SmartPlaylistRuleField.FILE_PATH,
             SmartPlaylistRuleOperator.ENDS_WITH, textValue = "Pop.flac")
-        assertEquals(listOf("target", "other"), planner.preview(rows,
+        // Equal ratings/completions use RecordingId as the deterministic tie-break.
+        assertEquals(listOf("other", "target"), planner.preview(rows,
             SmartPlaylistV2Query(file)).map { it.recordingId })
     }
 
