@@ -19,6 +19,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.data.settings.ThemeMode
+import com.music.bitchord.ui.theme.BitChordTheme
+import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.screens.SettingsGroupSurface
+import com.music.bitchord.ui.screens.SettingsRow
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -45,8 +55,17 @@ class DiagnosticsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+            val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
+            val dark = when (theme) {
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+            }
+            BitChordTheme(darkTheme = dark) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background,
+                ) {
                     DiagnosticsPanel(
                         onShare = ::shareDiagnostics,
                         onRestartAndCapture = ::restartAndCaptureStartup,
@@ -198,22 +217,25 @@ private fun DiagnosticsPanel(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = PAGE_GUTTER, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("BitChord Diagnostics", style = MaterialTheme.typography.headlineMedium)
+        Text("Logs", style = MaterialTheme.typography.headlineLarge)
+        SettingsGroupSurface {
+            SettingsRow(
+                title = if (status.active) "Captura em andamento" else "Captura parada",
+                subtitle = if (status.active) "Tempo restante: cerca de $remainingMinutes min"
+                    else "Nenhuma captura em andamento",
+                reserveIconSpace = false,
+            )
+        }
         Text(
-            if (status.active) {
-                "Capture active · about $remainingMinutes min remaining"
-            } else {
-                "Capture stopped"
-            },
-            style = MaterialTheme.typography.bodyLarge,
-        )
-        Text(
-            "Start capture here, reproduce the problem in BitChord, return here, inspect the events, then share the report. Persistent capture expires automatically after one hour.",
+            "Inicie a captura, reproduza o problema e volte aqui para compartilhar o relatório. A coleta é encerrada automaticamente após uma hora.",
             style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         OutlinedButton(
@@ -260,7 +282,7 @@ private fun DiagnosticsPanel(
                     },
                     enabled = !busy,
                     modifier = Modifier.weight(1f),
-                ) { Text("Stop capture") }
+                ) { Text("Parar captura") }
             } else {
                 Button(
                     onClick = {
@@ -272,7 +294,7 @@ private fun DiagnosticsPanel(
                     },
                     enabled = !busy,
                     modifier = Modifier.weight(1f),
-                ) { Text("Start 1h capture") }
+                ) { Text("Iniciar captura · 1h") }
             }
             OutlinedButton(
                 onClick = {
@@ -282,7 +304,7 @@ private fun DiagnosticsPanel(
                 },
                 enabled = !busy,
                 modifier = Modifier.weight(1f),
-            ) { Text("Clear") }
+) { Text("Limpar") }
         }
 
         OutlinedButton(
@@ -290,7 +312,7 @@ private fun DiagnosticsPanel(
             enabled = !busy,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Restart & capture startup")
+            Text("Reiniciar e capturar inicialização")
         }
         Text(
             "Persists capture before restarting the app so the next process records a real cold Application startup without ADB.",
@@ -302,7 +324,7 @@ private fun DiagnosticsPanel(
             enabled = !busy,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Share report")
+            Text("Compartilhar relatório")
         }
         Text(
             "The report shared from this screen is the canonical diagnostics artifact.",
@@ -322,11 +344,11 @@ private fun DiagnosticsPanel(
             enabled = !busy,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Refresh events")
+            Text("Atualizar eventos")
         }
 
         HorizontalDivider()
-        Text("Incident triage (observed evidence)", style = MaterialTheme.typography.titleMedium)
+        Text("Triagem de incidentes", style = MaterialTheme.typography.headlineMedium)
         Text(
             "In-memory window only. A missing stage or event is UNKNOWN; warning clusters do not prove a root cause.",
             style = MaterialTheme.typography.bodySmall,
@@ -421,7 +443,7 @@ private fun DiagnosticsPanel(
             }
         }
         HorizontalDivider()
-        Text("Recent events", style = MaterialTheme.typography.titleMedium)
+        Text("Eventos recentes", style = MaterialTheme.typography.headlineMedium)
         if (recentEvents.isEmpty()) {
             Text("No diagnostic events in this process yet.")
         } else {
