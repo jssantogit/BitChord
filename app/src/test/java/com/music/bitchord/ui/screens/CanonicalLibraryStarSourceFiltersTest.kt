@@ -99,6 +99,41 @@ class CanonicalLibraryStarSourceFiltersTest {
         ))
     }
 
+    @Test fun selectingSourceUsesItsOwnArtworkAndDatesWithoutAnotherSourceLeaking() {
+        val remoteArt = CanonicalBrowseMediaAsset(
+            "server-art", "opensubsonic:active",
+            dateAddedSeconds = 90,
+            artworkUri = "opaque-server-art",
+        )
+        val localArt = CanonicalBrowseMediaAsset(
+            "local-art", "local-mediastore",
+            dateAddedSeconds = 11,
+            artworkUri = "content://media/local-cover",
+        )
+        val recording = CanonicalBrowseTrack(
+            recordingId = "recording-art",
+            title = "Song",
+            artistDisplay = "Artist",
+            durationMs = 120_000L,
+            artworkUri = "opaque-server-art",
+            availableAssets = listOf(remoteArt, localArt),
+            dateAddedSeconds = 90,
+        )
+        val localFiltered = filterCanonicalLibraryTracks(
+            listOf(recording), "local-mediastore", null,
+            CanonicalRatingDisplaySnapshot(),
+        ).single()
+        assertEquals("content://media/local-cover", localFiltered.artworkUri)
+        assertEquals(11L, localFiltered.dateAddedSeconds)
+
+        val remoteFiltered = filterCanonicalLibraryTracks(
+            listOf(recording), "opensubsonic:active", null,
+            CanonicalRatingDisplaySnapshot(),
+        ).single()
+        assertEquals("opaque-server-art", remoteFiltered.artworkUri)
+        assertEquals(90L, remoteFiltered.dateAddedSeconds)
+    }
+
     @Test fun albumOrArtistIsEligibleOnlyIfItContainsVisibleProvenMember() {
         val visible = setOf("song-1", "song-2")
         assertTrue(canonicalLibraryEntityHasMatchingTracks(
