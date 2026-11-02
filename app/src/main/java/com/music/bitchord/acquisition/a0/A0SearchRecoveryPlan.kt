@@ -73,9 +73,16 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
         elapsedMillis:Long,
         hasRelevantCandidate:Boolean,
         alreadySent:Set<String>,
+        missingSiblings:Boolean=false,
     ):String? {
         if(elapsedMillis<6000 || elapsedMillis>15000 ||
-            hasRelevantCandidate || alreadySent.size>=3)return null
+            alreadySent.size>=3)return null
+        // An eligible first track does not prove that its 47 siblings
+        // are present. Allow only the *one* album-wide discovery variant
+        // in that case, not redundant searches for the already-ready title.
+        if(hasRelevantCandidate)
+            return if(missingSiblings)albumWide?.takeIf { it !in alreadySent }
+                else null
         return variants.firstOrNull { it !in alreadySent }
     }
 
