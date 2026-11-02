@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import com.music.bitchord.data.catalog.CanonicalBrowseMediaAsset
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
+import com.music.bitchord.data.catalog.CanonicalEntitySortDateRow
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.components.visibleStarValues
@@ -118,6 +119,34 @@ internal fun sortCanonicalUnifiedTracks(
         LocalMusicSort.DATE_MODIFIED -> tracks.sortedWith(
             compareBy<CanonicalBrowseTrack> { it.dateModifiedSeconds == null }
                 .thenByDescending { it.dateModifiedSeconds }
+                .then(alphabetic),
+        )
+    }
+}
+
+/**
+ * Sort real canonical albums and artists with the same native menu as local
+ * Library groups. Keys are existing Release/Artist IDs, never matching names.
+ */
+internal fun <T> sortCanonicalUnifiedEntities(
+    entries: List<T>,
+    sort: LocalMusicSort,
+    dates: Map<String, CanonicalEntitySortDateRow>,
+    id: (T) -> String,
+    title: (T) -> String,
+): List<T> {
+    val alphabetic = compareBy<T> { title(it).lowercase(Locale.ROOT) }.thenBy(id)
+    return when (sort) {
+        LocalMusicSort.TITLE_ASC -> entries.sortedWith(alphabetic)
+        LocalMusicSort.TITLE_DESC -> entries.sortedWith(alphabetic.reversed())
+        LocalMusicSort.DATE_ADDED -> entries.sortedWith(
+            compareBy<T> { dates[id(it)]?.dateAddedSeconds == null }
+                .thenByDescending { dates[id(it)]?.dateAddedSeconds }
+                .then(alphabetic),
+        )
+        LocalMusicSort.DATE_MODIFIED -> entries.sortedWith(
+            compareBy<T> { dates[id(it)]?.dateModifiedSeconds == null }
+                .thenByDescending { dates[id(it)]?.dateModifiedSeconds }
                 .then(alphabetic),
         )
     }
