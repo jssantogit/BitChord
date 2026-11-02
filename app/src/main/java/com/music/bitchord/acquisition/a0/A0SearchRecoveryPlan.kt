@@ -9,6 +9,19 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
     // A bilingual title may carry a native-script name and a widely used
     // Latin title in trailing parentheses. Search the Latin alternative
     // as discovery only; the canonical selection gate is unchanged.
+    // Parenthetical edition labels are not alternate SONG titles.
+    // E.g. "(Live Version)" must not become a bare "Live Version"
+    // search while "(Boy In Luv)" can be a genuine bilingual alias.
+    // Match only recognizable metadata phrases, not every occurrence
+    // of the word "live" (a song may be named "Live It Up").
+    private val versionDescriptor=Regex(
+        "^(?:live(?: (?:version|recording|performance|edit|mix|at .+|in .+))?" +
+            "|remaster(?:ed)?(?: [0-9]{2,4})?|[0-9]{2,4} remaster(?:ed)?" +
+            "|radio edit|extended mix|original mix|acoustic version" +
+            "|instrumental version|demo version|clean version|explicit version" +
+            "|(?:.+ )?remix)$",
+        RegexOption.IGNORE_CASE
+    )
     private val latinTitleAlias=runCatching {
         val title=original.split(Regex("\\s+[-–—]\\s+"),limit=2)
             .getOrNull(1) ?: return@runCatching null
@@ -17,7 +30,8 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
             ?:return@runCatching null
         val normalized=A0SearchQuery.normalize(ending.groupValues[1])
         if(normalized.length<8 || normalized.split(' ').size<2 ||
-            !normalized.all { it.code in 32..126 })return@runCatching null
+            !normalized.all { it.code in 32..126 } ||
+            versionDescriptor.matches(normalized))return@runCatching null
         normalized
     }.getOrNull()
 

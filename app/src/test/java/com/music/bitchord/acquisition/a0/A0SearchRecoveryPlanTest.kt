@@ -94,6 +94,23 @@ class A0SearchRecoveryPlanTest {
             plan.next(6000,false,setOf(A0SearchQuery.normalize(original))))
     }
 
+    @Test fun multiwordEditionMetadataNeverReplacesActualKoreanTitle() {
+        for (suffix in listOf("Live Version","Live at Seoul",
+            "Remastered 2023","2023 Remaster","Radio Edit",
+            "Extended Mix","Original Mix","Acoustic Version",
+            "Demo Version","Dance Remix")) {
+            val canonical="BTS - 노래 ($suffix)"
+            val expected=A0SearchQuery.normalize("노래 ($suffix)")
+            val plan=A0SearchRecoveryPlan(canonical)
+            assertEquals("Wrong fallback for edition label",expected,
+                plan.next(6000,false,setOf(A0SearchQuery.normalize(canonical))))
+        }
+        // A genuine Latin name beginning with "Live" must still be used.
+        val alias="BTS - 사랑 (Live It Up)"
+        assertEquals("Live It Up",A0SearchRecoveryPlan(alias).next(
+            6000,false,setOf(A0SearchQuery.normalize(alias))))
+    }
+
     @Test fun releaseSearchCannotDegradeIntoArtistOnlyWhenAlbumIsUnspecified() {
         val track="BTS (방탄소년단) - 상남자 (Boy In Luv)"
         val empty=A0SearchRecoveryPlan(track,album="",releaseWide=true)
