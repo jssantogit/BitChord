@@ -2,6 +2,8 @@ package com.music.bitchord.data.listening
 
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalScopedTagRow
+import com.music.bitchord.data.catalog.canonicalAssetFilePath
+import com.music.bitchord.data.catalog.canonicalAssetFolderPath
 import kotlinx.serialization.json.Json
 import com.music.bitchord.data.catalog.CanonicalLocalLibrary
 
