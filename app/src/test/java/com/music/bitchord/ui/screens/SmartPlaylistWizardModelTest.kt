@@ -172,4 +172,43 @@ class SmartPlaylistWizardModelTest {
             smartRuleAppendAt(root, listOf(0), root)
         }
     }
+
+    @Test fun deleteLastConditionClearsRulesWithoutSavingAnEmptyGroup() {
+        val only = smartRuleNewComparison(SmartPlaylistRuleField.TITLE)
+        val root = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(only))
+        assertEquals(null, smartRuleRemovePruningEmptyGroups(root, listOf(0)))
+        assertEquals(null, smartRuleRemovePruningEmptyGroups(root, emptyList()))
+    }
+
+    @Test fun deleteNamedNestedGroupPrunesOnlyItsBranchAndKeepsSiblings() {
+        val sibling = smartRuleNewComparison(SmartPlaylistRuleField.SOURCE_KIND)
+        val child = SmartPlaylistRule.Not(smartRuleNewComparison(SmartPlaylistRuleField.GENRE))
+        val nested = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(child), name = "Humor")
+        val root = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(sibling, nested), name = "Fonte")
+        assertEquals(
+            SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(sibling), name = "Fonte"),
+            smartRuleRemovePruningEmptyGroups(root, listOf(1, 0)),
+        )
+        assertEquals(
+            SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(sibling), name = "Fonte"),
+            smartRuleRemovePruningEmptyGroups(root, listOf(1)),
+        )
+        assertEquals(root, root) // immutable original is not changed
+    }
+
+    @Test fun deleteWithinNegatedGroupPreservesNegationUntilItsLastChildIsRemoved() {
+        val a = smartRuleNewComparison(SmartPlaylistRuleField.TITLE)
+        val b = smartRuleNewComparison(SmartPlaylistRuleField.GENRE)
+        val wrapped = SmartPlaylistRule.Not(SmartPlaylistRule.Group(
+            SmartPlaylistRuleJoin.ANY, listOf(a, b), name = "Excluir",
+        ))
+        val root = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL,
+            listOf(smartRuleNewComparison(SmartPlaylistRuleField.SOURCE_KIND), wrapped))
+        val kept = smartRuleRemovePruningEmptyGroups(root, listOf(1, 0))!!
+        val keptWrapped = (kept as SmartPlaylistRule.Group).children[1] as SmartPlaylistRule.Not
+        assertEquals("Excluir", (keptWrapped.child as SmartPlaylistRule.Group).name)
+        assertEquals(listOf(b), (keptWrapped.child as SmartPlaylistRule.Group).children)
+        assertEquals(root.children.first(), (smartRuleRemovePruningEmptyGroups(root, listOf(1)) as SmartPlaylistRule.Group).children.single())
+    }
+
 }
