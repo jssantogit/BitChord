@@ -48,7 +48,8 @@ internal class A0AutoDiscoveryCoordinator(
     }
 
     enum class CacheAction {
-        REUSED, SEARCH_REQUIRED, SIBLING_RESCUE, SIBLING_RESCUE_SKIPPED,
+        REUSED, SEARCH_REQUIRED, PEER_SUPPRESSED,
+        SIBLING_RESCUE, SIBLING_RESCUE_SKIPPED,
         FOLDER_BROWSE_ADDED, FOLDER_BROWSE_EMPTY
     }
     /** Aggregate-only evidence: never exposes a filename, peer or path. */
@@ -118,6 +119,12 @@ internal class A0AutoDiscoveryCoordinator(
         val pooled=A0MultiSearchCandidateEvidence(entries,quality)
         val statuses=ArrayList<A0AutoBatchExecutor.TrackStatus>(count)
         val publishedPaths=HashSet<Pair<String,String>>()
+        // Repeated pre-accept failures from the same peer must not poison a
+        // large album. Only ephemeral, unpersisted peer evidence is used.
+        val peerPreAcceptFailures=HashMap<String,Int>()
+        fun sourceAllowed(peer:String)=(peerPreAcceptFailures[peer] ?: 0)<2
+        fun allowedSources(offers:List<A0ObservedCandidateHandoff.Choice>)=
+            offers.filter { sourceAllowed(it.peerUsername) }
         // A slot that never began P/F may benefit from sibling evidence
         // discovered later in this SAME explicitly requested release.
         val reviewWithoutTransfer=LinkedHashSet<Int>()
@@ -192,16 +199,23 @@ internal class A0AutoDiscoveryCoordinator(
                 // The old selectionPreview() recomputed every one of 64 slots
                 // before EACH next slot: quadratic and expensive with large
                 // 512-offer buckets. Only the current slot is relevant here.
+                val activeCached=allowedSources(cached)
+                if(activeCached.size<cached.size)try {
+                    onCacheEvidence(index,CacheEvidence(
+                        CacheAction.PEER_SUPPRESSED,
+                        (cached.size-activeCached.size).coerceIn(0,512),
+                        cacheTruncated,null))
+                }catch(_:Exception){}
                 val currentPreview=A0AutoCandidateSelectionPolicy.preview(
-                    entries[index],cached,quality,sampleTruncated=cacheTruncated)
-                val (_,cachedDecision)=select(index,cached,cacheTruncated,false)
+                    entries[index],activeCached,quality,sampleTruncated=cacheTruncated)
+                val (_,cachedDecision)=select(index,activeCached,cacheTruncated,false)
                 val readyInCache=currentPreview.status==
                     A0AutoCandidateSelectionPolicy.Status.PROVISIONAL ||
                     cachedDecision.status==
                     A0AutoCandidateSelectionPolicy.Status.PROVISIONAL
                 try { onCacheEvidence(index,CacheEvidence(
                     if(readyInCache) CacheAction.REUSED else CacheAction.SEARCH_REQUIRED,
-                    cached.size.coerceIn(0,512),cacheTruncated,cachedDecision.reason
+                    activeCached.size.coerceIn(0,512),cacheTruncated,cachedDecision.reason
                 )) }catch(_:Exception) {}
                 if(!readyInCache) {
                     searches++
@@ -244,7 +258,8 @@ internal class A0AutoDiscoveryCoordinator(
                 // review screens must not force a second identical search.
                 // Callback is observational, not a transport command.
                 try {onSlotEvidence(index,unique.toList())}catch(_:Exception){}
-                val (selected,decision)=select(index,unique,truncated,true)
+                val (selected,decision)=select(index,
+                    allowedSources(unique),truncated,true)
                 // Counts and reason only: never expose peer/user/path to logs.
                 try { onCandidateDecision(index,decision) }catch(_:Exception){}
                 val outcome=batchExecutor.run(
@@ -257,6 +272,9 @@ internal class A0AutoDiscoveryCoordinator(
                 )
                 attempts+=outcome.attempts
                 publishedPaths.addAll(outcome.publishedSourceKeys)
+                for(peer in outcome.preAcceptFailedPeers)
+                    peerPreAcceptFailures[peer]=
+                        (peerPreAcceptFailures[peer] ?: 0).plus(1).coerceAtMost(2)
                 val status=outcome.results.singleOrNull()
                     ?: A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW
                 // The executor already delivered this slot's progress.
@@ -271,7 +289,7 @@ internal class A0AutoDiscoveryCoordinator(
                         val (offers,clipped)=checkNotNull(pooled.slotEvidence(next))
                         // Account for release-cohesion-based eligibility,
                         // not just a single-track preview.
-                        val (_,choice)=select(next,offers,clipped,false)
+                        val (_,choice)=select(next,allowedSources(offers),clipped,false)
                         choice.status!=
                             A0AutoCandidateSelectionPolicy.Status.PROVISIONAL
                     }
@@ -366,7 +384,8 @@ internal class A0AutoDiscoveryCoordinator(
                     val lateOffers=if(truncated)unspent.filter {
                         (it.peerUsername to parent(it.remotePath)) in publishedFolders
                     } else unspent
-                    if(lateOffers.isEmpty()) {
+                    val eligibleLateOffers=allowedSources(lateOffers)
+                    if(eligibleLateOffers.isEmpty()) {
                         if(truncated)try { onCacheEvidence(index,CacheEvidence(
                             CacheAction.SIBLING_RESCUE_SKIPPED,0,true,
                             A0AutoCandidateSelectionPolicy.Reason.INCOMPLETE_SAMPLE,
@@ -374,17 +393,17 @@ internal class A0AutoDiscoveryCoordinator(
                         )) }catch(_:Exception) {}
                         continue
                     }
-                    val (selected,late)=select(index,lateOffers,false,true)
+                    val (selected,late)=select(index,eligibleLateOffers,false,true)
                     if(late.status!=A0AutoCandidateSelectionPolicy.Status.PROVISIONAL) {
                         if(truncated)try { onCacheEvidence(index,CacheEvidence(
                             CacheAction.SIBLING_RESCUE_SKIPPED,
-                            lateOffers.size.coerceIn(0,512),true,late.reason,
+                            eligibleLateOffers.size.coerceIn(0,512),true,late.reason,
                             publishedFolders.size,samePeerOffers,samePeerFolderOffers
                         )) }catch(_:Exception) {}
                         continue
                     }
                     if(truncated)try { onCacheEvidence(index,CacheEvidence(
-                        CacheAction.SIBLING_RESCUE,lateOffers.size.coerceIn(0,512),
+                        CacheAction.SIBLING_RESCUE,eligibleLateOffers.size.coerceIn(0,512),
                         true,late.reason,
                         publishedFolders.size,samePeerOffers,samePeerFolderOffers
                     )) }catch(_:Exception) {}
@@ -400,6 +419,9 @@ internal class A0AutoDiscoveryCoordinator(
                     )
                     attempts+=recovery.attempts
                     publishedPaths.addAll(recovery.publishedSourceKeys)
+                    for(peer in recovery.preAcceptFailedPeers)
+                        peerPreAcceptFailures[peer]=
+                            (peerPreAcceptFailures[peer] ?: 0).plus(1).coerceAtMost(2)
                     val status=recovery.results.singleOrNull()
                         ?: A0AutoBatchExecutor.TrackStatus.MANUAL_REVIEW
                     statuses[index]=status
