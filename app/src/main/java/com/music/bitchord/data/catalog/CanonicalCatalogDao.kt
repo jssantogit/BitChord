@@ -116,6 +116,8 @@ internal data class CanonicalScopedTagRow(
     val moodsJson: String?,
     val bpmsJson: String?,
     val stylesJson: String?,
+    val composersJson: String?,
+    val assetPath: String?,
 )
 
 internal data class CanonicalLocalTagScanRow(
@@ -156,7 +158,9 @@ internal interface CanonicalCatalogDao {
                tags.genresJson AS genresJson,
                tags.moodsJson AS moodsJson,
                tags.bpmsJson AS bpmsJson,
-               tags.stylesJson AS stylesJson
+               tags.stylesJson AS stylesJson,
+               tags.composersJson AS composersJson,
+               asset.path AS assetPath
         FROM catalog_media_asset AS asset
         LEFT JOIN catalog_media_asset_tags AS tags ON tags.mediaAssetId = asset.id
         WHERE asset.provider = :providerKey AND asset.recordingId IN (:recordingIds)
