@@ -70,6 +70,18 @@ class CanonicalUnifiedLibrarySortingTest {
         assertEquals(listOf("unknown", "newer", "older"), reverse.map { it.id })
     }
 
+    @Test fun nativeUnifiedHeaderDisplaysComputedHoursNotKotlinSource() {
+        assertEquals("594 faixas · 29h 20m",
+            nativeUnifiedTrackCountLabel(594, listOf(29L * 3_600_000 + 20L * 60_000)))
+        assertEquals("1 faixa · 0h 03m",
+            nativeUnifiedTrackCountLabel(1, listOf(180_000L)))
+    }
+
+    @Test fun missingDurationRemainsUnknownRatherThanInventingFullTotal() {
+        assertEquals("2 faixas", nativeUnifiedTrackCountLabel(2, listOf(180_000L, null)))
+        assertEquals("0 faixas", nativeUnifiedTrackCountLabel(0, emptyList()))
+    }
+
     @Test fun modifiedDateDoesNotFallBackToAdded() {
         val input = listOf(track("unknown", "B", added = 400),
             track("modified", "A", modified = 8))
