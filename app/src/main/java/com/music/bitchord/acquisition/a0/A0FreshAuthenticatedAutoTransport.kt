@@ -66,13 +66,23 @@ internal class A0FreshAuthenticatedAutoTransport(
         var fTokenValidated=false
         var receivedBytes=0L
         var firstByteElapsedMs=-1L
+        var lastByteElapsedMs=-1L
         fun receiveCheckpoint(status:String) {
+            val payloadMs=if(lastByteElapsedMs>=firstByteElapsedMs &&
+                firstByteElapsedMs>=0L)
+                (lastByteElapsedMs-firstByteElapsedMs).coerceAtLeast(1L)
+                else -1L
+            val effectiveKiBps=if(payloadMs>0L)
+                ((receivedBytes/1024L)*1000L/payloadMs).coerceIn(0,1_000_000)
+                else -1L
             // Aggregates only: never emit peer identity, filename or raw bytes.
             com.music.bitchord.data.DebugLog.d("BitChord",
                 "soulseek_auto_receive_checkpoint status=$status" +
                     " token_validated=$fTokenValidated" +
                     " received_kib=${(receivedBytes/1024).coerceIn(0,262144)}" +
                     " first_byte_elapsed_ms=$firstByteElapsedMs" +
+                    " payload_elapsed_ms=$payloadMs" +
+                    " effective_kibps=$effectiveKiBps" +
                     " scope=$diagnosticScope")
         }
         try {
@@ -123,6 +133,8 @@ internal class A0FreshAuthenticatedAutoTransport(
                     if(count>0 && firstByteElapsedMs<0)
                         firstByteElapsedMs=android.os.SystemClock.elapsedRealtime()-start
                     receivedBytes=count
+                    if(count>0)
+                        lastByteElapsedMs=android.os.SystemClock.elapsedRealtime()-start
                 }
             )
             if(cancelled.get() || isCancelled() ||
