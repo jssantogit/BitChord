@@ -27,6 +27,30 @@ import org.robolectric.annotation.ConscryptMode
 class NativeCanonicalLibraryFiltersComposeTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun previousToolbarRequestIsNotReplayedWhenReturningFromArtistOrAlbumDetail() {
+        // In the real Library, opening a detail unmounts this sheet; returning
+        // recreates it with the toolbar's existing, nonzero request counter.
+        val actionToken = mutableIntStateOf(2)
+        val source = mutableStateOf<String?>(null)
+        val stars = mutableStateOf<Int?>(null)
+        compose.setContent {
+            MaterialTheme {
+                NativeCanonicalLibraryFilters(
+                    availableKeys = listOf("local-mediastore", "opensubsonic:account"),
+                    selectedSource = source.value,
+                    onSourceChange = { source.value = it },
+                    selectedStars = stars.value,
+                    onStarsChange = { stars.value = it },
+                    requestToken = actionToken.intValue,
+                )
+            }
+        }
+        compose.onNodeWithText("Filtrar biblioteca").assertDoesNotExist()
+        // Only a fresh click on the existing toolbar filter icon may open it.
+        compose.runOnIdle { actionToken.intValue++ }
+        compose.onNodeWithText("Filtrar biblioteca").assertExists()
+    }
+
     @Test fun libraryFilterIsHiddenUntilNativeToolbarRequestAndScopesSource() {
         val actionToken = mutableIntStateOf(0)
         val source = mutableStateOf<String?>(null)
