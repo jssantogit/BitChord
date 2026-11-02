@@ -17,12 +17,15 @@ class A0IndirectPeerFailureStageTest {
             A0IndirectPeerFailureStage.classify(true,true))
     }
 
-    @Test fun connectFailuresRetainDistinctTimeoutRefusalRouteAndOtherReasons() {
+    @Test fun connectFailuresRetainDistinctTimeoutConnectExceptionRouteAndOtherReasons() {
         val causes=A0IndirectPeerFailureStage
         assertEquals(A0IndirectPeerFailureStage.ConnectCause.TIMEOUT,
             causes.connectCause(SocketTimeoutException("peer address intentionally not recorded")))
-        assertEquals(A0IndirectPeerFailureStage.ConnectCause.REFUSED,
+        assertEquals(A0IndirectPeerFailureStage.ConnectCause.CONNECT_ERROR,
             causes.connectCause(ConnectException("refused")))
+        // A bare ConnectException is not proof of ECONNREFUSED on Android.
+        assertEquals(A0IndirectPeerFailureStage.ConnectCause.CONNECT_ERROR,
+            causes.connectCause(ConnectException("Connection timed out")))
         assertEquals(A0IndirectPeerFailureStage.ConnectCause.NO_ROUTE,
             causes.connectCause(NoRouteToHostException("unreachable")))
         assertEquals(A0IndirectPeerFailureStage.ConnectCause.OTHER,

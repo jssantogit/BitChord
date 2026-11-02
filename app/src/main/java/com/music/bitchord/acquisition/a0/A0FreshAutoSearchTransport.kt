@@ -162,7 +162,7 @@ internal class A0FreshAutoSearchTransport(
             val indirectFailed=AtomicInteger()
             val indirectConnectFailed=AtomicInteger()
             val indirectConnectTimeout=AtomicInteger()
-            val indirectConnectRefused=AtomicInteger()
+            val indirectConnectError=AtomicInteger()
             val indirectConnectNoRoute=AtomicInteger()
             val indirectConnectOther=AtomicInteger()
             val indirectInitFailed=AtomicInteger()
@@ -319,8 +319,8 @@ internal class A0FreshAutoSearchTransport(
                                                 when(A0IndirectPeerFailureStage.connectCause(error)) {
                                                     A0IndirectPeerFailureStage.ConnectCause.TIMEOUT ->
                                                         indirectConnectTimeout.incrementAndGet()
-                                                    A0IndirectPeerFailureStage.ConnectCause.REFUSED ->
-                                                        indirectConnectRefused.incrementAndGet()
+                                                    A0IndirectPeerFailureStage.ConnectCause.CONNECT_ERROR ->
+                                                        indirectConnectError.incrementAndGet()
                                                     A0IndirectPeerFailureStage.ConnectCause.NO_ROUTE ->
                                                         indirectConnectNoRoute.incrementAndGet()
                                                     A0IndirectPeerFailureStage.ConnectCause.OTHER ->
@@ -511,7 +511,7 @@ internal class A0FreshAutoSearchTransport(
                 " indirect_failed=${indirectFailed.get().coerceIn(0,512)}" +
                 " indirect_connect_failed=${indirectConnectFailed.get().coerceIn(0,512)}" +
                 " indirect_connect_timeout=${indirectConnectTimeout.get().coerceIn(0,512)}" +
-                " indirect_connect_refused=${indirectConnectRefused.get().coerceIn(0,512)}" +
+                " indirect_connect_error=${indirectConnectError.get().coerceIn(0,512)}" +
                 " indirect_connect_no_route=${indirectConnectNoRoute.get().coerceIn(0,512)}" +
                 " indirect_connect_other=${indirectConnectOther.get().coerceIn(0,512)}" +
                 " indirect_init_failed=${indirectInitFailed.get().coerceIn(0,512)}" +

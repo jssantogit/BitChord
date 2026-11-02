@@ -11,16 +11,17 @@ import java.net.SocketTimeoutException
  */
 internal object A0IndirectPeerFailureStage {
     enum class Phase { CONNECT, INIT, RESPONSE }
-    enum class ConnectCause { TIMEOUT, REFUSED, NO_ROUTE, OTHER }
+    enum class ConnectCause { TIMEOUT, CONNECT_ERROR, NO_ROUTE, OTHER }
 
-    /** Reason classes only; never serialize exception messages or peer addresses. */
+    /** ConnectException alone cannot prove refusal: Android also uses it for timeouts.
+     * Reason classes only; never serialize exception messages or peer addresses. */
     fun connectCause(error:IOException):ConnectCause {
         var current:Throwable?=error
         repeat(5) {
             when(current) {
                 is SocketTimeoutException -> return ConnectCause.TIMEOUT
                 is NoRouteToHostException -> return ConnectCause.NO_ROUTE
-                is ConnectException -> return ConnectCause.REFUSED
+                is ConnectException -> return ConnectCause.CONNECT_ERROR
             }
             current=current?.cause
         }
