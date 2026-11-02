@@ -16,6 +16,22 @@ class A0SearchTicketRegistryTest {
         assertFalse(tickets.register(84))
         assertFalse(tickets.toString().contains("999999"))
     }
+    @Test fun liveTicketSetAcceptsNewFallbackWithoutAcceptingUnknownTokens() {
+        val tickets=A0SearchTicketRegistry(27182)
+        val accepted=tickets.accepted
+        assertEquals(setOf(27182),accepted.toSet())
+        assertTrue(tickets.register(27183))
+        assertTrue(27183 in accepted)
+        assertFalse(27184 in accepted)
+        tickets.creditValidated(27183)
+        tickets.creditValidated(27184)
+        assertEquals(listOf(0,1,0),tickets.responseCounts())
+        assertTrue(tickets.register(27185))
+        tickets.creditValidated(27185)
+        assertEquals(listOf(0,1,1),tickets.responseCounts())
+        assertFalse(tickets.register(27186))
+    }
+
     @Test fun onlyOriginalAndTwoRegisteredVariantsArePermitted() {
         val tickets=A0SearchTicketRegistry(81)
         assertFalse(tickets.register(81))

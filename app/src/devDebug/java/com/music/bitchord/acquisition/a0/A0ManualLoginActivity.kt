@@ -503,6 +503,7 @@ class A0ManualLoginActivity : Activity() {
                                 trace.note(A0SmokeTrace.Stage.SEARCH_LISTENER_OPEN)
                                 listener.soTimeout = 18_000
                                 val token = SecureRandom().nextInt(Int.MAX_VALUE - 1) + 1
+                                val tickets=A0SearchTicketRegistry(token)
                                 val expectedDuration=SoulseekBatchPlan.expectedDuration(
                                     batch?.current,
                                     intent.getIntExtra("bitchord.soulseek.manual.duration_seconds",0)
@@ -521,6 +522,7 @@ class A0ManualLoginActivity : Activity() {
                                         peerReliability=peerReliability,
                                         collectReleaseShadow=batch!=null,
                                         releaseQueries=batch?.entries?.map { it.query }.orEmpty(),
+                                        acceptedSearchTokens=tickets.accepted,
                                     ).also { transfer ->
                                         if (!SoulseekActiveSession.registerTransfer(
                                                 transfer, accountGeneration
@@ -593,19 +595,18 @@ class A0ManualLoginActivity : Activity() {
                                         try {
                                             peer.soTimeout = 3500
                                             val observation=A0OneShotPublicSearchWire.readOneDirectPeerReply(
-                                                peer.getInputStream(),token
-                                            ) { verifiedFrame, claimedPeer ->
-                                                // The outer wire reader checks protocol framing;
-                                                // the handoff also verifies token, identity and
-                                                // full search-response decoding. Only after both
-                                                // may this source receive a reliability credit.
-                                                if(handoff?.offerSearchResult(verifiedFrame,claimedPeer)==false)
-                                                    throw IOException("Invalid peer search response")
-                                                receivedValidP2pReply.set(true)
-                                                peerReliability.observe(claimedPeer,
-                                                    A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
-                                                discoveryProgress()
-                                            }
+                                                peer.getInputStream(),token,
+                                                acceptedSearchTokens=tickets.accepted,
+                                                onValidatedParsedReply={ parsed ->
+                                                    if(handoff?.offerParsed(parsed,parsed.peerUsername)==false)
+                                                        throw IOException("Invalid peer search response")
+                                                    tickets.creditValidated(parsed.token)
+                                                    receivedValidP2pReply.set(true)
+                                                    peerReliability.observe(parsed.peerUsername,
+                                                        A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
+                                                    discoveryProgress()
+                                                }
+                                            )
                                             trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_ACCEPTED)
                                             if (!transferObserved) {
                                                 readerGate.publish(inbox,
@@ -700,15 +701,18 @@ class A0ManualLoginActivity : Activity() {
                                                                 }
                                                                 trace.note(A0SmokeTrace.Stage.PIERCE_SENT)
                                                                 val observation=A0IndirectSearchWire.readIndirectReply(
-                                                                    peer.getInputStream(),token,offer.username
-                                                                ) { frame, claimedPeer ->
-                                                                    if(handoff?.offerSearchResult(frame,claimedPeer)==false)
-                                                                        throw IOException("Invalid peer search response")
-                                                                    receivedValidP2pReply.set(true)
-                                                                    peerReliability.observe(claimedPeer,
-                                                                        A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
-                                                                    discoveryProgress()
-                                                                }
+                                                                    peer.getInputStream(),token,offer.username,
+                                                                    acceptedSearchTokens=tickets.accepted,
+                                                                    onValidatedParsedReply={ parsed ->
+                                                                        if(handoff?.offerParsed(parsed,offer.username)==false)
+                                                                            throw IOException("Invalid peer search response")
+                                                                        tickets.creditValidated(parsed.token)
+                                                                        receivedValidP2pReply.set(true)
+                                                                        peerReliability.observe(offer.username,
+                                                                            A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
+                                                                        discoveryProgress()
+                                                                    }
+                                                                )
                                                                 trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_ACCEPTED)
                                                                 if (!transferObserved) {
                                                                     readerGate.publish(inbox,
@@ -806,10 +810,13 @@ class A0ManualLoginActivity : Activity() {
                                                     "soulseek_manual_search fallback_budget_skipped=true")
                                                 return
                                             }
+                                            val variantToken=generateSequence {
+                                                SecureRandom().nextInt(Int.MAX_VALUE-1)+1
+                                            }.take(8).firstOrNull(tickets::register) ?: return
                                             if(!lease.commit(now))return
                                             try {
                                                 connection.getOutputStream().apply {
-                                                    write(A0OneShotPublicSearchWire.fileSearch(token,variant))
+                                                    write(A0OneShotPublicSearchWire.fileSearch(variantToken,variant))
                                                     flush()
                                                 }
                                                 sent.add(variant)
@@ -908,6 +915,15 @@ class A0ManualLoginActivity : Activity() {
                                     }
                                     trace.note(A0SmokeTrace.Stage.SEARCH_COMPLETED, finalOutcome)
                                 } finally {
+                                    // Diagnostic aggregates only: never log tokens,
+                                    // usernames, peer addresses or search terms.
+                                    val byTicket=tickets.responseCounts()
+                                    com.music.bitchord.data.DebugLog.d("BitChord",
+                                        "soulseek_manual_search tickets_sent=" +
+                                            tickets.accepted.size.coerceIn(1,3) +
+                                            " initial_replies=${byTicket[0]}" +
+                                            " fallback_1_replies=${byTicket[1]}" +
+                                            " fallback_2_replies=${byTicket[2]}")
                                     // Release optional queries before any lengthy manual
                                     // selection or P/F transfer; sent ones stay charged.
                                     searchLease?.close()
