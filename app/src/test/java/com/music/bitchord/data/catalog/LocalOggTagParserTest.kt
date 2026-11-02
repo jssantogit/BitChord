@@ -62,6 +62,27 @@ class LocalOggTagParserTest {
         assertEquals(emptyList<Double>(), requireNotNull(LocalEmbeddedTagParser.parse(empty)).bpms)
     }
 
+    @Test fun opusTagsSpanningTwoContinuedPagesAreReassembledWithoutAudioReads() {
+        val opusHead = "OpusHead".toByteArray() + ByteArray(11)
+        val opusTags = "OpusTags".toByteArray() + comments(
+            "GENRE=Electronic", "COMMENT=" + "x".repeat(240),
+        )
+        assertTrue(opusTags.size > 255 && opusTags.size < 510)
+        fun raw(serial: Int, sequence: Int, flags: Int, laces: ByteArray, body: ByteArray): ByteArray =
+            "OggS".toByteArray() + byteArrayOf(0, flags.toByte()) + ByteArray(8) +
+                le32(serial) + le32(sequence) + ByteArray(4) +
+                byteArrayOf(laces.size.toByte()) + laces + body
+        val bytes = page(17, 0, opusHead, true) +
+            raw(17, 1, 0, byteArrayOf(255.toByte()), opusTags.copyOfRange(0, 255)) +
+            raw(17, 2, 1, byteArrayOf((opusTags.size - 255).toByte()),
+                opusTags.copyOfRange(255, opusTags.size)) +
+            ByteArray(250_000)
+        val input = ByteArrayInputStream(bytes)
+        val parsed = requireNotNull(LocalEmbeddedTagParser.readStream(input))
+        assertEquals(listOf("Electronic"), parsed.genres)
+        assertTrue(input.available() >= 250_000)
+    }
+
     @Test fun rejectTruncatedPageForeignSerialAndMalformedCommentWithoutConvertingToMissing() {
         val head = page(7, 0, "OpusHead".toByteArray() + ByteArray(11), true)
         val comments = page(9, 1, "OpusTags".toByteArray() + comments("GENRE=Pop"), false)
