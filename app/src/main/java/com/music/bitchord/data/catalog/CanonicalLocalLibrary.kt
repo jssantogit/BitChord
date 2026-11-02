@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import androidx.room.withTransaction
 import com.music.bitchord.data.LocalMediaRepository
 import com.music.bitchord.data.model.Song
@@ -444,3 +446,30 @@ internal data class MediaStoreSourceLookup(
     val collectionUri: String,
     val mediaId: Long,
 )
+
+/**
+ * Bring the existing MediaStore library into the canonical multi-source view
+ * once per process, rather than rescanning on every category or Compose entry.
+ * The Library's explicit pull-to-refresh invalidates this gate; permission
+ * changes also retry because an unsuccessful scan is never marked complete.
+ * All playback identities still come from [CanonicalLocalLibrary.sync].
+ */
+internal object UnifiedLocalCatalogIndex {
+    private val mutex = Mutex()
+    @Volatile private var complete = false
+
+    suspend fun ensure(context: Context) {
+        if (complete || !LocalMediaRepository.hasStoragePermission(context)) return
+        mutex.withLock {
+            if (complete || !LocalMediaRepository.hasStoragePermission(context)) return@withLock
+            val app = context.applicationContext
+            val mediaStoreSongs = LocalMediaRepository.getLocalMusic(app)
+            CanonicalLocalLibrary.sync(app, mediaStoreSongs)
+            complete = true
+        }
+    }
+
+    fun invalidate() {
+        complete = false
+    }
+}
