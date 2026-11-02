@@ -1,9 +1,11 @@
 package com.music.bitchord.acquisition.a0
 
+import java.io.EOFException
+import java.net.SocketException
 import java.net.SocketTimeoutException
 
 /**
- * A timeout may be retried against an independently discovered, metadata-
+ * A timeout or definite socket disconnect may be retried against an independently discovered, metadata-
  * equivalent alternative ONLY while the P peer has not accepted an upload.
  * A timeout after TRANSFER_ACCEPTED may already have staged bytes; never
  * authorize another P/F through an inferred "no receipt" alone.
@@ -18,7 +20,9 @@ internal object A0PreByteTransportRetryPolicy {
         cancelled:Boolean,
         sameGeneration:Boolean,
     ):Boolean {
-        if(cancelled || !sameGeneration || error !is SocketTimeoutException)
+        if(cancelled || !sameGeneration ||
+            error !is SocketTimeoutException &&
+            error !is EOFException && error !is SocketException)
             return false
         return lastPhase in setOf(
             A0ServerAssociatedTransfer.Phase.GATE_PASSED,
