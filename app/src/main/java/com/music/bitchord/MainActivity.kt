@@ -2842,6 +2842,10 @@ private fun BitChordApp(
         // one child it always had and changes nothing.
         Row(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxHeight()) {
+                val playlistRoute = canonicalPlaylistRoute(
+                    showBuilder = showSmartPlaylistBuilder,
+                    showLibrary = showPlaylistLibrary,
+                )
                 AnimatedContent(
                     targetState = when {
                         showSpotify && detail == null -> "spotify"
@@ -2875,8 +2879,7 @@ private fun BitChordApp(
                         showCanonicalMyRatings -> "my_ratings"
                         // The wizard is pushed FROM the playlist category. It must win
                         // over that category while editing or creating a playlist.
-                        showSmartPlaylistBuilder -> "smart_playlist_builder"
-                        showPlaylistLibrary -> "canonical_playlist_library"
+                        playlistRoute != null -> playlistRoute
                         else -> "$TAB_KEY$selectedTab"
                     },
                     // Tabs swap outright; everything else crossfades.
