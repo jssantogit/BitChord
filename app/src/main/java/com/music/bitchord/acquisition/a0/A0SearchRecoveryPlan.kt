@@ -5,7 +5,7 @@ package com.music.bitchord.acquisition.a0
  * Keeps canonical artist/title for screening; variants only change wire text.
  * Maximum two fallback requests, no reconnect/login/retry loop or transfer.
  */
-internal class A0SearchRecoveryPlan(original:String,album:String?=null) {
+internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWide:Boolean=false) {
     // A generic title (e.g. "Normal") can match many unrelated releases.
     // Search the artist + canonical album + title before broad title-only.
     // This changes discovery text only: the original identity and all A3
@@ -22,6 +22,18 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null) {
         val artist=original.split(Regex("\\s+[-–—]\\s+"),limit=2).first()
         A0SearchQuery.normalize("$artist $albumNormalized $title")
     }.getOrNull()
+    // Read-only album + artist query can discover many independently eligible
+    // sibling slots in a release, rather than 18s of per-track searches.
+    // Never used for an isolated single-track manual search.
+    private val albumWide=if(releaseWide)runCatching {
+        val artist=original.split(Regex("\\s+[-–—]\\s+"),limit=2).first()
+            .substringBefore('(').trim()
+        val normalizedAlbum=A0SearchQuery.normalize(album.orEmpty())
+        if(artist.isBlank() || A0SearchQuery.titleOnlyFallback(original)==null)
+            return@runCatching null
+        A0SearchQuery.normalize("$artist $normalizedAlbum")
+    }.getOrNull() else null
+
     // Avoid overconstraining descriptive title searches by adding a
     // compilation album. Generic one-word titles still prefer the album.
     // The original canonical track and quality gates are never changed.
@@ -29,8 +41,11 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null) {
         val title=A0SearchQuery.titleOnlyFallback(original)
         val generic=title==null || title.length<8 || title.split(' ').size<2
         val normal=A0SearchQuery.variants(original).drop(1)
-        val ordered=if(generic)listOfNotNull(albumQualified)+normal
-            else listOfNotNull(title,albumQualified)+normal
+        val ordered=when {
+            albumWide!=null -> listOfNotNull(albumWide,title,albumQualified)+normal
+            generic -> listOfNotNull(albumQualified)+normal
+            else -> listOfNotNull(title,albumQualified)+normal
+        }
         ordered.filter { it.length>=3 }.distinct().take(2)
     }
     val authorizesTransfer:Boolean get()=false

@@ -24,6 +24,21 @@ class A0SearchRecoveryPlanTest {
         assertEquals(A0SearchQuery.normalize(
             "BTS (방탄소년단) Proof Boy In Luv"),recovery.next(12000,false,already))
     }
+    @Test fun releaseWideFallbackSearchesAlbumToRecoverOtherTracksWithoutTransfer() {
+        val recovery=A0SearchRecoveryPlan(
+            "BTS (방탄소년단) - Boy In Luv",album="Proof",releaseWide=true)
+        val sent=mutableSetOf(A0SearchQuery.normalize(
+            "BTS (방탄소년단) - Boy In Luv"))
+        assertEquals("BTS Proof",recovery.next(6000,false,sent))
+        sent.add("BTS Proof")
+        assertEquals("Boy In Luv",recovery.next(12000,false,sent))
+        assertFalse(recovery.authorizesTransfer)
+        val generic=A0SearchRecoveryPlan("BTS - Normal","ARIRANG",releaseWide=true)
+        assertEquals("BTS ARIRANG",generic.next(6000,false,setOf("BTS Normal")))
+        val noAlbum=A0SearchRecoveryPlan("BTS - Normal","",releaseWide=true)
+        assertEquals("Normal",noAlbum.next(6000,false,setOf("BTS Normal")))
+    }
+
     @Test fun genericTrackReceivesAlbumSpecificRecoveryBeforeBroadTitleOnly() {
         val recovery=A0SearchRecoveryPlan("BTS - Normal",album="ARIRANG")
         val already=mutableSetOf("BTS Normal")

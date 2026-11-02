@@ -248,7 +248,8 @@ internal class A0FreshAutoSearchTransport(
                 }
             }
 
-            val recovery=A0SearchRecoveryPlan(entry.query,entry.album)
+            val recovery=A0SearchRecoveryPlan(entry.query,entry.album,
+                releaseWide=releaseSlots.size>1)
             val sent=mutableSetOf(normalized)
             val marks=mutableSetOf<Int>()
             var nextCompletionCheckMs=8000L
