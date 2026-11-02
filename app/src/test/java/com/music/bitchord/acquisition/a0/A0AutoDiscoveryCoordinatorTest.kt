@@ -674,6 +674,22 @@ class A0AutoDiscoveryCoordinatorTest {
             it.second=="alternate-peer" }.map { it.first })
     }
 
+    @Test fun threeEmptySearchesAreReportedAsOneStreakWithoutPeerMetadata() {
+        val discovery=FakeSearch { A0AutoDiscoveryCoordinator.SearchResult.NoReply }
+        val result=A0AutoDiscoveryCoordinator(
+            discovery,batch(mutableListOf())).run(
+            entries.take(3),quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(3,result.searches)
+        assertEquals(3,result.noReplySearches)
+        assertEquals(3,result.longestNoReplyStreak)
+        assertEquals(3,result.batch.manualReview)
+        val copied=result.withReservationReleased(true)
+        assertEquals(3,copied.noReplySearches)
+        assertEquals(3,copied.longestNoReplyStreak)
+        assertTrue(copied.unusedReservationReleased)
+    }
+
     @Test fun noExplicitOptInNeverOpensSearchOrTransfer() {
         val search=FakeSearch {
             throw AssertionError("Network must remain OFF")
