@@ -19,7 +19,7 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null) {
         val titleTokens=title.lowercase().split(' ')
         if(albumTokens.all { it in originalTokens } ||
             albumTokens.all { it in titleTokens })return@runCatching null
-        val artist=original.substringBefore(Regex("\\\\s+[-–—]\\\\s+"))
+        val artist=original.split(Regex("\\s+[-–—]\\s+"),limit=2).first()
         A0SearchQuery.normalize("$artist $albumNormalized $title")
     }.getOrNull()
     private val variants=(listOfNotNull(albumQualified)+
