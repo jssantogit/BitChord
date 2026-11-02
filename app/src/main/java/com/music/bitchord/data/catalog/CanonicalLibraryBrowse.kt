@@ -31,6 +31,7 @@ internal data class CanonicalBrowseMediaAsset(
     val providerKey: String,
     val dateAddedSeconds: Long? = null,
     val dateModifiedSeconds: Long? = null,
+    val artworkUri: String? = null,
 )
 
 /**
@@ -92,6 +93,7 @@ internal class CanonicalLibraryBrowseRepository(
                             providerKey = row.providerKey,
                             dateAddedSeconds = row.dateAddedSeconds,
                             dateModifiedSeconds = row.dateModifiedSeconds,
+                            artworkUri = row.artworkUri,
                         )
                     }
                     .sortedBy(CanonicalBrowseMediaAsset::mediaAssetId),
