@@ -35,6 +35,17 @@ class A0SearchQueryTest {
             "BTS - \u1102\u1169\u1105\u1162"))
     }
 
+    @Test fun combiningMarksWithinRealWordsAreRetainedButMarkOnlyQueryIsRejected() {
+        // Devanagari vowel signs do not always have NFC precomposed letters.
+        assertEquals("भारत गीत",A0SearchQuery.normalize("भारत - गीत"))
+        assertEquals("गीत",A0SearchQuery.titleOnlyFallback("भारत - गीत"))
+        assertEquals("ภาษาไทย",A0SearchQuery.normalize("ภาษาไทย"))
+        try {
+            A0SearchQuery.normalize("\u093e\u0301")
+            fail("Combining-mark-only search must stay invalid")
+        } catch (_:IllegalArgumentException) { }
+    }
+
     @Test fun userQueryReallyReplacesPreviouslyHardcodedSearchOnWire() {
         val one = A0OneShotPublicSearchWire.fileSearch(42, "newjeans - omg")
         val two = A0OneShotPublicSearchWire.fileSearch(42, "naruto*")

@@ -14,7 +14,11 @@ package com.music.bitchord.acquisition.a0
 internal object A0SearchQuery {
     private const val MAX_SOURCE_CHARS = 120
     private const val MAX_WIRE_UTF8_BYTES = 160
-    private val punctuation = Regex("[^\\p{L}\\p{N}]+")
+    // Unicode combining marks form part of words in Indic, Thai and many
+    // other scripts. They are not punctuation, even when NFC cannot compose
+    // them into a precomposed character.
+    private val punctuation = Regex("[^\\p{L}\\p{N}\\p{M}]+")
+    private val hasLetterOrDigit = Regex("[\\p{L}\\p{N}]")
     private val whitespace = Regex("\\s+")
 
     /**
@@ -77,7 +81,7 @@ internal object A0SearchQuery {
         val normalized = composed.replace(punctuation, " ")
             .trim()
             .replace(whitespace, " ")
-        require(normalized.isNotEmpty() &&
+        require(hasLetterOrDigit.containsMatchIn(normalized) &&
             normalized.toByteArray(Charsets.UTF_8).size <= MAX_WIRE_UTF8_BYTES
         ) { "A0 search term is empty or too long" }
         return normalized
