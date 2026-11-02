@@ -181,10 +181,14 @@ internal class A0AutoDiscoveryCoordinator(
                 }
                 // Observable per-track state, never network authority.
                 try {onSlotSearching(index)}catch(_:Exception){}
-                val proposals=pooled.selectionPreview()
                 val (cached,cacheTruncated)=checkNotNull(pooled.slotEvidence(index))
+                // The old selectionPreview() recomputed every one of 64 slots
+                // before EACH next slot: quadratic and expensive with large
+                // 512-offer buckets. Only the current slot is relevant here.
+                val currentPreview=A0AutoCandidateSelectionPolicy.preview(
+                    entries[index],cached,quality,sampleTruncated=cacheTruncated)
                 val (_,cachedDecision)=select(index,cached,cacheTruncated,false)
-                val readyInCache=proposals.getOrNull(index)?.status==
+                val readyInCache=currentPreview.status==
                     A0AutoCandidateSelectionPolicy.Status.PROVISIONAL ||
                     cachedDecision.status==
                     A0AutoCandidateSelectionPolicy.Status.PROVISIONAL
@@ -258,9 +262,10 @@ internal class A0AutoDiscoveryCoordinator(
                     // individually eligible, untruncated cached candidate.
                     val needsSiblingEvidence=(index+1 until count).any { next ->
                         val (offers,clipped)=checkNotNull(pooled.slotEvidence(next))
-                        A0AutoCandidateSelectionPolicy.preview(
-                            entries[next],offers,quality,
-                            sampleTruncated=clipped).status!=
+                        // Account for release-cohesion-based eligibility,
+                        // not just a single-track preview.
+                        val (_,choice)=select(next,offers,clipped,false)
+                        choice.status!=
                             A0AutoCandidateSelectionPolicy.Status.PROVISIONAL
                     }
                     if(needsSiblingEvidence && folderQueries<4) {
@@ -285,8 +290,12 @@ internal class A0AutoDiscoveryCoordinator(
                                             candidate.remotePath.replace('\\','/')
                                                 .substringBeforeLast('/',"")==directory
                                     }
-                                if(browsed is SearchResult.Found && fromExactFolder) {
-                                    pooled.add(browsed.choices,browsed.truncatedSlots)
+                                // An optional browse must never poison the
+                                // complete public-search evidence with a
+                                // clipped response or ambiguous extra folder.
+                                if(browsed is SearchResult.Found && fromExactFolder &&
+                                    browsed.truncatedSlots.isEmpty()) {
+                                    pooled.add(browsed.choices)
                                     try {onCacheEvidence(index,CacheEvidence(
                                         CacheAction.FOLDER_BROWSE_ADDED,
                                         browsed.choices.size.coerceIn(0,512),
