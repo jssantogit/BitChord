@@ -60,6 +60,8 @@ internal data class RuleBasedRecordingCandidate(
     val artistDisplay: String? = null,
     val earlySkips: Long = 0,
     val lateSkips: Long = 0,
+    /** Last real early/late skip in first-party Listening, not an interruption. */
+    val lastSkippedAtEpochMs: Long? = null,
     val releaseTitles: List<String> = emptyList(),
     /** Null = unavailable provenance; never treat it as a negative match. */
     val sourceKinds: Set<SmartPlaylistSourceKind>? = null,
@@ -96,8 +98,28 @@ internal data class RuleBasedRecordingCandidate(
     val hasReleaseArtworkReference: Boolean = false,
     val localAddedEpochMs: List<Long> = emptyList(),
     val localAddedDateEvidenceUnknown: Boolean = true,
+    /** Verified paths of MediaStore assets only, never provider/stream URLs. */
+    val localFilePaths: List<String> = emptyList(),
+    /** False when local assets have missing/inaccessible paths or provenance is unknown. */
+    val localFilePathsComplete: Boolean = false,
+    /** Tag evidence from available MediaStore assets, never title-inferred. */
+    val localGenres: List<String> = emptyList(),
+    val localGenresComplete: Boolean = false,
+    /** MediaStore BITRATE converted from bits/s into decimal kilobits/s. */
+    val localBitratesKbps: List<Double> = emptyList(),
+    val localBitrateEvidenceComplete: Boolean = false,
     /** Real canonical ReleaseTrack IDs, never matched by album title. */
     val canonicalReleaseIds: List<String> = emptyList(),
+    /** Country codes from verified canonical artist credits joined to MusicBrainz. */
+    val artistCountryCodes: List<String> = emptyList(),
+    val artistCountryEvidenceUnknown: Boolean = true,
+    /** The ReleaseGroup first-release year; never an edition's releaseDate. */
+    val originalReleaseYears: List<Int> = emptyList(),
+    val originalReleaseYearEvidenceUnknown: Boolean = true,
+    val discNumbers: List<Int> = emptyList(),
+    val discNumberEvidenceUnknown: Boolean = true,
+    val releaseGroupTypes: List<String> = emptyList(),
+    val releaseGroupTypeEvidenceUnknown: Boolean = true,
 )
 
 internal data class RuleBasedSmartPlaylistQuery(
@@ -262,7 +284,12 @@ internal fun SmartPlaylistV2Query.requiredEvidenceFields(): Set<SmartPlaylistRul
 
 private fun SmartPlaylistRule.needsSourceKinds(): Boolean = when (this) {
     is SmartPlaylistRule.Comparison -> field == SmartPlaylistRuleField.SOURCE_KIND ||
-        field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED
+        (field == SmartPlaylistRuleField.DAYS_SINCE_LOCAL_FILE_ADDED ||
+            field == SmartPlaylistRuleField.LOCAL_FOLDER ||
+            field == SmartPlaylistRuleField.LOCAL_FILE_PATH ||
+        field == SmartPlaylistRuleField.LOCAL_FILE_EXTENSION ||
+        field == SmartPlaylistRuleField.LOCAL_GENRE ||
+        field == SmartPlaylistRuleField.LOCAL_BITRATE_KBPS)
     is SmartPlaylistRule.Reference -> false
     is SmartPlaylistRule.Group -> children.any { it.needsSourceKinds() }
     is SmartPlaylistRule.Not -> child.needsSourceKinds()
