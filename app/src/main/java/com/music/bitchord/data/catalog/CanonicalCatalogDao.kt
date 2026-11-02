@@ -1533,6 +1533,33 @@ internal interface CanonicalCatalogDao {
     )
     suspend fun providerScopedArtists(providerKey: String): List<ArtistEntity>
 
+    /**
+     * Batch evidence for native Library rating filters. Call with <=400 IDs;
+     * source eligibility is proven by the caller's already source-filtered
+     * RecordingId list. IDs, not album titles, establish membership.
+     */
+    @Query("""
+        SELECT DISTINCT rt.releaseId
+        FROM catalog_release_track AS rt
+        WHERE rt.recordingId IN (:recordingIds)
+    """)
+    suspend fun releaseIdsForVisibleRecordings(recordingIds: List<String>): List<String>
+
+    /** Canonical recording and release artist credit paths, never display-name joins. */
+    @Query("""
+        SELECT DISTINCT matches.artistId
+        FROM (
+            SELECT artistId, recordingId
+            FROM catalog_recording_artist_credit
+            UNION ALL
+            SELECT credit.artistId AS artistId, track.recordingId AS recordingId
+            FROM catalog_release_artist_credit AS credit
+            INNER JOIN catalog_release_track AS track ON track.releaseId = credit.releaseId
+        ) AS matches
+        WHERE matches.recordingId IN (:recordingIds)
+    """)
+    suspend fun artistIdsForVisibleRecordings(recordingIds: List<String>): List<String>
+
     /** Bounded canonical group search for playlist construction. */
     @Query(
         """
