@@ -1740,9 +1740,9 @@ class A0ManualLoginActivity : Activity() {
                 // setMessage() and setItems() are supplied. The previous
                 // chooser therefore displayed ONLY a description + Voltar,
                 // trapping all pending slots. Use one list-owning dialog.
-                A0PendingReviewChooserDialog.create(this,indices,guided.entries) { slot ->
-                        if(!action.isEnabled)return@create
-                        if(!guided.selectPending(slot))return@setItems
+                A0PendingReviewChooserDialog.create(this,indices,guided.entries) reviewSelection@{ slot ->
+                        if(!action.isEnabled)return@reviewSelection
+                        if(!guided.selectPending(slot))return@reviewSelection
                         val entry=checkNotNull(guided.current)
                         com.music.bitchord.data.DebugLog.d("BitChord",
                             "soulseek_manual_review_navigation action=SELECT" +
