@@ -7,6 +7,10 @@ import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.diagnostics.DiagnosticLevel
 import androidx.room.withTransaction
 import java.util.Locale
+import java.io.ByteArrayInputStream
+import java.io.FileInputStream
+import java.io.SequenceInputStream
+import java.nio.ByteBuffer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,13 +49,7 @@ internal object LocalEmbeddedTagEnricher {
         activeJob = scope.launch {
             val startedAt = System.nanoTime()
             val stats = processPending(db) { rawUri ->
-                val uri = Uri.parse(rawUri)
-                require(uri.scheme?.lowercase(Locale.ROOT) in setOf("content", "file")) {
-                    "Local tags require a local content/file URI"
-                }
-                val input = context.contentResolver.openInputStream(uri)
-                    ?: error("Local audio header unavailable")
-                input.use(LocalEmbeddedTagParser::readStream)
+                readLocalTags(context, rawUri)
             }
             // Bounded privacy-safe evidence exported in the app's Diagnostics.
             // No file paths, URIs, raw tag values, or credentials ever leave here.
@@ -68,6 +66,61 @@ internal object LocalEmbeddedTagEnricher {
                 ),
                 durationNanos = System.nanoTime() - startedAt,
             )
+        }
+    }
+
+    /**
+     * A seekable descriptor is needed for MP4, where moov often follows mdat.
+     * POSitional reads avoid fetching or decoding the audio payload. Other
+     * formats keep the existing bounded streaming parser, including virtual
+     * providers that expose only InputStream.
+     */
+    private fun readLocalTags(context: Context, rawUri: String): LocalEmbeddedTags? {
+        val uri = Uri.parse(rawUri)
+        require(uri.scheme?.lowercase(Locale.ROOT) in setOf("content", "file")) {
+            "Local tags require a local content/file URI"
+        }
+        val afd = context.contentResolver.openAssetFileDescriptor(uri, "r")
+        if (afd == null) {
+            return context.contentResolver.openInputStream(uri)?.use(
+                LocalEmbeddedTagParser::readStream,
+            )
+        }
+        return afd.use { asset ->
+            asset.createInputStream().use { input ->
+                val first = ByteArray(8)
+                var count = 0
+                while (count < first.size) {
+                    val got = input.read(first, count, first.size - count)
+                    if (got <= 0) break
+                    count += got
+                }
+                if (count < first.size) return@use null
+                val isMp4 = first.copyOfRange(4, 8).contentEquals(
+                    "ftyp".toByteArray(Charsets.US_ASCII),
+                )
+                if (!isMp4) {
+                    return@use LocalEmbeddedTagParser.readStream(
+                        SequenceInputStream(ByteArrayInputStream(first), input),
+                    )
+                }
+                // File-backed content providers generally expose random access.
+                // Pipe-backed virtual files stay UNKNOWN instead of scanning
+                // hundreds of MB to find a tail moov.
+                val channel = FileInputStream(asset.fileDescriptor).channel
+                val size = if (asset.length >= 0L) asset.length
+                    else channel.size() - asset.startOffset
+                LocalMp4TagParser.parse(size) { offset, length ->
+                    val buffer = ByteBuffer.allocate(length)
+                    var n = 0
+                    while (n < length) {
+                        val got = channel.read(buffer, asset.startOffset + offset + n)
+                        if (got <= 0) return@parse null
+                        n += got
+                    }
+                    buffer.array()
+                }
+            }
         }
     }
 
