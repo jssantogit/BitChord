@@ -1605,6 +1605,8 @@ class A0ManualLoginActivity : Activity() {
                 if(batch?.isComplete==true || batch?.currentSaved==true ||
                     (batch==null && completedSingle.get()))return
                 if(manualRecovery && !reviewSlotSelected) {
+                    com.music.bitchord.data.DebugLog.d("BitChord",
+                        "soulseek_manual_review_navigation action=SEARCH_BLOCKED_NO_SELECTION")
                     status.text="Escolha uma das faixas pendentes antes de pesquisar."
                     return
                 }
@@ -1659,6 +1661,9 @@ class A0ManualLoginActivity : Activity() {
                 if(!manualRecovery || !action.isEnabled || guided.isComplete)return
                 val indices=guided.pendingIndices
                 if(indices.isEmpty())return
+                com.music.bitchord.data.DebugLog.d("BitChord",
+                    "soulseek_manual_review_navigation action=OPEN_CHOOSER" +
+                        " pending=${indices.size.coerceIn(0,64)}")
                 val titles=indices.map { slot ->
                     "${slot+1}. ${guided.entries[slot].query}"
                 }.toTypedArray()
@@ -1672,6 +1677,10 @@ class A0ManualLoginActivity : Activity() {
                         val slot=indices[position]
                         if(!guided.selectPending(slot))return@setItems
                         val entry=checkNotNull(guided.current)
+                        com.music.bitchord.data.DebugLog.d("BitChord",
+                            "soulseek_manual_review_navigation action=SELECT" +
+                                " original_slot=${recoveryIndices?.getOrNull(slot) ?: -1}" +
+                                " pending=${guided.pendingIndices.size.coerceIn(0,64)}")
                         reviewSlotSelected=true
                         searchInput.setText(entry.query)
                         albumInput.setText(entry.album.orEmpty())
