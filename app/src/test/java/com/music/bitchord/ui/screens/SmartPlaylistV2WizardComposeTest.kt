@@ -96,13 +96,18 @@ class SmartPlaylistV2WizardComposeTest {
         }
     }
 
-    @Test fun localGenreAsksForTextRatherThanSilentPresence() {
-        val comparison = smartRuleNewComparison(SmartPlaylistRuleField.LOCAL_GENRE)
+    @Test fun universalGenreAsksForTextAndLegacyLocalGenreRemainsReadable() {
+        val comparison = smartRuleNewComparison(SmartPlaylistRuleField.GENRE)
         assertEquals(SmartPlaylistRuleOperator.CONTAINS, comparison.operator)
         assertEquals("", comparison.textValue)
         assertEquals("music", smartConditionCategories.single {
-            SmartPlaylistRuleField.LOCAL_GENRE in it.fields
+            SmartPlaylistRuleField.GENRE in it.fields
         }.id)
+        assertTrue(smartConditionCategories.none {
+            SmartPlaylistRuleField.LOCAL_GENRE in it.fields
+        })
+        val legacy = smartRuleNewComparison(SmartPlaylistRuleField.LOCAL_GENRE)
+        assertEquals(SmartPlaylistRuleOperator.CONTAINS, legacy.operator)
     }
 
     @Test fun addingSuggestedRecordingPreservesMetadataAndPreventsDuplicates() {

@@ -14,11 +14,11 @@ class SmartPlaylistV2RuleEngineTest {
         val rows = listOf(
             RuleBasedRecordingCandidate("target", null, 0, null, 180_000, true).copy(
                 sourceKinds = setOf(SmartPlaylistSourceKind.LOCAL),
-                localFilePaths = listOf("Music/ILLIT/Pop.flac"),
+                localFilePaths = listOf("/Music/ILLIT/Pop.flac"),
                 localFilePathsComplete = true),
             RuleBasedRecordingCandidate("other", null, 0, null, 180_000, true).copy(
                 sourceKinds = setOf(SmartPlaylistSourceKind.LOCAL),
-                localFilePaths = listOf("Music/ILLIT-Backup/Pop.flac"),
+                localFilePaths = listOf("/Music/ILLIT-Backup/Pop.flac"),
                 localFilePathsComplete = true),
         )
         val folder = SmartPlaylistRule.Comparison(SmartPlaylistRuleField.FOLDER_PATH,
