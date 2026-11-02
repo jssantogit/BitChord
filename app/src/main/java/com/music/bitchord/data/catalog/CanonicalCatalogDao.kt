@@ -94,6 +94,13 @@ internal data class CanonicalReleaseArtistCreditNameRow(
  * Date evidence for a real canonical ReleaseId/ArtistId, from assets in the
  * currently eligible providers only. A null value is an unknown timestamp.
  */
+/** Only ReleaseGroup evidence attached by exact ReleaseId qualifies as type/date. */
+internal data class CanonicalArtistReleaseEvidenceRow(
+    val releaseId: String,
+    val primaryType: String?,
+    val firstReleaseDate: String?,
+)
+
 internal data class CanonicalEntitySortDateRow(
     val entityId: String,
     val dateAddedSeconds: Long?,
@@ -1617,6 +1624,24 @@ internal interface CanonicalCatalogDao {
         providerKey: String, searchTerm: String,
     ): List<ArtistEntity>
 
+
+    /** No title heuristics: grouped types/dates require a real Edition edge. */
+    @Query(
+        """
+        SELECT edition.releaseId AS releaseId,
+          CASE WHEN COUNT(DISTINCT grp.primaryType) = 1
+            THEN MAX(grp.primaryType) ELSE NULL END AS primaryType,
+          CASE WHEN COUNT(DISTINCT grp.firstReleaseDate) = 1
+            THEN MAX(grp.firstReleaseDate) ELSE NULL END AS firstReleaseDate
+        FROM catalog_release_group_edition AS edition
+        INNER JOIN catalog_release_group AS grp ON grp.id = edition.releaseGroupId
+        WHERE edition.releaseId IN (:releaseIds)
+        GROUP BY edition.releaseId
+        """,
+    )
+    suspend fun canonicalArtistReleaseEvidence(
+        releaseIds: List<String>,
+    ): List<CanonicalArtistReleaseEvidenceRow>
 
     /**
      * One eligible canonical recording per release, for the browse row cover.
