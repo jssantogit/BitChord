@@ -7,6 +7,23 @@ import org.junit.Test
 
 /** Manual choice: no static CC0 filename, no unrequested transfers. */
 class A0ObservedCandidateHandoffTest {
+    @Test fun automaticShadowModeDoesNotMaintainTheUnneededManualCandidateRanking() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",81,true,
+            searchPhrase="ILLIT - More",requestedAlbum="BREAK EVEN",
+            collectReleaseShadow=true,collectManualCandidates=false,
+            releaseQueries=listOf("ILLIT - More","ILLIT - Pop"))
+        val files=(0 until 240).map { n ->
+            A0SoulseekSearchFile(
+                "Shared\\ILLIT\\BREAK EVEN\\ILLIT - More $n.flac",
+                38_000_000L,"flac",mapOf(1 to 173,4 to 44_100,5 to 16))
+        }
+        assertTrue(handoff.offerParsed(A0SoulseekSearchResponse(
+            "peer",81,files,emptyList(),true,128_000,0),"peer"))
+        assertTrue(handoff.choices().isEmpty())
+        assertEquals(64,handoff.releaseShadowChoices().size)
+        assertTrue(handoff.releaseShadowSnapshot().shadowDroppedAtPeerLimit>0)
+    }
+
     @Test fun collectsEligiblePublicAudioCandidatesWithoutRequiringRingingsound() {
         val handoff=A0ObservedCandidateHandoff(Socket(),"ouruser",81,true)
         val response=A0SoulseekSearchResponse(
