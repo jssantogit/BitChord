@@ -268,6 +268,9 @@ object LocalMediaRepository {
             null
         }
         val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
+        val mandatoryProjection = projection.filterNot {
+            it == MediaStore.Audio.Media.GENRE || it == MediaStore.MediaColumns.BITRATE
+        }.toTypedArray()
 
         runCatching {
             // An OEM MediaStore may not implement an optional genre column.
@@ -319,6 +322,12 @@ object LocalMediaRepository {
                     val albumId = cursor.getLong(albumIdCol)
                     val durationMs = cursor.getLong(durationCol)
                     val path = cursor.getString(dataCol)
+                    val localGenre = if (genreCol >= 0 && !cursor.isNull(genreCol)) {
+                        cursor.getString(genreCol)?.trim()?.takeIf(String::isNotBlank)
+                    } else null
+                    val localBitrateBps = if (bitrateCol >= 0 && !cursor.isNull(bitrateCol)) {
+                        cursor.getLong(bitrateCol).takeIf { it > 0L }
+                    } else null
 
                     if (filterNonMusic && !isEligibleLocalMusic(durationMs, displayName, path)) continue
                     if (!isInSelectedFolder(path, AppSettings.localMusicFolderUri.value)) continue
@@ -354,6 +363,8 @@ object LocalMediaRepository {
                             albumName = albumName,
                             localUri = contentUri,
                             localPath = path,
+                            localGenre = localGenre,
+                            localBitrateBps = localBitrateBps,
                             localDateAddedSeconds = cursor.getLong(dateAddedCol),
                             localDateModifiedSeconds = cursor.getLong(dateModifiedCol),
                             trackNumber = trackNumber,
