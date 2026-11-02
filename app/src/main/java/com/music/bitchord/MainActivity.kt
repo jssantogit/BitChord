@@ -4368,7 +4368,8 @@ private fun BitChordApp(
                             // a history is a record of what was played, which reads
                             // as that tab's business rather than every tab's.
                             if (!showHistory && !showReplay && !showDiscord && libraryShowAll == null &&
-                                detail == null && selectedTab == TAB_LIBRARY
+                                detail == null && selectedTab == TAB_LIBRARY &&
+                                unifiedLibraryCategory == null
                             ) {
                                 IconButton(
                                     onClick = {
@@ -4504,7 +4505,9 @@ private fun BitChordApp(
                             // there is a batch to report on — see
                             // [TopBarDownloadButton], which decides that for
                             // itself rather than being told.
-                            TopBarDownloadButton(onClick = { showDownloadManager = true })
+                            if (unifiedLibraryCategory == null) {
+                                TopBarDownloadButton(onClick = { showDownloadManager = true })
+                            }
                             // Not on a release page, whose pill already carries
                             // three of its own controls — Apple Music leaves the
                             // profile off its album pages too.
