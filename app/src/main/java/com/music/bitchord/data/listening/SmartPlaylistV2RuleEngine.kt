@@ -762,7 +762,10 @@ internal class SmartPlaylistV2RuleEngine(
                 }
                 else -> Unit
             }
-            val expected = rule.textValue.normalizedSmartPlaylistText()
+            val expected = (if (rule.field == SmartPlaylistRuleField.FILE_PATH ||
+                    rule.field == SmartPlaylistRuleField.FOLDER_PATH) {
+                rule.textValue?.replace('\\', '/')
+            } else rule.textValue).normalizedSmartPlaylistText()
                 ?: return RuleTruth.UNKNOWN
             if (values.isEmpty()) return RuleTruth.UNKNOWN
             val matched = values.any { actual ->
