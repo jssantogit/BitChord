@@ -136,6 +136,52 @@ class A0AutoDiscoveryCoordinatorTest {
             isCancelled={false},stillAuthorized={true})
         assertEquals(4,result.batch.published)
         assertEquals(4,search.searched)
+        // All four simulated downloads use the SAME peer + folder:
+        // the failed browse is attempted once, not twice.
+        assertEquals(1,search.inspected)
+        assertEquals(1,result.folderQueries)
+    }
+
+    @Test fun distinctPublishedFoldersRespectShortAlbumProbeBudgetOfTwo() {
+        val search=object:A0AutoDiscoveryCoordinator.SearchPort {
+            var searched=0
+            var inspected=0
+            override fun search(entry:SoulseekBatchPlan.Entry,
+                releaseSlots:List<SoulseekBatchPlan.Entry>,
+                isCancelled:()->Boolean):A0AutoDiscoveryCoordinator.SearchResult {
+                searched++
+                val observation=A0ObservedCandidateHandoff(
+                    Socket(),"local",177,true,
+                    searchPhrase=entry.query,requestedAlbum=entry.album,
+                    expectedDurationSeconds=entry.durationSeconds,
+                    qualityProfile=quality,collectReleaseShadow=true
+                )
+                val filename="Shared\\\\Unique-${entry.trackId}\\\\SUPER REAL ME\\\\${entry.query}.mp3"
+                observation.offerParsed(A0SoulseekSearchResponse(
+                    "ready-peer",177,
+                    listOf(A0SoulseekSearchFile(
+                        filename,entry.durationSeconds!!.toLong()*40_000L,
+                        "mp3",mapOf(0 to 320,1 to entry.durationSeconds))),
+                    emptyList(),true,128_000,0),"ready-peer")
+                return A0AutoDiscoveryCoordinator.SearchResult.Found(
+                    observation.releaseShadowChoices())
+            }
+            override fun inspectPublishedFolder(
+                source:A0ObservedCandidateHandoff.Choice,
+                releaseSlots:List<SoulseekBatchPlan.Entry>,
+                isCancelled:()->Boolean):A0AutoDiscoveryCoordinator.SearchResult {
+                inspected++
+                return A0AutoDiscoveryCoordinator.SearchResult.NoReply
+            }
+            override fun close() {}
+        }
+        val done=mutableListOf<String>()
+        val result=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            entries,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(4,result.batch.published)
+        assertEquals(4,search.searched)
+        // Distinct real source directories exercise the budget, not dedup.
         assertEquals(2,search.inspected)
         assertEquals(2,result.folderQueries)
     }
