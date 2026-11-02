@@ -139,3 +139,25 @@ publicar o APK como artifact associado ao SHA exato deste commit.
 
 **Fora do escopo:** merge da PR, assinatura de produção, alteração da
 `main`, fechamento de #192 e afirmação de paridade Symfonium completa.
+
+
+## Smoke físico — reconciliação visual e funcional das playlists, 02/11/2026
+
+**Autorização explícita do usuário nesta conversa:** “Pode gerar”.
+
+**Código-base confirmado:** `6038bbb9269c3702fb359b422a5095ce919e291d` na PR draft #193; fast-forward incorporou a PR #204 (interface da #202 + filtros da #193). Branch #193 e #204 com conteúdo idêntico no checkpoint anterior.
+
+**Gates prévios no HEAD exato:**
+- [Android CI #41426285333](https://github.com/jssantogit/BitChord/actions/runs/41426285333): SUCCESS.
+- [Integration Queue #41426285137](https://github.com/jssantogit/BitChord/actions/runs/41426285137): SUCCESS.
+
+**Disparo único deste ciclo:** commit somente deste documento-gatilho na branch `listening/smart-playlists-v2-192`, conforme `.github/workflows/physical-smoke-apk.yml`. O workflow exige o ancestral da interface #202, executa testes Android e `:app:assembleDevDebug` no novo SHA, publica um artefato por commit. Nenhum código do app será alterado neste gatilho.
+
+**Plano de aceite Galaxy A54:**
+- Home com título “Início”, botão do perfil e menu funcionais, sem duplicação de chrome.
+- Biblioteca → Playlists: lista vazia, criar pelo CTA, lista preenchida, criar pela toolbar, busca e ordenação.
+- Criar playlist Normal e Inteligente, editar por ID, salvar, reabrir, voltar e descartar; nome, descrição, capa manual, revisão, fontes do catálogo.
+- Filtros Symfonium já implementados na branch, metadados locais/Navidrome, caminho/pasta, regras E/OU/NÃO, prévia, seleção de fontes sem vazamentos, Play/Fila até 500.
+- Responsividade da UI e logs de `playlist_create_requested`, `canonical_playlist_library_entered` e `playlist_wizard_entered`; observar `main_thread_stall` sem atribuir causa sem evidência.
+
+**Não autorizado por este pedido:** mesclar na `main`, release assinada de produção, fechamento da issue #192 ou declaração de paridade Symfonium completa. APK Dev Debug apenas para smoke físico.
