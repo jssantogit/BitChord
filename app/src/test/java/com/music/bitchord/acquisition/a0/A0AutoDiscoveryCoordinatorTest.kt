@@ -450,6 +450,38 @@ class A0AutoDiscoveryCoordinatorTest {
             "search:three","three","search:four","four"),events)
     }
 
+    @Test fun laterReadySiblingCanRescueEarlierCongestedOnlyTrack() {
+        val two=entries.take(2)
+        val congested=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase=two[0].query,requestedAlbum=two[0].album,
+            expectedDurationSeconds=two[0].durationSeconds,
+            qualityProfile=quality,collectReleaseShadow=true)
+        val song=A0SoulseekSearchFile(
+            "Shared\\\\ILLIT\\\\SUPER REAL ME\\\\${two[0].query}.mp3",
+            two[0].durationSeconds!!.toLong()*40_000L,"mp3",
+            mapOf(0 to 320,1 to two[0].durationSeconds))
+        congested.offerParsed(A0SoulseekSearchResponse(
+            "congested-peer",177,listOf(song),emptyList(),true,128_000,40),
+            "congested-peer")
+        val slowOffers=congested.releaseShadowChoices()
+        assertEquals(A0AutoCandidateSelectionPolicy.Reason.NO_READY_SOURCE,
+            A0AutoCandidateSelectionPolicy.preview(
+                two[0],slowOffers,quality).reason)
+        val search=FakeSearch { slot ->
+            A0AutoDiscoveryCoordinator.SearchResult.Found(
+                if(slot.trackId=="one")slowOffers else claims(two))
+        }
+        val done=mutableListOf<String>()
+        val report=A0AutoDiscoveryCoordinator(search,batch(done)).run(
+            two,quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(2,report.searches)
+        assertEquals(listOf("one","two"),search.requests)
+        assertEquals(listOf("two","one"),done)
+        assertEquals(2,report.batch.published)
+        assertEquals(0,report.batch.manualReview)
+    }
+
     @Test fun laterSiblingEvidenceMayRescueAnEarlierReviewWithoutExtraSearch() {
         val two=entries.take(2)
         val search=FakeSearch { slot ->

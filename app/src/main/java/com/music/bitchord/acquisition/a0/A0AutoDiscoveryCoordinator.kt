@@ -409,7 +409,10 @@ internal class A0AutoDiscoveryCoordinator(
                     decision.reason in setOf(
                         A0AutoCandidateSelectionPolicy.Reason.NO_STRONG_CANDIDATE,
                         A0AutoCandidateSelectionPolicy.Reason.AMBIGUOUS_EDITION,
-                        A0AutoCandidateSelectionPolicy.Reason.INCOMPLETE_SAMPLE) &&
+                        A0AutoCandidateSelectionPolicy.Reason.INCOMPLETE_SAMPLE,
+                        // No P/F was attempted: a later sibling search may
+                        // reveal a READY source for the same canonical song.
+                        A0AutoCandidateSelectionPolicy.Reason.NO_READY_SOURCE) &&
                     outcome.attempts==0)
                     reviewWithoutTransfer.add(index)
                 if(status in setOf(
