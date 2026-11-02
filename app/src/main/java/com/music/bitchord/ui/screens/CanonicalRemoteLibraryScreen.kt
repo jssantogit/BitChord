@@ -1122,7 +1122,7 @@ private fun TrackList(
 }
 
 @Composable
-private fun CanonicalTrackRow(
+internal fun CanonicalTrackRow(
     track: CanonicalBrowseTrack,
     artworkLoader: OpenSubsonicArtworkLoader,
     onClick: () -> Unit,
@@ -1616,7 +1616,7 @@ private fun NativeUnifiedLibraryBody(
  * remains inside the OpenSubsonic provider loader (never a raw URL in Compose).
  */
 @Composable
-private fun CanonicalUnifiedArtwork(
+internal fun CanonicalUnifiedArtwork(
     track: CanonicalBrowseTrack,
     loader: OpenSubsonicArtworkLoader,
     modifier: Modifier = Modifier,
@@ -1647,7 +1647,7 @@ private fun CanonicalUnifiedArtwork(
 
 /** Same cell spacing as LocalFolder's grid; artist artwork is circular. */
 @Composable
-private fun NativeLibraryEntityCard(
+internal fun NativeLibraryEntityCard(
     title: String,
     subtitle: String,
     imageUrl: String?,
