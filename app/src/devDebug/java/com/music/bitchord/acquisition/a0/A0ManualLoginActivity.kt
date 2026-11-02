@@ -1736,18 +1736,12 @@ class A0ManualLoginActivity : Activity() {
                 com.music.bitchord.data.DebugLog.d("BitChord",
                     "soulseek_manual_review_navigation action=OPEN_CHOOSER" +
                         " pending=${indices.size.coerceIn(0,64)}")
-                val titles=indices.map { slot ->
-                    "${slot+1}. ${guided.entries[slot].query}"
-                }.toTypedArray()
-                AlertDialog.Builder(this)
-                    .setTitle("${indices.size} " +
-                        if(indices.size==1) "faixa pendente" else "faixas pendentes")
-                    .setMessage("Escolha uma faixa para pesquisar manualmente. " +
-                        "As outras permanecem pendentes. Nenhum arquivo será baixado " +
-                        "antes de você selecionar e autorizar um candidato.")
-                    .setItems(titles) { _,position ->
-                        if(!action.isEnabled)return@setItems
-                        val slot=indices[position]
+                // Android AlertDialog suppresses the item list when both
+                // setMessage() and setItems() are supplied. The previous
+                // chooser therefore displayed ONLY a description + Voltar,
+                // trapping all pending slots. Use one list-owning dialog.
+                A0PendingReviewChooserDialog.create(this,indices,guided.entries) { slot ->
+                        if(!action.isEnabled)return@create
                         if(!guided.selectPending(slot))return@setItems
                         val entry=checkNotNull(guided.current)
                         com.music.bitchord.data.DebugLog.d("BitChord",
@@ -1765,9 +1759,7 @@ class A0ManualLoginActivity : Activity() {
                         nextTrack?.isEnabled=false
                         status.text="Faixa selecionada. Use Pesquisar candidatos para " +
                             "escolher e autorizar um arquivo."
-                    }
-                    .setNegativeButton("Voltar",null)
-                    .show()
+                    }.show()
             }
             chooseReviewTrack?.setOnClickListener {
                 if(action.isEnabled)showPendingReviewTracks()
