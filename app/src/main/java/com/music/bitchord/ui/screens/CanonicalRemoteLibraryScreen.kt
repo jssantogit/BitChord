@@ -994,7 +994,8 @@ internal fun RemoteTrackArtwork(
         key2 = artworkRevision,
         key3 = artworkLoader,
     ) {
-        value = if (mediaAssetId == null || artworkRevision.isNullOrBlank()) {
+        value = if (mediaAssetId == null || artworkRevision.isNullOrBlank() ||
+            artworkRevision.startsWith("content://") || artworkRevision.startsWith("file://")) {
             null
         } else {
             when (val result = awaitRecoverableCanonicalArtwork(load = {
