@@ -296,6 +296,11 @@ internal class A0AutoDiscoveryCoordinator(
                             }catch(_:Exception){}
                         }
                         SearchResult.TeardownIncomplete -> {
+                            // A reader-drain failure is NOT a genuine empty
+                            // network reply. Break a streak of true NoReply
+                            // slots or the diagnostic would implicate Soulseek
+                            // throttling when our own reader failed between.
+                            consecutiveNoReply=0
                             // The failing search's observation is unusable.
                             // Do not retry the slot or resurrect it from later
                             // evidence; never strand untouched siblings.

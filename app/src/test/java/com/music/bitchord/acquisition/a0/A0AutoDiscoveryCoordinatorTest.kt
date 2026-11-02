@@ -782,6 +782,23 @@ class A0AutoDiscoveryCoordinatorTest {
         assertEquals(1,report.withReservationReleased(true).screenedOutSearches)
     }
 
+    @Test fun failedReaderDrainSeparatesTrueEmptySearchStreaks() {
+        val search=FakeSearch { slot ->
+            if(slot.trackId=="two")
+                A0AutoDiscoveryCoordinator.SearchResult.TeardownIncomplete
+            else A0AutoDiscoveryCoordinator.SearchResult.NoReply
+        }
+        val report=A0AutoDiscoveryCoordinator(
+            search,batch(mutableListOf())).run(
+            entries.take(3),quality,userRequested=true,optedIn=true,
+            isCancelled={false},stillAuthorized={true})
+        assertEquals(3,report.searches)
+        assertEquals(2,report.noReplySearches)
+        assertEquals(1,report.longestNoReplyStreak)
+        assertEquals(3,report.batch.manualReview)
+        assertEquals(listOf("one","two","three"),search.requests)
+    }
+
     @Test fun threeEmptySearchesAreReportedAsOneStreakWithoutPeerMetadata() {
         val discovery=FakeSearch { A0AutoDiscoveryCoordinator.SearchResult.NoReply }
         val result=A0AutoDiscoveryCoordinator(
