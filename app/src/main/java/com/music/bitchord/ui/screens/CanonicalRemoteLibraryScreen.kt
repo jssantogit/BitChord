@@ -666,7 +666,31 @@ internal fun CanonicalRemoteLibraryScreen(
                 CanonicalDetailBrowseState.Failed -> CanonicalSongFilterState.Failed
                 is CanonicalDetailBrowseState.Ready -> CanonicalSongFilterState.Ready(detailMatches)
             }
-            NativeUnifiedLibraryBody(
+            if (detail != null && selectedContext == CanonicalSmartFilterContext.ARTISTS) {
+                // Real artist destination: the approved DetailScreen artist
+                // chrome and sections, bound to proven canonical memberships.
+                CanonicalNativeArtistDetail(
+                    artistName = detail.name,
+                    tracks = sortCanonicalUnifiedTracks(scopedDetailTracks, unifiedSort),
+                    sourceKeys = sources,
+                    selectedSourceKey = selectedSource,
+                    heroArtworkTrack = entityArtworkById[detail.id]
+                        ?: scopedDetailTracks.firstOrNull(),
+                    artworkLoader = artworkLoader,
+                    query = detailQuery,
+                    onQueryChange = { detailQuery = it },
+                    onTrackPlay = playTrack,
+                    onTrackEditRating = editRating,
+                    onPlayAll = { visible, shuffle ->
+                        executeLibraryTrack(
+                            SmartCollectionActionSource.LibraryTracks(
+                                visible.map { it.recordingId }, selectedSource, shuffle,
+                            ),
+                            CanonicalCollectionIntent.PLAY_NOW,
+                        )
+                    },
+                )
+            } else NativeUnifiedLibraryBody(
                 title = detail?.name ?: title,
                 selectedContext = if (detail == null) selectedContext
                     else CanonicalSmartFilterContext.SONGS,
