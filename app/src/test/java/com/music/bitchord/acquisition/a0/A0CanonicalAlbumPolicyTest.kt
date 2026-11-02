@@ -176,6 +176,36 @@ class A0CanonicalAlbumPolicyTest {
             exactRelease.status)
     }
 
+    @Test fun exactlyNamedAlbumWithCalendarYearAndEpLabelRemainsUnverifiedHint() {
+        val target=A0CanonicalAlbumPolicy.Target("BREAK EVEN",expectedArtist="ILLIT")
+        for(folder in listOf(
+            "(2026) BREAK EVEN","BREAK EVEN (2026)",
+            "ILLIT - BREAK EVEN [EP] (2026)","BREAK EVEN (2026) [EP]",
+            "ILLIT - BREAK EVEN (2026)"
+        )) {
+            val answer=policy.assess(target,A0CanonicalAlbumPolicy.Claim(
+                folder,A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
+            assertEquals(folder,A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED,
+                answer.status)
+            assertFalse(answer.authorizesTransfer)
+        }
+    }
+
+    @Test fun editionModifiersCannotBeLaunderedByYearOrEpDecoration() {
+        val target=A0CanonicalAlbumPolicy.Target("BREAK EVEN",expectedArtist="ILLIT")
+        for(folder in listOf(
+            "ILLIT - BREAK EVEN [Deluxe] (2026)",
+            "BREAK EVEN (2026) Remastered",
+            "Other - BREAK EVEN (2026)",
+            "ILLIT - BREAK EVEN (2026) (Live)"
+        )) {
+            val answer=policy.assess(target,A0CanonicalAlbumPolicy.Claim(
+                folder,A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
+            assertTrue(folder,answer.status!=
+                A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED)
+        }
+    }
+
     @Test fun compositeNamesNeverOverrideExplicitConflictOrAlternateVersion() {
         val target=A0CanonicalAlbumPolicy.Target("BREAK EVEN",expectedArtist="ILLIT")
         for(label in listOf("ILLIT - BREAK EVEN [FLAC]","BREAK EVEN (Deluxe)")) {
