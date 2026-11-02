@@ -14,8 +14,19 @@ internal object A0AutoSearchEarlyExitPolicy {
         quality:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
         shadow:A0ObservedCandidateHandoff.ReleaseShadowSnapshot,
     ):Boolean {
-        if(elapsedMillis<8000 || release.size !in 2..SoulseekBatchPlan.MAX_TRACKS)
-            return false
+        if(elapsedMillis<8000)return false
+        return hasCompleteEligibleRelease(release,quality,shadow)
+    }
+
+    /** Unlike canFinish, coverage may be inspected before the 8s early-exit
+     * threshold to decide if one album-wide query is worth sending.
+     */
+    fun hasCompleteEligibleRelease(
+        release:List<SoulseekBatchPlan.Entry>,
+        quality:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
+        shadow:A0ObservedCandidateHandoff.ReleaseShadowSnapshot,
+    ):Boolean {
+        if(release.size !in 2..SoulseekBatchPlan.MAX_TRACKS)return false
         if(shadow.choices.isEmpty() || shadow.truncatedSlots.isNotEmpty() ||
             shadow.shadowDroppedAtGlobalLimit>0 ||
             shadow.shadowDroppedAtPeerLimit>0 ||
