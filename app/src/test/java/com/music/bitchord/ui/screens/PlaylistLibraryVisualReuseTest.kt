@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
@@ -271,6 +272,43 @@ class PlaylistLibraryVisualReuseTest {
                 queued,
             )
         }
+    }
+
+    @Test fun nativePlaylistMenuShowsExplicitCoverEvenWhenSmartPlaylistHasNoSongs() {
+        val saved = LibraryPlaylistCard.Smart(
+            com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition(
+                id = "empty-smart",
+                name = "Coleção sem faixas",
+                query = com.music.bitchord.data.listening.SmartPlaylistV2Query(
+                    com.music.bitchord.data.listening.SmartPlaylistRule.Comparison(
+                        com.music.bitchord.data.listening.SmartPlaylistRuleField.TITLE,
+                        com.music.bitchord.data.listening.SmartPlaylistRuleOperator.IS_PRESENT,
+                    ),
+                ),
+                coverUri = "content://media/document/saved-cover",
+            ),
+        )
+        compose.setContent {
+            com.music.bitchord.ui.components.BrowseActionsSheet(
+                target = com.music.bitchord.ui.components.BrowseTarget(
+                    browseId = null, title = saved.title,
+                    subtitle = "Playlist inteligente · 0 faixas",
+                    type = com.music.bitchord.data.model.BrowseType.PLAYLIST,
+                    fromCard = false,
+                ),
+                onPlayNext = {}, onAddToQueue = {},
+                headerArtwork = {
+                    CanonicalPlaylistCoverArt(
+                        rows = emptyList(),
+                        modifier = Modifier.fillMaxSize(),
+                        customCoverUri = saved.explicitCoverUri(),
+                    )
+                },
+                onEdit = {},
+            )
+        }
+        compose.onNodeWithContentDescription("Capa personalizada").assertExists()
+        compose.onNodeWithText("Coleção sem faixas").assertExists()
     }
 
     @Test fun nativeBrowseSheetReusesArtworkAndCanonicalEditAction() {
