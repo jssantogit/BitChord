@@ -6479,7 +6479,7 @@ private fun FrostedUnifiedLibrarySourceMenu(
             val title = when {
                 key == "local-mediastore" -> "Música local"
                 key.startsWith("opensubsonic:") ->
-                    if (navidrome.size > 1) "Navidrome $" + "{navidrome.indexOf(key) + 1}"
+                    if (navidrome.size > 1) "Navidrome ${navidrome.indexOf(key) + 1}"
                     else "Navidrome"
                 else -> "Outra fonte"
             }
@@ -6539,7 +6539,7 @@ private fun FrostedUnifiedLibrarySortMenu(
                     Icon(
                         if (stars != null && value <= stars) Icons.Rounded.Star
                         else Icons.Rounded.StarBorder,
-                        contentDescription = "Filtrar $" + "{value} estrelas",
+                        contentDescription = "Filtrar ${value} estrelas",
                         tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(20.dp),
                     )
