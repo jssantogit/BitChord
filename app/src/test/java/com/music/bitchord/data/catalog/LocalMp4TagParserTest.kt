@@ -80,7 +80,7 @@ class LocalMp4TagParserTest {
         assertNull(read(atom("ftyp", "M4A ".toByteArray()) + atom("moov", ByteArray(0))))
         val broken = m4a(freeform("MOOD", "Calm")).copyOf().also {
             it[it.lastIndex] = 0x7F
-            it[0] = 0 // malformed initial atom size
+            it[3] = 4 // invalid initial atom size smaller than its header
         }
         assertNull(read(broken))
     }
