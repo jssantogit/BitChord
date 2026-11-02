@@ -3490,6 +3490,18 @@ private fun BitChordApp(
                                 onRefresh = { viewModel.refresh(MainViewModel.Feed.HOME) },
                                 pullState = homePull,
                                 contentPadding = listPadding,
+                                headerTrailing = {
+                                    TopBarAccountButton(
+                                        account = account,
+                                        onClick = {
+                                            if (signedIn) {
+                                                viewModel.loadChannels()
+                                                showAccountSelector = true
+                                            } else showSettings = true
+                                        },
+                                        onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
+                                    )
+                                },
                                 title = stringResource(R.string.listen_now),
                                 signedIn = true,
                                 leadHero = true,
@@ -3501,6 +3513,18 @@ private fun BitChordApp(
                             listState = homeListState,
                             currentSong = player.song,
                             isPlaying = player.isPlaying,
+                            headerTrailing = {
+                                TopBarAccountButton(
+                                    account = account,
+                                    onClick = {
+                                        if (signedIn) {
+                                            viewModel.loadChannels()
+                                            showAccountSelector = true
+                                        } else showSettings = true
+                                    },
+                                    onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
+                                )
+                            },
                             title = stringResource(R.string.home),
                             headerActions = listOf(
                                 HomeHeaderAction(stringResource(R.string.settings)) {
@@ -4126,7 +4150,7 @@ private fun BitChordApp(
                     // circles over the shared gradient — no full-width pane.
                     transparentBackdrop = true,
                     artworkPageChrome = true,
-                    showActions = !homeRootVisible,
+                    showActions = !homeRootVisible || homeListState.firstVisibleItemIndex > 0,
                     // The generic top bar scroll flag flips after 24px,
                     // while the large Home heading is still fully legible.
                     // Only show its compact replacement when item 0 has left
