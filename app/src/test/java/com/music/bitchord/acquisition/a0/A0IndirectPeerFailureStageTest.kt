@@ -1,5 +1,9 @@
 package com.music.bitchord.acquisition.a0
 
+import java.io.IOException
+import java.net.ConnectException
+import java.net.NoRouteToHostException
+import java.net.SocketTimeoutException
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -11,6 +15,24 @@ class A0IndirectPeerFailureStageTest {
             A0IndirectPeerFailureStage.classify(true,false))
         assertEquals(A0IndirectPeerFailureStage.Phase.RESPONSE,
             A0IndirectPeerFailureStage.classify(true,true))
+    }
+
+    @Test fun connectFailuresRetainDistinctTimeoutRefusalRouteAndOtherReasons() {
+        val causes=A0IndirectPeerFailureStage
+        assertEquals(A0IndirectPeerFailureStage.ConnectCause.TIMEOUT,
+            causes.connectCause(SocketTimeoutException("peer address intentionally not recorded")))
+        assertEquals(A0IndirectPeerFailureStage.ConnectCause.REFUSED,
+            causes.connectCause(ConnectException("refused")))
+        assertEquals(A0IndirectPeerFailureStage.ConnectCause.NO_ROUTE,
+            causes.connectCause(NoRouteToHostException("unreachable")))
+        assertEquals(A0IndirectPeerFailureStage.ConnectCause.OTHER,
+            causes.connectCause(IOException("unknown")))
+    }
+
+    @Test fun wrappedNetworkTimeoutStillCountsAsTimeoutWithoutLoggingDetails() {
+        assertEquals(A0IndirectPeerFailureStage.ConnectCause.TIMEOUT,
+            A0IndirectPeerFailureStage.connectCause(IOException("wrapper",
+                IOException("nested",SocketTimeoutException("timeout")))))
     }
 
     @Test fun impossiblePeerInitWithoutTcpNeverMasqueradesAsReplyFailure() {

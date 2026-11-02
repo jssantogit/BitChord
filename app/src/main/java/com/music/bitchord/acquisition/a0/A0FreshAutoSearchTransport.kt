@@ -161,6 +161,10 @@ internal class A0FreshAutoSearchTransport(
             val indirectConnected=AtomicInteger()
             val indirectFailed=AtomicInteger()
             val indirectConnectFailed=AtomicInteger()
+            val indirectConnectTimeout=AtomicInteger()
+            val indirectConnectRefused=AtomicInteger()
+            val indirectConnectNoRoute=AtomicInteger()
+            val indirectConnectOther=AtomicInteger()
             val indirectInitFailed=AtomicInteger()
             val indirectReplyFailed=AtomicInteger()
             handoff=A0ObservedCandidateHandoff(
@@ -303,15 +307,26 @@ internal class A0FreshAutoSearchTransport(
                                                 acceptedSearchTokens=tickets.accepted
                                             )
                                         }
-                                    }catch(_:IOException) {
+                                    }catch(error:IOException) {
                                         indirectFailed.incrementAndGet()
                                         // Connection / peer-init / response are
                                         // distinct failure modes. Only bounded
                                         // counts are logged, never identities.
                                         when(A0IndirectPeerFailureStage.classify(
                                             connected,initSent)) {
-                                            A0IndirectPeerFailureStage.Phase.CONNECT ->
+                                            A0IndirectPeerFailureStage.Phase.CONNECT -> {
                                                 indirectConnectFailed.incrementAndGet()
+                                                when(A0IndirectPeerFailureStage.connectCause(error)) {
+                                                    A0IndirectPeerFailureStage.ConnectCause.TIMEOUT ->
+                                                        indirectConnectTimeout.incrementAndGet()
+                                                    A0IndirectPeerFailureStage.ConnectCause.REFUSED ->
+                                                        indirectConnectRefused.incrementAndGet()
+                                                    A0IndirectPeerFailureStage.ConnectCause.NO_ROUTE ->
+                                                        indirectConnectNoRoute.incrementAndGet()
+                                                    A0IndirectPeerFailureStage.ConnectCause.OTHER ->
+                                                        indirectConnectOther.incrementAndGet()
+                                                }
+                                            }
                                             A0IndirectPeerFailureStage.Phase.INIT ->
                                                 indirectInitFailed.incrementAndGet()
                                             A0IndirectPeerFailureStage.Phase.RESPONSE ->
@@ -495,6 +510,10 @@ internal class A0FreshAutoSearchTransport(
                 " indirect_connected=${indirectConnected.get().coerceIn(0,512)}" +
                 " indirect_failed=${indirectFailed.get().coerceIn(0,512)}" +
                 " indirect_connect_failed=${indirectConnectFailed.get().coerceIn(0,512)}" +
+                " indirect_connect_timeout=${indirectConnectTimeout.get().coerceIn(0,512)}" +
+                " indirect_connect_refused=${indirectConnectRefused.get().coerceIn(0,512)}" +
+                " indirect_connect_no_route=${indirectConnectNoRoute.get().coerceIn(0,512)}" +
+                " indirect_connect_other=${indirectConnectOther.get().coerceIn(0,512)}" +
                 " indirect_init_failed=${indirectInitFailed.get().coerceIn(0,512)}" +
                 " indirect_reply_failed=${indirectReplyFailed.get().coerceIn(0,512)}" +
                 " indirect_workers_started=${successWorkers.started.coerceIn(0,512)}" +
