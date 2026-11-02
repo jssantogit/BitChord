@@ -215,7 +215,7 @@ internal class SmartCollectionBatchHandoff(
                     track.recordingId to track.availableAssets.toSet()
                 }
                 val scopedRemote = verifiedRemoteAssets(source).filter { (id, hint) ->
-                    currentAssets[id]?.contains(hint) == true
+                    currentAssets[id]?.any { sameCanonicalAssetIdentity(it, hint) } == true
                 }
                 mark("asset_evidence", mapOf("uniqueRatedAssets" to scopedRemote.size.toString()))
                 val chunkIntent = if (chunkIndex == 0) intent else CanonicalCollectionIntent.ADD_TO_QUEUE
@@ -441,6 +441,16 @@ internal fun uniqueVerifiedRatedRemoteAssets(
             if (uniqueAssets.size == 1) recording to uniqueAssets.single() else null
         }.toMap()
 }
+
+/**
+ * A rendition's stable identity is its catalog MediaAssetId and provider.
+ * Cover art and timestamps can change without invalidating trusted hints.
+ */
+internal fun sameCanonicalAssetIdentity(
+    first: CanonicalBrowseMediaAsset,
+    second: CanonicalBrowseMediaAsset,
+): Boolean = first.mediaAssetId == second.mediaAssetId &&
+    first.providerKey == second.providerKey
 
 /** Fail closed: never silently resolve a saved single-source playlist from another provider. */
 internal fun canonicalBrowseOnlyProvider(
