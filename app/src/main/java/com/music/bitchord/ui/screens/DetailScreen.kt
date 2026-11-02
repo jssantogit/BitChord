@@ -1664,7 +1664,7 @@ private val SOFT_FOOT_BLUR = 48.dp
  * (a guest) it stays, greyed out and untappable, so Play keeps the middle.
  */
 @Composable
-private fun ActionRow(
+internal fun ActionRow(
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
     bottomSpace: Dp = 22.dp,
