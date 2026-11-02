@@ -75,6 +75,8 @@ class CanonicalUnifiedLibrarySortingTest {
             nativeUnifiedTrackCountLabel(594, listOf(29L * 3_600_000 + 20L * 60_000)))
         assertEquals("1 faixa · 0h 03m",
             nativeUnifiedTrackCountLabel(1, listOf(180_000L)))
+        assertEquals("2 faixas · 0h 01m",
+            nativeUnifiedTrackCountLabel(2, listOf(30_000L, 30_000L)))
     }
 
     @Test fun missingDurationRemainsUnknownRatherThanInventingFullTotal() {
