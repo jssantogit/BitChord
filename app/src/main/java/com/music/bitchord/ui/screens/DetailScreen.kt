@@ -1556,7 +1556,7 @@ internal fun PageBackground(
     // freeze the bottom of the video into the wrong picture.
     val softenFoot = canvas == null && !reduceDynamicBlur &&
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val art = heroUrl ?: page?.thumbnailUrl.artworkAt(HEADER_ART_PX)
+    val art = heroUrl ?: page?.thumbnailUrl?.artworkAt(HEADER_ART_PX)
 
     Box(modifier.clipToBounds()) {
         Box(
