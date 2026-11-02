@@ -55,6 +55,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -301,8 +302,14 @@ internal fun CanonicalRemoteLibraryScreen(
         mutableStateOf<CanonicalSelectedEntity?>(null)
     }
     var detailQuery by remember(selectedEntity?.id) { mutableStateOf("") }
+    var artistNestedReleaseOpen by remember { mutableStateOf(false) }
+    var artistNestedBackToken by remember { mutableIntStateOf(0) }
+    LaunchedEffect(selectedEntity?.id) { artistNestedReleaseOpen = false }
     LaunchedEffect(detailBackToken) {
-        if (detailBackToken > 0) selectedEntity = null
+        if (detailBackToken > 0) {
+            if (artistNestedReleaseOpen) artistNestedBackToken++
+            else selectedEntity = null
+        }
     }
     LaunchedEffect(selectedEntity != null) {
         onDetailChanged(selectedEntity != null)
@@ -679,6 +686,8 @@ internal fun CanonicalRemoteLibraryScreen(
                     artworkLoader = artworkLoader,
                     query = detailQuery,
                     onQueryChange = { detailQuery = it },
+                    nestedBackToken = artistNestedBackToken,
+                    onNestedDetailChanged = { artistNestedReleaseOpen = it },
                     onTrackPlay = playTrack,
                     onTrackEditRating = editRating,
                     onPlayAll = { visible, shuffle ->
