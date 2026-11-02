@@ -1443,7 +1443,9 @@ internal interface CanonicalCatalogDao {
             recording.title AS title,
             recording.artistDisplay AS artistDisplay,
             recording.durationMs AS durationMs,
-            asset.artworkUri AS artworkUri
+            asset.artworkUri AS artworkUri,
+            asset.dateAddedSeconds AS dateAddedSeconds,
+            asset.dateModifiedSeconds AS dateModifiedSeconds
         FROM catalog_media_asset AS asset
         INNER JOIN catalog_recording AS recording
             ON recording.id = asset.recordingId
@@ -1759,7 +1761,9 @@ internal interface CanonicalCatalogDao {
             recording.title AS title,
             recording.artistDisplay AS artistDisplay,
             recording.durationMs AS durationMs,
-            asset.artworkUri AS artworkUri
+            asset.artworkUri AS artworkUri,
+            asset.dateAddedSeconds AS dateAddedSeconds,
+            asset.dateModifiedSeconds AS dateModifiedSeconds
         FROM catalog_media_asset AS asset
         INNER JOIN catalog_recording AS recording ON recording.id = asset.recordingId
         WHERE asset.provider IN (:providerKeys)
