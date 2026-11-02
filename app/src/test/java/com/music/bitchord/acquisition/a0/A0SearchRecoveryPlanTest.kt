@@ -67,6 +67,32 @@ class A0SearchRecoveryPlanTest {
             plan.next(6000,false,setOf(A0SearchQuery.normalize(original))))
     }
 
+    @Test fun releaseSearchCannotDegradeIntoArtistOnlyWhenAlbumIsUnspecified() {
+        val track="BTS (방탄소년단) - 상남자 (Boy In Luv)"
+        val empty=A0SearchRecoveryPlan(track,album="",releaseWide=true)
+        assertNull(empty.releaseWideQuery)
+        assertEquals("Boy In Luv",empty.next(6000,false,
+            setOf(A0SearchQuery.normalize(track))))
+        val invalid=A0SearchRecoveryPlan("BTS - Normal",album="..",releaseWide=true)
+        assertNull(invalid.releaseWideQuery)
+        val giant=A0SearchRecoveryPlan("BTS - Normal",album="X".repeat(140),
+            releaseWide=true)
+        assertNull(giant.releaseWideQuery)
+    }
+
+    @Test fun LatinAliasIsActuallyPrioritizedInTwoWireFallbackSlots() {
+        val title="BTS (방탄소년단) - 상남자 (Boy In Luv)"
+        val plan=A0SearchRecoveryPlan(title,album="Proof",releaseWide=true)
+        val used=mutableSetOf(A0SearchQuery.normalize(title))
+        val first=checkNotNull(plan.next(6000,false,used))
+        assertEquals("BTS Proof",first)
+        used.add(first)
+        assertEquals("Boy In Luv",plan.next(12000,false,used))
+        val solo=A0SearchRecoveryPlan(title)
+        assertEquals("Boy In Luv",solo.next(6000,false,
+            setOf(A0SearchQuery.normalize(title))))
+    }
+
     @Test fun genericTrackReceivesAlbumSpecificRecoveryBeforeBroadTitleOnly() {
         val recovery=A0SearchRecoveryPlan("BTS - Normal",album="ARIRANG")
         val already=mutableSetOf("BTS Normal")
