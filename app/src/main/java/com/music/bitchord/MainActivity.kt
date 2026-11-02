@@ -6467,11 +6467,13 @@ private fun UnifiedLibraryMenus(
     hazeState: HazeState,
     controls: UnifiedLibraryUiControls,
 ) {
-    if (!visible) {
-        controls.sourceMenuOpen = false
-        controls.sortMenuOpen = false
-        return
+    LaunchedEffect(visible) {
+        if (!visible) {
+            controls.sourceMenuOpen = false
+            controls.sortMenuOpen = false
+        }
     }
+    if (!visible) return
     if (controls.sourceMenuOpen) {
         BackHandler { controls.sourceMenuOpen = false }
         FrostedUnifiedLibrarySourceMenu(
