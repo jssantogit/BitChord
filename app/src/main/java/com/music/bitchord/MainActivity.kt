@@ -2347,6 +2347,8 @@ private fun BitChordApp(
     var unifiedLibraryCategory by remember {
         mutableStateOf<com.music.bitchord.data.listening.CanonicalSmartFilterContext?>(null)
     }
+    var unifiedLibraryFilterToken by remember { mutableIntStateOf(0) }
+    var unifiedLibrarySearching by remember { mutableStateOf(false) }
     var showPlaylistLibrary by rememberSaveable { mutableStateOf(false) }
     var openedCanonicalPlaylist by remember {
         mutableStateOf<com.music.bitchord.ui.screens.LibraryPlaylistCard?>(null)
@@ -3086,6 +3088,8 @@ private fun BitChordApp(
                                 else -> "Músicas"
                             },
                             unified = true,
+                            filterActionToken = unifiedLibraryFilterToken,
+                            searchVisible = unifiedLibrarySearching,
                             initialContext = unifiedLibraryCategory
                                 ?: com.music.bitchord.data.listening.CanonicalSmartFilterContext.SONGS,
                             onClose = { unifiedLibraryCategory = null },
@@ -3912,6 +3916,7 @@ private fun BitChordApp(
                                 deviceLinks = libraryLinks(),
                                 onOpenPlaylists = { showPlaylistLibrary = true },
                                 onOpenLocalCategory = { category ->
+                                    unifiedLibrarySearching = false
                                     unifiedLibraryCategory = when (category) {
                                         com.music.bitchord.ui.screens.LocalFolderTab.ARTISTS ->
                                             com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS
@@ -4274,6 +4279,18 @@ private fun BitChordApp(
                         }
                     } else null,
                     actions = {
+                        if (unifiedLibraryCategory != null && !showSettings && detail == null) {
+                            NativeCollectionSearchAction(
+                                searching = unifiedLibrarySearching,
+                                contentDescription = if (unifiedLibrarySearching)
+                                    "Fechar pesquisa da biblioteca" else "Pesquisar na biblioteca",
+                                onClick = { unifiedLibrarySearching = !unifiedLibrarySearching },
+                            )
+                            NativeCollectionSortAction(
+                                contentDescription = "Filtrar biblioteca",
+                                onClick = { unifiedLibraryFilterToken++ },
+                            )
+                        }
                         if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null &&
                             !showSettings && !showAccountScrobbling) {
                             CanonicalPlaylistToolbarActions(
