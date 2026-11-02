@@ -6,6 +6,21 @@ package com.music.bitchord.acquisition.a0
  * Maximum two fallback requests, no reconnect/login/retry loop or transfer.
  */
 internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWide:Boolean=false) {
+    // A bilingual title may carry a native-script name and a widely used
+    // Latin title in trailing parentheses. Search the Latin alternative
+    // as discovery only; the canonical selection gate is unchanged.
+    private val latinTitleAlias=runCatching {
+        val title=original.split(Regex("\\s+[-–—]\\s+"),limit=2)
+            .getOrNull(1) ?: return@runCatching null
+        if(title.none { it.code>127 })return@runCatching null
+        val ending=Regex("\\(([^()]+)\\)\\s*$").find(title)
+            ?:return@runCatching null
+        val normalized=A0SearchQuery.normalize(ending.groupValues[1])
+        if(normalized.length<8 || normalized.split(' ').size<2 ||
+            !normalized.all { it.code in 32..126 })return@runCatching null
+        normalized
+    }.getOrNull()
+
     // A generic title (e.g. "Normal") can match many unrelated releases.
     // Search the artist + canonical album + title before broad title-only.
     // This changes discovery text only: the original identity and all A3
@@ -33,21 +48,6 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
             return@runCatching null
         A0SearchQuery.normalize("$artist $normalizedAlbum")
     }.getOrNull() else null
-
-    // A bilingual title may carry a native-script name and a widely used
-    // Latin title in trailing parentheses. Search the Latin alternative
-    // as discovery only; the canonical selection gate is unchanged.
-    private val latinTitleAlias=runCatching {
-        val title=original.split(Regex("\\s+[-–—]\\s+"),limit=2)
-            .getOrNull(1) ?: return@runCatching null
-        if(title.none { it.code>127 })return@runCatching null
-        val ending=Regex("\\(([^()]+)\\)\\s*$").find(title)
-            ?:return@runCatching null
-        val normalized=A0SearchQuery.normalize(ending.groupValues[1])
-        if(normalized.length<8 || normalized.split(' ').size<2 ||
-            !normalized.all { it.code in 32..126 })return@runCatching null
-        normalized
-    }.getOrNull()
 
     // Avoid overconstraining descriptive title searches by adding a
     // compilation album. Generic one-word titles still prefer the album.
