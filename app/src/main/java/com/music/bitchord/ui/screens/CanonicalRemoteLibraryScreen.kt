@@ -626,7 +626,7 @@ private fun RemoteBrowseContextTabs(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun NativeCanonicalLibraryFilters(
+internal fun NativeCanonicalLibraryFilters(
     availableKeys: List<String>,
     selectedSource: String?,
     onSourceChange: (String?) -> Unit,
