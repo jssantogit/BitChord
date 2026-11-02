@@ -33,6 +33,23 @@ class A0PeerReliabilityEvidenceTest {
         val chosen=ledger.sequentialFallbacks(offers,claimKey="same",failedPeers=setOf("origin"),maxPeers=2)
         assertEquals(listOf("good","waiting"),chosen)
     }
+    @Test fun sameClaimReadyPeersPreferShorterQueueThenAdvertisedSpeed() {
+        val offers=listOf(
+            A0PeerReliabilityEvidence.Alternative(
+                "slow","same",A0PeerAvailability.Tier.READY,queueLength=1,speedKiBps=70),
+            A0PeerReliabilityEvidence.Alternative(
+                "fast","same",A0PeerAvailability.Tier.READY,queueLength=0,speedKiBps=4000),
+            A0PeerReliabilityEvidence.Alternative(
+                "middle","same",A0PeerAvailability.Tier.READY,queueLength=0,speedKiBps=300),
+            A0PeerReliabilityEvidence.Alternative(
+                "different-release","other",A0PeerAvailability.Tier.READY,queueLength=0,speedKiBps=10000))
+        assertEquals(listOf("fast","middle","slow"),
+            ledger.sequentialFallbacks(offers,"same",emptySet()))
+        ledger.observe("slow",A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
+        // Verified peer behavior takes priority over optimistic speed claims.
+        assertEquals("slow",ledger.sequentialFallbacks(offers,"same",emptySet()).first())
+    }
+
     @Test fun duplicatePeerNeverStartsTwoTransfers() {
         val offers=(1..10).map {
             A0PeerReliabilityEvidence.Alternative("one","same",A0PeerAvailability.Tier.READY)
