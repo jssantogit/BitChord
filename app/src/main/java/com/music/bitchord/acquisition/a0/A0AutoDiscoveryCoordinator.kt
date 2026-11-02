@@ -122,6 +122,10 @@ internal class A0AutoDiscoveryCoordinator(
         // A failed lookup is not grounds for a retry storm.
         val inspectedFolders=HashSet<Pair<String,String>>()
         var folderQueries=0
+        // Two extra direct-peer probes for short albums; four for long
+        // releases. Never let unsupported browse clients multiply network
+        // waiting time for every title in a user-requested batch.
+        val folderQueryBudget=if(count<=8)2 else 4
         // An account/protocol stop or uncertain A3 publication terminates
         // the entire automatic session, including late-evidence rescue.
         var mayRescueLateSlots=true
@@ -268,7 +272,7 @@ internal class A0AutoDiscoveryCoordinator(
                         choice.status!=
                             A0AutoCandidateSelectionPolicy.Status.PROVISIONAL
                     }
-                    if(needsSiblingEvidence && folderQueries<4) {
+                    if(needsSiblingEvidence && folderQueries<folderQueryBudget) {
                         val source=selected.firstOrNull {
                             (it.peerUsername to it.remotePath) in outcome.publishedSourceKeys
                         }
