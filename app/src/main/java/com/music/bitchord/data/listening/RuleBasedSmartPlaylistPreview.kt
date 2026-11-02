@@ -81,6 +81,12 @@ internal data class RuleBasedRecordingCandidate(
     /** Each source-owned tempo is independent; no averaging across copies. */
     val bpms: List<Double> = emptyList(),
     val bpmEvidenceUnknown: Boolean = true,
+    val composers: List<String> = emptyList(),
+    val composerEvidenceUnknown: Boolean = true,
+    val filePaths: List<String> = emptyList(),
+    val filePathEvidenceUnknown: Boolean = true,
+    val folderPaths: List<String> = emptyList(),
+    val folderPathEvidenceUnknown: Boolean = true,
     val localRatingUpdatedAtEpochMs: Long? = null,
     /** An absent first-party rating is only known after the local store was queried. */
     val localRatingDateEvidenceKnown: Boolean = false,
@@ -374,7 +380,10 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
         val tagEvidence = if (requiredFields.any {
             it == SmartPlaylistRuleField.GENRE || it == SmartPlaylistRuleField.MOOD ||
                 it == SmartPlaylistRuleField.BPM ||
-                it == SmartPlaylistRuleField.STYLE
+                it == SmartPlaylistRuleField.STYLE ||
+                it == SmartPlaylistRuleField.COMPOSER ||
+                it == SmartPlaylistRuleField.FILE_PATH ||
+                it == SmartPlaylistRuleField.FOLDER_PATH
         }) availability.availableRecordingTags(ids).associateBy { it.recordingId }
         else emptyMap()
         val taggedRows = if (tagEvidence.isEmpty()) rows else rows.map { row ->
@@ -386,6 +395,12 @@ internal class CanonicalRuleBasedSmartPlaylistPreview(
                 moodEvidenceUnknown = tags.moodEvidenceUnknown,
                 styles = tags.styles,
                 styleEvidenceUnknown = tags.styleEvidenceUnknown,
+                composers = tags.composers,
+                composerEvidenceUnknown = tags.composerEvidenceUnknown,
+                filePaths = tags.filePaths,
+                filePathEvidenceUnknown = tags.filePathEvidenceUnknown,
+                folderPaths = tags.folderPaths,
+                folderPathEvidenceUnknown = tags.folderPathEvidenceUnknown,
                 bpms = tags.bpms,
                 bpmEvidenceUnknown = tags.bpmEvidenceUnknown,
             )
