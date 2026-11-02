@@ -88,6 +88,13 @@ class CanonicalCatalogIncrementalMigrationTest {
                     "stylesJson", "localSourceFingerprint", "localParsedFingerprint",
                 ), names)
             }
+            CanonicalCatalogDatabase.MIGRATION_13_14.migrate(migrationDb)
+            raw.rawQuery("PRAGMA table_info(catalog_media_asset_tags)", null).use { columns ->
+                val names = mutableListOf<String>()
+                while (columns.moveToNext()) names += columns.getString(1)
+                org.junit.Assert.assertTrue("composer column must be migrated",
+                    "composersJson" in names)
+            }
 
             raw.rawQuery(
                 "SELECT title,hasOfficialAudioRelease,isVideo FROM musicbrainz_recording_enrichment WHERE recordingId='old-recording'",
