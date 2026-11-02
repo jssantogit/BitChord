@@ -254,14 +254,17 @@ internal fun CanonicalPlaylistTrackRow(
                 )
             },
         )
-        // Shared reactive recording-ID snapshot: no per-row network or Room IO.
-        CanonicalRatingStars(
-            rating = LocalCanonicalRatingDisplay.current.byRecordingId[track.id],
-            color = titleColor,
-        )
-        canonicalTrackDuration(track.durationMs)?.let {
-            Spacer(Modifier.width(8.dp))
-            Text(it, style = MaterialTheme.typography.labelMedium, color = subtitleColor)
+        // Reuse the native rating strip above duration, as in other music lists.
+        // Both values resolve from a precomputed recording-ID snapshot.
+        Spacer(Modifier.width(8.dp))
+        Column(horizontalAlignment = Alignment.End) {
+            CanonicalRatingStars(
+                rating = LocalCanonicalRatingDisplay.current.byRecordingId[track.id],
+                color = titleColor,
+            )
+            canonicalTrackDuration(track.durationMs)?.let {
+                Text(it, style = MaterialTheme.typography.labelMedium, color = subtitleColor)
+            }
         }
         if (available) {
             Box {

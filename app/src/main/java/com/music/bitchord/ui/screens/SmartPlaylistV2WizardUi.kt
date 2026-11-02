@@ -1552,7 +1552,7 @@ internal fun SmartPlaylistV2WizardUi(
                 if (availableSourceKeys.any { it.startsWith("opensubsonic:") })
                     listOf("opensubsonic" to "Navidrome") else emptyList()
         WizardChoiceDialog(
-            title = "Origem das músicas",
+            title = "Fontes de origem",
             options = if (normalMode) normalOptions else smartOptions,
             label = { it.second },
             onChosen = { (source, _) ->
