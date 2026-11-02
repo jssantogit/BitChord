@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import com.music.bitchord.data.catalog.CanonicalBrowseMediaAsset
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
+import com.music.bitchord.data.catalog.CanonicalPlaylistAlbumCoverRow
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.components.visibleStarValues
@@ -143,4 +144,28 @@ class CanonicalLibraryStarSourceFiltersTest {
         assertFalse(canonicalLibraryEntityHasMatchingTracks(
             emptyList(), visible))
     }
+    @Test fun albumAndArtistArtworkRequiresAnEligibleLinkedRecordingId() {
+        val first = CanonicalBrowseTrack(
+            "recording-visible", "Song", "Collaborating Artist", 120_000L,
+            "content://media/verified", listOf(local),
+        )
+        val another = CanonicalBrowseTrack(
+            "recording-other", "Song", "Collaborating Artist", 120_000L,
+            "content://media/unavailable", listOf(otherRemote),
+        )
+        val mapped = canonicalLibraryEntityArtworkById(
+            listOf(
+                CanonicalPlaylistAlbumCoverRow("album-a", "recording-visible"),
+                CanonicalPlaylistAlbumCoverRow("artist-a", "recording-visible"),
+                CanonicalPlaylistAlbumCoverRow("album-other", "recording-other"),
+            ),
+            listOf(first),
+        )
+        assertEquals(setOf("album-a", "artist-a"), mapped.keys)
+        assertEquals("recording-visible", mapped["artist-a"]?.recordingId)
+        assertFalse(mapped.containsKey("album-other"))
+        // Artist display text alone never creates an artwork membership claim.
+        assertEquals(null, canonicalLibraryEntityArtworkById(emptyList(), listOf(first, another))["artist-a"])
+    }
+
 }
