@@ -279,7 +279,13 @@ internal class A0AutoDiscoveryCoordinator(
                                     source,entries,::shouldStop)
                             }catch(_:Exception){SearchResult.NoReply}
                             if(!shouldStop()) {
-                                if(browsed is SearchResult.Found) {
+                                val fromExactFolder=browsed is SearchResult.Found &&
+                                    browsed.choices.all { candidate ->
+                                        candidate.peerUsername==source.peerUsername &&
+                                            candidate.remotePath.replace('\\','/')
+                                                .substringBeforeLast('/',"")==directory
+                                    }
+                                if(browsed is SearchResult.Found && fromExactFolder) {
                                     pooled.add(browsed.choices,browsed.truncatedSlots)
                                     try {onCacheEvidence(index,CacheEvidence(
                                         CacheAction.FOLDER_BROWSE_ADDED,
