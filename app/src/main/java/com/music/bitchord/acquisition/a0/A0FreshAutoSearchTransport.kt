@@ -111,6 +111,13 @@ internal class A0FreshAutoSearchTransport(
             val tickets=A0SearchTicketRegistry(token)
             val validDirect=AtomicInteger()
             val validIndirect=AtomicInteger()
+            val directAccepted=AtomicInteger()
+            val directDropped=AtomicInteger()
+            val directFailed=AtomicInteger()
+            val indirectOffers=AtomicInteger()
+            val indirectSubmitted=AtomicInteger()
+            val indirectConnected=AtomicInteger()
+            val indirectFailed=AtomicInteger()
             handoff=A0ObservedCandidateHandoff(
                 connection,checkNotNull(session).username,token,
                 searchPhrase=entry.query,saveFormatsOnly=true,
@@ -163,6 +170,7 @@ internal class A0FreshAutoSearchTransport(
                             acceptedSearchTokens=tickets.accepted
                         )
                     }catch(_:IOException) {
+                        directFailed.incrementAndGet()
                         // One malformed or slow untrusted peer cannot poison
                         // an otherwise useful release-wide discovery.
                     }
@@ -179,7 +187,9 @@ internal class A0FreshAutoSearchTransport(
                     !openListener.isClosed && System.nanoTime()<deadline) {
                     try {
                         val peer=openListener.accept()
-                        directCollector.offer(peer)
+                        directAccepted.incrementAndGet()
+                        if(!directCollector.offer(peer))
+                            directDropped.incrementAndGet()
                     }catch(_:SocketTimeoutException) {
                         // Keep listening for the complete 18-second window.
                     }catch(_:IOException) {
@@ -202,6 +212,7 @@ internal class A0FreshAutoSearchTransport(
                         }catch(_:SocketTimeoutException) {continue}
                         catch(_:A0IndirectSearchWire.RejectedPeerOffer) {continue}
                         if(offer==null || !readerGate.isOpen())continue
+                        indirectOffers.incrementAndGet()
                         if(!gate.accept(offer.username,offer.token))continue
                         val submitted=peerWorkers.submit {
                             if(!stopped() && readerGate.isOpen()) {
@@ -212,6 +223,7 @@ internal class A0FreshAutoSearchTransport(
                                             A0PeerWorkStageCounts.Stage.CONNECTING) {
                                             peer.connect(InetSocketAddress(
                                                 offer.address,offer.port),1800)
+                                            indirectConnected.incrementAndGet()
                                             peer.soTimeout=2300
                                             peer.getOutputStream().apply {
                                                 write(A0IndirectSearchWire.pierceFirewall(offer.token))
@@ -234,6 +246,7 @@ internal class A0FreshAutoSearchTransport(
                                             )
                                         }
                                     }catch(_:IOException) {
+                                        indirectFailed.incrementAndGet()
                                         // Ignore one peer; retain validated replies.
                                     }finally {
                                         activePeers.remove(peer)
@@ -241,8 +254,10 @@ internal class A0FreshAutoSearchTransport(
                                 }
                             }
                         }
-                        if(submitted)accepted++
-                        else gate.releaseUnsubmitted(offer.username,offer.token)
+                        if(submitted) {
+                            accepted++
+                            indirectSubmitted.incrementAndGet()
+                        } else gate.releaseUnsubmitted(offer.username,offer.token)
                     }
                     if(!stopped() && !framed.finishPendingFrame())
                         readerFailed.set(true)
@@ -359,12 +374,23 @@ internal class A0FreshAutoSearchTransport(
             holder.markReadersStopped()
             val snapshot=holder.releaseShadowSnapshot()
             val counts=holder.screening()
+            val reachability=A0SearchReachabilityDiagnosis.classify(
+                directAccepted.get(),indirectOffers.get(),indirectConnected.get(),
+                counts.responses,snapshot.choices.size)
             Log.d("BitChord","soulseek_auto_search replies=${snapshot.choices.size}" +
                 " tickets_sent=${tickets.accepted.size.coerceIn(1,3)}" +
                 " valid_direct=${validDirect.get().coerceIn(0,160)}" +
                 " valid_indirect=${validIndirect.get().coerceIn(0,160)}" +
                 " release_queries=${releaseWideSent.size.coerceIn(0,8)}" +
                 " release_dedup=${releaseWideSkipped.get().coerceIn(0,64)}" +
+                " reachability=${reachability.name}" +
+                " direct_accepted=${directAccepted.get().coerceIn(0,512)}" +
+                " direct_dropped=${directDropped.get().coerceIn(0,512)}" +
+                " direct_failed=${directFailed.get().coerceIn(0,512)}" +
+                " indirect_offers=${indirectOffers.get().coerceIn(0,512)}" +
+                " indirect_submitted=${indirectSubmitted.get().coerceIn(0,512)}" +
+                " indirect_connected=${indirectConnected.get().coerceIn(0,512)}" +
+                " indirect_failed=${indirectFailed.get().coerceIn(0,512)}" +
                 " truncated_slots=${snapshot.truncatedSlots.size}" +
                 " raw_responses=${counts.responses} public_files=${counts.publicFiles}" +
                 " admitted_before_limit=${counts.validBeforeLimit}" +
