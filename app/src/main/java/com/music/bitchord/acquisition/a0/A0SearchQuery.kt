@@ -57,6 +57,21 @@ internal object A0SearchQuery {
      * from unstructured or short titles. Identity checks still use the
      * ORIGINAL artist-title request, never this fallback text.
      */
+    /**
+     * Automatic acquisition requires a real canonical artist AND title.
+     * Normalizing an invalid title such as "Artist - ---" would otherwise
+     * send an overbroad artist-only query and waste a server search slot.
+     * Ordinary user-driven manual search remains allowed to be unstructured.
+     */
+    fun canonicalArtistTitle(userEntered:String):String?=runCatching {
+        normalize(userEntered) // source length, controls and UTF-8 budget
+        val parts=userEntered.split(Regex("\\s+[-–—]\\s+"),limit=2)
+        if(parts.size!=2)return@runCatching null
+        val artist=normalize(parts[0])
+        val title=normalize(parts[1])
+        normalize("$artist $title")
+    }.getOrNull()
+
     fun titleOnlyFallback(userEntered: String): String? {
         val parts = userEntered.split(Regex("\\s+[-–—]\\s+"), limit = 2)
         if (parts.size != 2 || parts[0].isBlank()) return null

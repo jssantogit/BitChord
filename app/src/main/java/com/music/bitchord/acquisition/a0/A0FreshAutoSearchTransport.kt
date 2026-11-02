@@ -80,7 +80,8 @@ internal class A0FreshAutoSearchTransport(
             return A0AutoDiscoveryCoordinator.SearchResult.Stop
         }
         val normalized=runCatching {
-            A0SearchQuery.normalize(entry.query)
+            A0SearchQuery.canonicalArtistTitle(entry.query)
+                ?:throw IllegalArgumentException("Invalid canonical search")
         }.getOrElse {
             A0AcquisitionDiagnostics.emit(traceScope,
                 A0AcquisitionDiagnostics.Phase.SEARCH_STOP,

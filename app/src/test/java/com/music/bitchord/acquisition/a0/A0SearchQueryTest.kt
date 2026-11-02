@@ -61,6 +61,20 @@ class A0SearchQueryTest {
         assertFalse(one.toString(Charsets.UTF_8).contains("naruto"))
     }
 
+    @Test fun automaticSearchRejectsArtistOnlyAndMalformedCanonicalTitles() {
+        assertEquals("BTS 노래",
+            A0SearchQuery.canonicalArtistTitle("BTS - 노래"))
+        assertEquals("ILLIT Magnetic",
+            A0SearchQuery.canonicalArtistTitle("ILLIT - Magnetic"))
+        for (bad in listOf("BTS - ---","BTS - 🎵","--- - Magnetic",
+            "BTS Magnetic","BTS -   ","BTS - " + "x".repeat(120))) {
+            assertNull("Invalid artist/title may not become a public search",
+                A0SearchQuery.canonicalArtistTitle(bad))
+        }
+        // A user explicitly entering an unstructured manual query remains valid.
+        assertEquals("BTS Magnetic",A0SearchQuery.normalize("BTS Magnetic"))
+    }
+
     @Test fun boundedFallbackUsesTrackTitleToAvoidOverconstrainedArtistQueries() {
         assertEquals("Billie Jean", A0SearchQuery.titleOnlyFallback(
             "Michael Jackson - Billie Jean"))

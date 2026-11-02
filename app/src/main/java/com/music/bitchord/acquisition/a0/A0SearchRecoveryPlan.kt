@@ -82,7 +82,11 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
         // rather than merely when composing the optional album-specific text.
         val title=latinTitleAlias ?: A0SearchQuery.titleOnlyFallback(original)
         val generic=title==null || title.length<8 || title.split(' ').size<2
-        val normal=A0SearchQuery.variants(original).drop(1)
+        // Never throw on a malformed imported canonical title: discovery
+        // refuses that slot before network I/O; planning is fail-closed too.
+        val normal=runCatching {
+            A0SearchQuery.variants(original).drop(1)
+        }.getOrDefault(emptyList())
         val ordered=when {
             albumWide!=null && generic -> listOfNotNull(albumWide,albumQualified,title)+normal
             albumWide!=null -> listOfNotNull(albumWide,title,albumQualified)+normal
