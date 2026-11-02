@@ -442,14 +442,16 @@ internal class OpenSubsonicProvider(
             },
             bpm = song.bpm,
             path = song.path?.trim()?.takeIf(String::isNotBlank),
-            composers = song.contributors?.let { credits ->
-                val names = credits.filter { it.role.equals("composer", ignoreCase = true) }
+            composers = if (song.contributors != null) {
+                val names = song.contributors
+                    .filter { it.role.equals("composer", ignoreCase = true) }
                     .map { it.artist?.name.clean() }
-                if (names.any { it == null }) null else names.filterNotNull().distinct()
-            }?.let { names ->
-                song.displayComposer?.clean()?.let { display -> (names + display).distinct() }
-                    ?: names
-            } ?: song.displayComposer?.let { display ->
+                // A malformed composer credit is UNKNOWN, even when a display
+                // fallback also exists. Never certify negative predicates.
+                if (names.any { it == null }) null
+                else (names.filterNotNull() +
+                    listOfNotNull(song.displayComposer?.clean())).distinct()
+            } else song.displayComposer?.let { display ->
                 display.clean()?.let(::listOf) ?: emptyList()
             },
 
