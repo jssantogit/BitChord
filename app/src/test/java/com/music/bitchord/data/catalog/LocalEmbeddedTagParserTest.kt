@@ -51,23 +51,27 @@ class LocalEmbeddedTagParserTest {
             frame("TMOO", "Calm"),
             frame("TBPM", "128.5"),
             frame("TXXX", "STYLE\u0000Shoegaze"),
+            frame("TCOM", "Hildur Guðnadóttir"),
         )
         val tags = requireNotNull(LocalEmbeddedTagParser.parse(input))
         assertEquals(listOf("Dream Pop"), tags.genres)
         assertEquals(listOf("Calm"), tags.moods)
         assertEquals(listOf(128.5), tags.bpms)
         assertEquals(listOf("Shoegaze"), tags.styles)
+        assertEquals(listOf("Hildur Guðnadóttir"), tags.composers)
     }
 
     @Test fun repeatedVorbisCommentsRemainMultiValuedAndExplicitAbsenceIsNotUnknown() {
         val tags = requireNotNull(LocalEmbeddedTagParser.parse(flac(
             "GENRE=K-Pop", "GENRE=Dream Pop", "MOOD=Bright", "BPM=105",
             "STYLE=Electronic", "STYLE=Ambient",
+            "COMPOSER=Alice", "COMPOSER=Bob",
         )))
         assertEquals(listOf("K-Pop", "Dream Pop"), tags.genres)
         assertEquals(listOf("Bright"), tags.moods)
         assertEquals(listOf(105.0), tags.bpms)
         assertEquals(listOf("Electronic", "Ambient"), tags.styles)
+        assertEquals(listOf("Alice", "Bob"), tags.composers)
         val empty = requireNotNull(LocalEmbeddedTagParser.parse(flac("TITLE=Song")))
         assertEquals(emptyList<String>(), empty.genres)
         assertEquals(emptyList<String>(), empty.moods)
