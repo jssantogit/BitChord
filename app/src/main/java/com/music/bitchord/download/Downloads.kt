@@ -1347,7 +1347,10 @@ object Downloads {
                             " action=${evidence.action.name}" +
                             " observed=${evidence.observed.coerceIn(0,512)}" +
                             " truncated=${evidence.truncated}" +
-                            " reason=${evidence.decisionReason?.name ?: "NONE"}")
+                            " reason=${evidence.decisionReason?.name ?: "NONE"}" +
+                            " published_folders=${evidence.publishedFolderCount.coerceIn(0,64)}" +
+                            " same_peer_offers=${evidence.samePeerOffers.coerceIn(0,512)}" +
+                            " same_peer_folder_offers=${evidence.samePeerFolderOffers.coerceIn(0,512)}")
                     },
                     onSlotEvidence={index,observed ->
                         val entry=request.entries[index]
