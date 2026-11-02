@@ -94,8 +94,6 @@ import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.components.PAGE_GUTTER
-import com.music.bitchord.ui.components.TopBarContentHeight
-import com.music.bitchord.ui.components.TopBarContentGap
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.canonical_rating_song_options
@@ -422,7 +420,8 @@ internal fun CanonicalRemoteLibraryScreen(
             modifier = Modifier.fillMaxSize()
                 .statusBarsPadding().navigationBarsPadding()
                 .then(if (unified) Modifier.padding(
-                    top = TopBarContentHeight + TopBarContentGap,
+                    // Existing ListeningLibraryPage floating top-bar inset.
+                    top = 72.dp,
                 ) else Modifier),
         ) {
             if (!unified) RemoteBrowseTopBar(
