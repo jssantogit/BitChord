@@ -48,6 +48,25 @@ class A0SearchRecoveryPlanTest {
         assertEquals("Boy In Luv",recovery.next(6000,false,sent))
         assertEquals(2,sent.size)
     }
+    @Test fun bilingualKoreanTitleCanSearchItsLatinAliasWithoutChangingIdentity() {
+        val title="BTS (방탄소년단) - 상남자 (Boy In Luv)"
+        val release=A0SearchRecoveryPlan(title,"Proof",releaseWide=true)
+        val sent=mutableSetOf(A0SearchQuery.normalize(title))
+        assertEquals("BTS Proof",release.next(6000,false,sent))
+        sent.add("BTS Proof")
+        assertEquals("Boy In Luv",release.next(12000,false,sent))
+        assertFalse(release.authorizesTransfer)
+        val standalone=A0SearchRecoveryPlan(title)
+        assertEquals("Boy In Luv",standalone.next(6000,false,
+            setOf(A0SearchQuery.normalize(title))))
+    }
+    @Test fun liveOrRemixVersionTagNeverBecomesAFalseLatinAlias() {
+        val original="BTS - 노래 (Live)"
+        val plan=A0SearchRecoveryPlan(original)
+        assertEquals(A0SearchQuery.normalize("노래 (Live)"),
+            plan.next(6000,false,setOf(A0SearchQuery.normalize(original))))
+    }
+
     @Test fun genericTrackReceivesAlbumSpecificRecoveryBeforeBroadTitleOnly() {
         val recovery=A0SearchRecoveryPlan("BTS - Normal",album="ARIRANG")
         val already=mutableSetOf("BTS Normal")
