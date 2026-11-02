@@ -52,4 +52,24 @@ class LibraryNavigationLinksTest {
         assertFalse(result[4].enabled)
         assertEquals("local:downloads", result.last().item.browseId)
     }
+    @Test fun unifiedLibraryRequestsMissingAudioPermissionWithoutBlockingNavigation() {
+        val transitions = mutableListOf<String>()
+        openUnifiedLibraryCategory(
+            hasMediaPermission = false,
+            onOpenCategory = { transitions += "opened" },
+            onRequestPermission = { transitions += "requested" },
+        )
+        assertEquals(listOf("opened", "requested"), transitions)
+    }
+
+    @Test fun unifiedLibraryDoesNotPromptWhenLocalAudioAlreadyGranted() {
+        val transitions = mutableListOf<String>()
+        openUnifiedLibraryCategory(
+            hasMediaPermission = true,
+            onOpenCategory = { transitions += "opened" },
+            onRequestPermission = { transitions += "requested" },
+        )
+        assertEquals(listOf("opened"), transitions)
+    }
+
 }
