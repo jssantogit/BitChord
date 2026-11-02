@@ -107,6 +107,9 @@ internal object CanonicalLocalLibrary {
                             candidate.bpms, previousTags?.bpmsJson.takeIf { reuse },
                         ),
                         stylesJson = if (reuse) previousTags?.stylesJson else null,
+                        composersJson = mergedLocalTagJson(
+                            candidate.composers, previousTags?.composersJson.takeIf { reuse },
+                        ),
                         localSourceFingerprint = fingerprint,
                         localParsedFingerprint = if (reuse) fingerprint else null,
                     ),
@@ -215,6 +218,7 @@ internal object CanonicalLocalLibrary {
             genres = normalizedLocalTagList(song.localGenres),
             moods = normalizedLocalTagList(song.localMoods),
             bpms = normalizedLocalBpmList(song.localBpms),
+            composers = normalizedLocalTagList(song.localComposers),
             sourceFingerprint = song.localDateModifiedSeconds?.takeIf { it > 0L }
                 ?.let { modified -> "v2:$modified:${song.localSizeBytes ?: -1L}" },
             youtubeVideoId = song.videoId.takeIf { id ->
@@ -426,6 +430,7 @@ internal data class LocalMediaCandidate(
     val genres: List<String>? = null,
     val moods: List<String>? = null,
     val bpms: List<Double>? = null,
+    val composers: List<String>? = null,
     val sourceFingerprint: String? = null,
 )
 
