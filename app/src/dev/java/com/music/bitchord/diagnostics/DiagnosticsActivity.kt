@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,6 +30,9 @@ import com.music.bitchord.ui.theme.BitChordTheme
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.screens.SettingsGroupSurface
 import com.music.bitchord.ui.screens.SettingsRow
+import com.music.bitchord.ui.screens.PlaylistWizardPrimaryAction
+import com.music.bitchord.ui.screens.PlaylistWizardSecondaryAction
+import com.music.bitchord.ui.components.ArtworkPageBackButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
@@ -67,6 +72,7 @@ class DiagnosticsActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     DiagnosticsPanel(
+                        onBack = ::finish,
                         onShare = ::shareDiagnostics,
                         onRestartAndCapture = ::restartAndCaptureStartup,
                     )
@@ -152,6 +158,7 @@ class DiagnosticsActivity : ComponentActivity() {
 
 @Composable
 private fun DiagnosticsPanel(
+    onBack: () -> Unit,
     onShare: () -> Unit,
     onRestartAndCapture: () -> Unit,
 ) {
@@ -223,7 +230,11 @@ private fun DiagnosticsPanel(
             .padding(horizontal = PAGE_GUTTER, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Logs", style = MaterialTheme.typography.headlineLarge)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ArtworkPageBackButton(onClick = onBack, hazeState = null)
+            Spacer(Modifier.width(16.dp))
+            Text("Logs", style = MaterialTheme.typography.headlineLarge)
+        }
         SettingsGroupSurface {
             SettingsRow(
                 title = if (status.active) "Captura em andamento" else "Captura parada",
@@ -271,40 +282,29 @@ private fun DiagnosticsPanel(
             style = MaterialTheme.typography.bodySmall,
         )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            if (status.active) {
-                Button(
-                    onClick = {
-                        runControl("Capture stopped") { Diagnostics.stopCapture() }
-                    },
-                    enabled = !busy,
-                    modifier = Modifier.weight(1f),
-                ) { Text("Parar captura") }
-            } else {
-                Button(
-                    onClick = {
-                        runControl("Capture started") {
-                            check(Diagnostics.startCapture().active) {
-                                "Could not persist capture state"
-                            }
-                        }
-                    },
-                    enabled = !busy,
-                    modifier = Modifier.weight(1f),
-                ) { Text("Iniciar captura · 1h") }
-            }
-            OutlinedButton(
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            PlaylistWizardPrimaryAction(
+                label = if (status.active) "Parar captura" else "Iniciar captura · 1h",
+                enabled = !busy,
                 onClick = {
-                    runControl("Diagnostics cleared; capture state was preserved") {
+                    if (status.active) runControl("Captura parada") {
+                        Diagnostics.stopCapture()
+                    } else runControl("Captura iniciada") {
+                        check(Diagnostics.startCapture().active) {
+                            "Não foi possível iniciar a captura"
+                        }
+                    }
+                },
+            )
+            PlaylistWizardSecondaryAction(
+                label = "Limpar eventos",
+                enabled = !busy,
+                onClick = {
+                    runControl("Eventos limpos; estado da captura preservado") {
                         Diagnostics.clear()
                     }
                 },
-                enabled = !busy,
-                modifier = Modifier.weight(1f),
-) { Text("Limpar") }
+            )
         }
 
         OutlinedButton(
