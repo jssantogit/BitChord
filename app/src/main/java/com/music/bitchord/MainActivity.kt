@@ -634,7 +634,6 @@ private fun BitChordApp(
     var editingPartyServer by remember { mutableStateOf(false) }
     var editingSignatureApi by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
-    var homeOptionsOpen by remember { mutableStateOf(false) }
     // A Library shelf's "Show all" — the shelf it was opened from, so its own
     // cards can be laid out again as a full-screen grid. See [LibraryGridPage].
     var libraryShowAll by remember { mutableStateOf<HomeShelf?>(null) }
@@ -4110,8 +4109,8 @@ private fun BitChordApp(
                         .graphicsLayer { alpha = topFadeAlpha },
                 )
 
-                // The Home has its own single Início / ⋮ row. Do not leave
-                // a second floating upload/profile pill above that header.
+                // Home reuses the shared account/profile pill, with no overflow menu.
+                // Never add separate Material 3 actions over its title.
                 val homeRootVisible = selectedTab == TAB_HOME &&
                     detail == null && selectedMoodGenre == null &&
                     libraryShowAll == null && !showSettings &&
@@ -4316,12 +4315,6 @@ private fun BitChordApp(
                         if (showListenTogether) {
                             ListenTogetherLatencyBadge(partyServerStatus)
                         }
-                        if (homeRootVisible) {
-                            NativeCollectionOverflowAction(
-                                contentDescription = stringResource(R.string.more),
-                                onClick = { homeOptionsOpen = true },
-                            )
-                        }
                         // Only worth surfacing where there's room for it and it won't
                         // be mistaken for a per-page action — Home, at rest.
                         if (!showSettings && !showAccountScrobbling && !showSources && !showListenTogether && !showWearOs && !showEqualizer &&
@@ -4489,12 +4482,9 @@ private fun BitChordApp(
                             // profile off its album pages too.
                             if (!isReleaseDetail) TopBarAccountButton(
                                 account = account,
-                                onClick = {
-                                    if (signedIn) {
-                                        viewModel.loadChannels()
-                                        showAccountSelector = true
-                                    } else showSettings = true
-                                },
+                                // The account glyph is the single entrance to Settings.
+                                // Home has no redundant overflow menu.
+                                onClick = { showSettings = true },
                                 onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
                             )
                         }
@@ -5310,64 +5300,6 @@ private fun BitChordApp(
                     }
                 },
             )
-        }
-
-        if (homeOptionsOpen) {
-            ModalBottomSheet(
-                onDismissRequest = { homeOptionsOpen = false },
-                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                containerColor = MaterialTheme.colorScheme.surface,
-            ) {
-                Column(
-                    Modifier.fillMaxWidth().navigationBarsPadding()
-                        .padding(bottom = 20.dp),
-                ) {
-                    Text(
-                        stringResource(R.string.home),
-                        style = MaterialTheme.typography.headlineMedium,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    )
-                    com.music.bitchord.ui.screens.SettingsGroupSurface(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    ) {
-                        com.music.bitchord.ui.screens.SettingsRow(
-                            title = stringResource(R.string.settings),
-                            reserveIconSpace = false,
-                            onClick = {
-                                homeOptionsOpen = false
-                                showSettings = true
-                            },
-                        )
-                        com.music.bitchord.ui.screens.SettingsRow(
-                            title = stringResource(R.string.downloads),
-                            reserveIconSpace = false,
-                            onClick = {
-                                homeOptionsOpen = false
-                                showDownloadManager = true
-                            },
-                        )
-                        com.music.bitchord.ui.screens.SettingsRow(
-                            title = stringResource(R.string.account_integrations),
-                            reserveIconSpace = false,
-                            onClick = {
-                                homeOptionsOpen = false
-                                settingsSection = SettingsSection.ACCOUNT
-                                showSettings = true
-                            },
-                        )
-                        updateNotice?.let { update ->
-                            com.music.bitchord.ui.screens.SettingsRow(
-                                title = stringResource(R.string.update_available, update.version),
-                                reserveIconSpace = false,
-                                onClick = {
-                                    homeOptionsOpen = false
-                                    showUpdateDialog = true
-                                },
-                            )
-                        }
-                    }
-                }
-            }
         }
 
         if (songSortMenuOpen) {
