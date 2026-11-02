@@ -148,6 +148,10 @@ data class Song(
     val localComposers: List<String>? = null,
     /** MediaStore size is part of the incremental local tag-header cache key. */
     val localSizeBytes: Long? = null,
+    /** Legacy MediaStore genre, kept scoped to the local file. */
+    val localGenre: String? = null,
+    /** Positive MediaStore bitrate in bits/s, independent of BPM. */
+    val localBitrateBps: Long? = null,
 ) {
     /** Legacy derived property: true if and only if [queueTier] is [QueueTier.AUTOPLAY]. */
     val fromAutoplay: Boolean get() = queueTier == QueueTier.AUTOPLAY
