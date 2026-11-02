@@ -79,6 +79,8 @@ import com.music.bitchord.data.catalog.CanonicalEntitySortDateRow
 import com.music.bitchord.data.catalog.UnifiedLocalCatalogIndex
 import com.music.bitchord.data.settings.LocalMusicSort
 import com.music.bitchord.data.settings.LibraryViewType
+import com.music.bitchord.diagnostics.Diagnostics
+import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.theme.rememberArtworkPalette
@@ -239,6 +241,38 @@ internal fun CanonicalRemoteLibraryScreen(
         if (unified) filterCanonicalLibraryTracks(
             library.tracks, selectedSource, selectedStars, ratingsSnapshot,
         ) else library.tracks
+    }
+    // A future physical smoke can distinguish unavailable MediaStore evidence
+    // from an empty account, an invalid source choice and an active star filter.
+    // Only counts and enum labels are exported (no account IDs or song paths).
+    LaunchedEffect(
+        unified, library.tracks.size, eligibleTracks.size, selectedContext,
+        selectedSource, selectedStars, sources.size,
+    ) {
+        if (unified) runCatching {
+            Diagnostics.event(
+                category = DiagnosticCategory.CATALOG,
+                name = "unified_library_browse_v1",
+                metadata = mapOf(
+                    "category" to selectedContext.name,
+                    "recordingCount" to library.tracks.size.toString(),
+                    "visibleCount" to eligibleTracks.size.toString(),
+                    "localAssetCount" to library.tracks.sumOf { track ->
+                        track.availableAssets.count { it.providerKey == "local-mediastore" }
+                    }.toString(),
+                    "remoteAssetCount" to library.tracks.sumOf { track ->
+                        track.availableAssets.count { it.providerKey.startsWith("opensubsonic:") }
+                    }.toString(),
+                    "sourceCount" to sources.size.toString(),
+                    "sourceMode" to when {
+                        selectedSource == null -> "all"
+                        selectedSource == "local-mediastore" -> "local"
+                        else -> "remote"
+                    },
+                    "stars" to (selectedStars?.toString() ?: "all"),
+                ),
+            )
+        }
     }
     val executeLibraryTrack = rememberSmartCollectionBatchAction(controller)
     // Preserve native RecordingId-scoped rating edits from the main branch.
