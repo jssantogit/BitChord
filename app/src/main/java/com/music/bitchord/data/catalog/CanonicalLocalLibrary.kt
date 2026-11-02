@@ -3,6 +3,7 @@ package com.music.bitchord.data.catalog
 import android.content.Context
 import android.net.Uri
 import android.os.Build
+import android.os.SystemClock
 import android.provider.MediaStore
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -10,6 +11,8 @@ import androidx.room.withTransaction
 import com.music.bitchord.data.LocalMediaRepository
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.diagnostics.DiagnosticCategory
+import com.music.bitchord.diagnostics.Diagnostics
 import java.util.Locale
 import java.util.UUID
 import kotlinx.serialization.encodeToString
@@ -458,18 +461,59 @@ internal object UnifiedLocalCatalogIndex {
     private val mutex = Mutex()
     @Volatile private var complete = false
 
+    private fun trace(
+        phase: String,
+        scannedCount: Int = 0,
+        indexedCount: Int = 0,
+        elapsedNanos: Long? = null,
+    ) {
+        // Privacy: counts and stages only; never log paths, file names or IDs.
+        runCatching {
+            Diagnostics.event(
+                category = DiagnosticCategory.CATALOG,
+                name = "unified_library_local_index_v1",
+                metadata = mapOf(
+                    "phase" to phase,
+                    "scannedCount" to scannedCount.toString(),
+                    "indexedCount" to indexedCount.toString(),
+                ),
+                durationNanos = elapsedNanos,
+            )
+        }
+    }
+
     suspend fun ensure(context: Context) {
-        if (complete || !LocalMediaRepository.hasStoragePermission(context)) return
+        if (complete) return
+        if (!LocalMediaRepository.hasStoragePermission(context)) {
+            trace("permission_missing")
+            return
+        }
         mutex.withLock {
             if (complete || !LocalMediaRepository.hasStoragePermission(context)) return@withLock
+            val started = SystemClock.elapsedRealtimeNanos()
             val app = context.applicationContext
-            val mediaStoreSongs = LocalMediaRepository.getLocalMusic(app)
-            CanonicalLocalLibrary.sync(app, mediaStoreSongs)
-            complete = true
+            var scannedCount = 0
+            try {
+                val scanned = LocalMediaRepository.getLocalMusic(app)
+                scannedCount = scanned.size
+                trace("scanned", scannedCount)
+                val indexed = CanonicalLocalLibrary.sync(app, scanned)
+                complete = true
+                trace("ready", scannedCount, indexed.size,
+                    SystemClock.elapsedRealtimeNanos() - started)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                trace("cancelled", scannedCount)
+                throw cancelled
+            } catch (failure: Exception) {
+                trace("failed", scannedCount, elapsedNanos =
+                    SystemClock.elapsedRealtimeNanos() - started)
+                throw failure
+            }
         }
     }
 
     fun invalidate() {
         complete = false
+        trace("invalidated")
     }
 }
