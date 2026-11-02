@@ -115,6 +115,19 @@ internal fun canonicalLibraryEntityArtworkById(
     }.toMap()
 }
 
+/** Duration labels are factual: a missing duration is not counted as zero. */
+internal fun nativeUnifiedTrackCountLabel(
+    count: Int,
+    durationsMs: List<Long?>,
+): String {
+    val noun = if (count == 1) "faixa" else "faixas"
+    val prefix = "$count $noun"
+    if (count == 0 || durationsMs.size != count ||
+        durationsMs.any { it == null || it <= 0L }) return prefix
+    val totalMinutes = durationsMs.filterNotNull().sumOf { it / 60_000L }
+    return "$prefix · ${totalMinutes / 60}h ${(totalMinutes % 60).toString().padStart(2, '0')}m"
+}
+
 /** Keep the native LocalFolder sort semantics on the unified canonical list.
  * Unknown source timestamps stay last; they are never invented from sync time.
  */
