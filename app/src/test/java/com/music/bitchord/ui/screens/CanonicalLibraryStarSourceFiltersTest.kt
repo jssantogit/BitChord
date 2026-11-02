@@ -4,6 +4,7 @@ import com.music.bitchord.data.catalog.CanonicalBrowseMediaAsset
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
+import com.music.bitchord.ui.components.visibleStarValues
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -60,6 +61,27 @@ class CanonicalLibraryStarSourceFiltersTest {
         assertTrue(filterCanonicalLibraryTracks(
             listOf(row(currentRemote)), null, 5, ratings,
         ).isEmpty())
+    }
+
+    @Test fun visibleStarsRemainScopedToEligibleAssetsAndConflicts() {
+        val snapshot = CanonicalRatingDisplaySnapshot(
+            byRecordingId = mapOf(
+                "recording-a" to RatingDisplay(localValue = 4.0),
+            ),
+            byMediaAssetId = mapOf(
+                "remote-a" to RatingDisplay(localValue = 4.0, remoteValue = 5),
+                "remote-b" to RatingDisplay(remoteValue = 3),
+            ),
+        )
+        assertEquals(listOf(4.0, 5.0),
+            canonicalLibraryVisibleRatings(row(local, currentRemote), snapshot)
+                .single().visibleStarValues())
+        val scoped = canonicalLibraryVisibleRatings(row(local), snapshot)
+        assertEquals(listOf(4.0), scoped.single().visibleStarValues())
+        val divergent = canonicalLibraryVisibleRatings(row(currentRemote, otherRemote), snapshot)
+        assertEquals(3, divergent.size)
+        assertEquals(listOf(4.0, 5.0, 3.0),
+            divergent.flatMap { it.visibleStarValues() })
     }
 
     @Test fun albumOrArtistIsEligibleOnlyIfItContainsVisibleProvenMember() {
