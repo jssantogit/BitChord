@@ -3511,19 +3511,7 @@ private fun BitChordApp(
                                 onRefresh = { viewModel.refresh(MainViewModel.Feed.HOME) },
                                 pullState = homePull,
                                 contentPadding = listPadding,
-                                headerTrailing = {
-                                    TopBarAccountButton(
-                                        account = account,
-                                        onClick = {
-                                            if (signedIn) {
-                                                viewModel.loadChannels()
-                                                showAccountSelector = true
-                                            } else showSettings = true
-                                        },
-                                        onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
-                                    )
-                                },
-                                // Canonical and legacy Home share the native
+                                                                // Canonical and legacy Home share the native
                                 // "Início" heading; no legacy "Ouvir agora" split.
                                 title = stringResource(R.string.home),
                                 signedIn = true,
@@ -3536,35 +3524,7 @@ private fun BitChordApp(
                             listState = homeListState,
                             currentSong = player.song,
                             isPlaying = player.isPlaying,
-                            headerTrailing = {
-                                TopBarAccountButton(
-                                    account = account,
-                                    onClick = {
-                                        if (signedIn) {
-                                            viewModel.loadChannels()
-                                            showAccountSelector = true
-                                        } else showSettings = true
-                                    },
-                                    onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
-                                )
-                            },
-                            title = stringResource(R.string.home),
-                            headerActions = listOf(
-                                HomeHeaderAction(stringResource(R.string.settings)) {
-                                    showSettings = true
-                                },
-                                HomeHeaderAction(stringResource(R.string.downloads)) {
-                                    showDownloadManager = true
-                                },
-                                HomeHeaderAction(stringResource(R.string.account_integrations)) {
-                                    settingsSection = SettingsSection.ACCOUNT
-                                    showSettings = true
-                                },
-                            ) + (updateNotice?.let { update ->
-                                listOf(HomeHeaderAction(
-                                    stringResource(R.string.update_available, update.version),
-                                ) { showUpdateDialog = true })
-                            } ?: emptyList()),
+                                                        title = stringResource(R.string.home),
                             signedIn = signedIn,
                             // Do not advertise YouTube authentication on a music-first
                             // canonical home. Provider configuration remains in Settings.
@@ -4169,7 +4129,10 @@ private fun BitChordApp(
                     // circles over the shared gradient — no full-width pane.
                     transparentBackdrop = true,
                     artworkPageChrome = true,
-                    showActions = !homeRootVisible || homeListState.firstVisibleItemIndex > 0,
+                    // Home uses this existing frosted action pill from the first frame.
+                    // Never render a second profile button or Material3 overflow
+                    // beside the large Início title.
+                    showActions = true,
                     // The generic top bar scroll flag flips after 24px,
                     // while the large Home heading is still fully legible.
                     // Only show its compact replacement when item 0 has left
