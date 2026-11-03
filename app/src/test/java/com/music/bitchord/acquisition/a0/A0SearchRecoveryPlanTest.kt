@@ -31,7 +31,9 @@ class A0SearchRecoveryPlanTest {
             "BTS (방탄소년단) - Boy In Luv"))
         assertEquals("BTS Proof",recovery.next(6000,false,sent))
         sent.add("BTS Proof")
-        assertEquals("BTS Proof Boy In Luv",recovery.next(12000,false,sent))
+        assertEquals(A0SearchQuery.normalize(
+            "BTS (방탄소년단) Proof Boy In Luv"),
+            recovery.next(12000,false,sent))
         assertFalse(recovery.authorizesTransfer)
         val generic=A0SearchRecoveryPlan("BTS - Normal","ARIRANG",releaseWide=true)
         assertEquals("BTS ARIRANG",generic.next(6000,false,setOf("BTS Normal")))
