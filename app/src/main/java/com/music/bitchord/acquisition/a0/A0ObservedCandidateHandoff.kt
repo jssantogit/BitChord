@@ -121,6 +121,29 @@ internal class A0ObservedCandidateHandoff(
     private val releaseSlotTokens=releaseQueries.take(64)
         .map(A0ReleaseDiscoveryShadowAdapter::titleTokens)
 
+    /**
+     * Per validated search ticket: how many untrusted public file claims
+     * survived cheap title screening, duplicate rejection and shadow insertion.
+     * These are discovery funnel counts, NOT independently strong candidates.
+     * The random wire ticket stays private and never enters the diagnostic text.
+     */
+    data class TicketScreening(
+        val titleMatched:Int=0,
+        val uniqueAdmitted:Int=0,
+        val shadowInserted:Int=0,
+    )
+    private class TicketCounters {
+        var titleMatched=0
+        var uniqueAdmitted=0
+        var shadowInserted=0
+        fun snapshot()=TicketScreening(titleMatched,uniqueAdmitted,shadowInserted)
+    }
+    private val perTicket=HashMap<Int,TicketCounters>(3)
+
+    /** Snapshot only; independent of choice ranking and transfer authority. */
+    @Synchronized fun ticketScreening(token:Int):TicketScreening =
+        perTicket[token]?.snapshot() ?: TicketScreening()
+
     private fun markLostName(name:String) {
         if(!collectReleaseShadow)return
         val file=A0ReleaseDiscoveryShadowAdapter.fileTokens(name)
@@ -281,6 +304,14 @@ internal class A0ObservedCandidateHandoff(
         replies=(replies+1).coerceAtMost(100000)
         publicSeen=(publicSeen+result.files.size).coerceAtMost(100000)
         lockedSeen=(lockedSeen+result.lockedFiles.size).coerceAtMost(100000)
+        // Only the three already accepted auto-search tickets can allocate a
+        // counter bucket. Manual collection keeps its existing behavior.
+        val ticket=if(collectReleaseShadow && !collectManualCandidates &&
+            releaseSlotTokens.any { it.isNotEmpty() }) {
+            perTicket[result.token] ?: if(perTicket.size<3)
+                TicketCounters().also { perTicket[result.token]=it }
+            else null
+        } else null
 
         val validExtensions=if(saveFormatsOnly) setOf("mp3","flac","wav","aac","opus","ogg")
             else setOf("mp3","flac","wav","ogg","m4a","aac","opus")
@@ -322,6 +353,9 @@ internal class A0ObservedCandidateHandoff(
                     continue
                 }
             }
+            // Safety/format/size/availability checks and the release-title
+            // screen have passed. This still does not prove the artist.
+            ticket?.let { it.titleMatched=(it.titleMatched+1).coerceAtMost(100000) }
             val identity=result.peerUsername to path
             val incomingClaim=A0CandidateClaimClusters.Claim(
                 filename=basename,format=ext,sizeBytes=file.sizeBytes,
@@ -349,6 +383,7 @@ internal class A0ObservedCandidateHandoff(
             }
             witnessedClaims[identity]=incomingClaim
             eligible=(eligible+1).coerceAtMost(100000)
+            ticket?.let { it.uniqueAdmitted=(it.uniqueAdmitted+1).coerceAtMost(100000) }
             // Preserve out-of-range claims for the codec conflict gate: dropping
             // an impossible MP3 bitrate would quietly downgrade UNSAFE to
             // REVIEW/UNKNOWN. Only the UI exposure is bounded.
@@ -465,6 +500,11 @@ internal class A0ObservedCandidateHandoff(
                 if(releaseShadow.size<releaseShadowLimit &&
                     (releaseShadowPerPeer[peer] ?: 0)<64) {
                     releaseShadow.add(observedChoice)
+                    // Counts insertion, not final retained snapshot: later
+                    // evictions are still reported separately.
+                    ticket?.let {
+                        it.shadowInserted=(it.shadowInserted+1).coerceAtMost(100000)
+                    }
                     releaseHitsCache[observedChoice]=releaseSlotHits(observedChoice)
                     releaseShadowPerPeer[peer]=(releaseShadowPerPeer[peer] ?: 0)+1
                 } else {
