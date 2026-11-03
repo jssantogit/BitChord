@@ -86,7 +86,11 @@ internal object A0CanonicalAlbumPolicy {
         val artistWords=artist.split(' ').filter(String::isNotEmpty)
         val compactArtist=artistWords.takeIf {
             it.size in 2..4 && it.all { word ->
-                word.length>=2 && word.all(Char::isLetterOrDigit)
+                word.length>=2 && word.all { character ->
+                    character.isDigit() ||
+                        Character.UnicodeScript.of(character.code)==
+                            Character.UnicodeScript.LATIN
+                }
             }
         }?.joinToString("")?.takeIf { it.length>=6 }
         val exactCompactArtistAlbum=claim.source==ClaimSource.DIRECTORY_HINT &&
