@@ -37,6 +37,8 @@ import com.music.bitchord.data.catalog.CanonicalCatalogDao
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.provider.opensubsonic.androidOpenSubsonicArtworkLoader
 import com.music.bitchord.data.model.BrowseType
+import com.music.bitchord.diagnostics.Diagnostics
+import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.PAGE_GUTTER
@@ -215,11 +217,34 @@ internal fun CanonicalPinnedLibraryShelf(
         ).collectLatest {
             value = try {
                 withContext(Dispatchers.IO) {
-                    readPinnedLibraryCards(dao, pins, canonicalAvailablePlaylistSourceKeys(context))
+                    val keys = canonicalAvailablePlaylistSourceKeys(context)
+                    val cards = readPinnedLibraryCards(dao, pins, keys)
+                    runCatching {
+                        Diagnostics.event(
+                            category = DiagnosticCategory.UI,
+                            name = "canonical_library_pins_resolved_v1",
+                            metadata = mapOf(
+                                "pins" to pins.size.toString(),
+                                "available" to cards.count { it.accessible }.toString(),
+                                "sources" to keys.size.toString(),
+                            ),
+                        )
+                    }
+                    cards
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                runCatching {
+                    Diagnostics.event(
+                        category = DiagnosticCategory.UI,
+                        name = "canonical_library_pins_resolution_failed_v1",
+                        metadata = mapOf(
+                            "pins" to pins.size.toString(),
+                            "errorType" to error.javaClass.simpleName,
+                        ),
+                    )
+                }
                 // Keep the user's pin identities. A transient catalog read
                 // failure must never delete or silently rewrite pinned prefs.
                 pins.map { PinnedLibraryCard(it, it.title, it.subtitle, null, null, false) }
