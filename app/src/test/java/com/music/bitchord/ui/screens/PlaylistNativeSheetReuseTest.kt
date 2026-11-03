@@ -5,6 +5,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
@@ -53,7 +57,7 @@ class PlaylistNativeSheetReuseTest {
     }
 
     @Test fun nativePlaylistSheetKeepsWizardHeaderAndSettingsRowBehavior() {
-        var selected = 0
+        var selected by mutableStateOf(0)
         compose.setContent {
             PlaylistWizardSheetChrome(title = "Adicionar à playlist", onClose = {}) {
                 PlaylistWizardSelectionRow(
@@ -62,9 +66,12 @@ class PlaylistNativeSheetReuseTest {
                 )
             }
         }
+        compose.waitForIdle() // ModalBottomSheet must finish its entrance animation.
         compose.onNodeWithText("Adicionar à playlist").assertExists()
         compose.onNodeWithTag("native-settings-group-surface").assertExists()
-        compose.onNodeWithText("2000s").performClick()
+        compose.onNodeWithTag("native-playlist-selection-row")
+            .assertHasClickAction()
+            .performClick()
         compose.runOnIdle { assertEquals(1, selected) }
     }
 }
