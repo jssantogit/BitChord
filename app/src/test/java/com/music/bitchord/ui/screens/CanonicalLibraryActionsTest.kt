@@ -109,6 +109,24 @@ class CanonicalLibraryActionsTest {
         ))
     }
 
+    @Test fun creationWizardInheritsExactSelectedRecordingsButRejectsPartialSelection() {
+        assertEquals(listOf("a", "b"), canonicalLibraryWizardSeed(
+            CanonicalLibraryResolvedSelection(
+                recordingIds = listOf("a", "b", "a"), unavailableEntities = 0,
+            ),
+        ))
+        assertEquals(null, canonicalLibraryWizardSeed(
+            CanonicalLibraryResolvedSelection(
+                recordingIds = listOf("a"), unavailableEntities = 1,
+            ),
+        ))
+        assertEquals(null, canonicalLibraryWizardSeed(
+            CanonicalLibraryResolvedSelection(
+                recordingIds = emptyList(), unavailableEntities = 0,
+            ),
+        ))
+    }
+
     @Test fun longPressSelectionIsOnlyAvailableOnTopLevelLibraryCategories() {
         for (category in CanonicalSmartFilterContext.entries) {
             assertTrue(canSelectCanonicalLibraryByLongPress(category, detailOpen = false))
