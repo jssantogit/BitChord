@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -61,6 +63,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -71,6 +74,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -1742,16 +1746,82 @@ private fun NativeUnifiedLibraryBody(
         CanonicalSmartFilterContext.ALBUMS -> "${count} álbuns"
         CanonicalSmartFilterContext.ARTISTS -> "${count} artistas"
     }
+    // Drag selection belongs to the *root* Library only. Detail pages keep
+    // their original touch/menu behavior; neither a global gesture interceptor
+    // nor an additional browse surface is introduced.
+    val dragOrder = remember(selectedContext, tracks, albums, artists) {
+        when (selectedContext) {
+            CanonicalSmartFilterContext.SONGS -> tracks.map {
+                CanonicalLibrarySelection(CanonicalLibraryEntityType.TRACK, it.recordingId)
+            }
+            CanonicalSmartFilterContext.ALBUMS -> albums.map {
+                CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, it.id)
+            }
+            CanonicalSmartFilterContext.ARTISTS -> artists.map {
+                CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, it.id)
+            }
+        }
+    }
+    val gridMode = viewType == LibraryViewType.GRID
+    val dragRows = remember(dragOrder, gridMode) {
+        canonicalLibraryDragRows(dragOrder, gridMode)
+    }
+    val dragIndices = remember(dragOrder) {
+        dragOrder.withIndex().associate { it.value to it.index }
+    }
+    val listState = rememberLazyListState()
+    val currentSelectedItems by rememberUpdatedState(selectedItems)
+    val currentToggleSelection by rememberUpdatedState(onToggleSelection)
+
     BoxWithConstraints(
         Modifier.fillMaxSize().background(
             if (isAlbumDetail) palette.background else MaterialTheme.colorScheme.background,
         ),
     ) {
         val sleeve = (maxWidth * 0.76f).coerceAtMost(maxHeight * 0.6f)
+        val dragModifier = if (canLongPressSelect) {
+            Modifier.pointerInput(dragRows, dragIndices, gridMode) {
+                val visited = mutableSetOf<CanonicalLibrarySelection>()
+                var previousIndex: Int? = null
+                fun visit(position: androidx.compose.ui.geometry.Offset) {
+                    val hitRow = listState.layoutInfo.visibleItemsInfo.firstOrNull { item ->
+                        position.y >= item.offset && position.y < item.offset + item.size
+                    } ?: return
+                    val target = canonicalLibraryDragHit(
+                        dragRows, hitRow.key, position.x,
+                        listState.layoutInfo.viewportSize.width.toFloat(), gridMode,
+                    ) ?: return
+                    val index = dragIndices[target] ?: return
+                    val firstIndex = previousIndex ?: index
+                    canonicalLibraryDragSpan(dragOrder, firstIndex, index).forEach { entry ->
+                        // Paint-selection never deselects an item merely because the
+                        // finger crosses it again. The user's existing draft survives.
+                        if (visited.add(entry) && entry !in currentSelectedItems) {
+                            currentToggleSelection(entry)
+                        }
+                    }
+                    previousIndex = index
+                }
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { position ->
+                        previousIndex = null
+                        visited.clear()
+                        visit(position)
+                    },
+                    onDragEnd = { previousIndex = null; visited.clear() },
+                    onDragCancel = { previousIndex = null; visited.clear() },
+                    onDrag = { change, _ ->
+                        visit(change.position)
+                        change.consume()
+                    },
+                )
+            }
+        } else Modifier
         LazyColumn(
             // Same insets as DetailScreen: the hero itself clears the frosted
             // toolbar. A second 72dp/status inset pushed the artwork too low.
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().then(dragModifier),
+            state = listState,
             contentPadding = PaddingValues(bottom = 112.dp),
         ) {
             item(key = "native-library-header") {
@@ -1853,9 +1923,7 @@ private fun NativeUnifiedLibraryBody(
                                     else onTrackPlay(track)
                                 },
                                 onMore = { onTrackOptions(track) },
-                                onLongPress = if (canLongPressSelect) {
-                                    { onToggleSelection(target) }
-                                } else null,
+                                onLongPress = null, // The list-level gesture handles hold and drag.
                                 selectionMode = selectedItems.isNotEmpty(),
                                 selected = target in selectedItems,
                                 onToggleSelection = { onToggleSelection(target) },
@@ -1873,9 +1941,7 @@ private fun NativeUnifiedLibraryBody(
                             onClick = { onTrackPlay(track) },
                             onEditRating = { onTrackEditRating(track) },
                             onOptions = { onTrackOptions(track) },
-                            onLongPress = if (canLongPressSelect) {
-                                { onToggleSelection(target) }
-                            } else null,
+                            onLongPress = null, // The list-level gesture handles hold and drag.
                             selectionMode = selectedItems.isNotEmpty(),
                             selected = target in selectedItems,
                             onToggleSelection = { onToggleSelection(target) },
@@ -1921,9 +1987,7 @@ private fun NativeUnifiedLibraryBody(
                                         ))
                                     },
                                     onMore = { onAlbumOptions(album) },
-                                    onLongPress = if (canLongPressSelect) {
-                                        { onToggleSelection(target) }
-                                    } else null,
+                                    onLongPress = null, // The list-level gesture handles hold and drag.
                                     selectionMode = selectedItems.isNotEmpty(),
                                     selected = target in selectedItems,
                                     onToggleSelection = { onToggleSelection(target) },
@@ -1949,9 +2013,7 @@ private fun NativeUnifiedLibraryBody(
                                         album.id, album.title, album.artworkUri,
                                     ))
                                 },
-                                onLongPress = if (canLongPressSelect) {
-                                    { onToggleSelection(target) }
-                                } else null,
+                                onLongPress = null, // The list-level gesture handles hold and drag.
                                 trailing = {
                                     if (selectedItems.isNotEmpty()) {
                                         IconButton(onClick = { onToggleSelection(target) }) {
@@ -2007,9 +2069,7 @@ private fun NativeUnifiedLibraryBody(
                                         else onEntitySelect(artist)
                                     },
                                     onMore = { onArtistOptions(artist) },
-                                    onLongPress = if (canLongPressSelect) {
-                                        { onToggleSelection(target) }
-                                    } else null,
+                                    onLongPress = null, // The list-level gesture handles hold and drag.
                                     selectionMode = selectedItems.isNotEmpty(),
                                     selected = target in selectedItems,
                                     onToggleSelection = { onToggleSelection(target) },
@@ -2034,9 +2094,7 @@ private fun NativeUnifiedLibraryBody(
                                     if (selectedItems.isNotEmpty()) onToggleSelection(target)
                                     else onEntitySelect(artist)
                                 },
-                                onLongPress = if (canLongPressSelect) {
-                                    { onToggleSelection(target) }
-                                } else null,
+                                onLongPress = null, // The list-level gesture handles hold and drag.
                                 trailing = {
                                     if (selectedItems.isNotEmpty()) {
                                         IconButton(onClick = { onToggleSelection(target) }) {
