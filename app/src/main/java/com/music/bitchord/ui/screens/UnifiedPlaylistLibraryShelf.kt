@@ -396,6 +396,41 @@ internal fun UnifiedPlaylistLibraryShelf(
     }
 }
 
+/**
+ * Cover identity and artwork loader are shared by the normal playlist Library
+ * row AND the add-to-playlist destination picker. Never reimplement a second
+ * thumbnail, collage, artwork URL or provider-specific title lookup.
+ */
+internal fun canonicalStaticPlaylistCoverCandidateIds(ids: List<String>): List<String> =
+    ids.filter(String::isNotBlank).distinct().take(4)
+
+@Composable
+internal fun CanonicalStaticPlaylistCoverArt(
+    playlist: SavedCanonicalStaticPlaylist,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current.applicationContext
+    val rows by produceState<List<V2DisplayRow>>(
+        initialValue = emptyList(), key1 = playlist,
+    ) {
+        val coverIds = canonicalStaticPlaylistCoverCandidateIds(playlist.recordingIds)
+        value = if (coverIds.isEmpty()) emptyList() else try {
+            canonicalNormalPlaylistSelectedRows(
+                context, coverIds, playlist.sourceProviderKey,
+            ).filter { it.isAvailablePlaylistMember() }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+    CanonicalPlaylistCoverArt(
+        rows = rows,
+        modifier = modifier,
+        customCoverUri = playlist.coverUri,
+    )
+}
+
 /** Compact vertical Library presentation; the same actions work in the grid. */
 @Composable
 private fun UnifiedPlaylistCompactRow(
@@ -408,18 +443,9 @@ private fun UnifiedPlaylistCompactRow(
         initialValue = emptyList(), key1 = card.id, key2 = card,
     ) {
         value = when (card) {
-            is LibraryPlaylistCard.CanonicalNormal -> {
-                try {
-                    canonicalNormalPlaylistSelectedRows(
-                        context, card.definition.recordingIds.take(4),
-                        card.definition.sourceProviderKey,
-                    ).filterNot { it.title == "Gravação indisponível" }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    emptyList()
-                }
-            }
+            // The canonical normal cover is rendered by
+            // CanonicalStaticPlaylistCoverArt, shared with the destination picker.
+            is LibraryPlaylistCard.CanonicalNormal -> emptyList()
             is LibraryPlaylistCard.Smart -> {
                 try {
                     val ids = withContext(Dispatchers.IO) {
@@ -458,6 +484,11 @@ private fun UnifiedPlaylistCompactRow(
         // create/edit screen and the dedicated playlist detail only.
         artworkSize = 64.dp,
         artwork = when {
+            card is LibraryPlaylistCard.CanonicalNormal -> ({
+                CanonicalStaticPlaylistCoverArt(
+                    card.definition, modifier = Modifier.fillMaxSize(),
+                )
+            })
             card.explicitCoverUri() != null -> ({
                 CanonicalPlaylistCoverArt(
                     canonicalCover, Modifier.fillMaxSize(),
