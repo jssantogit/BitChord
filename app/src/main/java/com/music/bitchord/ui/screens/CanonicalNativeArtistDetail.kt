@@ -43,6 +43,7 @@ import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoader
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.trackColumnWidth
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import kotlinx.coroutines.CancellationException
@@ -113,8 +114,11 @@ internal fun CanonicalNativeArtistDetail(
                 val coverLinks = releases.map { it.id }.chunked(300).flatMap { ids ->
                     dao.playlistAlbumCoverRecordingIds(keys, ids)
                 }
+                val counts = releases.map { it.id }.chunked(300).flatMap { ids ->
+                    dao.scopedReleaseRecordingCounts(ids, keys)
+                }.associate { it.releaseId to it.recordingCount }
                 CanonicalArtistNativeReleases(
-                    canonicalArtistReleaseSections(releases, proofs),
+                    canonicalArtistReleaseSections(releases, proofs, counts),
                     canonicalLibraryEntityArtworkById(coverLinks, tracks),
                 )
             }
@@ -234,6 +238,7 @@ internal fun CanonicalNativeArtistDetail(
             (maxWidth / 0.95f).coerceAtMost(maxHeight * 0.6f)
         }
         val photoHeight by animateDpAsState(targetPhotoHeight, label = "native_artist_hero")
+        val trackColumnWidth = trackColumnWidth(maxWidth)
         PageBackground(
             page = null,
             palette = palette,
@@ -287,7 +292,7 @@ internal fun CanonicalNativeArtistDetail(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(shownTracks.take(20).chunked(4), key = { it.first().recordingId }) { column ->
-                            Column(Modifier.width(312.dp)) {
+                            Column(Modifier.width(trackColumnWidth)) {
                                 column.forEach { track ->
                                     CanonicalTrackRow(
                                         track, artworkLoader,
