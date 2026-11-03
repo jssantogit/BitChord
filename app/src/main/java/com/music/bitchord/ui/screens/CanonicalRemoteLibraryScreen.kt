@@ -1776,6 +1776,9 @@ private fun NativeUnifiedLibraryBody(
                         if (viewType == LibraryViewType.GRID) {
                             gridRows(albums, 2, key = { it.id }) { album ->
                                 val art = entityArtworkById[album.id]
+                                val target = CanonicalLibrarySelection(
+                                    CanonicalLibraryEntityType.ALBUM, album.id,
+                                )
                                 NativeLibraryEntityCard(
                                     title = album.title,
                                     subtitle = album.artistDisplay.orEmpty(),
@@ -1787,13 +1790,22 @@ private fun NativeUnifiedLibraryBody(
                                         ) }
                                     },
                                     onClick = {
-                                        onEntitySelect(CanonicalSelectedEntity(album.id, album.title, album.artworkUri))
+                                        if (selectedItems.isNotEmpty()) onToggleSelection(target)
+                                        else onEntitySelect(CanonicalSelectedEntity(
+                                            album.id, album.title, album.artworkUri,
+                                        ))
                                     },
                                     onMore = { onAlbumOptions(album) },
+                                    selectionMode = selectedItems.isNotEmpty(),
+                                    selected = target in selectedItems,
+                                    onToggleSelection = { onToggleSelection(target) },
                                 )
                             }
                         } else items(albums, key = { it.id }) { album ->
                             val art = entityArtworkById[album.id]
+                            val target = CanonicalLibrarySelection(
+                                CanonicalLibraryEntityType.ALBUM, album.id,
+                            )
                             LibraryRow(
                                 title = album.title,
                                 subtitle = album.artistDisplay.orEmpty(),
@@ -1803,9 +1815,22 @@ private fun NativeUnifiedLibraryBody(
                                         candidate, artworkLoader, Modifier.fillMaxSize(),
                                     ) }
                                 },
-                                onClick = { onEntitySelect(CanonicalSelectedEntity(album.id, album.title, album.artworkUri)) },
+                                onClick = {
+                                    if (selectedItems.isNotEmpty()) onToggleSelection(target)
+                                    else onEntitySelect(CanonicalSelectedEntity(
+                                        album.id, album.title, album.artworkUri,
+                                    ))
+                                },
                                 trailing = {
-                                    RowMoreButton(onClick = { onAlbumOptions(album) })
+                                    if (selectedItems.isNotEmpty()) {
+                                        IconButton(onClick = { onToggleSelection(target) }) {
+                                            Icon(
+                                                if (target in selectedItems) Icons.Rounded.CheckCircle
+                                                else Icons.Rounded.RadioButtonUnchecked,
+                                                contentDescription = "Selecionar álbum",
+                                            )
+                                        }
+                                    } else RowMoreButton(onClick = { onAlbumOptions(album) })
                                 },
                                 artworkSize = 52.dp,
                                 horizontalPadding = PAGE_GUTTER,
@@ -1833,6 +1858,9 @@ private fun NativeUnifiedLibraryBody(
                         if (viewType == LibraryViewType.GRID) {
                             gridRows(artists, 2, key = { it.id }) { artist ->
                                 val art = entityArtworkById[artist.id]
+                                val target = CanonicalLibrarySelection(
+                                    CanonicalLibraryEntityType.ARTIST, artist.id,
+                                )
                                 NativeLibraryEntityCard(
                                     title = artist.name,
                                     subtitle = "",
@@ -1843,12 +1871,21 @@ private fun NativeUnifiedLibraryBody(
                                             candidate, artworkLoader, Modifier.fillMaxSize(),
                                         ) }
                                     },
-                                    onClick = { onEntitySelect(artist) },
+                                    onClick = {
+                                        if (selectedItems.isNotEmpty()) onToggleSelection(target)
+                                        else onEntitySelect(artist)
+                                    },
                                     onMore = { onArtistOptions(artist) },
+                                    selectionMode = selectedItems.isNotEmpty(),
+                                    selected = target in selectedItems,
+                                    onToggleSelection = { onToggleSelection(target) },
                                 )
                             }
                         } else items(artists, key = { it.id }) { artist ->
                             val art = entityArtworkById[artist.id]
+                            val target = CanonicalLibrarySelection(
+                                CanonicalLibraryEntityType.ARTIST, artist.id,
+                            )
                             LibraryRow(
                                 title = artist.name,
                                 subtitle = "",
@@ -1859,9 +1896,20 @@ private fun NativeUnifiedLibraryBody(
                                     ) }
                                 },
                                 artworkShape = CircleShape,
-                                onClick = { onEntitySelect(artist) },
+                                onClick = {
+                                    if (selectedItems.isNotEmpty()) onToggleSelection(target)
+                                    else onEntitySelect(artist)
+                                },
                                 trailing = {
-                                    RowMoreButton(onClick = { onArtistOptions(artist) })
+                                    if (selectedItems.isNotEmpty()) {
+                                        IconButton(onClick = { onToggleSelection(target) }) {
+                                            Icon(
+                                                if (target in selectedItems) Icons.Rounded.CheckCircle
+                                                else Icons.Rounded.RadioButtonUnchecked,
+                                                contentDescription = "Selecionar artista",
+                                            )
+                                        }
+                                    } else RowMoreButton(onClick = { onArtistOptions(artist) })
                                 },
                                 artworkSize = 52.dp,
                                 horizontalPadding = PAGE_GUTTER,
@@ -1923,6 +1971,9 @@ internal fun NativeLibraryEntityCard(
     onClick: () -> Unit,
     artwork: (@Composable () -> Unit)? = null,
     onMore: (() -> Unit)? = null,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelection: (() -> Unit)? = null,
 ) {
     val shape = if (isArtist) CircleShape else RoundedCornerShape(12.dp)
     Column(
@@ -1942,7 +1993,18 @@ internal fun NativeLibraryEntityCard(
                     Modifier.fillMaxSize(),
                 )
             }
-            if (onMore != null) {
+            if (selectionMode && onToggleSelection != null) {
+                IconButton(
+                    onClick = onToggleSelection,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                ) {
+                    Icon(
+                        if (selected) Icons.Rounded.CheckCircle
+                        else Icons.Rounded.RadioButtonUnchecked,
+                        contentDescription = "Selecionar ${title}",
+                    )
+                }
+            } else if (onMore != null) {
                 RowMoreButton(
                     onClick = onMore,
                     modifier = Modifier.align(Alignment.TopEnd),
