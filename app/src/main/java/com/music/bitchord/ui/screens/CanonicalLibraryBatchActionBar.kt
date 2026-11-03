@@ -41,6 +41,7 @@ internal fun CanonicalLibraryBatchActionBar(
     onClear: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onPlayNext: () -> Unit,
+    onAddToQueue: () -> Unit,
     onRateSelection: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -93,8 +94,13 @@ internal fun CanonicalLibraryBatchActionBar(
                     )
                     PlaylistWizardCompactAction(
                         label = "Tocar a seleção a seguir",
-                        icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                        icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
                         onClick = onPlayNext,
+                    )
+                    PlaylistWizardCompactAction(
+                        label = "Adicionar seleção à fila",
+                        icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                        onClick = onAddToQueue,
                     )
                     onRateSelection?.let { rate ->
                         PlaylistWizardCompactAction(
