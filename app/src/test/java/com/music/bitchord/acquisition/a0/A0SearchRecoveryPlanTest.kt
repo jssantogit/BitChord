@@ -66,6 +66,20 @@ class A0SearchRecoveryPlanTest {
     }
 
 
+    @Test fun fallbackDiagnosticKindIsClosedAndDoesNotExposeSearchText() {
+        val plan=A0SearchRecoveryPlan("BTS - Boy In Luv","Proof")
+        assertEquals(A0SearchRecoveryPlan.VariantKind.ALBUM_QUALIFIED,
+            plan.variantKind("BTS Proof Boy In Luv"))
+        assertEquals(A0SearchRecoveryPlan.VariantKind.TITLE_ONLY_OR_ALIAS,
+            plan.variantKind("Boy In Luv"))
+        assertEquals(A0SearchRecoveryPlan.VariantKind.OTHER,
+            plan.variantKind("Unrelated"))
+        val edition=A0SearchRecoveryPlan("BTS - Epiphany (Jin Demo Ver.)","Proof")
+        assertEquals(A0SearchRecoveryPlan.VariantKind.EDITION_EQUIVALENT,
+            edition.variantKind("BTS Epiphany Jin Demo Version"))
+        assertEquals("OTHER",plan.variantKind("Artist Private Name").name)
+    }
+
     @Test fun missingOrInvalidAlbumPreservesExistingTitleOnlyFallback() {
         val noAlbum=A0SearchRecoveryPlan("BTS - Boy In Luv")
         assertEquals("Boy In Luv",noAlbum.next(6000,false,
