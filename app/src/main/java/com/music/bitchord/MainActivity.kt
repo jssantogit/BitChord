@@ -3150,6 +3150,7 @@ private fun BitChordApp(
                             albumSort = unifiedAlbumUi.songSort,
                             albumMenuToken = unifiedAlbumUi.optionsToken,
                             albumPlaylistToken = unifiedAlbumUi.playlistToken,
+                            artistMenuToken = unifiedAlbumUi.artistOptionsToken,
                             initialPinnedSelection = pinnedLibraryRequest,
                             onSourceKeysChanged = unifiedControls::updateAvailableSources,
                             searchVisible = unifiedLibrarySearching,
@@ -6606,6 +6607,7 @@ private class UnifiedAlbumDetailUiState {
     var sortMenuOpen by mutableStateOf(false)
     var optionsToken by mutableIntStateOf(0)
     var playlistToken by mutableIntStateOf(0)
+    var artistOptionsToken by mutableIntStateOf(0)
 
     fun resetDetail() {
         songSort = SongSort.DEFAULT
@@ -6614,6 +6616,7 @@ private class UnifiedAlbumDetailUiState {
 
     fun openSort() { sortMenuOpen = true }
     fun requestOptions() { optionsToken++ }
+    fun requestArtistOptions() { artistOptionsToken++ }
     fun requestAddToPlaylist() { playlistToken++ }
     fun dismissSort() { sortMenuOpen = false }
     fun selectSort(option: SongSort) {
@@ -6649,6 +6652,14 @@ private fun UnifiedAlbumDetailSortMenu(
 /** Category-only source and sort controls are meaningless atop entity details. */
 internal fun shouldShowUnifiedLibraryBrowseFilters(detailOpen: Boolean): Boolean =
     !detailOpen
+
+/** The artist detail uses its three original hero controls; pin lives in ⋮. */
+internal fun shouldUseUnifiedArtistDetailToolbar(
+    category: com.music.bitchord.data.listening.CanonicalSmartFilterContext?,
+    detailOpen: Boolean,
+    nestedAlbumOpen: Boolean,
+): Boolean = detailOpen && !nestedAlbumOpen &&
+    category == com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS
 
 /** Album details are native release pages, not Library categories or artist pages. */
 internal fun shouldUseUnifiedAlbumDetailToolbar(
@@ -6702,6 +6713,10 @@ private fun UnifiedLibraryRouteToolbar(
             onAlbumSort = albumUi::openSort,
             onAlbumOptions = albumUi::requestOptions,
             onAlbumAddToPlaylist = albumUi::requestAddToPlaylist,
+            artistDetail = shouldUseUnifiedArtistDetailToolbar(
+                category, detailOpen, nestedAlbumOpen,
+            ),
+            onArtistOptions = albumUi::requestArtistOptions,
         )
     }
 }
@@ -6716,6 +6731,8 @@ private fun UnifiedLibraryToolbarActions(
     onAlbumSort: () -> Unit = {},
     onAlbumOptions: () -> Unit = {},
     onAlbumAddToPlaylist: () -> Unit = {},
+    artistDetail: Boolean = false,
+    onArtistOptions: () -> Unit = {},
 ) {
     // Keep the native contextual search entry even inside an artist detail.
     NativeCollectionSearchAction(
@@ -6735,6 +6752,11 @@ private fun UnifiedLibraryToolbarActions(
         NativeCollectionOverflowAction(
             contentDescription = "Opções do álbum",
             onClick = onAlbumOptions,
+        )
+    } else if (artistDetail) {
+        NativeCollectionOverflowAction(
+            contentDescription = "Opções do artista",
+            onClick = onArtistOptions,
         )
     } else if (showBrowseFilters) {
         IconButton(onClick = { controls.sourceMenuOpen = true }) {
