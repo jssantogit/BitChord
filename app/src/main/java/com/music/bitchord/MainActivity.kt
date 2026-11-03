@@ -2383,14 +2383,11 @@ private fun BitChordApp(
     var unifiedLibrarySearching by remember { mutableStateOf(false) }
     var unifiedLibraryDetailOpen by remember { mutableStateOf(false) }
     var unifiedLibraryBackToken by remember { mutableIntStateOf(0) }
-    var unifiedAlbumSongSort by remember { mutableStateOf(SongSort.DEFAULT) }
-    var unifiedAlbumSortMenuOpen by remember { mutableStateOf(false) }
-    var unifiedAlbumOptionsToken by remember { mutableIntStateOf(0) }
+    // Put album action/sort state outside BitChordApp: it is already close
+    // to the JVM Compose method-size limit, and its chrome is reused below.
+    val unifiedAlbumUi = remember { UnifiedAlbumDetailUiState() }
     LaunchedEffect(unifiedLibraryDetailOpen) {
-        if (!unifiedLibraryDetailOpen) {
-            unifiedAlbumSongSort = SongSort.DEFAULT
-            unifiedAlbumSortMenuOpen = false
-        }
+        if (!unifiedLibraryDetailOpen) unifiedAlbumUi.resetDetail()
     }
     var showPlaylistLibrary by rememberSaveable { mutableStateOf(false) }
     var openedCanonicalPlaylist by remember {
@@ -3138,8 +3135,9 @@ private fun BitChordApp(
                             selectedStarsFilter = unifiedControls.stars,
                             unifiedSort = unifiedControls.sort,
                             unifiedViewType = unifiedControls.viewType,
-                            albumSort = unifiedAlbumSongSort,
-                            albumMenuToken = unifiedAlbumOptionsToken,
+                            albumSort = unifiedAlbumUi.songSort,
+                            albumMenuToken = unifiedAlbumUi.optionsToken,
+                            albumPlaylistToken = unifiedAlbumUi.playlistToken,
                             onSourceKeysChanged = unifiedControls::updateAvailableSources,
                             searchVisible = unifiedLibrarySearching,
                             detailBackToken = unifiedLibraryBackToken,
@@ -4395,8 +4393,9 @@ private fun BitChordApp(
                                 albumDetail = shouldUseUnifiedAlbumDetailToolbar(
                                     unifiedLibraryCategory, unifiedLibraryDetailOpen,
                                 ),
-                                onAlbumSort = { unifiedAlbumSortMenuOpen = true },
-                                onAlbumOptions = { unifiedAlbumOptionsToken++ },
+                                onAlbumSort = unifiedAlbumUi::openSort,
+                                onAlbumOptions = unifiedAlbumUi::requestOptions,
+                                onAlbumAddToPlaylist = unifiedAlbumUi::requestAddToPlaylist,
                             )
                         }
                         if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null &&
@@ -5459,29 +5458,13 @@ private fun BitChordApp(
             )
         }
 
-        if (unifiedAlbumSortMenuOpen && shouldUseUnifiedAlbumDetailToolbar(
-            unifiedLibraryCategory, unifiedLibraryDetailOpen,
-        )) {
-            BackHandler { unifiedAlbumSortMenuOpen = false }
-            // The same frosted five-option SongSort menu as DetailScreen,
-            // not the root Library menu with irrelevant grid/source/star filters.
-            FrostedSortMenu(
-                hazeState = hazeState,
-                selected = unifiedAlbumSongSort,
-                onSelect = {
-                    unifiedAlbumSongSort = it
-                    unifiedAlbumSortMenuOpen = false
-                },
-                onFlipDateDirection = {
-                    unifiedAlbumSongSort = when (unifiedAlbumSongSort) {
-                        SongSort.DATE_ADDED_DESC -> SongSort.DATE_ADDED_ASC
-                        SongSort.DATE_ADDED_ASC -> SongSort.DATE_ADDED_DESC
-                        else -> SongSort.DATE_ADDED_DESC
-                    }
-                },
-                onDismiss = { unifiedAlbumSortMenuOpen = false },
-            )
-        }
+        UnifiedAlbumDetailSortMenu(
+            visible = shouldUseUnifiedAlbumDetailToolbar(
+                unifiedLibraryCategory, unifiedLibraryDetailOpen,
+            ),
+            state = unifiedAlbumUi,
+            hazeState = hazeState,
+        )
 
         UnifiedLibraryMenus(
             visible = unifiedLibraryCategory != null && !showAllLocalRecentAdditions &&
@@ -6562,6 +6545,56 @@ private class UnifiedLibraryUiControls {
     }
 }
 
+/**
+ * Album-specific chrome is held outside the massive BitChordApp method.
+ * The release detail reuses the existing frosted SongSort panel, while
+ * the playlist action is delivered to the canonical picker as a one-shot token.
+ */
+private class UnifiedAlbumDetailUiState {
+    var songSort by mutableStateOf(SongSort.DEFAULT)
+    var sortMenuOpen by mutableStateOf(false)
+    var optionsToken by mutableIntStateOf(0)
+    var playlistToken by mutableIntStateOf(0)
+
+    fun resetDetail() {
+        songSort = SongSort.DEFAULT
+        sortMenuOpen = false
+    }
+
+    fun openSort() { sortMenuOpen = true }
+    fun requestOptions() { optionsToken++ }
+    fun requestAddToPlaylist() { playlistToken++ }
+    fun dismissSort() { sortMenuOpen = false }
+    fun selectSort(option: SongSort) {
+        songSort = option
+        sortMenuOpen = false
+    }
+    fun flipDateDirection() {
+        songSort = when (songSort) {
+            SongSort.DATE_ADDED_DESC -> SongSort.DATE_ADDED_ASC
+            SongSort.DATE_ADDED_ASC -> SongSort.DATE_ADDED_DESC
+            else -> SongSort.DATE_ADDED_DESC
+        }
+    }
+}
+
+@Composable
+private fun UnifiedAlbumDetailSortMenu(
+    visible: Boolean,
+    state: UnifiedAlbumDetailUiState,
+    hazeState: HazeState,
+) {
+    if (!visible || !state.sortMenuOpen) return
+    BackHandler(onBack = state::dismissSort)
+    FrostedSortMenu(
+        hazeState = hazeState,
+        selected = state.songSort,
+        onSelect = state::selectSort,
+        onFlipDateDirection = state::flipDateDirection,
+        onDismiss = state::dismissSort,
+    )
+}
+
 /** Category-only source and sort controls are meaningless atop entity details. */
 internal fun shouldShowUnifiedLibraryBrowseFilters(detailOpen: Boolean): Boolean =
     !detailOpen
@@ -6582,6 +6615,7 @@ private fun UnifiedLibraryToolbarActions(
     albumDetail: Boolean = false,
     onAlbumSort: () -> Unit = {},
     onAlbumOptions: () -> Unit = {},
+    onAlbumAddToPlaylist: () -> Unit = {},
 ) {
     // Keep the native contextual search entry even inside an artist detail.
     NativeCollectionSearchAction(
@@ -6591,6 +6625,15 @@ private fun UnifiedLibraryToolbarActions(
         onClick = onSearch,
     )
     if (albumDetail) {
+        // Separate from + in the hero: that control is reserved for
+        // future pin-to-Library, not repurposed as "add to playlist".
+        IconButton(onClick = onAlbumAddToPlaylist) {
+            Icon(
+                Icons.Rounded.PlaylistAdd,
+                contentDescription = "Adicionar álbum à playlist",
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
+        }
         NativeCollectionSortAction(
             contentDescription = "Ordenar faixas do álbum",
             onClick = onAlbumSort,
