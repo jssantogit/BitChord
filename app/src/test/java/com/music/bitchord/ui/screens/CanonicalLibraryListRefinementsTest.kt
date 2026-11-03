@@ -9,7 +9,7 @@ import com.music.bitchord.data.listening.CanonicalEntityRatingEntity
 import com.music.bitchord.data.listening.CanonicalSmartFilterContext
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.components.SongRow
-import com.music.bitchord.ui.theme.rememberArtworkPalette
+import com.music.bitchord.ui.theme.themeArtworkPalette
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -54,7 +54,7 @@ class CanonicalLibraryListRefinementsTest {
                     query = "",
                     onQueryChange = {},
                     searching = false,
-                    palette = rememberArtworkPalette(imageUrl = null),
+                    palette = themeArtworkPalette(),
                     hasPlayableTracks = true,
                     onPlayAll = {},
                 )
@@ -76,7 +76,7 @@ class CanonicalLibraryListRefinementsTest {
                     query = "",
                     onQueryChange = {},
                     searching = false,
-                    palette = rememberArtworkPalette(imageUrl = null),
+                    palette = themeArtworkPalette(),
                     hasPlayableTracks = true,
                     onPlayAll = {},
                 )
@@ -98,6 +98,7 @@ class CanonicalLibraryListRefinementsTest {
                         thumbnailUrl = null,
                         durationText = "4:12",
                     ),
+                    trackNumber = 1,
                     onClick = {},
                 )
             }
