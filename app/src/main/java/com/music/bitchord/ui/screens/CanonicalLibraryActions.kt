@@ -155,6 +155,12 @@ internal suspend fun canonicalLibraryResolveSelections(
     )
 }
 
+/** Recheck current source assets before the embedded wizard persists members. */
+internal fun canonicalNativeWizardSourceEligible(
+    recordingIds: List<String>,
+    availableRecordingIds: Set<String>,
+): Boolean = recordingIds.distinct().all { it in availableRecordingIds }
+
 /** Opening the existing wizard must not silently drop selected entities. */
 internal fun canonicalLibraryWizardSeed(
     resolved: CanonicalLibraryResolvedSelection,
