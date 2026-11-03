@@ -123,6 +123,10 @@ private suspend fun readPinnedLibraryCards(
     val counts = if (sourceKeys.isNotEmpty() && releaseIds.isNotEmpty())
         dao.scopedReleaseRecordingCounts(releaseIds, sourceKeys)
             .associate { it.releaseId to it.recordingCount } else emptyMap()
+    val activeArtists = if (sourceKeys.isNotEmpty() && artistIds.isNotEmpty())
+        dao.scopedPinnedArtistIds(sourceKeys, artistIds).toSet() else emptySet()
+    val activeDisplayArtists = if (sourceKeys.isNotEmpty() && displayArtists.isNotEmpty())
+        dao.scopedPinnedDisplayArtistNames(sourceKeys, displayArtists).toSet() else emptySet()
 
     return pins.map { pin ->
         val selection = pin.selection
@@ -155,8 +159,9 @@ private suspend fun readPinnedLibraryCards(
                     pin, name, "Artista",
                     artworkId?.let(artByRecording::get),
                     AppleArtistArtRepository.cached(name)?.heroUrl,
-                    artists[selection.entityId] != null ||
-                        playlistDisplayArtistNameFromGroupId(selection.entityId) != null,
+                    canonicalPinnedArtistAccessible(
+                        selection.entityId, activeArtists, activeDisplayArtists,
+                    ),
                 )
             }
         }
