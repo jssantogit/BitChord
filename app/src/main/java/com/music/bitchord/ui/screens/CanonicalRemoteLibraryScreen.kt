@@ -74,6 +74,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.R
 import com.music.bitchord.data.catalog.CanonicalBrowseLibrary
@@ -196,6 +197,7 @@ internal fun CanonicalRemoteLibraryScreen(
     unifiedSort: LocalMusicSort = LocalMusicSort.TITLE_ASC,
     unifiedViewType: LibraryViewType = LibraryViewType.LIST,
     onSourceKeysChanged: (List<String>) -> Unit = {},
+    selectionBarBottomPadding: Dp = 140.dp,
 ) {
     val context = LocalContext.current
     val controller = rememberMediaController()
@@ -1020,7 +1022,7 @@ internal fun CanonicalRemoteLibraryScreen(
         if (unified && selectedItems.isNotEmpty()) {
             CanonicalLibraryBatchActionBar(
                 modifier = Modifier.align(Alignment.BottomEnd)
-                    .padding(end = PAGE_GUTTER, bottom = 116.dp),
+                    .padding(end = PAGE_GUTTER, bottom = selectionBarBottomPadding),
                 selectedCount = selectedItems.size,
                 onClear = { selectedItems = emptyList() },
                 onAddToPlaylist = { playlistPickerSelection = selectedItems.toList() },
