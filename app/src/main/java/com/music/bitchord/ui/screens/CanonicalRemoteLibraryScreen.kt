@@ -232,6 +232,7 @@ internal fun CanonicalRemoteLibraryScreen(
     albumSort: SongSort = SongSort.DEFAULT,
     albumMenuToken: Int = 0,
     albumPlaylistToken: Int = 0,
+    artistMenuToken: Int = 0,
     onSourceKeysChanged: (List<String>) -> Unit = {},
     selectionBarBottomPadding: Dp = 140.dp,
 ) {
@@ -885,6 +886,14 @@ internal fun CanonicalRemoteLibraryScreen(
             CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, artist.id),
             artist.name, "Artista",
         )
+    }
+    // The artist hero retains its three native circles (Shuffle/Play/Rating).
+    // Pin/unpin lives in the same first-party ⋮ menu as root artist cards.
+    LaunchedEffect(artistMenuToken) {
+        if (unified && artistMenuToken > 0 &&
+            selectedContext == CanonicalSmartFilterContext.ARTISTS &&
+            !artistNestedReleaseOpen
+        ) selectedEntity?.let(openArtistMenu)
     }
 
     // All batch queue actions must revalidate the exact typed selection in
