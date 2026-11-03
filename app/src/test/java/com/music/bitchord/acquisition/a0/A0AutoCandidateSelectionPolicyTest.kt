@@ -231,14 +231,16 @@ class A0AutoCandidateSelectionPolicyTest {
     @Test fun joinedArtistSpellingMustPassAllAlbumQualityAndPreflightGates() {
         val target=SoulseekBatchPlan.Entry("bp",
             "BLACK PINK - How You Like That","THE ALBUM",220)
-        fun candidate(album:String):List<A0ObservedCandidateHandoff.Choice> {
+        fun candidate(album:String,
+            filename:String="BLACKPINK - How You Like That.mp3",
+        ):List<A0ObservedCandidateHandoff.Choice> {
             val collector=A0ObservedCandidateHandoff(Socket(),"local",177,true,
                 searchPhrase=target.query,requestedAlbum=target.album,
                 expectedDurationSeconds=target.durationSeconds,
                 qualityProfile=profile,collectReleaseShadow=true)
             collector.offerParsed(A0SoulseekSearchResponse(
                 "peer",177,listOf(A0SoulseekSearchFile(
-                    "Shared\\$album\\BLACKPINK - How You Like That.mp3",
+                    "Shared\\$album\\$filename",
                     8_800_000L,"mp3",mapOf(0 to 320,1 to 220))),
                 emptyList(),true,128_000,0),"peer")
             return collector.releaseShadowChoices()
@@ -250,6 +252,16 @@ class A0AutoCandidateSelectionPolicyTest {
                 valid.status)
             assertFalse(valid.canTransfer)
         }
+        val titleOnly=A0AutoCandidateSelectionPolicy.preview(
+            target,candidate("BLACKPINK - THE ALBUM","How You Like That.mp3"),profile)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,
+            titleOnly.status)
+        assertFalse(titleOnly.canTransfer)
+        val decorated=A0AutoCandidateSelectionPolicy.preview(
+            target,candidate("BLACKPINK - THE ALBUM [FLAC]",
+                "How You Like That.mp3"),profile)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,
+            decorated.status)
         for(folder in listOf("Another Album",
             "BLACKPINK - THE ALBUM [FLAC]")) {
             val conflict=A0AutoCandidateSelectionPolicy.preview(
