@@ -2,9 +2,10 @@ package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
@@ -21,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -44,49 +46,65 @@ internal fun CanonicalLibraryBatchActionBar(
 ) {
     if (selectedEntityCount < 1) return
     var expanded by remember { mutableStateOf(true) }
-    SettingsGroupSurface(modifier) {
-    Row(
-        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        PlaylistWizardCompactAction(
-            label = "Encerrar seleção",
-            icon = Icons.Rounded.Close,
-            onClick = onClear,
-        )
-        Spacer(Modifier.width(2.dp))
-        Text(
-            summary,
-            modifier = Modifier.semantics { contentDescription = summary },
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.width(2.dp))
-        if (expanded) {
-            PlaylistWizardCompactAction(
-                label = "Adicionar seleção à playlist",
-                icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
-                onClick = onAddToPlaylist,
-            )
-            PlaylistWizardCompactAction(
-                label = "Tocar a seleção a seguir",
-                icon = Icons.AutoMirrored.Rounded.QueueMusic,
-                onClick = onPlayNext,
-            )
-            onRateSelection?.let { rate ->
+    // Compact phone-safe dock: the count is never squeezed between four
+    // 48dp controls on one line. Both rows use the existing wizard actions
+    // inside the same native Settings surface, not an invented panel.
+    SettingsGroupSurface(modifier.widthIn(max = 312.dp)) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
                 PlaylistWizardCompactAction(
-                    label = "Avaliar seleção",
-                    icon = Icons.Rounded.Star,
-                    onClick = rate,
+                    label = "Encerrar seleção",
+                    icon = Icons.Rounded.Close,
+                    onClick = onClear,
+                )
+                Text(
+                    summary,
+                    modifier = Modifier.weight(1f).semantics {
+                        contentDescription = summary
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                PlaylistWizardCompactAction(
+                    label = if (expanded) "Recolher ações" else "Expandir ações",
+                    icon = if (expanded) Icons.Rounded.ExpandMore else Icons.Rounded.ExpandLess,
+                    onClick = { expanded = !expanded },
                 )
             }
+            if (expanded) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PlaylistWizardCompactAction(
+                        label = "Adicionar seleção à playlist",
+                        icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+                        onClick = onAddToPlaylist,
+                    )
+                    PlaylistWizardCompactAction(
+                        label = "Tocar a seleção a seguir",
+                        icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                        onClick = onPlayNext,
+                    )
+                    onRateSelection?.let { rate ->
+                        PlaylistWizardCompactAction(
+                            label = "Avaliar seleção",
+                            icon = Icons.Rounded.Star,
+                            onClick = rate,
+                        )
+                    }
+                }
+            }
         }
-        PlaylistWizardCompactAction(
-            label = if (expanded) "Recolher ações" else "Expandir ações",
-            icon = if (expanded) Icons.Rounded.ExpandMore else Icons.Rounded.ExpandLess,
-            onClick = { expanded = !expanded },
-        )
-    }
     }
 }
