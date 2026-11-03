@@ -36,7 +36,11 @@ class A0AutoCandidateSelectionPolicyTest {
         val collector=A0ObservedCandidateHandoff(Socket(),"local",177,true,
             searchPhrase=target.query,requestedAlbum=target.album,
             expectedDurationSeconds=target.durationSeconds,
-            qualityProfile=profile,collectReleaseShadow=true)
+            qualityProfile=profile,collectReleaseShadow=true,
+            // Production automatic collectors provide this release's titles
+            // to enable the early filename screen; an empty query list
+            // intentionally keeps all files for legacy/manual use.
+            releaseQueries=listOf(target.query))
         val files=listOf(
             // Correct song title without an independently credited artist.
             A0SoulseekSearchFile(
