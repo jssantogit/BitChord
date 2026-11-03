@@ -43,6 +43,28 @@ class CanonicalLibraryActionsTest {
         assertTrue(toggleCanonicalLibrarySelection(selected, artist).isEmpty())
     }
 
+    @Test fun artistRatingsAreTypedAndNeverImpersonateRecordingRatings() {
+        val artist = CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, "verified-artist-id")
+        val album = CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, "verified-release-id")
+        val song = CanonicalLibrarySelection(CanonicalLibraryEntityType.TRACK, "verified-recording-id")
+        assertEquals("ARTIST", canonicalEntityRatingTarget(artist)?.entityType)
+        assertEquals("ALBUM", canonicalEntityRatingTarget(album)?.entityType)
+        assertEquals(null, canonicalEntityRatingTarget(song))
+        assertEquals(null, canonicalEntityRatingTarget(
+            CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST,
+                playlistDisplayArtistGroupId("aespa")),
+        ))
+    }
+
+    @Test fun entityRatingsAreFiveStarHalfStepAndRequireRealIdentity() {
+        assertTrue(isValidCanonicalEntityRating(1.0))
+        assertTrue(isValidCanonicalEntityRating(4.5))
+        assertTrue(isValidCanonicalEntityRating(5.0))
+        assertFalse(isValidCanonicalEntityRating(0.5))
+        assertFalse(isValidCanonicalEntityRating(3.3))
+        assertFalse(isValidCanonicalEntityRating(Double.NaN))
+    }
+
     @Test fun menuAvailabilityIsTypedAndNeverOffersArtistRatingForDisplayOnlyName() {
         val album = canonicalLibraryAvailableActions(CanonicalLibraryEntityType.ALBUM, true)
         assertTrue(CanonicalLibraryAction.ADD_TO_PLAYLIST in album)
