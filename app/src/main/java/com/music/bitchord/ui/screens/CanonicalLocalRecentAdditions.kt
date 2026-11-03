@@ -307,6 +307,8 @@ internal fun CanonicalLocalRecentAdditions(
                 query = searchQuery,
                 onQueryChange = { searchQuery = it },
                 viewType = viewType,
+                filterActive = searchQuery.isNotBlank() || stars != null ||
+                    sourceKey != null,
             )
         }
     } else if (recent != null) {
@@ -404,27 +406,58 @@ internal fun CanonicalRecentAdditionsGrid(
     contentPadding: PaddingValues = PaddingValues(),
     loading: Boolean = false,
     error: Boolean = false,
+    showSearch: Boolean = false,
+    query: String = "",
+    onQueryChange: (String) -> Unit = {},
+    viewType: LibraryViewType = LibraryViewType.GRID,
+    filterActive: Boolean = false,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
     ) {
+        if (showSearch) item(key = "recent-search") {
+            SearchField(
+                query = query,
+                onQueryChange = onQueryChange,
+                onSubmit = {},
+                placeholder = "Pesquisar em adições recentes",
+                modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
+            )
+        }
         if (recent.isEmpty()) item {
             Text(
                 when {
                     loading -> "Carregando adições locais…"
                     error -> "Não foi possível consultar as adições locais. Arraste para atualizar."
+                    filterActive -> "Nenhuma adição corresponde aos filtros."
                     else -> "Nenhuma adição local recente."
                 },
                 modifier = Modifier.padding(PAGE_GUTTER),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        gridRows(recent, columns = 2, key = { it.id }) { track ->
-            CanonicalRecentAdditionCard(
-                track = track, modifier = Modifier.fillMaxWidth(),
-                onClick = { onPlayTrack(track.id) },
-            )
+        if (viewType == LibraryViewType.LIST) {
+            items(recent, key = { it.id }) { track ->
+                LibraryRow(
+                    title = track.title,
+                    subtitle = track.artist,
+                    imageUrl = null,
+                    artwork = {
+                        SmartPlaylistPreviewArtwork(track, Modifier.fillMaxSize())
+                    },
+                    onClick = { onPlayTrack(track.id) },
+                    horizontalPadding = PAGE_GUTTER,
+                    artworkSize = 52.dp,
+                )
+            }
+        } else {
+            gridRows(recent, columns = 2, key = { it.id }) { track ->
+                CanonicalRecentAdditionCard(
+                    track = track, modifier = Modifier.fillMaxWidth(),
+                    onClick = { onPlayTrack(track.id) },
+                )
+            }
         }
     }
 }
