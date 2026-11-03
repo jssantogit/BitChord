@@ -1,6 +1,5 @@
 package com.music.bitchord.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,7 +21,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -36,19 +34,19 @@ import androidx.compose.ui.unit.dp
  */
 @Composable
 internal fun CanonicalLibraryBatchActionBar(
-    selectedCount: Int,
+    selectedEntityCount: Int,
+    summary: String,
     onClear: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onPlayNext: () -> Unit,
     onRateSelection: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    if (selectedCount < 1) return
+    if (selectedEntityCount < 1) return
     var expanded by remember { mutableStateOf(true) }
+    SettingsGroupSurface(modifier) {
     Row(
-        modifier = modifier.clip(GroupShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -59,10 +57,8 @@ internal fun CanonicalLibraryBatchActionBar(
         )
         Spacer(Modifier.width(2.dp))
         Text(
-            "$selectedCount",
-            modifier = Modifier.semantics {
-                contentDescription = "$selectedCount itens selecionados"
-            },
+            summary,
+            modifier = Modifier.semantics { contentDescription = summary },
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -91,5 +87,6 @@ internal fun CanonicalLibraryBatchActionBar(
             icon = if (expanded) Icons.Rounded.ExpandMore else Icons.Rounded.ExpandLess,
             onClick = { expanded = !expanded },
         )
+    }
     }
 }
