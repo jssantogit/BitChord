@@ -30,6 +30,71 @@ class A0ObservedCandidateHandoffTest {
         assertTrue(handoff.releaseShadowSnapshot().shadowDroppedAtPeerLimit>0)
     }
 
+
+    @Test fun perTicketFunnelDistinguishesIrrelevantDuplicateAndNewCandidates() {
+        val tickets=A0SearchTicketRegistry(81)
+        val collector=A0ObservedCandidateHandoff(Socket(),"local",81,true,
+            searchPhrase="ILLIT - Magnetic",requestedAlbum="SUPER REAL ME",
+            collectReleaseShadow=true,collectManualCandidates=false,
+            releaseQueries=listOf("ILLIT - Magnetic"),
+            acceptedSearchTokens=tickets.accepted)
+        val relevant=A0SoulseekSearchFile(
+            "Shared\\ILLIT\\SUPER REAL ME\\ILLIT - Magnetic.mp3",
+            6_440_000L,"mp3",mapOf(0 to 320,1 to 161))
+        val unrelated=A0SoulseekSearchFile(
+            "Shared\\ILLIT\\SUPER REAL ME\\Another Song.mp3",
+            6_440_000L,"mp3",mapOf(0 to 320,1 to 161))
+        fun response(peer:String,token:Int,files:List<A0SoulseekSearchFile>) =
+            A0SoulseekSearchResponse(peer,token,files,emptyList(),
+                true,128_000,0)
+        assertTrue(collector.offerParsed(
+            response("source",81,listOf(unrelated,relevant)),"source"))
+        assertTrue(tickets.register(82))
+        // A second search returning a known claim is not new discovery.
+        assertTrue(collector.offerParsed(
+            response("source",82,listOf(relevant)),"source"))
+        // A different peer claiming the same recording is a new offer.
+        assertTrue(collector.offerParsed(
+            response("other",82,listOf(relevant)),"other"))
+        assertFalse(collector.offerParsed(
+            response("other",83,listOf(relevant)),"other"))
+        assertEquals(81,tickets.tokenAt(0))
+        assertEquals(82,tickets.tokenAt(1))
+        assertNull(tickets.tokenAt(2))
+        assertEquals(A0ObservedCandidateHandoff.TicketScreening(
+            titleMatched=1,uniqueAdmitted=1,shadowInserted=1),
+            collector.ticketScreening(81))
+        assertEquals(A0ObservedCandidateHandoff.TicketScreening(
+            titleMatched=2,uniqueAdmitted=1,shadowInserted=1),
+            collector.ticketScreening(82))
+        assertEquals(A0ObservedCandidateHandoff.TicketScreening(),
+            collector.ticketScreening(83))
+        assertEquals(1,collector.screening().shadowTitleFiltered)
+        assertEquals(2,collector.releaseShadowChoices().size)
+        assertFalse(collector.ticketScreening(81).toString().contains("source"))
+        assertFalse(collector.ticketScreening(82).toString().contains("Magnetic"))
+    }
+
+    @Test fun ticketFunnelCountsOnlyFilesPassingPreTitleSafetyChecks() {
+        val collector=A0ObservedCandidateHandoff(Socket(),"local",81,true,
+            searchPhrase="ILLIT - Magnetic",collectReleaseShadow=true,
+            collectManualCandidates=false,
+            releaseQueries=listOf("ILLIT - Magnetic"))
+        val proper=A0SoulseekSearchFile("Shared\\ILLIT\\Magnetic.mp3",
+            6_440_000L,"mp3",mapOf(0 to 320,1 to 161))
+        val badPath=A0SoulseekSearchFile("../Magnetic.mp3",
+            6_440_000L,"mp3",emptyMap())
+        val unsupported=A0SoulseekSearchFile("Shared\\Magnetic.exe",
+            6_440_000L,"exe",emptyMap())
+        assertTrue(collector.offerParsed(A0SoulseekSearchResponse(
+            "source",81,listOf(proper,badPath,unsupported),emptyList(),
+            true,128_000,0),"source"))
+        assertEquals(A0ObservedCandidateHandoff.TicketScreening(
+            titleMatched=1,uniqueAdmitted=1,shadowInserted=1),
+            collector.ticketScreening(81))
+        assertEquals(3,collector.screening().publicFiles)
+    }
+
     @Test fun automaticShadowReportsTitlePrefilterRejectsWithoutRetainingIdentity() {
         val handoff=A0ObservedCandidateHandoff(Socket(),"local",81,true,
             searchPhrase="ILLIT - Magnetic",collectReleaseShadow=true,
