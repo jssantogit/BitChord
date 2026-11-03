@@ -104,6 +104,22 @@ internal data class CanonicalLibraryResolvedSelection(
     val unavailableEntities: Int,
 )
 
+/** Recordings are the playback unit; album/artist cards never count as one song. */
+internal fun canonicalLibrarySelectionSummary(
+    selectedEntities: Int,
+    result: CanonicalLibraryResolvedSelection?,
+): String {
+    if (result == null) return "Calculando faixas…"
+    val tracks = result.recordingIds.size
+    val unavailable = result.unavailableEntities
+    val trackLabel = "$tracks " + if (tracks == 1) "faixa" else "faixas"
+    val itemCount = selectedEntities - unavailable
+    val itemsLabel = "$itemCount " + if (itemCount == 1) "item" else "itens"
+    return if (unavailable == 0) "$trackLabel · $itemsLabel"
+    else "$trackLabel · $unavailable " +
+        if (unavailable == 1) "item indisponível" else "itens indisponíveis"
+}
+
 /** Only verified RecordingIds are included; unresolvable groups are reported. */
 internal suspend fun canonicalLibraryResolveSelections(
     context: Context,
