@@ -66,6 +66,7 @@ import kotlinx.coroutines.withContext
 private data class CanonicalArtistNativeReleases(
     val sections: CanonicalArtistReleaseSections,
     val artwork: Map<String, CanonicalBrowseTrack>,
+    val evidence: Map<String, CanonicalArtistReleaseEvidence> = emptyMap(),
 ) {
     companion object {
         val EMPTY = CanonicalArtistNativeReleases(
@@ -166,7 +167,7 @@ internal fun CanonicalNativeArtistDetail(
                     )
                 }
                 CanonicalArtistNativeReleases(
-                    sections, canonicalLibraryEntityArtworkById(coverLinks, tracks),
+                    sections, canonicalLibraryEntityArtworkById(coverLinks, tracks), proofs,
                 )
             }
             } catch (cancelled: CancellationException) {
@@ -214,7 +215,10 @@ internal fun CanonicalNativeArtistDetail(
     }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     var openedRelease by remember(artistName) { mutableStateOf<ReleaseEntity?>(null) }
-    LaunchedEffect(openedRelease?.id) { onNestedDetailChanged(openedRelease != null) }
+    LaunchedEffect(openedRelease?.id) {
+        onNestedDetailChanged(openedRelease != null)
+        if (openedRelease != null) onQueryChange("")
+    }
     LaunchedEffect(nestedBackToken) {
         if (nestedBackToken > 0) openedRelease = null
     }
@@ -247,13 +251,18 @@ internal fun CanonicalNativeArtistDetail(
         val albumIds = canonicalArtistReleaseTrackIds(
             availableLibraryTracks.map { it.recordingId }, releaseRecordingIds.toSet(),
         ).toSet()
-        val albumTracks = canonicalAlbumDetailSort(
-            canonicalAlbumDetailTrackOrder(
-                availableLibraryTracks.filter { it.recordingId in albumIds },
-                releaseRecordingIds,
-            ),
-            albumSort,
+        val albumRunningOrder = canonicalAlbumDetailTrackOrder(
+            availableLibraryTracks.filter { it.recordingId in albumIds },
+            releaseRecordingIds,
         )
+        val albumTracks = canonicalAlbumDetailSort(albumRunningOrder, albumSort)
+        val albumTrackNumbers = canonicalAlbumDetailTrackNumbers(albumRunningOrder)
+        val visibleAlbumTracks = albumTracks.filter {
+            query.isBlank() ||
+                it.title.contains(query, ignoreCase = true) ||
+                it.artistDisplay.contains(query, ignoreCase = true)
+        }
+        val trustedEvidence = nativeReleases.evidence[selectedAlbum.id]
         val releasePalette = rememberArtworkPalette(
             imageUrl = canonicalNativeReleasePaletteUri(
                 nativeReleases.artwork[selectedAlbum.id]?.artworkUri,
@@ -265,10 +274,13 @@ internal fun CanonicalNativeArtistDetail(
             LazyColumn(contentPadding = PaddingValues(bottom = 112.dp)) {
                 item {
                     NativeReleaseHeaderLayout(
-                        title = selectedAlbum.title,
+                        title = canonicalAlbumDisplayTitle(
+                            selectedAlbum.title, trustedEvidence?.primaryType,
+                        ),
                         credit = selectedAlbum.artistDisplay.orEmpty(),
-                        meta = nativeUnifiedTrackCountLabel(albumTracks.size,
-                            albumTracks.map { it.durationMs }),
+                        meta = canonicalAlbumDetailMeta(
+                            trustedEvidence?.primaryType, trustedEvidence?.firstReleaseDate, albumTracks,
+                        ),
                         palette = releasePalette,
                         sleeveSize = sleeve,
                         artwork = {
