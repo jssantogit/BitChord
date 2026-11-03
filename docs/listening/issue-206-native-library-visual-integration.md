@@ -93,3 +93,18 @@ O screenshot de referência segue o `DetailScreen` nativo; o detalhe de álbum d
 **Validação física pendente:** comparar novamente com screenshot original verificando capa, título/crédito/tipo/ano, alinhamento do Play e círculos laterais, numeração/separadores/altura das seis (ou cinco disponíveis) linhas, ⋮ das faixas, busca/ordenação e miniplayer. Testar album vindo somente do Navidrome, somente do MediaStore e com fontes mistas; confirmar que tocar/sortear músicas segue a ordem exibida e que as notas não são perdidas. A reprodução e o Catálogo continuam canônicos, sem vídeos sintéticos.
 
 **Regressão automatizada:** `CanonicalAlbumDetailParityTest` prova ordenação de `ReleaseTrack`, fallback, classificação/ano com evidência e preservação do título quando incerto; `UnifiedLibraryToolbarPolicyTest` cobre o escopo da barra de álbum. Não marcar aprovado antes de CI exata do HEAD e inspeção visual real.
+
+
+## 2026-11-03 — Adicionar álbum à playlist diretamente dos detalhes
+
+Decisão do owner: a pílula de ações no canto superior direito do detalhe de álbum recebe um ícone **PlaylistAdd** próprio, que abre **exatamente** o seletor nativo `CanonicalLibraryPlaylistPicker` das músicas. O ícone `+` na linha Shuffle/Play/`+` fica **reservado para o futuro pin na página inicial da Biblioteca**: sem implementar uma fixação fictícia e sem transformar o `+` em ação de playlist.
+
+**Implementação:** `MainActivity` (toolbar `UnifiedLibraryRouteToolbar` + estado `UnifiedAlbumDetailUiState`) envia token de abertura ao `CanonicalRemoteLibraryScreen`. A rota Álbuns → Detalhes usa `canonicalAlbumDetailPlaylistSelection(ALBUMS, releaseId)`; a rota Artistas → Lançamento abre o mesmo seletor com `ReleaseEntity.id` real. As duas compartilham o mesmo ícone da pílula, sem menu ou modal paralelo. O escopo é *somente* uma página real de álbum; a raiz de Músicas/Álbuns/Artistas, os detalhes de artista e as telas de playlist não ganham esse ícone.
+
+**Semântica:** é o álbum inteiro, não as faixas filtradas temporariamente pela pesquisa e não as músicas de um artista inteiro. A fonte filtrada é preservada. O picker revalida as relações `ReleaseTrack` e `RecordingId`, evita duplicatas, rejeita qualquer faixa indisponível no destino e só permite inserção manual em playlists normais. Criar uma nova playlist reutiliza `SmartPlaylistBuilderScreen` nativo com a seleção inicial. Uma playlist inteligente mantém somente seu editor de regras.
+
+**Botão `+`:** `NativeReleaseActionRow(reservePinAction=true)` indica “Fixar álbum na Biblioteca (em breve)” e permanece não interativo. As rotas legadas com ação real de salvar na biblioteca não tiveram essa ação silenciosamente substituída.
+
+**CI/diagnóstico:** `CanonicalLibraryActionsTest` confirma que o target de playlist é tipado como ÁLBUM e não vaza para outra categoria/identidade vazia; `NativeAlbumPinReservationTest` verifica o `+` desativado; `UnifiedLibraryToolbarPolicyTest` cobre o álbum aninhado em artista. `album_playlist_toolbar_v1` registra origem e escopo de fonte sem dados pessoais. Os menus de ordenação e a barra da Biblioteca foram extraídos parcialmente de `BitChordApp` para remediar `MethodTooLargeException` da CI anterior.
+
+**Smoke manual:** abrir álbum da aba Álbuns e de Artistas → lançamento; tocar o PlaylistAdd na pílula (não `+`); escolher playlist normal, validar faixas novas e pré-existentes, duplicatas e fonte local/Navidrome; repetir via “Nova playlist”; verificar que o botão `+` não muda nada, que ⋮ e ordenação continuam funcionando e que a toolbar volta a seu estado correto ao fechar o álbum. Testar Android após CI verde do HEAD. Nenhum APK disparado por esta etapa.
