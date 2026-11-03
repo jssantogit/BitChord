@@ -1063,6 +1063,7 @@ internal fun CanonicalRemoteLibraryScreen(
                             ),
                             selected.name, artist,
                         ))
+                        Unit
                     }
                 },
                 albumMeta = if (detail != null &&
