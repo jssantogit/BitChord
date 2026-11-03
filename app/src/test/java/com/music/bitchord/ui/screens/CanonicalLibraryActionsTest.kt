@@ -81,10 +81,33 @@ class CanonicalLibraryActionsTest {
         assertEquals("ARTIST", canonicalEntityRatingTarget(artist)?.entityType)
         assertEquals("ALBUM", canonicalEntityRatingTarget(album)?.entityType)
         assertEquals(null, canonicalEntityRatingTarget(song))
-        assertEquals(null, canonicalEntityRatingTarget(
+        // Display-name group is a *separate* rating identity, not a
+        // fabricated canonical ArtistId or a RecordingId.
+        val group = canonicalEntityRatingTarget(
             CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST,
                 playlistDisplayArtistGroupId("aespa")),
+        )
+        assertEquals("DISPLAY_ARTIST", group?.entityType)
+        assertEquals(playlistDisplayArtistGroupId("aespa"), group?.entityId)
+    }
+
+    @Test fun longPressSelectionIsOnlyAvailableOnTopLevelLibraryCategories() {
+        for (category in CanonicalSmartFilterContext.entries) {
+            assertTrue(canSelectCanonicalLibraryByLongPress(category, detailOpen = false))
+            assertFalse(canSelectCanonicalLibraryByLongPress(category, detailOpen = true))
+        }
+    }
+
+    @Test fun displayArtistRatingMustRemainDistinctFromCanonicalArtistWithSameName() {
+        val real = canonicalEntityRatingTarget(CanonicalLibrarySelection(
+            CanonicalLibraryEntityType.ARTIST, "mbid-artist",
         ))
+        val display = canonicalEntityRatingTarget(CanonicalLibrarySelection(
+            CanonicalLibraryEntityType.ARTIST, playlistDisplayArtistGroupId("AtHeart"),
+        ))
+        assertEquals("ARTIST", real?.entityType)
+        assertEquals("DISPLAY_ARTIST", display?.entityType)
+        assertFalse(real == display)
     }
 
     @Test fun entityRatingsAreFiveStarHalfStepAndRequireRealIdentity() {
