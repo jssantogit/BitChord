@@ -267,6 +267,9 @@ internal fun CanonicalRemoteLibraryScreen(
         mutableStateOf<List<CanonicalLibrarySelection>?>(null)
     }
     var selectedItems by remember { mutableStateOf<List<CanonicalLibrarySelection>>(emptyList()) }
+    var ratingDialogSelection by remember {
+        mutableStateOf<List<CanonicalLibrarySelection>?>(null)
+    }
     LaunchedEffect(selectedContext, selectedSource, selectedEntity?.id) {
         selectedItems = emptyList()
     }
@@ -726,6 +729,7 @@ internal fun CanonicalRemoteLibraryScreen(
                 // chrome and sections, bound to proven canonical memberships.
                 CanonicalNativeArtistDetail(
                     artistName = detail.name,
+                    artistId = detail.id,
                     tracks = sortCanonicalUnifiedTracks(scopedDetailTracks, unifiedSort),
                     availableLibraryTracks = eligibleTracks,
                     sourceKeys = sources,
@@ -742,6 +746,13 @@ internal fun CanonicalRemoteLibraryScreen(
                     onTrackEditRating = editRating,
                     onTrackOptions = openTrackMenu,
                     onReleaseOptions = openAlbumMenu,
+                    onRateArtist = if (playlistDisplayArtistNameFromGroupId(detail.id) == null) {
+                        {
+                            ratingDialogSelection = listOf(CanonicalLibrarySelection(
+                                CanonicalLibraryEntityType.ARTIST, detail.id,
+                            ))
+                        }
+                    } else null,
                     selectedItems = selectedItems,
                     onToggleSelection = toggleSelection,
                     onPlayAll = { visible, shuffle ->
@@ -965,11 +976,17 @@ internal fun CanonicalRemoteLibraryScreen(
                         toggleSelection(menu.selection)
                         libraryMenu = null
                     },
-                    onEditRating = if (menu.selection.type == CanonicalLibraryEntityType.TRACK)
-                        { {
-                            editingRecordingId = menu.selection.entityId
+                    onEditRating = if (menu.selection.type == CanonicalLibraryEntityType.TRACK ||
+                        canonicalEntityRatingTarget(menu.selection) != null) {
+                        {
+                            if (menu.selection.type == CanonicalLibraryEntityType.TRACK) {
+                                editingRecordingId = menu.selection.entityId
+                            } else {
+                                ratingDialogSelection = listOf(menu.selection)
+                            }
                             libraryMenu = null
-                        } } else null,
+                        }
+                    } else null,
                     headerArtwork = {
                         if (art != null) {
                             CanonicalUnifiedArtwork(art, artworkLoader, Modifier.fillMaxSize())
@@ -995,6 +1012,13 @@ internal fun CanonicalRemoteLibraryScreen(
                 onDismiss = { editingRecordingId = null },
             )
         }
+        ratingDialogSelection?.let { ratings ->
+            CanonicalLibraryEntityRatingDialog(
+                targets = ratings,
+                selectedSource = if (unified) selectedSource else providerKey,
+                onDismiss = { ratingDialogSelection = null },
+            )
+        }
         if (unified && selectedItems.isNotEmpty()) {
             CanonicalLibraryBatchActionBar(
                 modifier = Modifier.align(Alignment.BottomEnd)
@@ -1002,6 +1026,10 @@ internal fun CanonicalRemoteLibraryScreen(
                 selectedCount = selectedItems.size,
                 onClear = { selectedItems = emptyList() },
                 onAddToPlaylist = { playlistPickerSelection = selectedItems.toList() },
+                onRateSelection = if (selectedItems.all {
+                    it.type == CanonicalLibraryEntityType.TRACK ||
+                        canonicalEntityRatingTarget(it) != null
+                }) { { ratingDialogSelection = selectedItems.toList() } } else null,
                 onPlayNext = {
                     val snapshot = selectedItems.toList()
                     libraryActionScope.launch {
