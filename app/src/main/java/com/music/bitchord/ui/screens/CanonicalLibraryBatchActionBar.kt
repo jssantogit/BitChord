@@ -10,13 +10,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 /**
@@ -36,6 +44,7 @@ internal fun CanonicalLibraryBatchActionBar(
     modifier: Modifier = Modifier,
 ) {
     if (selectedCount < 1) return
+    var expanded by remember { mutableStateOf(true) }
     Row(
         modifier = modifier.clip(GroupShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -51,26 +60,36 @@ internal fun CanonicalLibraryBatchActionBar(
         Spacer(Modifier.width(2.dp))
         Text(
             "$selectedCount",
+            modifier = Modifier.semantics {
+                contentDescription = "$selectedCount itens selecionados"
+            },
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.width(2.dp))
-        PlaylistWizardCompactAction(
-            label = "Adicionar seleção à playlist",
-            icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
-            onClick = onAddToPlaylist,
-        )
-        PlaylistWizardCompactAction(
-            label = "Tocar a seleção a seguir",
-            icon = Icons.AutoMirrored.Rounded.QueueMusic,
-            onClick = onPlayNext,
-        )
-        onRateSelection?.let { rate ->
+        if (expanded) {
             PlaylistWizardCompactAction(
-                label = "Avaliar seleção",
-                icon = Icons.Rounded.Star,
-                onClick = rate,
+                label = "Adicionar seleção à playlist",
+                icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+                onClick = onAddToPlaylist,
             )
+            PlaylistWizardCompactAction(
+                label = "Tocar a seleção a seguir",
+                icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                onClick = onPlayNext,
+            )
+            onRateSelection?.let { rate ->
+                PlaylistWizardCompactAction(
+                    label = "Avaliar seleção",
+                    icon = Icons.Rounded.Star,
+                    onClick = rate,
+                )
+            }
         }
+        PlaylistWizardCompactAction(
+            label = if (expanded) "Recolher ações" else "Expandir ações",
+            icon = if (expanded) Icons.Rounded.ExpandMore else Icons.Rounded.ExpandLess,
+            onClick = { expanded = !expanded },
+        )
     }
 }
