@@ -92,6 +92,18 @@ class PlaylistLibraryVisualReuseTest {
         }
     }
 
+    @Test fun recentLocalLoadingUsesCenteredNativeProgressIndicator() {
+        compose.setContent {
+            CanonicalRecentAdditionsGrid(
+                recent = emptyList(),
+                onPlayTrack = {},
+                loading = true,
+            )
+        }
+        compose.onNodeWithTag("native-recent-loading").assertExists()
+        compose.onNodeWithText("Carregando adições locais…").assertExists()
+    }
+
     @Test fun localRecentSnapshotRestoresBothModesWithoutRepeatedQueries() {
         RecentLocalAdditionsSnapshot.clear()
         assertEquals(null, RecentLocalAdditionsSnapshot.get(false))
