@@ -1819,6 +1819,9 @@ private fun NativeUnifiedLibraryBody(
                                     else onTrackPlay(track)
                                 },
                                 onMore = { onTrackOptions(track) },
+                                onLongPress = if (canLongPressSelect) {
+                                    { onToggleSelection(target) }
+                                } else null,
                                 selectionMode = selectedItems.isNotEmpty(),
                                 selected = target in selectedItems,
                                 onToggleSelection = { onToggleSelection(target) },
@@ -1836,6 +1839,9 @@ private fun NativeUnifiedLibraryBody(
                             onClick = { onTrackPlay(track) },
                             onEditRating = { onTrackEditRating(track) },
                             onOptions = { onTrackOptions(track) },
+                            onLongPress = if (canLongPressSelect) {
+                                { onToggleSelection(target) }
+                            } else null,
                             selectionMode = selectedItems.isNotEmpty(),
                             selected = target in selectedItems,
                             onToggleSelection = { onToggleSelection(target) },
@@ -1881,6 +1887,9 @@ private fun NativeUnifiedLibraryBody(
                                         ))
                                     },
                                     onMore = { onAlbumOptions(album) },
+                                    onLongPress = if (canLongPressSelect) {
+                                        { onToggleSelection(target) }
+                                    } else null,
                                     selectionMode = selectedItems.isNotEmpty(),
                                     selected = target in selectedItems,
                                     onToggleSelection = { onToggleSelection(target) },
@@ -1906,6 +1915,9 @@ private fun NativeUnifiedLibraryBody(
                                         album.id, album.title, album.artworkUri,
                                     ))
                                 },
+                                onLongPress = if (canLongPressSelect) {
+                                    { onToggleSelection(target) }
+                                } else null,
                                 trailing = {
                                     if (selectedItems.isNotEmpty()) {
                                         IconButton(onClick = { onToggleSelection(target) }) {
@@ -1961,6 +1973,9 @@ private fun NativeUnifiedLibraryBody(
                                         else onEntitySelect(artist)
                                     },
                                     onMore = { onArtistOptions(artist) },
+                                    onLongPress = if (canLongPressSelect) {
+                                        { onToggleSelection(target) }
+                                    } else null,
                                     selectionMode = selectedItems.isNotEmpty(),
                                     selected = target in selectedItems,
                                     onToggleSelection = { onToggleSelection(target) },
@@ -1985,6 +2000,9 @@ private fun NativeUnifiedLibraryBody(
                                     if (selectedItems.isNotEmpty()) onToggleSelection(target)
                                     else onEntitySelect(artist)
                                 },
+                                onLongPress = if (canLongPressSelect) {
+                                    { onToggleSelection(target) }
+                                } else null,
                                 trailing = {
                                     if (selectedItems.isNotEmpty()) {
                                         IconButton(onClick = { onToggleSelection(target) }) {
