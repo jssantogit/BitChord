@@ -6614,6 +6614,12 @@ private class UnifiedAlbumDetailUiState {
     fun resetDetail() {
         songSort = SongSort.DEFAULT
         sortMenuOpen = false
+        // These are one-shot action tokens, not persistent screen preferences.
+        // Reopening a pinned album/artist must never replay an old ⋮ or
+        // PlaylistAdd tap from the previous detail destination.
+        optionsToken = 0
+        playlistToken = 0
+        artistOptionsToken = 0
     }
 
     fun openSort() { sortMenuOpen = true }
