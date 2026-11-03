@@ -99,6 +99,7 @@ class CanonicalLibraryListRefinementsTest {
                         durationText = "4:12",
                     ),
                     trackNumber = 1,
+                    downloadedTint = null,
                     onClick = {},
                 )
             }
