@@ -70,14 +70,14 @@ internal fun CanonicalLibraryPlaylistPicker(
     var searching by remember { mutableStateOf("") }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var creating by remember { mutableStateOf(false) }
-    var newName by remember { mutableStateOf("") }
+    var wizardSeed by remember { mutableStateOf<List<String>>(emptyList()) }
+    var preparingWizard by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     fun save() {
-        if (saving || (creating && newName.trim().isEmpty()) ||
-            (!creating && selectedId == null)) return
+        if (saving || selectedId == null) return
         saving = true
         error = null
         scope.launch {
@@ -94,8 +94,8 @@ internal fun CanonicalLibraryPlaylistPicker(
                         resolved.recordingIds.isEmpty() -> null
                         else -> addCanonicalLibraryRecordingsToPlaylist(
                             context = app,
-                            playlistId = if (creating) null else selectedId,
-                            newPlaylistName = if (creating) newName.trim() else null,
+                            playlistId = selectedId,
+                            newPlaylistName = null,
                             requested = resolved.recordingIds,
                         )
                     }
@@ -132,29 +132,56 @@ internal fun CanonicalLibraryPlaylistPicker(
         }
     }
 
+    fun openNativeWizard() {
+        if (preparingWizard || saving) return
+        preparingWizard = true
+        error = null
+        scope.launch {
+            try {
+                val resolved = withContext(Dispatchers.IO) {
+                    canonicalLibraryResolveSelections(app, selection, selectedSource)
+                }
+                val initial = canonicalLibraryWizardSeed(resolved)
+                if (initial == null) {
+                    error = "Algumas faixas não estão disponíveis nesta fonte. Revise a seleção."
+                } else {
+                    wizardSeed = initial
+                    // Unmount this destination picker and present the SAME
+                    // full editor used by Biblioteca → Criar playlist, only
+                    // bounded to a large modal over the still-mounted Library.
+                    creating = true
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                error = "Não foi possível confirmar as faixas selecionadas."
+            } finally {
+                preparingWizard = false
+            }
+        }
+    }
+
+    if (creating) {
+        SmartPlaylistBuilderScreen(
+            onBack = { creating = false },
+            embeddedInLibrary = true,
+            initialLibraryRecordingIds = wizardSeed,
+            initialLibrarySource = selectedSource,
+            onLibraryNormalSaved = { onDismiss() },
+        )
+        return
+    }
+
     PlaylistWizardSheetChrome(
-        title = if (creating) "Nova playlist" else "Adicionar à playlist",
+        title = "Adicionar à playlist",
         onClose = onDismiss,
-        canClose = !saving,
+        canClose = !saving && !preparingWizard,
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-                if (creating) {
-                    PlaylistWizardTextEntry(
-                        value = newName,
-                        onValueChange = { newName = it; error = null },
-                        label = "Nome",
-                        emphasized = true,
-                    )
-                    PlaylistWizardSecondaryAction(
-                        label = "Voltar às playlists",
-                        enabled = !saving,
-                        onClick = { creating = false; error = null },
-                    )
-                } else {
-                    PlaylistWizardSearchEntry(
+                PlaylistWizardSearchEntry(
                         value = searching,
                         onValueChange = { searching = it },
                         placeholder = "Buscar playlist",
@@ -162,13 +189,14 @@ internal fun CanonicalLibraryPlaylistPicker(
                     SettingsRow(
                         icon = Icons.Rounded.Add,
                         title = "Nova playlist",
+                        subtitle = "Usar o editor de playlists normal ou inteligente",
                         reserveIconSpace = false,
-                        onClick = {
-                            creating = true
-                            selectedId = null
-                            error = null
+                        onClick = ::openNativeWizard,
+                        trailing = {
+                            if (preparingWizard) CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                            )
                         },
-                        trailing = {},
                     )
                     RowDivider()
                     when (val playlists = existing) {
@@ -214,7 +242,6 @@ internal fun CanonicalLibraryPlaylistPicker(
                             }
                         }
                     }
-                }
                 error?.let {
                     Text(
                         it,
@@ -223,13 +250,8 @@ internal fun CanonicalLibraryPlaylistPicker(
                     )
                 }
                 PlaylistWizardPrimaryAction(
-                    label = when {
-                        saving -> "Salvando…"
-                        creating -> "Criar e adicionar"
-                        else -> "Adicionar"
-                    },
-                    enabled = !saving && if (creating) newName.trim().isNotEmpty()
-                        else selectedId != null,
+                    label = if (saving) "Salvando…" else "Adicionar",
+                    enabled = !saving && !preparingWizard && selectedId != null,
                     onClick = ::save,
                 )
         }
