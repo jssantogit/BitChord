@@ -90,6 +90,9 @@ import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.RowMoreButton
+import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
+import com.music.bitchord.ui.components.NativeTrackRowText
+import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.theme.ArtworkPalette
@@ -1393,71 +1396,73 @@ internal fun CanonicalTrackRow(
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onToggleSelection: (() -> Unit)? = null,
-    // The native artist shelf is a compact horizontal four-song column, not
-    // a full-width library track row. Keep a single canonical row component.
+    // Only the category's row should enter selection via a long press.
+    // Detail pages never pass this callback.
+    onLongPress: (() -> Unit)? = null,
     compactForArtist: Boolean = false,
     palette: ArtworkPalette? = null,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = {
-                if (selectionMode && onToggleSelection != null) onToggleSelection()
-                else onClick()
-            })
-            .then(
-                if (compactForArtist) Modifier.padding(vertical = 4.dp)
-                else Modifier.heightIn(min = 68.dp)
-                    .padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
-            ),
+    // Exactly the native SongRow frame (same horizontal inset and trailing
+    // gutter), without converting RecordingId into a fake Song.videoId.
+    NativeDetailTrackRowFrame(
+        onClick = {
+            if (selectionMode && onToggleSelection != null) onToggleSelection()
+            else onClick()
+        },
+        onLongPress = onLongPress,
+        onMore = onOptions,
+        horizontalInset = if (compactForArtist) 0.dp else PAGE_GUTTER,
+        modifier = if (compactForArtist) Modifier else Modifier.heightIn(min = 68.dp),
     ) {
-        CanonicalUnifiedArtwork(track, artworkLoader, Modifier.size(48.dp))
-        Spacer(Modifier.width(if (compactForArtist) 12.dp else 16.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = track.title,
-                style = if (compactForArtist) MaterialTheme.typography.titleMedium
-                    else MaterialTheme.typography.bodyLarge,
-                color = palette?.onBackground ?: MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = track.artistDisplay,
-                style = MaterialTheme.typography.bodyMedium,
-                color = palette?.onBackgroundVariant
-                    ?: MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        CanonicalUnifiedArtwork(
+            track, artworkLoader, Modifier.size(if (compactForArtist) 48.dp else 52.dp),
+        )
+        Spacer(Modifier.width(if (compactForArtist) 12.dp else 14.dp))
+        NativeTrackRowText(
+            title = {
+                Text(
+                    text = track.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = palette?.onBackground ?: MaterialTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+            subtitle = {
+                Text(
+                    text = track.artistDisplay,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = palette?.onBackgroundVariant
+                        ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+        )
         Column(
             modifier = Modifier.padding(start = 8.dp),
             horizontalAlignment = Alignment.End,
         ) {
-            canonicalLibraryVisibleRatings(
-                track, LocalCanonicalRatingDisplay.current,
-            ).forEach { rating ->
-                CanonicalRatingStars(
-                    rating,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-            // The native CompactSongRow reserves its trailing space for
-            // ratings/menu, not duration. Preserve durations in library rows.
+            canonicalLibraryVisibleRatings(track, LocalCanonicalRatingDisplay.current)
+                .forEach { rating ->
+                    CanonicalRatingStars(
+                        rating, color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
             if (!compactForArtist) formatDuration(track.durationMs)?.let { duration ->
                 Text(
                     text = duration,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = palette?.onBackgroundVariant
+                        ?: MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
         if (selectionMode && onToggleSelection != null) {
-            IconButton(onClick = onToggleSelection) {
+            IconButton(onClick = onToggleSelection, modifier = Modifier.size(36.dp)) {
                 Icon(
-                    if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                    if (selected) Icons.Rounded.CheckCircle
+                    else Icons.Rounded.RadioButtonUnchecked,
                     contentDescription = if (selected) "Desmarcar faixa" else "Selecionar faixa",
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
