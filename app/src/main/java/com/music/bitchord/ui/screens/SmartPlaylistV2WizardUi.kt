@@ -404,6 +404,7 @@ internal fun SmartPlaylistV2WizardUi(
     editingNormalId: String? = null,
     openingAsEdit: Boolean = false,
     startOnNormalSongs: Boolean = false,
+    embeddedInLibrary: Boolean = false,
     normalRows: List<V2DisplayRow> = emptyList(),
     normalSelectedRows: List<V2DisplayRow> = emptyList(),
     normalSelectedIds: List<String> = emptyList(),
@@ -543,7 +544,11 @@ internal fun SmartPlaylistV2WizardUi(
     // Do not mix the editor with the app's own scrollable library screen.
     // The caller hosts this in a full-width Dialog over the library tab bar.
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
+        Column(
+            Modifier.fillMaxSize()
+                .then(if (embeddedInLibrary) Modifier else Modifier.statusBarsPadding())
+                .imePadding(),
+        ) {
             Box(
                 modifier = Modifier.fillMaxWidth()
                     .heightIn(min = 56.dp)
