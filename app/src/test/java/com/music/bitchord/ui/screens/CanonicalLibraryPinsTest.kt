@@ -23,7 +23,7 @@ class CanonicalLibraryPinsTest {
     )
     private val track = CanonicalLibraryPin(
         CanonicalLibrarySelection(CanonicalLibraryEntityType.TRACK, "recording-id"),
-        "What's Next, "Really"?", "Faixa & Música",
+        "What's Next, \"Really\"?", "Faixa & Música",
     )
 
     @Test fun togglesTypedPinsWithoutSilentlyRemovingAnotherTypeOrReordering() {
@@ -32,7 +32,7 @@ class CanonicalLibraryPinsTest {
         list = toggleCanonicalLibraryPin(list, track)
         assertEquals(listOf(album, artist, track), list)
         assertEquals(listOf(artist, track), toggleCanonicalLibraryPin(list, album))
-        assertEquals(list, toggleCanonicalLibraryPin(list + album, album))
+        assertEquals(listOf(artist, track), toggleCanonicalLibraryPin(list + album, album))
     }
 
     @Test fun encodedPinsRoundTripUnicodeAndIdsWithoutConfusingSeparators() {
