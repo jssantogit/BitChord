@@ -139,10 +139,10 @@ class A0SearchRecoveryPlanTest {
     @Test fun explicitDemoVersionSearchIsPreferredOverGenericTitleFallback() {
         val original="BTS - Epiphany (Jin Demo Ver.)"
         val plan=A0SearchRecoveryPlan(original,"Proof",releaseWide=true)
-        val album=plan.releaseWideQuery
+        val album=checkNotNull(plan.releaseWideQuery)
         assertEquals("BTS Proof",album)
         assertEquals("BTS Epiphany Jin Demo Version",
-            plan.next(6000,false,setOf(album!!)))
+            plan.next(6000,false,setOf(album)))
         // A successful album-wide result still avoids redundant variants.
         assertNull(plan.next(6000,true,setOf(album),missingSiblings=false))
         assertEquals("BTS Epiphany Jin Demo Version",
