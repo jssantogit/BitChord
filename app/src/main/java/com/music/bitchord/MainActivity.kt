@@ -2382,12 +2382,19 @@ private fun BitChordApp(
     var recentSearching by remember { mutableStateOf(false) }
     var unifiedLibrarySearching by remember { mutableStateOf(false) }
     var unifiedLibraryDetailOpen by remember { mutableStateOf(false) }
+    var unifiedLibraryNestedAlbumOpen by remember { mutableStateOf(false) }
     var unifiedLibraryBackToken by remember { mutableIntStateOf(0) }
     // Put album action/sort state outside BitChordApp: it is already close
     // to the JVM Compose method-size limit, and its chrome is reused below.
     val unifiedAlbumUi = remember { UnifiedAlbumDetailUiState() }
-    LaunchedEffect(unifiedLibraryDetailOpen) {
-        if (!unifiedLibraryDetailOpen) unifiedAlbumUi.resetDetail()
+    LaunchedEffect(
+        unifiedLibraryCategory, unifiedLibraryDetailOpen, unifiedLibraryNestedAlbumOpen,
+    ) {
+        if (!shouldUseUnifiedAlbumDetailToolbar(
+                unifiedLibraryCategory, unifiedLibraryDetailOpen,
+                unifiedLibraryNestedAlbumOpen,
+            )
+        ) unifiedAlbumUi.resetDetail()
     }
     var showPlaylistLibrary by rememberSaveable { mutableStateOf(false) }
     var openedCanonicalPlaylist by remember {
@@ -3142,6 +3149,7 @@ private fun BitChordApp(
                             searchVisible = unifiedLibrarySearching,
                             detailBackToken = unifiedLibraryBackToken,
                             onDetailChanged = { unifiedLibraryDetailOpen = it },
+                            onNestedAlbumChanged = { unifiedLibraryNestedAlbumOpen = it },
                             initialContext = unifiedLibraryCategory
                                 ?: com.music.bitchord.data.listening.CanonicalSmartFilterContext.SONGS,
                             onClose = { unifiedLibraryCategory = null },
@@ -4392,6 +4400,7 @@ private fun BitChordApp(
                                 ),
                                 albumDetail = shouldUseUnifiedAlbumDetailToolbar(
                                     unifiedLibraryCategory, unifiedLibraryDetailOpen,
+                                    unifiedLibraryNestedAlbumOpen,
                                 ),
                                 onAlbumSort = unifiedAlbumUi::openSort,
                                 onAlbumOptions = unifiedAlbumUi::requestOptions,
@@ -4609,6 +4618,7 @@ private fun BitChordApp(
                             // profile off its album pages too.
                             if (!isReleaseDetail && !shouldUseUnifiedAlbumDetailToolbar(
                                 unifiedLibraryCategory, unifiedLibraryDetailOpen,
+                                unifiedLibraryNestedAlbumOpen,
                             )) TopBarAccountButton(
                                 account = account,
                                 // The account glyph is the single entrance to Settings.
@@ -5460,7 +5470,7 @@ private fun BitChordApp(
 
         UnifiedAlbumDetailSortMenu(
             visible = shouldUseUnifiedAlbumDetailToolbar(
-                unifiedLibraryCategory, unifiedLibraryDetailOpen,
+                unifiedLibraryCategory, unifiedLibraryDetailOpen, unifiedLibraryNestedAlbumOpen,
             ),
             state = unifiedAlbumUi,
             hazeState = hazeState,
@@ -6603,8 +6613,12 @@ internal fun shouldShowUnifiedLibraryBrowseFilters(detailOpen: Boolean): Boolean
 internal fun shouldUseUnifiedAlbumDetailToolbar(
     category: com.music.bitchord.data.listening.CanonicalSmartFilterContext?,
     detailOpen: Boolean,
-): Boolean = detailOpen &&
-    category == com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS
+    nestedAlbumOpen: Boolean = false,
+): Boolean = detailOpen && (
+    category == com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS ||
+        (category == com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS &&
+            nestedAlbumOpen)
+)
 
 @Composable
 private fun UnifiedLibraryToolbarActions(
