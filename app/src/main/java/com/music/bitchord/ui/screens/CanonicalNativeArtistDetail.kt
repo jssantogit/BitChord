@@ -17,11 +17,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,12 +46,14 @@ import com.music.bitchord.data.canvas.keyColors
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.ReleaseEntity
+import com.music.bitchord.data.settings.SongSort
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoader
 import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.NUMBERED_ROW_DIVIDER_INSET
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.trackColumnWidth
 import com.music.bitchord.ui.icons.BitChordIcons
@@ -93,6 +97,10 @@ internal fun CanonicalNativeArtistDetail(
     searching: Boolean,
     nestedBackToken: Int,
     onNestedDetailChanged: (Boolean) -> Unit,
+    albumSort: SongSort = SongSort.DEFAULT,
+    albumMenuToken: Int = 0,
+    albumPlaylistToken: Int = 0,
+    onNestedAlbumAddToPlaylist: (ReleaseEntity) -> Unit = {},
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
     onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
     onTrackOptions: (CanonicalBrowseTrack) -> Unit,
@@ -210,20 +218,26 @@ internal fun CanonicalNativeArtistDetail(
     LaunchedEffect(nestedBackToken) {
         if (nestedBackToken > 0) openedRelease = null
     }
+    LaunchedEffect(albumMenuToken) {
+        if (albumMenuToken > 0) openedRelease?.let(onReleaseOptions)
+    }
+    LaunchedEffect(albumPlaylistToken) {
+        if (albumPlaylistToken > 0) openedRelease?.let(onNestedAlbumAddToPlaylist)
+    }
     val releaseRecordingIds by produceState(
-        initialValue = emptySet<String>(),
+        initialValue = emptyList<String>(),
         key1 = openedRelease?.id,
         key2 = keys,
     ) {
         val id = openedRelease?.id ?: return@produceState
         value = try {
             withContext(Dispatchers.IO) {
-                keys.flatMap { dao.providerScopedReleaseRecordingIds(it, id) }.toSet()
+                keys.flatMap { dao.providerScopedReleaseRecordingIds(it, id) }.distinct()
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            emptySet()
+            emptyList()
         }
     }
     BackHandler(enabled = openedRelease != null) { openedRelease = null }
@@ -231,9 +245,15 @@ internal fun CanonicalNativeArtistDetail(
     val selectedAlbum = openedRelease
     if (selectedAlbum != null) {
         val albumIds = canonicalArtistReleaseTrackIds(
-            availableLibraryTracks.map { it.recordingId }, releaseRecordingIds,
+            availableLibraryTracks.map { it.recordingId }, releaseRecordingIds.toSet(),
         ).toSet()
-        val albumTracks = availableLibraryTracks.filter { it.recordingId in albumIds }
+        val albumTracks = canonicalAlbumDetailSort(
+            canonicalAlbumDetailTrackOrder(
+                availableLibraryTracks.filter { it.recordingId in albumIds },
+                releaseRecordingIds,
+            ),
+            albumSort,
+        )
         val releasePalette = rememberArtworkPalette(
             imageUrl = canonicalNativeReleasePaletteUri(
                 nativeReleases.artwork[selectedAlbum.id]?.artworkUri,
@@ -259,42 +279,31 @@ internal fun CanonicalNativeArtistDetail(
                         },
                         actions = {
                             if (albumTracks.isNotEmpty()) {
-                                Spacer(Modifier.height(32.dp))
-                                Row(
-                                    Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    ActionPill(
-                                        icon = BitChordIcons.Play,
-                                        label = "Tocar",
-                                        onClick = { onPlayAll(albumTracks, false) },
-                                        filled = true,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    ActionPill(
-                                        icon = BitChordIcons.Shuffle,
-                                        label = "Aleatório",
-                                        onClick = { onPlayAll(albumTracks, true) },
-                                        filled = false,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                }
+                                Spacer(Modifier.height(18.dp))
+                                NativeReleaseActionRow(
+                                    onPlay = { onPlayAll(albumTracks, false) },
+                                    onShuffle = { onPlayAll(albumTracks, true) },
+                                    isLocal = false,
+                                    reservePinAction = true,
+                                )
                             }
                         },
                     )
                 }
-                item(key = "nested-album-spacing") { Spacer(Modifier.height(20.dp)) }
-                items(albumTracks, key = { it.recordingId }) { track ->
-                    val target = CanonicalLibrarySelection(
-                        CanonicalLibraryEntityType.TRACK, track.recordingId,
-                    )
+                itemsIndexed(albumTracks, key = { _, track -> track.recordingId }) { index, track ->
                     CanonicalTrackRow(
-                        track, artworkLoader, { onTrackPlay(track) },
-                        { onTrackEditRating(track) },
+                        track = track,
+                        artworkLoader = artworkLoader,
+                        onClick = { onTrackPlay(track) },
+                        onEditRating = { onTrackEditRating(track) },
                         onOptions = { onTrackOptions(track) },
-                        selectionMode = selectedItems.isNotEmpty(),
-                        selected = target in selectedItems,
-                        onToggleSelection = { onToggleSelection(target) },
+                        albumTrackNumber = index + 1,
+                        palette = releasePalette,
+                    )
+                    if (index < albumTracks.lastIndex) HorizontalDivider(
+                        modifier = Modifier.padding(start = NUMBERED_ROW_DIVIDER_INSET),
+                        thickness = 0.5.dp,
+                        color = releasePalette.divider,
                     )
                 }
             }
