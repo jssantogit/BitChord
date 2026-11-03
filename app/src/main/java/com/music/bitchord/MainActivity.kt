@@ -4634,10 +4634,15 @@ private fun BitChordApp(
                             // Not on a release page, whose pill already carries
                             // three of its own controls — Apple Music leaves the
                             // profile off its album pages too.
-                            if (!isReleaseDetail && !shouldUseUnifiedAlbumDetailToolbar(
-                                unifiedLibraryCategory, unifiedLibraryDetailOpen,
-                                unifiedLibraryNestedAlbumOpen,
-                            )) TopBarAccountButton(
+                            if (!isReleaseDetail &&
+                                !shouldUseUnifiedAlbumDetailToolbar(
+                                    unifiedLibraryCategory, unifiedLibraryDetailOpen,
+                                    unifiedLibraryNestedAlbumOpen,
+                                ) && !shouldUseUnifiedArtistDetailToolbar(
+                                    unifiedLibraryCategory, unifiedLibraryDetailOpen,
+                                    unifiedLibraryNestedAlbumOpen,
+                                )
+                            ) TopBarAccountButton(
                                 account = account,
                                 // The account glyph is the single entrance to Settings.
                                 // Home has no redundant overflow menu.
