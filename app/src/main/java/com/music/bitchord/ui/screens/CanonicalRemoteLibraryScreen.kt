@@ -229,6 +229,7 @@ internal fun CanonicalRemoteLibraryScreen(
     unifiedViewType: LibraryViewType = LibraryViewType.LIST,
     albumSort: SongSort = SongSort.DEFAULT,
     albumMenuToken: Int = 0,
+    albumPlaylistToken: Int = 0,
     onSourceKeysChanged: (List<String>) -> Unit = {},
     selectionBarBottomPadding: Dp = 140.dp,
 ) {
@@ -808,6 +809,21 @@ internal fun CanonicalRemoteLibraryScreen(
                         selected.artworkUri,
                     )
                 }
+            }
+        }
+    }
+    // A dedicated icon in the album's floating top pill opens exactly the
+    // same native sheet as ⋮ → Adicionar à playlist on songs and album cards.
+    // Its typed ReleaseId resolves the WHOLE album under the selected source,
+    // even when the detail has a text search or an alternate display sort.
+    LaunchedEffect(albumPlaylistToken) {
+        if (unified && albumPlaylistToken > 0) {
+            val selection = canonicalAlbumDetailPlaylistSelection(
+                selectedContext, selectedEntity?.id,
+            )
+            if (selection != null) {
+                libraryMenu = null
+                playlistPickerSelection = selection
             }
         }
     }
