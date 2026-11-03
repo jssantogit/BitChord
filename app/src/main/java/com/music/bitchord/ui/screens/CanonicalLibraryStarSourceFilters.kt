@@ -128,6 +128,48 @@ internal fun nativeUnifiedTrackCountLabel(
     return "$prefix · ${totalMinutes / 60}h ${(totalMinutes % 60).toString().padStart(2, '0')}m"
 }
 
+/** Album detail uses the ordered, source-validated ReleaseTrack edges from Room.
+ * Root Library sorting must never reorder the release's own running order. */
+internal fun canonicalAlbumDetailTrackOrder(
+    tracks: List<CanonicalBrowseTrack>,
+    releaseRecordingIds: List<String>,
+): List<CanonicalBrowseTrack> {
+    if (releaseRecordingIds.isEmpty()) return tracks
+    val byId = tracks.associateBy(CanonicalBrowseTrack::recordingId)
+    val ordered = releaseRecordingIds.distinct().mapNotNull(byId::get)
+    val includedIds = ordered.mapTo(HashSet()) { it.recordingId }
+    return ordered + tracks.filter { it.recordingId !in includedIds }
+}
+
+/** Title decoration is dropped only when the official release type agrees.
+ * This never mutates the canonical title in the database or identity index. */
+internal fun canonicalAlbumDisplayTitle(title: String, primaryType: String?): String {
+    val suffix = if (primaryType?.equals("EP", ignoreCase = true) == true) " - EP" else null
+    return if (suffix != null && title.endsWith(suffix, ignoreCase = true))
+        title.dropLast(suffix.length).trimEnd() else title
+}
+
+/** The native release header shows verified type/year, never guessed metadata. */
+internal fun canonicalAlbumDetailMeta(
+    primaryType: String?,
+    releaseDate: String?,
+    tracks: List<CanonicalBrowseTrack>,
+): String {
+    val kind = when (primaryType?.trim()?.lowercase(Locale.ROOT)) {
+        "ep" -> "EP"
+        "album" -> "Álbum"
+        "single" -> "Single"
+        else -> null
+    }
+    val year = releaseDate?.trim()?.takeIf {
+        it.matches(Regex("""^\\d{4}(-\\d{2}(-\\d{2})?)?$"""))
+    }?.take(4)
+    return listOfNotNull(
+        kind, year,
+        nativeUnifiedTrackCountLabel(tracks.size, tracks.map(CanonicalBrowseTrack::durationMs)),
+    ).joinToString(" · ")
+}
+
 /** Keep the native LocalFolder sort semantics on the unified canonical list.
  * Unknown source timestamps stay last; they are never invented from sync time.
  */
