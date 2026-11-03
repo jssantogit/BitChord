@@ -6,19 +6,40 @@ import org.junit.Test
 class A0ReleaseInitialQueryPolicyTest {
     @Test fun releaseWithMultipleMissingTracksSearchesArtistAlbumFirst() {
         val initial=A0ReleaseInitialQueryPolicy.choose(
-            "BTS Epiphany Jin Demo Ver","BTS Proof",48,emptySet())
+            "BTS Epiphany Jin Demo Ver","BTS Proof",8,emptySet())
         assertEquals(A0ReleaseInitialQueryPolicy.Kind.ALBUM_WIDE,initial.kind)
         assertEquals("BTS Proof",initial.query)
         // The album was sent; subsequent sessions search the actual track,
         // and the already sent album query never consumes a fallback slot.
         val next=A0ReleaseInitialQueryPolicy.choose(
-            "BTS Seesaw Demo Ver","BTS Proof",48,setOf(initial.query))
+            "BTS Seesaw Demo Ver","BTS Proof",8,setOf(initial.query))
         assertEquals(A0ReleaseInitialQueryPolicy.Kind.TRACK,next.kind)
         assertEquals("BTS Seesaw Demo Ver",next.query)
         val recovery=A0SearchRecoveryPlan("BTS - Epiphany (Jin Demo Ver.)",
             "Proof",releaseWide=true)
         assertNotEquals("BTS Proof",recovery.next(6000,false,
             setOf("BTS Proof"),excludedQueries=setOf("BTS Proof")))
+    }
+
+    @Test fun fortyEightTrackAlbumCannotPoisonItsOwnCoverageWithWideSnapshot() {
+        val count=48
+        assertFalse(A0ReleaseInitialQueryPolicy.permitsAlbumWide(count))
+        assertTrue(A0ReleaseInitialQueryPolicy.permitsAlbumWide(4))
+        assertTrue(A0ReleaseInitialQueryPolicy.permitsAlbumWide(12))
+        assertFalse(A0ReleaseInitialQueryPolicy.permitsAlbumWide(13))
+        val first=A0ReleaseInitialQueryPolicy.choose(
+            "BTS Epiphany Jin Demo Ver","BTS Proof",count,emptySet())
+        assertEquals(A0ReleaseInitialQueryPolicy.Kind.TRACK,first.kind)
+        assertEquals("BTS Epiphany Jin Demo Ver",first.query)
+        // On the 6s fallback, this oversized album must STILL NOT
+        // produce BTS Proof (even if there is no candidate yet).
+        val recovery=A0SearchRecoveryPlan(
+            "BTS - Epiphany (Jin Demo Ver.)","Proof",
+            releaseWide=A0ReleaseInitialQueryPolicy.permitsAlbumWide(count))
+        assertNull(recovery.releaseWideQuery)
+        assertEquals("BTS Epiphany Jin Demo Version",recovery.next(
+            6000,false,setOf("BTS Epiphany Jin Demo Ver")))
+        assertFalse(recovery.authorizesTransfer)
     }
 
     @Test fun aMixedBatchDoesNotPretendEverySongSharesOneRelease() {

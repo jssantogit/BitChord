@@ -94,10 +94,14 @@ internal class A0FreshAutoSearchTransport(
         // Ask that release-wide query FIRST once per batch (>=4 slots), so
         // the six-second fallback delay no longer blocks sibling discovery.
         // The original canonical song still owns ALL identity/quality gates.
-        val recovery=A0SearchRecoveryPlan(entry.query,entry.album,
-            releaseWide=releaseSlots.size>1)
         val sameReleaseCount=A0ReleaseInitialQueryPolicy.cohortSize(
             entry,releaseSlots)
+        // A large public album query can overflow the bounded release shadow
+        // and irreversibly mark numerous siblings INCOMPLETE_SAMPLE.
+        // Disable it for big cohorts BOTH as initial query and fallback.
+        val recovery=A0SearchRecoveryPlan(entry.query,entry.album,
+            releaseWide=A0ReleaseInitialQueryPolicy.permitsAlbumWide(
+                sameReleaseCount))
         val initialQuery=A0ReleaseInitialQueryPolicy.choose(
             normalized,recovery.releaseWideQuery,sameReleaseCount,releaseWideSent)
         // A single reservation covers this session's initial query and up
