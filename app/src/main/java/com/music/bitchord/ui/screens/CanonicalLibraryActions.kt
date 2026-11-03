@@ -155,6 +155,13 @@ internal suspend fun canonicalLibraryResolveSelections(
     )
 }
 
+/** Opening the existing wizard must not silently drop selected entities. */
+internal fun canonicalLibraryWizardSeed(
+    resolved: CanonicalLibraryResolvedSelection,
+): List<String>? = resolved.recordingIds.distinct().takeIf {
+    resolved.unavailableEntities == 0 && it.isNotEmpty()
+}
+
 internal suspend fun canonicalLibraryResolveRecordingIds(
     context: Context,
     selection: List<CanonicalLibrarySelection>,
