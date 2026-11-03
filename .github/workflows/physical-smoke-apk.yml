@@ -32,7 +32,7 @@ jobs:
     steps:
       - name: Validate physical smoke request
         env:
-          SMOKE_PLAN: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke_plan || (github.event_name == 'push' && github.ref == 'refs/heads/listening/smart-playlists-v2-192' && 'Explicit user-approved physical smoke for issue 192') || (github.event_name == 'push' && github.ref == 'refs/heads/smoke/206-loading-drag-20261103' && 'Owner-approved #206 loading spinner and hold-drag physical smoke') }}
+          SMOKE_PLAN: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke_plan || (github.event_name == 'push' && github.ref == 'refs/heads/listening/smart-playlists-v2-192' && 'Explicit user-approved physical smoke for issue 192') || (github.event_name == 'push' && github.ref == 'refs/heads/smoke/206-loading-drag-20261103' && 'Owner-approved issue 206 loading spinner and hold-drag physical smoke') }}
         run: test -n "$SMOKE_PLAN"
 
       - name: Checkout
