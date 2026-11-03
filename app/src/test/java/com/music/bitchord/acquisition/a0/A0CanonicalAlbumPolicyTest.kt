@@ -223,4 +223,31 @@ class A0CanonicalAlbumPolicyTest {
             "BREAK EVENT (2026)",A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
         assertEquals(A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM,notSubstring.status)
     }
+    @Test fun exactJoinedArtistAndAlbumDirectoryIsOnlyAnUnverifiedAlbumHint() {
+        val target=A0CanonicalAlbumPolicy.Target(
+            "THE ALBUM",expectedArtist="BLACK PINK")
+        fun directory(name:String)=policy.assess(target,
+            A0CanonicalAlbumPolicy.Claim(name,
+                A0CanonicalAlbumPolicy.ClaimSource.DIRECTORY_HINT))
+        for(name in listOf("BLACKPINK - THE ALBUM",
+            "BLACKPINK - THE ALBUM (2020)")) {
+            val result=directory(name)
+            assertEquals(name,A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED,
+                result.status)
+            assertFalse(result.authorizesTransfer)
+        }
+        for(name in listOf("BLACKPINKS - THE ALBUM",
+            "Other BLACKPINK - THE ALBUM",
+            "BLACKPINK - THE ALBUM [FLAC]",
+            "BLACKPINK - THE ALBUM Remastered")) {
+            assertNotEquals(name,
+                A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED,
+                directory(name).status)
+        }
+        assertEquals(A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM,
+            policy.assess(target,A0CanonicalAlbumPolicy.Claim(
+                "BLACKPINK - THE ALBUM",
+                A0CanonicalAlbumPolicy.ClaimSource.EXPLICIT_ALBUM_FIELD)).status)
+    }
+
 }
