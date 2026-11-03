@@ -13,6 +13,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,10 +51,10 @@ internal fun CanonicalLibraryBatchActionBar(
     // Compact phone-safe dock: the count is never squeezed between four
     // 48dp controls on one line. Both rows use the existing wizard actions
     // inside the same native Settings surface, not an invented panel.
-    SettingsGroupSurface(modifier.widthIn(max = 312.dp)) {
+    SettingsGroupSurface(modifier.widthIn(max = 340.dp)) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -84,7 +85,7 @@ internal fun CanonicalLibraryBatchActionBar(
             if (expanded) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     PlaylistWizardCompactAction(
@@ -94,7 +95,7 @@ internal fun CanonicalLibraryBatchActionBar(
                     )
                     PlaylistWizardCompactAction(
                         label = "Tocar a seleção a seguir",
-                        icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+                        icon = Icons.Rounded.SkipNext,
                         onClick = onPlayNext,
                     )
                     PlaylistWizardCompactAction(
