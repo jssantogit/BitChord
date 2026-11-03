@@ -7,8 +7,8 @@ on:
   # This scoped push fallback is needed while PR #193 has a conflicted merge
   # ref and the connected GitHub integration cannot dispatch workflows.
   push:
-    branches: [listening/smart-playlists-v2-192]
-    paths: [docs/listening/issue-192-physical-smoke-request.md]
+    branches: [listening/smart-playlists-v2-192, smoke/205-artist-parity-20261102]
+    paths: [docs/listening/issue-192-physical-smoke-request.md, docs/listening/issue-205-artist-parity-smoke-request.md]
   workflow_dispatch:
     inputs:
       smoke_plan:
@@ -32,7 +32,7 @@ jobs:
     steps:
       - name: Validate physical smoke request
         env:
-          SMOKE_PLAN: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke_plan || (github.event_name == 'push' && github.ref == 'refs/heads/listening/smart-playlists-v2-192' && 'Explicit user-approved physical smoke for issue 192') }}
+          SMOKE_PLAN: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke_plan || (github.event_name == 'push' && (github.ref == 'refs/heads/listening/smart-playlists-v2-192' || github.ref == 'refs/heads/smoke/205-artist-parity-20261102') && 'Explicit user-approved physical smoke for issue 192 / PR 205 artist parity') }}
         run: test -n "$SMOKE_PLAN"
 
       - name: Checkout
