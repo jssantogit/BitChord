@@ -163,7 +163,10 @@ internal fun CanonicalLibraryPlaylistPicker(
 
     if (creating) {
         SmartPlaylistBuilderScreen(
-            onBack = { creating = false },
+            // The editor is a modal over the original selected Library page.
+            // Back from its first step returns there, not through another
+            // invented playlist-creation destination or nested picker.
+            onBack = onDismiss,
             embeddedInLibrary = true,
             initialLibraryRecordingIds = wizardSeed,
             initialLibrarySource = selectedSource,
