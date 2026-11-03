@@ -166,8 +166,16 @@ private sealed interface CanonicalEntityBrowseState {
 private sealed interface CanonicalDetailBrowseState {
     data object Loading : CanonicalDetailBrowseState
     data object Failed : CanonicalDetailBrowseState
-    data class Ready(val recordingIds: Set<String>) : CanonicalDetailBrowseState
+    data class Ready(
+        val recordingIds: Set<String>,
+        val releaseOrder: List<String> = emptyList(),
+    ) : CanonicalDetailBrowseState
 }
+
+private data class CanonicalAlbumHeaderEvidence(
+    val primaryType: String?,
+    val releaseDate: String?,
+)
 
 private data class CanonicalSelectedEntity(
     val id: String,
@@ -673,7 +681,11 @@ internal fun CanonicalRemoteLibraryScreen(
                         }
                     }.distinct()
                 }
-                CanonicalDetailBrowseState.Ready(ids.toSet())
+                CanonicalDetailBrowseState.Ready(
+                    ids.toSet(),
+                    releaseOrder = if (selectedContext == CanonicalSmartFilterContext.ALBUMS)
+                        ids else emptyList(),
+                )
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -682,10 +694,48 @@ internal fun CanonicalRemoteLibraryScreen(
         }
     }
     val scopedDetailTracks = when (val d = detailState) {
-        is CanonicalDetailBrowseState.Ready -> eligibleTracks.filter { track ->
-            track.recordingId in d.recordingIds && track.availableAssets.isNotEmpty()
+        is CanonicalDetailBrowseState.Ready -> {
+            val members = eligibleTracks.filter { track ->
+                track.recordingId in d.recordingIds && track.availableAssets.isNotEmpty()
+            }
+            if (selectedContext == CanonicalSmartFilterContext.ALBUMS)
+                canonicalAlbumDetailTrackOrder(members, d.releaseOrder)
+            else members
         }
         else -> emptyList()
+    }
+    // The release title/type/year are only enriched from verified canonical
+    // ReleaseGroup or MusicBrainz Edition evidence. No "- EP" heuristics when
+    // that evidence is absent; no provider name used as a surrogate ID.
+    val albumHeaderEvidence by produceState<CanonicalAlbumHeaderEvidence?>(
+        initialValue = null,
+        key1 = selectedEntity?.id,
+        key2 = selectedContext,
+        key3 = catalogDao,
+    ) {
+        val releaseId = selectedEntity?.id
+            ?.takeIf { selectedContext == CanonicalSmartFilterContext.ALBUMS }
+            ?: return@produceState
+        catalogDb.invalidationTracker.createFlow(
+            "catalog_release_group", "catalog_release_group_edition",
+            "musicbrainz_release_enrichment",
+        ).collectLatest {
+            value = try {
+                withContext(Dispatchers.IO) {
+                    val group = catalogDao.canonicalArtistReleaseEvidence(listOf(releaseId))
+                        .firstOrNull()
+                    val edition = catalogDao.musicBrainzReleaseEnrichment(releaseId)
+                    CanonicalAlbumHeaderEvidence(
+                        primaryType = group?.primaryType,
+                        releaseDate = group?.firstReleaseDate ?: edition?.releaseDate,
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+        }
     }
 
     BackHandler(enabled = selectedEntity != null) { selectedEntity = null }
@@ -835,10 +885,15 @@ internal fun CanonicalRemoteLibraryScreen(
                     },
                 )
             } else NativeUnifiedLibraryBody(
-                title = detail?.name ?: title,
+                title = if (detail != null &&
+                    selectedContext == CanonicalSmartFilterContext.ALBUMS
+                ) canonicalAlbumDisplayTitle(detail.name, albumHeaderEvidence?.primaryType)
+                    else detail?.name ?: title,
                 selectedContext = if (detail == null) selectedContext
                     else CanonicalSmartFilterContext.SONGS,
-                tracks = sortCanonicalUnifiedTracks(shownTracks, unifiedSort),
+                tracks = if (detail != null &&
+                    selectedContext == CanonicalSmartFilterContext.ALBUMS
+                ) shownTracks else sortCanonicalUnifiedTracks(shownTracks, unifiedSort),
                 filteredState = shownState,
                 entityState = entityState,
                 artworkLoader = artworkLoader,
@@ -857,7 +912,15 @@ internal fun CanonicalRemoteLibraryScreen(
                 albumCredit = detail?.let { selected ->
                     (entityState as? CanonicalEntityBrowseState.Albums)
                         ?.releases?.firstOrNull { it.id == selected.id }?.artistDisplay
-                }.orEmpty(),
+                }?.takeIf(String::isNotBlank)
+                    ?: scopedDetailTracks.firstOrNull()?.artistDisplay.orEmpty(),
+                albumMeta = if (detail != null &&
+                    selectedContext == CanonicalSmartFilterContext.ALBUMS
+                ) canonicalAlbumDetailMeta(
+                    albumHeaderEvidence?.primaryType,
+                    albumHeaderEvidence?.releaseDate,
+                    scopedDetailTracks,
+                ) else null,
                 onTrackPlay = playTrack,
                 onTrackEditRating = editRating,
                 onTrackOptions = openTrackMenu,
