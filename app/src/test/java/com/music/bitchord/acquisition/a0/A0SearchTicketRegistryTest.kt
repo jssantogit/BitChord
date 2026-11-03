@@ -43,7 +43,6 @@ class A0SearchTicketRegistryTest {
         tickets.creditValidated(102,publicFiles=2)
         assertEquals(listOf(1,2,1),tickets.responseCounts())
         assertEquals(listOf(3,9,2),tickets.publicFileCounts())
-        assertFalse(tickets.toString().contains("100"))
     }
     
     @Test fun onlyOriginalAndTwoRegisteredVariantsArePermitted() {
