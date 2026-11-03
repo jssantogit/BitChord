@@ -46,12 +46,20 @@ class A0AutoAcquisitionExecutorTest {
         var publicationUncertain=false
         val diagnosticStages=mutableListOf<Pair<
             A0AutoAcquisitionExecutor.DiagnosticStage,Enum<*>?>>()
+        val outcomes=mutableListOf<Triple<
+            A0AutoAcquisitionExecutor.Status,
+            A0AutoAcquisitionExecutor.Reason?,Int>>()
         override fun diagnostic(
             stage:A0AutoAcquisitionExecutor.DiagnosticStage,
             reason:Enum<*>?,
         ) {
             diagnosticStages.add(stage to reason)
         }
+        override fun diagnosticOutcome(
+            status:A0AutoAcquisitionExecutor.Status,
+            reason:A0AutoAcquisitionExecutor.Reason?,
+            attempts:Int,
+        ) { outcomes.add(Triple(status,reason,attempts)) }
         override fun fetch(
             candidate:A0ObservedCandidateHandoff.Choice,
             isCancelled:()->Boolean,
@@ -91,6 +99,27 @@ class A0AutoAcquisitionExecutorTest {
             assertTrue("Each temporary receipt must be discarded",receipt.file.delete())
         }
         override fun finish() { finishes++ }
+    }
+
+    @Test fun terminalDiagnosticAccountsForExhaustedRetriesWithoutPeerData() {
+        val port=FakePort().apply { failCount=3 }
+        val result=A0AutoAcquisitionExecutor(port).run(
+            target,(1..3).flatMap { choices("sensitive-peer-$it") },quality,
+            userRequested=true,optedIn=true,stillAuthorized={true})
+        assertEquals(A0AutoAcquisitionExecutor.Status.MANUAL_REVIEW,result.status)
+        assertEquals(A0AutoAcquisitionExecutor.Reason.EXHAUSTED_PEERS,result.reason)
+        assertEquals(3,result.attempts)
+        assertEquals(listOf(Triple(result.status,result.reason,3)),port.outcomes)
+        assertFalse(port.outcomes.toString().contains("sensitive-peer"))
+    }
+
+    @Test fun terminalDiagnosticReportsDurableResultExactlyOnce() {
+        val port=FakePort().apply { decoded=this@A0AutoAcquisitionExecutorTest.decoded }
+        val result=A0AutoAcquisitionExecutor(port).run(
+            target,choices("secret-peer"),quality,
+            userRequested=true,optedIn=true,stillAuthorized={true})
+        assertEquals(A0AutoAcquisitionExecutor.Status.PUBLISHED,result.status)
+        assertEquals(listOf(Triple(result.status,result.reason,1)),port.outcomes)
     }
 
     @Test fun defaultOffOrMissingUserTapNeverRequestsPeerBytes() {
