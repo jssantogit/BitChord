@@ -169,6 +169,16 @@ private data class CanonicalSelectedEntity(
     val artworkUri: String? = null,
 )
 
+/** Only the three root Library categories support hold-to-select. */
+internal fun canSelectCanonicalLibraryByLongPress(
+    category: CanonicalSmartFilterContext,
+    detailOpen: Boolean,
+): Boolean = !detailOpen && category in setOf(
+    CanonicalSmartFilterContext.SONGS,
+    CanonicalSmartFilterContext.ALBUMS,
+    CanonicalSmartFilterContext.ARTISTS,
+)
+
 private data class CanonicalLibraryMenuTarget(
     val selection: CanonicalLibrarySelection,
     val title: String,
@@ -805,8 +815,10 @@ internal fun CanonicalRemoteLibraryScreen(
                             CanonicalLibraryEntityType.ARTIST, detail.id,
                         ))
                     },
-                    selectedItems = selectedItems,
-                    onToggleSelection = toggleSelection,
+                    // Selection belongs to the root category, never the
+                    // artist detail or its nested releases.
+                    selectedItems = emptyList(),
+                    onToggleSelection = {},
                     onPlayAll = { visible, shuffle ->
                         executeLibraryTrack(
                             SmartCollectionActionSource.LibraryTracks(
@@ -839,7 +851,10 @@ internal fun CanonicalRemoteLibraryScreen(
                 onTrackOptions = openTrackMenu,
                 onAlbumOptions = openAlbumMenu,
                 onArtistOptions = openArtistMenu,
-                selectedItems = selectedItems,
+                selectedItems = if (detail == null) selectedItems else emptyList(),
+                canLongPressSelect = canSelectCanonicalLibraryByLongPress(
+                    selectedContext, detailOpen = detail != null,
+                ),
                 onToggleSelection = toggleSelection,
                 onPlayAll = { visible, shuffle ->
                     executeLibraryTrack(
@@ -1029,10 +1044,12 @@ internal fun CanonicalRemoteLibraryScreen(
                         playlistPickerSelection = listOf(menu.selection)
                         libraryMenu = null
                     },
-                    onSelect = {
-                        toggleSelection(menu.selection)
-                        libraryMenu = null
-                    },
+                    onSelect = if (selectedEntity == null) {
+                        {
+                            toggleSelection(menu.selection)
+                            libraryMenu = null
+                        }
+                    } else null,
                     onEditRating = if (CanonicalLibraryAction.EDIT_RATING in availableMenuActions) {
                         {
                             if (menu.selection.type == CanonicalLibraryEntityType.TRACK) {
@@ -1653,6 +1670,7 @@ private fun NativeUnifiedLibraryBody(
     onAlbumOptions: (ReleaseEntity) -> Unit,
     onArtistOptions: (CanonicalSelectedEntity) -> Unit,
     selectedItems: List<CanonicalLibrarySelection>,
+    canLongPressSelect: Boolean,
     onToggleSelection: (CanonicalLibrarySelection) -> Unit,
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
     onEntitySelect: (CanonicalSelectedEntity) -> Unit,
@@ -2038,13 +2056,16 @@ internal fun NativeLibraryEntityCard(
     onClick: () -> Unit,
     artwork: (@Composable () -> Unit)? = null,
     onMore: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null,
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onToggleSelection: (() -> Unit)? = null,
 ) {
     val shape = if (isArtist) CircleShape else RoundedCornerShape(12.dp)
     Column(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(4.dp),
+        Modifier.fillMaxWidth().longPressMenuClickable(
+            onClick = onClick, onLongClick = onLongPress,
+        ).padding(4.dp),
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(shape)) {
             when {
