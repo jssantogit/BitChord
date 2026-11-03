@@ -114,6 +114,7 @@ import com.music.bitchord.data.catalog.RoomCanonicalMultiSourceBrowseStore
 import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.catalog.RoomCanonicalLibraryBrowseStore
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
+import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.CanonicalContextualFilterLibrary
 import com.music.bitchord.data.listening.CanonicalSmartFilterContext
 import com.music.bitchord.data.listening.filterCanonicalBrowseAlbums
@@ -138,6 +139,7 @@ import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.topBarContentPadding
 import com.music.bitchord.ui.components.SearchField
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.sharedui.resources.Res
@@ -299,6 +301,17 @@ internal fun CanonicalRemoteLibraryScreen(
         else repository.observe(providerKey)
     }
     val library by libraryFlow.collectAsStateWithLifecycle(initialValue = CanonicalBrowseLibrary.EMPTY)
+    // Album/artist scores belong to their own local table, not track ratings.
+    // A single Room flow powers all visible rows and repaints after editing.
+    val entityRatingDao = remember(context.applicationContext) {
+        ListeningEventDatabase.get(context.applicationContext).canonicalEntityRatingDao()
+    }
+    val entityRatingRows by remember(entityRatingDao) {
+        entityRatingDao.observeAll()
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val entityRatingValues = remember(entityRatingRows) {
+        canonicalLibraryEntityRatingsByTarget(entityRatingRows)
+    }
     val ratingsSnapshot = LocalCanonicalRatingDisplay.current
     val eligibleTracks = remember(library.tracks, selectedSource, selectedStars, ratingsSnapshot, unified) {
         if (unified) filterCanonicalLibraryTracks(
@@ -1037,6 +1050,7 @@ internal fun CanonicalRemoteLibraryScreen(
                 sort = unifiedSort,
                 sortDates = nativeEntitySortDates,
                 entityArtworkById = entityArtworkById,
+                entityRatings = entityRatingValues,
                 heroArtworkUri = detail?.artworkUri,
                 heroArtworkTrack = detail?.let { entityArtworkById[it.id] }
                     ?: if (detail == null) null else scopedDetailTracks.firstOrNull(),
@@ -1715,24 +1729,20 @@ internal fun CanonicalTrackRow(
                 )
             },
         )
-        Column(
-            modifier = Modifier.padding(start = 8.dp),
-            horizontalAlignment = Alignment.End,
-        ) {
-            if (albumTrackNumber == null) canonicalLibraryVisibleRatings(
-                track, LocalCanonicalRatingDisplay.current,
-            ).forEach { rating ->
+        // Song lists never show a per-track duration. Keep existing local/
+        // remote rating badges without reserving an empty timing column.
+        if (albumTrackNumber == null) {
+            Column(
+                modifier = Modifier.padding(start = 8.dp),
+                horizontalAlignment = Alignment.End,
+            ) {
+                canonicalLibraryVisibleRatings(
+                    track, LocalCanonicalRatingDisplay.current,
+                ).forEach { rating ->
                     CanonicalRatingStars(
                         rating, color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
-            if (!compactForArtist) formatDuration(track.durationMs)?.let { duration ->
-                Text(
-                    text = duration,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = palette?.onBackgroundVariant
-                        ?: MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
         if (selectionMode && onToggleSelection != null) {
@@ -1911,6 +1921,81 @@ internal fun canonicalNativeReleasePaletteUri(
 }
 
 /**
+ * Root categories are collections, not releases: keep the native floating
+ * toolbar, its wide text field and existing ActionPill, but never reserve a
+ * generic sleeve-sized rectangle above the actual list/grid.
+ */
+internal fun shouldShowCanonicalLibraryCategoryPlayback(
+    context: CanonicalSmartFilterContext,
+    isAlbumDetail: Boolean,
+    hasPlayableTracks: Boolean,
+): Boolean = !isAlbumDetail && hasPlayableTracks &&
+    context != CanonicalSmartFilterContext.ARTISTS
+
+@Composable
+internal fun NativeUnifiedLibraryCategoryHeader(
+    title: String,
+    context: CanonicalSmartFilterContext,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    searching: Boolean,
+    palette: ArtworkPalette,
+    hasPlayableTracks: Boolean,
+    onPlayAll: (Boolean) -> Unit,
+) {
+    Column(
+        Modifier.fillMaxWidth()
+            .padding(top = topBarContentPadding(), bottom = 12.dp),
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Bold,
+            color = palette.onBackground,
+            modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+        )
+        Spacer(Modifier.height(12.dp))
+        DetailSearchField(
+            query = query,
+            onQueryChange = onQueryChange,
+            onClose = { onQueryChange("") },
+            autoFocus = searching,
+            onFocused = {},
+            palette = palette,
+            placeholder = "Buscar em $title",
+            horizontalInset = PAGE_GUTTER,
+        )
+        if (shouldShowCanonicalLibraryCategoryPlayback(
+                context, isAlbumDetail = false, hasPlayableTracks = hasPlayableTracks,
+            )
+        ) {
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = PAGE_GUTTER)
+                    .testTag("canonical-library-category-play-actions"),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ActionPill(
+                    icon = BitChordIcons.Play,
+                    label = stringResource(R.string.play),
+                    onClick = { onPlayAll(false) },
+                    filled = true,
+                    modifier = Modifier.weight(1f),
+                )
+                ActionPill(
+                    icon = BitChordIcons.Shuffle,
+                    label = stringResource(R.string.shuffle),
+                    onClick = { onPlayAll(true) },
+                    filled = false,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+/**
  * The unified catalog reuses the pre-regression release-page header, search,
  * action pills and Library rows. Its entities remain Recording/Release/Artist
  * IDs; this is intentionally not a conversion into fake local Song/browse IDs.
@@ -1930,6 +2015,7 @@ private fun NativeUnifiedLibraryBody(
     sort: LocalMusicSort,
     sortDates: Map<String, CanonicalEntitySortDateRow>,
     entityArtworkById: Map<String, CanonicalBrowseTrack>,
+    entityRatings: Map<CanonicalEntityRatingTarget, Double>,
     heroArtworkUri: String? = null,
     heroArtworkTrack: CanonicalBrowseTrack? = null,
     isAlbumDetail: Boolean = false,
@@ -2085,36 +2171,33 @@ private fun NativeUnifiedLibraryBody(
             contentPadding = PaddingValues(bottom = 112.dp),
         ) {
             item(key = "native-library-header") {
-                NativeReleaseHeaderLayout(
-                    title = title,
-                    credit = if (isAlbumDetail) albumCredit else "",
-                    meta = if (isAlbumDetail) albumMeta ?: label else label,
-                    palette = palette,
-                    sleeveSize = sleeve,
-                    artwork = {
-                        when {
-                            !heroArtworkUri.isNullOrBlank() &&
-                                (heroArtworkUri.startsWith("content://") ||
-                                    heroArtworkUri.startsWith("file://")) -> AsyncImage(
-                                model = heroArtworkUri,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                            heroArtworkTrack != null -> CanonicalUnifiedArtwork(
-                                heroArtworkTrack, artworkLoader, Modifier.fillMaxSize(),
-                            )
-                            else -> CoverPlaceholder(Icons.Rounded.Folder, Modifier.fillMaxSize())
-                        }
-                    },
-                    actions = {
-                        if (count > 0 && tracks.isNotEmpty()) {
-                            Spacer(Modifier.height(18.dp))
-                            if (isAlbumDetail) {
-                                // Exact same action row as DetailScreen's remote
-                                // album: circle Shuffle / primary Play / library
-                                // circle. Local/remote RecordingId playback remains
-                                // in onPlayAll, never a fake Song.videoId.
+                if (isAlbumDetail) {
+                    // Release detail keeps its genuine artwork and action row.
+                    NativeReleaseHeaderLayout(
+                        title = title,
+                        credit = albumCredit,
+                        meta = albumMeta ?: label,
+                        palette = palette,
+                        sleeveSize = sleeve,
+                        artwork = {
+                            when {
+                                !heroArtworkUri.isNullOrBlank() &&
+                                    (heroArtworkUri.startsWith("content://") ||
+                                        heroArtworkUri.startsWith("file://")) -> AsyncImage(
+                                    model = heroArtworkUri,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                                heroArtworkTrack != null -> CanonicalUnifiedArtwork(
+                                    heroArtworkTrack, artworkLoader, Modifier.fillMaxSize(),
+                                )
+                                else -> CoverPlaceholder(Icons.Rounded.Folder, Modifier.fillMaxSize())
+                            }
+                        },
+                        actions = {
+                            if (tracks.isNotEmpty()) {
+                                Spacer(Modifier.height(18.dp))
                                 NativeReleaseActionRow(
                                     onPlay = { onPlayAll(tracks, false) },
                                     onShuffle = { onPlayAll(tracks, true) },
@@ -2124,40 +2207,33 @@ private fun NativeUnifiedLibraryBody(
                                     isPinnedInLibrary = albumPinned,
                                     onTogglePin = onToggleAlbumPin,
                                 )
-                            } else {
-                                Row(
-                                    Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    ActionPill(
-                                        icon = BitChordIcons.Play,
-                                        label = stringResource(R.string.play),
-                                        onClick = { onPlayAll(tracks, false) },
-                                        filled = true,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    ActionPill(
-                                        icon = BitChordIcons.Shuffle,
-                                        label = stringResource(R.string.shuffle),
-                                        onClick = { onPlayAll(tracks, true) },
-                                        filled = false,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                }
                             }
-                        }
-                    },
-                )
+                        },
+                    )
+                } else {
+                    NativeUnifiedLibraryCategoryHeader(
+                        title = title,
+                        context = selectedContext,
+                        query = query,
+                        onQueryChange = onQueryChange,
+                        searching = searching,
+                        palette = palette,
+                        hasPlayableTracks = count > 0 && tracks.isNotEmpty(),
+                        onPlayAll = { shuffle -> onPlayAll(tracks, shuffle) },
+                    )
+                }
             }
-            if (!isAlbumDetail || searching || query.isNotBlank()) {
+            // Only the release detail has a collapsible search field; root
+            // categories display the same native field permanently in header.
+            if (isAlbumDetail && (searching || query.isNotBlank())) {
                 item(key = "native-library-search") {
                     DetailSearchField(
-                    query = query,
-                    onQueryChange = onQueryChange,
-                    onClose = { onQueryChange("") },
-                    autoFocus = searching,
-                    onFocused = {},
-                    palette = palette,
+                        query = query,
+                        onQueryChange = onQueryChange,
+                        onClose = { onQueryChange("") },
+                        autoFocus = searching,
+                        onFocused = {},
+                        palette = palette,
                     )
                 }
             }
@@ -2319,7 +2395,18 @@ private fun NativeUnifiedLibraryBody(
                                                 contentDescription = "Selecionar álbum",
                                             )
                                         }
-                                    } else RowMoreButton(onClick = { onAlbumOptions(album) })
+                                    } else Row(verticalAlignment = Alignment.CenterVertically) {
+                                        canonicalLibraryEntityRatingForRow(
+                                            entityRatings, target,
+                                        )?.let { value ->
+                                            CanonicalRatingStars(
+                                                rating = RatingDisplay(localValue = value),
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                modifier = Modifier.padding(end = 8.dp),
+                                            )
+                                        }
+                                        RowMoreButton(onClick = { onAlbumOptions(album) })
+                                    }
                                 },
                                 artworkSize = 52.dp,
                                 horizontalPadding = PAGE_GUTTER,
@@ -2400,7 +2487,18 @@ private fun NativeUnifiedLibraryBody(
                                                 contentDescription = "Selecionar artista",
                                             )
                                         }
-                                    } else RowMoreButton(onClick = { onArtistOptions(artist) })
+                                    } else Row(verticalAlignment = Alignment.CenterVertically) {
+                                        canonicalLibraryEntityRatingForRow(
+                                            entityRatings, target,
+                                        )?.let { value ->
+                                            CanonicalRatingStars(
+                                                rating = RatingDisplay(localValue = value),
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                modifier = Modifier.padding(end = 8.dp),
+                                            )
+                                        }
+                                        RowMoreButton(onClick = { onArtistOptions(artist) })
+                                    }
                                 },
                                 artworkSize = 52.dp,
                                 horizontalPadding = PAGE_GUTTER,
