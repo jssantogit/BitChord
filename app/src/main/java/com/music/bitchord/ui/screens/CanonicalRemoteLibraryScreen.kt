@@ -795,13 +795,13 @@ internal fun CanonicalRemoteLibraryScreen(
                     onTrackEditRating = editRating,
                     onTrackOptions = openTrackMenu,
                     onReleaseOptions = openAlbumMenu,
-                    onRateArtist = if (playlistDisplayArtistNameFromGroupId(detail.id) == null) {
-                        {
-                            ratingDialogSelection = listOf(CanonicalLibrarySelection(
-                                CanonicalLibraryEntityType.ARTIST, detail.id,
-                            ))
-                        }
-                    } else null,
+                    onRateArtist = {
+                        // The same rating editor handles verified canonical
+                        // ArtistIds and separately keyed display-artist groups.
+                        ratingDialogSelection = listOf(CanonicalLibrarySelection(
+                            CanonicalLibraryEntityType.ARTIST, detail.id,
+                        ))
+                    },
                     selectedItems = selectedItems,
                     onToggleSelection = toggleSelection,
                     onPlayAll = { visible, shuffle ->
