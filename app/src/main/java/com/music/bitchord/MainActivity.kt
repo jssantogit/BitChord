@@ -3980,31 +3980,22 @@ private fun BitChordApp(
                             contentPadding = listPadding,
                             navigationHome = true,
                             pinnedSection = {
-                                com.music.bitchord.ui.screens.CanonicalPinnedLibraryShelf(
+                                com.music.bitchord.ui.screens.CanonicalPinnedLibraryHomeSection(
                                     refreshRequested = MainViewModel.Feed.LIBRARY in refreshing,
-                                    onOpen = { pin ->
-                                        when (pin.selection.type) {
-                                            com.music.bitchord.ui.screens.CanonicalLibraryEntityType.TRACK ->
-                                                executeSmartCollection(
-                                                    SmartCollectionActionSource.LibraryTracks(
-                                                        listOf(pin.selection.entityId),
-                                                        null, shuffle = false,
-                                                    ),
-                                                    CanonicalCollectionIntent.PLAY_NOW,
-                                                )
-                                            com.music.bitchord.ui.screens.CanonicalLibraryEntityType.ALBUM,
-                                            com.music.bitchord.ui.screens.CanonicalLibraryEntityType.ARTIST -> {
-                                                pinnedLibraryRequest = pin
-                                                unifiedLibrarySearching = false
-                                                unifiedLibraryDetailOpen = false
-                                                unifiedLibraryBackToken = 0
-                                                unifiedLibraryCategory = if (
-                                                    pin.selection.type ==
-                                                    com.music.bitchord.ui.screens.CanonicalLibraryEntityType.ALBUM
-                                                ) com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS
-                                                else com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS
-                                            }
-                                        }
+                                    onPlayRecording = { recordingId ->
+                                        executeSmartCollection(
+                                            SmartCollectionActionSource.LibraryTracks(
+                                                listOf(recordingId), null, shuffle = false,
+                                            ),
+                                            CanonicalCollectionIntent.PLAY_NOW,
+                                        )
+                                    },
+                                    onOpenEntity = { pin, category ->
+                                        pinnedLibraryRequest = pin
+                                        unifiedLibrarySearching = false
+                                        unifiedLibraryDetailOpen = false
+                                        unifiedLibraryBackToken = 0
+                                        unifiedLibraryCategory = category
                                     },
                                 )
                             },
