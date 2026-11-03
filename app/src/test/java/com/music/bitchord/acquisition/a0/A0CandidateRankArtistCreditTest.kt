@@ -106,4 +106,17 @@ class A0CandidateRankArtistCreditTest {
         assertNotEquals(A0CandidateRank.Match.ALL_TERMS,unrelated.match)
     }
 
+    @Test fun joinedArtistExceptionIsLatinOnlyAndDoesNotEraseNonLatinVowelEvidence() {
+        val candidate=A0CandidateRank.rank(
+            searchPhrase="कुमार सानू - गीत",
+            name="कुमारसानू - गीत.flac",declaredBitrateKbps=900,
+            remotePath="Shared/Album/कुमारसानू - गीत.flac",
+            format="flac",declaredDurationSeconds=220,
+            expectedDurationSeconds=220,expectedAlbum="Album")
+        assertNotEquals(A0CandidateRank.Match.ALL_TERMS,candidate.match)
+        assertTrue(candidate.artistCreditIncomplete)
+        assertNotEquals(A0CandidateRank.tokens("गीत"),
+            A0CandidateRank.tokens("गत"))
+    }
+
 }
