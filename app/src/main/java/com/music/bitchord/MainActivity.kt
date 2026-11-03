@@ -4392,9 +4392,9 @@ private fun BitChordApp(
                                 showBrowseFilters = shouldShowUnifiedLibraryBrowseFilters(
                                     detailOpen = unifiedLibraryDetailOpen,
                                 ),
-                                albumDetail = unifiedLibraryDetailOpen &&
-                                    unifiedLibraryCategory ==
-                                    com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS,
+                                albumDetail = shouldUseUnifiedAlbumDetailToolbar(
+                                    unifiedLibraryCategory, unifiedLibraryDetailOpen,
+                                ),
                                 onAlbumSort = { unifiedAlbumSortMenuOpen = true },
                                 onAlbumOptions = { unifiedAlbumOptionsToken++ },
                             )
@@ -4608,10 +4608,9 @@ private fun BitChordApp(
                             // Not on a release page, whose pill already carries
                             // three of its own controls — Apple Music leaves the
                             // profile off its album pages too.
-                            if (!isReleaseDetail && !(unifiedLibraryDetailOpen &&
-                                unifiedLibraryCategory ==
-                                    com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS)
-                            ) TopBarAccountButton(
+                            if (!isReleaseDetail && !shouldUseUnifiedAlbumDetailToolbar(
+                                unifiedLibraryCategory, unifiedLibraryDetailOpen,
+                            )) TopBarAccountButton(
                                 account = account,
                                 // The account glyph is the single entrance to Settings.
                                 // Home has no redundant overflow menu.
@@ -5460,10 +5459,9 @@ private fun BitChordApp(
             )
         }
 
-        if (unifiedAlbumSortMenuOpen && unifiedLibraryDetailOpen &&
-            unifiedLibraryCategory ==
-                com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS
-        ) {
+        if (unifiedAlbumSortMenuOpen && shouldUseUnifiedAlbumDetailToolbar(
+            unifiedLibraryCategory, unifiedLibraryDetailOpen,
+        )) {
             BackHandler { unifiedAlbumSortMenuOpen = false }
             // The same frosted five-option SongSort menu as DetailScreen,
             // not the root Library menu with irrelevant grid/source/star filters.
@@ -6564,9 +6562,16 @@ private class UnifiedLibraryUiControls {
     }
 }
 
-/** Category-only source and sort controls are meaningless atop artist details. */
+/** Category-only source and sort controls are meaningless atop entity details. */
 internal fun shouldShowUnifiedLibraryBrowseFilters(detailOpen: Boolean): Boolean =
     !detailOpen
+
+/** Album details are native release pages, not Library categories or artist pages. */
+internal fun shouldUseUnifiedAlbumDetailToolbar(
+    category: com.music.bitchord.data.listening.CanonicalSmartFilterContext?,
+    detailOpen: Boolean,
+): Boolean = detailOpen &&
+    category == com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS
 
 @Composable
 private fun UnifiedLibraryToolbarActions(
