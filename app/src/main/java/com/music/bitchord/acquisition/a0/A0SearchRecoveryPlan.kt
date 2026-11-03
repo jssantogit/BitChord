@@ -116,7 +116,7 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
     }
     /** Enum-only search-kind diagnostics. Never emit wire text or identifiers. */
     internal enum class VariantKind {
-        ALBUM_WIDE, ALBUM_QUALIFIED, EDITION_EQUIVALENT,
+        NONE, ALBUM_WIDE, ALBUM_QUALIFIED, EDITION_EQUIVALENT,
         TITLE_ONLY_OR_ALIAS, NORMALIZED_VARIANT, OTHER,
     }
     internal fun variantKind(wireText:String):VariantKind = when {
