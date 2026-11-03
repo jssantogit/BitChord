@@ -266,12 +266,11 @@ internal fun CanonicalRemoteLibraryScreen(
     var playlistPickerSelection by remember {
         mutableStateOf<List<CanonicalLibrarySelection>?>(null)
     }
+    // Selection is an explicit draft and survives source/star/sort changes.
+    // Never reset it just because a browse filter or detail page changed.
     var selectedItems by remember { mutableStateOf<List<CanonicalLibrarySelection>>(emptyList()) }
     var ratingDialogSelection by remember {
         mutableStateOf<List<CanonicalLibrarySelection>?>(null)
-    }
-    LaunchedEffect(selectedContext, selectedSource, selectedEntity?.id) {
-        selectedItems = emptyList()
     }
     val libraryActionScope = rememberCoroutineScope()
     val filterRepo = remember(context.applicationContext) {
@@ -650,7 +649,6 @@ internal fun CanonicalRemoteLibraryScreen(
 
     BackHandler(enabled = selectedEntity != null) { selectedEntity = null }
     BackHandler(enabled = selectedEntity == null, onBack = onClose)
-    BackHandler(enabled = selectedItems.isNotEmpty()) { selectedItems = emptyList() }
 
     val playTrack: (CanonicalBrowseTrack) -> Unit = { track ->
         if (unified) {
