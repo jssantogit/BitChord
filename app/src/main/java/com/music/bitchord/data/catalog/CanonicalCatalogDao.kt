@@ -814,6 +814,14 @@ internal interface CanonicalCatalogDao {
     @Query("SELECT * FROM catalog_recording WHERE id = :recordingId LIMIT 1")
     suspend fun recordingById(recordingId: String): RecordingEntity?
 
+    /** Pinned Library resolves canonical metadata in batches; never query a
+     * list of pinned artists/albums with one Room round-trip per card. */
+    @Query("SELECT * FROM catalog_release WHERE id IN (:releaseIds)")
+    suspend fun releasesByIds(releaseIds: List<String>): List<ReleaseEntity>
+
+    @Query("SELECT * FROM catalog_artist WHERE id IN (:artistIds)")
+    suspend fun artistsByIds(artistIds: List<String>): List<ArtistEntity>
+
     @Query("SELECT * FROM catalog_release WHERE id = :releaseId LIMIT 1")
     suspend fun releaseById(releaseId: String): ReleaseEntity?
 
