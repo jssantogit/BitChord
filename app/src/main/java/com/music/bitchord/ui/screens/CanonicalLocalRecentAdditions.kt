@@ -11,6 +11,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -403,6 +409,28 @@ internal fun CanonicalRecentAdditionsGrid(
     viewType: LibraryViewType = LibraryViewType.GRID,
     filterActive: Boolean = false,
 ) {
+    if (loading && recent.isEmpty()) {
+        // Initial MediaStore projection can be expensive. The same native
+        // spinner already used in playlists belongs in the center of the
+        // content, not a text-only row at the upper-left corner.
+        Box(
+            modifier = Modifier.fillMaxSize().testTag("native-recent-loading"),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                Text(
+                    "Carregando adições locais…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        return
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
@@ -422,7 +450,6 @@ internal fun CanonicalRecentAdditionsGrid(
         if (recent.isEmpty()) item {
             Text(
                 when {
-                    loading -> "Carregando adições locais…"
                     error -> "Não foi possível consultar as adições locais. Arraste para atualizar."
                     filterActive -> "Nenhuma adição corresponde aos filtros."
                     else -> "Nenhuma adição local recente."
