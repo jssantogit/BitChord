@@ -294,7 +294,55 @@ private fun iconForConditionCategory(id: String) = when (id) {
 }
 
 
+/**
+ * The original wizard's native modal shell, reused verbatim for any playlist
+ * selection, including RecordingId destinations from the unified Library.
+ * Only data/rows differ; there is no second full-screen creation dialog.
+ */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+internal fun PlaylistWizardSheetChrome(
+    title: String,
+    onClose: () -> Unit,
+    canClose: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = { if (canClose) onClose() },
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
+        ),
+        containerColor = MaterialTheme.colorScheme.background,
+    ) {
+        Column(
+            Modifier.fillMaxWidth().navigationBarsPadding().imePadding()
+                .padding(bottom = 12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(start = PAGE_GUTTER, end = 8.dp, bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                PlaylistWizardCompactAction(
+                    label = "Fechar",
+                    onClick = onClose,
+                    enabled = canClose,
+                    icon = Icons.Rounded.Close,
+                )
+            }
+            SettingsGroupSurface(modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
+                content()
+            }
+        }
+    }
+}
+
 @Composable
 internal fun <T> WizardChoiceDialog(
     title: String,
@@ -304,43 +352,18 @@ internal fun <T> WizardChoiceDialog(
     onClose: () -> Unit,
     radioSelected: ((T) -> Boolean)? = null,
 ) {
-    // The app already uses ModalBottomSheet for details/actions. A second
-    // full-screen Dialog with a hand-drawn scrim is not needed.
-    androidx.compose.material3.ModalBottomSheet(
-        onDismissRequest = onClose,
-        sheetState = androidx.compose.material3.rememberModalBottomSheetState(
-            skipPartiallyExpanded = true,
-        ),
-        containerColor = MaterialTheme.colorScheme.background,
-    ) {
-        Column(
-            Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth()
-                    .padding(start = PAGE_GUTTER, end = 8.dp, bottom = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(title, style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground)
-                PlaylistWizardCompactAction(label = "Fechar", onClick = onClose,
-                    icon = Icons.Rounded.Close)
-            }
-            SettingsGroupSurface(modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
-                LazyColumn(Modifier.heightIn(max = 480.dp)) {
-                    items(options) { option ->
-                        SettingsRow(
-                            title = label(option),
-                            onClick = { onChosen(option); onClose() },
-                            reserveIconSpace = false,
-                            trailing = if (radioSelected != null) ({
-                                RadioButton(selected = radioSelected(option), onClick = null)
-                            }) else null,
-                        )
-                        RowDivider()
-                    }
-                }
+    PlaylistWizardSheetChrome(title = title, onClose = onClose) {
+        LazyColumn(Modifier.heightIn(max = 480.dp)) {
+            items(options) { option ->
+                SettingsRow(
+                    title = label(option),
+                    onClick = { onChosen(option); onClose() },
+                    reserveIconSpace = false,
+                    trailing = if (radioSelected != null) ({
+                        RadioButton(selected = radioSelected(option), onClick = null)
+                    }) else null,
+                )
+                RowDivider()
             }
         }
     }
