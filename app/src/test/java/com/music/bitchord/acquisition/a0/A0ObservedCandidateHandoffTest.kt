@@ -36,9 +36,9 @@ class A0ObservedCandidateHandoffTest {
             collectManualCandidates=false,
             releaseQueries=listOf("ILLIT - Magnetic","ILLIT - Lucky Girl Syndrome"))
         val files=listOf(
-            A0SoulseekSearchFile("Shared\\\\ILLIT\\\\Album\\\\Other Song.mp3",
+            A0SoulseekSearchFile("Shared\\ILLIT\\Album\\Other Song.mp3",
                 6_400_000L,"mp3",mapOf(0 to 320,1 to 161)),
-            A0SoulseekSearchFile("Shared\\\\ILLIT\\\\Album\\\\Magnetic.mp3",
+            A0SoulseekSearchFile("Shared\\ILLIT\\Album\\Magnetic.mp3",
                 6_400_000L,"mp3",mapOf(0 to 320,1 to 161))
         )
         assertTrue(handoff.offerParsed(A0SoulseekSearchResponse(

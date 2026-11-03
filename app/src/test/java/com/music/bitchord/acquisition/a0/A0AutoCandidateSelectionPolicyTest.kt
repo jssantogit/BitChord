@@ -40,11 +40,11 @@ class A0AutoCandidateSelectionPolicyTest {
         val files=listOf(
             // Correct song title without an independently credited artist.
             A0SoulseekSearchFile(
-                "Shared\\\\Other\\\\SUPER REAL ME\\\\Magnetic.mp3",
+                "Shared\\Other\\SUPER REAL ME\\Magnetic.mp3",
                 6_440_000L,"mp3",mapOf(0 to 320,1 to 161)),
             // Correct artist folder but a different song title.
             A0SoulseekSearchFile(
-                "Shared\\\\ILLIT\\\\SUPER REAL ME\\\\Other.mp3",
+                "Shared\\ILLIT\\SUPER REAL ME\\Other.mp3",
                 6_440_000L,"mp3",mapOf(0 to 320,1 to 161)),
         )
         assertTrue(collector.offerParsed(A0SoulseekSearchResponse(
