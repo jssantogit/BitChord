@@ -6,6 +6,30 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CanonicalLibraryActionsTest {
+    @Test fun selectedAlbumAndArtistCountResolvedRecordingsRatherThanCards() {
+        val summary = canonicalLibrarySelectionSummary(
+            selectedEntities = 2,
+            result = CanonicalLibraryResolvedSelection(
+                recordingIds = listOf("rec-1", "rec-2", "rec-3"),
+                unavailableEntities = 0,
+            ),
+        )
+        assertEquals("3 faixas · 2 itens", summary)
+        assertEquals(
+            "Calculando faixas…",
+            canonicalLibrarySelectionSummary(selectedEntities = 2, result = null),
+        )
+        assertEquals(
+            "1 faixa · 1 item indisponível",
+            canonicalLibrarySelectionSummary(
+                selectedEntities = 2,
+                result = CanonicalLibraryResolvedSelection(
+                    recordingIds = listOf("rec-1"), unavailableEntities = 1,
+                ),
+            ),
+        )
+    }
+
     @Test fun preservingOrderAndSourceEligibilityWhenAddingExistingMembers() {
         val plan = planCanonicalPlaylistAppend(
             current = listOf("old", "duplicate"),
