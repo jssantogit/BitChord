@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.data.listening.CanonicalEntityRatingEntity
+
 import android.content.Context
 import androidx.room.withTransaction
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
@@ -68,6 +70,25 @@ internal fun canonicalEntityRatingTarget(
 
 internal fun isValidCanonicalEntityRating(rating: Double): Boolean =
     rating.isFinite() && rating in 1.0..5.0 && rating * 2 == (rating * 2).toInt().toDouble()
+
+/**
+ * One precomputed, typed projection for the Album/Artist list modes.
+ * No title matching, no conversion of display-artist groups into ArtistIds,
+ * and no per-row Room subscriptions. A new first-party rating immediately
+ * repaints the matching row via the shared observeAll() flow.
+ */
+internal fun canonicalLibraryEntityRatingsByTarget(
+    records: List<CanonicalEntityRatingEntity>,
+): Map<CanonicalEntityRatingTarget, Double> =
+    records.asSequence()
+        .filter { isValidCanonicalEntityRating(it.ratingValue) }
+        .filter { it.entityType in setOf("ALBUM", "ARTIST", "DISPLAY_ARTIST") }
+        .associate { CanonicalEntityRatingTarget(it.entityType, it.entityId) to it.ratingValue }
+
+internal fun canonicalLibraryEntityRatingForRow(
+    ratings: Map<CanonicalEntityRatingTarget, Double>,
+    selection: CanonicalLibrarySelection,
+): Double? = canonicalEntityRatingTarget(selection)?.let(ratings::get)
 
 internal fun canonicalLibraryAvailableActions(
     type: CanonicalLibraryEntityType,
