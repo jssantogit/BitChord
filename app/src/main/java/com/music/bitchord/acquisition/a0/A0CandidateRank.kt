@@ -32,7 +32,30 @@ internal object A0CandidateRank {
     internal fun tokens(value:String):List<String> {
         val folded=Normalizer.normalize(value,Normalizer.Form.NFKD)
             .replace(Regex("\\p{M}+"),"").lowercase(Locale.ROOT)
-        return folded.split(Regex("[^\\p{L}\\p{N}]+")).filter(String::isNotBlank)
+        val raw=folded.split(Regex("[^\\p{L}\\p{N}]+")).filter(String::isNotBlank)
+        // Canonical edition labels sometimes use "Demo Ver." where a peer
+        // writes "Demo Version". Expand ONLY with the immediately preceding
+        // qualifier; a song title such as "Quiero Ver" is not "Quiero Version".
+        // "A Cappella"/"Acapella" are spelling variants of the same label.
+        // Both target and source use this exact function, including the
+        // release shadow's necessary-condition prefilter.
+        val versionQualifiers=setOf("demo","live","acoustic","instrumental",
+            "studio","radio")
+        return buildList {
+            var i=0
+            while(i<raw.size) {
+                if(raw[i]=="a" && i+1<raw.size &&
+                    raw[i+1] in setOf("cappella","capella")) {
+                    add("acapella")
+                    i+=2
+                    continue
+                }
+                if(raw[i]=="ver" && i>0 && raw[i-1] in versionQualifiers)
+                    add("version")
+                else add(raw[i])
+                i++
+            }
+        }
     }
 
     private fun containsPhrase(haystack:List<String>,phrase:List<String>):Boolean=
