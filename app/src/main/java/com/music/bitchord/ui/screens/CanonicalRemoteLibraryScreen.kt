@@ -223,6 +223,7 @@ internal fun CanonicalRemoteLibraryScreen(
     detailBackToken: Int = 0,
     onDetailChanged: (Boolean) -> Unit = {},
     onNestedAlbumChanged: (Boolean) -> Unit = {},
+    initialPinnedSelection: CanonicalLibraryPin? = null,
     initialContext: CanonicalSmartFilterContext = CanonicalSmartFilterContext.SONGS,
     selectedSourceKey: String? = null,
     selectedStarsFilter: Int? = null,
@@ -240,6 +241,13 @@ internal fun CanonicalRemoteLibraryScreen(
         CanonicalCatalogDatabase.get(context.applicationContext)
     }
     val catalogDao = remember(catalogDb) { catalogDb.catalogDao() }
+    val libraryPinRepository = remember(context.applicationContext) {
+        CanonicalLibraryPinRepository.get(context.applicationContext)
+    }
+    val libraryPins by libraryPinRepository.pins.collectAsStateWithLifecycle()
+    val pinnedIdentities = remember(libraryPins) {
+        libraryPins.mapTo(HashSet()) { it.selection }
+    }
     val contextualReader = remember(catalogDao) { CanonicalContextualFilterLibrary(catalogDao) }
     val repository = remember(context.applicationContext) {
         CanonicalLibraryBrowseRepository(
@@ -381,8 +389,17 @@ internal fun CanonicalRemoteLibraryScreen(
             )
         }
     }
-    var selectedEntity by remember(providerKey, selectedContext) {
-        mutableStateOf<CanonicalSelectedEntity?>(null)
+    val pinnedDetail = initialPinnedSelection?.takeIf { pin ->
+        unified && pin.selection.entityId.isNotBlank() && when (selectedContext) {
+            CanonicalSmartFilterContext.ALBUMS ->
+                pin.selection.type == CanonicalLibraryEntityType.ALBUM
+            CanonicalSmartFilterContext.ARTISTS ->
+                pin.selection.type == CanonicalLibraryEntityType.ARTIST
+            CanonicalSmartFilterContext.SONGS -> false
+        }
+    }
+    var selectedEntity by remember(providerKey, selectedContext, pinnedDetail?.selection) {
+        mutableStateOf(pinnedDetail?.let { CanonicalSelectedEntity(it.selection.entityId, it.title) })
     }
     var detailQuery by remember(selectedEntity?.id) { mutableStateOf("") }
     var artistNestedReleaseOpen by remember { mutableStateOf(false) }
@@ -391,6 +408,7 @@ internal fun CanonicalRemoteLibraryScreen(
     LaunchedEffect(detailBackToken) {
         if (detailBackToken > 0) {
             if (artistNestedReleaseOpen) artistNestedBackToken++
+            else if (pinnedDetail != null) onClose()
             else selectedEntity = null
         }
     }
@@ -755,7 +773,11 @@ internal fun CanonicalRemoteLibraryScreen(
         }
     }
 
-    BackHandler(enabled = selectedEntity != null) { selectedEntity = null }
+    BackHandler(enabled = selectedEntity != null) {
+        if (pinnedDetail != null && !artistNestedReleaseOpen) onClose()
+        else if (artistNestedReleaseOpen) artistNestedBackToken++
+        else selectedEntity = null
+    }
     BackHandler(enabled = selectedEntity == null, onBack = onClose)
 
     val playTrack: (CanonicalBrowseTrack) -> Unit = { track ->
@@ -788,6 +810,11 @@ internal fun CanonicalRemoteLibraryScreen(
         if (unified || track.availableAssets.any { it.providerKey == providerKey }) {
             editingRecordingId = track.recordingId
         }
+    }
+    val togglePin: (CanonicalLibraryMenuTarget) -> Unit = { menu ->
+        libraryPinRepository.toggle(CanonicalLibraryPin(
+            menu.selection, menu.title, menu.subtitle,
+        ))
     }
     val openTrackMenu: (CanonicalBrowseTrack) -> Unit = { track ->
         libraryMenu = CanonicalLibraryMenuTarget(
@@ -1011,6 +1038,24 @@ internal fun CanonicalRemoteLibraryScreen(
                         ?.releases?.firstOrNull { it.id == selected.id }?.artistDisplay
                 }?.takeIf(String::isNotBlank)
                     ?: scopedDetailTracks.firstOrNull()?.artistDisplay.orEmpty(),
+                albumPinned = detail != null &&
+                    CanonicalLibrarySelection(
+                        CanonicalLibraryEntityType.ALBUM, detail.id,
+                    ) in pinnedIdentities,
+                onToggleAlbumPin = detail?.takeIf {
+                    selectedContext == CanonicalSmartFilterContext.ALBUMS
+                }?.let { selected ->
+                    {
+                        val artist = (entityState as? CanonicalEntityBrowseState.Albums)
+                            ?.releases?.firstOrNull { it.id == selected.id }?.artistDisplay.orEmpty()
+                        libraryPinRepository.toggle(CanonicalLibraryPin(
+                            CanonicalLibrarySelection(
+                                CanonicalLibraryEntityType.ALBUM, selected.id,
+                            ),
+                            selected.name, artist,
+                        ))
+                    }
+                },
                 albumMeta = if (detail != null &&
                     selectedContext == CanonicalSmartFilterContext.ALBUMS
                 ) canonicalAlbumDetailMeta(
@@ -1213,6 +1258,11 @@ internal fun CanonicalRemoteLibraryScreen(
                         },
                         fromCard = false,
                     ),
+                    isPinned = menu.selection in pinnedIdentities,
+                    onTogglePin = {
+                        togglePin(menu)
+                        libraryMenu = null
+                    },
                     onPlayNext = { queue(CanonicalCollectionIntent.ADD_NEXT) },
                     onAddToQueue = { queue(CanonicalCollectionIntent.ADD_TO_QUEUE) },
                     onAddToPlaylist = {
@@ -1876,6 +1926,8 @@ private fun NativeUnifiedLibraryBody(
     albumCredit: String = "",
     albumMeta: String? = null,
     albumTrackNumbers: Map<String, Int> = emptyMap(),
+    albumPinned: Boolean = false,
+    onToggleAlbumPin: (() -> Unit)? = null,
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
     onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
     onTrackOptions: (CanonicalBrowseTrack) -> Unit,
@@ -2059,6 +2111,8 @@ private fun NativeUnifiedLibraryBody(
                                     isLocal = false,
                                     canShuffle = tracks.isNotEmpty(),
                                     reservePinAction = true,
+                                    isPinnedInLibrary = albumPinned,
+                                    onTogglePin = onToggleAlbumPin,
                                 )
                             } else {
                                 Row(
