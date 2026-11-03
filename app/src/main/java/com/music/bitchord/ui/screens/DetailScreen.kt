@@ -1135,6 +1135,9 @@ internal fun NativeReleaseActionRow(
     canShuffle: Boolean = true,
     isSaved: Boolean? = null,
     onToggleLibrary: (() -> Unit)? = null,
+    // Reserved for a future pin on the unified Library landing page.
+    // Never attach playlist membership to the hero +.
+    reservePinAction: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -1179,14 +1182,18 @@ internal fun NativeReleaseActionRow(
                 modifier = Modifier.weight(1f),
             )
             CircleIconButton(
-                icon = if (isSaved == true) BitChordIcons.Check else BitChordIcons.Plus,
-                contentDescription = stringResource(
-                    if (isSaved == true) R.string.remove_from_library else R.string.add_to_library,
-                ),
-                onClick = { onToggleLibrary?.invoke() },
-                haptic = if (isSaved == true) Haptic.ToggleOff else Haptic.ToggleOn,
+                icon = if (!reservePinAction && isSaved == true)
+                    BitChordIcons.Check else BitChordIcons.Plus,
+                contentDescription = if (reservePinAction)
+                    "Fixar álbum na Biblioteca (em breve)" else stringResource(
+                        if (isSaved == true) R.string.remove_from_library
+                        else R.string.add_to_library,
+                    ),
+                onClick = { if (!reservePinAction) onToggleLibrary?.invoke() },
+                haptic = if (!reservePinAction && isSaved == true)
+                    Haptic.ToggleOff else Haptic.ToggleOn,
                 size = RELEASE_SIDE_BUTTON,
-                enabled = onToggleLibrary != null,
+                enabled = !reservePinAction && onToggleLibrary != null,
             )
         }
     }
