@@ -6,6 +6,10 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -69,9 +73,30 @@ class PlaylistNativeSheetReuseTest {
         compose.waitForIdle() // ModalBottomSheet must finish its entrance animation.
         compose.onNodeWithText("Adicionar à playlist").assertExists()
         compose.onNodeWithTag("native-settings-group-surface").assertExists()
+        // A Robolectric bottom-sheet scrim can intercept synthetic pointer
+        // coordinates even when the target is exposed. The accessible OnClick
+        // exercises the same native SettingsRow handler deterministically.
         compose.onNodeWithTag("native-playlist-selection-row")
             .assertHasClickAction()
-            .performClick()
+            .assertIsNotSelected()
+            .performSemanticsAction(SemanticsActions.OnClick)
         compose.runOnIdle { assertEquals(1, selected) }
+        compose.onNodeWithTag("native-playlist-selection-row").assertIsSelected()
+    }
+
+    @Test fun nativeSelectionRowRespondsToRealPointerClicksOutsideModalScrim() {
+        var selected by mutableStateOf(false)
+        compose.setContent {
+            PlaylistWizardSelectionRow(
+                label = "Faixas locais",
+                selected = selected,
+                onClick = { selected = !selected },
+            )
+        }
+        compose.onNodeWithTag("native-playlist-selection-row")
+            .assertIsNotSelected()
+            .performClick()
+        compose.runOnIdle { assertEquals(true, selected) }
+        compose.onNodeWithTag("native-playlist-selection-row").assertIsSelected()
     }
 }
