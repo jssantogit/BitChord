@@ -20,6 +20,10 @@ internal object A0CandidateRank {
         VERSION_MISMATCH, DURATION_MISMATCH, SIZE_SUSPICIOUS, ENCODING_CONFLICT,
         ARTIST_CONFLICT, IDENTITY_AMBIGUOUS
     }
+    /** Sanitized classification, never an artist/name/path value. */
+    enum class ArtistCreditGap {
+        NONE, ABSENT, PARTIAL_FILENAME, PARTIAL_DIRECTORY, SPLIT_DIRECTORIES
+    }
 
     data class Ranking(
         val score:Int,
@@ -30,6 +34,7 @@ internal object A0CandidateRank {
         // peer-supplied words, and do not change any selection threshold.
         val titleTermsIncomplete:Boolean=false,
         val artistCreditIncomplete:Boolean=false,
+        val artistCreditGap:ArtistCreditGap=ArtistCreditGap.NONE,
     )
     // Shared by the release shadow's cheap *necessary-condition* gate.
     // Never duplicate Unicode/token semantics in a separate prefilter.
@@ -143,6 +148,16 @@ internal object A0CandidateRank {
         val titleComplete=titleWords.isNotEmpty() && titleMatches==titleWords.size
         val artistComplete=artistWords.isEmpty() ||
             artistInFilename || artistInSingleFolder
+        val artistCreditGap=when {
+            artistComplete -> ArtistCreditGap.NONE
+            artistWords.all { it in folderWords } ->
+                ArtistCreditGap.SPLIT_DIRECTORIES
+            artistWords.any { it in fileWords } ->
+                ArtistCreditGap.PARTIAL_FILENAME
+            artistWords.any { it in folderWords } ->
+                ArtistCreditGap.PARTIAL_DIRECTORY
+            else -> ArtistCreditGap.ABSENT
+        }
         val match=when {
             titleComplete && artistComplete -> Match.ALL_TERMS
             titleMatches>0 || artistMatches>0 -> Match.SOME_TERMS
@@ -339,6 +354,7 @@ internal object A0CandidateRank {
         // compatibility with existing rank callers and baseline fixtures.
         return Ranking(score.coerceIn(0,100),match,quality,warnings.toList(),
             titleTermsIncomplete=!titleComplete,
-            artistCreditIncomplete=!artistComplete)
+            artistCreditIncomplete=!artistComplete,
+            artistCreditGap=artistCreditGap)
     }
 }
