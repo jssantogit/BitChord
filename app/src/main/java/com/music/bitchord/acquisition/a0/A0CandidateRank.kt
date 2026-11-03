@@ -29,23 +29,38 @@ internal object A0CandidateRank {
     )
     // Shared by the release shadow's cheap *necessary-condition* gate.
     // Never duplicate Unicode/token semantics in a separate prefilter.
+    // Blind NFKD + \\p{M} removal destroys non-Latin vowels: Hindi गीत
+    // and गत collapsed to the same title, risking a WRONG auto-selection.
+    // Compose canonical Unicode, then fold diacritics on Latin letters only.
+    private val latinDiacritics=Regex("\\p{M}+")
+    private val tokenSeparator=Regex("[^\\p{L}\\p{N}\\p{M}]+")
+    private val versionQualifiers=setOf("demo","live","acoustic",
+        "instrumental","studio","radio")
+    private val cappellaSpellings=setOf("cappella","capella")
     internal fun tokens(value:String):List<String> {
-        val folded=Normalizer.normalize(value,Normalizer.Form.NFKD)
-            .replace(Regex("\\p{M}+"),"").lowercase(Locale.ROOT)
-        val raw=folded.split(Regex("[^\\p{L}\\p{N}]+")).filter(String::isNotBlank)
+        val composed=Normalizer.normalize(value,Normalizer.Form.NFC)
+        val folded=buildString(composed.length) {
+            for(ch in composed) {
+                if(Character.UnicodeScript.of(ch.code)==Character.UnicodeScript.LATIN)
+                    append(Normalizer.normalize(ch.toString(),
+                        Normalizer.Form.NFKD).replace(latinDiacritics,""))
+                else append(ch)
+            }
+        }.lowercase(Locale.ROOT)
+        val raw=folded.split(tokenSeparator).filter {
+            token -> token.any(Char::isLetterOrDigit)
+        }
         // Canonical edition labels sometimes use "Demo Ver." where a peer
         // writes "Demo Version". Expand ONLY with the immediately preceding
         // qualifier; a song title such as "Quiero Ver" is not "Quiero Version".
         // "A Cappella"/"Acapella" are spelling variants of the same label.
         // Both target and source use this exact function, including the
         // release shadow's necessary-condition prefilter.
-        val versionQualifiers=setOf("demo","live","acoustic","instrumental",
-            "studio","radio")
         return buildList {
             var i=0
             while(i<raw.size) {
                 if(raw[i]=="a" && i+1<raw.size &&
-                    raw[i+1] in setOf("cappella","capella")) {
+                    raw[i+1] in cappellaSpellings) {
                     add("acapella")
                     i+=2
                     continue
