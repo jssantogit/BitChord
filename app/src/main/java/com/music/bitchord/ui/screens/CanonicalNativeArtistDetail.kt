@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.Box
 import coil3.compose.AsyncImage
 import com.music.bitchord.R
 import com.music.bitchord.data.canvas.AppleArtistArtRepository
+import com.music.bitchord.data.canvas.keyColors
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.ReleaseEntity
