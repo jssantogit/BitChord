@@ -168,10 +168,21 @@ internal object A0CanonicalAlbumPolicy {
 
     private fun normalize(value: String?): String {
         if (value.isNullOrBlank()) return ""
-        val folded = Normalizer.normalize(value, Normalizer.Form.NFKD)
-            .replace(Regex("\\p{M}+"), "")
-            .lowercase(Locale.ROOT)
-        return folded.split(Regex("[^\\p{L}\\p{N}]+"))
+        // Blind NFKD + mark stripping destroys Indic vowel distinctions
+        // (for example गीत vs गत). Fold accents on LATIN letters only,
+        // preserving non-Latin canonical combining marks and script words.
+        val composed=Normalizer.normalize(value,Normalizer.Form.NFC)
+        val latinMarks=Regex("\\p{M}+")
+        val folded=buildString(composed.length) {
+            for(ch in composed) {
+                if(Character.UnicodeScript.of(ch.code)==
+                    Character.UnicodeScript.LATIN)
+                    append(Normalizer.normalize(ch.toString(),
+                        Normalizer.Form.NFKD).replace(latinMarks,""))
+                else append(ch)
+            }
+        }.lowercase(Locale.ROOT)
+        return folded.split(Regex("[^\\p{L}\\p{N}\\p{M}]+"))
             .filter(String::isNotEmpty).joinToString(" ")
     }
 }
