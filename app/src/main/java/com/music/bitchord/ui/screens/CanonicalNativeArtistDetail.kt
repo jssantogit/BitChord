@@ -50,6 +50,7 @@ import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 
 private data class CanonicalArtistNativeReleases(
@@ -90,16 +91,23 @@ internal fun CanonicalNativeArtistDetail(
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
 ) {
     val context = LocalContext.current.applicationContext
-    val dao = remember(context) { CanonicalCatalogDatabase.get(context).catalogDao() }
+    val catalogDb = remember(context) { CanonicalCatalogDatabase.get(context) }
+    val dao = remember(catalogDb) { catalogDb.catalogDao() }
     val keys = sourceKeys.filter { selectedSourceKey == null || it == selectedSourceKey }
     val nativeReleases by produceState(
         initialValue = CanonicalArtistNativeReleases.EMPTY,
         key1 = tracks.map { it.recordingId },
         key2 = keys,
     ) {
-        value = try {
-            withContext(Dispatchers.IO) {
-                val recordingIds = tracks.map { it.recordingId }
+        // A delayed MusicBrainz classification or provider rescan must refresh
+        // an artist already on screen, without requiring navigation away/back.
+        catalogDb.invalidationTracker.createFlow(
+            "catalog_release", "catalog_release_track", "catalog_media_asset",
+            "catalog_release_group", "catalog_release_group_edition",
+        ).collectLatest {
+            value = try {
+                withContext(Dispatchers.IO) {
+                    val recordingIds = tracks.map { it.recordingId }
                 val releaseIds = recordingIds.chunked(300).flatMap {
                     dao.releaseIdsForVisibleRecordings(it)
                 }.toSet()
@@ -141,21 +149,22 @@ internal fun CanonicalNativeArtistDetail(
                     sections, canonicalLibraryEntityArtworkById(coverLinks, tracks),
                 )
             }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: Exception) {
-            runCatching {
-                Diagnostics.event(
-                    category = DiagnosticCategory.CATALOG,
-                    name = "unified_artist_shelves_failed_v1",
-                    metadata = mapOf(
-                        "errorType" to error.javaClass.simpleName,
-                        "sources" to keys.size.toString(),
-                        "visibleTracks" to tracks.size.toString(),
-                    ),
-                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                runCatching {
+                    Diagnostics.event(
+                        category = DiagnosticCategory.CATALOG,
+                        name = "unified_artist_shelves_failed_v1",
+                        metadata = mapOf(
+                            "errorType" to error.javaClass.simpleName,
+                            "sources" to keys.size.toString(),
+                            "visibleTracks" to tracks.size.toString(),
+                        ),
+                    )
+                }
+                CanonicalArtistNativeReleases.EMPTY
             }
-            CanonicalArtistNativeReleases.EMPTY
         }
     }
 
