@@ -1796,14 +1796,18 @@ private fun NativeUnifiedLibraryBody(
             Modifier.pointerInput(dragRows, dragIndices, gridMode) {
                 val visited = mutableSetOf<CanonicalLibrarySelection>()
                 var previousIndex: Int? = null
-                fun visit(position: androidx.compose.ui.geometry.Offset) {
+                var startedOnEntity = false
+                fun findTarget(position: androidx.compose.ui.geometry.Offset): CanonicalLibrarySelection? {
                     val hitRow = listState.layoutInfo.visibleItemsInfo.firstOrNull { item ->
                         position.y >= item.offset && position.y < item.offset + item.size
-                    } ?: return
-                    val target = canonicalLibraryDragHit(
+                    } ?: return null
+                    return canonicalLibraryDragHit(
                         dragRows, hitRow.key, position.x,
                         listState.layoutInfo.viewportSize.width.toFloat(), gridMode,
-                    ) ?: return
+                    )
+                }
+                fun visit(position: androidx.compose.ui.geometry.Offset) {
+                    val target = findTarget(position) ?: return
                     val index = dragIndices[target] ?: return
                     val firstIndex = previousIndex ?: index
                     canonicalLibraryDragSpan(dragOrder, firstIndex, index).forEach { entry ->
@@ -1819,13 +1823,18 @@ private fun NativeUnifiedLibraryBody(
                     onDragStart = { position ->
                         previousIndex = null
                         visited.clear()
-                        visit(position)
+                        // Holding the artwork header, search or blank grid space
+                        // must never turn into selection by dragging onto a row.
+                        startedOnEntity = findTarget(position) != null
+                        if (startedOnEntity) visit(position)
                     },
-                    onDragEnd = { previousIndex = null; visited.clear() },
-                    onDragCancel = { previousIndex = null; visited.clear() },
+                    onDragEnd = { previousIndex = null; visited.clear(); startedOnEntity = false },
+                    onDragCancel = { previousIndex = null; visited.clear(); startedOnEntity = false },
                     onDrag = { change, _ ->
-                        visit(change.position)
-                        change.consume()
+                        if (startedOnEntity) {
+                            visit(change.position)
+                            change.consume()
+                        }
                     },
                 )
             }
