@@ -98,13 +98,19 @@ internal fun planCanonicalPlaylistAppend(
     )
 }
 
-/** Native playlist editor uses this exact source-aware, verified group resolver. */
-internal suspend fun canonicalLibraryResolveRecordingIds(
+/** A source change must not silently discard a selected album or artist. */
+internal data class CanonicalLibraryResolvedSelection(
+    val recordingIds: List<String>,
+    val unavailableEntities: Int,
+)
+
+/** Only verified RecordingIds are included; unresolvable groups are reported. */
+internal suspend fun canonicalLibraryResolveSelections(
     context: Context,
     selection: List<CanonicalLibrarySelection>,
     selectedSource: String?,
-): List<String> {
-    val groups = selection.map { target ->
+): CanonicalLibraryResolvedSelection {
+    val groups = selection.distinct().map { target ->
         when (target.type) {
             CanonicalLibraryEntityType.TRACK -> listOf(target.entityId)
             CanonicalLibraryEntityType.ALBUM, CanonicalLibraryEntityType.ARTIST -> {
@@ -121,11 +127,23 @@ internal suspend fun canonicalLibraryResolveRecordingIds(
             }
         }
     }
-    return canonicalLibraryBatchRecordingIds(groups)
+    return CanonicalLibraryResolvedSelection(
+        recordingIds = canonicalLibraryBatchRecordingIds(groups),
+        unavailableEntities = groups.count { it.isEmpty() },
+    )
 }
+
+internal suspend fun canonicalLibraryResolveRecordingIds(
+    context: Context,
+    selection: List<CanonicalLibrarySelection>,
+    selectedSource: String?,
+): List<String> = canonicalLibraryResolveSelections(
+    context, selection, selectedSource,
+).recordingIds
 
 internal sealed interface CanonicalLibraryPlaylistSaveResult {
     data class Saved(val added: Int, val unavailable: Int) : CanonicalLibraryPlaylistSaveResult
+    data class Unavailable(val count: Int) : CanonicalLibraryPlaylistSaveResult
     data object Missing : CanonicalLibraryPlaylistSaveResult
 }
 
@@ -180,6 +198,13 @@ internal suspend fun addCanonicalLibraryRecordingsToPlaylist(
             eligible.takeIf { current.sourceProviderKey in permitted }.orEmpty()
         }
         val plan = planCanonicalPlaylistAppend(current.recordingIds, requestedIds, allowed)
+        // Never silently drop unavailable selected members in the name of
+        // success. Explicit review must precede any partial insertion.
+        if (plan.unavailableCount > 0) {
+            return@withTransaction CanonicalLibraryPlaylistSaveResult.Unavailable(
+                plan.unavailableCount,
+            )
+        }
         if (plan.addedIds.isNotEmpty() || playlistId == null) {
             repo.save(current.copy(recordingIds = plan.updatedIds))
         }
