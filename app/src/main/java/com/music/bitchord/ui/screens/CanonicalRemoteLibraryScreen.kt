@@ -181,6 +181,7 @@ private data class CanonicalLibraryMenuTarget(
  * a credential-free disk cache or authenticate a cover-art request at runtime.
  * Authenticated URLs and provider cover IDs never enter Compose state.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CanonicalRemoteLibraryScreen(
     providerKey: String,
