@@ -21,7 +21,8 @@ import kotlinx.coroutines.withContext
 /**
  * Writes only proven CURRENT canonical identities and provider memberships.
  * Cross-entity ratings belong to their own first-party table, never to the
- * recording rating store or a display-only artist name.
+ * recording rating store. An artist display group uses its own independent
+ * namespace and is accepted only with proven source-scoped membership.
  *
  * This also makes multi-selection one all-or-nothing operation: evidence
  * for every selected target must succeed before the Listening Room transaction.
@@ -63,9 +64,18 @@ internal suspend fun rateCanonicalLibrarySelection(
                     }) return@withContext false
             }
             CanonicalLibraryEntityType.ARTIST -> {
-                // No artist name heuristics or surrogate IDs, even for multi-select.
-                if (canonicalEntityRatingTarget(target) == null ||
-                    catalog.artistById(target.entityId) == null ||
+                val identity = canonicalEntityRatingTarget(target)
+                    ?: return@withContext false
+                if (identity.entityType == "DISPLAY_ARTIST") {
+                    // Prove that this display group has actual playable
+                    // recordings in the selected source. Keep its key separate
+                    // from real ArtistIds, and never infer the ArtistId from text.
+                    val groupName = playlistDisplayArtistNameFromGroupId(target.entityId)
+                        ?: return@withContext false
+                    if (providers.none { key ->
+                        catalog.playlistDisplayArtistRecordingIds(key, groupName).isNotEmpty()
+                    }) return@withContext false
+                } else if (catalog.artistById(target.entityId) == null ||
                     providers.none { key ->
                         catalog.providerScopedArtistRecordingIds(key, target.entityId).isNotEmpty()
                     }) return@withContext false
