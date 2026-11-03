@@ -91,6 +91,24 @@ class CanonicalLibraryActionsTest {
         assertEquals(playlistDisplayArtistGroupId("aespa"), group?.entityId)
     }
 
+    @Test fun releasePaletteUsesOnlyLocallyReadableCoverUrisNotAuthenticatedProviderRefs() {
+        assertEquals(
+            "content://media/album-art/123",
+            canonicalNativeReleasePaletteUri(
+                "content://media/album-art/123", "https://restricted.example/covers/123",
+            ),
+        )
+        assertEquals(
+            "file:///music/cover.png",
+            canonicalNativeReleasePaletteUri(
+                null, "file:///music/cover.png",
+            ),
+        )
+        assertEquals(null, canonicalNativeReleasePaletteUri(
+            "opensubsonic:secret-art-id", "https://provider/private-art",
+        ))
+    }
+
     @Test fun longPressSelectionIsOnlyAvailableOnTopLevelLibraryCategories() {
         for (category in CanonicalSmartFilterContext.entries) {
             assertTrue(canSelectCanonicalLibraryByLongPress(category, detailOpen = false))
