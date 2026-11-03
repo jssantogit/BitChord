@@ -75,9 +75,10 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
         A0SearchQuery.normalize("$artist $normalizedAlbum")
     }.getOrNull() else null
 
-    // Avoid overconstraining descriptive title searches by adding a
-    // compilation album. Generic one-word titles still prefer the album.
-    // The original canonical track and quality gates are never changed.
+    // Prefer exact artist+album+title before a broad title-only lookup
+    // when canonical album context exists. A real bilingual Latin title
+    // alias and an equivalent explicit edition spelling retain priority.
+    // Both are discovery text only: the canonical track and A3 gates remain.
     private val variants=run {
         // Use the extracted Latin title in the actual two outbound slots,
         // rather than merely when composing the optional album-specific text.
