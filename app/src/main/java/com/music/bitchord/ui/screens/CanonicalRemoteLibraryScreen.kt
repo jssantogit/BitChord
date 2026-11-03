@@ -90,6 +90,7 @@ import com.music.bitchord.data.catalog.CanonicalEntitySortDateRow
 import com.music.bitchord.data.catalog.UnifiedLocalCatalogIndex
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.settings.LocalMusicSort
+import com.music.bitchord.data.settings.SongSort
 import com.music.bitchord.data.settings.LibraryViewType
 import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.diagnostics.DiagnosticCategory
@@ -224,6 +225,8 @@ internal fun CanonicalRemoteLibraryScreen(
     selectedStarsFilter: Int? = null,
     unifiedSort: LocalMusicSort = LocalMusicSort.TITLE_ASC,
     unifiedViewType: LibraryViewType = LibraryViewType.LIST,
+    albumSort: SongSort = SongSort.DEFAULT,
+    albumMenuToken: Int = 0,
     onSourceKeysChanged: (List<String>) -> Unit = {},
     selectionBarBottomPadding: Dp = 140.dp,
 ) {
@@ -784,6 +787,28 @@ internal fun CanonicalRemoteLibraryScreen(
             album.title, album.artistDisplay.orEmpty(), album.artworkUri,
         )
     }
+    LaunchedEffect(albumMenuToken) {
+        if (albumMenuToken > 0 &&
+            selectedContext == CanonicalSmartFilterContext.ALBUMS
+        ) {
+            selectedEntity?.let { selected ->
+                val release = (entityState as? CanonicalEntityBrowseState.Albums)
+                    ?.releases?.firstOrNull { it.id == selected.id }
+                if (release != null) {
+                    openAlbumMenu(release)
+                } else {
+                    // A canonical release remains actionable while the source
+                    // list is refreshing; never invent a provider album ID.
+                    libraryMenu = CanonicalLibraryMenuTarget(
+                        CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, selected.id),
+                        selected.name,
+                        scopedDetailTracks.firstOrNull()?.artistDisplay.orEmpty(),
+                        selected.artworkUri,
+                    )
+                }
+            }
+        }
+    }
     val openArtistMenu: (CanonicalSelectedEntity) -> Unit = { artist ->
         libraryMenu = CanonicalLibraryMenuTarget(
             CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, artist.id),
@@ -893,7 +918,8 @@ internal fun CanonicalRemoteLibraryScreen(
                     else CanonicalSmartFilterContext.SONGS,
                 tracks = if (detail != null &&
                     selectedContext == CanonicalSmartFilterContext.ALBUMS
-                ) shownTracks else sortCanonicalUnifiedTracks(shownTracks, unifiedSort),
+                ) canonicalAlbumDetailSort(shownTracks, albumSort)
+                    else sortCanonicalUnifiedTracks(shownTracks, unifiedSort),
                 filteredState = shownState,
                 entityState = entityState,
                 artworkLoader = artworkLoader,
