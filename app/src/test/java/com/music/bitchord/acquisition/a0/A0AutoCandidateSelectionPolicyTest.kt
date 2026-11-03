@@ -228,6 +228,31 @@ class A0AutoCandidateSelectionPolicyTest {
             A0AutoCandidateSelectionPolicy.preview(target,wrong,profile).status)
     }
 
+    @Test fun joinedArtistSpellingMustPassAllAlbumQualityAndPreflightGates() {
+        val target=SoulseekBatchPlan.Entry("bp",
+            "BLACK PINK - How You Like That","THE ALBUM",220)
+        fun candidate(album:String):List<A0ObservedCandidateHandoff.Choice> {
+            val collector=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+                searchPhrase=target.query,requestedAlbum=target.album,
+                expectedDurationSeconds=target.durationSeconds,
+                qualityProfile=profile,collectReleaseShadow=true)
+            collector.offerParsed(A0SoulseekSearchResponse(
+                "peer",177,listOf(A0SoulseekSearchFile(
+                    "Shared\\$album\\BLACKPINK - How You Like That.mp3",
+                    8_800_000L,"mp3",mapOf(0 to 320,1 to 220))),
+                emptyList(),true,128_000,0),"peer")
+            return collector.releaseShadowChoices()
+        }
+        val valid=A0AutoCandidateSelectionPolicy.preview(
+            target,candidate("THE ALBUM"),profile)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,valid.status)
+        assertFalse(valid.canTransfer)
+        val conflict=A0AutoCandidateSelectionPolicy.preview(
+            target,candidate("Another Album"),profile)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,
+            conflict.status)
+    }
+
     @Test fun titleOverlappingArtistUsesOnlyExactIndependentDirectoryCredit() {
         val queen=SoulseekBatchPlan.Entry("queen-hearts",
             "Queen - Queen Of Hearts","The Works",220)
