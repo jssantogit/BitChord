@@ -359,6 +359,8 @@ internal class A0FreshAutoSearchTransport(
             val marks=mutableSetOf<Int>()
             var nextCompletionCheckMs=8000L
             var budgetSkippedFallbacks=0
+            var fallbackOneKind=A0SearchRecoveryPlan.VariantKind.NONE
+            var fallbackTwoKind=A0SearchRecoveryPlan.VariantKind.NONE
             var releaseWideSkipCounted=false
             while(System.nanoTime()<deadline && !stopped()) {
                 val elapsed=TimeUnit.NANOSECONDS.toMillis(
@@ -406,6 +408,13 @@ internal class A0FreshAutoSearchTransport(
                                     flush()
                                 }
                                 sent.add(variant)
+                                // Diagnostics correlate response counts to
+                                // broad vs album-qualified search strategies,
+                                // NEVER exposing the actual wire query.
+                                if(sent.size==2)
+                                    fallbackOneKind=recovery.variantKind(variant)
+                                else if(sent.size==3)
+                                    fallbackTwoKind=recovery.variantKind(variant)
                                 if(variant==recovery.releaseWideQuery)
                                     releaseWideSent.add(variant)
                                 A0AcquisitionDiagnostics.emit(traceScope,
@@ -499,6 +508,8 @@ internal class A0FreshAutoSearchTransport(
                 " initial_replies=${replyByTicket[0]}" +
                 " fallback_1_replies=${replyByTicket[1]}" +
                 " fallback_2_replies=${replyByTicket[2]}" +
+                " fallback_1_kind=${fallbackOneKind.name}" +
+                " fallback_2_kind=${fallbackTwoKind.name}" +
                 " valid_direct=${validDirect.get().coerceIn(0,160)}" +
                 " valid_indirect=${validIndirect.get().coerceIn(0,160)}" +
                 " release_queries=${releaseWideSent.size.coerceIn(0,8)}" +
