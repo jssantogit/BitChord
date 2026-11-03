@@ -13,6 +13,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onParent
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.semantics.SemanticsActions
@@ -168,6 +170,47 @@ class PlaylistLibraryVisualReuseTest {
         compose.runOnIdle {
             assertEquals(1, toggles)
             assertEquals(1, overflow) // selection mode has no overflow.
+        }
+    }
+
+    @Test fun longPressSelectsNativeGridCardWithoutPlayingAndClickStillPlays() {
+        var plays = 0
+        var selections = 0
+        compose.setContent {
+            NativeLibraryEntityCard(
+                title = "Hurt",
+                subtitle = "NewJeans",
+                imageUrl = null,
+                isArtist = false,
+                onClick = { plays++ },
+                onLongPress = { selections++ },
+            )
+        }
+        compose.onNodeWithText("Hurt").performTouchInput { longClick() }
+        compose.runOnIdle {
+            assertEquals(1, selections)
+            assertEquals(0, plays)
+        }
+        compose.onNodeWithText("Hurt").performClick()
+        compose.runOnIdle { assertEquals(1, plays) }
+    }
+
+    @Test fun longPressWorksOnTheExistingNativeLibraryRow() {
+        var opened = 0
+        var selected = 0
+        compose.setContent {
+            LibraryRow(
+                title = "Magnetic",
+                subtitle = "ILLIT",
+                imageUrl = null,
+                onClick = { opened++ },
+                onLongPress = { selected++ },
+            )
+        }
+        compose.onNodeWithText("Magnetic").performTouchInput { longClick() }
+        compose.runOnIdle {
+            assertEquals(1, selected)
+            assertEquals(0, opened)
         }
     }
 
