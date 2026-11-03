@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.onParent
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
@@ -101,7 +102,13 @@ class PlaylistLibraryVisualReuseTest {
             )
         }
         compose.onNodeWithTag("native-recent-loading").assertExists()
-        compose.onNodeWithText("Carregando adições locais…").assertExists()
+        compose.onNodeWithText("Carregando adições locais…").assertDoesNotExist()
+    }
+
+    @Test fun nativeLibraryLoadingUsesAnIndicatorWithoutText() {
+        compose.setContent { NativeLoadingSpinner() }
+        compose.onNodeWithTag("native-library-loading").assertExists()
+        compose.onNodeWithText("Carregando músicas…").assertDoesNotExist()
     }
 
     @Test fun localRecentSnapshotRestoresBothModesWithoutRepeatedQueries() {
