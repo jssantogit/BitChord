@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -219,8 +220,16 @@ internal fun CanonicalNativeArtistDetail(
             it.title.contains(query, ignoreCase = true) ||
             it.artistDisplay.contains(query, ignoreCase = true)
     }
+    val artistPhotoUrl = canonicalArtistHeroPhotoUrl(
+        appleArt?.heroUrl, heroArtworkTrack?.artworkUri,
+    )
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val photoHeight = (maxWidth / 0.95f).coerceAtMost(maxHeight * 0.6f)
+        val targetPhotoHeight = if (shouldCompactNativeArtistHero(artistPhotoUrl)) {
+            220.dp
+        } else {
+            (maxWidth / 0.95f).coerceAtMost(maxHeight * 0.6f)
+        }
+        val photoHeight by animateDpAsState(targetPhotoHeight, label = "native_artist_hero")
         PageBackground(
             page = null,
             palette = palette,
@@ -228,9 +237,7 @@ internal fun CanonicalNativeArtistDetail(
             artHeight = photoHeight,
             listState = listState,
             // Never stretch a song/album sleeve into a claimed artist photo.
-            heroUrl = canonicalArtistHeroPhotoUrl(
-                appleArt?.heroUrl, heroArtworkTrack?.artworkUri,
-            ),
+            heroUrl = artistPhotoUrl,
             modifier = Modifier.fillMaxSize(),
         )
         LazyColumn(
