@@ -44,6 +44,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -679,7 +680,11 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                         onClick = onLoadMore,
                         enabled = !loadingMore,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
-                    ) { Text(if (loadingMore) stringResource(Res.string.canonical_loading_more) else stringResource(Res.string.canonical_more_editions)) }
+                    ) {
+                        if (loadingMore) CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp), strokeWidth = 2.dp,
+                        ) else Text(stringResource(Res.string.canonical_more_editions))
+                    }
                 }
             }
         }
@@ -692,7 +697,9 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                 modifier = Modifier.fillMaxWidth()
                     .padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
             ) {
-                Text(if (searchLoadingMore) stringResource(Res.string.canonical_loading_more) else stringResource(Res.string.canonical_more_results))
+                if (searchLoadingMore) CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp), strokeWidth = 2.dp,
+                ) else Text(stringResource(Res.string.canonical_more_results))
             }
         }
     }
