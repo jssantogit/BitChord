@@ -59,3 +59,7 @@ internal fun canonicalArtistHeroPhotoUrl(
 /** Keep the original DetailScreen contract: search opens from the toolbar. */
 internal fun shouldShowNativeArtistSearch(searching: Boolean, query: String): Boolean =
     searching || query.isNotBlank()
+
+/** Artist photo is optional; leave no 60%-height empty canvas when it is missing. */
+internal fun shouldCompactNativeArtistHero(artistPhotoUrl: String?): Boolean =
+    artistPhotoUrl.isNullOrBlank()
