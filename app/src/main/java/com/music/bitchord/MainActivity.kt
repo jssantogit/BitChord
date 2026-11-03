@@ -6281,6 +6281,21 @@ private fun NativeCollectionSortAction(contentDescription: String, onClick: () -
     }
 }
 
+/**
+ * The album action is a native icon inside the existing frosted toolbar pill,
+ * distinct from the disabled + reserved for future Library pinning.
+ */
+@Composable
+internal fun NativeAlbumPlaylistToolbarAction(onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(
+            Icons.Rounded.PlaylistAdd,
+            contentDescription = "Adicionar álbum à playlist",
+            tint = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
 @Composable
 private fun NativeCollectionOverflowAction(contentDescription: String, onClick: () -> Unit) {
     IconButton(onClick = onClick) {
@@ -6673,13 +6688,7 @@ private fun UnifiedLibraryToolbarActions(
     if (albumDetail) {
         // Separate from + in the hero: that control is reserved for
         // future pin-to-Library, not repurposed as "add to playlist".
-        IconButton(onClick = onAlbumAddToPlaylist) {
-            Icon(
-                Icons.Rounded.PlaylistAdd,
-                contentDescription = "Adicionar álbum à playlist",
-                tint = MaterialTheme.colorScheme.onSurface,
-            )
-        }
+        NativeAlbumPlaylistToolbarAction(onClick = onAlbumAddToPlaylist)
         NativeCollectionSortAction(
             contentDescription = "Ordenar faixas do álbum",
             onClick = onAlbumSort,
