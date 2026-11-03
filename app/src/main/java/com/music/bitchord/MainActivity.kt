@@ -5120,18 +5120,9 @@ private fun BitChordApp(
             // it is what marks the batch seen, and marking it on the way *out*
             // rather than on the way in is deliberate: it is the outcome the user is
             // signing off on, and while the sheet is up there may not be one yet.
-            if (showDownloadManager) {
-                val closeDownloadManager = {
-                    showDownloadManager = false
-                    DownloadSession.markSeen()
-                }
-                BackHandler(onBack = closeDownloadManager)
-                ModalBottomSheet(
-                    onDismissRequest = closeDownloadManager,
-                    containerColor = MaterialTheme.colorScheme.background,
-                ) {
-                    DownloadManagerSheet(onDismiss = closeDownloadManager)
-                }
+            DownloadManagerOverlay(show = showDownloadManager) {
+                showDownloadManager = false
+                DownloadSession.markSeen()
             }
 
             // ---- Add to playlist / new playlist ----
@@ -5300,39 +5291,25 @@ private fun BitChordApp(
             // and one that pulled the sheet down instead would throw the new order
             // away. (Material3 1.3 has no sheetGesturesEnabled; the row drags
             // consume their own events, so the list's overscroll is the only path.)
-            reorderTarget?.let { target ->
-                val close = { reorderTarget = null }
-                val keepSheetStill = remember {
-                    object : NestedScrollConnection {
-                        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) = available
-                        override suspend fun onPostFling(consumed: Velocity, available: Velocity) = available
+            ReorderPlaylistOverlay(
+                target = reorderTarget,
+                entries = reorderEntries,
+                saving = reorderSaving,
+                onClose = { reorderTarget = null },
+                onSave = { target, reordered ->
+                    val original = (reorderEntries as? UiState.Success)?.data.orEmpty()
+                    reorderSaving = true
+                    viewModel.reorderPlaylist(target, original, reordered) { saved ->
+                        reorderSaving = false
+                        showQueueNotice(
+                            context.getString(
+                                if (saved) R.string.playlist_reordered else R.string.reorder_failed,
+                            ),
+                        )
+                        if (saved && reorderTarget == target) reorderTarget = null
                     }
-                }
-                ModalBottomSheet(
-                    onDismissRequest = close,
-                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = MaterialTheme.colorScheme.background,
-                ) {
-                    ReorderPlaylistSheet(
-                        modifier = Modifier.nestedScroll(keepSheetStill),
-                        playlist = target,
-                        entries = reorderEntries,
-                        saving = reorderSaving,
-                        onClose = close,
-                        onSave = { reordered ->
-                            val original = (reorderEntries as? UiState.Success)?.data.orEmpty()
-                            reorderSaving = true
-                            viewModel.reorderPlaylist(target, original, reordered) { saved ->
-                                reorderSaving = false
-                                showQueueNotice(
-                                    context.getString(if (saved) R.string.playlist_reordered else R.string.reorder_failed),
-                                )
-                                if (saved && reorderTarget == target) reorderTarget = null
-                            }
-                        },
-                    )
-                }
-            }
+                },
+            )
 
         }
         contextualActionOverlays()
@@ -5340,23 +5317,12 @@ private fun BitChordApp(
         // ---- Welcome (once; under the sign-in WebView it can open) ----
         // There from the first frame, so no way in; on the way out it drops
         // like a dismissed sheet onto the app it was standing in front of.
-        AnimatedVisibility(
+        WelcomeOnboardingOverlay(
             visibleState = onboardingShown,
-            enter = EnterTransition.None,
-            exit = slideOutVertically(
-                tween<IntOffset>(durationMillis = 560, easing = OnboardingDismissEasing),
-            ) { it },
-        ) {
-            OnboardingScreen(
-                signedIn = signedIn,
-                initialName = remember {
-                    ListenTogether.nickname().ifBlank { account?.name.orEmpty() }
-                },
-                onNameChosen = ListenTogether::setNickname,
-                onSignIn = { webSession = WebSessionMode.SIGN_IN },
-                onFinish = AppSettings::setOnboardingComplete,
-            )
-        }
+            signedIn = signedIn,
+            accountName = account?.name.orEmpty(),
+            onSignIn = { webSession = WebSessionMode.SIGN_IN },
+        )
 
         // ---- Google sign-in (full screen WebView) ----
         webSession?.let { mode ->
@@ -5566,21 +5532,13 @@ private fun BitChordApp(
             )
         }
 
-        if (showAppLanguage) {
-            BackHandler { showAppLanguage = false }
-            AppLanguageDialog(
-                hazeState = hazeState,
-                onDismiss = { showAppLanguage = false },
-            )
-        }
-
-        if (showTranslationLanguage) {
-            BackHandler { showTranslationLanguage = false }
-            TranslationLanguageDialog(
-                hazeState = hazeState,
-                onDismiss = { showTranslationLanguage = false },
-            )
-        }
+        LanguageSettingsOverlays(
+            hazeState = hazeState,
+            showAppLanguage = showAppLanguage,
+            showTranslationLanguage = showTranslationLanguage,
+            onDismissApp = { showAppLanguage = false },
+            onDismissTranslation = { showTranslationLanguage = false },
+        )
 
         ConnectionEditors(
             hazeState = hazeState,
@@ -5601,27 +5559,7 @@ private fun BitChordApp(
         // and mini player like every other alert. Backing out is a skip —
         // leaving the batch suspended on a dismissed dialog would hang the
         // upload with no way to reach the question again.
-        val uploadConflict by com.music.bitchord.data.webdav.WebDavUploads.conflict.collectAsStateWithLifecycle()
-        uploadConflict?.let { req ->
-            var applyToAll by remember(req) { mutableStateOf(false) }
-            val answer: (com.music.bitchord.data.webdav.WebDavUploads.Choice) -> Unit = { choice ->
-                req.answer.complete(
-                    com.music.bitchord.data.webdav.WebDavUploads.Resolution(choice, applyToAll),
-                )
-            }
-            BackHandler { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.SKIP) }
-            WebDavConflictAlert(
-                hazeState = hazeState,
-                fileName = req.fileName,
-                showApplyToAll = req.remaining > 0,
-                applyToAll = applyToAll,
-                onApplyToAllChange = { applyToAll = it },
-                onOverwrite = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.OVERWRITE) },
-                onKeepBoth = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.KEEP_BOTH) },
-                onSkip = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.SKIP) },
-                onDismiss = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.SKIP) },
-            )
-        }
+        WebDavUploadConflictOverlay(hazeState)
 
         ExternalAccountLoginOverlays(
             showDiscordLogin = showDiscordLogin,
@@ -5687,6 +5625,142 @@ private fun BitChordApp(
             )
         }
 
+    }
+}
+
+
+/**
+ * Keep these independent overlays out of BitChordApp so the JVM's 64KB
+ * per-method bytecode ceiling cannot be tripped by their Compose expansions.
+ * Their state owners and callbacks remain in the original app composition.
+ */
+@Composable
+private fun DownloadManagerOverlay(
+    show: Boolean,
+    onClose: () -> Unit,
+) {
+    if (show) {
+        BackHandler(onBack = onClose)
+        ModalBottomSheet(
+            onDismissRequest = onClose,
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            DownloadManagerSheet(onDismiss = onClose)
+        }
+    }
+}
+
+@Composable
+private fun ReorderPlaylistOverlay(
+    target: UserPlaylist?,
+    entries: UiState<List<Song>>,
+    saving: Boolean,
+    onClose: () -> Unit,
+    onSave: (UserPlaylist, List<Song>) -> Unit,
+) {
+    if (target == null) return
+    val keepSheetStill = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ) = available
+
+            override suspend fun onPostFling(
+                consumed: Velocity,
+                available: Velocity,
+            ) = available
+        }
+    }
+    ModalBottomSheet(
+        onDismissRequest = onClose,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.background,
+    ) {
+        ReorderPlaylistSheet(
+            modifier = Modifier.nestedScroll(keepSheetStill),
+            playlist = target,
+            entries = entries,
+            saving = saving,
+            onClose = onClose,
+            onSave = { reordered -> onSave(target, reordered) },
+        )
+    }
+}
+
+@Composable
+private fun WelcomeOnboardingOverlay(
+    visibleState: MutableTransitionState<Boolean>,
+    signedIn: Boolean,
+    accountName: String,
+    onSignIn: () -> Unit,
+) {
+    AnimatedVisibility(
+        visibleState = visibleState,
+        enter = EnterTransition.None,
+        exit = slideOutVertically(
+            tween<IntOffset>(durationMillis = 560, easing = OnboardingDismissEasing),
+        ) { it },
+    ) {
+        OnboardingScreen(
+            signedIn = signedIn,
+            initialName = remember {
+                ListenTogether.nickname().ifBlank { accountName }
+            },
+            onNameChosen = ListenTogether::setNickname,
+            onSignIn = onSignIn,
+            onFinish = AppSettings::setOnboardingComplete,
+        )
+    }
+}
+
+@Composable
+private fun LanguageSettingsOverlays(
+    hazeState: HazeState,
+    showAppLanguage: Boolean,
+    showTranslationLanguage: Boolean,
+    onDismissApp: () -> Unit,
+    onDismissTranslation: () -> Unit,
+) {
+    if (showAppLanguage) {
+        BackHandler(onBack = onDismissApp)
+        AppLanguageDialog(
+            hazeState = hazeState,
+            onDismiss = onDismissApp,
+        )
+    }
+    if (showTranslationLanguage) {
+        BackHandler(onBack = onDismissTranslation)
+        TranslationLanguageDialog(
+            hazeState = hazeState,
+            onDismiss = onDismissTranslation,
+        )
+    }
+}
+
+@Composable
+private fun WebDavUploadConflictOverlay(hazeState: HazeState) {
+    val uploadConflict by com.music.bitchord.data.webdav.WebDavUploads.conflict.collectAsStateWithLifecycle()
+    uploadConflict?.let { req ->
+        var applyToAll by remember(req) { mutableStateOf(false) }
+        val answer: (com.music.bitchord.data.webdav.WebDavUploads.Choice) -> Unit = { choice ->
+            req.answer.complete(
+                com.music.bitchord.data.webdav.WebDavUploads.Resolution(choice, applyToAll),
+            )
+        }
+        BackHandler { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.SKIP) }
+        WebDavConflictAlert(
+            hazeState = hazeState,
+            fileName = req.fileName,
+            showApplyToAll = req.remaining > 0,
+            applyToAll = applyToAll,
+            onApplyToAllChange = { applyToAll = it },
+            onOverwrite = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.OVERWRITE) },
+            onKeepBoth = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.KEEP_BOTH) },
+            onSkip = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.SKIP) },
+            onDismiss = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.SKIP) },
+        )
     }
 }
 
