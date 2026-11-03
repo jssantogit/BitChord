@@ -41,6 +41,8 @@ import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoader
+import com.music.bitchord.diagnostics.Diagnostics
+import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.trackColumnWidth
@@ -117,14 +119,42 @@ internal fun CanonicalNativeArtistDetail(
                 val counts = releases.map { it.id }.chunked(300).flatMap { ids ->
                     dao.scopedReleaseRecordingCounts(ids, keys)
                 }.associate { it.releaseId to it.recordingCount }
+                val sections = canonicalArtistReleaseSections(releases, proofs, counts)
+                // Count-only diagnostics distinguish missing ReleaseGroup types
+                // from missing memberships without leaking account IDs/titles.
+                runCatching {
+                    Diagnostics.event(
+                        category = DiagnosticCategory.CATALOG,
+                        name = "unified_artist_shelves_v1",
+                        metadata = mapOf(
+                            "sources" to keys.size.toString(),
+                            "releases" to releases.size.toString(),
+                            "typed" to proofs.values.count { !it.primaryType.isNullOrBlank() }.toString(),
+                            "counted" to counts.size.toString(),
+                            "albums" to sections.albums.size.toString(),
+                            "singlesEps" to sections.singlesAndEps.size.toString(),
+                            "unknown" to sections.unclassified.size.toString(),
+                        ),
+                    )
+                }
                 CanonicalArtistNativeReleases(
-                    canonicalArtistReleaseSections(releases, proofs, counts),
-                    canonicalLibraryEntityArtworkById(coverLinks, tracks),
+                    sections, canonicalLibraryEntityArtworkById(coverLinks, tracks),
                 )
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            runCatching {
+                Diagnostics.event(
+                    category = DiagnosticCategory.CATALOG,
+                    name = "unified_artist_shelves_failed_v1",
+                    metadata = mapOf(
+                        "errorType" to error.javaClass.simpleName,
+                        "sources" to keys.size.toString(),
+                        "visibleTracks" to tracks.size.toString(),
+                    ),
+                )
+            }
             CanonicalArtistNativeReleases.EMPTY
         }
     }
