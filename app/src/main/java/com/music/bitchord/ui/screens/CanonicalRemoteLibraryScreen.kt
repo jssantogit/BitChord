@@ -2023,9 +2023,6 @@ private fun NativeUnifiedLibraryBody(
                     )
                 }
             }
-            if (isAlbumDetail) item(key = "release-track-spacing") {
-                Spacer(Modifier.height(20.dp))
-            }
             when (selectedContext) {
                 CanonicalSmartFilterContext.SONGS -> when (filteredState) {
                     CanonicalSongFilterState.Loading -> item {
