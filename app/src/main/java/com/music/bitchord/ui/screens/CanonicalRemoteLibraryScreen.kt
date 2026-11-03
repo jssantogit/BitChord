@@ -1099,7 +1099,9 @@ internal fun CanonicalRemoteLibraryScreen(
                 onDismiss = { ratingDialogSelection = null },
             )
         }
-        if (unified && selectedItems.isNotEmpty()) {
+        // Keep the draft while navigating, but never float batch actions over
+        // an artist or album detail page.
+        if (unified && selectedEntity == null && selectedItems.isNotEmpty()) {
             CanonicalLibraryBatchActionBar(
                 modifier = Modifier.align(Alignment.BottomEnd)
                     .padding(end = PAGE_GUTTER, bottom = selectionBarBottomPadding),
