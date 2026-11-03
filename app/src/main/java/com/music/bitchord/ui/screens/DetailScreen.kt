@@ -1671,6 +1671,9 @@ internal fun ActionRow(
     /** The artist header's subscribe state, or null where it isn't offered. */
     subscription: SubscriptionState? = null,
     onToggleSubscription: (() -> Unit)? = null,
+    /** Only the canonical Library artist route can supply first-party rating. */
+    onRateArtist: (() -> Unit)? = null,
+    artistRated: Boolean = false,
     /** Apple's fill for the Play circle; null leaves it white. */
     playColor: Color? = null,
 ) {
@@ -1704,6 +1707,14 @@ internal fun ActionRow(
                 ),
                 onClick = { onToggleSubscription?.invoke() },
                 haptic = if (subscription.subscribed) Haptic.ToggleOff else Haptic.ToggleOn,
+                size = ARTIST_SIDE_BUTTON,
+            )
+        } else if (onRateArtist != null) {
+            CircleIconButton(
+                icon = if (artistRated) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                contentDescription = "Avaliar artista",
+                onClick = onRateArtist,
+                haptic = Haptic.ToggleOn,
                 size = ARTIST_SIDE_BUTTON,
             )
         } else {
