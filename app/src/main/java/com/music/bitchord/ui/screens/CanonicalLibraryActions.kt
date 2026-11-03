@@ -20,6 +20,22 @@ internal data class CanonicalLibrarySelection(
     val entityId: String,
 )
 
+/**
+ * The album toolbar's playlist action targets the canonical ReleaseId, not
+ * whatever tracks happen to be visible after searching/sorting the detail.
+ * The existing picker then resolves the complete album under the active source
+ * and revalidates each RecordingId at save time.
+ */
+internal fun canonicalAlbumDetailPlaylistSelection(
+    category: com.music.bitchord.data.listening.CanonicalSmartFilterContext,
+    releaseId: String?,
+): List<CanonicalLibrarySelection>? {
+    if (category != com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS ||
+        releaseId.isNullOrBlank() || releaseId != releaseId.trim()
+    ) return null
+    return listOf(CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, releaseId))
+}
+
 internal enum class CanonicalLibraryAction {
     EDIT_RATING, ADD_TO_PLAYLIST, ADD_NEXT, ADD_TO_QUEUE,
 }
