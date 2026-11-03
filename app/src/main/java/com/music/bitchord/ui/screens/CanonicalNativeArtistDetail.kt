@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -224,7 +225,9 @@ internal fun CanonicalNativeArtistDetail(
     val artistPhotoUrl = canonicalArtistHeroPhotoUrl(
         appleArt?.heroUrl, heroArtworkTrack?.artworkUri,
     )
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    // The approved artist DetailScreen extends the artwork's wash behind
+    // every shelf, so the photograph merges into the page without a seam.
+    BoxWithConstraints(Modifier.fillMaxSize().background(palette.wash)) {
         val targetPhotoHeight = if (shouldCompactNativeArtistHero(artistPhotoUrl)) {
             220.dp
         } else {
@@ -290,6 +293,8 @@ internal fun CanonicalNativeArtistDetail(
                                         track, artworkLoader,
                                         onClick = { onTrackPlay(track) },
                                         onEditRating = { onTrackEditRating(track) },
+                                        compactForArtist = true,
+                                        palette = palette,
                                     )
                                 }
                             }
