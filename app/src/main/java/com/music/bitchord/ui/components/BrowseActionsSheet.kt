@@ -124,10 +124,9 @@ data class BrowseTarget(
  * and Shuffle; the page's own header already carries both, so there they are
  * null and the sheet is the queue rows and the download.
  *
- * The queue rows are always offered. They are the reason this menu exists: a
- * release is exactly the kind of thing someone wants *after* what is playing
- * rather than instead of it, and until now the only way to queue one was to
- * open it and long-press its tracks one at a time.
+ * Queue rows are shown only when the caller provides working handlers. In
+ * particular, canonical pinned items must not expose legacy queue operations
+ * without a real RecordingId-based implementation.
  *
  * Deleting asks a second time, in place. A playlist is the only thing in this
  * app whose loss can't be undone by tapping the same row again, and a
@@ -136,8 +135,8 @@ data class BrowseTarget(
 @Composable
 fun BrowseActionsSheet(
     target: BrowseTarget,
-    onPlayNext: () -> Unit,
-    onAddToQueue: () -> Unit,
+    onPlayNext: (() -> Unit)? = null,
+    onAddToQueue: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     onPlay: (() -> Unit)? = null,
     onShuffle: (() -> Unit)? = null,
@@ -226,16 +225,20 @@ fun BrowseActionsSheet(
 
             onPlay?.let { ActionRow(Icons.Rounded.PlayArrow, stringResource(R.string.play), onClick = it) }
             onShuffle?.let { ActionRow(BitChordIcons.Shuffle, stringResource(R.string.shuffle), onClick = it) }
-            ActionRow(
-                Icons.AutoMirrored.Rounded.PlaylistPlay,
-                stringResource(R.string.play_next),
-                onClick = onPlayNext,
-            )
-            ActionRow(
-                Icons.AutoMirrored.Rounded.QueueMusic,
-                stringResource(R.string.add_to_queue),
-                onClick = onAddToQueue,
-            )
+            onPlayNext?.let { playNext ->
+                ActionRow(
+                    Icons.AutoMirrored.Rounded.PlaylistPlay,
+                    stringResource(R.string.play_next),
+                    onClick = playNext,
+                )
+            }
+            onAddToQueue?.let { addToQueue ->
+                ActionRow(
+                    Icons.AutoMirrored.Rounded.QueueMusic,
+                    stringResource(R.string.add_to_queue),
+                    onClick = addToQueue,
+                )
+            }
             onAddToPlaylist?.let { add ->
                 ActionRow(Icons.AutoMirrored.Rounded.PlaylistPlay,
                     "Adicionar à playlist", onClick = add)
