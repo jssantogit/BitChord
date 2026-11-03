@@ -174,8 +174,7 @@ internal suspend fun collectSmartPlaylistSavedState(
 @Composable
 internal fun SmartPlaylistSavedStatus(state: SmartPlaylistSavedUiState) {
     when (state) {
-        SmartPlaylistSavedUiState.Loading ->
-            Text(stringResource(Res.string.smart_playlist_saved_loading))
+        SmartPlaylistSavedUiState.Loading -> NativeLoadingSpinner()
         SmartPlaylistSavedUiState.Empty ->
             Text(stringResource(Res.string.smart_playlist_saved_empty))
         SmartPlaylistSavedUiState.Error ->
@@ -431,7 +430,7 @@ internal fun SmartPlaylistBuilderScreen(
                         Text(stringResource(Res.string.smart_playlist_reset))
                     }
                 }
-                if (busy) Text(stringResource(Res.string.smart_playlist_loading))
+                if (busy) NativeLoadingSpinner()
                 if (error != null) Text(error.orEmpty())
             }
         }
