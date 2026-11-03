@@ -5634,6 +5634,7 @@ private fun BitChordApp(
  * per-method bytecode ceiling cannot be tripped by their Compose expansions.
  * Their state owners and callbacks remain in the original app composition.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DownloadManagerOverlay(
     show: Boolean,
@@ -5650,6 +5651,7 @@ private fun DownloadManagerOverlay(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ReorderPlaylistOverlay(
     target: UserPlaylist?,
