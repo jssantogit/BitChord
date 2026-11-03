@@ -23,6 +23,8 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
     interface Port {
         /** Safe enum-only events, no identities, paths or source metadata. */
         fun diagnostic(stage:DiagnosticStage,reason:Enum<*>?=null) {}
+        /** One redacted terminal result per run; no source handles or user metadata. */
+        fun diagnosticOutcome(status:Status,reason:Reason?,attempts:Int) {}
         /** Transport MUST enforce one authenticated Soulseek session and P/F limits. */
         fun fetch(
             candidate:A0ObservedCandidateHandoff.Choice,
@@ -87,6 +89,13 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
     private fun cancelled(attempts:Int=0)=
         Result(Status.CANCELLED,Reason.REVOKED_OR_CANCELLED,attempts)
 
+    /** Diagnostics must not alter the result even if the reporter fails. */
+    private fun recordOutcome(result:Result):Result {
+        try { port.diagnosticOutcome(result.status,result.reason,
+            result.attempts.coerceIn(0,3)) }catch(_:Exception) {}
+        return result
+    }
+
     /**
      * Must run on an I/O worker, never on the Android UI thread. This is NOT
      * currently reachable via Downloads/DownloadService. All peer/file IDs
@@ -101,16 +110,18 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
         isCancelled:()->Boolean={false},
         stillAuthorized:()->Boolean,
     ):Result {
-        if(!userRequested || !optedIn)return manual(Reason.NO_EXPLICIT_CONSENT)
-        if(!running.compareAndSet(false,true))return manual(Reason.SINGLE_FLIGHT)
+        if(!userRequested || !optedIn)
+            return recordOutcome(manual(Reason.NO_EXPLICIT_CONSENT))
+        if(!running.compareAndSet(false,true))
+            return recordOutcome(manual(Reason.SINGLE_FLIGHT))
         try {
             fun revoked()=isCancelled() || !stillAuthorized() ||
                 Thread.currentThread().isInterrupted
-            if(revoked())return cancelled()
+            if(revoked())return recordOutcome(cancelled())
             val choice=A0AutoCandidateSelectionPolicy.preview(target,observed,profile)
             if(choice.status!=A0AutoCandidateSelectionPolicy.Status.PROVISIONAL ||
                 choice.sequentialAlternatives.isEmpty())
-                return manual(Reason.NO_STRONG_CANDIDATE)
+                return recordOutcome(manual(Reason.NO_STRONG_CANDIDATE))
             // Exact-score alternative editions may only follow an explicit
             // pre-acceptance RetryableConnectionFailure, NEVER a receipt,
             // failed technical inspection or uncertain A3 publication.
@@ -121,8 +132,8 @@ internal class A0AutoAcquisitionExecutor(private val port:Port) {
                 equivalentClaimsConfirmed=choice.preByteFallbacks.isEmpty(),
                 independentlyEligibleExactScore=choice.preByteFallbacks.isNotEmpty())
             val rejectedPeers=LinkedHashSet<String>()
-            fun report(result:Result)=Result(result.status,result.reason,
-                result.attempts,result.selectedSource,rejectedPeers.toSet())
+            fun report(result:Result)=recordOutcome(Result(result.status,result.reason,
+                result.attempts,result.selectedSource,rejectedPeers.toSet()))
             while(true) {
                 if(revoked()) {
                     sequence.cancel()
