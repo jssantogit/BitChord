@@ -15,14 +15,14 @@ class A0SearchRecoveryPlanTest {
         already.add("Jóga")
         assertNull(recovery.next(15000,false,already))
     }
-    @Test fun longerDescriptiveTitlePrecedesCompilationAlbumVariant() {
+    @Test fun longerDescriptiveTitleUsesExactAlbumQualifiedRecoveryBeforeBroadTitle() {
         val original="BTS (방탄소년단) - Boy In Luv"
         val recovery=A0SearchRecoveryPlan(original,album="Proof")
         val already=mutableSetOf(A0SearchQuery.normalize(original))
-        assertEquals("Boy In Luv",recovery.next(6000,false,already))
-        already.add("Boy In Luv")
-        assertEquals(A0SearchQuery.normalize(
-            "BTS (방탄소년단) Proof Boy In Luv"),recovery.next(12000,false,already))
+        val qualified=A0SearchQuery.normalize("BTS (방탄소년단) Proof Boy In Luv")
+        assertEquals(qualified,recovery.next(6000,false,already))
+        already.add(qualified)
+        assertEquals("Boy In Luv",recovery.next(12000,false,already))
     }
     @Test fun releaseWideFallbackSearchesAlbumToRecoverOtherTracksWithoutTransfer() {
         val recovery=A0SearchRecoveryPlan(
@@ -31,7 +31,7 @@ class A0SearchRecoveryPlanTest {
             "BTS (방탄소년단) - Boy In Luv"))
         assertEquals("BTS Proof",recovery.next(6000,false,sent))
         sent.add("BTS Proof")
-        assertEquals("Boy In Luv",recovery.next(12000,false,sent))
+        assertEquals("BTS Proof Boy In Luv",recovery.next(12000,false,sent))
         assertFalse(recovery.authorizesTransfer)
         val generic=A0SearchRecoveryPlan("BTS - Normal","ARIRANG",releaseWide=true)
         assertEquals("BTS ARIRANG",generic.next(6000,false,setOf("BTS Normal")))
@@ -57,13 +57,29 @@ class A0SearchRecoveryPlanTest {
         val plan=A0SearchRecoveryPlan(title,"Proof",releaseWide=true)
         val sent=mutableSetOf(A0SearchQuery.normalize(title))
         val global=setOf("BTS Proof")
-        assertEquals("Boy In Luv",plan.next(
-            6000,false,sent,excludedQueries=global))
-        sent.add("Boy In Luv")
-        assertEquals(A0SearchQuery.normalize("BTS (방탄소년단) Proof Boy In Luv"),
-            plan.next(12000,false,sent,excludedQueries=global))
+        val qualified=A0SearchQuery.normalize("BTS (방탄소년단) Proof Boy In Luv")
+        assertEquals(qualified,plan.next(6000,false,sent,excludedQueries=global))
+        sent.add(qualified)
+        assertEquals("Boy In Luv",plan.next(12000,false,sent,excludedQueries=global))
         assertNull(plan.next(14000,true,setOf(A0SearchQuery.normalize(title)),
             missingSiblings=true,excludedQueries=global))
+    }
+
+
+    @Test fun missingOrInvalidAlbumPreservesExistingTitleOnlyFallback() {
+        val noAlbum=A0SearchRecoveryPlan("BTS - Boy In Luv")
+        assertEquals("Boy In Luv",noAlbum.next(6000,false,
+            setOf("BTS Boy In Luv")))
+        val invalid=A0SearchRecoveryPlan("BTS - Boy In Luv",album="../")
+        assertEquals("Boy In Luv",invalid.next(6000,false,
+            setOf("BTS Boy In Luv")))
+    }
+
+    @Test fun trueBilingualLatinAliasStillTakesPrecedenceOverAlbumQualifiedSearch() {
+        val original="BTS - 상남자 (Boy In Luv)"
+        val plan=A0SearchRecoveryPlan(original,"Proof")
+        val canonical=A0SearchQuery.normalize(original)
+        assertEquals("Boy In Luv",plan.next(6000,false,setOf(canonical)))
     }
 
     @Test fun repeatedAlbumQueryCanBeSkippedWithoutLosingTheTitleFallback() {
@@ -72,7 +88,8 @@ class A0SearchRecoveryPlanTest {
         val sent=mutableSetOf(A0SearchQuery.normalize(original))
         assertEquals("BTS Proof",recovery.releaseWideQuery)
         sent.add(checkNotNull(recovery.releaseWideQuery)) // already sought by earlier slot
-        assertEquals("Boy In Luv",recovery.next(6000,false,sent))
+        assertEquals("BTS (방탄소년단) Proof Boy In Luv",
+            recovery.next(6000,false,sent))
         assertEquals(2,sent.size)
     }
     @Test fun bilingualKoreanTitleCanSearchItsLatinAliasWithoutChangingIdentity() {
