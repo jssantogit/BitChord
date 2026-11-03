@@ -27,6 +27,10 @@ internal interface CanonicalEntityRatingDao {
     """)
     fun observe(entityType: String, entityId: String): Flow<CanonicalEntityRatingEntity?>
 
+    /** One reactive snapshot for Library list rows; never open one Flow per card. */
+    @Query("SELECT * FROM canonical_entity_rating")
+    fun observeAll(): Flow<List<CanonicalEntityRatingEntity>>
+
     @Query("""
         SELECT * FROM canonical_entity_rating
         WHERE entityType = :entityType AND entityId = :entityId LIMIT 1
