@@ -1024,13 +1024,41 @@ internal fun SmartPlaylistV2BuilderScreen(
                             scope.launch {
                                 try {
                                     val id = editingNormalId ?: UUID.randomUUID().toString()
-                                    withContext(Dispatchers.IO) {
-                                        normalRepo.save(SavedCanonicalStaticPlaylist(
-                                            id = id, name = name, recordingIds = normalSelectedIds,
-                                            sourceProviderKey = normalSourceProviderKey,
-                                            description = description.trim(),
-                                            coverUri = coverUri,
-                                        ))
+                                    val sourceValid = withContext(Dispatchers.IO) {
+                                        // Revalidate the same RecordingIds when a
+                                        // Library-launched wizard saves. Switching
+                                        // source inside the wizard cannot silently
+                                        // persist songs absent from that provider.
+                                        val valid = if (embeddedInLibrary &&
+                                            normalSelectedIds.isNotEmpty()) {
+                                            val currentSources = canonicalAvailablePlaylistSourceKeys(
+                                                context.applicationContext,
+                                            )
+                                            val keys = normalSourceProviderKey?.let { key ->
+                                                currentSources.filter { it == key }
+                                            } ?: currentSources
+                                            val eligible = if (keys.isEmpty()) emptySet() else
+                                                normalSelectedIds.distinct().chunked(300)
+                                                    .flatMap { ids ->
+                                                        catalog.browseAssetsForRecordingIds(keys, ids)
+                                                    }.mapTo(HashSet()) { it.recordingId }
+                                            canonicalNativeWizardSourceEligible(
+                                                normalSelectedIds, eligible,
+                                            )
+                                        } else true
+                                        if (valid) {
+                                            normalRepo.save(SavedCanonicalStaticPlaylist(
+                                                id = id, name = name, recordingIds = normalSelectedIds,
+                                                sourceProviderKey = normalSourceProviderKey,
+                                                description = description.trim(),
+                                                coverUri = coverUri,
+                                            ))
+                                        }
+                                        valid
+                                    }
+                                    if (!sourceValid) {
+                                        error = "Algumas faixas não pertencem à fonte escolhida. Revise antes de salvar."
+                                        return@launch
                                     }
                                     // Return to the Library's still-mounted
                                     // selection when the modal save succeeds.
