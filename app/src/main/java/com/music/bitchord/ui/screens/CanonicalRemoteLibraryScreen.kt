@@ -1276,6 +1276,7 @@ internal fun CanonicalTrackRow(
     artworkLoader: OpenSubsonicArtworkLoader,
     onClick: () -> Unit,
     onEditRating: () -> Unit,
+    onOptions: (() -> Unit)? = null,
     // The native artist shelf is a compact horizontal four-song column, not
     // a full-width library track row. Keep a single canonical row component.
     compactForArtist: Boolean = false,
@@ -1334,7 +1335,7 @@ internal fun CanonicalTrackRow(
                 )
             }
         }
-        CanonicalCatalogRatingMenu(onEdit = onEditRating)
+        CanonicalCatalogRatingMenu(onEdit = onEditRating, onOpenMenu = onOptions)
     }
 }
 
@@ -1342,17 +1343,18 @@ internal fun CanonicalTrackRow(
  * Preserve main-branch rating menu alongside the canonical filter tabs.
  */
 @Composable
-internal fun CanonicalCatalogRatingMenu(onEdit: () -> Unit) {
+internal fun CanonicalCatalogRatingMenu(
+    onEdit: () -> Unit,
+    onOpenMenu: (() -> Unit)? = null,
+) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { expanded = true }) {
-            Icon(
-                Icons.Rounded.MoreVert,
-                contentDescription = sharedStringResource(Res.string.canonical_rating_song_options),
-            )
-        }
+        RowMoreButton(
+            onClick = { if (onOpenMenu != null) onOpenMenu() else expanded = true },
+            contentDescription = sharedStringResource(Res.string.canonical_rating_song_options),
+        )
         DropdownMenu(
-            expanded = expanded,
+            expanded = expanded && onOpenMenu == null,
             onDismissRequest = { expanded = false },
         ) {
             DropdownMenuItem(
@@ -1504,6 +1506,9 @@ private fun NativeUnifiedLibraryBody(
     heroArtworkTrack: CanonicalBrowseTrack? = null,
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
     onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
+    onTrackOptions: (CanonicalBrowseTrack) -> Unit,
+    onAlbumOptions: (ReleaseEntity) -> Unit,
+    onArtistOptions: (CanonicalSelectedEntity) -> Unit,
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
     onEntitySelect: (CanonicalSelectedEntity) -> Unit,
 ) {
@@ -1654,6 +1659,7 @@ private fun NativeUnifiedLibraryBody(
                             track = track, artworkLoader = artworkLoader,
                             onClick = { onTrackPlay(track) },
                             onEditRating = { onTrackEditRating(track) },
+                            onOptions = { onTrackOptions(track) },
                         )
                         HorizontalDivider(
                             modifier = Modifier.padding(start = 84.dp),
@@ -1689,6 +1695,7 @@ private fun NativeUnifiedLibraryBody(
                                     onClick = {
                                         onEntitySelect(CanonicalSelectedEntity(album.id, album.title, album.artworkUri))
                                     },
+                                    onMore = { onAlbumOptions(album) },
                                 )
                             }
                         } else items(albums, key = { it.id }) { album ->
@@ -1703,6 +1710,9 @@ private fun NativeUnifiedLibraryBody(
                                     ) }
                                 },
                                 onClick = { onEntitySelect(CanonicalSelectedEntity(album.id, album.title, album.artworkUri)) },
+                                trailing = {
+                                    RowMoreButton(onClick = { onAlbumOptions(album) })
+                                },
                                 artworkSize = 52.dp,
                                 horizontalPadding = PAGE_GUTTER,
                             )
@@ -1740,6 +1750,7 @@ private fun NativeUnifiedLibraryBody(
                                         ) }
                                     },
                                     onClick = { onEntitySelect(artist) },
+                                    onMore = { onArtistOptions(artist) },
                                 )
                             }
                         } else items(artists, key = { it.id }) { artist ->
@@ -1755,6 +1766,9 @@ private fun NativeUnifiedLibraryBody(
                                 },
                                 artworkShape = CircleShape,
                                 onClick = { onEntitySelect(artist) },
+                                trailing = {
+                                    RowMoreButton(onClick = { onArtistOptions(artist) })
+                                },
                                 artworkSize = 52.dp,
                                 horizontalPadding = PAGE_GUTTER,
                             )
@@ -1814,6 +1828,7 @@ internal fun NativeLibraryEntityCard(
     isArtist: Boolean,
     onClick: () -> Unit,
     artwork: (@Composable () -> Unit)? = null,
+    onMore: (() -> Unit)? = null,
 ) {
     val shape = if (isArtist) CircleShape else RoundedCornerShape(12.dp)
     Column(
@@ -1831,6 +1846,13 @@ internal fun NativeLibraryEntityCard(
                 else -> CoverPlaceholder(
                     if (isArtist) Icons.Rounded.MusicNote else Icons.Rounded.Album,
                     Modifier.fillMaxSize(),
+                )
+            }
+            if (onMore != null) {
+                RowMoreButton(
+                    onClick = onMore,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                    contentDescription = "Opções de ${title}",
                 )
             }
         }
