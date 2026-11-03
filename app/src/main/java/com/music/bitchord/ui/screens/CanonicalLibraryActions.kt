@@ -73,6 +73,44 @@ internal fun toggleCanonicalLibrarySelection(
     chosen + target
 }
 
+
+/**
+ * The root Library list remains the source of truth for the drag order.
+ * Keys match LazyColumn.items and LocalFolder.gridRows exactly; neither
+ * header/toolbar rows nor a blank second card can become a selection.
+ */
+internal fun canonicalLibraryDragRows(
+    ordered: List<CanonicalLibrarySelection>,
+    grid: Boolean,
+): Map<Any, List<CanonicalLibrarySelection>> =
+    if (grid) ordered.chunked(2).mapIndexed { index, row ->
+        "grid-$index-${row.first().entityId}" to row
+    }.toMap()
+    else ordered.associate { it.entityId as Any to listOf(it) }
+
+internal fun canonicalLibraryDragHit(
+    rows: Map<Any, List<CanonicalLibrarySelection>>,
+    visibleKey: Any,
+    pointerX: Float,
+    width: Float,
+    grid: Boolean,
+): CanonicalLibrarySelection? {
+    if (width <= 0f || pointerX < 0f || pointerX >= width) return null
+    val entries = rows[visibleKey] ?: return null
+    return if (grid) entries.getOrNull(if (pointerX < width / 2f) 0 else 1)
+    else entries.singleOrNull()
+}
+
+/** Fill skipped rows when a finger moves faster than the list can draw frames. */
+internal fun canonicalLibraryDragSpan(
+    ordered: List<CanonicalLibrarySelection>,
+    from: Int,
+    to: Int,
+): List<CanonicalLibrarySelection> {
+    if (from !in ordered.indices || to !in ordered.indices) return emptyList()
+    return ordered.subList(minOf(from, to), maxOf(from, to) + 1)
+}
+
 /** Exact RecordingId deduplication, never title/artist text or provider URL. */
 internal fun canonicalLibraryBatchRecordingIds(
     groups: List<List<String>>,
