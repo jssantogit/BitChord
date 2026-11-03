@@ -41,6 +41,27 @@ class CanonicalLibraryPinsTest {
         assertFalse(encodeCanonicalLibraryPins(mixed).contains("https://secret.example"))
     }
 
+    @Test fun pinNavigationNeverGuessesSourcesOrUsesTitlesAsIds() {
+        assertEquals(
+            CanonicalLibraryPinOpenTarget.PlayRecording("recording-id"),
+            canonicalLibraryPinOpenTarget(track),
+        )
+        assertEquals(
+            CanonicalLibraryPinOpenTarget.OpenEntity(
+                com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS,
+                album,
+            ),
+            canonicalLibraryPinOpenTarget(album),
+        )
+        assertEquals(
+            CanonicalLibraryPinOpenTarget.OpenEntity(
+                com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS,
+                artist,
+            ),
+            canonicalLibraryPinOpenTarget(artist),
+        )
+    }
+
     @Test fun malformedOrDuplicateRecordsDoNotEraseOtherValidPins() {
         val json = """[
           {"type":"ALBUM","id":"r","title":"Release","subtitle":"Artista"},
