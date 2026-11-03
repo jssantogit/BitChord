@@ -408,12 +408,15 @@ internal fun CanonicalRecentAdditionsGrid(
         contentPadding = contentPadding,
     ) {
         if (showSearch) item(key = "recent-search") {
-            SearchField(
+            DetailSearchField(
                 query = query,
                 onQueryChange = onQueryChange,
-                onSubmit = {},
+                onClose = { onQueryChange("") },
+                autoFocus = true,
+                onFocused = {},
+                palette = themeArtworkPalette(),
                 placeholder = "Pesquisar em adições recentes",
-                modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
+                horizontalInset = PAGE_GUTTER,
             )
         }
         if (recent.isEmpty()) item {
