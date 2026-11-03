@@ -146,7 +146,7 @@ private suspend fun readPinnedLibraryCards(
                     ?: playlistDisplayArtistNameFromGroupId(selection.entityId)
                     ?: pin.title
                 val artworkId = covered[selection.entityId]
-                    ?: covered[playlistDisplayArtistNameFromGroupId(selection.entityId)]
+                    ?: playlistDisplayArtistNameFromGroupId(selection.entityId)?.let(covered::get)
                 PinnedLibraryCard(
                     pin, name, "Artista",
                     artworkId?.let(artByRecording::get),
