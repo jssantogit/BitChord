@@ -586,8 +586,7 @@ private fun SongRowContent(
             )
         }
         // Rating occupies the trailing strip; title/artist ellipsize to leave
-        // space for it. Duration sits *under* the stars, not beside them.
-        // Unrated tracks keep their existing trailing duration slot.
+        // space for it. Song lists no longer show per-track duration.
         Column(
             modifier = Modifier.padding(start = 8.dp),
             horizontalAlignment = Alignment.End,
@@ -599,14 +598,6 @@ private fun SongRowContent(
                     strokeWidth = 2.dp,
                     color = subtitleColor,
                 )
-            } else {
-                song.durationText?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = subtitleColor,
-                    )
-                }
             }
         }
         // Same sheet the long-press opens, for anyone who doesn't think to hold.
