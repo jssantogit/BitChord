@@ -6,6 +6,7 @@ package com.music.bitchord.acquisition.a0
  * Maximum two fallback requests, no reconnect/login/retry loop or transfer.
  */
 internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWide:Boolean=false) {
+    private val originalQuery=original
     // A bilingual title may carry a native-script name and a widely used
     // Latin title in trailing parentheses. Search the Latin alternative
     // as discovery only; the canonical selection gate is unchanged.
@@ -113,6 +114,24 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
         // An album-wide query sent by a sibling must not consume a fallback.
         ordered.filter { it.length>=3 }.distinct()
     }
+    /** Enum-only search-kind diagnostics. Never emit wire text or identifiers. */
+    internal enum class VariantKind {
+        ALBUM_WIDE, ALBUM_QUALIFIED, EDITION_EQUIVALENT,
+        TITLE_ONLY_OR_ALIAS, NORMALIZED_VARIANT, OTHER,
+    }
+    internal fun variantKind(wireText:String):VariantKind = when {
+        albumWide!=null && wireText==albumWide -> VariantKind.ALBUM_WIDE
+        albumQualified!=null && wireText==albumQualified ->
+            VariantKind.ALBUM_QUALIFIED
+        A0SearchQuery.editionSpellingVariant(originalQuery)==wireText ->
+            VariantKind.EDITION_EQUIVALENT
+        (latinTitleAlias ?: A0SearchQuery.titleOnlyFallback(originalQuery))==wireText ->
+            VariantKind.TITLE_ONLY_OR_ALIAS
+        wireText in runCatching { A0SearchQuery.variants(originalQuery).drop(1) }
+            .getOrDefault(emptyList()) -> VariantKind.NORMALIZED_VARIANT
+        else -> VariantKind.OTHER
+    }
+
     /** Search-only key; a release query should be issued once per batch. */
     internal val releaseWideQuery:String? get()=albumWide
     val authorizesTransfer:Boolean get()=false
