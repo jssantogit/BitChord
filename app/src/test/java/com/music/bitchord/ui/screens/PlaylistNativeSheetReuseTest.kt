@@ -27,6 +27,7 @@ class PlaylistNativeSheetReuseTest {
 
     @Test fun sharedSettingsGroupSelectionDockFitsPhoneAndCollapsesNativeActions() {
         var added = 0
+        var queued = 0
         compose.setContent {
             Box(Modifier.width(320.dp)) {
                 CanonicalLibraryBatchActionBar(
@@ -35,13 +36,18 @@ class PlaylistNativeSheetReuseTest {
                     onClear = {},
                     onAddToPlaylist = { added++ },
                     onPlayNext = {},
+                    onAddToQueue = { queued++ },
                     onRateSelection = {},
                 )
             }
         }
         compose.onNodeWithTag("native-settings-group-surface").assertExists()
         compose.onNodeWithContentDescription("Adicionar seleção à playlist").performClick()
-        compose.runOnIdle { assertEquals(1, added) }
+        compose.onNodeWithContentDescription("Adicionar seleção à fila").performClick()
+        compose.runOnIdle {
+            assertEquals(1, added)
+            assertEquals(1, queued)
+        }
         compose.onNodeWithContentDescription("Recolher ações").performClick()
         compose.onNodeWithContentDescription("Adicionar seleção à playlist").assertDoesNotExist()
     }
