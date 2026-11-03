@@ -832,6 +832,21 @@ internal fun CanonicalRemoteLibraryScreen(
             val selection = canonicalAlbumDetailPlaylistSelection(
                 selectedContext, selectedEntity?.id,
             )
+            runCatching {
+                Diagnostics.event(
+                    category = DiagnosticCategory.UI,
+                    name = "album_playlist_toolbar_v1",
+                    metadata = mapOf(
+                        "origin" to "album_category",
+                        "validTarget" to (selection != null).toString(),
+                        "sourceMode" to when {
+                            selectedSource == null -> "all"
+                            selectedSource == "local-mediastore" -> "local"
+                            else -> "remote"
+                        },
+                    ),
+                )
+            }
             if (selection != null) {
                 libraryMenu = null
                 playlistPickerSelection = selection
@@ -921,6 +936,21 @@ internal fun CanonicalRemoteLibraryScreen(
                         val chosen = canonicalAlbumDetailPlaylistSelection(
                             CanonicalSmartFilterContext.ALBUMS, release.id,
                         )
+                        runCatching {
+                            Diagnostics.event(
+                                category = DiagnosticCategory.UI,
+                                name = "album_playlist_toolbar_v1",
+                                metadata = mapOf(
+                                    "origin" to "artist_nested",
+                                    "validTarget" to (chosen != null).toString(),
+                                    "sourceMode" to when {
+                                        selectedSource == null -> "all"
+                                        selectedSource == "local-mediastore" -> "local"
+                                        else -> "remote"
+                                    },
+                                ),
+                            )
+                        }
                         if (chosen != null) {
                             libraryMenu = null
                             playlistPickerSelection = chosen
