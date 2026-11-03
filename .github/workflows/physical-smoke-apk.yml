@@ -7,8 +7,8 @@ on:
   # This scoped push fallback is needed while PR #193 has a conflicted merge
   # ref and the connected GitHub integration cannot dispatch workflows.
   push:
-    branches: [listening/smart-playlists-v2-192]
-    paths: [docs/listening/issue-192-physical-smoke-request.md]
+    branches: [listening/smart-playlists-v2-192, smoke/206-native-visual-20261103]
+    paths: [docs/listening/issue-192-physical-smoke-request.md, docs/listening/issue-206-physical-smoke-request.md]
   workflow_dispatch:
     inputs:
       smoke_plan:
@@ -32,7 +32,7 @@ jobs:
     steps:
       - name: Validate physical smoke request
         env:
-          SMOKE_PLAN: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke_plan || (github.event_name == 'push' && github.ref == 'refs/heads/listening/smart-playlists-v2-192' && 'Explicit user-approved physical smoke for issue 192') }}
+          SMOKE_PLAN: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke_plan || (github.event_name == 'push' && (github.ref == 'refs/heads/listening/smart-playlists-v2-192' || github.ref == 'refs/heads/smoke/206-native-visual-20261103') && 'Explicit user-approved physical smoke for issue 192 / PR 206 unified Library visual parity') }}
         run: test -n "$SMOKE_PLAN"
 
       - name: Checkout
@@ -51,6 +51,19 @@ jobs:
             { echo "::error::Native playlist UI PR #202 is absent from APK HEAD"; exit 1; }
           test -f app/src/main/java/com/music/bitchord/ui/screens/SmartPlaylistVisualLanguage.kt
           grep -Fq 'Descrição (opcional)' app/src/main/java/com/music/bitchord/ui/screens/SmartPlaylistV2WizardUi.kt
+
+      # No silent regression to an older native playlist/library version.
+      # The only Android code authorized by this smoke is the exact #206
+      # CI-green commit plus workflow/documentation-only smoke commits.
+      - name: Require CI-green native Library #206
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 7f9badc663be21db9d143a27dbf44fb350117f89 HEAD ||
+            { echo "::error::Native Library PR #206 CI-green HEAD is absent"; exit 1; }
+          test -f app/src/main/java/com/music/bitchord/ui/screens/CanonicalLibraryPlaylistPicker.kt
+          test -f app/src/main/java/com/music/bitchord/ui/screens/CanonicalLibraryBatchActionBar.kt
+          grep -Fq 'NativeLibraryEntityCard(' app/src/main/java/com/music/bitchord/ui/screens/CanonicalRemoteLibraryScreen.kt
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
