@@ -191,18 +191,11 @@ internal fun CanonicalLibraryPlaylistPicker(
                                     modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
                                 ) {
                                     items(filtered, key = { it.id }) { saved ->
-                                        SettingsRow(
-                                            title = saved.name,
+                                        PlaylistWizardSelectionRow(
+                                            label = saved.name,
                                             subtitle = "${saved.recordingIds.size} faixas",
-                                            reserveIconSpace = false,
+                                            selected = selectedId == saved.id,
                                             onClick = { selectedId = saved.id; error = null },
-                                            trailing = {
-                                                if (selectedId == saved.id) {
-                                                    Icon(Icons.Rounded.Check,
-                                                        contentDescription = "Selecionada",
-                                                        tint = MaterialTheme.colorScheme.primary)
-                                                }
-                                            },
                                             leading = {
                                                 Box(
                                                     Modifier.size(44.dp)
