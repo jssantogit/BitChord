@@ -342,6 +342,7 @@ internal fun PlaylistWizardSelectionRow(
         title = label,
         onClick = onClick,
         reserveIconSpace = false,
+        modifier = Modifier.testTag("native-playlist-selection-row"),
         trailing = {
             if (selected) {
                 Icon(
