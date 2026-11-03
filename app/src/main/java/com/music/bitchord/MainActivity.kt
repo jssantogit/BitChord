@@ -4368,7 +4368,12 @@ private fun BitChordApp(
                                 showBrowseFilters = true,
                             )
                         }
-                        if (unifiedLibraryCategory != null && !showSettings && detail == null) {
+                        // "Ver todos" may temporarily coexist with the saved
+                        // unified-category state. Render only the active route's
+                        // native toolbar, never two overlapping sets of actions.
+                        else if (unifiedLibraryCategory != null &&
+                            !showAllLocalRecentAdditions && !showSettings && detail == null
+                        ) {
                             UnifiedLibraryToolbarActions(
                                 searching = unifiedLibrarySearching,
                                 onSearch = { unifiedLibrarySearching = !unifiedLibrarySearching },
@@ -5437,7 +5442,7 @@ private fun BitChordApp(
         }
 
         UnifiedLibraryMenus(
-            visible = unifiedLibraryCategory != null &&
+            visible = unifiedLibraryCategory != null && !showAllLocalRecentAdditions &&
                 shouldShowUnifiedLibraryBrowseFilters(unifiedLibraryDetailOpen),
             hazeState = hazeState,
             controls = unifiedControls,
