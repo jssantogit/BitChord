@@ -271,8 +271,7 @@ private fun AdaptiveCollectionsBody(
         Text(texts.title, style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp))
         when (state) {
-            AdaptiveCollectionsUiState.Loading ->
-                Text(texts.loading, Modifier.padding(horizontal = 20.dp))
+            AdaptiveCollectionsUiState.Loading -> NativeLoadingSpinner()
             AdaptiveCollectionsUiState.Error ->
                 Text(texts.error, Modifier.padding(horizontal = 20.dp))
             is AdaptiveCollectionsUiState.Ready -> state.collections.forEach { section ->
