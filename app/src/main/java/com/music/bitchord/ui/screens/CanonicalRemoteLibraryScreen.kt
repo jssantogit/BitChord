@@ -1467,14 +1467,23 @@ internal fun CanonicalCatalogRatingMenu(
     onEdit: () -> Unit,
     onOpenMenu: (() -> Unit)? = null,
 ) {
+    if (onOpenMenu != null) {
+        // This is already the native canonical BrowseActionsSheet route.
+        // Do not compose a second (dormant) rating-only dropdown beneath it.
+        RowMoreButton(
+            onClick = onOpenMenu,
+            contentDescription = sharedStringResource(Res.string.canonical_rating_song_options),
+        )
+        return
+    }
     var expanded by remember { mutableStateOf(false) }
     Box {
         RowMoreButton(
-            onClick = { if (onOpenMenu != null) onOpenMenu() else expanded = true },
+            onClick = { expanded = true },
             contentDescription = sharedStringResource(Res.string.canonical_rating_song_options),
         )
         DropdownMenu(
-            expanded = expanded && onOpenMenu == null,
+            expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
             DropdownMenuItem(
