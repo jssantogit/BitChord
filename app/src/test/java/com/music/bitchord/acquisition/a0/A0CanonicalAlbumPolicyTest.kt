@@ -250,4 +250,16 @@ class A0CanonicalAlbumPolicyTest {
                 A0CanonicalAlbumPolicy.ClaimSource.EXPLICIT_ALBUM_FIELD)).status)
     }
 
+    @Test fun nonLatinVowelSignsCannotCollapseDistinctAlbumClaims() {
+        val expected=A0CanonicalAlbumPolicy.Target("गीत")
+        val different=policy.assess(expected,A0CanonicalAlbumPolicy.Claim("गत"))
+        assertEquals(A0CanonicalAlbumPolicy.Status.CONFLICTING_CLAIM,
+            different.status)
+        val equivalent=policy.assess(expected,A0CanonicalAlbumPolicy.Claim(
+            java.text.Normalizer.normalize("गीत",
+                java.text.Normalizer.Form.NFD)))
+        assertEquals(A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED,
+            equivalent.status)
+    }
+
 }
