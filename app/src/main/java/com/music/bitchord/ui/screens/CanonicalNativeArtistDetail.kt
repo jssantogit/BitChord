@@ -45,6 +45,7 @@ import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.trackColumnWidth
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.theme.rememberArtworkPalette
@@ -88,6 +89,8 @@ internal fun CanonicalNativeArtistDetail(
     onNestedDetailChanged: (Boolean) -> Unit,
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
     onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
+    onTrackOptions: (CanonicalBrowseTrack) -> Unit,
+    onReleaseOptions: (ReleaseEntity) -> Unit,
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
 ) {
     val context = LocalContext.current.applicationContext
@@ -252,8 +255,11 @@ internal fun CanonicalNativeArtistDetail(
                     )
                 }
                 items(albumTracks, key = { it.recordingId }) { track ->
-                    CanonicalTrackRow(track, artworkLoader, { onTrackPlay(track) },
-                        { onTrackEditRating(track) })
+                    CanonicalTrackRow(
+                        track, artworkLoader, { onTrackPlay(track) },
+                        { onTrackEditRating(track) },
+                        onOptions = { onTrackOptions(track) },
+                    )
                 }
             }
         }
@@ -337,6 +343,7 @@ internal fun CanonicalNativeArtistDetail(
                                         track, artworkLoader,
                                         onClick = { onTrackPlay(track) },
                                         onEditRating = { onTrackEditRating(track) },
+                                        onOptions = { onTrackOptions(track) },
                                         compactForArtist = true,
                                         palette = palette,
                                     )
@@ -360,6 +367,9 @@ internal fun CanonicalNativeArtistDetail(
                                 Modifier.fillMaxSize()) }
                         },
                         onClick = { openedRelease = release },
+                        trailing = {
+                            RowMoreButton(onClick = { onReleaseOptions(release) })
+                        },
                         horizontalPadding = PAGE_GUTTER,
                     )
                 }
@@ -384,6 +394,7 @@ internal fun CanonicalNativeArtistDetail(
                                         Modifier.fillMaxSize()) }
                                 },
                                 onClick = { openedRelease = release },
+                                onMore = { onReleaseOptions(release) },
                             )
                             }
                         }
