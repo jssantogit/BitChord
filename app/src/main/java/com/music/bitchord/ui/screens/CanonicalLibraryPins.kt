@@ -20,6 +20,29 @@ internal data class CanonicalLibraryPin(
     val subtitle: String = "",
 )
 
+/** Typed pin navigation: a Recording plays; a Release/Artist opens the
+ * existing unified detail. No provider-owned IDs or display-name routing. */
+internal sealed interface CanonicalLibraryPinOpenTarget {
+    data class PlayRecording(val recordingId: String) : CanonicalLibraryPinOpenTarget
+    data class OpenEntity(
+        val category: com.music.bitchord.data.listening.CanonicalSmartFilterContext,
+        val pin: CanonicalLibraryPin,
+    ) : CanonicalLibraryPinOpenTarget
+}
+
+internal fun canonicalLibraryPinOpenTarget(
+    pin: CanonicalLibraryPin,
+): CanonicalLibraryPinOpenTarget = when (pin.selection.type) {
+    CanonicalLibraryEntityType.TRACK ->
+        CanonicalLibraryPinOpenTarget.PlayRecording(pin.selection.entityId)
+    CanonicalLibraryEntityType.ALBUM -> CanonicalLibraryPinOpenTarget.OpenEntity(
+        com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS, pin,
+    )
+    CanonicalLibraryEntityType.ARTIST -> CanonicalLibraryPinOpenTarget.OpenEntity(
+        com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS, pin,
+    )
+}
+
 internal const val MAX_CANONICAL_LIBRARY_PINS = 100
 
 internal fun validCanonicalLibraryPin(pin: CanonicalLibraryPin): Boolean =
