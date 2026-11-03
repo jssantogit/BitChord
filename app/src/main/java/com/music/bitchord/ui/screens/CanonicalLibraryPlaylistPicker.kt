@@ -208,9 +208,8 @@ internal fun CanonicalLibraryPlaylistPicker(
                                                     Modifier.size(44.dp)
                                                         .clip(RoundedCornerShape(12.dp)),
                                                 ) {
-                                                    CanonicalPlaylistCoverArt(
-                                                        rows = emptyList(),
-                                                        customCoverUri = saved.coverUri,
+                                                    CanonicalStaticPlaylistCoverArt(
+                                                        playlist = saved,
                                                         modifier = Modifier.fillMaxSize(),
                                                     )
                                                 }
