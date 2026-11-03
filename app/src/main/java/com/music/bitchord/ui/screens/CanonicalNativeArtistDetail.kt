@@ -191,14 +191,18 @@ internal fun CanonicalNativeArtistDetail(
         keyColors = appleArt?.keyColors(),
     )
 
-    // The star indicates first-party rating of the exact ArtistId; no
-    // subscribing or copying song stars, and no display-name fallback.
-    val artistRated by produceState(initialValue = false, key1 = artistId) {
-        val verified = artistId?.takeIf {
-            it.isNotBlank() && playlistDisplayArtistNameFromGroupId(it) == null
-        } ?: return@produceState
+    // The existing star edits the artist's first-party rating. Local
+    // display-only groups use DISPLAY_ARTIST, never a fabricated MusicBrainz
+    // ArtistId; the save path checks real provider-scoped song membership.
+    val artistRatingKey = artistId?.let { id ->
+        canonicalEntityRatingTarget(
+            CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, id),
+        )
+    }
+    val artistRated by produceState(initialValue = false, key1 = artistRatingKey) {
+        val key = artistRatingKey ?: return@produceState
         ListeningEventDatabase.get(context).canonicalEntityRatingDao()
-            .observe("ARTIST", verified).collectLatest { value = it != null }
+            .observe(key.entityType, key.entityId).collectLatest { value = it != null }
     }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     var openedRelease by remember(artistName) { mutableStateOf<ReleaseEntity?>(null) }
@@ -336,9 +340,8 @@ internal fun CanonicalNativeArtistDetail(
                     ActionRow(
                         onPlay = { onPlayAll(shownTracks, false) },
                         onShuffle = { onPlayAll(shownTracks, true) },
-                        onRateArtist = if (artistId != null &&
-                            playlistDisplayArtistNameFromGroupId(artistId) == null)
-                                onRateArtist else null,
+                        onRateArtist = if (artistRatingKey != null)
+                            onRateArtist else null,
                         artistRated = artistRated,
                         playColor = appleArt?.keyColor?.let { Color(it) },
                     )
