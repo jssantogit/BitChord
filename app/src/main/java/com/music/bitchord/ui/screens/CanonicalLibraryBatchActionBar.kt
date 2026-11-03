@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +32,7 @@ internal fun CanonicalLibraryBatchActionBar(
     onClear: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onPlayNext: () -> Unit,
+    onRateSelection: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     if (selectedCount < 1) return
@@ -63,5 +65,12 @@ internal fun CanonicalLibraryBatchActionBar(
             icon = Icons.AutoMirrored.Rounded.QueueMusic,
             onClick = onPlayNext,
         )
+        onRateSelection?.let { rate ->
+            PlaylistWizardCompactAction(
+                label = "Avaliar seleção",
+                icon = Icons.Rounded.Star,
+                onClick = rate,
+            )
+        }
     }
 }
