@@ -22,6 +22,24 @@ class UnifiedLibraryToolbarPolicyTest {
         assertFalse(shouldUseUnifiedAlbumDetailToolbar(null, detailOpen = true))
     }
 
+    @Test fun nestedArtistAlbumUsesNativeAlbumToolbarWithoutChangingArtistRoot() {
+        assertTrue(shouldUseUnifiedAlbumDetailToolbar(
+            CanonicalSmartFilterContext.ARTISTS,
+            detailOpen = true,
+            nestedAlbumOpen = true,
+        ))
+        assertFalse(shouldUseUnifiedAlbumDetailToolbar(
+            CanonicalSmartFilterContext.ARTISTS,
+            detailOpen = true,
+            nestedAlbumOpen = false,
+        ))
+        assertFalse(shouldUseUnifiedAlbumDetailToolbar(
+            CanonicalSmartFilterContext.ARTISTS,
+            detailOpen = false,
+            nestedAlbumOpen = true,
+        ))
+    }
+
     @Test fun browseFiltersBelongToCategoryViewButNotArtistDetail() {
         assertTrue(shouldShowUnifiedLibraryBrowseFilters(detailOpen = false))
         assertFalse(shouldShowUnifiedLibraryBrowseFilters(detailOpen = true))
