@@ -722,6 +722,33 @@ internal fun CanonicalRemoteLibraryScreen(
         )
     }
 
+    // All batch queue actions must revalidate the exact typed selection in
+    // one canonical resolver; do not create a second per-source queue path.
+    val queueMultiSelection: (CanonicalCollectionIntent) -> Unit = { intent ->
+        val snapshot = selectedItems.toList()
+        libraryActionScope.launch {
+            val resolved = try {
+                canonicalLibraryResolveSelections(
+                    context.applicationContext, snapshot, selectedSource,
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            val ids = resolved?.recordingIds.orEmpty()
+            if (resolved?.unavailableEntities == 0 && ids.isNotEmpty()) {
+                executeLibraryTrack(
+                    SmartCollectionActionSource.LibraryTracks(
+                        ids, selectedSource, shuffle = false,
+                    ),
+                    intent,
+                )
+                selectedItems = emptyList()
+            }
+        }
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
@@ -1055,28 +1082,8 @@ internal fun CanonicalRemoteLibraryScreen(
                     it.type == CanonicalLibraryEntityType.TRACK ||
                         canonicalEntityRatingTarget(it) != null
                 }) { { ratingDialogSelection = selectedItems.toList() } } else null,
-                onPlayNext = {
-                    val snapshot = selectedItems.toList()
-                    libraryActionScope.launch {
-                        val resolved = try {
-                            canonicalLibraryResolveSelections(
-                                context.applicationContext, snapshot, selectedSource,
-                            )
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (_: Exception) { null }
-                        val ids = resolved?.recordingIds.orEmpty()
-                        if (resolved?.unavailableEntities == 0 && ids.isNotEmpty()) {
-                            executeLibraryTrack(
-                                SmartCollectionActionSource.LibraryTracks(
-                                    ids, selectedSource, shuffle = false,
-                                ),
-                                CanonicalCollectionIntent.ADD_NEXT,
-                            )
-                            selectedItems = emptyList()
-                        }
-                    }
-                },
+                onPlayNext = { queueMultiSelection(CanonicalCollectionIntent.ADD_NEXT) },
+                onAddToQueue = { queueMultiSelection(CanonicalCollectionIntent.ADD_TO_QUEUE) },
             )
         }
         }
