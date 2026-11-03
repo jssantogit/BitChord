@@ -141,6 +141,36 @@ class PlaylistLibraryVisualReuseTest {
         compose.runOnIdle { assertEquals("newjeans", query) }
     }
 
+    @Test fun unifiedSongGridCanReuseAlbumAndArtistCardActionsWithoutAnotherCard() {
+        var plays = 0
+        var overflow = 0
+        var chosen by mutableStateOf(false)
+        var toggles = 0
+        compose.setContent {
+            NativeLibraryEntityCard(
+                title = "Hurt",
+                subtitle = "NewJeans",
+                imageUrl = null,
+                isArtist = false,
+                onClick = { plays++ },
+                onMore = { overflow++ },
+                selectionMode = chosen,
+                selected = chosen,
+                onToggleSelection = { chosen = !chosen; toggles++ },
+            )
+        }
+        compose.onNodeWithContentDescription("Opções de Hurt").performClick()
+        compose.runOnIdle { assertEquals(1, overflow) }
+        compose.onNodeWithText("Hurt").performClick()
+        compose.runOnIdle { assertEquals(1, plays) }
+        compose.runOnIdle { chosen = true }
+        compose.onNodeWithContentDescription("Selecionar Hurt").performClick()
+        compose.runOnIdle {
+            assertEquals(1, toggles)
+            assertEquals(1, overflow) // selection mode has no overflow.
+        }
+    }
+
     @Test fun normalPlaylistPickerAndLibraryCoverUseSameOrderedDeduplicatedMembers() {
         assertEquals(
             listOf("rec-1", "rec-2", "rec-3", "rec-4"),
