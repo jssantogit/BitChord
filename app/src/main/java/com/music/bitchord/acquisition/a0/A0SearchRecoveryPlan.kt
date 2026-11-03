@@ -94,10 +94,20 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
         val ordered=when {
             albumWide!=null && generic ->
                 listOfNotNull(albumWide,albumQualified,editionVariant,title)+normal
-            albumWide!=null ->
-                listOfNotNull(albumWide,editionVariant,title,albumQualified)+normal
+            albumWide!=null -> {
+                // The user's exact artist + album + title is usually more
+                // useful than an unconstrained title-only search. Preserve
+                // true bilingual Latin title aliases as the first recovery:
+                // their translated title may be the peer's only known name.
+                if(latinTitleAlias!=null)
+                    listOfNotNull(albumWide,editionVariant,title,albumQualified)+normal
+                else
+                    listOfNotNull(albumWide,editionVariant,albumQualified,title)+normal
+            }
             generic -> listOfNotNull(albumQualified,editionVariant)+normal
-            else -> listOfNotNull(editionVariant,title,albumQualified)+normal
+            latinTitleAlias!=null ->
+                listOfNotNull(editionVariant,title,albumQualified)+normal
+            else -> listOfNotNull(editionVariant,albumQualified,title)+normal
         }
         // Keep the ranked candidates, not merely the first two raw choices.
         // An album-wide query sent by a sibling must not consume a fallback.
