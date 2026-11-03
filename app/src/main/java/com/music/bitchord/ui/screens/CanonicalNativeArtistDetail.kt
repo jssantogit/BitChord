@@ -238,7 +238,7 @@ internal fun CanonicalNativeArtistDetail(
             (maxWidth / 0.95f).coerceAtMost(maxHeight * 0.6f)
         }
         val photoHeight by animateDpAsState(targetPhotoHeight, label = "native_artist_hero")
-        val trackColumnWidth = trackColumnWidth(maxWidth)
+        val artistTrackColumnWidth = trackColumnWidth(maxWidth)
         PageBackground(
             page = null,
             palette = palette,
@@ -292,7 +292,7 @@ internal fun CanonicalNativeArtistDetail(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(shownTracks.take(20).chunked(4), key = { it.first().recordingId }) { column ->
-                            Column(Modifier.width(trackColumnWidth)) {
+                            Column(Modifier.width(artistTrackColumnWidth)) {
                                 column.forEach { track ->
                                     CanonicalTrackRow(
                                         track, artworkLoader,
