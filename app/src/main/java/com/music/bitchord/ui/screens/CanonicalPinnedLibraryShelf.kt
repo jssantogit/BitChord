@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -233,8 +236,8 @@ internal fun CanonicalPinnedLibraryShelf(
                                     )
                                     else -> com.music.bitchord.ui.components.CoverPlaceholder(
                                         if (card.pin.selection.type == CanonicalLibraryEntityType.ARTIST)
-                                            androidx.compose.material.icons.Icons.Rounded.Person
-                                        else androidx.compose.material.icons.Icons.Rounded.Album,
+                                            Icons.Rounded.Person
+                                        else Icons.Rounded.Album,
                                         Modifier.fillMaxSize(),
                                     )
                                 }
