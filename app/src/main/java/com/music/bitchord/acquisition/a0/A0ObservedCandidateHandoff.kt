@@ -88,6 +88,9 @@ internal class A0ObservedCandidateHandoff(
         val qualityMismatches:Int=0,
         val manualPrimary:Int=0,
         val shadowStrong:Int=0,
+        // Aggregate, title-unrelated filenames discarded before ranking.
+        // They are deliberately absent from per-slot MISSING_TERMS counts.
+        val shadowTitleFiltered:Int=0,
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
     private val candidates=ArrayList<Choice>(384)
@@ -251,6 +254,7 @@ internal class A0ObservedCandidateHandoff(
     private var unsupported=0
     private var unsafe=0
     private var noSlotSeen=0
+    private var shadowTitleFiltered=0
     private var readersStopped=false
     private var cancelled=false
     private var spent=false
@@ -313,7 +317,10 @@ internal class A0ObservedCandidateHandoff(
                 releaseSlotTokens.isNotEmpty()) {
                 val fileWords=A0ReleaseDiscoveryShadowAdapter.fileTokens(basename)
                 if(releaseSlotTokens.none { it.isNotEmpty() &&
-                        fileWords.containsAll(it) })continue
+                        fileWords.containsAll(it) }) {
+                    shadowTitleFiltered=(shadowTitleFiltered+1).coerceAtMost(100000)
+                    continue
+                }
             }
             val identity=result.peerUsername to path
             val incomingClaim=A0CandidateClaimClusters.Claim(
@@ -533,6 +540,7 @@ internal class A0ObservedCandidateHandoff(
         manualPrimary=A0ManualCandidatePolicy.primaryIndices(
             candidates,candidates.indices.toList()).size,
         shadowStrong=shadowEligibleIndices().size,
+        shadowTitleFiltered=shadowTitleFiltered,
         validBeforeLimit=eligible,
         duplicates=duplicateCount,
         capacityDropped=capDropped,

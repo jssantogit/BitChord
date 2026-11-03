@@ -30,6 +30,27 @@ class A0ObservedCandidateHandoffTest {
         assertTrue(handoff.releaseShadowSnapshot().shadowDroppedAtPeerLimit>0)
     }
 
+    @Test fun automaticShadowReportsTitlePrefilterRejectsWithoutRetainingIdentity() {
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",81,true,
+            searchPhrase="ILLIT - Magnetic",collectReleaseShadow=true,
+            collectManualCandidates=false,
+            releaseQueries=listOf("ILLIT - Magnetic","ILLIT - Lucky Girl Syndrome"))
+        val files=listOf(
+            A0SoulseekSearchFile("Shared\\\\ILLIT\\\\Album\\\\Other Song.mp3",
+                6_400_000L,"mp3",mapOf(0 to 320,1 to 161)),
+            A0SoulseekSearchFile("Shared\\\\ILLIT\\\\Album\\\\Magnetic.mp3",
+                6_400_000L,"mp3",mapOf(0 to 320,1 to 161))
+        )
+        assertTrue(handoff.offerParsed(A0SoulseekSearchResponse(
+            "source",81,files,emptyList(),true,128_000,0),"source"))
+        assertEquals(1,handoff.releaseShadowChoices().size)
+        assertEquals(1,handoff.screening().shadowTitleFiltered)
+        assertEquals(1,handoff.screening().validBeforeLimit)
+        assertTrue(handoff.choices().isEmpty())
+        assertFalse(handoff.screening().toString().contains("Other Song"))
+        assertFalse(handoff.screening().toString().contains("source"))
+    }
+
     @Test fun collectsEligiblePublicAudioCandidatesWithoutRequiringRingingsound() {
         val handoff=A0ObservedCandidateHandoff(Socket(),"ouruser",81,true)
         val response=A0SoulseekSearchResponse(

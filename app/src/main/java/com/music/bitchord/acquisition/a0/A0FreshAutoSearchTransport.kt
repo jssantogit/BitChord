@@ -526,6 +526,7 @@ internal class A0FreshAutoSearchTransport(
                 " truncated_slots=${snapshot.truncatedSlots.size}" +
                 " raw_responses=${counts.responses} public_files=${counts.publicFiles}" +
                 " admitted_before_limit=${counts.validBeforeLimit}" +
+                " shadow_title_filtered=${counts.shadowTitleFiltered}" +
                 " no_slot=${counts.noSlot} unsafe_path=${counts.unsafePath}" +
                 " unsupported_format=${counts.unsupportedFormat}" +
                 " duplicate=${counts.duplicates}" +
