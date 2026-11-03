@@ -40,6 +40,21 @@ class UnifiedLibraryToolbarPolicyTest {
         ))
     }
 
+    @Test fun artistDetailGetsNativeOverflowForPinWithoutTakingAlbumOrNestedToolbar() {
+        assertTrue(shouldUseUnifiedArtistDetailToolbar(
+            CanonicalSmartFilterContext.ARTISTS, detailOpen = true, nestedAlbumOpen = false,
+        ))
+        assertFalse(shouldUseUnifiedArtistDetailToolbar(
+            CanonicalSmartFilterContext.ARTISTS, detailOpen = true, nestedAlbumOpen = true,
+        ))
+        assertFalse(shouldUseUnifiedArtistDetailToolbar(
+            CanonicalSmartFilterContext.ALBUMS, detailOpen = true, nestedAlbumOpen = false,
+        ))
+        assertFalse(shouldUseUnifiedArtistDetailToolbar(
+            CanonicalSmartFilterContext.ARTISTS, detailOpen = false, nestedAlbumOpen = false,
+        ))
+    }
+
     @Test fun browseFiltersBelongToCategoryViewButNotArtistDetail() {
         assertTrue(shouldShowUnifiedLibraryBrowseFilters(detailOpen = false))
         assertFalse(shouldShowUnifiedLibraryBrowseFilters(detailOpen = true))
