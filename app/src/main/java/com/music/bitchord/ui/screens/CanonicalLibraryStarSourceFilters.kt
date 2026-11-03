@@ -8,6 +8,7 @@ import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.components.visibleStarValues
 import com.music.bitchord.data.settings.LocalMusicSort
+import com.music.bitchord.data.settings.SongSort
 import java.util.Locale
 
 /**
@@ -139,6 +140,33 @@ internal fun canonicalAlbumDetailTrackOrder(
     val ordered = releaseRecordingIds.distinct().mapNotNull(byId::get)
     val includedIds = ordered.mapTo(HashSet()) { it.recordingId }
     return ordered + tracks.filter { it.recordingId !in includedIds }
+}
+
+/** A canonical album opens in the release's own order. Only a deliberate
+ * action in DetailScreen's native song-sort menu changes that order. */
+internal fun canonicalAlbumDetailSort(
+    tracks: List<CanonicalBrowseTrack>,
+    sort: SongSort,
+): List<CanonicalBrowseTrack> = when (sort) {
+    SongSort.DEFAULT -> tracks
+    SongSort.TITLE_ASC -> tracks.sortedWith(
+        compareBy<CanonicalBrowseTrack> { it.title.lowercase(Locale.ROOT) }
+            .thenBy { it.recordingId },
+    )
+    SongSort.TITLE_DESC -> tracks.sortedWith(
+        compareByDescending<CanonicalBrowseTrack> { it.title.lowercase(Locale.ROOT) }
+            .thenBy { it.recordingId },
+    )
+    SongSort.DATE_ADDED_ASC -> tracks.sortedWith(
+        compareBy<CanonicalBrowseTrack> { it.dateAddedSeconds == null }
+            .thenBy { it.dateAddedSeconds }
+            .thenBy { it.recordingId },
+    )
+    SongSort.DATE_ADDED_DESC -> tracks.sortedWith(
+        compareBy<CanonicalBrowseTrack> { it.dateAddedSeconds == null }
+            .thenByDescending { it.dateAddedSeconds }
+            .thenBy { it.recordingId },
+    )
 }
 
 /** Title decoration is dropped only when the official release type agrees.
