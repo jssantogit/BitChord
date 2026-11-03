@@ -7,6 +7,32 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CanonicalLibraryActionsTest {
+    @Test fun albumDetailPlaylistActionUsesEntireCanonicalReleaseNotVisibleSongFilter() {
+        val selection = canonicalAlbumDetailPlaylistSelection(
+            CanonicalSmartFilterContext.ALBUMS, "canonical-release-id",
+        )
+        assertEquals(listOf(
+            CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, "canonical-release-id"),
+        ), selection)
+        // This action must not turn a search's currently visible tracks into
+        // a partial album or manufacture one RecordingId per visual row.
+    }
+
+    @Test fun albumDetailPlaylistActionCannotLeakToOtherCategoriesOrBlankIdentity() {
+        assertEquals(null, canonicalAlbumDetailPlaylistSelection(
+            CanonicalSmartFilterContext.SONGS, "canonical-release-id",
+        ))
+        assertEquals(null, canonicalAlbumDetailPlaylistSelection(
+            CanonicalSmartFilterContext.ARTISTS, "canonical-release-id",
+        ))
+        assertEquals(null, canonicalAlbumDetailPlaylistSelection(
+            CanonicalSmartFilterContext.ALBUMS, null,
+        ))
+        assertEquals(null, canonicalAlbumDetailPlaylistSelection(
+            CanonicalSmartFilterContext.ALBUMS, "  ",
+        ))
+    }
+
     @Test fun selectedAlbumAndArtistCountResolvedRecordingsRatherThanCards() {
         val summary = canonicalLibrarySelectionSummary(
             selectedEntities = 2,
