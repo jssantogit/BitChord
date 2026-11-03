@@ -30,6 +30,13 @@ class CanonicalLibraryActionsTest {
         )
     }
 
+    @Test fun changingTargetPlaylistSourceDuringValidationFailsClosed() {
+        assertTrue(canonicalPlaylistTargetSourceUnchanged("opensubsonic:a", "opensubsonic:a"))
+        assertTrue(canonicalPlaylistTargetSourceUnchanged(null, null))
+        assertFalse(canonicalPlaylistTargetSourceUnchanged(null, "opensubsonic:b"))
+        assertFalse(canonicalPlaylistTargetSourceUnchanged("opensubsonic:a", "opensubsonic:b"))
+    }
+
     @Test fun preservingOrderAndSourceEligibilityWhenAddingExistingMembers() {
         val plan = planCanonicalPlaylistAppend(
             current = listOf("old", "duplicate"),
