@@ -2383,6 +2383,15 @@ private fun BitChordApp(
     var unifiedLibrarySearching by remember { mutableStateOf(false) }
     var unifiedLibraryDetailOpen by remember { mutableStateOf(false) }
     var unifiedLibraryBackToken by remember { mutableIntStateOf(0) }
+    var unifiedAlbumSongSort by remember { mutableStateOf(SongSort.DEFAULT) }
+    var unifiedAlbumSortMenuOpen by remember { mutableStateOf(false) }
+    var unifiedAlbumOptionsToken by remember { mutableIntStateOf(0) }
+    LaunchedEffect(unifiedLibraryDetailOpen) {
+        if (!unifiedLibraryDetailOpen) {
+            unifiedAlbumSongSort = SongSort.DEFAULT
+            unifiedAlbumSortMenuOpen = false
+        }
+    }
     var showPlaylistLibrary by rememberSaveable { mutableStateOf(false) }
     var openedCanonicalPlaylist by remember {
         mutableStateOf<com.music.bitchord.ui.screens.LibraryPlaylistCard?>(null)
@@ -3129,6 +3138,8 @@ private fun BitChordApp(
                             selectedStarsFilter = unifiedControls.stars,
                             unifiedSort = unifiedControls.sort,
                             unifiedViewType = unifiedControls.viewType,
+                            albumSort = unifiedAlbumSongSort,
+                            albumMenuToken = unifiedAlbumOptionsToken,
                             onSourceKeysChanged = unifiedControls::updateAvailableSources,
                             searchVisible = unifiedLibrarySearching,
                             detailBackToken = unifiedLibraryBackToken,
@@ -4381,6 +4392,11 @@ private fun BitChordApp(
                                 showBrowseFilters = shouldShowUnifiedLibraryBrowseFilters(
                                     detailOpen = unifiedLibraryDetailOpen,
                                 ),
+                                albumDetail = unifiedLibraryDetailOpen &&
+                                    unifiedLibraryCategory ==
+                                    com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS,
+                                onAlbumSort = { unifiedAlbumSortMenuOpen = true },
+                                onAlbumOptions = { unifiedAlbumOptionsToken++ },
                             )
                         }
                         if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null &&
@@ -4592,7 +4608,10 @@ private fun BitChordApp(
                             // Not on a release page, whose pill already carries
                             // three of its own controls — Apple Music leaves the
                             // profile off its album pages too.
-                            if (!isReleaseDetail) TopBarAccountButton(
+                            if (!isReleaseDetail && !(unifiedLibraryDetailOpen &&
+                                unifiedLibraryCategory ==
+                                    com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS)
+                            ) TopBarAccountButton(
                                 account = account,
                                 // The account glyph is the single entrance to Settings.
                                 // Home has no redundant overflow menu.
@@ -5438,6 +5457,31 @@ private fun BitChordApp(
                     }
                 },
                 onDismiss = { songSortMenuOpen = false },
+            )
+        }
+
+        if (unifiedAlbumSortMenuOpen && unifiedLibraryDetailOpen &&
+            unifiedLibraryCategory ==
+                com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS
+        ) {
+            BackHandler { unifiedAlbumSortMenuOpen = false }
+            // The same frosted five-option SongSort menu as DetailScreen,
+            // not the root Library menu with irrelevant grid/source/star filters.
+            FrostedSortMenu(
+                hazeState = hazeState,
+                selected = unifiedAlbumSongSort,
+                onSelect = {
+                    unifiedAlbumSongSort = it
+                    unifiedAlbumSortMenuOpen = false
+                },
+                onFlipDateDirection = {
+                    unifiedAlbumSongSort = when (unifiedAlbumSongSort) {
+                        SongSort.DATE_ADDED_DESC -> SongSort.DATE_ADDED_ASC
+                        SongSort.DATE_ADDED_ASC -> SongSort.DATE_ADDED_DESC
+                        else -> SongSort.DATE_ADDED_DESC
+                    }
+                },
+                onDismiss = { unifiedAlbumSortMenuOpen = false },
             )
         }
 
@@ -6530,6 +6574,9 @@ private fun UnifiedLibraryToolbarActions(
     onSearch: () -> Unit,
     controls: UnifiedLibraryUiControls,
     showBrowseFilters: Boolean,
+    albumDetail: Boolean = false,
+    onAlbumSort: () -> Unit = {},
+    onAlbumOptions: () -> Unit = {},
 ) {
     // Keep the native contextual search entry even inside an artist detail.
     NativeCollectionSearchAction(
@@ -6538,7 +6585,16 @@ private fun UnifiedLibraryToolbarActions(
             "Fechar pesquisa da biblioteca" else "Pesquisar na biblioteca",
         onClick = onSearch,
     )
-    if (showBrowseFilters) {
+    if (albumDetail) {
+        NativeCollectionSortAction(
+            contentDescription = "Ordenar faixas do álbum",
+            onClick = onAlbumSort,
+        )
+        NativeCollectionOverflowAction(
+            contentDescription = "Opções do álbum",
+            onClick = onAlbumOptions,
+        )
+    } else if (showBrowseFilters) {
         IconButton(onClick = { controls.sourceMenuOpen = true }) {
             Icon(
                 Icons.Rounded.Layers, contentDescription = "Fonte das músicas",
