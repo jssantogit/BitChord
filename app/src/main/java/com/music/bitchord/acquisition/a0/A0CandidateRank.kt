@@ -124,7 +124,11 @@ internal object A0CandidateRank {
         // in a decorated folder never authenticates the performer.
         val compactArtistToken=artistSequence.takeIf {
             it.size in 2..4 && it.all { word ->
-                word.length>=2 && word.all(Char::isLetterOrDigit)
+                word.length>=2 && word.all { character ->
+                    character.isDigit() ||
+                        Character.UnicodeScript.of(character.code)==
+                            Character.UnicodeScript.LATIN
+                }
             }
         }?.joinToString("")?.takeIf { it.length>=6 }
         val compactInFilename=compactArtistToken!=null &&
