@@ -63,10 +63,11 @@ internal class A0FreshAutoSearchTransport(
             Thread.currentThread().isInterrupted
         val traceScope=A0AcquisitionDiagnostics.newScope()
         val traceStart=android.os.SystemClock.elapsedRealtime()
+        val slotIndex=releaseSlots.indexOf(entry)
         A0AcquisitionDiagnostics.emit(traceScope,
             A0AcquisitionDiagnostics.Phase.SEARCH_START,
             count=releaseSlots.size,
-            slot=releaseSlots.indexOf(entry))
+            slot=slotIndex)
         val valid=releaseSlots.size in 1..SoulseekBatchPlan.MAX_TRACKS &&
             releaseSlots.map{it.trackId}.distinct().size==releaseSlots.size &&
             entry in releaseSlots &&
@@ -434,6 +435,7 @@ internal class A0FreshAutoSearchTransport(
                         elapsed,releaseSlots,quality,holder.releaseShadowSnapshot()
                     )) {
                         Log.d("BitChord","soulseek_auto_search early_stop=FULL_RELEASE_COVERAGE" +
+                            " scope=$traceScope slot=$slotIndex" +
                             " elapsed_ms=${elapsed.coerceIn(0,18000)}")
                         break
                     }
@@ -473,7 +475,8 @@ internal class A0FreshAutoSearchTransport(
                         else A0AcquisitionDiagnostics.Fault.STATE,
                     elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart)
                 Log.d("BitChord","soulseek_auto_search stopped " +
-                    "joined=$joined reader_joined=$readerJoined " +
+                    "scope=$traceScope slot=$slotIndex" +
+                    " joined=$joined reader_joined=$readerJoined " +
                     "direct_joined=$directJoined indirect_joined=$indirectJoined" +
                     " direct_active=${directStats.activeNow.coerceIn(0,12)}" +
                     " direct_queued=${directStats.queuedNow.coerceIn(0,128)}" +
@@ -502,6 +505,7 @@ internal class A0FreshAutoSearchTransport(
                 counts.responses,snapshot.choices.size,
                 rejectedServerOffers.get())
             Log.d("BitChord","soulseek_auto_search replies=${snapshot.choices.size}" +
+                " scope=$traceScope slot=$slotIndex" +
                 " initial_query_kind=${initialQuery.kind.name}" +
                 " tickets_sent=${tickets.accepted.size.coerceIn(1,3)}" +
                 " rate_budget_wait_ms=${searchThrottleWaitMs.coerceIn(0,300000)}" +
