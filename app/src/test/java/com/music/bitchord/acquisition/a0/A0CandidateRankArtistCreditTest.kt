@@ -45,4 +45,22 @@ class A0CandidateRankArtistCreditTest {
             expectedDurationSeconds=220,expectedAlbum="The Works")
         assertTrue(A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in result.warnings)
     }
+    @Test fun missingArtistCreditDistinguishesAbsentPartialAndSplitDirectories() {
+        fun classify(path:String,name:String="Ditto.flac") =
+            A0CandidateRank.rank(searchPhrase="New Jeans - Ditto",name=name,
+                declaredBitrateKbps=900,remotePath=path,format="flac",
+                declaredDurationSeconds=220,expectedDurationSeconds=220,
+                expectedAlbum="Get Up").artistCreditGap
+        assertEquals(A0CandidateRank.ArtistCreditGap.ABSENT,
+            classify("Shared/Other/Get Up/Ditto.flac"))
+        assertEquals(A0CandidateRank.ArtistCreditGap.PARTIAL_FILENAME,
+            classify("Shared/Other/Get Up/New - Ditto.flac","New - Ditto.flac"))
+        assertEquals(A0CandidateRank.ArtistCreditGap.PARTIAL_DIRECTORY,
+            classify("Shared/New Collection/Get Up/Ditto.flac"))
+        assertEquals(A0CandidateRank.ArtistCreditGap.SPLIT_DIRECTORIES,
+            classify("Shared/New/Jeans/Get Up/Ditto.flac"))
+        assertEquals(A0CandidateRank.ArtistCreditGap.NONE,
+            classify("Shared/New Jeans/Get Up/Ditto.flac"))
+    }
+
 }
