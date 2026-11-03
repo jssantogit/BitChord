@@ -127,6 +127,18 @@ class CanonicalLibraryActionsTest {
         ))
     }
 
+    @Test fun embeddedNativeWizardMustRecheckSourceBeforeSaving() {
+        assertTrue(canonicalNativeWizardSourceEligible(
+            listOf("a", "b", "a"), setOf("a", "b"),
+        ))
+        assertFalse(canonicalNativeWizardSourceEligible(
+            listOf("a", "b"), setOf("a"),
+        ))
+        assertFalse(canonicalNativeWizardSourceEligible(
+            listOf("a"), emptySet(),
+        ))
+    }
+
     @Test fun longPressSelectionIsOnlyAvailableOnTopLevelLibraryCategories() {
         for (category in CanonicalSmartFilterContext.entries) {
             assertTrue(canSelectCanonicalLibraryByLongPress(category, detailOpen = false))
