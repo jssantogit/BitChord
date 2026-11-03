@@ -3,6 +3,8 @@ package com.music.bitchord.ui.screens
 import android.content.Context
 import android.content.SharedPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
+import com.music.bitchord.diagnostics.Diagnostics
+import com.music.bitchord.diagnostics.DiagnosticCategory
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -115,10 +117,29 @@ internal class CanonicalLibraryPinRepository(
         // Commit before notifying Compose: a UI success cannot precede a failed
         // disk write, and a killed process should not lose the latest tap.
         if (!preferences.edit().putString(KEY, encodeCanonicalLibraryPins(updated)).commit()) {
+            runCatching {
+                Diagnostics.event(
+                    category = DiagnosticCategory.UI,
+                    name = "canonical_library_pin_write_failed_v1",
+                    metadata = mapOf("entityType" to pin.selection.type.name),
+                )
+            }
             return pin.selection in old.map { it.selection }
         }
         pins.value = updated
-        return pin.selection in updated.map { it.selection }
+        val pinnedNow = pin.selection in updated.map { it.selection }
+        runCatching {
+            Diagnostics.event(
+                category = DiagnosticCategory.UI,
+                name = "canonical_library_pin_toggled_v1",
+                metadata = mapOf(
+                    "entityType" to pin.selection.type.name,
+                    "pinned" to pinnedNow.toString(),
+                    "count" to updated.size.toString(),
+                ),
+            )
+        }
+        return pinnedNow
     }
 
     companion object {
