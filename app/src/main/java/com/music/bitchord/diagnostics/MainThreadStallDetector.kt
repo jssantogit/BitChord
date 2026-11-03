@@ -59,6 +59,54 @@ internal class MainThreadStallState(
 }
 
 /**
+ * Bound repetitive MODERATE watchdog recoveries. The physical acquisition
+ * smoke generated ~700 almost identical warnings, evicting useful search
+ * events from the diagnostic ring. Serious stalls must bypass this gate.
+ * All state is confined to the watchdog worker thread.
+ */
+internal class MainThreadStallEventLimiter(
+    private val moderateCooldownNanos:Long=10_000_000_000L,
+) {
+    init { require(moderateCooldownNanos>0L) }
+    data class Emission(
+        val observation:MainThreadStallObservation,
+        val suppressedModerates:Int,
+    )
+    private var lastModerateEmittedAt:Long?=null
+    private var suppressed=0
+    private var peakSuppressedDurationNanos=0L
+
+    fun accept(nowNanos:Long,observed:MainThreadStallObservation):Emission? {
+        require(nowNanos>=0L)
+        if(observed.severity!=MainThreadStallSeverity.MODERATE) {
+            val hidden=suppressed
+            suppressed=0
+            peakSuppressedDurationNanos=0L
+            // Severity changes reset the moderate window. Severe/critical
+            // incidents must always be visible independently.
+            lastModerateEmittedAt=nowNanos
+            return Emission(observed,hidden)
+        }
+        val last=lastModerateEmittedAt
+        if(last!=null && nowNanos>=last &&
+            nowNanos-last<moderateCooldownNanos) {
+            suppressed=(suppressed+1).coerceAtMost(1_000_000)
+            peakSuppressedDurationNanos=maxOf(
+                peakSuppressedDurationNanos,observed.durationNanos)
+            return null
+        }
+        val collapsed=Emission(
+            observed.copy(durationNanos=maxOf(
+                observed.durationNanos,peakSuppressedDurationNanos)),
+            suppressed)
+        lastModerateEmittedAt=nowNanos
+        suppressed=0
+        peakSuppressedDurationNanos=0L
+        return collapsed
+    }
+}
+
+/**
  * Debug-only process watchdog. A main-thread heartbeat is observed from a dedicated
  * lightweight worker. Diagnostics are emitted only when a stalled episode recovers,
  * never from the main thread and never once per heartbeat while it remains blocked.
@@ -84,6 +132,7 @@ internal object MainThreadStallDetector {
             val workerThread = HandlerThread("main-thread-stall-watchdog").apply { start() }
             val workerHandler = Handler(workerThread.looper)
             val state = MainThreadStallState(STALL_THRESHOLD_NANOS)
+            val limiter = MainThreadStallEventLimiter()
 
             lastMainHeartbeatNanos.set(SystemClock.elapsedRealtimeNanos())
 
@@ -99,14 +148,19 @@ internal object MainThreadStallDetector {
                     val heartbeatAt = lastMainHeartbeatNanos.get()
                     val delay = (now - heartbeatAt).coerceAtLeast(0L)
                     state.sample(delay)?.let { observation ->
-                        Diagnostics.event(
-                            category = DiagnosticCategory.UI,
-                            name = "main_thread_stall",
-                            level = DiagnosticLevel.WARN,
-                            durationNanos = observation.durationNanos,
-                            metadata = mapOf("severity" to observation.severity.wireName) +
-                                RuntimeUiStallCorrelation.metadata(now),
-                        )
+                        limiter.accept(now,observation)?.let { emitted ->
+                            Diagnostics.event(
+                                category = DiagnosticCategory.UI,
+                                name = "main_thread_stall",
+                                level = DiagnosticLevel.WARN,
+                                durationNanos = emitted.observation.durationNanos,
+                                metadata = mapOf(
+                                    "severity" to emitted.observation.severity.wireName,
+                                    "suppressedModerates" to
+                                        emitted.suppressedModerates.toString(),
+                                ) + RuntimeUiStallCorrelation.metadata(now),
+                            )
+                        }
                     }
                     workerHandler.postDelayed(this, HEARTBEAT_INTERVAL_MILLIS)
                 }
