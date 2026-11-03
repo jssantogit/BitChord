@@ -2371,6 +2371,15 @@ private fun BitChordApp(
         mutableStateOf<com.music.bitchord.data.listening.CanonicalSmartFilterContext?>(null)
     }
     val unifiedControls = remember { UnifiedLibraryUiControls() }
+    // "Ver todos" is local-only today; share the actual native Library filter
+    // controls without pretending Navidrome additions were locally indexed.
+    val recentControls = remember {
+        UnifiedLibraryUiControls().apply {
+            sort = LocalMusicSort.DATE_ADDED
+            viewType = LibraryViewType.GRID
+        }
+    }
+    var recentSearching by remember { mutableStateOf(false) }
     var unifiedLibrarySearching by remember { mutableStateOf(false) }
     var unifiedLibraryDetailOpen by remember { mutableStateOf(false) }
     var unifiedLibraryBackToken by remember { mutableIntStateOf(0) }
@@ -3188,6 +3197,11 @@ private fun BitChordApp(
                         com.music.bitchord.ui.screens.CanonicalLocalRecentAdditions(
                             showAll = true,
                             contentPadding = listPadding,
+                            searchVisible = recentSearching,
+                            sort = recentControls.sort,
+                            viewType = recentControls.viewType,
+                            sourceKey = recentControls.sourceKey,
+                            stars = recentControls.stars,
                             onPlayTrack = { recordingId ->
                                 executeSmartCollection(
                                     SmartCollectionActionSource.RecentLocalTrack(recordingId),
@@ -4345,6 +4359,14 @@ private fun BitChordApp(
                         }
                     } else null,
                     actions = {
+                        if (showAllLocalRecentAdditions && detail == null && !showSettings) {
+                            UnifiedLibraryToolbarActions(
+                                searching = recentSearching,
+                                onSearch = { recentSearching = !recentSearching },
+                                controls = recentControls,
+                                showBrowseFilters = true,
+                            )
+                        }
                         if (unifiedLibraryCategory != null && !showSettings && detail == null) {
                             UnifiedLibraryToolbarActions(
                                 searching = unifiedLibrarySearching,
@@ -5418,6 +5440,11 @@ private fun BitChordApp(
                 shouldShowUnifiedLibraryBrowseFilters(unifiedLibraryDetailOpen),
             hazeState = hazeState,
             controls = unifiedControls,
+        )
+        UnifiedLibraryMenus(
+            visible = showAllLocalRecentAdditions,
+            hazeState = hazeState,
+            controls = recentControls,
         )
 
         val menuFolder = detail?.browseId?.takeIf { it.isDeviceFolder() }
