@@ -31,6 +31,8 @@ internal object A0AutoCandidateSelectionPolicy {
         val preflight:Map<A0CandidatePreflight.Reason,Int> = emptyMap(),
         val album:Map<A0CanonicalAlbumPolicy.Reason,Int> = emptyMap(),
         val quality:Map<A0DownloadQualityPolicy.Reason,Int> = emptyMap(),
+        val missingTitleTerms:Int=0,
+        val missingArtistCredit:Int=0,
     ) {
         /** Enum names and bounded aggregate counts ONLY, no peer metadata. */
         fun summary():String {
@@ -39,6 +41,8 @@ internal object A0AutoCandidateSelectionPolicy {
                     .joinToString(",") { "${it.key.name}:${it.value.coerceIn(0,512)}" }
                     .ifEmpty { "NONE" }
             return "rank_detail=${render(rank)}" +
+                " rank_missing_title=${missingTitleTerms.coerceIn(0,512)}" +
+                " rank_missing_artist=${missingArtistCredit.coerceIn(0,512)}" +
                 " preflight_detail=${render(preflight)}" +
                 " album_detail=${render(album)}" +
                 " quality_detail=${render(quality)}"
@@ -178,6 +182,8 @@ internal object A0AutoCandidateSelectionPolicy {
         }
         val artist=parts[0]
         var rankRejected=0
+        var rankMissingTitle=0
+        var rankMissingArtist=0
         var preflightRejected=0
         var albumRejected=0
         var qualityRejected=0
@@ -207,6 +213,10 @@ internal object A0AutoCandidateSelectionPolicy {
                 A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in ranked.warnings ||
                 A0CandidateRank.Warning.VERSION_MISMATCH in ranked.warnings) {
                 rankRejected++
+                if(ranked.match!=A0CandidateRank.Match.ALL_TERMS) {
+                    if(ranked.titleTermsIncomplete)rankMissingTitle++
+                    if(ranked.artistCreditIncomplete)rankMissingArtist++
+                }
                 val why=when {
                     ranked.match!=A0CandidateRank.Match.ALL_TERMS ->
                         RankReject.MISSING_TERMS
@@ -271,7 +281,8 @@ internal object A0AutoCandidateSelectionPolicy {
         }
         val funnel=Funnel(rankRejected,preflightRejected,albumRejected,qualityRejected)
         val details=RejectionDetails(rankReasons.toMap(),preflightReasons.toMap(),
-            albumReasons.toMap(),qualityReasons.toMap())
+            albumReasons.toMap(),qualityReasons.toMap(),
+            missingTitleTerms=rankMissingTitle,missingArtistCredit=rankMissingArtist)
         if(strong.isEmpty())return review(
             Reason.NO_STRONG_CANDIDATE,observed.size,funnel=funnel,details=details)
         // Exact equality of peer claims is not proof of actual equal audio.

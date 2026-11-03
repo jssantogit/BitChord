@@ -32,6 +32,37 @@ class A0AutoCandidateSelectionPolicyTest {
         return source.releaseShadowChoices()
     }
 
+    @Test fun rankMissingTermsAreDiagnosedAsTitleOrArtistWithoutLeakingNames() {
+        val collector=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase=target.query,requestedAlbum=target.album,
+            expectedDurationSeconds=target.durationSeconds,
+            qualityProfile=profile,collectReleaseShadow=true)
+        val files=listOf(
+            // Correct song title without an independently credited artist.
+            A0SoulseekSearchFile(
+                "Shared\\\\Other\\\\SUPER REAL ME\\\\Magnetic.mp3",
+                6_440_000L,"mp3",mapOf(0 to 320,1 to 161)),
+            // Correct artist folder but a different song title.
+            A0SoulseekSearchFile(
+                "Shared\\\\ILLIT\\\\SUPER REAL ME\\\\Other.mp3",
+                6_440_000L,"mp3",mapOf(0 to 320,1 to 161)),
+        )
+        assertTrue(collector.offerParsed(A0SoulseekSearchResponse(
+            "peer",177,files,emptyList(),true,128_000,0),"peer"))
+        val choice=A0AutoCandidateSelectionPolicy.preview(
+            target,collector.releaseShadowChoices(),profile)
+        assertEquals(A0AutoCandidateSelectionPolicy.Reason.NO_STRONG_CANDIDATE,
+            choice.reason)
+        assertEquals(2,choice.funnel.rankRejected)
+        assertEquals(1,choice.rejectionDetails.missingTitleTerms)
+        assertEquals(1,choice.rejectionDetails.missingArtistCredit)
+        val summary=choice.rejectionDetails.summary()
+        assertTrue(summary.contains("rank_missing_title=1"))
+        assertTrue(summary.contains("rank_missing_artist=1"))
+        assertFalse(summary.contains("ILLIT"))
+        assertFalse(summary.contains("Magnetic"))
+    }
+
     @Test fun noStrongCandidateReportsExclusiveGateRejectionsWithoutMetadata() {
         val samples=offers("rank",name="Other - Another.mp3")+
             offers("preflight",duration=140)+

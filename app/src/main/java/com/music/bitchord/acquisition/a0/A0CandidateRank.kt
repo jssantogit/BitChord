@@ -25,7 +25,11 @@ internal object A0CandidateRank {
         val score:Int,
         val match:Match,
         val quality:Quality=Quality.UNKNOWN_ADVERTISED,
-        val warnings:List<Warning> = emptyList()
+        val warnings:List<Warning> = emptyList(),
+        // Sanitized missing-evidence flags. They never reveal requested or
+        // peer-supplied words, and do not change any selection threshold.
+        val titleTermsIncomplete:Boolean=false,
+        val artistCreditIncomplete:Boolean=false,
     )
     // Shared by the release shadow's cheap *necessary-condition* gate.
     // Never duplicate Unicode/token semantics in a separate prefilter.
@@ -319,6 +323,8 @@ internal object A0CandidateRank {
         // The queue belongs to the source, not the recording. It must never
         // change the musical score. Keep queueLength in the signature for
         // compatibility with existing rank callers and baseline fixtures.
-        return Ranking(score.coerceIn(0,100),match,quality,warnings.toList())
+        return Ranking(score.coerceIn(0,100),match,quality,warnings.toList(),
+            titleTermsIncomplete=!titleComplete,
+            artistCreditIncomplete=!artistComplete)
     }
 }
