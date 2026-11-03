@@ -8,3 +8,5 @@
 - CI Android final da PR #206 deve passar antes de qualquer merge na main. O workflow de APK executa `:app:testDevDebugUnitTest` como gate antes de `:app:assembleDevDebug` e só publica artefato em caso de sucesso.
 - O workflow de CI anterior #41654338625 falhou 1/2795 testes por verificar a string “Loading saved playlists…”; corrigido em `f52b0de8`. Não tratar uma tentativa vermelha anterior como um APK aprovado.
 - Nenhuma alteração em `main` ou nas PRs dependentes #193/#205 é autorizada por esta solicitação.
+
+- Reenvio técnico: o primeiro workflow foi rejeitado por uma expressão YAML não citada contendo o caractere de comentário #. A correção é restrita à branch de smoke. A intenção e o código-base do owner permanecem os mesmos.
