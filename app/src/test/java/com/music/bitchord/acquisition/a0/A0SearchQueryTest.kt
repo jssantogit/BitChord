@@ -87,6 +87,20 @@ class A0SearchQueryTest {
         assertNull(A0SearchQuery.titleOnlyFallback("artist - ---"))
     }
 
+    @Test fun editionSearchVariationsPreserveAllCanonicalSongTerms() {
+        assertEquals("BTS Epiphany Jin Demo Version",
+            A0SearchQuery.editionSpellingVariant(
+                "BTS - Epiphany (Jin Demo Ver.)"))
+        assertEquals("BTS Still With You Acapella",
+            A0SearchQuery.editionSpellingVariant(
+                "BTS - Still With You (A Cappella)"))
+        assertEquals(listOf("BTS Epiphany Jin Demo Ver",
+            "BTS Epiphany Jin Demo Version","Epiphany Jin Demo Ver"),
+            A0SearchQuery.variants("BTS - Epiphany (Jin Demo Ver.)"))
+        assertNull(A0SearchQuery.editionSpellingVariant("BTS - Quiero Ver"))
+        assertNull(A0SearchQuery.editionSpellingVariant("BTS - Epiphany"))
+    }
+
     @Test fun emptyPunctuationControlCharactersAndOversizedQueriesFailClosed() {
         for (bad in listOf("", "   ", "---", "***", "../", "x".repeat(121),
             "some\nsearch", "bad\u0000name", "é".repeat(100))) {

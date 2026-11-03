@@ -136,6 +136,20 @@ class A0SearchRecoveryPlanTest {
             releaseWide=true).releaseWideQuery)
     }
 
+    @Test fun explicitDemoVersionSearchIsPreferredOverGenericTitleFallback() {
+        val original="BTS - Epiphany (Jin Demo Ver.)"
+        val plan=A0SearchRecoveryPlan(original,"Proof",releaseWide=true)
+        val album=plan.releaseWideQuery
+        assertEquals("BTS Proof",album)
+        assertEquals("BTS Epiphany Jin Demo Version",
+            plan.next(6000,false,setOf(album!!)))
+        // A successful album-wide result still avoids redundant variants.
+        assertNull(plan.next(6000,true,setOf(album),missingSiblings=false))
+        assertEquals("BTS Epiphany Jin Demo Version",
+            A0SearchRecoveryPlan(original).next(6000,false,
+                setOf("BTS Epiphany Jin Demo Ver")))
+    }
+
     @Test fun releaseSearchCannotDegradeIntoArtistOnlyWhenAlbumIsUnspecified() {
         val track="BTS (방탄소년단) - 상남자 (Boy In Luv)"
         val empty=A0SearchRecoveryPlan(track,album="",releaseWide=true)

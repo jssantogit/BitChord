@@ -87,11 +87,17 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
         val normal=runCatching {
             A0SearchQuery.variants(original).drop(1)
         }.getOrDefault(emptyList())
+        // A peer advertising "Demo Version" need not answer "Demo Ver";
+        // prefer the equivalent fully qualified song query over an overly
+        // broad title-only fallback. The two-search cap is unchanged.
+        val editionVariant=A0SearchQuery.editionSpellingVariant(original)
         val ordered=when {
-            albumWide!=null && generic -> listOfNotNull(albumWide,albumQualified,title)+normal
-            albumWide!=null -> listOfNotNull(albumWide,title,albumQualified)+normal
-            generic -> listOfNotNull(albumQualified)+normal
-            else -> listOfNotNull(title,albumQualified)+normal
+            albumWide!=null && generic ->
+                listOfNotNull(albumWide,albumQualified,editionVariant,title)+normal
+            albumWide!=null ->
+                listOfNotNull(albumWide,editionVariant,title,albumQualified)+normal
+            generic -> listOfNotNull(albumQualified,editionVariant)+normal
+            else -> listOfNotNull(editionVariant,title,albumQualified)+normal
         }
         // Keep the ranked candidates, not merely the first two raw choices.
         // An album-wide query sent by a sibling must not consume a fallback.

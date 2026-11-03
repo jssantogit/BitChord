@@ -26,6 +26,18 @@ internal object A0SearchQuery {
      * A separately bounded, same-session title-only fallback may be sent
      * after the initial exact query finds no compatible candidates.
      */
+    /** A search-text-only alternative for explicitly equivalent edition spellings.
+     * It grants NO authority to accept the file or change its canonical identity.
+     */
+    fun editionSpellingVariant(userEntered:String):String?=runCatching {
+        val first=normalize(userEntered)
+        val expanded=first.replace(
+            Regex("\\b(demo|live|acoustic|instrumental|studio|radio) ver\\b",
+                RegexOption.IGNORE_CASE),"$1 Version")
+            .replace(Regex("\\ba cappella\\b",RegexOption.IGNORE_CASE),"Acapella")
+        normalize(expanded).takeIf { it!=first }
+    }.getOrNull()
+
     fun variants(userEntered: String): List<String> {
         val first = normalize(userEntered)
         val variants = linkedSetOf(first)
@@ -44,6 +56,7 @@ internal object A0SearchQuery {
             }
         }
         if (ascii != first) variants.add(normalize(ascii))
+        editionSpellingVariant(userEntered)?.let(variants::add)
         val parts = userEntered.split(Regex("\\s+[-–—]\\s+"), limit = 2)
         if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) {
             variants.add(normalize(parts[1]))
