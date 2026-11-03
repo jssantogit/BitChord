@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
+import com.music.bitchord.data.settings.SongSort
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -54,6 +55,23 @@ class CanonicalAlbumDetailParityTest {
         assertTrue(meta.startsWith("1 faixa · "))
         assertFalse(meta.contains("2025"))
         assertFalse(meta.contains("EP"))
+    }
+
+
+    @Test fun releaseSortKeepsNativeOrderUntilUserExplicitlyChangesIt() {
+        val runningOrder = listOf(track("b", "Beta"), track("a", "Alpha"))
+        assertEquals(
+            listOf("b", "a"),
+            canonicalAlbumDetailSort(runningOrder, SongSort.DEFAULT).map { it.recordingId },
+        )
+        assertEquals(
+            listOf("a", "b"),
+            canonicalAlbumDetailSort(runningOrder, SongSort.TITLE_ASC).map { it.recordingId },
+        )
+        assertEquals(
+            listOf("b", "a"),
+            canonicalAlbumDetailSort(runningOrder, SongSort.TITLE_DESC).map { it.recordingId },
+        )
     }
 
     @Test fun epSuffixIsOnlyHiddenWhenVerifiedSubtypeAgrees() {
