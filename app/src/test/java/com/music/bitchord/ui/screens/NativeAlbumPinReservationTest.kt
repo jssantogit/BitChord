@@ -2,7 +2,14 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.performClick
+import org.junit.Assert.assertEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import org.junit.Rule
@@ -36,4 +43,29 @@ class NativeAlbumPinReservationTest {
         compose.onNodeWithContentDescription("Fixar álbum na Biblioteca (em breve)")
             .assertIsNotEnabled()
     }
+    @Test fun nativeAlbumHeroPlusPinsAndBecomesCheckToUnpin() {
+        var taps = 0
+        compose.setContent {
+            var pinned by androidx.compose.runtime.remember { mutableStateOf(false) }
+            MaterialTheme {
+                NativeReleaseActionRow(
+                    onPlay = {},
+                    onShuffle = {},
+                    isLocal = false,
+                    reservePinAction = true,
+                    isPinnedInLibrary = pinned,
+                    onTogglePin = {
+                        taps++
+                        pinned = !pinned
+                    },
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("Fixar álbum na Biblioteca")
+            .assertIsEnabled().performClick()
+        compose.onNodeWithContentDescription("Desafixar álbum da Biblioteca")
+            .assertIsDisplayed().performClick()
+        assertEquals(2, taps)
+    }
+
 }
