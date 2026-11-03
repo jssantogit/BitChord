@@ -98,6 +98,8 @@ import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
+import com.music.bitchord.ui.components.NativeDetailTrackNumber
+import com.music.bitchord.ui.components.NUMBERED_ROW_DIVIDER_INSET
 import com.music.bitchord.ui.components.NativeTrackRowText
 import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.ui.components.CoverPlaceholder
@@ -1548,13 +1550,12 @@ internal fun CanonicalTrackRow(
         modifier = if (compactForArtist) Modifier else Modifier.heightIn(min = 68.dp),
     ) {
         if (albumTrackNumber != null) {
-            Text(
-                text = albumTrackNumber.toString(),
-                style = MaterialTheme.typography.bodyMedium,
+            NativeDetailTrackNumber(
+                number = albumTrackNumber,
                 color = palette?.onBackgroundVariant
                     ?: MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.width(34.dp),
             )
+            Spacer(Modifier.width(PAGE_GUTTER))
         } else {
             CanonicalUnifiedArtwork(
                 track, artworkLoader, Modifier.size(if (compactForArtist) 48.dp else 52.dp),
@@ -2053,7 +2054,7 @@ private fun NativeUnifiedLibraryBody(
                                 palette = palette,
                             )
                             if (index < tracks.lastIndex) HorizontalDivider(
-                                modifier = Modifier.padding(start = 76.dp),
+                                modifier = Modifier.padding(start = NUMBERED_ROW_DIVIDER_INSET),
                                 thickness = 0.5.dp,
                                 color = palette.divider,
                             )
