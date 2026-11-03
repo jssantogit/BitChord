@@ -59,6 +59,47 @@ class CanonicalArtistReleaseSectionsTest {
         assertEquals(true, shouldShowNativeArtistSearch(false, "aespa"))
     }
 
+    @Test fun artistShelfSeparatesAvailableLocalAlbumAndSinglesWhenReleaseGroupTypeIsMissing() {
+        // Browse-only fallback: local album tags provide a release membership
+        // even when a MusicBrainz ReleaseGroup classification was not indexed.
+        val rows = listOf(release("Plot Twist"), release("Butterfly Doors"),
+            release("Say It"), release("unresolved"))
+        val sections = canonicalArtistReleaseSections(
+            releases = rows,
+            evidence = emptyMap(),
+            recordingCountsByRelease = mapOf(
+                "Plot Twist" to 4,
+                "Butterfly Doors" to 1,
+                "Say It" to 1,
+            ),
+        )
+        assertEquals(listOf("Plot Twist"), sections.albums.map { it.id })
+        assertEquals(listOf("Butterfly Doors", "Say It"),
+            sections.singlesAndEps.map { it.id })
+        assertEquals(listOf("unresolved"), sections.unclassified.map { it.id })
+        assertNull(sections.recentAlbum)
+    }
+
+    @Test fun officialReleaseGroupTypeOutranksProvisionalMembershipCount() {
+        val rows = listOf(release("partial-album"), release("multi-track-ep"),
+            release("unsupported-type"))
+        val proof = mapOf(
+            "partial-album" to CanonicalArtistReleaseEvidence("partial-album", "Album", "2025-04-01"),
+            "multi-track-ep" to CanonicalArtistReleaseEvidence("multi-track-ep", "EP", null),
+            "unsupported-type" to CanonicalArtistReleaseEvidence("unsupported-type", "Other", null),
+        )
+        val sections = canonicalArtistReleaseSections(
+            releases = rows,
+            evidence = proof,
+            recordingCountsByRelease = mapOf("partial-album" to 1,
+                "multi-track-ep" to 4, "unsupported-type" to 8),
+        )
+        assertEquals(listOf("partial-album"), sections.albums.map { it.id })
+        assertEquals(listOf("multi-track-ep"), sections.singlesAndEps.map { it.id })
+        assertEquals(listOf("unsupported-type"), sections.unclassified.map { it.id })
+        assertEquals("partial-album", sections.recentAlbum?.id)
+    }
+
     @Test fun artistWithoutPortraitUsesCompactNativeHeaderInsteadOfHugeBlankCanvas() {
         assertEquals(true, shouldCompactNativeArtistHero(null))
         assertEquals(true, shouldCompactNativeArtistHero(" "))
