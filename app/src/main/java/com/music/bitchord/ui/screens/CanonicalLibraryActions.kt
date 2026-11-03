@@ -24,7 +24,7 @@ internal enum class CanonicalLibraryAction {
     EDIT_RATING, ADD_TO_PLAYLIST, ADD_NEXT, ADD_TO_QUEUE,
 }
 
-/** Never pass UI-only artist name groups into the persisted entity rating DAO. */
+/** Rating keys distinguish a MusicBrainz ArtistId from a proven display group. */
 internal data class CanonicalEntityRatingTarget(
     val entityType: String,
     val entityId: String,
@@ -38,9 +38,15 @@ internal fun canonicalEntityRatingTarget(
     return when (selected.type) {
         CanonicalLibraryEntityType.TRACK -> null
         CanonicalLibraryEntityType.ALBUM -> CanonicalEntityRatingTarget("ALBUM", id)
-        CanonicalLibraryEntityType.ARTIST ->
-            if (playlistDisplayArtistNameFromGroupId(id) != null) null
-            else CanonicalEntityRatingTarget("ARTIST", id)
+        CanonicalLibraryEntityType.ARTIST -> {
+            // Some local libraries have real recordings for an artist before
+            // MusicBrainz has verified an ArtistId. Keep these ratings in their
+            // own namespace, NEVER fabricate an ArtistId from the name.
+            val displayName = playlistDisplayArtistNameFromGroupId(id)
+            CanonicalEntityRatingTarget(
+                if (displayName != null) "DISPLAY_ARTIST" else "ARTIST", id,
+            )
+        }
     }
 }
 
@@ -51,8 +57,8 @@ internal fun canonicalLibraryAvailableActions(
     type: CanonicalLibraryEntityType,
     hasCanonicalIdentity: Boolean,
 ): List<CanonicalLibraryAction> = buildList {
-    // Recording ratings and canonical album/artist ratings have separate
-    // persisted tables. Display-only artist name groups cannot be rated.
+    // Ratings live in separate first-party tables. The display-artist
+    // namespace is distinct from verified ArtistId ratings.
     if (hasCanonicalIdentity) add(CanonicalLibraryAction.EDIT_RATING)
     add(CanonicalLibraryAction.ADD_TO_PLAYLIST)
     add(CanonicalLibraryAction.ADD_NEXT)
