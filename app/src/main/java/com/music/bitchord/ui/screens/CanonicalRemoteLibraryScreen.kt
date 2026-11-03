@@ -744,7 +744,9 @@ internal fun CanonicalRemoteLibraryScreen(
                     ),
                     intent,
                 )
-                selectedItems = emptyList()
+                // The user may have selected more items while this batch was
+                // being revalidated. Never clear a newer selection draft.
+                if (selectedItems == snapshot) selectedItems = emptyList()
             }
         }
     }
