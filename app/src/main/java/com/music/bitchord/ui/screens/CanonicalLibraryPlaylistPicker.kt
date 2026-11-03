@@ -257,7 +257,7 @@ internal fun CanonicalLibraryPlaylistPicker(
                     label = when {
                         saving -> "Salvando…"
                         creating -> "Criar e adicionar"
-                        else -> "Adicionar",
+                        else -> "Adicionar"
                     },
                     enabled = !saving && if (creating) newName.trim().isNotEmpty()
                         else selectedId != null,
