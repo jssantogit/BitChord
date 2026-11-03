@@ -33,6 +33,12 @@ import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLocalLibrary
 import com.music.bitchord.data.catalog.UnifiedLocalCatalogIndex
+import com.music.bitchord.data.settings.LocalMusicSort
+import com.music.bitchord.data.settings.LibraryViewType
+import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
+import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
+import com.music.bitchord.ui.components.SearchField
+import java.util.Locale
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.ShelfRow
 import kotlinx.coroutines.CancellationException
@@ -104,14 +110,67 @@ internal fun shouldRequeryRecentLocalAdditions(
     explicitRefresh: Boolean,
 ): Boolean = explicitRefresh || cachedIds.isNullOrEmpty()
 
+/** Only real MediaStore timestamps; null is UNKNOWN, never sync time. */
+internal data class CanonicalRecentLocalDates(
+    val added: Long?,
+    val modified: Long?,
+)
+
+/** Native list filters never trigger a new filesystem or Room read. */
+internal fun filteredCanonicalRecentLocalAdditions(
+    tracks: List<V2DisplayRow>,
+    query: String,
+    sort: LocalMusicSort,
+    sourceKey: String?,
+    stars: Int?,
+    ratings: CanonicalRatingDisplaySnapshot,
+    dates: Map<String, CanonicalRecentLocalDates>,
+): List<V2DisplayRow> {
+    require(stars == null || stars in 1..5)
+    if (sourceKey != null && sourceKey != CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
+        return emptyList()
+    val term = query.trim()
+    val visible = tracks.filter { track ->
+        (term.isEmpty() || track.title.contains(term, ignoreCase = true) ||
+            track.artist.contains(term, ignoreCase = true)) &&
+            (stars == null || ratings.byRecordingId[track.id]?.localValue == stars.toDouble())
+    }
+    val byTitle = compareBy<V2DisplayRow> { it.title.lowercase(Locale.ROOT) }
+        .thenBy { it.id }
+    return when (sort) {
+        LocalMusicSort.TITLE_ASC -> visible.sortedWith(byTitle)
+        LocalMusicSort.TITLE_DESC -> visible.sortedWith(byTitle.reversed())
+        LocalMusicSort.DATE_ADDED ->
+            if (dates.isEmpty()) visible else visible.sortedWith(
+                compareBy<V2DisplayRow> { dates[it.id]?.added == null }
+                    .thenByDescending { dates[it.id]?.added }
+                    .then(byTitle),
+            )
+        LocalMusicSort.DATE_MODIFIED ->
+            if (dates.isEmpty()) visible else visible.sortedWith(
+                compareBy<V2DisplayRow> { dates[it.id]?.modified == null }
+                    .thenByDescending { dates[it.id]?.modified }
+                    .then(byTitle),
+            )
+    }
+}
+
 internal object RecentLocalAdditionsSnapshot {
     private var all: List<V2DisplayRow>? = null
     private var shelf: List<V2DisplayRow>? = null
+    private var timestamps = emptyMap<String, CanonicalRecentLocalDates>()
+
+    @Synchronized fun dates(): Map<String, CanonicalRecentLocalDates> = timestamps
 
     @Synchronized fun get(showAll: Boolean): List<V2DisplayRow>? =
         if (showAll) all else shelf ?: all?.take(6)
 
-    @Synchronized fun put(showAll: Boolean, rows: List<V2DisplayRow>) {
+    @Synchronized fun put(
+        showAll: Boolean,
+        rows: List<V2DisplayRow>,
+        realDates: Map<String, CanonicalRecentLocalDates> = emptyMap(),
+    ) {
+        if (realDates.isNotEmpty()) timestamps = timestamps + realDates
         if (showAll) {
             all = rows
             shelf = rows.take(6)
@@ -121,6 +180,7 @@ internal object RecentLocalAdditionsSnapshot {
     @Synchronized fun clear() {
         all = null
         shelf = null
+        timestamps = emptyMap()
     }
 }
 
