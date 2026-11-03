@@ -88,7 +88,7 @@ class A0SearchRecoveryPlanTest {
         val sent=mutableSetOf(A0SearchQuery.normalize(original))
         assertEquals("BTS Proof",recovery.releaseWideQuery)
         sent.add(checkNotNull(recovery.releaseWideQuery)) // already sought by earlier slot
-        assertEquals("BTS (방탄소년단) Proof Boy In Luv",
+        assertEquals(A0SearchQuery.normalize("BTS (방탄소년단) Proof Boy In Luv"),
             recovery.next(6000,false,sent))
         assertEquals(2,sent.size)
     }
