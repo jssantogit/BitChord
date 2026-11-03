@@ -17,26 +17,49 @@ internal data class CanonicalArtistReleaseSections(
 )
 
 /**
- * A Release without trusted ReleaseGroup type stays visible in "Lançamentos";
- * it must not be mislabeled Album, Single or EP. "Álbum recente" is shown only
- * for an album carrying an actual complete release date.
+ * Preferred classification comes from a linked, verified ReleaseGroup type.
+ *
+ * When a user's local/remote album tag created a canonical Release without
+ * the MusicBrainz edition edge, present a *browse-only* fallback based on
+ * CURRENTLY available distinct release recordings: multiple => Albums,
+ * exactly one => Singles e EPs. This is a UI grouping, not evidence that a
+ * partially downloaded album is officially a single; never persist it as
+ * ReleaseGroup truth or use it for metadata filters.
+ *
+ * Unknown/explicitly other types stay in "Lançamentos". Only an explicitly
+ * typed Album with a real full date may become "Álbum recente".
  */
 internal fun canonicalArtistReleaseSections(
     releases: List<ReleaseEntity>,
     evidence: Map<String, CanonicalArtistReleaseEvidence>,
+    recordingCountsByRelease: Map<String, Int> = emptyMap(),
 ): CanonicalArtistReleaseSections {
-    val albums = releases.filter { evidence[it.id]?.primaryType?.equals("Album", true) == true }
-    val singles = releases.filter {
-        evidence[it.id]?.primaryType?.let { type ->
-            type.equals("Single", true) || type.equals("EP", true)
-        } == true
+    fun browseKind(release: ReleaseEntity): String {
+        val type = evidence[release.id]?.primaryType?.trim()?.lowercase(java.util.Locale.ROOT)
+        return when {
+            type == "album" -> "album"
+            type == "single" || type == "ep" -> "single"
+            type.isNullOrEmpty() -> when (recordingCountsByRelease[release.id]) {
+                1 -> "single"
+                null, 0 -> "other"
+                else -> "album"
+            }
+            else -> "other"
+        }
     }
-    val classified = (albums.map { it.id } + singles.map { it.id }).toSet()
-    val other = releases.filterNot { it.id in classified }
+    val categorized = releases.groupBy(::browseKind)
+    val albums = categorized["album"].orEmpty()
+    val singles = categorized["single"].orEmpty()
+    val other = categorized["other"].orEmpty()
     val validDate = Regex("\\d{4}-\\d{2}-\\d{2}")
     val recent = albums.mapNotNull { album ->
-        evidence[album.id]?.firstReleaseDate?.takeIf { validDate.matches(it) }?.let { day ->
-            day to album
+        val proof = evidence[album.id]
+        if (proof?.primaryType?.trim()?.equals("Album", ignoreCase = true) != true) {
+            null
+        } else {
+            proof.firstReleaseDate?.takeIf { validDate.matches(it) }?.let { day ->
+                day to album
+            }
         }
     }.maxWithOrNull(compareBy<Pair<String, ReleaseEntity>> { it.first }
         .thenBy { it.second.id })?.second
