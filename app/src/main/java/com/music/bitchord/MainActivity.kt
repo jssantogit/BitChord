@@ -4350,6 +4350,9 @@ private fun BitChordApp(
                                 searching = unifiedLibrarySearching,
                                 onSearch = { unifiedLibrarySearching = !unifiedLibrarySearching },
                                 controls = unifiedControls,
+                                showBrowseFilters = shouldShowUnifiedLibraryBrowseFilters(
+                                    detailOpen = unifiedLibraryDetailOpen,
+                                ),
                             )
                         }
                         if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null &&
@@ -5411,7 +5414,8 @@ private fun BitChordApp(
         }
 
         UnifiedLibraryMenus(
-            visible = unifiedLibraryCategory != null,
+            visible = unifiedLibraryCategory != null &&
+                shouldShowUnifiedLibraryBrowseFilters(unifiedLibraryDetailOpen),
             hazeState = hazeState,
             controls = unifiedControls,
         )
@@ -6483,28 +6487,36 @@ private class UnifiedLibraryUiControls {
     }
 }
 
+/** Category-only source and sort controls are meaningless atop artist details. */
+internal fun shouldShowUnifiedLibraryBrowseFilters(detailOpen: Boolean): Boolean =
+    !detailOpen
+
 @Composable
 private fun UnifiedLibraryToolbarActions(
     searching: Boolean,
     onSearch: () -> Unit,
     controls: UnifiedLibraryUiControls,
+    showBrowseFilters: Boolean,
 ) {
+    // Keep the native contextual search entry even inside an artist detail.
     NativeCollectionSearchAction(
         searching = searching,
         contentDescription = if (searching)
             "Fechar pesquisa da biblioteca" else "Pesquisar na biblioteca",
         onClick = onSearch,
     )
-    IconButton(onClick = { controls.sourceMenuOpen = true }) {
-        Icon(
-            Icons.Rounded.Layers, contentDescription = "Fonte das músicas",
-            tint = MaterialTheme.colorScheme.onSurface,
+    if (showBrowseFilters) {
+        IconButton(onClick = { controls.sourceMenuOpen = true }) {
+            Icon(
+                Icons.Rounded.Layers, contentDescription = "Fonte das músicas",
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        NativeCollectionSortAction(
+            contentDescription = "Ordenar e filtrar biblioteca",
+            onClick = { controls.sortMenuOpen = true },
         )
     }
-    NativeCollectionSortAction(
-        contentDescription = "Ordenar e filtrar biblioteca",
-        onClick = { controls.sortMenuOpen = true },
-    )
 }
 
 @Composable
