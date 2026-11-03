@@ -159,6 +159,32 @@ private suspend fun readPinnedLibraryCards(
     }
 }
 
+/**
+ * Keep canonical pin dispatch outside the already-large BitChordApp
+ * composable (the JVM compiler has a hard 64KB method bytecode ceiling).
+ */
+@Composable
+internal fun CanonicalPinnedLibraryHomeSection(
+    refreshRequested: Boolean,
+    onPlayRecording: (String) -> Unit,
+    onOpenEntity: (
+        CanonicalLibraryPin,
+        com.music.bitchord.data.listening.CanonicalSmartFilterContext,
+    ) -> Unit,
+) {
+    CanonicalPinnedLibraryShelf(
+        refreshRequested = refreshRequested,
+        onOpen = { pin ->
+            when (val target = canonicalLibraryPinOpenTarget(pin)) {
+                is CanonicalLibraryPinOpenTarget.PlayRecording ->
+                    onPlayRecording(target.recordingId)
+                is CanonicalLibraryPinOpenTarget.OpenEntity ->
+                    onOpenEntity(target.pin, target.category)
+            }
+        },
+    )
+}
+
 /** The native Library landing shelf mirrors the reference's 3-column covers
  * BEFORE category links. Nothing is shown when the user has no pins. Six covers
  * are initially visible; the rest expand in-place without a parallel route. */
