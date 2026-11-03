@@ -75,6 +75,22 @@ class CanonicalLibraryPinsTest {
         assertTrue(decodeCanonicalLibraryPins("not json").isEmpty())
     }
 
+    @Test fun artistPinAvailabilityRequiresExactSourceScopedArtistEvidence() {
+        assertTrue(canonicalPinnedArtistAccessible(
+            "verified-id", setOf("verified-id"), emptySet(),
+        ))
+        assertFalse(canonicalPinnedArtistAccessible(
+            "verified-id", emptySet(), setOf("Someone"),
+        ))
+        val nameGroup = playlistDisplayArtistGroupId("aespa")
+        assertTrue(canonicalPinnedArtistAccessible(
+            nameGroup, emptySet(), setOf("aespa"),
+        ))
+        assertFalse(canonicalPinnedArtistAccessible(
+            nameGroup, emptySet(), setOf("aespa 2"),
+        ))
+    }
+
     @Test fun savedPinOrderSurvivesRepositoryRecreation() {
         val app = org.robolectric.RuntimeEnvironment.getApplication()
         val prefs = app.getSharedPreferences("canonical-pin-test", Context.MODE_PRIVATE)
