@@ -316,7 +316,10 @@ internal fun CanonicalNativeArtistDetail(
                 }
                 if (visibleAlbumTracks.isEmpty() && albumTracks.isNotEmpty()) {
                     item(key = "nested-release-no-results") {
-                        RemoteBrowseMessage("Nenhuma música corresponde à pesquisa.")
+                        Text(
+                            "Nenhuma música corresponde à pesquisa.",
+                            modifier = Modifier.padding(PAGE_GUTTER),
+                        )
                     }
                 }
                 itemsIndexed(visibleAlbumTracks, key = { _, track -> track.recordingId }) { index, track ->
