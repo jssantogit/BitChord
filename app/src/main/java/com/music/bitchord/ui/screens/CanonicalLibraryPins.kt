@@ -45,6 +45,19 @@ internal fun canonicalLibraryPinOpenTarget(
     )
 }
 
+/** Availability is not implied by an Artist row surviving an account removal.
+ * A display-artist group is only valid if recordings with that exact display
+ * name still have a MediaAsset in an active source. */
+internal fun canonicalPinnedArtistAccessible(
+    artistId: String,
+    verifiedScopedArtistIds: Set<String>,
+    scopedDisplayNames: Set<String>,
+): Boolean {
+    val display = playlistDisplayArtistNameFromGroupId(artistId)
+    return if (display != null) display in scopedDisplayNames
+    else artistId in verifiedScopedArtistIds
+}
+
 internal const val MAX_CANONICAL_LIBRARY_PINS = 100
 
 internal fun validCanonicalLibraryPin(pin: CanonicalLibraryPin): Boolean =
