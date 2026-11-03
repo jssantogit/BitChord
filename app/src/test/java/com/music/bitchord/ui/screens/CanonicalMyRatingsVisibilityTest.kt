@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -93,7 +94,8 @@ class CanonicalMyRatingsVisibilityTest {
                 )
             }
         }
-        compose.onNodeWithText("Loading ratings…").assertIsDisplayed()
+        compose.onNodeWithTag("native-library-loading").assertIsDisplayed()
+        compose.onNodeWithText("Loading ratings…").assertDoesNotExist()
         compose.onNodeWithText("No ratings yet. Rate a canonical song from its menu.")
             .assertDoesNotExist()
     }
