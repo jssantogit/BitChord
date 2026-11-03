@@ -49,8 +49,14 @@ class A0AutoCandidateSelectionPolicyTest {
         )
         assertTrue(collector.offerParsed(A0SoulseekSearchResponse(
             "peer",177,files,emptyList(),true,128_000,0),"peer"))
+        // The automatic release shadow intentionally filters out filenames
+        // missing the requested title before ranking. Exercise both missing
+        // terms with the broader manual candidate sample; do not weaken the
+        // production shadow prefilter just to satisfy this diagnostic test.
+        assertEquals(1,collector.releaseShadowChoices().size)
+        assertEquals(2,collector.choices().size)
         val choice=A0AutoCandidateSelectionPolicy.preview(
-            target,collector.releaseShadowChoices(),profile)
+            target,collector.choices(),profile)
         assertEquals(A0AutoCandidateSelectionPolicy.Reason.NO_STRONG_CANDIDATE,
             choice.reason)
         assertEquals(2,choice.funnel.rankRejected)
