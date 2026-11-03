@@ -761,17 +761,8 @@ fun DetailScreen(
                                     )
                                 }
                             }
-                            row.durationMs?.takeIf { it > 0L }?.let { duration ->
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = String.format(
-                                        Locale.ROOT, "%d:%02d",
-                                        duration / 60_000L, (duration / 1_000L) % 60L,
-                                    ),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = palette.onBackgroundVariant,
-                                )
-                            }
+                            // Individual track durations stay in metadata,
+                            // but no longer consume space in release list rows.
                         }
                         if (index < canonicalTracks.lastIndex) {
                             HorizontalDivider(
