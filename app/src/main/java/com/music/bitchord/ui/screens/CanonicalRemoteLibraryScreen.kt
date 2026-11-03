@@ -222,6 +222,7 @@ internal fun CanonicalRemoteLibraryScreen(
     searchVisible: Boolean = false,
     detailBackToken: Int = 0,
     onDetailChanged: (Boolean) -> Unit = {},
+    onNestedAlbumChanged: (Boolean) -> Unit = {},
     initialContext: CanonicalSmartFilterContext = CanonicalSmartFilterContext.SONGS,
     selectedSourceKey: String? = null,
     selectedStarsFilter: Int? = null,
@@ -396,8 +397,18 @@ internal fun CanonicalRemoteLibraryScreen(
     LaunchedEffect(selectedEntity != null) {
         onDetailChanged(selectedEntity != null)
     }
+    LaunchedEffect(selectedEntity?.id, selectedContext, artistNestedReleaseOpen) {
+        onNestedAlbumChanged(
+            selectedEntity != null &&
+                selectedContext == CanonicalSmartFilterContext.ARTISTS &&
+                artistNestedReleaseOpen,
+        )
+    }
     DisposableEffect(Unit) {
-        onDispose { onDetailChanged(false) }
+        onDispose {
+            onDetailChanged(false)
+            onNestedAlbumChanged(false)
+        }
     }
     var selectedFilterId by remember(providerKey, selectedContext) {
         mutableStateOf<String?>(null)
@@ -903,6 +914,18 @@ internal fun CanonicalRemoteLibraryScreen(
                     searching = searchVisible,
                     nestedBackToken = artistNestedBackToken,
                     onNestedDetailChanged = { artistNestedReleaseOpen = it },
+                    albumSort = albumSort,
+                    albumMenuToken = albumMenuToken,
+                    albumPlaylistToken = albumPlaylistToken,
+                    onNestedAlbumAddToPlaylist = { release ->
+                        val chosen = canonicalAlbumDetailPlaylistSelection(
+                            CanonicalSmartFilterContext.ALBUMS, release.id,
+                        )
+                        if (chosen != null) {
+                            libraryMenu = null
+                            playlistPickerSelection = chosen
+                        }
+                    },
                     onTrackPlay = playTrack,
                     onTrackEditRating = editRating,
                     onTrackOptions = openTrackMenu,
