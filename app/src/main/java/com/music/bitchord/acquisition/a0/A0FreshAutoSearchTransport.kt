@@ -223,7 +223,7 @@ internal class A0FreshAutoSearchTransport(
                                 if(!publishParsed(parsed,parsed.peerUsername))
                                     throw IOException("Soulseek direct claim was invalid")
                                 validDirect.incrementAndGet()
-                                tickets.creditValidated(parsed.token)
+                                tickets.creditValidated(parsed.token,parsed.files.size)
                             },
                             acceptedSearchTokens=tickets.accepted
                         )
@@ -305,7 +305,7 @@ internal class A0FreshAutoSearchTransport(
                                                         if(!publishParsed(parsed,offer.username))
                                                             throw IOException("Invalid Soulseek indirect reply")
                                                         validIndirect.incrementAndGet()
-                                                        tickets.creditValidated(parsed.token)
+                                                        tickets.creditValidated(parsed.token,parsed.files.size)
                                                     }
                                                 },
                                                 acceptedSearchTokens=tickets.accepted
@@ -495,6 +495,7 @@ internal class A0FreshAutoSearchTransport(
             val snapshot=holder.releaseShadowSnapshot()
             val counts=holder.screening()
             val replyByTicket=tickets.responseCounts()
+            val filesByTicket=tickets.publicFileCounts()
             val successWorkers=peerWorkers.snapshot()
             val reachability=A0SearchReachabilityDiagnosis.classify(
                 directAccepted.get(),indirectOffers.get(),indirectConnected.get(),
@@ -508,6 +509,9 @@ internal class A0FreshAutoSearchTransport(
                 " initial_replies=${replyByTicket[0]}" +
                 " fallback_1_replies=${replyByTicket[1]}" +
                 " fallback_2_replies=${replyByTicket[2]}" +
+                " initial_public_files=${filesByTicket[0]}" +
+                " fallback_1_public_files=${filesByTicket[1]}" +
+                " fallback_2_public_files=${filesByTicket[2]}" +
                 " fallback_1_kind=${fallbackOneKind.name}" +
                 " fallback_2_kind=${fallbackTwoKind.name}" +
                 " valid_direct=${validDirect.get().coerceIn(0,160)}" +
