@@ -113,10 +113,29 @@ internal object A0CandidateRank {
         val stem=name.substringBeforeLast('.',name)
         val fileTokens=tokens(stem)
         val fileWords=fileTokens.toSet()
+        val stemParts=stem.split(Regex("\\s+[-–—]\\s+"),limit=2)
         val parentSegments=remotePath.orEmpty().replace('\\','/')
             .split('/').dropLast(1)
         val folderWords=parentSegments.flatMap(::tokens).toSet()
-        val artistInFilename=artistWords.isNotEmpty() && artistWords.all { it in fileWords }
+        // Token-boundary-only orthographic equivalence: BLACK PINK vs
+        // BLACKPINK. A joined spelling must occur as the COMPLETE artist
+        // prefix before a separator (optional track number), or as one
+        // COMPLETE directory segment. Seeing it elsewhere in a title or
+        // in a decorated folder never authenticates the performer.
+        val compactArtistToken=artistSequence.takeIf {
+            it.size in 2..4 && it.all { word ->
+                word.length>=2 && word.all(Char::isLetterOrDigit)
+            }
+        }?.joinToString("")?.takeIf { it.length>=6 }
+        val compactInFilename=compactArtistToken!=null &&
+            stemParts.size==2 &&
+            tokens(stemParts[0]).dropWhile { word ->
+                word.all(Char::isDigit)
+            }==listOf(compactArtistToken)
+        val compactInFolder=compactArtistToken!=null &&
+            parentSegments.any { tokens(it)==listOf(compactArtistToken) }
+        val artistInFilename=artistWords.isNotEmpty() &&
+            (artistWords.all { it in fileWords } || compactInFilename)
         // Folder context is supporting evidence only when the *same* folder
         // segment identifies the artist. "New/Jeans" cannot imply "New Jeans".
         // A title can itself contain the artist's name ("Queen Of Hearts").
@@ -135,14 +154,14 @@ internal object A0CandidateRank {
             artistSequence+tokens(expectedAlbum)
         else emptyList()
         val artistInSingleFolder=artistWords.isNotEmpty() &&
-            parentSegments.any { parent ->
+            (compactInFolder || parentSegments.any { parent ->
                 val words=tokens(parent)
                 if(artistTitleOverlap)
                     words==artistSequence ||
                         (exactArtistAlbumFolderTokens.isNotEmpty() &&
                             words==exactArtistAlbumFolderTokens)
                 else artistWords.all { it in words }
-            }
+            })
         val titleMatches=titleWords.count { it in fileWords }
         val artistMatches=artistWords.count { it in fileWords || it in folderWords }
         val titleComplete=titleWords.isNotEmpty() && titleMatches==titleWords.size
@@ -229,9 +248,16 @@ internal object A0CandidateRank {
         if(titleSequence.isNotEmpty() && artistSequence.isNotEmpty()) {
             val observed=fileTokens.groupingBy { it }.eachCount()
             val titleOnly=titleSequence.groupingBy { it }.eachCount()
-            val artistAndTitle=(artistSequence+titleSequence)
+            // Count the exact artist spelling actually credited by this
+            // source, not both whitespace variants at once.
+            val creditedArtistTokens=if(compactArtistToken!=null &&
+                (compactInFilename || (compactInFolder &&
+                    !artistWords.all { it in fileWords })))
+                listOf(compactArtistToken)
+            else artistSequence
+            val artistAndTitle=(creditedArtistTokens+titleSequence)
                 .groupingBy { it }.eachCount()
-            val relevant=(artistSequence+titleSequence).toSet()
+            val relevant=(creditedArtistTokens+titleSequence).toSet()
             val actual=relevant.associateWith { observed[it] ?: 0 }
             val titleCounts=relevant.associateWith { titleOnly[it] ?: 0 }
             val combinedCounts=relevant.associateWith { artistAndTitle[it] ?: 0 }
@@ -250,14 +276,14 @@ internal object A0CandidateRank {
         // credit even when an ancestor directory is called "ILLIT".
         // Numeric track prefixes ("01 - Magnetic") and title-led suffixes
         // ("Magnetic - Master") are not treated as artist claims.
-        val stemParts=stem.split(Regex("\\s+[-–—]\\s+"),limit=2)
         if(artistWords.isNotEmpty() && stemParts.size==2) {
             val leading=tokens(stemParts[0]).toSet()
             val isTrackNumber=leading.isNotEmpty() &&
                 leading.all { token -> token.all(Char::isDigit) }
             val isTitlePrefix=titleWords.isNotEmpty() &&
                 titleWords.all { it in leading }
-            val isExpectedCredit=artistWords.all { it in leading }
+            val isExpectedCredit=artistWords.all { it in leading } ||
+                compactInFilename
             if(leading.isNotEmpty() && !isTrackNumber &&
                 !isTitlePrefix && !isExpectedCredit) {
                 score-=36
@@ -269,7 +295,8 @@ internal object A0CandidateRank {
         // Known presentation labels and track numbers are neutral; everything
         // else must be reviewed before any future unattended decision.
         if(titleWords.isNotEmpty() && artistWords.isNotEmpty()) {
-            val expectedWords=(artistWords+titleWords).toSet()
+            val expectedWords=(artistWords+titleWords).toMutableSet()
+            if(compactInFilename)compactArtistToken?.let(expectedWords::add)
             val neutralLabels=setOf(
                 "official","audio","hq","hd","320","kbps","256",
                 "cbr","vbr","track","stereo"
@@ -301,7 +328,8 @@ internal object A0CandidateRank {
         val titleOrdered=containsPhrase(fileTokens,titleSequence)
         val artistOrdered=artistSequence.isEmpty() ||
             containsPhrase(fileTokens,artistSequence) ||
-            parentSegments.any { containsPhrase(tokens(it),artistSequence) }
+            parentSegments.any { containsPhrase(tokens(it),artistSequence) } ||
+            compactInFilename || compactInFolder
         if(match==Match.ALL_TERMS && (!titleOrdered || !artistOrdered)) {
             score-=9
             if(Warning.IDENTITY_AMBIGUOUS !in warnings)
