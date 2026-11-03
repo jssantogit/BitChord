@@ -24,15 +24,36 @@ internal enum class CanonicalLibraryAction {
     EDIT_RATING, ADD_TO_PLAYLIST, ADD_NEXT, ADD_TO_QUEUE,
 }
 
+/** Never pass UI-only artist name groups into the persisted entity rating DAO. */
+internal data class CanonicalEntityRatingTarget(
+    val entityType: String,
+    val entityId: String,
+)
+
+internal fun canonicalEntityRatingTarget(
+    selected: CanonicalLibrarySelection,
+): CanonicalEntityRatingTarget? {
+    val id = selected.entityId
+    if (id.isBlank() || id != id.trim() || id.length > 256) return null
+    return when (selected.type) {
+        CanonicalLibraryEntityType.TRACK -> null
+        CanonicalLibraryEntityType.ALBUM -> CanonicalEntityRatingTarget("ALBUM", id)
+        CanonicalLibraryEntityType.ARTIST ->
+            if (playlistDisplayArtistNameFromGroupId(id) != null) null
+            else CanonicalEntityRatingTarget("ARTIST", id)
+    }
+}
+
+internal fun isValidCanonicalEntityRating(rating: Double): Boolean =
+    rating.isFinite() && rating in 1.0..5.0 && rating * 2 == (rating * 2).toInt().toDouble()
+
 internal fun canonicalLibraryAvailableActions(
     type: CanonicalLibraryEntityType,
     hasCanonicalIdentity: Boolean,
 ): List<CanonicalLibraryAction> = buildList {
-    // Recorded song ratings have a real existing editor. Album/artist ratings
-    // must not impersonate song ratings while their own persistence is pending.
-    if (type == CanonicalLibraryEntityType.TRACK && hasCanonicalIdentity) {
-        add(CanonicalLibraryAction.EDIT_RATING)
-    }
+    // Recording ratings and canonical album/artist ratings have separate
+    // persisted tables. Display-only artist name groups cannot be rated.
+    if (hasCanonicalIdentity) add(CanonicalLibraryAction.EDIT_RATING)
     add(CanonicalLibraryAction.ADD_TO_PLAYLIST)
     add(CanonicalLibraryAction.ADD_NEXT)
     add(CanonicalLibraryAction.ADD_TO_QUEUE)
