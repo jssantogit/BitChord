@@ -79,6 +79,18 @@ internal object A0CanonicalAlbumPolicy {
         val artist=normalize(target.expectedArtist)
         val exactArtistAlbum=claim.source == ClaimSource.DIRECTORY_HINT &&
             artist.isNotEmpty() && observed == "$artist $expected"
+        // A canonical multiword credit may be printed without word spaces:
+        // BLACK PINK -> BLACKPINK. Require a COMPLETE artist+album directory
+        // with no arbitrary suffixes. Explicit album fields never gain this
+        // exception, and this is still an unverified release-name hint.
+        val artistWords=artist.split(' ').filter(String::isNotEmpty)
+        val compactArtist=artistWords.takeIf {
+            it.size in 2..4 && it.all { word ->
+                word.length>=2 && word.all(Char::isLetterOrDigit)
+            }
+        }?.joinToString("")?.takeIf { it.length>=6 }
+        val exactCompactArtistAlbum=claim.source==ClaimSource.DIRECTORY_HINT &&
+            compactArtist!=null && observed=="$compactArtist $expected"
         // Directory decorations such as "(2026)" and "[EP]" describe a
         // calendar year/release type, not a new title or alternate master.
         // Accept only the exact requested album (optionally exact artist)
@@ -95,10 +107,12 @@ internal object A0CanonicalAlbumPolicy {
                     words.removeAt(words.lastIndex)
                 val cleaned=words.joinToString(" ")
                 cleaned==expected || (artist.isNotEmpty() &&
-                    cleaned=="$artist $expected")
+                    cleaned=="$artist $expected") ||
+                    (compactArtist!=null && cleaned=="$compactArtist $expected")
             }
         if (observed != expected && !singleDescriptor &&
-            !exactArtistAlbum && !neutralYearEpFolder) {
+            !exactArtistAlbum && !exactCompactArtistAlbum &&
+            !neutralYearEpFolder) {
             // A peer's folder often combines artist, release, year and codec,
             // e.g. "ILLIT - BREAK EVEN [FLAC]". Exact album matching must
             // remain STRICT, but the composite hint cannot prove a conflict.
