@@ -17,6 +17,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -211,6 +214,10 @@ internal fun SmartPlaylistV2BuilderScreen(
     initialPlaylistId: String? = null,
     initialNormalPlaylistId: String? = null,
     startOnNormalSongs: Boolean = false,
+    embeddedInLibrary: Boolean = false,
+    initialLibraryRecordingIds: List<String> = emptyList(),
+    initialLibrarySource: String? = null,
+    onLibraryNormalSaved: ((String) -> Unit)? = null,
     onClassic: () -> Unit,
     onSavedAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
     onPreviewAction: ((SmartPlaylistV2Query, String?, CanonicalCollectionIntent) -> Unit)? = null,
@@ -256,13 +263,21 @@ internal fun SmartPlaylistV2BuilderScreen(
     var normalMode by remember { mutableStateOf(false) }
     var editingNormalId by remember { mutableStateOf<String?>(null) }
     var normalSearch by remember { mutableStateOf("") }
-    var normalSourceProviderKey by remember { mutableStateOf<String?>(null) }
-    var normalSourceTouched by remember { mutableStateOf(false) }
+    var normalSourceProviderKey by remember {
+        mutableStateOf(initialLibrarySource)
+    }
+    var normalSourceTouched by remember {
+        mutableStateOf(initialLibraryRecordingIds.isNotEmpty())
+    }
     var normalBrowseType by remember { mutableStateOf(CanonicalPlaylistBrowseType.TRACKS) }
     var normalBrowseGroup by remember { mutableStateOf<CanonicalPlaylistBrowseGroup?>(null) }
     var normalGroups by remember { mutableStateOf<List<CanonicalPlaylistBrowseGroup>>(emptyList()) }
     var normalRows by remember { mutableStateOf<List<V2DisplayRow>>(emptyList()) }
-    var normalSelectedIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    // Initialized once from the selected canonical RecordingIds. The wizard
+    // itself still handles all subsequent edits, reordering and source rules.
+    var normalSelectedIds by remember {
+        mutableStateOf(initialLibraryRecordingIds.filter(String::isNotBlank).distinct())
+    }
     var normalSelectedRows by remember { mutableStateOf<List<V2DisplayRow>>(emptyList()) }
     var normalLoading by remember { mutableStateOf(false) }
     var normalAddingAlbumId by remember { mutableStateOf<String?>(null) }
@@ -763,8 +778,9 @@ internal fun SmartPlaylistV2BuilderScreen(
         }
     }
 
-    // Full-viewport dialog prevents the library tab bar and mini player from
-    // overlapping the creation flow. Dismissing it never discards this draft.
+    // The native wizard is reused in both contexts. From a Library
+    // selection its *same* editor is presented as a large modal card, leaving
+    // the originating tracks/selected draft mounted underneath it.
     Dialog(
         onDismissRequest = onBack,
         properties = DialogProperties(
@@ -774,6 +790,13 @@ internal fun SmartPlaylistV2BuilderScreen(
             decorFitsSystemWindows = false,
         ),
     ) {
+        Box(
+            modifier = if (embeddedInLibrary) Modifier
+                .fillMaxWidth(0.95f).fillMaxHeight(0.90f)
+                .clip(GroupShape)
+                .background(MaterialTheme.colorScheme.background)
+            else Modifier.fillMaxSize(),
+        ) {
         if (showWizard) {
             androidx.compose.runtime.key(editorEpoch) {
                 SmartPlaylistV2WizardUi(
@@ -797,6 +820,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     filterNotice = filterNotice,
                     hasExportedFilter = exportedFilterId != null,
                     startOnNormalSongs = startOnNormalSongs,
+                    embeddedInLibrary = embeddedInLibrary,
                     savedDefinitions = saved.filterNot { it.id == editingId },
                     onNameChange = { name = it; filterNotice = null },
                     description = description,
@@ -1008,9 +1032,11 @@ internal fun SmartPlaylistV2BuilderScreen(
                                             coverUri = coverUri,
                                         ))
                                     }
-                                    // Keep this completed draft mounted until close;
-                                    // don't show a new blank wizard on the exit frame.
-                                    onBack()
+                                    // Return to the Library's still-mounted
+                                    // selection when the modal save succeeds.
+                                    if (onLibraryNormalSaved != null) {
+                                        onLibraryNormalSaved(id)
+                                    } else onBack()
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
                                 } catch (_: Exception) {
@@ -1384,5 +1410,6 @@ internal fun SmartPlaylistV2BuilderScreen(
                 onDismiss = { pendingEditorNavigation = null },
             )
         }
+        } // The same wizard, bounded only in the Library modal context.
     }
 }
