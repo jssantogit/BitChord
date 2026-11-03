@@ -4377,36 +4377,23 @@ private fun BitChordApp(
                         }
                     } else null,
                     actions = {
-                        if (showAllLocalRecentAdditions && detail == null && !showSettings) {
-                            UnifiedLibraryToolbarActions(
-                                searching = recentSearching,
-                                onSearch = { recentSearching = !recentSearching },
-                                controls = recentControls,
-                                showBrowseFilters = true,
-                            )
-                        }
-                        // "Ver todos" may temporarily coexist with the saved
-                        // unified-category state. Render only the active route's
-                        // native toolbar, never two overlapping sets of actions.
-                        else if (unifiedLibraryCategory != null &&
-                            !showAllLocalRecentAdditions && !showSettings && detail == null
-                        ) {
-                            UnifiedLibraryToolbarActions(
-                                searching = unifiedLibrarySearching,
-                                onSearch = { unifiedLibrarySearching = !unifiedLibrarySearching },
-                                controls = unifiedControls,
-                                showBrowseFilters = shouldShowUnifiedLibraryBrowseFilters(
-                                    detailOpen = unifiedLibraryDetailOpen,
-                                ),
-                                albumDetail = shouldUseUnifiedAlbumDetailToolbar(
-                                    unifiedLibraryCategory, unifiedLibraryDetailOpen,
-                                    unifiedLibraryNestedAlbumOpen,
-                                ),
-                                onAlbumSort = unifiedAlbumUi::openSort,
-                                onAlbumOptions = unifiedAlbumUi::requestOptions,
-                                onAlbumAddToPlaylist = unifiedAlbumUi::requestAddToPlaylist,
-                            )
-                        }
+                        UnifiedLibraryRouteToolbar(
+                            recentPage = showAllLocalRecentAdditions,
+                            settingsOpen = showSettings,
+                            otherDetailOpen = detail != null,
+                            recentSearching = recentSearching,
+                            onRecentSearch = { recentSearching = !recentSearching },
+                            recentControls = recentControls,
+                            category = unifiedLibraryCategory,
+                            detailOpen = unifiedLibraryDetailOpen,
+                            nestedAlbumOpen = unifiedLibraryNestedAlbumOpen,
+                            unifiedSearching = unifiedLibrarySearching,
+                            onUnifiedSearch = {
+                                unifiedLibrarySearching = !unifiedLibrarySearching
+                            },
+                            unifiedControls = unifiedControls,
+                            albumUi = unifiedAlbumUi,
+                        )
                         if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null &&
                             !showSettings && !showAccountScrobbling) {
                             CanonicalPlaylistToolbarActions(
@@ -6619,6 +6606,51 @@ internal fun shouldUseUnifiedAlbumDetailToolbar(
         (category == com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS &&
             nestedAlbumOpen)
 )
+
+/**
+ * The route-aware right pill is shared by Recent Additions and the unified
+ * Library. Extracted from BitChordApp to leave JVM bytecode headroom: the
+ * large host composable previously exceeded the 64KB method ceiling.
+ */
+@Composable
+private fun UnifiedLibraryRouteToolbar(
+    recentPage: Boolean,
+    settingsOpen: Boolean,
+    otherDetailOpen: Boolean,
+    recentSearching: Boolean,
+    onRecentSearch: () -> Unit,
+    recentControls: UnifiedLibraryUiControls,
+    category: com.music.bitchord.data.listening.CanonicalSmartFilterContext?,
+    detailOpen: Boolean,
+    nestedAlbumOpen: Boolean,
+    unifiedSearching: Boolean,
+    onUnifiedSearch: () -> Unit,
+    unifiedControls: UnifiedLibraryUiControls,
+    albumUi: UnifiedAlbumDetailUiState,
+) {
+    if (settingsOpen || otherDetailOpen) return
+    if (recentPage) {
+        UnifiedLibraryToolbarActions(
+            searching = recentSearching,
+            onSearch = onRecentSearch,
+            controls = recentControls,
+            showBrowseFilters = true,
+        )
+    } else if (category != null) {
+        UnifiedLibraryToolbarActions(
+            searching = unifiedSearching,
+            onSearch = onUnifiedSearch,
+            controls = unifiedControls,
+            showBrowseFilters = shouldShowUnifiedLibraryBrowseFilters(detailOpen),
+            albumDetail = shouldUseUnifiedAlbumDetailToolbar(
+                category, detailOpen, nestedAlbumOpen,
+            ),
+            onAlbumSort = albumUi::openSort,
+            onAlbumOptions = albumUi::requestOptions,
+            onAlbumAddToPlaylist = albumUi::requestAddToPlaylist,
+        )
+    }
+}
 
 @Composable
 private fun UnifiedLibraryToolbarActions(
