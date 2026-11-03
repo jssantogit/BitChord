@@ -59,4 +59,10 @@ class CanonicalArtistReleaseSectionsTest {
         assertEquals(true, shouldShowNativeArtistSearch(false, "aespa"))
     }
 
+    @Test fun artistWithoutPortraitUsesCompactNativeHeaderInsteadOfHugeBlankCanvas() {
+        assertEquals(true, shouldCompactNativeArtistHero(null))
+        assertEquals(true, shouldCompactNativeArtistHero(" "))
+        assertEquals(false, shouldCompactNativeArtistHero("https://example.com/portrait.jpg"))
+    }
+
 }
