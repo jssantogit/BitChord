@@ -952,6 +952,11 @@ internal fun CanonicalRemoteLibraryScreen(
                 }
                 else -> entityArtworkById[menu.selection.entityId]
             }
+            val availableMenuActions = canonicalLibraryAvailableActions(
+                type = menu.selection.type,
+                hasCanonicalIdentity = menu.selection.type == CanonicalLibraryEntityType.TRACK ||
+                    canonicalEntityRatingTarget(menu.selection) != null,
+            )
             val queue: (CanonicalCollectionIntent) -> Unit = { intent ->
                 libraryMenu = null
                 libraryActionScope.launch {
@@ -996,8 +1001,7 @@ internal fun CanonicalRemoteLibraryScreen(
                         toggleSelection(menu.selection)
                         libraryMenu = null
                     },
-                    onEditRating = if (menu.selection.type == CanonicalLibraryEntityType.TRACK ||
-                        canonicalEntityRatingTarget(menu.selection) != null) {
+                    onEditRating = if (CanonicalLibraryAction.EDIT_RATING in availableMenuActions) {
                         {
                             if (menu.selection.type == CanonicalLibraryEntityType.TRACK) {
                                 editingRecordingId = menu.selection.entityId
