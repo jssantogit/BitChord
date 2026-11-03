@@ -302,17 +302,34 @@ internal fun CanonicalNativeArtistDetail(
                         },
                     )
                 }
-                itemsIndexed(albumTracks, key = { _, track -> track.recordingId }) { index, track ->
+                if (shouldShowNativeArtistSearch(searching, query)) {
+                    item(key = "nested-release-search") {
+                        DetailSearchField(
+                            query = query,
+                            onQueryChange = onQueryChange,
+                            onClose = { onQueryChange("") },
+                            autoFocus = searching,
+                            onFocused = {},
+                            palette = releasePalette,
+                        )
+                    }
+                }
+                if (visibleAlbumTracks.isEmpty() && albumTracks.isNotEmpty()) {
+                    item(key = "nested-release-no-results") {
+                        RemoteBrowseMessage("Nenhuma música corresponde à pesquisa.")
+                    }
+                }
+                itemsIndexed(visibleAlbumTracks, key = { _, track -> track.recordingId }) { index, track ->
                     CanonicalTrackRow(
                         track = track,
                         artworkLoader = artworkLoader,
                         onClick = { onTrackPlay(track) },
                         onEditRating = { onTrackEditRating(track) },
                         onOptions = { onTrackOptions(track) },
-                        albumTrackNumber = index + 1,
+                        albumTrackNumber = albumTrackNumbers[track.recordingId] ?: index + 1,
                         palette = releasePalette,
                     )
-                    if (index < albumTracks.lastIndex) HorizontalDivider(
+                    if (index < visibleAlbumTracks.lastIndex) HorizontalDivider(
                         modifier = Modifier.padding(start = NUMBERED_ROW_DIVIDER_INSET),
                         thickness = 0.5.dp,
                         color = releasePalette.divider,
