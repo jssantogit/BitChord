@@ -243,14 +243,20 @@ class A0AutoCandidateSelectionPolicyTest {
                 emptyList(),true,128_000,0),"peer")
             return collector.releaseShadowChoices()
         }
-        val valid=A0AutoCandidateSelectionPolicy.preview(
-            target,candidate("THE ALBUM"),profile)
-        assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,valid.status)
-        assertFalse(valid.canTransfer)
-        val conflict=A0AutoCandidateSelectionPolicy.preview(
-            target,candidate("Another Album"),profile)
-        assertEquals(A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,
-            conflict.status)
+        for(folder in listOf("THE ALBUM","BLACKPINK - THE ALBUM")) {
+            val valid=A0AutoCandidateSelectionPolicy.preview(
+                target,candidate(folder),profile)
+            assertEquals(folder,A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,
+                valid.status)
+            assertFalse(valid.canTransfer)
+        }
+        for(folder in listOf("Another Album",
+            "BLACKPINK - THE ALBUM [FLAC]")) {
+            val conflict=A0AutoCandidateSelectionPolicy.preview(
+                target,candidate(folder),profile)
+            assertEquals(folder,A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,
+                conflict.status)
+        }
     }
 
     @Test fun titleOverlappingArtistUsesOnlyExactIndependentDirectoryCredit() {
