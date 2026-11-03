@@ -846,6 +846,12 @@ internal fun CanonicalRemoteLibraryScreen(
                 heroArtworkUri = detail?.artworkUri,
                 heroArtworkTrack = detail?.let { entityArtworkById[it.id] }
                     ?: if (detail == null) null else scopedDetailTracks.firstOrNull(),
+                isAlbumDetail = detail != null &&
+                    selectedContext == CanonicalSmartFilterContext.ALBUMS,
+                albumCredit = detail?.let { selected ->
+                    (entityState as? CanonicalEntityBrowseState.Albums)
+                        ?.releases?.firstOrNull { it.id == selected.id }?.artistDisplay
+                }.orEmpty(),
                 onTrackPlay = playTrack,
                 onTrackEditRating = editRating,
                 onTrackOptions = openTrackMenu,
@@ -1642,6 +1648,14 @@ private fun formatDuration(durationMs: Long?): String? {
     }
 }
 
+/** Source-authenticated artwork must never be leaked to Coil's palette decoder. */
+internal fun canonicalNativeReleasePaletteUri(
+    primary: String?,
+    fallback: String? = null,
+): String? = sequenceOf(primary, fallback).filterNotNull().firstOrNull {
+    it.startsWith("content://") || it.startsWith("file://")
+}
+
 /**
  * The unified catalog reuses the pre-regression release-page header, search,
  * action pills and Library rows. Its entities remain Recording/Release/Artist
@@ -1664,6 +1678,8 @@ private fun NativeUnifiedLibraryBody(
     entityArtworkById: Map<String, CanonicalBrowseTrack>,
     heroArtworkUri: String? = null,
     heroArtworkTrack: CanonicalBrowseTrack? = null,
+    isAlbumDetail: Boolean = false,
+    albumCredit: String = "",
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
     onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
     onTrackOptions: (CanonicalBrowseTrack) -> Unit,
@@ -1675,7 +1691,13 @@ private fun NativeUnifiedLibraryBody(
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
     onEntitySelect: (CanonicalSelectedEntity) -> Unit,
 ) {
-    val palette = rememberArtworkPalette(imageUrl = null)
+    // A genuine release detail inherits the exact native DetailScreen
+    // artwork palette. Browse categories keep the neutral Library surface.
+    val palette = rememberArtworkPalette(
+        imageUrl = if (isAlbumDetail) canonicalNativeReleasePaletteUri(
+            heroArtworkUri, heroArtworkTrack?.artworkUri,
+        ) else null,
+    )
     val albumItems = (entityState as? CanonicalEntityBrowseState.Albums)?.releases.orEmpty()
     val artistItems = (entityState as? CanonicalEntityBrowseState.Artists)?.artists.orEmpty()
     // Browse-only artist fallback IDs are intentionally not real ArtistIds.
@@ -1717,7 +1739,11 @@ private fun NativeUnifiedLibraryBody(
         CanonicalSmartFilterContext.ALBUMS -> "${count} álbuns"
         CanonicalSmartFilterContext.ARTISTS -> "${count} artistas"
     }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(
+        Modifier.fillMaxSize().background(
+            if (isAlbumDetail) palette.background else MaterialTheme.colorScheme.background,
+        ),
+    ) {
         val sleeve = (maxWidth * 0.76f).coerceAtMost(maxHeight * 0.6f)
         LazyColumn(
             // Same insets as DetailScreen: the hero itself clears the frosted
@@ -1728,7 +1754,7 @@ private fun NativeUnifiedLibraryBody(
             item(key = "native-library-header") {
                 NativeReleaseHeaderLayout(
                     title = title,
-                    credit = "",
+                    credit = if (isAlbumDetail) albumCredit else "",
                     meta = label,
                     palette = palette,
                     sleeveSize = sleeve,
@@ -1750,7 +1776,7 @@ private fun NativeUnifiedLibraryBody(
                     },
                     actions = {
                         if (count > 0 && tracks.isNotEmpty()) {
-                            Spacer(Modifier.height(18.dp))
+                            Spacer(Modifier.height(if (isAlbumDetail) 32.dp else 18.dp))
                             Row(
                                 Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1774,15 +1800,20 @@ private fun NativeUnifiedLibraryBody(
                     },
                 )
             }
-            item(key = "native-library-search") {
-                DetailSearchField(
+            if (!isAlbumDetail || searching || query.isNotBlank()) {
+                item(key = "native-library-search") {
+                    DetailSearchField(
                     query = query,
                     onQueryChange = onQueryChange,
                     onClose = { onQueryChange("") },
                     autoFocus = searching,
                     onFocused = {},
                     palette = palette,
-                )
+                    )
+                }
+            }
+            if (isAlbumDetail) item(key = "release-track-spacing") {
+                Spacer(Modifier.height(20.dp))
             }
             when (selectedContext) {
                 CanonicalSmartFilterContext.SONGS -> when (filteredState) {
