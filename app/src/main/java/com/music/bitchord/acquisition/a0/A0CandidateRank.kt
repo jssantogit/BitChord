@@ -132,8 +132,17 @@ internal object A0CandidateRank {
             tokens(stemParts[0]).dropWhile { word ->
                 word.all(Char::isDigit)
             }==listOf(compactArtistToken)
+        val compactAlbumFolderTokens=if(compactArtistToken!=null &&
+            !expectedAlbum.isNullOrBlank())
+            listOf(compactArtistToken)+tokens(expectedAlbum)
+        else emptyList()
         val compactInFolder=compactArtistToken!=null &&
-            parentSegments.any { tokens(it)==listOf(compactArtistToken) }
+            parentSegments.any { parent ->
+                val words=tokens(parent)
+                words==listOf(compactArtistToken) ||
+                    (compactAlbumFolderTokens.isNotEmpty() &&
+                        words==compactAlbumFolderTokens)
+            }
         val artistInFilename=artistWords.isNotEmpty() &&
             (artistWords.all { it in fileWords } || compactInFilename)
         // Folder context is supporting evidence only when the *same* folder
