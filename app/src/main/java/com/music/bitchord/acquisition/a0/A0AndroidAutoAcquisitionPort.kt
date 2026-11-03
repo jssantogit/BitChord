@@ -84,6 +84,19 @@ internal class A0AndroidAutoAcquisitionPort(
         }
     }
 
+    override fun diagnosticOutcome(
+        status:A0AutoAcquisitionExecutor.Status,
+        reason:A0AutoAcquisitionExecutor.Reason?,
+        attempts:Int,
+    ) {
+        runCatching {
+            Log.d("BitChord","soulseek_auto_outcome scope=$diagnosticScope" +
+                " status=${status.name}" +
+                " reason=${reason?.name ?: "NONE"}" +
+                " attempts=${attempts.coerceIn(0,3)}")
+        }
+    }
+
     override fun fetch(
         candidate:A0ObservedCandidateHandoff.Choice,
         isCancelled:()->Boolean,
