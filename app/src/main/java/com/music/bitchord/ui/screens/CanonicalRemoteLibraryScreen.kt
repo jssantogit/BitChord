@@ -84,6 +84,7 @@ import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.theme.ArtworkPalette
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.ReleaseEntity
@@ -1162,29 +1163,38 @@ internal fun CanonicalTrackRow(
     artworkLoader: OpenSubsonicArtworkLoader,
     onClick: () -> Unit,
     onEditRating: () -> Unit,
+    // The native artist shelf is a compact horizontal four-song column, not
+    // a full-width library track row. Keep a single canonical row component.
+    compactForArtist: Boolean = false,
+    palette: ArtworkPalette? = null,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .heightIn(min = 68.dp)
-            .padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            .then(
+                if (compactForArtist) Modifier.padding(vertical = 4.dp)
+                else Modifier.heightIn(min = 68.dp)
+                    .padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
+            ),
     ) {
         CanonicalUnifiedArtwork(track, artworkLoader, Modifier.size(48.dp))
-        Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(if (compactForArtist) 12.dp else 16.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 text = track.title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground,
+                style = if (compactForArtist) MaterialTheme.typography.titleMedium
+                    else MaterialTheme.typography.bodyLarge,
+                color = palette?.onBackground ?: MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = track.artistDisplay,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = palette?.onBackgroundVariant
+                    ?: MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1201,7 +1211,9 @@ internal fun CanonicalTrackRow(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            formatDuration(track.durationMs)?.let { duration ->
+            // The native CompactSongRow reserves its trailing space for
+            // ratings/menu, not duration. Preserve durations in library rows.
+            if (!compactForArtist) formatDuration(track.durationMs)?.let { duration ->
                 Text(
                     text = duration,
                     style = MaterialTheme.typography.bodySmall,
