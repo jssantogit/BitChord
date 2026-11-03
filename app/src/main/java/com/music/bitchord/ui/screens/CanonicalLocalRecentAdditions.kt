@@ -310,13 +310,19 @@ internal fun CanonicalLocalRecentAdditions(
         }
     } else if (recent != null) {
         CanonicalRecentAdditionsShelf(recent.orEmpty(), onPlayTrack, onSeeAll)
-    } else {
+    } else if (loadFailed) {
         Text(
-            if (loadFailed) "Não foi possível consultar as adições locais."
-            else "Carregando adições recentes…",
+            "Não foi possível consultar as adições locais.",
             modifier = Modifier.padding(PAGE_GUTTER),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    } else {
+        Box(
+            Modifier.fillMaxWidth().height(96.dp).testTag("native-recent-shelf-loading"),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(28.dp))
+        }
     }
 }
 
@@ -417,17 +423,7 @@ internal fun CanonicalRecentAdditionsGrid(
             modifier = Modifier.fillMaxSize().testTag("native-recent-loading"),
             contentAlignment = Alignment.Center,
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(28.dp))
-                Text(
-                    "Carregando adições locais…",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            CircularProgressIndicator(modifier = Modifier.size(28.dp))
         }
         return
     }
