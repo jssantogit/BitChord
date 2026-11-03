@@ -44,6 +44,7 @@ import com.music.bitchord.data.canvas.keyColors
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.ReleaseEntity
+import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoader
 import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.diagnostics.DiagnosticCategory
@@ -80,6 +81,7 @@ private data class CanonicalArtistNativeReleases(
 @Composable
 internal fun CanonicalNativeArtistDetail(
     artistName: String,
+    artistId: String?,
     tracks: List<CanonicalBrowseTrack>,
     availableLibraryTracks: List<CanonicalBrowseTrack>,
     sourceKeys: List<String>,
@@ -95,6 +97,7 @@ internal fun CanonicalNativeArtistDetail(
     onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
     onTrackOptions: (CanonicalBrowseTrack) -> Unit,
     onReleaseOptions: (ReleaseEntity) -> Unit,
+    onRateArtist: (() -> Unit)? = null,
     selectedItems: List<CanonicalLibrarySelection>,
     onToggleSelection: (CanonicalLibrarySelection) -> Unit,
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
@@ -188,6 +191,15 @@ internal fun CanonicalNativeArtistDetail(
         keyColors = appleArt?.keyColors(),
     )
 
+    // The star indicates first-party rating of the exact ArtistId; no
+    // subscribing or copying song stars, and no display-name fallback.
+    val artistRated by produceState(initialValue = false, key1 = artistId) {
+        val verified = artistId?.takeIf {
+            it.isNotBlank() && playlistDisplayArtistNameFromGroupId(it) == null
+        } ?: return@produceState
+        ListeningEventDatabase.get(context).canonicalEntityRatingDao()
+            .observe("ARTIST", verified).collectLatest { value = it != null }
+    }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     var openedRelease by remember(artistName) { mutableStateOf<ReleaseEntity?>(null) }
     LaunchedEffect(openedRelease?.id) { onNestedDetailChanged(openedRelease != null) }
@@ -324,6 +336,10 @@ internal fun CanonicalNativeArtistDetail(
                     ActionRow(
                         onPlay = { onPlayAll(shownTracks, false) },
                         onShuffle = { onPlayAll(shownTracks, true) },
+                        onRateArtist = if (artistId != null &&
+                            playlistDisplayArtistNameFromGroupId(artistId) == null)
+                                onRateArtist else null,
+                        artistRated = artistRated,
                         playColor = appleArt?.keyColor?.let { Color(it) },
                     )
                 }
