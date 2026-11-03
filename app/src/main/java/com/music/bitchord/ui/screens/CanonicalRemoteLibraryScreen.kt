@@ -1778,38 +1778,28 @@ private fun NativeUnifiedLibraryBody(
                             val target = CanonicalLibrarySelection(
                                 CanonicalLibraryEntityType.TRACK, track.recordingId,
                             )
-                            Column(
-                                modifier = Modifier.fillMaxWidth()
-                                    .clickable {
-                                        if (selectedItems.isNotEmpty()) onToggleSelection(target)
-                                        else onTrackPlay(track)
-                                    },
-                            ) {
-                                Box {
+                            // Músicas uses the exact same native grid card
+                            // as Álbuns/Artistas: artwork, type scale, spacing,
+                            // overflow and selection all stay in one component.
+                            NativeLibraryEntityCard(
+                                title = track.title,
+                                subtitle = track.artistDisplay,
+                                imageUrl = null,
+                                isArtist = false,
+                                artwork = {
                                     CanonicalUnifiedArtwork(
-                                        track, artworkLoader,
-                                        Modifier.fillMaxWidth().aspectRatio(1f),
+                                        track, artworkLoader, Modifier.fillMaxSize(),
                                     )
-                                    if (selectedItems.isNotEmpty()) {
-                                        IconButton(
-                                            onClick = { onToggleSelection(target) },
-                                            modifier = Modifier.align(Alignment.TopEnd),
-                                        ) {
-                                            Icon(
-                                                if (target in selectedItems) Icons.Rounded.CheckCircle
-                                                else Icons.Rounded.RadioButtonUnchecked,
-                                                contentDescription = "Selecionar música",
-                                            )
-                                        }
-                                    }
-                                }
-                                Text(track.title, maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.titleMedium)
-                                Text(track.artistDisplay, maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.bodySmall)
-                            }
+                                },
+                                onClick = {
+                                    if (selectedItems.isNotEmpty()) onToggleSelection(target)
+                                    else onTrackPlay(track)
+                                },
+                                onMore = { onTrackOptions(track) },
+                                selectionMode = selectedItems.isNotEmpty(),
+                                selected = target in selectedItems,
+                                onToggleSelection = { onToggleSelection(target) },
+                            )
                         }
                     } else items(
                         items = tracks,
