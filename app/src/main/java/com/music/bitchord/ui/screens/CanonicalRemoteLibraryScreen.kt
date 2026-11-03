@@ -1018,6 +1018,9 @@ internal fun CanonicalRemoteLibraryScreen(
                     albumHeaderEvidence?.releaseDate,
                     scopedDetailTracks,
                 ) else null,
+                albumTrackNumbers = if (detail != null &&
+                    selectedContext == CanonicalSmartFilterContext.ALBUMS
+                ) canonicalAlbumDetailTrackNumbers(scopedDetailTracks) else emptyMap(),
                 onTrackPlay = playTrack,
                 onTrackEditRating = editRating,
                 onTrackOptions = openTrackMenu,
@@ -1872,6 +1875,7 @@ private fun NativeUnifiedLibraryBody(
     isAlbumDetail: Boolean = false,
     albumCredit: String = "",
     albumMeta: String? = null,
+    albumTrackNumbers: Map<String, Int> = emptyMap(),
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
     onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
     onTrackOptions: (CanonicalBrowseTrack) -> Unit,
@@ -2117,7 +2121,7 @@ private fun NativeUnifiedLibraryBody(
                                 onClick = { onTrackPlay(track) },
                                 onEditRating = { onTrackEditRating(track) },
                                 onOptions = { onTrackOptions(track) },
-                                albumTrackNumber = index + 1,
+                                albumTrackNumber = albumTrackNumbers[track.recordingId] ?: index + 1,
                                 palette = palette,
                             )
                             if (index < tracks.lastIndex) HorizontalDivider(
