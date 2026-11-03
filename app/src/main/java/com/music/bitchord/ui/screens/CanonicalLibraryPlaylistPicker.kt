@@ -92,18 +92,31 @@ internal fun CanonicalLibraryPlaylistPicker(
         scope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
-                    val resolved = canonicalLibraryResolveRecordingIds(app, selection, selectedSource)
-                    if (resolved.isEmpty()) null else addCanonicalLibraryRecordingsToPlaylist(
-                        context = app,
-                        playlistId = if (creating) null else selectedId,
-                        newPlaylistName = if (creating) newName.trim() else null,
-                        requested = resolved,
+                    val resolved = canonicalLibraryResolveSelections(
+                        app, selection, selectedSource,
                     )
+                    when {
+                        resolved.unavailableEntities > 0 ->
+                            CanonicalLibraryPlaylistSaveResult.Unavailable(
+                                resolved.unavailableEntities,
+                            )
+                        resolved.recordingIds.isEmpty() -> null
+                        else -> addCanonicalLibraryRecordingsToPlaylist(
+                            context = app,
+                            playlistId = if (creating) null else selectedId,
+                            newPlaylistName = if (creating) newName.trim() else null,
+                            requested = resolved.recordingIds,
+                        )
+                    }
                 }
                 when (result) {
                     null -> error = "Nenhuma faixa disponível nesta seleção."
                     CanonicalLibraryPlaylistSaveResult.Missing ->
                         error = "Esta playlist já não está disponível."
+                    is CanonicalLibraryPlaylistSaveResult.Unavailable ->
+                        error = if (result.count == 1)
+                            "Uma seleção não está disponível nesta fonte. Revise antes de adicionar."
+                            else "${result.count} seleções não estão disponíveis nesta fonte. Revise antes de adicionar."
                     is CanonicalLibraryPlaylistSaveResult.Saved -> {
                         if (result.added == 0) {
                             error = if (result.unavailable > 0)
