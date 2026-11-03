@@ -228,6 +228,34 @@ class A0AutoCandidateSelectionPolicyTest {
             A0AutoCandidateSelectionPolicy.preview(target,wrong,profile).status)
     }
 
+    @Test fun titleOverlappingArtistUsesOnlyExactIndependentDirectoryCredit() {
+        val queen=SoulseekBatchPlan.Entry("queen-hearts",
+            "Queen - Queen Of Hearts","The Works",220)
+        fun sample(folder:String):List<A0ObservedCandidateHandoff.Choice> {
+            val collector=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+                searchPhrase=queen.query,requestedAlbum=queen.album,
+                expectedDurationSeconds=queen.durationSeconds,
+                qualityProfile=profile,collectReleaseShadow=true)
+            collector.offerParsed(A0SoulseekSearchResponse(
+                "peer",177,listOf(A0SoulseekSearchFile(
+                    "Shared\\$folder\\Queen Of Hearts.mp3",
+                    8_800_000L,"mp3",mapOf(0 to 320,1 to 220))),
+                emptyList(),true,128_000,0),"peer")
+            return collector.releaseShadowChoices()
+        }
+        val exact=A0AutoCandidateSelectionPolicy.preview(
+            queen,sample("Queen - The Works"),profile)
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,exact.status)
+        assertFalse(exact.canTransfer)
+        for(folder in listOf("The Works","Queen - Different Album",
+            "Queen - The Works - Remastered")) {
+            val ambiguous=A0AutoCandidateSelectionPolicy.preview(
+                queen,sample(folder),profile)
+            assertEquals("Folder $folder must remain review-only",
+                A0AutoCandidateSelectionPolicy.Status.MANUAL_REVIEW,ambiguous.status)
+        }
+    }
+
     @Test fun exactArtistAndAlbumFolderAllowsIndividuallyGatedAutoCandidate() {
         val offer=offers("artist-album",
             album="ILLIT - SUPER REAL ME")
