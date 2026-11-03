@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,8 +17,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -34,17 +31,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import coil3.compose.AsyncImage
 import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
 import com.music.bitchord.data.listening.SavedCanonicalStaticPlaylist
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
-import com.music.bitchord.ui.components.CoverPlaceholder
-import com.music.bitchord.ui.components.PAGE_GUTTER
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
@@ -141,34 +132,15 @@ internal fun CanonicalLibraryPlaylistPicker(
         }
     }
 
-    Dialog(
-        onDismissRequest = { if (!saving) onDismiss() },
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+    PlaylistWizardSheetChrome(
+        title = if (creating) "Nova playlist" else "Adicionar à playlist",
+        onClose = onDismiss,
+        canClose = !saving,
     ) {
-        SettingsGroupSurface(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER)
-                .imePadding(),
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        if (creating) "Nova playlist" else "Adicionar à playlist",
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    PlaylistWizardCompactAction(
-                        label = "Fechar",
-                        icon = Icons.Rounded.Close,
-                        onClick = { if (!saving) onDismiss() },
-                        enabled = !saving,
-                    )
-                }
                 if (creating) {
                     PlaylistWizardTextEntry(
                         value = newName,
@@ -236,19 +208,11 @@ internal fun CanonicalLibraryPlaylistPicker(
                                                     Modifier.size(44.dp)
                                                         .clip(RoundedCornerShape(12.dp)),
                                                 ) {
-                                                    if (saved.coverUri != null) {
-                                                        AsyncImage(
-                                                            model = saved.coverUri,
-                                                            contentDescription = null,
-                                                            contentScale = ContentScale.Crop,
-                                                            modifier = Modifier.fillMaxSize(),
-                                                        )
-                                                    } else {
-                                                        CoverPlaceholder(
-                                                            icon = Icons.Rounded.LibraryMusic,
-                                                            modifier = Modifier.fillMaxSize(),
-                                                        )
-                                                    }
+                                                    CanonicalPlaylistCoverArt(
+                                                        rows = emptyList(),
+                                                        customCoverUri = saved.coverUri,
+                                                        modifier = Modifier.fillMaxSize(),
+                                                    )
                                                 }
                                             },
                                         )
@@ -276,7 +240,6 @@ internal fun CanonicalLibraryPlaylistPicker(
                         else selectedId != null,
                     onClick = ::save,
                 )
-            }
         }
     }
 }
