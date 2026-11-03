@@ -1568,6 +1568,49 @@ internal interface CanonicalCatalogDao {
     )
     suspend fun providerScopedArtists(providerKey: String): List<ArtistEntity>
 
+    /** Only source-scoped credited artists qualify as AVAILABLE pins. Keep
+     * expired provider pins visible via cached labels, not falsely playable. */
+    @Query(
+        """
+        SELECT artist.id
+        FROM catalog_artist AS artist
+        WHERE artist.id IN (:artistIds)
+          AND (
+            EXISTS (
+                SELECT 1 FROM catalog_recording_artist_credit AS credit
+                INNER JOIN catalog_media_asset AS asset
+                    ON asset.recordingId = credit.recordingId
+                WHERE credit.artistId = artist.id
+                  AND asset.provider IN (:providerKeys)
+            ) OR EXISTS (
+                SELECT 1 FROM catalog_release_artist_credit AS credit
+                INNER JOIN catalog_release_track AS rt ON rt.releaseId = credit.releaseId
+                INNER JOIN catalog_media_asset AS asset ON asset.recordingId = rt.recordingId
+                WHERE credit.artistId = artist.id
+                  AND asset.provider IN (:providerKeys)
+            )
+          )
+        """,
+    )
+    suspend fun scopedPinnedArtistIds(
+        providerKeys: List<String>, artistIds: List<String>,
+    ): List<String>
+
+    /** Browse-only display groups are scoped by exact Recording.artistDisplay
+     * and present media asset; they must never impersonate ArtistIds. */
+    @Query(
+        """
+        SELECT DISTINCT recording.artistDisplay
+        FROM catalog_recording AS recording
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = recording.id
+        WHERE recording.artistDisplay IN (:displayNames)
+          AND asset.provider IN (:providerKeys)
+        """,
+    )
+    suspend fun scopedPinnedDisplayArtistNames(
+        providerKeys: List<String>, displayNames: List<String>,
+    ): List<String>
+
     /**
      * Batch evidence for native Library rating filters. Call with <=400 IDs;
      * source eligibility is proven by the caller's already source-filtered
