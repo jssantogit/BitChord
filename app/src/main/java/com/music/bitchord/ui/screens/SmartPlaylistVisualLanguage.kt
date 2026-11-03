@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import com.music.bitchord.ui.theme.AccentRed
@@ -335,14 +336,20 @@ internal fun PlaylistWizardSelectionRow(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
+    subtitle: String? = null,
+    leading: (@Composable () -> Unit)? = null,
 ) {
-    // A normal SettingsRow in its parent Settings group; no nested custom
-    // grey rounded rectangles for every single option.
+    // One native SettingsRow used by the wizard AND by the unified Library's
+    // playlist destination picker. Keep its artwork slot, insets and selected
+    // semantics in one place; do not invent another row composition.
     SettingsRow(
         title = label,
+        subtitle = subtitle,
+        leading = leading,
         onClick = onClick,
         reserveIconSpace = false,
-        modifier = Modifier.testTag("native-playlist-selection-row"),
+        modifier = Modifier.testTag("native-playlist-selection-row")
+            .semantics { this.selected = selected },
         trailing = {
             if (selected) {
                 Icon(
