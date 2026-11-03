@@ -1109,79 +1109,85 @@ private fun ReleaseHeader(
             // is willing to take the write — see [onToggleLibrary].
             val library = page.library?.takeIf { onToggleLibrary != null }
             Spacer(Modifier.height(18.dp))
-            Row(
-                modifier = Modifier
-                    .widthIn(max = RELEASE_ACTIONS_MAX_WIDTH)
-                    .fillMaxWidth()
-                    .padding(horizontal = HEADER_GUTTER),
-                horizontalArrangement = Arrangement.spacedBy(RELEASE_ACTION_GAP),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (page.browseId.startsWith("local:")) {
-                    // Already on this device — a folder, a download, a local
-                    // playlist — so there is no library to add it to, and a
-                    // greyed-out plus would only promise one. Apple Music's
-                    // own pair for that case: Play and Shuffle, side by side.
-                    ActionPill(
-                        icon = BitChordIcons.Play,
-                        label = stringResource(R.string.play),
-                        onClick = onPlay,
-                        filled = true,
-                        size = RELEASE_SIDE_BUTTON,
-                        modifier = Modifier.weight(1f),
-                    )
-                    ActionPill(
-                        icon = BitChordIcons.Shuffle,
-                        label = stringResource(R.string.shuffle),
-                        onClick = onShuffle,
-                        filled = false,
-                        size = RELEASE_SIDE_BUTTON,
-                        modifier = Modifier.weight(1f),
-                    )
-                    return@Row
-                }
-                CircleIconButton(
-                    icon = BitChordIcons.Shuffle,
-                    contentDescription = stringResource(R.string.shuffle),
-                    onClick = onShuffle,
-                    haptic = Haptic.Resume,
-                    size = RELEASE_SIDE_BUTTON,
-                    enabled = songs.isNotEmpty(),
-                )
-                ActionPill(
-                    icon = BitChordIcons.Play,
-                    label = stringResource(R.string.play),
-                    onClick = onPlay,
-                    filled = true,
-                    size = RELEASE_SIDE_BUTTON,
-                    modifier = Modifier.weight(1f),
-                )
-                if (library != null) {
-                    CircleIconButton(
-                        // A tick, not a filled-in plus: the pair reads as
-                        // "not yet / done", which is what the state is.
-                        icon = if (library.saved) BitChordIcons.Check else BitChordIcons.Plus,
-                        contentDescription = if (library.saved) {
-                            stringResource(R.string.remove_from_library)
-                        } else {
-                            stringResource(R.string.add_to_library)
-                        },
-                        onClick = { onToggleLibrary?.invoke() },
-                        haptic = if (library.saved) Haptic.ToggleOff else Haptic.ToggleOn,
-                        size = RELEASE_SIDE_BUTTON,
-                    )
-                } else {
-                    // Shown but greyed out for a guest, rather than leaving a
-                    // hole beside Play.
-                    CircleIconButton(
-                        icon = BitChordIcons.Plus,
-                        contentDescription = stringResource(R.string.add_to_library),
-                        onClick = {},
-                        size = RELEASE_SIDE_BUTTON,
-                        enabled = false,
-                    )
-                }
-            }
+            NativeReleaseActionRow(
+                onPlay = onPlay,
+                onShuffle = onShuffle,
+                isLocal = page.browseId.startsWith("local:"),
+                canShuffle = songs.isNotEmpty(),
+                isSaved = library?.saved,
+                onToggleLibrary = if (library == null) null else onToggleLibrary,
+            )
+        }
+    }
+}
+
+/**
+ * Shared release-page controls: a small Shuffle circle, dominant white Play
+ * pill, and the contextual library circle. Kept here beside DetailScreen so
+ * the canonical unified Album detail cannot drift into two Library action
+ * pills or silently change the reference release visual hierarchy.
+ */
+@Composable
+internal fun NativeReleaseActionRow(
+    onPlay: () -> Unit,
+    onShuffle: () -> Unit,
+    isLocal: Boolean,
+    canShuffle: Boolean = true,
+    isSaved: Boolean? = null,
+    onToggleLibrary: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .widthIn(max = RELEASE_ACTIONS_MAX_WIDTH)
+            .fillMaxWidth()
+            .padding(horizontal = HEADER_GUTTER),
+        horizontalArrangement = Arrangement.spacedBy(RELEASE_ACTION_GAP),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (isLocal) {
+            ActionPill(
+                icon = BitChordIcons.Play,
+                label = stringResource(R.string.play),
+                onClick = onPlay,
+                filled = true,
+                size = RELEASE_SIDE_BUTTON,
+                modifier = Modifier.weight(1f),
+            )
+            ActionPill(
+                icon = BitChordIcons.Shuffle,
+                label = stringResource(R.string.shuffle),
+                onClick = onShuffle,
+                filled = false,
+                size = RELEASE_SIDE_BUTTON,
+                modifier = Modifier.weight(1f),
+            )
+        } else {
+            CircleIconButton(
+                icon = BitChordIcons.Shuffle,
+                contentDescription = stringResource(R.string.shuffle),
+                onClick = onShuffle,
+                haptic = Haptic.Resume,
+                size = RELEASE_SIDE_BUTTON,
+                enabled = canShuffle,
+            )
+            ActionPill(
+                icon = BitChordIcons.Play,
+                label = stringResource(R.string.play),
+                onClick = onPlay,
+                filled = true,
+                size = RELEASE_SIDE_BUTTON,
+                modifier = Modifier.weight(1f),
+            )
+            CircleIconButton(
+                icon = if (isSaved == true) BitChordIcons.Check else BitChordIcons.Plus,
+                contentDescription = stringResource(
+                    if (isSaved == true) R.string.remove_from_library else R.string.add_to_library,
+                ),
+                onClick = { onToggleLibrary?.invoke() },
+                haptic = if (isSaved == true) Haptic.ToggleOff else Haptic.ToggleOn,
+                size = RELEASE_SIDE_BUTTON,
+                enabled = onToggleLibrary != null,
+            )
         }
     }
 }
