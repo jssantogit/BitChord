@@ -1138,6 +1138,8 @@ internal fun NativeReleaseActionRow(
     // Reserved for a future pin on the unified Library landing page.
     // Never attach playlist membership to the hero +.
     reservePinAction: Boolean = false,
+    isPinnedInLibrary: Boolean = false,
+    onTogglePin: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -1182,18 +1184,27 @@ internal fun NativeReleaseActionRow(
                 modifier = Modifier.weight(1f),
             )
             CircleIconButton(
-                icon = if (!reservePinAction && isSaved == true)
-                    BitChordIcons.Check else BitChordIcons.Plus,
-                contentDescription = if (reservePinAction)
-                    "Fixar álbum na Biblioteca (em breve)" else stringResource(
-                        if (isSaved == true) R.string.remove_from_library
-                        else R.string.add_to_library,
-                    ),
-                onClick = { if (!reservePinAction) onToggleLibrary?.invoke() },
-                haptic = if (!reservePinAction && isSaved == true)
-                    Haptic.ToggleOff else Haptic.ToggleOn,
+                icon = if (reservePinAction && isPinnedInLibrary ||
+                    !reservePinAction && isSaved == true
+                ) BitChordIcons.Check else BitChordIcons.Plus,
+                contentDescription = if (reservePinAction) {
+                    if (isPinnedInLibrary) "Desafixar álbum da Biblioteca"
+                    else if (onTogglePin == null) "Fixar álbum na Biblioteca (em breve)"
+                    else "Fixar álbum na Biblioteca"
+                } else stringResource(
+                    if (isSaved == true) R.string.remove_from_library
+                    else R.string.add_to_library,
+                ),
+                onClick = {
+                    if (reservePinAction) onTogglePin?.invoke()
+                    else onToggleLibrary?.invoke()
+                },
+                haptic = if (reservePinAction && isPinnedInLibrary ||
+                    !reservePinAction && isSaved == true
+                ) Haptic.ToggleOff else Haptic.ToggleOn,
                 size = RELEASE_SIDE_BUTTON,
-                enabled = !reservePinAction && onToggleLibrary != null,
+                enabled = if (reservePinAction) onTogglePin != null
+                    else onToggleLibrary != null,
             )
         }
     }
