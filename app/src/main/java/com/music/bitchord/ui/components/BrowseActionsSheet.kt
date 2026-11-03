@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
@@ -164,6 +165,7 @@ fun BrowseActionsSheet(
     /** Optional native actions for canonical tracks/releases/artists; no fake Song IDs. */
     onAddToPlaylist: (() -> Unit)? = null,
     onEditRating: (() -> Unit)? = null,
+    onSelect: (() -> Unit)? = null,
     /** Typed artwork slot for canonical RecordingId collections without a legacy thumbnail URL. */
     headerArtwork: (@Composable () -> Unit)? = null,
     /**
@@ -240,6 +242,9 @@ fun BrowseActionsSheet(
             }
             onEditRating?.let { edit ->
                 ActionRow(Icons.Rounded.Star, "Editar avaliação", onClick = edit)
+            }
+            onSelect?.let { select ->
+                ActionRow(Icons.Rounded.CheckCircle, "Selecionar", onClick = select)
             }
             onDownloadAll?.let { download ->
                 // Saying which of the three it is, rather than offering the same row
