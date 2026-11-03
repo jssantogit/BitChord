@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -196,6 +197,11 @@ internal fun CanonicalLocalRecentAdditions(
     showAll: Boolean = false,
     contentPadding: PaddingValues = PaddingValues(),
     refreshRequested: Boolean = false,
+    searchVisible: Boolean = false,
+    sort: LocalMusicSort = LocalMusicSort.DATE_ADDED,
+    viewType: LibraryViewType = LibraryViewType.GRID,
+    sourceKey: String? = null,
+    stars: Int? = null,
 ) {
     val context = LocalContext.current.applicationContext
     val database = remember(context) { CanonicalCatalogDatabase.get(context) }
@@ -203,6 +209,9 @@ internal fun CanonicalLocalRecentAdditions(
     var refreshSerial by remember { mutableIntStateOf(0) }
     var refreshing by remember { mutableStateOf(false) }
     var loadFailed by remember { mutableStateOf(false) }
+    var searchQuery by remember(showAll) { mutableStateOf("") }
+    LaunchedEffect(searchVisible) { if (!searchVisible) searchQuery = "" }
+    val ratingSnapshot = LocalCanonicalRatingDisplay.current
     val recent by produceState<List<V2DisplayRow>?>(
         initialValue = RecentLocalAdditionsSnapshot.get(showAll)?.takeIf { it.isNotEmpty() },
         key1 = dao, key2 = showAll, key3 = refreshSerial to refreshRequested,
@@ -217,7 +226,7 @@ internal fun CanonicalLocalRecentAdditions(
         }
         refreshing = refreshSerial > 0
         try {
-            val fresh = withContext(Dispatchers.IO) {
+            val (fresh, factDates) = withContext(Dispatchers.IO) {
                     // Home used to read an empty Room table before the first
                     // unified-category visit indexed MediaStore. Index once
                     // before reading; an empty pre-index cache is not final.
@@ -235,7 +244,7 @@ internal fun CanonicalLocalRecentAdditions(
                     val assets = recentRows.chunked(300).flatMap { batch ->
                         dao.mediaAssetsByIds(batch.map { it.mediaAssetId })
                     }.associateBy { it.id }
-                    recentRows.map { row ->
+                    val viewRows = recentRows.map { row ->
                         val (mediaTitle, mediaAlbum, fileName) = localRecentMediaStoreLabels(
                             context, assets[row.mediaAssetId]?.uri,
                         )
@@ -253,8 +262,14 @@ internal fun CanonicalLocalRecentAdditions(
                             localArtworkUri = row.artworkUri,
                         )
                     }
+                    viewRows to recentRows.associate { row ->
+                        row.recordingId to CanonicalRecentLocalDates(
+                            added = row.dateAddedSeconds,
+                            modified = row.dateModifiedSeconds,
+                        )
+                    }
             }
-            RecentLocalAdditionsSnapshot.put(showAll, fresh)
+            RecentLocalAdditionsSnapshot.put(showAll, fresh, factDates)
             value = fresh
             loadFailed = false
         } catch (cancelled: CancellationException) {
@@ -275,9 +290,23 @@ internal fun CanonicalLocalRecentAdditions(
             modifier = Modifier.fillMaxSize(),
         ) {
             CanonicalRecentAdditionsGrid(
-                recent.orEmpty(), onPlayTrack, contentPadding,
+                recent = filteredCanonicalRecentLocalAdditions(
+                    tracks = recent.orEmpty(),
+                    query = searchQuery,
+                    sort = sort,
+                    sourceKey = sourceKey,
+                    stars = stars,
+                    ratings = ratingSnapshot,
+                    dates = RecentLocalAdditionsSnapshot.dates(),
+                ),
+                onPlayTrack = onPlayTrack,
+                contentPadding = contentPadding,
                 loading = recent == null && !loadFailed,
                 error = loadFailed,
+                showSearch = searchVisible,
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                viewType = viewType,
             )
         }
     } else if (recent != null) {
