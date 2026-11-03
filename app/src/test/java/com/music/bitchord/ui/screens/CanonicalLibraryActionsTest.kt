@@ -140,6 +140,38 @@ class CanonicalLibraryActionsTest {
         ))
     }
 
+
+    @Test fun dragGestureUsesExactVisibleKeysAndNeverSelectsAnEmptyGridCell() {
+        val a = CanonicalLibrarySelection(CanonicalLibraryEntityType.TRACK, "recording-1")
+        val b = CanonicalLibrarySelection(CanonicalLibraryEntityType.TRACK, "recording-2")
+        val c = CanonicalLibrarySelection(CanonicalLibraryEntityType.TRACK, "recording-3")
+        val list = canonicalLibraryDragRows(listOf(a, b, c), grid = false)
+        assertEquals(a, canonicalLibraryDragHit(list, "recording-1", 100f, 400f, grid = false))
+        assertEquals(null, canonicalLibraryDragHit(list, "native-library-header", 100f, 400f, grid = false))
+
+        val grid = canonicalLibraryDragRows(listOf(a, b, c), grid = true)
+        assertEquals(a, canonicalLibraryDragHit(grid, "grid-0-recording-1", 100f, 400f, grid = true))
+        assertEquals(b, canonicalLibraryDragHit(grid, "grid-0-recording-1", 300f, 400f, grid = true))
+        assertEquals(c, canonicalLibraryDragHit(grid, "grid-1-recording-3", 100f, 400f, grid = true))
+        assertEquals(null, canonicalLibraryDragHit(grid, "grid-1-recording-3", 300f, 400f, grid = true))
+        assertEquals(null, canonicalLibraryDragHit(grid, "grid-0-recording-1", -1f, 400f, grid = true))
+    }
+
+    @Test fun draggingAcrossRowsSelectsEveryCrossedCanonicalIdWithoutRemovingEarlierSelection() {
+        val first = CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, "artist-1")
+        val second = CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, "artist-2")
+        val third = CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, "artist-3")
+        val fourth = CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, "artist-4")
+        val ordered = listOf(first, second, third, fourth)
+        assertEquals(listOf(first, second, third), canonicalLibraryDragSpan(ordered, 0, 2))
+        assertEquals(listOf(second, third, fourth), canonicalLibraryDragSpan(ordered, 3, 1))
+        assertTrue(canonicalLibraryDragSpan(ordered, -1, 2).isEmpty())
+        assertTrue(canonicalLibraryDragSpan(ordered, 0, 10).isEmpty())
+        assertEquals(listOf(first, second, third, fourth), (
+            listOf(first) + canonicalLibraryDragSpan(ordered, 1, 3)
+        ).distinct())
+    }
+
     @Test fun longPressSelectionIsOnlyAvailableOnTopLevelLibraryCategories() {
         for (category in CanonicalSmartFilterContext.entries) {
             assertTrue(canSelectCanonicalLibraryByLongPress(category, detailOpen = false))
