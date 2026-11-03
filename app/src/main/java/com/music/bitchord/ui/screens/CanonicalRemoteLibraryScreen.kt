@@ -58,6 +58,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,10 +79,14 @@ import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalEntitySortDateRow
 import com.music.bitchord.data.catalog.UnifiedLocalCatalogIndex
+import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.settings.LocalMusicSort
 import com.music.bitchord.data.settings.LibraryViewType
 import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.diagnostics.DiagnosticCategory
+import com.music.bitchord.ui.components.BrowseActionsSheet
+import com.music.bitchord.ui.components.BrowseTarget
+import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.theme.ArtworkPalette
@@ -127,6 +132,7 @@ import org.jetbrains.compose.resources.stringResource as sharedStringResource
 import com.music.bitchord.ui.player.awaitRecoverableCanonicalArtwork
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
@@ -155,6 +161,13 @@ private data class CanonicalSelectedEntity(
     val id: String,
     val name: String,
     val artworkUri: String? = null,
+)
+
+private data class CanonicalLibraryMenuTarget(
+    val selection: CanonicalLibrarySelection,
+    val title: String,
+    val subtitle: String,
+    val imageUrl: String? = null,
 )
 
 /**
@@ -247,6 +260,11 @@ internal fun CanonicalRemoteLibraryScreen(
     val executeLibraryTrack = rememberSmartCollectionBatchAction(controller)
     // Preserve native RecordingId-scoped rating edits from the main branch.
     var editingRecordingId by remember { mutableStateOf<String?>(null) }
+    var libraryMenu by remember { mutableStateOf<CanonicalLibraryMenuTarget?>(null) }
+    var playlistPickerSelection by remember {
+        mutableStateOf<List<CanonicalLibrarySelection>?>(null)
+    }
+    val libraryActionScope = rememberCoroutineScope()
     val filterRepo = remember(context.applicationContext) {
         SmartPlaylistV2FilterRepository(
             SmartPlaylistDefinitionDatabase.get(context.applicationContext).v2FilterDao(),
@@ -652,6 +670,24 @@ internal fun CanonicalRemoteLibraryScreen(
             editingRecordingId = track.recordingId
         }
     }
+    val openTrackMenu: (CanonicalBrowseTrack) -> Unit = { track ->
+        libraryMenu = CanonicalLibraryMenuTarget(
+            CanonicalLibrarySelection(CanonicalLibraryEntityType.TRACK, track.recordingId),
+            track.title, track.artistDisplay,
+        )
+    }
+    val openAlbumMenu: (ReleaseEntity) -> Unit = { album ->
+        libraryMenu = CanonicalLibraryMenuTarget(
+            CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, album.id),
+            album.title, album.artistDisplay.orEmpty(), album.artworkUri,
+        )
+    }
+    val openArtistMenu: (CanonicalSelectedEntity) -> Unit = { artist ->
+        libraryMenu = CanonicalLibraryMenuTarget(
+            CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, artist.id),
+            artist.name, "Artista",
+        )
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -693,6 +729,8 @@ internal fun CanonicalRemoteLibraryScreen(
                     onNestedDetailChanged = { artistNestedReleaseOpen = it },
                     onTrackPlay = playTrack,
                     onTrackEditRating = editRating,
+                    onTrackOptions = openTrackMenu,
+                    onReleaseOptions = openAlbumMenu,
                     onPlayAll = { visible, shuffle ->
                         executeLibraryTrack(
                             SmartCollectionActionSource.LibraryTracks(
@@ -722,6 +760,9 @@ internal fun CanonicalRemoteLibraryScreen(
                     ?: if (detail == null) null else scopedDetailTracks.firstOrNull(),
                 onTrackPlay = playTrack,
                 onTrackEditRating = editRating,
+                onTrackOptions = openTrackMenu,
+                onAlbumOptions = openAlbumMenu,
+                onArtistOptions = openArtistMenu,
                 onPlayAll = { visible, shuffle ->
                     executeLibraryTrack(
                         SmartCollectionActionSource.LibraryTracks(
@@ -856,6 +897,78 @@ internal fun CanonicalRemoteLibraryScreen(
                     }
                 }
             }
+        }
+        libraryMenu?.let { menu ->
+            val sourceForAction = if (unified) selectedSource else providerKey
+            val art = when (menu.selection.type) {
+                CanonicalLibraryEntityType.TRACK -> library.tracks.firstOrNull {
+                    it.recordingId == menu.selection.entityId
+                }
+                else -> entityArtworkById[menu.selection.entityId]
+            }
+            val queue: (CanonicalCollectionIntent) -> Unit = { intent ->
+                libraryMenu = null
+                libraryActionScope.launch {
+                    val ids = try {
+                        canonicalLibraryResolveRecordingIds(
+                            context.applicationContext, listOf(menu.selection), sourceForAction,
+                        )
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) { emptyList() }
+                    if (ids.isNotEmpty()) executeLibraryTrack(
+                        SmartCollectionActionSource.LibraryTracks(
+                            ids, sourceForAction, shuffle = false,
+                        ), intent,
+                    )
+                }
+            }
+            ModalBottomSheet(
+                onDismissRequest = { libraryMenu = null },
+                containerColor = MaterialTheme.colorScheme.background,
+            ) {
+                BrowseActionsSheet(
+                    target = BrowseTarget(
+                        browseId = null,
+                        title = menu.title,
+                        subtitle = menu.subtitle,
+                        thumbnailUrl = menu.imageUrl,
+                        type = when (menu.selection.type) {
+                            CanonicalLibraryEntityType.TRACK -> BrowseType.OTHER
+                            CanonicalLibraryEntityType.ALBUM -> BrowseType.ALBUM
+                            CanonicalLibraryEntityType.ARTIST -> BrowseType.ARTIST
+                        },
+                        fromCard = false,
+                    ),
+                    onPlayNext = { queue(CanonicalCollectionIntent.ADD_NEXT) },
+                    onAddToQueue = { queue(CanonicalCollectionIntent.ADD_TO_QUEUE) },
+                    onAddToPlaylist = {
+                        playlistPickerSelection = listOf(menu.selection)
+                        libraryMenu = null
+                    },
+                    onEditRating = if (menu.selection.type == CanonicalLibraryEntityType.TRACK)
+                        { {
+                            editingRecordingId = menu.selection.entityId
+                            libraryMenu = null
+                        } } else null,
+                    headerArtwork = {
+                        if (art != null) {
+                            CanonicalUnifiedArtwork(art, artworkLoader, Modifier.fillMaxSize())
+                        } else CoverPlaceholder(
+                            if (menu.selection.type == CanonicalLibraryEntityType.ARTIST)
+                                Icons.Rounded.MusicNote else Icons.Rounded.Album,
+                            Modifier.fillMaxSize(),
+                        )
+                    },
+                )
+            }
+        }
+        playlistPickerSelection?.let { selected ->
+            CanonicalLibraryPlaylistPicker(
+                selection = selected,
+                selectedSource = if (unified) selectedSource else providerKey,
+                onDismiss = { playlistPickerSelection = null },
+            )
         }
         editingRecordingId?.let { id ->
             CanonicalRecordingRatingDialog(
