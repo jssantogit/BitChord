@@ -22,6 +22,11 @@ internal class A0SearchTicketRegistry(initial:Int) {
         return true
     }
 
+    /** Internal query order for report assembly; never emit random tokens. */
+    @Synchronized fun tokenAt(index:Int):Int? =
+        if(index !in 0..2)null
+        else tickets.entries.firstOrNull { it.value==index }?.key
+
     fun creditValidated(token:Int,publicFiles:Int=0) {
         val ordinal=tickets[token] ?: return
         replies.incrementAndGet(ordinal)
