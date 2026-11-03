@@ -207,6 +207,12 @@ internal fun SmartPlaylistBuilderScreen(
     initialV2Id: String? = null,
     initialNormalId: String? = null,
     startOnNormalSongs: Boolean = false,
+    // Reuse THIS wizard in a bounded modal over a Library selection, rather
+    // than embedding a second, simplified playlist creation screen.
+    embeddedInLibrary: Boolean = false,
+    initialLibraryRecordingIds: List<String> = emptyList(),
+    initialLibrarySource: String? = null,
+    onLibraryNormalSaved: ((String) -> Unit)? = null,
     onSavedAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
     onPreviewAction: ((RuleBasedSmartPlaylistQuery, CanonicalCollectionIntent) -> Unit)? = null,
     onSavedV2Action: ((String, CanonicalCollectionIntent) -> Unit)? = null,
@@ -219,6 +225,10 @@ internal fun SmartPlaylistBuilderScreen(
             initialPlaylistId = initialV2Id,
             initialNormalPlaylistId = initialNormalId,
             startOnNormalSongs = startOnNormalSongs,
+            embeddedInLibrary = embeddedInLibrary,
+            initialLibraryRecordingIds = initialLibraryRecordingIds,
+            initialLibrarySource = initialLibrarySource,
+            onLibraryNormalSaved = onLibraryNormalSaved,
             onClassic = { showAdvanced = false },
             onSavedAction = onSavedV2Action,
             onPreviewAction = onPreviewV2Action,
