@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import com.music.bitchord.data.settings.LocalMusicSort
+import com.music.bitchord.data.catalog.CanonicalEntitySortDateRow
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
 import org.junit.Assert.assertEquals
@@ -17,9 +18,15 @@ class CanonicalRecentAdditionsFiltersTest {
         byRecordingId = mapOf("old" to RatingDisplay(localValue = 5.0)),
     )
     private val times = mapOf(
-        "new" to CanonicalRecentLocalDates(added = 30, modified = 10),
-        "old" to CanonicalRecentLocalDates(added = 20, modified = 40),
-        "unknown" to CanonicalRecentLocalDates(added = 10, modified = null),
+        "new" to CanonicalEntitySortDateRow(
+            entityId = "new", dateAddedSeconds = 30, dateModifiedSeconds = 10,
+        ),
+        "old" to CanonicalEntitySortDateRow(
+            entityId = "old", dateAddedSeconds = 20, dateModifiedSeconds = 40,
+        ),
+        "unknown" to CanonicalEntitySortDateRow(
+            entityId = "unknown", dateAddedSeconds = 10, dateModifiedSeconds = null,
+        ),
     )
 
     @Test fun nativeFilterUsesCanonicalStarsAndLocalSourceWithoutFabricatingRemoteRecents() {
