@@ -499,6 +499,10 @@ internal class A0FreshAutoSearchTransport(
             val counts=holder.screening()
             val replyByTicket=tickets.responseCounts()
             val filesByTicket=tickets.publicFileCounts()
+            val funnelByTicket=(0..2).map { index ->
+                tickets.tokenAt(index)?.let(holder::ticketScreening)
+                    ?: A0ObservedCandidateHandoff.TicketScreening()
+            }
             val successWorkers=peerWorkers.snapshot()
             val reachability=A0SearchReachabilityDiagnosis.classify(
                 directAccepted.get(),indirectOffers.get(),indirectConnected.get(),
@@ -516,6 +520,15 @@ internal class A0FreshAutoSearchTransport(
                 " initial_public_files=${filesByTicket[0]}" +
                 " fallback_1_public_files=${filesByTicket[1]}" +
                 " fallback_2_public_files=${filesByTicket[2]}" +
+                " initial_title_matched=${funnelByTicket[0].titleMatched}" +
+                " fallback_1_title_matched=${funnelByTicket[1].titleMatched}" +
+                " fallback_2_title_matched=${funnelByTicket[2].titleMatched}" +
+                " initial_unique_admitted=${funnelByTicket[0].uniqueAdmitted}" +
+                " fallback_1_unique_admitted=${funnelByTicket[1].uniqueAdmitted}" +
+                " fallback_2_unique_admitted=${funnelByTicket[2].uniqueAdmitted}" +
+                " initial_shadow_inserted=${funnelByTicket[0].shadowInserted}" +
+                " fallback_1_shadow_inserted=${funnelByTicket[1].shadowInserted}" +
+                " fallback_2_shadow_inserted=${funnelByTicket[2].shadowInserted}" +
                 " fallback_1_kind=${fallbackOneKind.name}" +
                 " fallback_2_kind=${fallbackTwoKind.name}" +
                 " valid_direct=${validDirect.get().coerceIn(0,160)}" +
