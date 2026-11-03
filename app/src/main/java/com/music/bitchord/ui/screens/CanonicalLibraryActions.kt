@@ -157,6 +157,14 @@ internal suspend fun canonicalLibraryResolveRecordingIds(
     context, selection, selectedSource,
 ).recordingIds
 
+/** Fails closed if the destination playlist's source changed during IO.
+ * A newly created playlist has no previous row and is checked separately.
+ */
+internal fun canonicalPlaylistTargetSourceUnchanged(
+    initialSourceKey: String?,
+    committedSourceKey: String?,
+): Boolean = initialSourceKey == committedSourceKey
+
 internal sealed interface CanonicalLibraryPlaylistSaveResult {
     data class Saved(val added: Int, val unavailable: Int) : CanonicalLibraryPlaylistSaveResult
     data class Unavailable(val count: Int) : CanonicalLibraryPlaylistSaveResult
@@ -207,6 +215,16 @@ internal suspend fun addCanonicalLibraryRecordingsToPlaylist(
             // changed membership while the source verification was running.
             repo.list().firstOrNull { it.id == playlistId }
                 ?: return@withTransaction CanonicalLibraryPlaylistSaveResult.Missing
+        }
+        // Two DBs cannot be locked atomically. A concurrent playlist editor
+        // may change its target source between Catalog verification and this
+        // transaction. Reject the entire append and let the user retry.
+        if (playlistId != null && !canonicalPlaylistTargetSourceUnchanged(
+                existing?.sourceProviderKey, current.sourceProviderKey,
+            )) {
+            return@withTransaction CanonicalLibraryPlaylistSaveResult.Unavailable(
+                requestedIds.size,
+            )
         }
         // Re-check the target source inside the transaction. Never mix new
         // tracks from an unselected provider into a source-bound playlist.
