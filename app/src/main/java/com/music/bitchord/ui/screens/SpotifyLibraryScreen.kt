@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.music.bitchord.R
 import com.music.bitchord.ui.components.CoverPlaceholder
+import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.spotify.SpotifyLibrary
 import com.music.bitchord.data.spotify.SpotifyPlaylist
@@ -163,6 +164,7 @@ internal fun LibraryRow(
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     artwork: (@Composable () -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     horizontalPadding: Dp = 20.dp,
     artworkSize: Dp = 52.dp,
@@ -172,7 +174,9 @@ internal fun LibraryRow(
 ) {
     Row(
         modifier = modifier.fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(if (onClick != null) Modifier.longPressMenuClickable(
+                onClick = onClick, onLongClick = onLongPress,
+            ) else Modifier)
             .padding(horizontal = horizontalPadding, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
