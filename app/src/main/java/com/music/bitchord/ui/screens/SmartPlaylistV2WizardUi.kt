@@ -1394,7 +1394,7 @@ internal fun SmartPlaylistV2WizardUi(
                     Text(error, color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodyMedium)
                 }
-                if (loading) item { Text("Consultando biblioteca…") }
+                if (loading) item { NativeLoadingSpinner() }
             }
             Column(
                 Modifier.fillMaxWidth().navigationBarsPadding()
