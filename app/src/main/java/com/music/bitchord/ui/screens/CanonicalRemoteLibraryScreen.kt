@@ -52,6 +52,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -897,7 +898,7 @@ internal fun CanonicalRemoteLibraryScreen(
                 )
                 when (detailState) {
                     CanonicalDetailBrowseState.Loading ->
-                        RemoteBrowseMessage("Carregando músicas vinculadas…")
+                        RemoteBrowseLoading()
                     CanonicalDetailBrowseState.Failed ->
                         RemoteBrowseMessage("Não foi possível confirmar as músicas deste item.")
                     is CanonicalDetailBrowseState.Ready -> {
@@ -945,7 +946,7 @@ internal fun CanonicalRemoteLibraryScreen(
                     CanonicalSmartFilterContext.SONGS -> {
                         when (filteredState) {
                             CanonicalSongFilterState.Loading ->
-                                RemoteBrowseMessage("Aplicando filtro…")
+                                RemoteBrowseLoading()
                             CanonicalSongFilterState.Failed ->
                                 RemoteBrowseMessage(
                                     "Este filtro não pôde ser aplicado. Selecione Todas.",
@@ -963,7 +964,7 @@ internal fun CanonicalRemoteLibraryScreen(
                     }
                     CanonicalSmartFilterContext.ALBUMS -> when (val state = entityState) {
                         CanonicalEntityBrowseState.Loading ->
-                            RemoteBrowseMessage("Carregando álbuns canônicos…")
+                            RemoteBrowseLoading()
                         CanonicalEntityBrowseState.Failed ->
                             RemoteBrowseMessage("Não foi possível aplicar o filtro de álbuns.")
                         is CanonicalEntityBrowseState.Artists -> Unit
@@ -984,7 +985,7 @@ internal fun CanonicalRemoteLibraryScreen(
                     }
                     CanonicalSmartFilterContext.ARTISTS -> when (val state = entityState) {
                         CanonicalEntityBrowseState.Loading ->
-                            RemoteBrowseMessage("Carregando artistas canônicos…")
+                            RemoteBrowseLoading()
                         CanonicalEntityBrowseState.Failed ->
                             RemoteBrowseMessage("Não foi possível aplicar o filtro de artistas.")
                         is CanonicalEntityBrowseState.Albums -> Unit
@@ -1239,6 +1240,18 @@ internal fun NativeCanonicalLibraryFilters(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RemoteBrowseLoading() {
+    // Same first-party progress indicator already used by the playlists UI.
+    // Loading is neither an empty-state sentence nor an error message.
+    Box(
+        modifier = Modifier.fillMaxWidth().height(88.dp).testTag("native-library-loading"),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(28.dp))
     }
 }
 
@@ -1891,7 +1904,7 @@ private fun NativeUnifiedLibraryBody(
             when (selectedContext) {
                 CanonicalSmartFilterContext.SONGS -> when (filteredState) {
                     CanonicalSongFilterState.Loading -> item {
-                        RemoteBrowseMessage("Carregando músicas…")
+                        RemoteBrowseLoading()
                     }
                     CanonicalSongFilterState.Failed -> item {
                         RemoteBrowseMessage("Não foi possível aplicar o filtro.")
@@ -1955,7 +1968,7 @@ private fun NativeUnifiedLibraryBody(
                 }
                 CanonicalSmartFilterContext.ALBUMS -> when (entityState) {
                     CanonicalEntityBrowseState.Loading -> item {
-                        RemoteBrowseMessage("Carregando álbuns…")
+                        RemoteBrowseLoading()
                     }
                     CanonicalEntityBrowseState.Failed -> item {
                         RemoteBrowseMessage("Não foi possível carregar os álbuns.")
@@ -2039,7 +2052,7 @@ private fun NativeUnifiedLibraryBody(
                 }
                 CanonicalSmartFilterContext.ARTISTS -> when (entityState) {
                     CanonicalEntityBrowseState.Loading -> item {
-                        RemoteBrowseMessage("Carregando artistas…")
+                        RemoteBrowseLoading()
                     }
                     CanonicalEntityBrowseState.Failed -> item {
                         RemoteBrowseMessage("Não foi possível carregar os artistas.")
