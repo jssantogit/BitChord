@@ -2001,6 +2001,7 @@ private fun NativeUnifiedLibraryBody(
                                     onShuffle = { onPlayAll(tracks, true) },
                                     isLocal = false,
                                     canShuffle = tracks.isNotEmpty(),
+                                    reservePinAction = true,
                                 )
                             } else {
                                 Row(
