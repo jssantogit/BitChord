@@ -74,6 +74,15 @@ class CanonicalAlbumDetailParityTest {
         )
     }
 
+    @Test fun displaySortAndSearchNeverRenumberTheOriginalAlbum() {
+        val original = listOf(track("b", "Beta"), track("a", "Alpha"))
+        val numbers = canonicalAlbumDetailTrackNumbers(original)
+        assertEquals(1, numbers["b"])
+        assertEquals(2, numbers["a"])
+        val ascending = canonicalAlbumDetailSort(original, SongSort.TITLE_ASC)
+        assertEquals(listOf(2, 1), ascending.map { numbers[it.recordingId] })
+    }
+
     @Test fun epSuffixIsOnlyHiddenWhenVerifiedSubtypeAgrees() {
         assertEquals("ALLDAY PROJECT", canonicalAlbumDisplayTitle("ALLDAY PROJECT - EP", "EP"))
         assertEquals("ALLDAY PROJECT - EP", canonicalAlbumDisplayTitle("ALLDAY PROJECT - EP", null))
