@@ -53,11 +53,10 @@ class A0AutoCandidateSelectionPolicyTest {
         )
         assertTrue(collector.offerParsed(A0SoulseekSearchResponse(
             "peer",177,files,emptyList(),true,128_000,0),"peer"))
-        // The automatic release shadow intentionally filters out filenames
-        // missing the requested title before ranking. Exercise both missing
-        // terms with the broader manual candidate sample; do not weaken the
-        // production shadow prefilter just to satisfy this diagnostic test.
-        assertEquals(1,collector.releaseShadowChoices().size)
+        // Combined manual+shadow collectors intentionally retain all manual
+        // filenames; the production auto-only collector applies the early
+        // title filter (covered separately in A0ObservedCandidateHandoffTest).
+        // Exercise missing title AND missing artist on this manual sample.
         assertEquals(2,collector.choices().size)
         val choice=A0AutoCandidateSelectionPolicy.preview(
             target,collector.choices(),profile)
