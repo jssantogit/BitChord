@@ -188,7 +188,7 @@ internal fun canonicalPlaylistDetailMeta(
     smart: Boolean, rows: List<V2DisplayRow>?,
 ): String {
     val type = if (smart) "Playlist inteligente" else "Playlist"
-    if (rows == null) return "${type} · Carregando músicas…"
+    if (rows == null) return type
     val count = "${rows.size} " + if (rows.size == 1) "faixa" else "faixas"
     val durations = rows.map { it.durationMs }
     val total = if (durations.isNotEmpty() && durations.all { it != null }) {
@@ -555,6 +555,9 @@ internal fun CanonicalPlaylistDetailScreen(
                     palette = palette,
                 )
             }
+        }
+        if (rows == null) item(key = "playlist-detail-loading") {
+            NativeLoadingSpinner()
         }
         if (rows?.isEmpty() == true) {
             if (trackLoadFailed) {
