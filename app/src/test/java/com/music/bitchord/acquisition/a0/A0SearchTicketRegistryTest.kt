@@ -32,6 +32,20 @@ class A0SearchTicketRegistryTest {
         assertFalse(tickets.register(27186))
     }
 
+    @Test fun publicFileCountsArePerTicketEvenForZeroFileReplies() {
+        val tickets=A0SearchTicketRegistry(100)
+        tickets.creditValidated(100,publicFiles=3)
+        assertTrue(tickets.register(101))
+        tickets.creditValidated(101,publicFiles=0)
+        tickets.creditValidated(101,publicFiles=9)
+        tickets.creditValidated(102,publicFiles=20) // Unregistered ticket
+        assertTrue(tickets.register(102))
+        tickets.creditValidated(102,publicFiles=2)
+        assertEquals(listOf(1,2,1),tickets.responseCounts())
+        assertEquals(listOf(3,9,2),tickets.publicFileCounts())
+        assertFalse(tickets.toString().contains("100"))
+    }
+    
     @Test fun onlyOriginalAndTwoRegisteredVariantsArePermitted() {
         val tickets=A0SearchTicketRegistry(81)
         assertFalse(tickets.register(81))
