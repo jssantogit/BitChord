@@ -346,8 +346,8 @@ internal fun CanonicalNativeArtistDetail(
                     }
                 }
             }
-            section("Singles e EPs", sections.singlesAndEps)
             section("Álbuns", sections.albums)
+            section("Singles e EPs", sections.singlesAndEps)
             section("Lançamentos", sections.unclassified)
         }
     }
