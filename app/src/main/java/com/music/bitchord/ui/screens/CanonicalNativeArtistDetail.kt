@@ -33,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -112,6 +113,8 @@ internal fun CanonicalNativeArtistDetail(
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
 ) {
     val context = LocalContext.current.applicationContext
+    val pinRepository = remember(context) { CanonicalLibraryPinRepository.get(context) }
+    val libraryPins by pinRepository.pins.collectAsStateWithLifecycle()
     val catalogDb = remember(context) { CanonicalCatalogDatabase.get(context) }
     val dao = remember(catalogDb) { catalogDb.catalogDao() }
     val keys = sourceKeys.filter { selectedSourceKey == null || it == selectedSourceKey }
@@ -297,6 +300,18 @@ internal fun CanonicalNativeArtistDetail(
                                     onShuffle = { onPlayAll(albumTracks, true) },
                                     isLocal = false,
                                     reservePinAction = true,
+                                    isPinnedInLibrary = CanonicalLibrarySelection(
+                                        CanonicalLibraryEntityType.ALBUM, selectedAlbum.id,
+                                    ) in libraryPins.map { it.selection },
+                                    onTogglePin = {
+                                        pinRepository.toggle(CanonicalLibraryPin(
+                                            CanonicalLibrarySelection(
+                                                CanonicalLibraryEntityType.ALBUM, selectedAlbum.id,
+                                            ),
+                                            selectedAlbum.title,
+                                            selectedAlbum.artistDisplay.orEmpty(),
+                                        ))
+                                    },
                                 )
                             }
                         },
