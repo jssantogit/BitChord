@@ -34,6 +34,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Album
@@ -263,6 +265,10 @@ internal fun CanonicalRemoteLibraryScreen(
     var libraryMenu by remember { mutableStateOf<CanonicalLibraryMenuTarget?>(null) }
     var playlistPickerSelection by remember {
         mutableStateOf<List<CanonicalLibrarySelection>?>(null)
+    }
+    var selectedItems by remember { mutableStateOf<List<CanonicalLibrarySelection>>(emptyList()) }
+    LaunchedEffect(selectedContext, selectedSource, selectedEntity?.id) {
+        selectedItems = emptyList()
     }
     val libraryActionScope = rememberCoroutineScope()
     val filterRepo = remember(context.applicationContext) {
@@ -641,6 +647,7 @@ internal fun CanonicalRemoteLibraryScreen(
 
     BackHandler(enabled = selectedEntity != null) { selectedEntity = null }
     BackHandler(enabled = selectedEntity == null, onBack = onClose)
+    BackHandler(enabled = selectedItems.isNotEmpty()) { selectedItems = emptyList() }
 
     val playTrack: (CanonicalBrowseTrack) -> Unit = { track ->
         if (unified) {
@@ -665,6 +672,9 @@ internal fun CanonicalRemoteLibraryScreen(
         }
     }
 
+    val toggleSelection: (CanonicalLibrarySelection) -> Unit = { target ->
+        selectedItems = toggleCanonicalLibrarySelection(selectedItems, target)
+    }
     val editRating: (CanonicalBrowseTrack) -> Unit = { track ->
         if (unified || track.availableAssets.any { it.providerKey == providerKey }) {
             editingRecordingId = track.recordingId
@@ -693,6 +703,7 @@ internal fun CanonicalRemoteLibraryScreen(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
+        Box(Modifier.fillMaxSize()) {
         if (unified) {
             // Selected albums/artists keep the exact native page chrome.
             // Only their revalidated RecordingId membership changes.
@@ -731,6 +742,8 @@ internal fun CanonicalRemoteLibraryScreen(
                     onTrackEditRating = editRating,
                     onTrackOptions = openTrackMenu,
                     onReleaseOptions = openAlbumMenu,
+                    selectedItems = selectedItems,
+                    onToggleSelection = toggleSelection,
                     onPlayAll = { visible, shuffle ->
                         executeLibraryTrack(
                             SmartCollectionActionSource.LibraryTracks(
@@ -763,6 +776,8 @@ internal fun CanonicalRemoteLibraryScreen(
                 onTrackOptions = openTrackMenu,
                 onAlbumOptions = openAlbumMenu,
                 onArtistOptions = openArtistMenu,
+                selectedItems = selectedItems,
+                onToggleSelection = toggleSelection,
                 onPlayAll = { visible, shuffle ->
                     executeLibraryTrack(
                         SmartCollectionActionSource.LibraryTracks(
@@ -946,6 +961,10 @@ internal fun CanonicalRemoteLibraryScreen(
                         playlistPickerSelection = listOf(menu.selection)
                         libraryMenu = null
                     },
+                    onSelect = {
+                        toggleSelection(menu.selection)
+                        libraryMenu = null
+                    },
                     onEditRating = if (menu.selection.type == CanonicalLibraryEntityType.TRACK)
                         { {
                             editingRecordingId = menu.selection.entityId
@@ -975,6 +994,35 @@ internal fun CanonicalRemoteLibraryScreen(
                 recordingId = id,
                 onDismiss = { editingRecordingId = null },
             )
+        }
+        if (unified && selectedItems.isNotEmpty()) {
+            CanonicalLibraryBatchActionBar(
+                selectedCount = selectedItems.size,
+                onClear = { selectedItems = emptyList() },
+                onAddToPlaylist = { playlistPickerSelection = selectedItems.toList() },
+                onPlayNext = {
+                    val snapshot = selectedItems.toList()
+                    libraryActionScope.launch {
+                        val ids = try {
+                            canonicalLibraryResolveRecordingIds(
+                                context.applicationContext, snapshot, selectedSource,
+                            )
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { emptyList() }
+                        if (ids.isNotEmpty()) {
+                            executeLibraryTrack(
+                                SmartCollectionActionSource.LibraryTracks(
+                                    ids, selectedSource, shuffle = false,
+                                ),
+                                CanonicalCollectionIntent.ADD_NEXT,
+                            )
+                            selectedItems = emptyList()
+                        }
+                    }
+                },
+            )
+        }
         }
     }
 }
