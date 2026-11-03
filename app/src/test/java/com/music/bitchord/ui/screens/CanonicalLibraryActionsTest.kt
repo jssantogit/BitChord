@@ -69,7 +69,7 @@ class CanonicalLibraryActionsTest {
         val album = canonicalLibraryAvailableActions(CanonicalLibraryEntityType.ALBUM, true)
         assertTrue(CanonicalLibraryAction.ADD_TO_PLAYLIST in album)
         assertTrue(CanonicalLibraryAction.ADD_NEXT in album)
-        assertFalse(CanonicalLibraryAction.EDIT_RATING in album)
+        assertTrue(CanonicalLibraryAction.EDIT_RATING in album)
         val artistWithoutId = canonicalLibraryAvailableActions(CanonicalLibraryEntityType.ARTIST, false)
         assertFalse(CanonicalLibraryAction.EDIT_RATING in artistWithoutId)
         val track = canonicalLibraryAvailableActions(CanonicalLibraryEntityType.TRACK, true)
