@@ -3125,6 +3125,7 @@ private fun BitChordApp(
                             },
                             unified = true,
                             selectedSourceKey = unifiedControls.sourceKey,
+                            selectionBarBottomPadding = listPadding.calculateBottomPadding(),
                             selectedStarsFilter = unifiedControls.stars,
                             unifiedSort = unifiedControls.sort,
                             unifiedViewType = unifiedControls.viewType,
