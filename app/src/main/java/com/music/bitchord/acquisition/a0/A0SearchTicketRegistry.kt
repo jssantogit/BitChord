@@ -34,7 +34,7 @@ internal class A0SearchTicketRegistry(initial:Int) {
     fun responseCounts(): List<Int> = (0..2).map { replies.get(it).coerceIn(0,160) }
 
     /** Counts raw public file claims, NOT eligible/strong candidates. */
-    fun publicFileCounts():List<Int>=(0..2).map {
+    fun publicFileCounts(): List<Int> = (0..2).map {
         publicFiles.get(it).coerceIn(0,100_000)
     }
 }
