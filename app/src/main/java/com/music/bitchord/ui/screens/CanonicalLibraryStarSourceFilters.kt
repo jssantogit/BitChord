@@ -162,7 +162,7 @@ internal fun canonicalAlbumDetailMeta(
         else -> null
     }
     val year = releaseDate?.trim()?.takeIf {
-        it.matches(Regex("""^\\d{4}(-\\d{2}(-\\d{2})?)?$"""))
+        it.matches(Regex("""^\d{4}(-\d{2}(-\d{2})?)?$"""))
     }?.take(4)
     return listOfNotNull(
         kind, year,
