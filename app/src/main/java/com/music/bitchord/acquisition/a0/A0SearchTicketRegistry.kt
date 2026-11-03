@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicIntegerArray
 internal class A0SearchTicketRegistry(initial:Int) {
     private val tickets=ConcurrentHashMap<Int,Int>()
     private val replies=AtomicIntegerArray(3)
+    private val publicFiles=AtomicIntegerArray(3)
 
     init { require(initial>0); tickets[initial]=0 }
 
@@ -21,11 +22,19 @@ internal class A0SearchTicketRegistry(initial:Int) {
         return true
     }
 
-    fun creditValidated(token:Int) {
+    fun creditValidated(token:Int,publicFiles:Int=0) {
         val ordinal=tickets[token] ?: return
         replies.incrementAndGet(ordinal)
+        // Decoder limits a reply to 4096 files. Count only validated tickets,
+        // without filenames, peers or transfer/candidate authority.
+        this.publicFiles.addAndGet(ordinal,publicFiles.coerceIn(0,4096))
     }
 
     /** An aggregate, not tokens or peer identities. */
     fun responseCounts(): List<Int> = (0..2).map { replies.get(it).coerceIn(0,160) }
+
+    /** Counts raw public file claims, NOT eligible/strong candidates. */
+    fun publicFileCounts():List<Int>=(0..2).map {
+        publicFiles.get(it).coerceIn(0,100_000)
+    }
 }
