@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -160,6 +161,9 @@ fun BrowseActionsSheet(
     onRename: ((String) -> Unit)? = null,
     /** First-party playlist editing that does not require a YouTube UserPlaylist. */
     onEdit: (() -> Unit)? = null,
+    /** Optional native actions for canonical tracks/releases/artists; no fake Song IDs. */
+    onAddToPlaylist: (() -> Unit)? = null,
+    onEditRating: (() -> Unit)? = null,
     /** Typed artwork slot for canonical RecordingId collections without a legacy thumbnail URL. */
     headerArtwork: (@Composable () -> Unit)? = null,
     /**
@@ -230,6 +234,13 @@ fun BrowseActionsSheet(
                 stringResource(R.string.add_to_queue),
                 onClick = onAddToQueue,
             )
+            onAddToPlaylist?.let { add ->
+                ActionRow(Icons.AutoMirrored.Rounded.PlaylistPlay,
+                    "Adicionar à playlist", onClick = add)
+            }
+            onEditRating?.let { edit ->
+                ActionRow(Icons.Rounded.Star, "Editar avaliação", onClick = edit)
+            }
             onDownloadAll?.let { download ->
                 // Saying which of the three it is, rather than offering the same row
                 // whatever the state — this is where a release is asked for now that
