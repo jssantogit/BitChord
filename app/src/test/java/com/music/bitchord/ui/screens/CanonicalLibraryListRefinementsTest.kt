@@ -7,6 +7,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import com.music.bitchord.data.listening.CanonicalEntityRatingEntity
 import com.music.bitchord.data.listening.CanonicalSmartFilterContext
+import com.music.bitchord.data.model.Song
+import com.music.bitchord.ui.components.SongRow
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -85,6 +87,43 @@ class CanonicalLibraryListRefinementsTest {
         compose.onNodeWithTag("canonical-library-category-play-actions").assertDoesNotExist()
     }
 
+    @Test fun nativeSongRowsOmitDurationWithoutLosingTitleOrArtist() {
+        compose.setContent {
+            MaterialTheme {
+                SongRow(
+                    song = Song(
+                        videoId = "track-one",
+                        title = "Song without duration label",
+                        artist = "Example artist",
+                        thumbnailUrl = null,
+                        durationText = "4:12",
+                    ),
+                    onClick = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Song without duration label").assertExists()
+        compose.onNodeWithText("Example artist").assertExists()
+        compose.onNodeWithText("4:12").assertDoesNotExist()
+    }
+
+    @Test fun canonicalPlaylistRowsOmitDurationButKeepMusicMetadata() {
+        compose.setContent {
+            MaterialTheme {
+                CanonicalPlaylistTrackRow(
+                    track = V2DisplayRow(
+                        id = "rec-two", title = "Playlist song", artist = "Playlist artist",
+                        durationMs = 255_000L,
+                    ),
+                    onPlay = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Playlist song").assertExists()
+        compose.onNodeWithText("Playlist artist").assertExists()
+        compose.onNodeWithText("4:15").assertDoesNotExist()
+    }
+
     @Test fun nativeAlbumAndArtistRatingsAreScopedToTheirExactTypedIdentities() {
         val displayArtistId = playlistDisplayArtistGroupId("aespa")
         val ratings = canonicalLibraryEntityRatingsByTarget(listOf(
@@ -96,9 +135,9 @@ class CanonicalLibraryListRefinementsTest {
         val album = CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, "same-id")
         val artist = CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, "same-id")
         val displayArtist = CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, displayArtistId)
-        assertEquals(4.5, canonicalLibraryEntityRatingForRow(ratings, album))
-        assertEquals(2.5, canonicalLibraryEntityRatingForRow(ratings, artist))
-        assertEquals(3.5, canonicalLibraryEntityRatingForRow(ratings, displayArtist))
+        assertEquals(4.5, canonicalLibraryEntityRatingForRow(ratings, album) ?: -1.0, 0.0)
+        assertEquals(2.5, canonicalLibraryEntityRatingForRow(ratings, artist) ?: -1.0, 0.0)
+        assertEquals(3.5, canonicalLibraryEntityRatingForRow(ratings, displayArtist) ?: -1.0, 0.0)
         assertEquals(null, canonicalLibraryEntityRatingForRow(ratings,
             CanonicalLibrarySelection(CanonicalLibraryEntityType.TRACK, "same-id")))
         assertEquals(null, canonicalLibraryEntityRatingForRow(ratings,
