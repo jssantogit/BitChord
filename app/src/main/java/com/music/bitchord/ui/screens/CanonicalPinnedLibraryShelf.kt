@@ -23,7 +23,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -262,16 +264,31 @@ internal fun CanonicalPinnedLibraryShelf(
             .padding(start = PAGE_GUTTER, end = PAGE_GUTTER, top = 20.dp, bottom = 14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        if (cards.isEmpty()) {
+            Box(
+                Modifier.fillMaxWidth().padding(vertical = 30.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                NativeLoadingSpinner()
+            }
+        }
         visible.chunked(3).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 row.forEach { card ->
                     Box(Modifier.weight(1f)) {
                         NativeLibraryEntityCard(
                             title = card.title,
-                            subtitle = card.subtitle,
+                            subtitle = if (card.accessible) card.subtitle
+                                else "Indisponível",
                             imageUrl = null,
                             isArtist = card.pin.selection.type == CanonicalLibraryEntityType.ARTIST,
-                            onClick = { if (card.accessible) onOpen(card.pin) },
+                            onClick = {
+                                if (card.accessible) onOpen(card.pin)
+                                else Toast.makeText(
+                                    context, "Item indisponível nas fontes atuais",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            },
                             onMore = { optionsFor = card.pin },
                             onLongPress = { optionsFor = card.pin },
                             artwork = {
