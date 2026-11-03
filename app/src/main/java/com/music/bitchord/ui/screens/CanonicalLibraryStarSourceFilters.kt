@@ -142,6 +142,15 @@ internal fun canonicalAlbumDetailTrackOrder(
     return ordered + tracks.filter { it.recordingId !in includedIds }
 }
 
+/** Album track numbers belong to the verified running order, not the current
+ * display sort or a temporary search result. Unknown tags retain a stable
+ * fallback sequence rather than following title order. */
+internal fun canonicalAlbumDetailTrackNumbers(
+    orderedReleaseTracks: List<CanonicalBrowseTrack>,
+): Map<String, Int> = orderedReleaseTracks.mapIndexed { index, track ->
+    track.recordingId to index + 1
+}.toMap()
+
 /** A canonical album opens in the release's own order. Only a deliberate
  * action in DetailScreen's native song-sort menu changes that order. */
 internal fun canonicalAlbumDetailSort(
