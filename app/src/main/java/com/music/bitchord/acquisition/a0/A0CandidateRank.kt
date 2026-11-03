@@ -118,10 +118,24 @@ internal object A0CandidateRank {
         // That is not independent credit. When names overlap, a supporting
         // folder must match the actual artist phrase, not the whole song title.
         val artistTitleOverlap=artistSequence.any { it in titleSequence }
+        // When a song title contains its artist's words (for example
+        // "Queen - Queen Of Hearts"), a title-only filename cannot credit
+        // the performer. A single directory explicitly naming EXACTLY the
+        // requested artist followed by the EXACT requested album is an
+        // independent credit, just like an exact artist-only directory.
+        // No additional year/codec/edition tokens are allowed here.
+        // Album admission is still checked independently by the A3 selector.
+        val exactArtistAlbumFolderTokens=if(artistTitleOverlap &&
+            !expectedAlbum.isNullOrBlank())
+            artistSequence+tokens(expectedAlbum)
+        else emptyList()
         val artistInSingleFolder=artistWords.isNotEmpty() &&
             parentSegments.any { parent ->
                 val words=tokens(parent)
-                if(artistTitleOverlap) words==artistSequence
+                if(artistTitleOverlap)
+                    words==artistSequence ||
+                        (exactArtistAlbumFolderTokens.isNotEmpty() &&
+                            words==exactArtistAlbumFolderTokens)
                 else artistWords.all { it in words }
             }
         val titleMatches=titleWords.count { it in fileWords }
