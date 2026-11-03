@@ -68,6 +68,8 @@ class A0AutoCandidateSelectionPolicyTest {
         val summary=choice.rejectionDetails.summary()
         assertTrue(summary.contains("rank_missing_title=1"))
         assertTrue(summary.contains("rank_missing_artist=1"))
+        assertTrue(summary.contains("rank_artist_gap=ABSENT:1"))
+        assertFalse(summary.contains("Other"))
         assertFalse(summary.contains("ILLIT"))
         assertFalse(summary.contains("Magnetic"))
     }
