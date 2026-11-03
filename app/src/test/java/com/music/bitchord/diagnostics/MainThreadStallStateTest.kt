@@ -72,7 +72,7 @@ class MainThreadStallStateTest {
         assertEquals(MainThreadStallSeverity.CRITICAL,critical?.observation?.severity)
         assertEquals(0,critical?.suppressedModerates)
         assertNull(gate.accept(500_000_000L,moderate))
-        assertEquals(0,gate.accept(10_400_000_000L,moderate)?.suppressedModerates)
+        assertEquals(1,gate.accept(10_400_000_000L,moderate)?.suppressedModerates)
     }
 
     @Test
