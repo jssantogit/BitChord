@@ -997,6 +997,8 @@ internal fun CanonicalRemoteLibraryScreen(
         }
         if (unified && selectedItems.isNotEmpty()) {
             CanonicalLibraryBatchActionBar(
+                modifier = Modifier.align(Alignment.BottomEnd)
+                    .padding(end = PAGE_GUTTER, bottom = 116.dp),
                 selectedCount = selectedItems.size,
                 onClear = { selectedItems = emptyList() },
                 onAddToPlaylist = { playlistPickerSelection = selectedItems.toList() },
@@ -1325,6 +1327,9 @@ internal fun CanonicalTrackRow(
     onClick: () -> Unit,
     onEditRating: () -> Unit,
     onOptions: (() -> Unit)? = null,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelection: (() -> Unit)? = null,
     // The native artist shelf is a compact horizontal four-song column, not
     // a full-width library track row. Keep a single canonical row component.
     compactForArtist: Boolean = false,
@@ -1334,7 +1339,10 @@ internal fun CanonicalTrackRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(onClick = {
+                if (selectionMode && onToggleSelection != null) onToggleSelection()
+                else onClick()
+            })
             .then(
                 if (compactForArtist) Modifier.padding(vertical = 4.dp)
                 else Modifier.heightIn(min = 68.dp)
@@ -1383,7 +1391,17 @@ internal fun CanonicalTrackRow(
                 )
             }
         }
-        CanonicalCatalogRatingMenu(onEdit = onEditRating, onOpenMenu = onOptions)
+        if (selectionMode && onToggleSelection != null) {
+            IconButton(onClick = onToggleSelection) {
+                Icon(
+                    if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                    contentDescription = if (selected) "Desmarcar faixa" else "Selecionar faixa",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        } else {
+            CanonicalCatalogRatingMenu(onEdit = onEditRating, onOpenMenu = onOptions)
+        }
     }
 }
 
@@ -1557,6 +1575,8 @@ private fun NativeUnifiedLibraryBody(
     onTrackOptions: (CanonicalBrowseTrack) -> Unit,
     onAlbumOptions: (ReleaseEntity) -> Unit,
     onArtistOptions: (CanonicalSelectedEntity) -> Unit,
+    selectedItems: List<CanonicalLibrarySelection>,
+    onToggleSelection: (CanonicalLibrarySelection) -> Unit,
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
     onEntitySelect: (CanonicalSelectedEntity) -> Unit,
 ) {
@@ -1683,14 +1703,34 @@ private fun NativeUnifiedLibraryBody(
                         gridRows(
                             tracks, 2, key = { it.recordingId },
                         ) { track ->
+                            val target = CanonicalLibrarySelection(
+                                CanonicalLibraryEntityType.TRACK, track.recordingId,
+                            )
                             Column(
                                 modifier = Modifier.fillMaxWidth()
-                                    .clickable { onTrackPlay(track) },
+                                    .clickable {
+                                        if (selectedItems.isNotEmpty()) onToggleSelection(target)
+                                        else onTrackPlay(track)
+                                    },
                             ) {
-                                CanonicalUnifiedArtwork(
-                                    track, artworkLoader,
-                                    Modifier.fillMaxWidth().aspectRatio(1f),
-                                )
+                                Box {
+                                    CanonicalUnifiedArtwork(
+                                        track, artworkLoader,
+                                        Modifier.fillMaxWidth().aspectRatio(1f),
+                                    )
+                                    if (selectedItems.isNotEmpty()) {
+                                        IconButton(
+                                            onClick = { onToggleSelection(target) },
+                                            modifier = Modifier.align(Alignment.TopEnd),
+                                        ) {
+                                            Icon(
+                                                if (target in selectedItems) Icons.Rounded.CheckCircle
+                                                else Icons.Rounded.RadioButtonUnchecked,
+                                                contentDescription = "Selecionar música",
+                                            )
+                                        }
+                                    }
+                                }
                                 Text(track.title, maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     style = MaterialTheme.typography.titleMedium)
@@ -1703,11 +1743,17 @@ private fun NativeUnifiedLibraryBody(
                         items = tracks,
                         key = CanonicalBrowseTrack::recordingId,
                     ) { track ->
+                        val target = CanonicalLibrarySelection(
+                            CanonicalLibraryEntityType.TRACK, track.recordingId,
+                        )
                         CanonicalTrackRow(
                             track = track, artworkLoader = artworkLoader,
                             onClick = { onTrackPlay(track) },
                             onEditRating = { onTrackEditRating(track) },
                             onOptions = { onTrackOptions(track) },
+                            selectionMode = selectedItems.isNotEmpty(),
+                            selected = target in selectedItems,
+                            onToggleSelection = { onToggleSelection(target) },
                         )
                         HorizontalDivider(
                             modifier = Modifier.padding(start = 84.dp),
