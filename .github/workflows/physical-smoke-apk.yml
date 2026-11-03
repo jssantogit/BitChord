@@ -7,8 +7,8 @@ on:
   # This scoped push fallback is needed while PR #193 has a conflicted merge
   # ref and the connected GitHub integration cannot dispatch workflows.
   push:
-    branches: [listening/smart-playlists-v2-192]
-    paths: [docs/listening/issue-192-physical-smoke-request.md]
+    branches: [listening/smart-playlists-v2-192, smoke/206-loading-drag-20261103]
+    paths: [docs/listening/issue-192-physical-smoke-request.md, docs/listening/issue-206-physical-smoke-request.md]
   workflow_dispatch:
     inputs:
       smoke_plan:
@@ -32,7 +32,7 @@ jobs:
     steps:
       - name: Validate physical smoke request
         env:
-          SMOKE_PLAN: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke_plan || (github.event_name == 'push' && github.ref == 'refs/heads/listening/smart-playlists-v2-192' && 'Explicit user-approved physical smoke for issue 192') }}
+          SMOKE_PLAN: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke_plan || (github.event_name == 'push' && github.ref == 'refs/heads/listening/smart-playlists-v2-192' && 'Explicit user-approved physical smoke for issue 192') || (github.event_name == 'push' && github.ref == 'refs/heads/smoke/206-loading-drag-20261103' && 'Owner-approved #206 loading spinner and hold-drag physical smoke') }}
         run: test -n "$SMOKE_PLAN"
 
       - name: Checkout
@@ -43,6 +43,16 @@ jobs:
       # Regression guard: the Nov 2 smoke APK lacked approved #202 UI because
       # its branch included #193 metadata features but not the UI merge.
       # Fail visibly before creating another visually outdated APK.
+      - name: Require exact PR #206 application sources for scoped smoke
+        if: github.event_name == 'push' && github.ref == 'refs/heads/smoke/206-loading-drag-20261103'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor f52b0de8cbbce5747189d50e645ece06dacab19d HEAD
+          grep -Fq 'detectDragGesturesAfterLongPress' app/src/main/java/com/music/bitchord/ui/screens/CanonicalRemoteLibraryScreen.kt
+          grep -Fq 'NativeLoadingSpinner()' app/src/main/java/com/music/bitchord/ui/screens/SmartPlaylistBuilderScreen.kt
+          test -f app/src/test/java/com/music/bitchord/ui/screens/SmartPlaylistSavedStateTest.kt
+
       - name: Require reconciled native playlist UI (#202)
         shell: bash
         run: |
