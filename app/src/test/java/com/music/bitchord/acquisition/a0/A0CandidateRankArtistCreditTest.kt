@@ -63,4 +63,43 @@ class A0CandidateRankArtistCreditTest {
             classify("Shared/New Jeans/Get Up/Ditto.flac"))
     }
 
+    @Test fun joinedArtistWordsAreValidOnlyAsAnExplicitFilenameCreditOrExactFolder() {
+        fun compact(file:String,path:String)=A0CandidateRank.rank(
+            searchPhrase="BLACK PINK - How You Like That",
+            name=file,declaredBitrateKbps=320,remotePath=path,
+            format="mp3",declaredDurationSeconds=220,
+            expectedDurationSeconds=220,expectedAlbum="THE ALBUM",
+            sizeBytes=8_800_000L)
+        val explicit=compact("BLACKPINK - How You Like That.mp3",
+            "Shared/THE ALBUM/BLACKPINK - How You Like That.mp3")
+        assertEquals(A0CandidateRank.Match.ALL_TERMS,explicit.match)
+        assertFalse(A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in explicit.warnings)
+        assertFalse(A0CandidateRank.Warning.ARTIST_CONFLICT in explicit.warnings)
+        val directory=compact("How You Like That.mp3",
+            "Shared/BLACKPINK/THE ALBUM/How You Like That.mp3")
+        assertEquals(A0CandidateRank.Match.ALL_TERMS,directory.match)
+        assertFalse(A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in directory.warnings)
+    }
+
+    @Test fun joinedArtistTextInsideTitleOrUnrelatedCreditsCannotAuthenticate() {
+        fun rank(file:String,folder:String="THE ALBUM")=
+            A0CandidateRank.rank(
+                searchPhrase="BLACK PINK - How You Like That",
+                name=file,declaredBitrateKbps=320,
+                remotePath="Shared/$folder/$file",format="mp3",
+                declaredDurationSeconds=220,expectedDurationSeconds=220,
+                expectedAlbum="THE ALBUM",sizeBytes=8_800_000L)
+        for(file in listOf("How You Like That BLACKPINK.mp3",
+            "PINKBLACK - How You Like That.mp3",
+            "Other BLACKPINK - How You Like That.mp3")) {
+            val candidate=rank(file)
+            assertTrue("Credit not explicit: $file",
+                candidate.match!=A0CandidateRank.Match.ALL_TERMS ||
+                    A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in candidate.warnings ||
+                    A0CandidateRank.Warning.ARTIST_CONFLICT in candidate.warnings)
+        }
+        val unrelated=rank("How You Like That.mp3","My BLACKPINK Archive")
+        assertNotEquals(A0CandidateRank.Match.ALL_TERMS,unrelated.match)
+    }
+
 }
