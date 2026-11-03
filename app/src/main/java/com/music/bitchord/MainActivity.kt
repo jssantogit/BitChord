@@ -3991,6 +3991,12 @@ private fun BitChordApp(
                                         )
                                     },
                                     onOpenEntity = { pin, category ->
+                                        // Pins belong to the unified catalog, not
+                                        // whichever category source/star filter was
+                                        // last used. Never hide a pinned release
+                                        // behind stale browsing preferences.
+                                        unifiedControls.sourceKey = null
+                                        unifiedControls.stars = null
                                         pinnedLibraryRequest = pin
                                         unifiedLibrarySearching = false
                                         unifiedLibraryDetailOpen = false
