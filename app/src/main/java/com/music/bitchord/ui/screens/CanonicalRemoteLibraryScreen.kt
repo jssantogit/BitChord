@@ -272,6 +272,25 @@ internal fun CanonicalRemoteLibraryScreen(
     // Selection is an explicit draft and survives source/star/sort changes.
     // Never reset it just because a browse filter or detail page changed.
     var selectedItems by remember { mutableStateOf<List<CanonicalLibrarySelection>>(emptyList()) }
+    val batchSelectedSources = if (unified) selectedSource else providerKey
+    // The count is resolved from canonical membership, not from the number
+    // of artist/album cards tapped. Changes of source revalidate in-place.
+    var batchResolved by remember(selectedItems, batchSelectedSources) {
+        mutableStateOf<CanonicalLibraryResolvedSelection?>(null)
+    }
+    LaunchedEffect(selectedItems, batchSelectedSources) {
+        if (selectedItems.isNotEmpty()) {
+            batchResolved = try {
+                withContext(Dispatchers.IO) {
+                    canonicalLibraryResolveSelections(
+                        context.applicationContext, selectedItems, batchSelectedSources,
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { null }
+        }
+    }
     var ratingDialogSelection by remember {
         mutableStateOf<List<CanonicalLibrarySelection>?>(null)
     }
@@ -1024,7 +1043,8 @@ internal fun CanonicalRemoteLibraryScreen(
             CanonicalLibraryBatchActionBar(
                 modifier = Modifier.align(Alignment.BottomEnd)
                     .padding(end = PAGE_GUTTER, bottom = selectionBarBottomPadding),
-                selectedCount = selectedItems.size,
+                selectedEntityCount = selectedItems.size,
+                summary = canonicalLibrarySelectionSummary(selectedItems.size, batchResolved),
                 onClear = { selectedItems = emptyList() },
                 onAddToPlaylist = { playlistPickerSelection = selectedItems.toList() },
                 onRateSelection = if (selectedItems.all {
@@ -1034,14 +1054,15 @@ internal fun CanonicalRemoteLibraryScreen(
                 onPlayNext = {
                     val snapshot = selectedItems.toList()
                     libraryActionScope.launch {
-                        val ids = try {
-                            canonicalLibraryResolveRecordingIds(
+                        val resolved = try {
+                            canonicalLibraryResolveSelections(
                                 context.applicationContext, snapshot, selectedSource,
                             )
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (_: Exception) { emptyList() }
-                        if (ids.isNotEmpty()) {
+                        } catch (_: Exception) { null }
+                        val ids = resolved?.recordingIds.orEmpty()
+                        if (resolved?.unavailableEntities == 0 && ids.isNotEmpty()) {
                             executeLibraryTrack(
                                 SmartCollectionActionSource.LibraryTracks(
                                     ids, selectedSource, shuffle = false,
