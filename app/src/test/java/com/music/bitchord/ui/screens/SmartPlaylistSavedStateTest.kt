@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import com.music.bitchord.data.listening.SavedSmartPlaylistDefinition
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -67,7 +68,8 @@ class SmartPlaylistSavedStateTest {
         compose.setContent {
             MaterialTheme { SmartPlaylistSavedStatus(SmartPlaylistSavedUiState.Loading) }
         }
-        compose.onNodeWithText("Loading saved playlists…").assertIsDisplayed()
+        compose.onNodeWithTag("native-library-loading").assertIsDisplayed()
+        compose.onNodeWithText("Loading saved playlists…").assertDoesNotExist()
         compose.onNodeWithText("Could not load saved playlists").assertDoesNotExist()
     }
 }
