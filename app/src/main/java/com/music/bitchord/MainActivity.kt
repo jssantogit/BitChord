@@ -6791,6 +6791,7 @@ private fun UnifiedLibraryRouteToolbar(
             onSearch = onUnifiedSearch,
             controls = unifiedControls,
             showBrowseFilters = shouldShowUnifiedLibraryBrowseFilters(detailOpen),
+            searchInContent = !detailOpen,
             albumDetail = shouldUseUnifiedAlbumDetailToolbar(
                 category, detailOpen, nestedAlbumOpen,
             ),
@@ -6811,6 +6812,7 @@ private fun UnifiedLibraryToolbarActions(
     onSearch: () -> Unit,
     controls: UnifiedLibraryUiControls,
     showBrowseFilters: Boolean,
+    searchInContent: Boolean = false,
     albumDetail: Boolean = false,
     onAlbumSort: () -> Unit = {},
     onAlbumOptions: () -> Unit = {},
@@ -6818,13 +6820,16 @@ private fun UnifiedLibraryToolbarActions(
     artistDetail: Boolean = false,
     onArtistOptions: () -> Unit = {},
 ) {
-    // Keep the native contextual search entry even inside an artist detail.
-    NativeCollectionSearchAction(
-        searching = searching,
-        contentDescription = if (searching)
-            "Fechar pesquisa da biblioteca" else "Pesquisar na biblioteca",
-        onClick = onSearch,
-    )
+    // Root Músicas/Álbuns/Artistas already expose the live search field
+    // inline. Keep the native toolbar search only in detail/recent pages.
+    if (!searchInContent) {
+        NativeCollectionSearchAction(
+            searching = searching,
+            contentDescription = if (searching)
+                "Fechar pesquisa da biblioteca" else "Pesquisar na biblioteca",
+            onClick = onSearch,
+        )
+    }
     if (albumDetail) {
         // Separate from + in the hero: that control is reserved for
         // future pin-to-Library, not repurposed as "add to playlist".
