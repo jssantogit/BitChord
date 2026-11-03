@@ -19,6 +19,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -91,6 +95,8 @@ internal fun CanonicalNativeArtistDetail(
     onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
     onTrackOptions: (CanonicalBrowseTrack) -> Unit,
     onReleaseOptions: (ReleaseEntity) -> Unit,
+    selectedItems: List<CanonicalLibrarySelection>,
+    onToggleSelection: (CanonicalLibrarySelection) -> Unit,
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
 ) {
     val context = LocalContext.current.applicationContext
@@ -255,10 +261,16 @@ internal fun CanonicalNativeArtistDetail(
                     )
                 }
                 items(albumTracks, key = { it.recordingId }) { track ->
+                    val target = CanonicalLibrarySelection(
+                        CanonicalLibraryEntityType.TRACK, track.recordingId,
+                    )
                     CanonicalTrackRow(
                         track, artworkLoader, { onTrackPlay(track) },
                         { onTrackEditRating(track) },
                         onOptions = { onTrackOptions(track) },
+                        selectionMode = selectedItems.isNotEmpty(),
+                        selected = target in selectedItems,
+                        onToggleSelection = { onToggleSelection(target) },
                     )
                 }
             }
@@ -344,6 +356,17 @@ internal fun CanonicalNativeArtistDetail(
                                         onClick = { onTrackPlay(track) },
                                         onEditRating = { onTrackEditRating(track) },
                                         onOptions = { onTrackOptions(track) },
+                                        selectionMode = selectedItems.isNotEmpty(),
+                                        selected = CanonicalLibrarySelection(
+                                            CanonicalLibraryEntityType.TRACK,
+                                            track.recordingId,
+                                        ) in selectedItems,
+                                        onToggleSelection = {
+                                            onToggleSelection(CanonicalLibrarySelection(
+                                                CanonicalLibraryEntityType.TRACK,
+                                                track.recordingId,
+                                            ))
+                                        },
                                         compactForArtist = true,
                                         palette = palette,
                                     )
@@ -366,9 +389,26 @@ internal fun CanonicalNativeArtistDetail(
                             { CanonicalUnifiedArtwork(track, artworkLoader,
                                 Modifier.fillMaxSize()) }
                         },
-                        onClick = { openedRelease = release },
+                        onClick = {
+                            if (selectedItems.isNotEmpty()) {
+                                onToggleSelection(CanonicalLibrarySelection(
+                                    CanonicalLibraryEntityType.ALBUM, release.id,
+                                ))
+                            } else openedRelease = release
+                        },
                         trailing = {
-                            RowMoreButton(onClick = { onReleaseOptions(release) })
+                            val target = CanonicalLibrarySelection(
+                                CanonicalLibraryEntityType.ALBUM, release.id,
+                            )
+                            if (selectedItems.isNotEmpty()) {
+                                IconButton(onClick = { onToggleSelection(target) }) {
+                                    Icon(
+                                        if (target in selectedItems) Icons.Rounded.CheckCircle
+                                        else Icons.Rounded.RadioButtonUnchecked,
+                                        contentDescription = "Selecionar álbum",
+                                    )
+                                }
+                            } else RowMoreButton(onClick = { onReleaseOptions(release) })
                         },
                         horizontalPadding = PAGE_GUTTER,
                     )
@@ -393,8 +433,23 @@ internal fun CanonicalNativeArtistDetail(
                                     { CanonicalUnifiedArtwork(track, artworkLoader,
                                         Modifier.fillMaxSize()) }
                                 },
-                                onClick = { openedRelease = release },
+                                onClick = {
+                                    if (selectedItems.isNotEmpty()) onToggleSelection(
+                                        CanonicalLibrarySelection(
+                                            CanonicalLibraryEntityType.ALBUM, release.id,
+                                        )
+                                    ) else openedRelease = release
+                                },
                                 onMore = { onReleaseOptions(release) },
+                                selectionMode = selectedItems.isNotEmpty(),
+                                selected = CanonicalLibrarySelection(
+                                    CanonicalLibraryEntityType.ALBUM, release.id,
+                                ) in selectedItems,
+                                onToggleSelection = {
+                                    onToggleSelection(CanonicalLibrarySelection(
+                                        CanonicalLibraryEntityType.ALBUM, release.id,
+                                    ))
+                                },
                             )
                             }
                         }
