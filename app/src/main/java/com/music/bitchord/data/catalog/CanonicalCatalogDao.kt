@@ -101,6 +101,12 @@ internal data class CanonicalArtistReleaseEvidenceRow(
     val firstReleaseDate: String?,
 )
 
+/** Browse-only distinct playable membership count; never a claimed release type. */
+internal data class CanonicalScopedReleaseRecordingCountRow(
+    val releaseId: String,
+    val recordingCount: Int,
+)
+
 internal data class CanonicalEntitySortDateRow(
     val entityId: String,
     val dateAddedSeconds: Long?,
@@ -1642,6 +1648,27 @@ internal interface CanonicalCatalogDao {
     suspend fun canonicalArtistReleaseEvidence(
         releaseIds: List<String>,
     ): List<CanonicalArtistReleaseEvidenceRow>
+
+    /**
+     * One grouped read for provisional artist-page shelves when a release has
+     * no verified ReleaseGroup type. Source-scoped; never infer completeness
+     * or modify canonical ReleaseGroup classification from these counts.
+     */
+    @Query(
+        """
+        SELECT track.releaseId AS releaseId,
+               COUNT(DISTINCT track.recordingId) AS recordingCount
+        FROM catalog_release_track AS track
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = track.recordingId
+        WHERE track.releaseId IN (:releaseIds)
+          AND asset.provider IN (:providerKeys)
+        GROUP BY track.releaseId
+        """,
+    )
+    suspend fun scopedReleaseRecordingCounts(
+        releaseIds: List<String>,
+        providerKeys: List<String>,
+    ): List<CanonicalScopedReleaseRecordingCountRow>
 
     /**
      * One eligible canonical recording per release, for the browse row cover.
