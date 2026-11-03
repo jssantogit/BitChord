@@ -79,6 +79,10 @@ class A0CandidateRankArtistCreditTest {
             "Shared/BLACKPINK/THE ALBUM/How You Like That.mp3")
         assertEquals(A0CandidateRank.Match.ALL_TERMS,directory.match)
         assertFalse(A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in directory.warnings)
+        val exactComposite=compact("How You Like That.mp3",
+            "Shared/BLACKPINK - THE ALBUM/How You Like That.mp3")
+        assertEquals(A0CandidateRank.Match.ALL_TERMS,exactComposite.match)
+        assertFalse(A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in exactComposite.warnings)
     }
 
     @Test fun joinedArtistTextInsideTitleOrUnrelatedCreditsCannotAuthenticate() {
