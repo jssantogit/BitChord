@@ -1507,6 +1507,7 @@ internal fun CanonicalTrackRow(
     onLongPress: (() -> Unit)? = null,
     compactForArtist: Boolean = false,
     palette: ArtworkPalette? = null,
+    albumTrackNumber: Int? = null,
 ) {
     // Exactly the native SongRow frame (same horizontal inset and trailing
     // gutter), without converting RecordingId into a fake Song.videoId.
@@ -1520,10 +1521,20 @@ internal fun CanonicalTrackRow(
         horizontalInset = if (compactForArtist) 0.dp else PAGE_GUTTER,
         modifier = if (compactForArtist) Modifier else Modifier.heightIn(min = 68.dp),
     ) {
-        CanonicalUnifiedArtwork(
-            track, artworkLoader, Modifier.size(if (compactForArtist) 48.dp else 52.dp),
-        )
-        Spacer(Modifier.width(if (compactForArtist) 12.dp else 14.dp))
+        if (albumTrackNumber != null) {
+            Text(
+                text = albumTrackNumber.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = palette?.onBackgroundVariant
+                    ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(34.dp),
+            )
+        } else {
+            CanonicalUnifiedArtwork(
+                track, artworkLoader, Modifier.size(if (compactForArtist) 48.dp else 52.dp),
+            )
+            Spacer(Modifier.width(if (compactForArtist) 12.dp else 14.dp))
+        }
         NativeTrackRowText(
             title = {
                 Text(
@@ -1549,8 +1560,9 @@ internal fun CanonicalTrackRow(
             modifier = Modifier.padding(start = 8.dp),
             horizontalAlignment = Alignment.End,
         ) {
-            canonicalLibraryVisibleRatings(track, LocalCanonicalRatingDisplay.current)
-                .forEach { rating ->
+            if (albumTrackNumber == null) canonicalLibraryVisibleRatings(
+                track, LocalCanonicalRatingDisplay.current,
+            ).forEach { rating ->
                     CanonicalRatingStars(
                         rating, color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -1763,6 +1775,7 @@ private fun NativeUnifiedLibraryBody(
     heroArtworkTrack: CanonicalBrowseTrack? = null,
     isAlbumDetail: Boolean = false,
     albumCredit: String = "",
+    albumMeta: String? = null,
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
     onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
     onTrackOptions: (CanonicalBrowseTrack) -> Unit,
@@ -1913,7 +1926,7 @@ private fun NativeUnifiedLibraryBody(
                 NativeReleaseHeaderLayout(
                     title = title,
                     credit = if (isAlbumDetail) albumCredit else "",
-                    meta = label,
+                    meta = if (isAlbumDetail) albumMeta ?: label else label,
                     palette = palette,
                     sleeveSize = sleeve,
                     artwork = {
@@ -1934,25 +1947,38 @@ private fun NativeUnifiedLibraryBody(
                     },
                     actions = {
                         if (count > 0 && tracks.isNotEmpty()) {
-                            Spacer(Modifier.height(if (isAlbumDetail) 32.dp else 18.dp))
-                            Row(
-                                Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                ActionPill(
-                                    icon = BitChordIcons.Play,
-                                    label = stringResource(R.string.play),
-                                    onClick = { onPlayAll(tracks, false) },
-                                    filled = true,
-                                    modifier = Modifier.weight(1f),
+                            Spacer(Modifier.height(18.dp))
+                            if (isAlbumDetail) {
+                                // Exact same action row as DetailScreen's remote
+                                // album: circle Shuffle / primary Play / library
+                                // circle. Local/remote RecordingId playback remains
+                                // in onPlayAll, never a fake Song.videoId.
+                                NativeReleaseActionRow(
+                                    onPlay = { onPlayAll(tracks, false) },
+                                    onShuffle = { onPlayAll(tracks, true) },
+                                    isLocal = false,
+                                    canShuffle = tracks.isNotEmpty(),
                                 )
-                                ActionPill(
-                                    icon = BitChordIcons.Shuffle,
-                                    label = stringResource(R.string.shuffle),
-                                    onClick = { onPlayAll(tracks, true) },
-                                    filled = false,
-                                    modifier = Modifier.weight(1f),
-                                )
+                            } else {
+                                Row(
+                                    Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    ActionPill(
+                                        icon = BitChordIcons.Play,
+                                        label = stringResource(R.string.play),
+                                        onClick = { onPlayAll(tracks, false) },
+                                        filled = true,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    ActionPill(
+                                        icon = BitChordIcons.Shuffle,
+                                        label = stringResource(R.string.shuffle),
+                                        onClick = { onPlayAll(tracks, true) },
+                                        filled = false,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
                             }
                         }
                     },
@@ -1983,6 +2009,29 @@ private fun NativeUnifiedLibraryBody(
                     }
                     is CanonicalSongFilterState.Ready -> if (tracks.isEmpty()) item {
                         RemoteBrowseMessage("Nenhuma música nesta seleção.")
+                    } else if (isAlbumDetail) {
+                        // An album is always a numbered release running order,
+                        // even if the root Músicas view was switched to grid.
+                        // Reuse CanonicalTrackRow's native frame, text and menu.
+                        itemsIndexed(
+                            items = tracks,
+                            key = { _, track -> track.recordingId },
+                        ) { index, track ->
+                            CanonicalTrackRow(
+                                track = track,
+                                artworkLoader = artworkLoader,
+                                onClick = { onTrackPlay(track) },
+                                onEditRating = { onTrackEditRating(track) },
+                                onOptions = { onTrackOptions(track) },
+                                albumTrackNumber = index + 1,
+                                palette = palette,
+                            )
+                            if (index < tracks.lastIndex) HorizontalDivider(
+                                modifier = Modifier.padding(start = 76.dp),
+                                thickness = 0.5.dp,
+                                color = palette.divider,
+                            )
+                        }
                     } else if (viewType == LibraryViewType.GRID) {
                         gridRows(
                             tracks, 2, key = { it.recordingId },
