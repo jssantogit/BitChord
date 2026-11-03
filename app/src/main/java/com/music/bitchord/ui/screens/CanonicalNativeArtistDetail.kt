@@ -234,7 +234,13 @@ internal fun CanonicalNativeArtistDetail(
             availableLibraryTracks.map { it.recordingId }, releaseRecordingIds,
         ).toSet()
         val albumTracks = availableLibraryTracks.filter { it.recordingId in albumIds }
-        BoxWithConstraints(Modifier.fillMaxSize()) {
+        val releasePalette = rememberArtworkPalette(
+            imageUrl = canonicalNativeReleasePaletteUri(
+                nativeReleases.artwork[selectedAlbum.id]?.artworkUri,
+                selectedAlbum.artworkUri,
+            ),
+        )
+        BoxWithConstraints(Modifier.fillMaxSize().background(releasePalette.background)) {
             val sleeve = (maxWidth * 0.76f).coerceAtMost(maxHeight * 0.6f)
             LazyColumn(contentPadding = PaddingValues(bottom = 112.dp)) {
                 item {
@@ -243,7 +249,7 @@ internal fun CanonicalNativeArtistDetail(
                         credit = selectedAlbum.artistDisplay.orEmpty(),
                         meta = nativeUnifiedTrackCountLabel(albumTracks.size,
                             albumTracks.map { it.durationMs }),
-                        palette = palette,
+                        palette = releasePalette,
                         sleeveSize = sleeve,
                         artwork = {
                             val art = nativeReleases.artwork[selectedAlbum.id]
@@ -253,6 +259,7 @@ internal fun CanonicalNativeArtistDetail(
                         },
                         actions = {
                             if (albumTracks.isNotEmpty()) {
+                                Spacer(Modifier.height(32.dp))
                                 Row(
                                     Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -276,6 +283,7 @@ internal fun CanonicalNativeArtistDetail(
                         },
                     )
                 }
+                item(key = "nested-album-spacing") { Spacer(Modifier.height(20.dp)) }
                 items(albumTracks, key = { it.recordingId }) { track ->
                     val target = CanonicalLibrarySelection(
                         CanonicalLibraryEntityType.TRACK, track.recordingId,
