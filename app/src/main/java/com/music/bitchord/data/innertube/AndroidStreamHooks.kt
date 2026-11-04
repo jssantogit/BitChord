@@ -6,13 +6,12 @@ import android.util.Log
 import com.music.bitchord.BuildConfig
 import com.music.bitchord.data.MonotonicClock
 import com.music.bitchord.data.TrackLog
-import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.sources.SourceResolver
 
 /**
- * The phone's answers to what the shared stream resolution asks of its
- * platform: the clock, logcat, the exported log's header, the quality
- * ceiling, and InnerTubeX's config store and BotGuard minter.
+ * Android runtime hooks retained for the shared diagnostics clock and log
+ * output. Retired InnerTubeX player configuration and BotGuard initialization
+ * are deliberately absent.
  */
 object AndroidStreamHooks {
 
@@ -39,8 +38,6 @@ object AndroidStreamHooks {
                 "device: ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}",
             )
         }
-        StreamResolver.maxKbps = { AppSettings.effectiveAudioQuality.maxKbps }
-        InnerTubeXResolver.debugLogging = BuildConfig.DEBUG
     }
 
 }
