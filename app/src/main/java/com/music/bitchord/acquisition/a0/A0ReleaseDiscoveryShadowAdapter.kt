@@ -28,6 +28,24 @@ internal object A0ReleaseDiscoveryShadowAdapter {
 
     internal fun fileTokens(name:String):Set<String> =
         A0CandidateRank.tokens(name.substringBeforeLast('.',name)).toSet()
+
+    /** Necessary-condition only; a title match never establishes artist/album. */
+    internal fun titleOptions(query:String):List<Set<String>> {
+        val original=titleTokens(query)
+        val title=query.split(Regex("\\s+[-–—]\\s+"),limit=2)
+            .getOrNull(1).orEmpty()
+        val alias=A0CjkTitleAliases.latinAlias(title)
+            ?.let { A0CandidateRank.tokens(it).toSet() }.orEmpty()
+        return listOfNotNull(original.takeIf { it.isNotEmpty() },
+            alias.takeIf { it.isNotEmpty() }).distinct()
+    }
+
+    internal fun matchesTitleOptions(
+        file:Set<String>, options:List<Set<String>>,
+    ):Boolean=options.any { it.isNotEmpty() && file.containsAll(it) }
+
+    internal fun fileMatchesTitle(query:String,name:String):Boolean=
+        matchesTitleOptions(fileTokens(name),titleOptions(query))
     private data class Ranked(
         val candidate:A0ObservedCandidateHandoff.Choice,
         val ranking:A0CandidateRank.Ranking,
@@ -74,7 +92,7 @@ internal object A0ReleaseDiscoveryShadowAdapter {
         for(entry in entries) {
             val titleStart=titleMatchedPairs
             val rankStart=rankMatchedPairs
-            val title=titleTokens(entry.query)
+            val title=titleOptions(entry.query)
             val expectedArtist=entry.query.split(
                 Regex("\\s+[-–—]\\s+"),limit=2).firstOrNull()
             // Score the entire bounded release shadow, not the first 128/192
@@ -82,7 +100,7 @@ internal object A0ReleaseDiscoveryShadowAdapter {
             // to other songs or advertise the wrong quality/album.
             val shortlisted=indexed.asSequence()
                 .filter {
-                    val matches=title.isNotEmpty() && it.second.containsAll(title)
+                    val matches=matchesTitleOptions(it.second,title)
                     if(matches)titleMatchedPairs++
                     matches
                 }
