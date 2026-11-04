@@ -268,6 +268,7 @@ import com.music.bitchord.data.sources.SourceConfig
 import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.data.sources.SourceRegistry
 import com.music.bitchord.ui.shouldRunLegacyYoutubeVersionLookup
+import com.music.bitchord.ui.shouldHandleExplicitLegacyYoutubeLink
 import com.music.bitchord.ui.components.ListenBrainzTokenAlert
 import com.music.bitchord.ui.components.MiniPlayer
 import com.music.bitchord.ui.components.QueueActionNotice
@@ -1921,11 +1922,16 @@ private fun BitChordApp(
         val legacyAllowed = shouldRunLegacyYoutubeVersionLookup(
             usesCanonicalDiscovery, discoverySourceConfigs,
         )
+        // An incoming, explicitly selected YouTube URL is a compatibility
+        // action, not permission to restore YouTube as the discovery catalog.
+        val explicitLegacyLinkAllowed = shouldHandleExplicitLegacyYoutubeLink(
+            discoverySourceConfigs,
+        )
         when (request) {
             is LinkRequest.Track -> {
                 // A legacy videoId cannot be promoted into a MusicBrainz MBID.
-                // In catalog mode, reject without contacting YouTube.
-                val song = if (legacyAllowed) {
+                // Explicit links keep their existing provider handler during migration.
+                val song = if (explicitLegacyLinkAllowed) {
                     YtMusicRepository.trackLinks(request.videoId).getOrNull()
                 } else null
                 if (song == null) {
@@ -1945,7 +1951,7 @@ private fun BitChordApp(
                 }
             }
             is LinkRequest.Page -> {
-                if (!legacyAllowed) {
+                if (!explicitLegacyLinkAllowed) {
                     Toast.makeText(
                         context,
                         context.getString(R.string.couldnt_open_link),
