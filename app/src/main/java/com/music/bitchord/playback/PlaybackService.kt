@@ -1878,8 +1878,12 @@ class PlaybackService : MediaLibraryService() {
         return listOf(shuffle)
     }
 
-    /** Adds Radio/Revert for controllers with room for them, e.g. Android Auto. */
+    /** Radio/Revert refer to YouTube video renditions, not native catalog
+     * recordings. Hide these until a genuinely canonical radio exists. */
     private fun carButtons(): List<CommandButton> {
+        if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
+            return notificationButtons()
+        }
         val current = player?.currentMediaItem
             ?.takeUnless { it.isCanonicalRemotePlayback() }
             ?.toSong()
@@ -8000,8 +8004,10 @@ class PlaybackService : MediaLibraryService() {
                 ACTION_PLAY_CANONICAL_REMOTE -> startCanonicalRemotePlayback(args)
                 ACTION_TOGGLE_AUTOPLAY -> toggleAutoplayFromNotification()
                 ACTION_TOGGLE_SHUFFLE -> toggleShuffleFromSession()
-                ACTION_START_STATION -> startStationFromSession()
-                ACTION_REVERT_TO_ORIGINAL -> revertCurrentToOriginal()
+                ACTION_START_STATION, ACTION_REVERT_TO_ORIGINAL ->
+                    return Futures.immediateFuture(
+                        SessionResult(SessionError.ERROR_NOT_SUPPORTED),
+                    )
                 ACTION_SWAP_TO_VERSION -> swapCurrentToVersion(args)
                 ACTION_BEGIN_RADIO_QUEUE -> beginRadioQueue()
                 ACTION_COMMIT_RADIO_QUEUE -> player?.let(::saveQueueSnapshotImmediately)
