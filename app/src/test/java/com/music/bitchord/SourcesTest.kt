@@ -598,12 +598,12 @@ class SourcesTest {
     }
 
     @Test
-    fun `JioSaavn is off by default on a fresh install`() {
+    fun `fresh installs seed no Youtube source and preserve JioSaavn opt in policy`() {
         assertFalse(SourceConfig(kind = SourceKind.JIOSAAVN).enabled)
         val sources = SourceRegistry.sourcesForInit(emptyList(), forceJioSaavnOff = true)
 
         assertFalse(sources.single { it.kind == SourceKind.JIOSAAVN }.enabled)
-        assertTrue(sources.single { it.kind == SourceKind.YOUTUBE }.enabled)
+        assertFalse(sources.any { it.kind == SourceKind.YOUTUBE })
     }
 
     @Test
@@ -621,8 +621,8 @@ class SourcesTest {
             forceJioSaavnOff = false,
         )
         assertFalse(nextBoot.single { it.kind == SourceKind.YOUTUBE }.enabled)
-        assertTrue(SourceRegistry.sourcesForInit(emptyList(), true)
-            .single { it.kind == SourceKind.YOUTUBE }.enabled)
+        assertFalse(SourceRegistry.sourcesForInit(emptyList(), true)
+            .any { it.kind == SourceKind.YOUTUBE })
     }
 
     @Test
