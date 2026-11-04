@@ -562,25 +562,9 @@ fun DetailScreen(
                 // both need to agree on its height without being able to ask each
                 // other — see [artHeight]. A release has no such layer: its sleeve
                 // is an ordinary item at the top of the list.
-                if (isArtist) {
-                    PageBackground(
-                        page = page,
-                        palette = palette,
-                        canvas = canvas,
-                        artHeight = artHeight,
-                        listState = listState,
-                        heroUrl = appleArt?.heroUrl,
-                        modifier = Modifier.matchParentSize(),
-                    )
-                }
-
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    // The artist photo runs edge-to-edge up under the glass bar;
-                    // a release header clears the bar itself, see [ReleaseHeader].
-                    contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
-                ) {
+                // One native list of detail sections, independent from where
+                // the artist or release metadata came from.
+                val detailListItems: LazyListScope.() -> Unit = {
             item(key = "header") {
                 if (isArtist) {
                     ArtistHeader(artistName = page.title, palette = palette, artHeight = artHeight, appleArt = appleArt, signature = signature)
@@ -944,6 +928,32 @@ fun DetailScreen(
             }
             if (isArtist) aboutItem()
         }
+
+                if (isArtist) {
+                    NativeArtistDetailFrame(
+                        palette = palette,
+                        artHeight = artHeight,
+                        listState = listState,
+                        contentPadding = PaddingValues(
+                            bottom = contentPadding.calculateBottomPadding(),
+                        ),
+                        page = page,
+                        canvas = canvas,
+                        heroUrl = appleArt?.heroUrl,
+                        content = detailListItems,
+                    )
+                } else {
+                    // Keep album and playlist geometry unchanged. Only the
+                    // artist photo/list structure is consolidated here.
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            bottom = contentPadding.calculateBottomPadding(),
+                        ),
+                        content = detailListItems,
+                    )
+                }
 
                 if (folder != null && folderState != null && folderState.selecting) {
                     LocalFolderSelectionBar(
