@@ -80,6 +80,37 @@ class LocalPlaylistCanonicalPersistenceTest {
         assertEquals("youtube-legacy-id", restored[0].videoId)
     }
 
+    @Test fun historicalMixedPlaylistSurvivesRenameAndReloadWithoutChangingIdentifiers() {
+        val localUri = "content://media/external/audio/media/142"
+        val original = JSONObject()
+            .put("id", "old-mixed")
+            .put("title", "Mixed history")
+            .put("songs", JSONArray()
+                .put(JSONObject()
+                    .put("videoId", "legacy-youtube-key")
+                    .put("title", "Old legacy")
+                    .put("artist", "Artist A"))
+                .put(JSONObject()
+                    .put("videoId", localUri)
+                    .put("title", "Local track")
+                    .put("artist", "Artist B")))
+        app.getSharedPreferences("bitchord_local_playlists", 0).edit()
+            .putString("playlists_json", JSONArray().put(original).toString()).commit()
+
+        LocalPlaylistStore.init(app)
+        LocalPlaylistStore.renamePlaylist("local:playlist:old-mixed", "Renamed history")
+        LocalPlaylistStore.init(app)
+
+        val restored = LocalPlaylistStore.getPlaylist("old-mixed")
+        assertEquals("Renamed history", restored?.title)
+        assertEquals(
+            listOf("legacy-youtube-key", localUri),
+            restored?.songs?.map { it.videoId },
+        )
+        assertNull(restored?.songs?.get(0)?.localUri)
+        assertEquals(localUri, restored?.songs?.get(1)?.localUri)
+    }
+
     @Test fun reloadAfterStoreClearedDropsStaleInMemoryPlaylists() {
         LocalPlaylistStore.savePlaylist("Temporary", listOf(
             Song("old-youtube-id", "Old song", "Artist", null),
