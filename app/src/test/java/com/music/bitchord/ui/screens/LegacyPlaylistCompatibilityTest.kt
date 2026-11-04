@@ -41,6 +41,15 @@ class LegacyPlaylistCompatibilityTest {
         assertNull(legacyPlaylistPlayableSong(song("historical-id"), "https://remote.invalid/audio"))
     }
 
+    @Test fun unsupportedHistoricalCanonicalProvidersAreNotPlayable() {
+        assertNull(legacyPlaylistPlayableSong(song(
+            "bitchord://canonical?recordingId=r&mediaAssetId=a&providerKey=youtube",
+        )))
+        assertNull(legacyPlaylistPlayableSong(song(
+            "bitchord://canonical?recordingId=r&mediaAssetId=a&providerKey=jellyfin%3Aone",
+        )))
+    }
+
     @Test fun aRawHistoricalVideoIdIsNeverMistakenForACanonicalUri() {
         assertNull(legacyPlaylistPlayableSong(song("bitchord://watch?v=old")))
     }
