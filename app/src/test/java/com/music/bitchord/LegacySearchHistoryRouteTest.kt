@@ -29,6 +29,21 @@ class LegacySearchHistoryRouteTest {
         assertEquals("opensubsonic:one", remote.request.providerKey)
     }
 
+    @Test fun historicalYoutubeCanonicalProviderIsNeverAcceptedForPlayback() {
+        assertEquals(
+            HistoricalTrackHistoryAction.Search,
+            historicalTrackHistoryAction(
+                "bitchord://canonical?recordingId=r&mediaAssetId=a&providerKey=youtube",
+            ),
+        )
+        assertEquals(
+            HistoricalTrackHistoryAction.Search,
+            historicalTrackHistoryAction(
+                "bitchord://canonical?recordingId=r&mediaAssetId=a&providerKey=jellyfin%3Aone",
+            ),
+        )
+    }
+
     @Test fun unverifiedWebUriCannotTriggerPlayback() {
         assertEquals(
             HistoricalTrackHistoryAction.Search,
