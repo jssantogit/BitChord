@@ -291,6 +291,17 @@ private const val ALIGNMENT_MEASURE_TIMEOUT_MS = 30_000L
  */
 internal class HistoricalMediaAssetUnavailable(message: String) : java.io.IOException(message)
 
+/** Unwrap Media3 failures without retrying an archival identifier as a stream. */
+internal fun historicalMediaUnavailableCause(error: Throwable?): HistoricalMediaAssetUnavailable? {
+    var cause = error
+    repeat(8) {
+        if (cause is HistoricalMediaAssetUnavailable) return cause
+        cause = cause?.cause?.takeIf { it !== cause }
+        if (cause == null) return null
+    }
+    return null
+}
+
 private fun Song.canStartStation(): Boolean =
     videoId.isNotBlank() &&
         !videoId.startsWith("content://") &&
@@ -3256,20 +3267,8 @@ class PlaybackService : MediaLibraryService() {
             return super.getRetryDelayMsFor(loadErrorInfo)
         }
 
-        private fun isPermanent(error: Throwable?): Boolean {
-            var cause = error
-            var depth = 0
-            while (cause != null && depth++ < CAUSE_DEPTH) {
-                if (cause is HistoricalMediaAssetUnavailable) return true
-                cause = cause.cause?.takeIf { it !== cause }
-            }
-            return false
-        }
-
-        private companion object {
-            /** Media3 and the coroutine machinery both wrap; nothing nests deeper than this. */
-            const val CAUSE_DEPTH = 8
-        }
+        private fun isPermanent(error: Throwable?): Boolean =
+            historicalMediaUnavailableCause(error) != null
     }
 
     /** Counts every byte a player reads, cache or network, progressive or DASH. */
@@ -3836,17 +3835,8 @@ class PlaybackService : MediaLibraryService() {
      * what the resolver actually threw. A shallow `is` check sees only the
      * outermost of those three.
      */
-    private fun permanentReason(error: Throwable?): String? {
-        var cause = error
-        var depth = 0
-        while (cause != null && depth++ < PERMANENT_CAUSE_DEPTH) {
-            if (cause is HistoricalMediaAssetUnavailable) {
-                return cause.message ?: "This track cannot be played"
-            }
-            cause = cause.cause?.takeIf { it !== cause }
-        }
-        return null
-    }
+    private fun permanentReason(error: Throwable?): String? =
+        historicalMediaUnavailableCause(error)?.message
 
     /**
      * The track whose item this service is about to replace under it, so that
@@ -8562,7 +8552,6 @@ class PlaybackService : MediaLibraryService() {
          * Media3 wraps twice on this path and the coroutine machinery may add
          * one; nothing nests deeper. See [permanentReason].
          */
-        const val PERMANENT_CAUSE_DEPTH = 8
 
         /**
          * The pause before a retry. Media3 refuses to remove a cache entry a
