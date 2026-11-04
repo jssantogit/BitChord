@@ -154,6 +154,9 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 
 private sealed interface CanonicalSongFilterState {
     data object Loading : CanonicalSongFilterState
@@ -175,6 +178,43 @@ private sealed interface CanonicalDetailBrowseState {
         val recordingIds: Set<String>,
         val releaseOrder: List<String> = emptyList(),
     ) : CanonicalDetailBrowseState
+}
+
+internal data class CanonicalAlbumFooterMetadata(
+    val date: String?,
+    val summary: String?,
+    val genre: String? = null,
+)
+
+/** Only metadata backed by the release/track catalog is shown. */
+internal fun canonicalAlbumFooterMetadata(
+    releaseDate: String?,
+    tracks: List<CanonicalBrowseTrack>,
+): CanonicalAlbumFooterMetadata {
+    val date = releaseDate?.trim()?.takeIf(String::isNotEmpty)?.let { raw ->
+        try {
+            LocalDate.parse(raw.take(10)).format(
+                DateTimeFormatter.ofPattern("d 'de' MMMM 'de' uuuu", Locale("pt", "BR")),
+            )
+        } catch (_: DateTimeParseException) {
+            raw.takeIf { it.length == 4 && it.all(Char::isDigit) }
+        }
+    }
+    val count = tracks.size
+    val duration = tracks.takeIf { it.isNotEmpty() && it.all { track ->
+        (track.durationMs ?: 0L) > 0L
+    } }?.sumOf { it.durationMs ?: 0L }?.let { total ->
+        ((total + 30_000L) / 60_000L).coerceAtLeast(1L)
+    }
+    val summary = count.takeIf { it > 0 }?.let {
+        "${it} ${if (it == 1) "música" else "músicas"}" +
+            (duration?.let { minutes ->
+                ", $minutes ${if (minutes == 1L) "minuto" else "minutos"}"
+            } ?: "")
+    }
+    // Genre is intentionally absent: CanonicalBrowseTrack currently has no
+    // verified genre field. Never guess it from artist, title or source.
+    return CanonicalAlbumFooterMetadata(date, summary)
 }
 
 private data class CanonicalAlbumHeaderEvidence(
@@ -1080,6 +1120,23 @@ internal fun CanonicalRemoteLibraryScreen(
                         Unit
                     }
                 },
+                albumRating = detail?.takeIf {
+                    selectedContext == CanonicalSmartFilterContext.ALBUMS
+                }?.let { selected ->
+                    canonicalLibraryEntityRatingForRow(entityRatingValues,
+                        CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, selected.id))
+                },
+                onRateAlbum = detail?.takeIf {
+                    selectedContext == CanonicalSmartFilterContext.ALBUMS
+                }?.let { selected ->
+                    { ratingDialogSelection = listOf(CanonicalLibrarySelection(
+                        CanonicalLibraryEntityType.ALBUM, selected.id,
+                    )) }
+                },
+                albumFooter = if (detail != null &&
+                    selectedContext == CanonicalSmartFilterContext.ALBUMS
+                ) canonicalAlbumFooterMetadata(albumHeaderEvidence?.releaseDate, scopedDetailTracks)
+                    else null,
                 albumMeta = if (detail != null &&
                     selectedContext == CanonicalSmartFilterContext.ALBUMS
                 ) canonicalAlbumDetailMeta(
@@ -2021,6 +2078,9 @@ private fun NativeUnifiedLibraryBody(
     isAlbumDetail: Boolean = false,
     albumCredit: String = "",
     albumMeta: String? = null,
+    albumRating: Double? = null,
+    onRateAlbum: (() -> Unit)? = null,
+    albumFooter: CanonicalAlbumFooterMetadata? = null,
     albumTrackNumbers: Map<String, Int> = emptyMap(),
     albumPinned: Boolean = false,
     onToggleAlbumPin: (() -> Unit)? = null,
@@ -2176,7 +2236,9 @@ private fun NativeUnifiedLibraryBody(
                     NativeReleaseHeaderLayout(
                         title = title,
                         credit = albumCredit,
-                        meta = albumMeta ?: label,
+                        meta = "",
+                        rating = albumRating,
+                        onRate = onRateAlbum,
                         palette = palette,
                         sleeveSize = sleeve,
                         artwork = {
@@ -2513,6 +2575,41 @@ private fun NativeUnifiedLibraryBody(
                     is CanonicalEntityBrowseState.Albums -> Unit
                 }
             }
+            if (isAlbumDetail && albumFooter != null) {
+                item(key = "native-album-footer") {
+                    NativeAlbumMetadataFooter(
+                        metadata = albumFooter,
+                        palette = palette,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun NativeAlbumMetadataFooter(
+    metadata: CanonicalAlbumFooterMetadata,
+    palette: ArtworkPalette,
+) {
+    if (metadata.date == null && metadata.summary == null && metadata.genre == null) return
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .padding(horizontal = PAGE_GUTTER, vertical = 26.dp)
+            .testTag("native-album-metadata-footer"),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        metadata.date?.let {
+            Text(it, style = MaterialTheme.typography.bodyMedium,
+                color = palette.onBackgroundVariant)
+        }
+        metadata.summary?.let {
+            Text(it, style = MaterialTheme.typography.bodyMedium,
+                color = palette.onBackgroundVariant)
+        }
+        metadata.genre?.let {
+            Text(it, style = MaterialTheme.typography.bodyMedium,
+                color = palette.onBackgroundVariant)
         }
     }
 }
