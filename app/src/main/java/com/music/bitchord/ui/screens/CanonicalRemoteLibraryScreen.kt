@@ -1074,17 +1074,73 @@ internal fun CanonicalRemoteLibraryScreen(
                         )
                     },
                 )
+            } else if (detail != null &&
+                selectedContext == CanonicalSmartFilterContext.ALBUMS
+            ) {
+                // Album detail is now a dedicated native release composition;
+                // the category browser no longer doubles as a release page.
+                val selection = CanonicalLibrarySelection(
+                    CanonicalLibraryEntityType.ALBUM, detail.id,
+                )
+                val album = (entityState as? CanonicalEntityBrowseState.Albums)
+                    ?.releases?.firstOrNull { it.id == detail.id }
+                NativeCanonicalLibraryAlbumDetail(
+                    title = canonicalAlbumDisplayTitle(
+                        detail.name, albumHeaderEvidence?.primaryType,
+                    ),
+                    tracks = canonicalAlbumDetailSort(shownTracks, albumSort),
+                    artworkLoader = artworkLoader,
+                    heroArtworkUri = detail.artworkUri,
+                    heroArtworkTrack = entityArtworkById[detail.id]
+                        ?: scopedDetailTracks.firstOrNull(),
+                    albumCredit = album?.artistDisplay?.takeIf(String::isNotBlank)
+                        ?: scopedDetailTracks.firstOrNull()?.artistDisplay.orEmpty(),
+                    albumRating = canonicalLibraryEntityRatingForRow(
+                        entityRatingValues, selection,
+                    ),
+                    albumQuality = canonicalAlbumSourceQuality(
+                        scopedDetailTracks, selectedSource,
+                    ),
+                    onRateAlbum = {
+                        ratingDialogSelection = listOf(selection)
+                    },
+                    albumFooter = canonicalAlbumFooterMetadata(
+                        albumHeaderEvidence?.releaseDate, scopedDetailTracks,
+                    ),
+                    albumTrackNumbers = canonicalAlbumDetailTrackNumbers(
+                        scopedDetailTracks,
+                    ),
+                    albumPinned = selection in pinnedIdentities,
+                    onToggleAlbumPin = {
+                        libraryPinRepository.toggle(CanonicalLibraryPin(
+                            selection = selection,
+                            title = detail.name,
+                            subtitle = album?.artistDisplay.orEmpty(),
+                        ))
+                        Unit
+                    },
+                    query = detailQuery,
+                    onQueryChange = { detailQuery = it },
+                    searching = searchVisible,
+                    loading = shownState is CanonicalSongFilterState.Loading,
+                    failed = shownState is CanonicalSongFilterState.Failed,
+                    onTrackPlay = playTrack,
+                    onTrackEditRating = editRating,
+                    onTrackOptions = openTrackMenu,
+                    onPlayAll = { visible, shuffle ->
+                        executeLibraryTrack(
+                            SmartCollectionActionSource.LibraryTracks(
+                                visible.map { it.recordingId }, selectedSource, shuffle,
+                            ),
+                            CanonicalCollectionIntent.PLAY_NOW,
+                        )
+                    },
+                )
             } else NativeUnifiedLibraryBody(
-                title = if (detail != null &&
-                    selectedContext == CanonicalSmartFilterContext.ALBUMS
-                ) canonicalAlbumDisplayTitle(detail.name, albumHeaderEvidence?.primaryType)
-                    else detail?.name ?: title,
+                title = detail?.name ?: title,
                 selectedContext = if (detail == null) selectedContext
                     else CanonicalSmartFilterContext.SONGS,
-                tracks = if (detail != null &&
-                    selectedContext == CanonicalSmartFilterContext.ALBUMS
-                ) canonicalAlbumDetailSort(shownTracks, albumSort)
-                    else sortCanonicalUnifiedTracks(shownTracks, unifiedSort),
+                tracks = sortCanonicalUnifiedTracks(shownTracks, unifiedSort),
                 filteredState = shownState,
                 entityState = entityState,
                 artworkLoader = artworkLoader,
@@ -1096,65 +1152,6 @@ internal fun CanonicalRemoteLibraryScreen(
                 sortDates = nativeEntitySortDates,
                 entityArtworkById = entityArtworkById,
                 entityRatings = entityRatingValues,
-                heroArtworkUri = detail?.artworkUri,
-                heroArtworkTrack = detail?.let { entityArtworkById[it.id] }
-                    ?: if (detail == null) null else scopedDetailTracks.firstOrNull(),
-                isAlbumDetail = detail != null &&
-                    selectedContext == CanonicalSmartFilterContext.ALBUMS,
-                albumCredit = detail?.let { selected ->
-                    (entityState as? CanonicalEntityBrowseState.Albums)
-                        ?.releases?.firstOrNull { it.id == selected.id }?.artistDisplay
-                }?.takeIf(String::isNotBlank)
-                    ?: scopedDetailTracks.firstOrNull()?.artistDisplay.orEmpty(),
-                albumPinned = detail != null &&
-                    CanonicalLibrarySelection(
-                        CanonicalLibraryEntityType.ALBUM, detail.id,
-                    ) in pinnedIdentities,
-                onToggleAlbumPin = detail?.takeIf {
-                    selectedContext == CanonicalSmartFilterContext.ALBUMS
-                }?.let { selected ->
-                    {
-                        val artist = (entityState as? CanonicalEntityBrowseState.Albums)
-                            ?.releases?.firstOrNull { it.id == selected.id }?.artistDisplay.orEmpty()
-                        libraryPinRepository.toggle(CanonicalLibraryPin(
-                            CanonicalLibrarySelection(
-                                CanonicalLibraryEntityType.ALBUM, selected.id,
-                            ),
-                            selected.name, artist,
-                        ))
-                        Unit
-                    }
-                },
-                albumQuality = if (detail != null &&
-                    selectedContext == CanonicalSmartFilterContext.ALBUMS
-                ) canonicalAlbumSourceQuality(scopedDetailTracks, selectedSource) else null,
-                albumRating = detail?.takeIf {
-                    selectedContext == CanonicalSmartFilterContext.ALBUMS
-                }?.let { selected ->
-                    canonicalLibraryEntityRatingForRow(entityRatingValues,
-                        CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, selected.id))
-                },
-                onRateAlbum = detail?.takeIf {
-                    selectedContext == CanonicalSmartFilterContext.ALBUMS
-                }?.let { selected ->
-                    { ratingDialogSelection = listOf(CanonicalLibrarySelection(
-                        CanonicalLibraryEntityType.ALBUM, selected.id,
-                    )) }
-                },
-                albumFooter = if (detail != null &&
-                    selectedContext == CanonicalSmartFilterContext.ALBUMS
-                ) canonicalAlbumFooterMetadata(albumHeaderEvidence?.releaseDate, scopedDetailTracks)
-                    else null,
-                albumMeta = if (detail != null &&
-                    selectedContext == CanonicalSmartFilterContext.ALBUMS
-                ) canonicalAlbumDetailMeta(
-                    albumHeaderEvidence?.primaryType,
-                    albumHeaderEvidence?.releaseDate,
-                    scopedDetailTracks,
-                ) else null,
-                albumTrackNumbers = if (detail != null &&
-                    selectedContext == CanonicalSmartFilterContext.ALBUMS
-                ) canonicalAlbumDetailTrackNumbers(scopedDetailTracks) else emptyMap(),
                 onTrackPlay = playTrack,
                 onTrackEditRating = editRating,
                 onTrackOptions = openTrackMenu,
@@ -2081,18 +2078,6 @@ private fun NativeUnifiedLibraryBody(
     sortDates: Map<String, CanonicalEntitySortDateRow>,
     entityArtworkById: Map<String, CanonicalBrowseTrack>,
     entityRatings: Map<CanonicalEntityRatingTarget, Double>,
-    heroArtworkUri: String? = null,
-    heroArtworkTrack: CanonicalBrowseTrack? = null,
-    isAlbumDetail: Boolean = false,
-    albumCredit: String = "",
-    albumMeta: String? = null,
-    albumRating: Double? = null,
-    albumQuality: com.music.bitchord.ui.components.SourceQuality? = null,
-    onRateAlbum: (() -> Unit)? = null,
-    albumFooter: CanonicalAlbumFooterMetadata? = null,
-    albumTrackNumbers: Map<String, Int> = emptyMap(),
-    albumPinned: Boolean = false,
-    onToggleAlbumPin: (() -> Unit)? = null,
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
     onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
     onTrackOptions: (CanonicalBrowseTrack) -> Unit,
@@ -2104,33 +2089,6 @@ private fun NativeUnifiedLibraryBody(
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
     onEntitySelect: (CanonicalSelectedEntity) -> Unit,
 ) {
-    if (isAlbumDetail) {
-        NativeCanonicalLibraryAlbumDetail(
-            title = title,
-            tracks = tracks,
-            artworkLoader = artworkLoader,
-            heroArtworkUri = heroArtworkUri,
-            heroArtworkTrack = heroArtworkTrack,
-            albumCredit = albumCredit,
-            albumRating = albumRating,
-            albumQuality = albumQuality,
-            onRateAlbum = onRateAlbum,
-            albumFooter = albumFooter,
-            albumTrackNumbers = albumTrackNumbers,
-            albumPinned = albumPinned,
-            onToggleAlbumPin = onToggleAlbumPin,
-            query = query,
-            onQueryChange = onQueryChange,
-            searching = searching,
-            loading = filteredState is CanonicalSongFilterState.Loading,
-            failed = filteredState is CanonicalSongFilterState.Failed,
-            onTrackPlay = onTrackPlay,
-            onTrackEditRating = onTrackEditRating,
-            onTrackOptions = onTrackOptions,
-            onPlayAll = onPlayAll,
-        )
-        return
-    }
     // Album detail exits into its native release compositor above.
     val palette = rememberArtworkPalette(imageUrl = null)
     val albumItems = (entityState as? CanonicalEntityBrowseState.Albums)?.releases.orEmpty()
