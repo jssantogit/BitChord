@@ -35,10 +35,10 @@ class SpotifyImportCanonicalOptOutTest {
             SpotifyImportTrack("Unknown", "Unknown"),
         )
         val queries = mutableListOf<String>()
-        val (songs, unmatched) = SpotifyImporter.resolveToSongs(
+        val (songs, unmatched) = SpotifyImporter.resolveToSongsWithResolver(
             tracks = tracks,
             onProgress = { _, _ -> },
-            allowYoutubeMatching = { true },
+            allowMatching = { true },
             resolveTrack = { track ->
                 synchronized(queries) { queries.add(track.title) }
                 if (track.title == "Supernova") Song(
@@ -55,10 +55,10 @@ class SpotifyImportCanonicalOptOutTest {
 
     @Test fun blockedGateNeverCallsInjectedResolver() = runBlocking {
         val tracks = listOf(SpotifyImportTrack("Magnetic", "ILLIT"))
-        val (songs, unmatched) = SpotifyImporter.resolveToSongs(
+        val (songs, unmatched) = SpotifyImporter.resolveToSongsWithResolver(
             tracks = tracks,
             onProgress = { _, _ -> },
-            allowYoutubeMatching = { false },
+            allowMatching = { false },
             resolveTrack = { error("source policy must block resolution") },
         )
         assertTrue(songs.isEmpty())
