@@ -788,31 +788,19 @@ fun DetailScreen(
                             palette = palette,
                             horizontalPadding = ARTIST_CONTENT_GUTTER,
                         )
-                        BoxWithConstraints {
-                            val columnWidth = trackColumnWidth(maxWidth)
-                            val topSongsState = rememberLazyListState()
-                            LazyRow(
-                                state = topSongsState,
-                                contentPadding = PaddingValues(horizontal = ARTIST_CONTENT_GUTTER),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                flingBehavior = rememberSnapFlingBehavior(lazyListState = topSongsState),
-                            ) {
-                                items(top.chunked(SONGS_PER_COLUMN)) { column ->
-                                    Column(Modifier.width(columnWidth)) {
-                                        column.forEach { song ->
-                                            CompactSongRow(
-                                                song = song,
-                                                palette = palette,
-                                                onClick = { onSongClick(top, top.indexOf(song)) },
-                                                onLongPress = { onSongLongPress(song) },
-                                                downloadedTint = downloadedTint,
-                                                isCurrent = isCurrentRow(song),
-                                                isPlaying = isCurrentRow(song) && isPlaying,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                        NativeArtistTracksCarousel(
+                            tracks = top,
+                            horizontalPadding = ARTIST_CONTENT_GUTTER,
+                        ) { song ->
+                            CompactSongRow(
+                                song = song,
+                                palette = palette,
+                                onClick = { onSongClick(top, top.indexOf(song)) },
+                                onLongPress = { onSongLongPress(song) },
+                                downloadedTint = downloadedTint,
+                                isCurrent = isCurrentRow(song),
+                                isPlaying = isCurrentRow(song) && isPlaying,
+                            )
                         }
                     }
                 } else {
@@ -939,21 +927,16 @@ fun DetailScreen(
                         onShowAll = if (canShowAll) { { onActiveShelfChange(shelf) } } else null,
                         horizontalPadding = ARTIST_CONTENT_GUTTER,
                     )
-                    val carouselState = rememberLazyListState()
-                    LazyRow(
-                        state = carouselState,
-                        contentPadding = PaddingValues(horizontal = ARTIST_CONTENT_GUTTER),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        flingBehavior = rememberSnapFlingBehavior(lazyListState = carouselState),
-                    ) {
-                        items(displayItems) { item ->
-                            SectionCard(
-                                item = item,
-                                palette = palette,
-                                onClick = { onSectionItemClick(item) },
-                                onLongPress = onSectionItemLongPress?.let { { it(item) } },
-                            )
-                        }
+                    NativeArtistReleaseCarousel(
+                        releases = displayItems,
+                        horizontalPadding = ARTIST_CONTENT_GUTTER,
+                    ) { item ->
+                        SectionCard(
+                            item = item,
+                            palette = palette,
+                            onClick = { onSectionItemClick(item) },
+                            onLongPress = onSectionItemLongPress?.let { { it(item) } },
+                        )
                     }
                 }
             }
