@@ -1003,7 +1003,7 @@ internal fun CanonicalRemoteLibraryScreen(
             if (detail != null && selectedContext == CanonicalSmartFilterContext.ARTISTS) {
                 // Real artist destination: the approved DetailScreen artist
                 // chrome and sections, bound to proven canonical memberships.
-                CanonicalNativeArtistDetail(
+                CanonicalArtistDetailRoute(
                     artistName = detail.name,
                     artistId = detail.id,
                     tracks = sortCanonicalUnifiedTracks(scopedDetailTracks, unifiedSort),

@@ -1,6 +1,5 @@
 package com.music.bitchord.ui.screens
 
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -18,15 +17,15 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtwork
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 
 /**
- * The artist route reuses the approved DetailScreen artist header, photo,
- * section headings, cards, playback pills and canonical track rows.
+ * This typed route feeds the shared native artist compositor with the
+ * verified Library state, playback actions, pin and nested release controls.
  *
  * A Release belongs here only through a verified RecordingId->ReleaseId edge;
  * source/account scope is carried through MediaAsset availability. No Song,
  * legacy browseId or artist ID is inferred from a name.
  */
 @Composable
-internal fun CanonicalNativeArtistDetail(
+internal fun CanonicalArtistDetailRoute(
     artistName: String,
     artistId: String?,
     tracks: List<CanonicalBrowseTrack>,
@@ -57,8 +56,8 @@ internal fun CanonicalNativeArtistDetail(
     val context = LocalContext.current.applicationContext
     val pinRepository = remember(context) { CanonicalLibraryPinRepository.get(context) }
     val libraryPins by pinRepository.pins.collectAsStateWithLifecycle()
-    // Reactive release evidence is now owned by the shared artist detail state;
-    // this renderer only handles UI/navigation until its native replacement.
+    // Reactive release evidence remains in the state layer; this is only an
+    // entry adapter, while NativeCanonicalArtistContent owns all visual sections.
     val nativeReleases by rememberCanonicalArtistReleases(
         tracks, sourceKeys, selectedSourceKey,
     )
