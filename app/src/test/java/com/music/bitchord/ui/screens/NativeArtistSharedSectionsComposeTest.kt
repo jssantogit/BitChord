@@ -18,7 +18,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
-import com.music.bitchord.ui.theme.rememberArtworkPalette
+import com.music.bitchord.ui.theme.themeArtworkPalette
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -74,7 +74,7 @@ class NativeArtistSharedSectionsComposeTest {
         var options = 0
         compose.setContent {
             MaterialTheme {
-                val palette = rememberArtworkPalette(imageUrl = null)
+                val palette = themeArtworkPalette()
                 NativeArtistReleaseCard(
                     title = "Album", subtitle = "aespa",
                     palette = palette,
@@ -97,7 +97,7 @@ class NativeArtistSharedSectionsComposeTest {
         var toggled = 0
         compose.setContent {
             MaterialTheme {
-                val palette = rememberArtworkPalette(imageUrl = null)
+                val palette = themeArtworkPalette()
                 NativeArtistReleaseCard(
                     title = "Album", subtitle = "artist", palette = palette,
                     onClick = {},
@@ -117,7 +117,7 @@ class NativeArtistSharedSectionsComposeTest {
         var ratingOpens = 0
         compose.setContent {
             MaterialTheme {
-                val palette = rememberArtworkPalette(imageUrl = null)
+                val palette = themeArtworkPalette()
                 NativeArtistDetailFrame(
                     palette = palette,
                     artHeight = 220.dp,
