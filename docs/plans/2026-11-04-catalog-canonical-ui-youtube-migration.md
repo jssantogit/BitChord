@@ -125,6 +125,14 @@ O escopo não se encerra na tela de artista. O compositor deixa de receber DTOs 
 
 **Gate:** [CI anterior #41827977284](https://github.com/jssantogit/BitChord/actions/runs/41827977284) compilou o app, mas encontrou 3 testes Compose incorretamente dependentes de `PlayerPlatform`. Os testes agora usam o `themeArtworkPalette()` existente. Novo HEAD exige CI verde, sem antecipar status; workflow de emulador A0 pode ser `skipped` e **não substitui smoke físico**.
 
+### Home e Explorar — início da mesma extração (04/11/2026)
+
+- `sharedUi/NativeShelfCard.kt` contém a apresentação do card Home/Explore já aprovada: mesmo artwork slot, título, subtítulo, ícone de fixado, playing-accent, dimensões e gesto de clique/menu/long press. Não recebe `ShelfItem`, `browseId`, `Song.videoId` ou identidade de provedor.
+- `HomeScreen.ShelfCard` **continua adaptador**: resolve `local:downloads`, `local:all`, `local:cache`, WebDAV, SMB e capas comuns usando a mesma implementação de arte anterior. `ExploreScreen` herda o componente de `ShelfCard` sem criar outra grade.
+- A remoção completa de `ShelfItem` do estado de Home/Explorar só é segura quando `HomeShelf`, clique/menu/long press, replay/playing indicator e navegação estiverem tipados de ponta a ponta. A extração visual não significa migração completa dessas rotas.
+- **Paridade obrigatória:** preservar capas gradientes, blur, mini player, capa local/remote, indicadores de execução, pinos, títulos e comportamento de acesso offline. Nenhum `browseId` canônico pode ser interpretado como ID de vídeo.
+- A CI atual deve validar produção e `:sharedUi:jvmTest`; smoke físico somente depois do corte coerente completo.
+
 ## Evidências
 
 - [#205 — Biblioteca/Playlists integrada](https://github.com/jssantogit/BitChord/pull/205)
