@@ -196,6 +196,15 @@ internal fun shouldRunLegacyYoutubeVersionLookup(
     @Suppress("UNUSED_PARAMETER") configs: List<SourceConfig>,
 ): Boolean = false
 
+/**
+ * Compatibility only for an explicitly opened YouTube link. Unlike
+ * background discovery it is not an implicit YouTube lookup, and cannot
+ * turn a provider browse/video ID into canonical musical identity.
+ * Remove after the link-migration contract is implemented.
+ */
+internal fun shouldHandleExplicitLegacyYoutubeLink(configs: List<SourceConfig>): Boolean =
+    isYouTubeSourceEnabled(configs)
+
 /** The legacy endpoint closure is never invoked while independent discovery is active. */
 internal class LegacyDiscoveryRequestGate(private val useCanonicalDiscovery: Boolean) {
     suspend fun <T> run(
