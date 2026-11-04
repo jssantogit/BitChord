@@ -370,21 +370,32 @@ class PlaybackService : MediaLibraryService() {
             if (SystemClock.elapsedRealtime() - at < QUICK_PICKS_CACHE_TTL_MS && songs.isNotEmpty()) return songs
         }
         val recentsIds = cachedRecents?.second?.mapTo(HashSet()) { it.videoId } ?: emptySet()
-        val songs = try {
-            val local = LocalMediaRepository.getLocalMusic(this@PlaybackService)
-            val downloads = Downloads.getDownloadedSongs(this@PlaybackService)
-            val remote = CanonicalCatalogDatabase.get(this@PlaybackService)
-                .catalogDao().searchCanonicalRemoteServerAssets("", limit = 200)
-                .let(::canonicalAutoSongs)
-            (local + downloads + remote)
-                .filter { it.videoId !in recentsIds }
-                .distinctBy(Song::videoId)
-                .take(150)
+        // Each provider is independent. A missing MediaStore permission must
+        // not hide accessible Navidrome recordings from Android Auto.
+        val local = try {
+            LocalMediaRepository.getLocalMusic(this@PlaybackService)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
             emptyList()
         }
+        val downloads = try {
+            Downloads.getDownloadedSongs(this@PlaybackService)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val remote = try {
+            CanonicalCatalogDatabase.get(this@PlaybackService)
+                .catalogDao().searchCanonicalRemoteServerAssets("", limit = 200)
+                .let(::canonicalAutoSongs)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val songs = canonicalAutoQuickPicks(local, downloads, remote, recentsIds)
         if (songs.isNotEmpty()) {
             cachedQuickPicks = SystemClock.elapsedRealtime() to songs
             songs.forEach { songCache[it.videoId] = it }
