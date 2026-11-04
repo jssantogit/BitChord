@@ -49,6 +49,8 @@ import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.spotify.LocalPlaylistStore
+import com.music.bitchord.download.Downloads
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
@@ -126,9 +128,8 @@ internal fun visibleLibraryPlaylistCards(
 internal fun canQueueLibraryPlaylist(card: LibraryPlaylistCard): Boolean =
     card is LibraryPlaylistCard.Smart || card is LibraryPlaylistCard.CanonicalNormal
 
-/** Delete is supported only by first-party saved playlist repositories here. */
-internal fun canDeleteLibraryPlaylist(card: LibraryPlaylistCard): Boolean =
-    card is LibraryPlaylistCard.Smart || card is LibraryPlaylistCard.CanonicalNormal
+/** All three first-party local playlist stores support non-destructive delete. */
+internal fun canDeleteLibraryPlaylist(card: LibraryPlaylistCard): Boolean = true
 
 /** Stable card IDs, fresh saved definitions; never keep a stale UI snapshot after editing. */
 internal fun latestLibraryPlaylistCard(
@@ -165,6 +166,7 @@ internal fun UnifiedPlaylistLibraryShelf(
     onLegacyPlay: (String, List<Song>, Int) -> Unit,
     onLegacyShuffle: (String, List<Song>) -> Unit,
     onLegacyQueue: (List<Song>) -> Unit,
+    onLegacyNext: (List<Song>) -> Unit,
     onLegacySongMenu: (Song) -> Unit,
     onLegacySongSwipe: (Song) -> Unit,
     onSmartAction: (String, CanonicalCollectionIntent) -> Unit,
@@ -375,6 +377,13 @@ internal fun UnifiedPlaylistLibraryShelf(
         }
     }
     menuCard?.let { selected ->
+        val historicalMenuSongs = (selected as? LibraryPlaylistCard.Normal)
+            ?.shelfItem?.browseId?.let(LocalPlaylistStore::getPlaylist)
+            ?.songs?.let { songs ->
+                eligibleHistoricalPlaylistSongs(songs) {
+                    Downloads.verifiedSavedUri(it.videoId)
+                }
+            }.orEmpty()
         ModalBottomSheet(
             onDismissRequest = { optionsFor = null },
             containerColor = MaterialTheme.colorScheme.background,
@@ -395,23 +404,23 @@ internal fun UnifiedPlaylistLibraryShelf(
                     playlistPinRepo.toggle(LibraryPlaylistPin(selected.id, selected.title))
                     optionsFor = null
                 },
-                onPlayNext = if (canQueueLibraryPlaylist(selected)) ({
+                onPlayNext = if (canQueueLibraryPlaylist(selected) || historicalMenuSongs.isNotEmpty()) ({
                     when (selected) {
                         is LibraryPlaylistCard.Smart ->
                             onSmartAction(selected.definition.id, CanonicalCollectionIntent.ADD_NEXT)
                         is LibraryPlaylistCard.CanonicalNormal ->
                             onCanonicalNormalAction(selected.definition.id, CanonicalCollectionIntent.ADD_NEXT)
-                        is LibraryPlaylistCard.Normal -> Unit
+                        is LibraryPlaylistCard.Normal -> onLegacyNext(historicalMenuSongs)
                     }
                     optionsFor = null
                 }) else null,
-                onAddToQueue = if (canQueueLibraryPlaylist(selected)) ({
+                onAddToQueue = if (canQueueLibraryPlaylist(selected) || historicalMenuSongs.isNotEmpty()) ({
                     when (selected) {
                         is LibraryPlaylistCard.Smart ->
                             onSmartAction(selected.definition.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
                         is LibraryPlaylistCard.CanonicalNormal ->
                             onCanonicalNormalAction(selected.definition.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
-                        is LibraryPlaylistCard.Normal -> Unit
+                        is LibraryPlaylistCard.Normal -> onLegacyQueue(historicalMenuSongs)
                     }
                     optionsFor = null
                 }) else null,
@@ -434,7 +443,8 @@ internal fun UnifiedPlaylistLibraryShelf(
                                     is LibraryPlaylistCard.Smart -> repo.remove(selected.definition.id)
                                     is LibraryPlaylistCard.CanonicalNormal ->
                                         normalRepo.remove(selected.definition.id)
-                                    is LibraryPlaylistCard.Normal -> Unit
+                                    is LibraryPlaylistCard.Normal ->
+                                        selected.shelfItem.browseId?.let(LocalPlaylistStore::deletePlaylist)
                                 }
                             }
                             playlistPinRepo.remove(selected.id)
