@@ -403,6 +403,23 @@ class PlaylistLibraryVisualReuseTest {
         compose.runOnIdle { assertEquals("recording:exact-27", clicked) }
     }
 
+    @Test fun longPressOnCanonicalPlaylistTrackOpensSameMenuAsThreeDots() {
+        compose.setContent {
+            CanonicalPlaylistTrackRow(
+                track = V2DisplayRow(
+                    id = "recording:longpress-1",
+                    title = "Long Press Track",
+                    artist = "Artist",
+                ),
+                onPlay = {},
+                onQueue = { _, _ -> },
+            )
+        }
+        compose.onNodeWithText("Long Press Track").performTouchInput { longClick() }
+        compose.onNodeWithText("Reproduzir daqui").assertExists()
+        compose.onNodeWithText("Adicionar à fila").assertExists()
+    }
+
     @Test fun playlistTrackMenuQueuesOnlyExplicitSelectedCanonicalRecording() {
         var queued: Pair<String, com.music.bitchord.playback.CanonicalCollectionIntent>? = null
         compose.setContent {
