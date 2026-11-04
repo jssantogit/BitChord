@@ -33,14 +33,12 @@ import com.music.bitchord.playback.LastPlayed
 import com.music.bitchord.playback.BoundedContextPersistence
 import com.music.bitchord.playback.OriginalVersion
 import com.music.bitchord.playback.PlaybackListeningBridge
-import com.music.bitchord.data.innertube.Innertube
 import com.music.bitchord.data.AndroidDiagnosticsHooks
 import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.SearchHistory
 import com.music.bitchord.data.sources.SourceRegistry
-import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.data.sources.SourceResolver
 import com.music.bitchord.data.sources.StructuredSourceResolutionTraceReporter
 import com.music.bitchord.data.stats.ArtistFacts
@@ -98,9 +96,6 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         SpotifyLibrary.auth = SpotifyLibrary.Auth {
             SpotifyToken.accessToken()?.let { SpotifyLibrary.Tokens(it, SpotifyToken.clientToken()) }
         }
-        // The per-app language picker, which YouTube Music's `hl` follows.
-        // Full tag (zh-Hant / zh-Hans preserved); Innertube maps to hl/gl.
-        Innertube.appLanguage = { AppCompatDelegate.getApplicationLocales().get(0)?.toLanguageTag() }
         Diagnostics.span(DiagnosticCategory.STARTUP, "locale_migration") {
             migrateScriptOnlyAppLocale()
         }
@@ -142,19 +137,7 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
                 authStore.select(restoredSession.accountId, restoredSession.activeProfileId)
             }
             authStore.cookie = restoredSession?.cookie
-            Innertube.cookie = restoredSession?.cookie
-            // Which account that cookie actually acts as. Read here rather than on
-            // demand so the answer is usually in hand before the first request needs
-            // it: a play registered under the wrong account is indistinguishable, to
-            // the listener, from one that was never registered at all. Fire and
-            // forget — every caller works without it, just less precisely.
-            if (restoredSession != null) {
-                // After the cookie, never before: setting the cookie clears any
-                // channel the last session was acting as, so restoring the choice
-                // first would restore it into the value about to be wiped.
-                restoredSession.profiles.firstOrNull { it.profileId == restoredSession.activeProfileId }
-                    ?.let { Innertube.selectChannel(it.pageId, it.dataSyncId, it.authUser) }
-            }
+
         }
         Diagnostics.span(DiagnosticCategory.STARTUP, "app_settings_init") {
             AppSettings.init(this, authStore)
@@ -245,19 +228,6 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         }
         Diagnostics.span(DiagnosticCategory.STARTUP, "background_join_wait") {
             backgroundInit.join()
-        }
-        // Warming YouTube's account scope is a discovery request. Wait until
-        // persisted settings and source opt-outs are loaded, and skip it when
-        // the app is configured for independent discovery. Cookie/channel
-        // restoration above still happens so explicit playback keeps its gate.
-        val youtubeDisabled = SourceRegistry.configs.value.any {
-            it.kind == SourceKind.YOUTUBE && !it.enabled
-        }
-        if (restoredSession != null &&
-            !AppSettings.canonicalDiscoveryEnabled.value &&
-            !youtubeDisabled
-        ) {
-            CoroutineScope(Dispatchers.IO).launch { Innertube.ensureSessionScope() }
         }
         Diagnostics.event(
             category = DiagnosticCategory.STARTUP,
