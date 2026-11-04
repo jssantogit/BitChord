@@ -3055,7 +3055,34 @@ private fun BitChordApp(
                                 editingSmartPlaylistId = null
                                 showSmartPlaylistBuilder = true
                             },
-                            onOpenNormalPlaylist = onLibraryItemClick,
+                            onLegacyPlay = { id, songs, index ->
+                                if (songs.isNotEmpty()) {
+                                    val browseId = id.removePrefix("local:")
+                                    val title = com.music.bitchord.data.spotify.LocalPlaylistStore
+                                        .getPlaylist(browseId)?.title ?: "Playlist"
+                                    playFrom(
+                                        songs,
+                                        index.coerceIn(songs.indices),
+                                        QueueSource(title, PlaybackSourceType.BROWSE, browseId),
+                                    )
+                                }
+                            },
+                            onLegacyShuffle = { id, songs ->
+                                if (songs.isNotEmpty()) {
+                                    val browseId = id.removePrefix("local:")
+                                    val title = com.music.bitchord.data.spotify.LocalPlaylistStore
+                                        .getPlaylist(browseId)?.title ?: "Playlist"
+                                    QueueShuffle.enableForNextQueue()
+                                    playFrom(
+                                        songs,
+                                        songs.indices.random(),
+                                        QueueSource(title, PlaybackSourceType.BROWSE, browseId),
+                                    )
+                                }
+                            },
+                            onLegacyQueue = addSongsToQueue,
+                            onLegacySongMenu = openSongMenu,
+                            onLegacySongSwipe = onSongSwipe,
                             onSmartAction = { id, intent ->
                                 executeSmartCollection(
                                     SmartCollectionActionSource.SavedV2Definition(id), intent,
