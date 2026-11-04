@@ -8520,10 +8520,7 @@ class PlaybackService : MediaLibraryService() {
                             cached
                         } else {
                             try {
-                                withTimeoutOrNull(3000L) {
-                                    YtMusicRepository.search(searchQuery, SearchFilter.SONGS).getOrNull()
-                                        ?.mapNotNull { if (it is SearchResult.Track) it.song else null }
-                                } ?: emptyList()
+                                searchAll(searchQuery).first
                             } catch (_: Exception) {
                                 emptyList()
                             }
@@ -8694,23 +8691,38 @@ class PlaybackService : MediaLibraryService() {
     private suspend fun searchAll(query: String): Pair<List<Song>, List<BrowseItem>> {
         val safeQuery = query.trim().take(MAX_AUTO_SEARCH_QUERY_CHARS)
         if (safeQuery.isEmpty()) return emptyList<Song>() to emptyList()
-        val results = try {
-            withTimeoutOrNull(3_500L) {
-                YtMusicRepository.search(safeQuery, SearchFilter.ALL).getOrNull()
-            } ?: emptyList()
+
+        // Search only assets that this device or an authenticated personal
+        // server can actually play. A public metadata match is not audio.
+        // Each origin fails independently: missing MediaStore permission must
+        // not hide the server or downloaded results.
+        val local = try {
+            canonicalAutoSearch(LocalMediaRepository.getLocalMusic(this), safeQuery)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             emptyList()
         }
-        val songs = results.mapNotNull {
-            when (it) {
-                is SearchResult.Track -> it.song
-                is SearchResult.TopTrack -> it.song
-                else -> null
-            }
-        }.distinctBy { it.videoId }
-        val browses = results.mapNotNull { (it as? SearchResult.Browse)?.item }
-            .distinctBy { it.browseId }
-        return songs to browses
+        val downloads = try {
+            canonicalAutoSearch(Downloads.getDownloadedSongs(this), safeQuery)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val remote = try {
+            CanonicalCatalogDatabase.get(this).catalogDao()
+                .searchCanonicalRemoteServerAssets(safeQuery, limit = 200)
+                .let(::canonicalAutoSongs)
+                .let { canonicalAutoSearch(it, safeQuery) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyList()
+        }
+        return (local + downloads + remote)
+            .distinctBy(Song::videoId)
+            .take(150) to emptyList()
     }
 
     private fun storeSearchResults(query: String, songs: List<Song>, browses: List<BrowseItem>) {
