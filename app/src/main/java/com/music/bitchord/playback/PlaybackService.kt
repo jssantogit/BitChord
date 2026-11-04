@@ -407,104 +407,47 @@ class PlaybackService : MediaLibraryService() {
      * [YtMusicRepository.browseSongs] for Liked Music cached for Android Auto's browse tree.
      */
     private var cachedLiked: Pair<Long, List<Song>>? = null
-    private var cachedLikedCookie: String? = null
     private val likedMutex = Mutex()
     private val LIKED_CACHE_TTL_MS = 60_000L
 
     private suspend fun cachedLikedSongs(): List<Song> = likedMutex.withLock {
-        val cookie = com.music.bitchord.data.innertube.Innertube.cookie
-        if (cookie == null) {
-            cachedLiked = null
-            cachedLikedCookie = null
-            return emptyList()
+        val songs = cachedQuickPicksSongs().filter { song ->
+            LikeState.overrides.value[song.videoId] == LikeStatus.LIKE
         }
-        if (cachedLikedCookie != null && cachedLikedCookie != cookie) {
-            cachedLiked = null
-        }
-        cachedLiked?.let { (at, songs) ->
-            if (SystemClock.elapsedRealtime() - at < LIKED_CACHE_TTL_MS && songs.isNotEmpty()) return songs
-        }
-        val songs = try {
-            withTimeoutOrNull(4000L) {
-                YtMusicRepository.browseSongs(YtMusicRepository.LIKED_MUSIC).getOrNull()?.songs?.ifEmpty { null }
-                    ?: YtMusicRepository.browseSongs("LM").getOrNull()?.songs?.ifEmpty { null }
-                    ?: run {
-                        val libPlaylists = YtMusicRepository.libraryPlaylists().getOrNull()
-                        val likedCard = libPlaylists?.firstOrNull {
-                            it.browseId == "VLLM" || it.title.contains("liked", ignoreCase = true)
-                        }
-                        val likedBrowseId = likedCard?.browseId
-                        if (likedBrowseId != null) {
-                            YtMusicRepository.browseSongs(likedBrowseId).getOrNull()?.songs
-                        } else null
-                    }
-                    ?: YtMusicRepository.browseSongs("FEmusic_liked_videos").getOrNull()?.songs
-            } ?: emptyList()
-        } catch (_: Exception) {
-            emptyList()
-        }
-        if (songs.isNotEmpty()) {
-            cachedLiked = SystemClock.elapsedRealtime() to songs
-            cachedLikedCookie = cookie
-            songs.forEach { songCache[it.videoId] = it }
-            LikeState.seedLiked(songs.mapTo(HashSet()) { it.videoId })
-        }
+        cachedLiked = SystemClock.elapsedRealtime() to songs
+        songs.forEach { songCache[it.videoId] = it }
         songs
     }
 
     private var cachedPlaylistCards: Pair<Long, List<ShelfItem>>? = null
-    private var cachedPlaylistCookie: String? = null
     private val playlistsMutex = Mutex()
     private val PLAYLISTS_CACHE_TTL_MS = 60_000L
 
-    private suspend fun fetchPlaylistCards(): List<ShelfItem> = try {
-        withTimeoutOrNull(3_000L) {
-            YtMusicRepository.libraryPlaylists().getOrNull()
-                ?: YtMusicRepository.userPlaylists().getOrNull()?.map {
-                    ShelfItem(
-                        title = it.title,
-                        subtitle = it.subtitle,
-                        thumbnailUrl = it.thumbnailUrl,
-                        videoId = null,
-                        browseId = "VL${it.playlistId}",
-                    )
-                }
-        } ?: emptyList()
-    } catch (_: Exception) {
-        emptyList()
-    }
+    /** Android Auto playlists are user-owned local collections, not a Google
+     * account endpoint. Keep the existing shelf presentation and stable IDs. */
+    private suspend fun fetchPlaylistCards(): List<ShelfItem> =
+        com.music.bitchord.data.spotify.LocalPlaylistStore.playlists.value.map { playlist ->
+            ShelfItem(
+                title = playlist.title,
+                subtitle = "${playlist.songs.size} faixas",
+                thumbnailUrl = playlist.songs.firstOrNull {
+                    !it.thumbnailUrl.isNullOrBlank()
+                }?.thumbnailUrl,
+                videoId = null,
+                browseId = playlist.browseId,
+            )
+        }
 
     private suspend fun cachedPlaylistCards(): List<ShelfItem> = playlistsMutex.withLock {
-        val cookie = com.music.bitchord.data.innertube.Innertube.cookie
-        if (cookie == null) {
-            cachedPlaylistCards = null
-            cachedPlaylistCookie = null
-            return emptyList()
-        }
-        if (cachedPlaylistCookie != null && cachedPlaylistCookie != cookie) {
-            cachedPlaylistCards = null
-        }
-        cachedPlaylistCards?.let { (at, cards) ->
-            if (SystemClock.elapsedRealtime() - at < PLAYLISTS_CACHE_TTL_MS && cards.isNotEmpty()) return cards
-        }
         val cards = fetchPlaylistCards()
-        if (cards.isNotEmpty()) {
-            cachedPlaylistCards = SystemClock.elapsedRealtime() to cards
-            cachedPlaylistCookie = cookie
-        }
+        cachedPlaylistCards = SystemClock.elapsedRealtime() to cards
         cards
     }
 
     private fun snapshotRecents(): List<Song> = cachedRecents?.second.orEmpty()
     private fun snapshotQuickPicks(): List<Song> = cachedQuickPicks?.second.orEmpty()
-    private fun snapshotLiked(): List<Song> {
-        val cookie = com.music.bitchord.data.innertube.Innertube.cookie
-        return if (cookie != null && cookie == cachedLikedCookie) cachedLiked?.second.orEmpty() else emptyList()
-    }
-    private fun snapshotPlaylistCards(): List<ShelfItem> {
-        val cookie = com.music.bitchord.data.innertube.Innertube.cookie
-        return if (cookie != null && cookie == cachedPlaylistCookie) cachedPlaylistCards?.second.orEmpty() else emptyList()
-    }
+    private fun snapshotLiked(): List<Song> = cachedLiked?.second.orEmpty()
+    private fun snapshotPlaylistCards(): List<ShelfItem> = cachedPlaylistCards?.second.orEmpty()
 
     private fun isFresh(at: Long, ttlMs: Long): Boolean =
         SystemClock.elapsedRealtime() - at < ttlMs
@@ -1308,9 +1251,10 @@ class PlaybackService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
 
-        if (com.music.bitchord.data.innertube.Innertube.cookie == null) {
-            com.music.bitchord.data.innertube.Innertube.cookie = com.music.bitchord.auth.AuthStore(this).cookie
-        }
+        // Android Auto can cold-start this service without MainActivity.
+        // Read the first-party playlist store directly; no YouTube cookie or
+        // authentication bootstrap belongs in Media3 startup.
+        com.music.bitchord.data.spotify.LocalPlaylistStore.init(this)
 
         // First, because everything below assumes it is standing up fresh and
         // one of the two ways this service starts does not give it that.
