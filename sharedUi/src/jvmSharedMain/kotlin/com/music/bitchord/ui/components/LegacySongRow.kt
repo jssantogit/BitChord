@@ -244,84 +244,80 @@ private fun SongRowContent(
     // has no match: shown, but not something a tap or a menu can act on.
     val matching = song.isMatchPending
     val unavailable = song.isMatchMissing
-    NativeDetailTrackRowFrame(
+    NativeDetailTrackRowLayout(
         onClick = onClick,
         onLongPress = onLongPress,
         onMore = onMore,
         modifier = modifier,
         opacity = if (unavailable) 0.45f else 1f,
         background = activeBackground,
-    ) {
-        if (trackNumber != null) {
-            NativeDetailTrackNumber(
-                number = trackNumber,
-                color = subtitleColor,
-                showPlayingBars = searchPlayingStyle && isCurrent && isPlaying,
-            )
-        } else {
-            NativeDetailTrackArtwork(
-                showPlayingBars = searchPlayingStyle && isCurrent && isPlaying,
-            ) {
-                AsyncImage(
-                    model = com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel(song, ROW_ART_PX),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .matchParentSize()
-                        .clip(RoundedCornerShape(8.dp))
-                        .thumbnailBorder(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
+        textGap = if (trackNumber == null) 14.dp else PAGE_GUTTER,
+        leading = {
+            if (trackNumber != null) {
+                NativeDetailTrackNumber(
+                    number = trackNumber,
+                    color = subtitleColor,
+                    showPlayingBars = searchPlayingStyle && isCurrent && isPlaying,
                 )
-            }
-        }
-        // A number is followed by the page gutter again, so the gap from the
-        // screen edge to the number and from the number to the title match,
-        // whatever its digit count.
-        Spacer(Modifier.width(if (trackNumber == null) 14.dp else PAGE_GUTTER))
-        NativeTrackRowText(
-            title = {
-                ExplicitSongTitle(
-                    song = song,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = titleColor,
-                )
-            },
-            subtitle = {
-                val subtitle = listOfNotNull(
-                    song.artist.takeIf { it.isNotBlank() },
-                    song.downloadFormat,
-                ).joinToString(" · ")
-                val quality = if (showSourceQuality) song.sourceQualityBadge() else null
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (quality != null) {
-                        SourceQualityBadge(
-                            quality = quality, color = subtitleColor,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    Text(
-                        text = if (quality != null && subtitle.isNotEmpty()) " · $subtitle" else subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = subtitleColor, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+            } else {
+                NativeDetailTrackArtwork(
+                    showPlayingBars = searchPlayingStyle && isCurrent && isPlaying,
+                ) {
+                    AsyncImage(
+                        model = com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel(song, ROW_ART_PX),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clip(RoundedCornerShape(8.dp))
+                            .thumbnailBorder(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
                     )
                 }
-            },
-        )
-        if (downloadedTint != null) {
-            DownloadedBadge(song.videoId, downloadedTint)
-        }
-        if (selected) {
-            Spacer(Modifier.width(8.dp))
-            Icon(
-                Icons.Rounded.CheckCircle,
-                contentDescription = stringResource(Res.string.selected),
-                tint = activeTint,
-                modifier = Modifier.size(20.dp),
+            }
+        },
+        title = {
+            ExplicitSongTitle(
+                song = song,
+                style = MaterialTheme.typography.titleMedium,
+                color = titleColor,
             )
-        }
-        // Rating occupies the trailing strip; title/artist ellipsize to leave
-        // space for it. Song lists no longer show per-track duration.
-        NativeDetailTrackRatingSlot {
+        },
+        subtitle = {
+            val subtitle = listOfNotNull(
+                song.artist.takeIf { it.isNotBlank() },
+                song.downloadFormat,
+            ).joinToString(" · ")
+            val quality = if (showSourceQuality) song.sourceQualityBadge() else null
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (quality != null) {
+                    SourceQualityBadge(
+                        quality = quality, color = subtitleColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                Text(
+                    text = if (quality != null && subtitle.isNotEmpty()) " · $subtitle" else subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = subtitleColor, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        },
+        afterText = {
+            if (downloadedTint != null) {
+                DownloadedBadge(song.videoId, downloadedTint)
+            }
+            if (selected) {
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    Icons.Rounded.CheckCircle,
+                    contentDescription = stringResource(Res.string.selected),
+                    tint = activeTint,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        },
+        rating = {
             CanonicalSongRatingStars(song, color = MaterialTheme.colorScheme.onSurface)
             if (matching) {
                 CircularProgressIndicator(
@@ -330,12 +326,13 @@ private fun SongRowContent(
                     color = subtitleColor,
                 )
             }
-        }
-        // Same sheet the long-press opens, for anyone who doesn't think to hold.
-        if (onMore != null && !matching && !unavailable) {
-            RowMoreButton(onClick = onMore, tint = subtitleColor)
-        }
-    }
+        },
+        actions = {
+            if (onMore != null && !matching && !unavailable) {
+                RowMoreButton(onClick = onMore, tint = subtitleColor)
+            }
+        },
+    )
 }
 
 /**

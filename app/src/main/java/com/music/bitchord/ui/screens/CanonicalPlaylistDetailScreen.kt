@@ -65,7 +65,7 @@ import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.ActionRow
-import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
+import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
 import com.music.bitchord.ui.components.NativeDetailTrackSwipeContainer
 import com.music.bitchord.ui.components.NativeDetailTrackArtwork
 import com.music.bitchord.ui.components.NativeDetailTrackRatingSlot
@@ -267,25 +267,24 @@ internal fun CanonicalPlaylistTrackRow(
         // The row must mask the queue reveal on an artwork-tinted page.
         rowBackground = rowBackground,
     ) { rowModifier ->
-    NativeDetailTrackRowFrame(
-        modifier = rowModifier.then(
-            if (isCurrent) Modifier.testTag("canonical-playlist-current-track")
-            else Modifier,
-        ),
-        background = if (isCurrent) activeTint.copy(alpha = 0.14f)
-            else androidx.compose.ui.graphics.Color.Transparent,
-        onClick = if (available) ({ onPlay(track.id) }) else null,
-        onLongPress = if (available) ({ menuExpanded = true }) else null,
-        onMore = if (available) ({ menuExpanded = true }) else null,
-        opacity = if (available) 1f else 0.45f,
-    ) {
-        NativeDetailTrackArtwork(showPlayingBars = isCurrent && isPlaying) {
-            SmartPlaylistPreviewArtwork(
-                row = track, modifier = Modifier.fillMaxSize(),
-            )
-        }
-        Spacer(Modifier.width(14.dp))
-        NativeTrackRowText(
+        NativeDetailTrackRowLayout(
+            modifier = rowModifier.then(
+                if (isCurrent) Modifier.testTag("canonical-playlist-current-track")
+                else Modifier,
+            ),
+            background = if (isCurrent) activeTint.copy(alpha = 0.14f)
+                else androidx.compose.ui.graphics.Color.Transparent,
+            onClick = if (available) ({ onPlay(track.id) }) else null,
+            onLongPress = if (available) ({ menuExpanded = true }) else null,
+            onMore = if (available) ({ menuExpanded = true }) else null,
+            opacity = if (available) 1f else 0.45f,
+            leading = {
+                NativeDetailTrackArtwork(showPlayingBars = isCurrent && isPlaying) {
+                    SmartPlaylistPreviewArtwork(
+                        row = track, modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            },
             title = {
                 Text(
                     track.title, style = MaterialTheme.typography.titleMedium,
@@ -300,36 +299,35 @@ internal fun CanonicalPlaylistTrackRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             },
-        )
-        // Same rating strip as other native song lists. Keep duration in
-        // metadata for sorting/planning, never as a trailing row label.
-        NativeDetailTrackRatingSlot {
-            CanonicalRatingStars(
-                rating = track.canonicalPlaylistRating(LocalCanonicalRatingDisplay.current),
-                color = titleColor,
-            )
-        }
-        if (available) {
-            Box {
-                RowMoreButton(
-                    onClick = { menuExpanded = true }, tint = subtitleColor,
-                    contentDescription = "Ações da música",
+            rating = {
+                CanonicalRatingStars(
+                    rating = track.canonicalPlaylistRating(LocalCanonicalRatingDisplay.current),
+                    color = titleColor,
                 )
-                if (menuExpanded) {
-                    CanonicalTrackActionSheet(
-                        onDismiss = { menuExpanded = false },
-                        onPlay = { onPlay(track.id) },
-                        onPlayNext = onQueue?.let { queue ->
-                            { queue(track.id, CanonicalCollectionIntent.ADD_NEXT) }
-                        },
-                        onAddToQueue = onQueue?.let { queue ->
-                            { queue(track.id, CanonicalCollectionIntent.ADD_TO_QUEUE) }
-                        },
-                    )
+            },
+            actions = {
+                if (available) {
+                    Box {
+                        RowMoreButton(
+                            onClick = { menuExpanded = true }, tint = subtitleColor,
+                            contentDescription = "Ações da música",
+                        )
+                        if (menuExpanded) {
+                            CanonicalTrackActionSheet(
+                                onDismiss = { menuExpanded = false },
+                                onPlay = { onPlay(track.id) },
+                                onPlayNext = onQueue?.let { queue ->
+                                    { queue(track.id, CanonicalCollectionIntent.ADD_NEXT) }
+                                },
+                                onAddToQueue = onQueue?.let { queue ->
+                                    { queue(track.id, CanonicalCollectionIntent.ADD_TO_QUEUE) }
+                                },
+                            )
+                        }
+                    }
                 }
-            }
-        }
-    }
+            },
+        )
     }
 }
 

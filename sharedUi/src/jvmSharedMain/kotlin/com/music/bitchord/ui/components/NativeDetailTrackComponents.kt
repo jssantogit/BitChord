@@ -261,6 +261,45 @@ fun NativeDetailTrackRowFrame(
 }
 
 /**
+ * Complete provider-independent track-row composition. Source adapters supply
+ * artwork, text, rating and capability-specific actions. This layer owns the
+ * exact same touch region, gutters, text width and rating/action order.
+ * Neither Song/videoId nor provider-specific RecordingId belong here.
+ */
+@Composable
+fun NativeDetailTrackRowLayout(
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    onLongPress: (() -> Unit)? = null,
+    onMore: (() -> Unit)? = null,
+    background: Color = Color.Transparent,
+    opacity: Float = 1f,
+    textGap: Dp = 14.dp,
+    leading: @Composable RowScope.() -> Unit,
+    title: @Composable () -> Unit,
+    subtitle: @Composable () -> Unit,
+    afterText: @Composable RowScope.() -> Unit = {},
+    rating: @Composable ColumnScope.() -> Unit,
+    actions: @Composable RowScope.() -> Unit = {},
+) {
+    NativeDetailTrackRowFrame(
+        onClick = onClick,
+        modifier = modifier,
+        onLongPress = onLongPress,
+        onMore = onMore,
+        background = background,
+        opacity = opacity,
+    ) {
+        leading()
+        Spacer(Modifier.width(textGap))
+        NativeTrackRowText(title = title, subtitle = subtitle)
+        afterText()
+        NativeDetailTrackRatingSlot(content = rating)
+        actions()
+    }
+}
+
+/**
  * One trailing rating geometry for legacy Song and canonical Recording rows.
  * Rating provenance remains in the caller, not in this presentation slot.
  */
