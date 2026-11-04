@@ -213,15 +213,31 @@ object SpotifyImporter {
     }
 
     /**
-     * Resolves Spotify tracks using an injected resolver. The default legacy matcher\n     * is isolated until the canonical MediaStore/Navidrome resolver replaces it.
-     * Reports real-time progress via [onProgress].
+     * Legacy entry point. The default YouTube matcher may only run while that
+     * source is explicitly permitted. Do not use for canonical Spotify imports.
      */
     suspend fun resolveToSongs(
         tracks: List<SpotifyImportTrack>,
         onProgress: (completed: Int, total: Int) -> Unit,
-        /** Live source policy, checked before and after each network lookup. */
         allowYoutubeMatching: () -> Boolean = { true },
-        resolveTrack: suspend (SpotifyImportTrack) -> Song? = LegacySpotifyYoutubeMatcher::matchImportTrack,
+    ): Pair<List<Song>, List<SpotifyImportTrack>> =
+        resolveToSongsWithResolver(
+            tracks = tracks,
+            onProgress = onProgress,
+            allowMatching = allowYoutubeMatching,
+            resolveTrack = LegacySpotifyYoutubeMatcher::matchImportTrack,
+        )
+
+    /**
+     * Provider-neutral Spotify resolution. Callers must provide their own
+     * verified asset resolver and policy gate. The default legacy YouTube
+     * matcher is deliberately NOT inherited by this overload.
+     */
+    suspend fun resolveToSongsWithResolver(
+        tracks: List<SpotifyImportTrack>,
+        onProgress: (completed: Int, total: Int) -> Unit,
+        allowMatching: () -> Boolean,
+        resolveTrack: suspend (SpotifyImportTrack) -> Song?,
     ): Pair<List<Song>, List<SpotifyImportTrack>> = coroutineScope {
         val total = tracks.size
         val completedCount = AtomicInteger(0)
@@ -230,14 +246,14 @@ object SpotifyImporter {
         val deferredResults = tracks.map { track ->
             async(Dispatchers.IO) {
                 semaphore.withPermit {
-                    if (!allowYoutubeMatching()) {
+                    if (!allowMatching()) {
                         val done = completedCount.incrementAndGet()
                         onProgress(done, total)
                         return@withPermit Pair<Song?, SpotifyImportTrack?>(null, track)
                     }
                     val resolved = resolveTrack(track)
                     // Discard responses that completed after source opt-out.
-                    val matchedSong = if (allowYoutubeMatching()) resolved else null
+                    val matchedSong = if (allowMatching()) resolved else null
 
                     val done = completedCount.incrementAndGet()
                     onProgress(done, total)
