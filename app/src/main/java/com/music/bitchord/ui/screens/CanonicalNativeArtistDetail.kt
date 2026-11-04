@@ -114,19 +114,9 @@ internal fun CanonicalNativeArtistDetail(
         keyColors = appleArt?.keyColors(),
     )
 
-    // The existing star edits the artist's first-party rating. Local
-    // display-only groups use DISPLAY_ARTIST, never a fabricated MusicBrainz
-    // ArtistId; the save path checks real provider-scoped song membership.
-    val artistRatingKey = artistId?.let { id ->
-        canonicalEntityRatingTarget(
-            CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, id),
-        )
-    }
-    val artistRated by produceState(initialValue = false, key1 = artistRatingKey) {
-        val key = artistRatingKey ?: return@produceState
-        ListeningEventDatabase.get(context).canonicalEntityRatingDao()
-            .observe(key.entityType, key.entityId).collectLatest { value = it != null }
-    }
+    // The rating observer is shared with the native artist detail contract.
+    // It keeps DISPLAY_ARTIST separate from a verified canonical ArtistId.
+    val artistRatingState by rememberCanonicalArtistRating(artistId)
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     var openedRelease by remember(artistName) { mutableStateOf<ReleaseEntity?>(null) }
     LaunchedEffect(openedRelease?.id) {
@@ -318,9 +308,9 @@ internal fun CanonicalNativeArtistDetail(
                     ActionRow(
                         onPlay = { onPlayAll(shownTracks, false) },
                         onShuffle = { onPlayAll(shownTracks, true) },
-                        onRateArtist = if (artistRatingKey != null)
+                        onRateArtist = if (artistRatingState.target != null)
                             onRateArtist else null,
-                        artistRated = artistRated,
+                        artistRated = artistRatingState.rated,
                         playColor = appleArt?.keyColor?.let { Color(it) },
                     )
                 }
