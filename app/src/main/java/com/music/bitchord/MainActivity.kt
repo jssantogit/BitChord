@@ -2587,31 +2587,12 @@ private fun BitChordApp(
                         null,
                         BrowseType.ARTIST,
                     )
-                } else if (!shouldRunLegacyYoutubeVersionLookup(
-                    usesCanonicalDiscovery, discoverySourceConfigs,
-                )) {
+                } else {
+                    // Name-only artist navigation does not imply a YouTube
+                    // provider identity. Search the canonical catalog instead.
                     selectedTab = TAB_SEARCH
                     viewModel.setSearchSource(SearchSource.CANONICAL)
                     viewModel.searchFor(name)
-                } else {
-                    scope.launch {
-                        val found = YtMusicRepository.findArtistPageId(name).getOrNull()
-                        if (found != null) {
-                            viewModel.openDetail(
-                                found,
-                                name,
-                                context.getString(R.string.artist),
-                                null,
-                                BrowseType.ARTIST,
-                            )
-                        } else {
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.couldnt_find, name),
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                        }
-                    }
                 }
             },
             onOpenPlaybackSource = openSource@{
