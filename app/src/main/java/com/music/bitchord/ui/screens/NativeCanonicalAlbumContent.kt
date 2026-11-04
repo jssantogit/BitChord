@@ -81,7 +81,7 @@ internal fun NativeCanonicalAlbumContent(
             }
             if (searching || query.isNotBlank()) {
                 item(key = searchKey) {
-                    DetailSearchField(
+                    NativeDetailSearchField(
                         query = query,
                         onQueryChange = onQueryChange,
                         onClose = { onQueryChange("") },

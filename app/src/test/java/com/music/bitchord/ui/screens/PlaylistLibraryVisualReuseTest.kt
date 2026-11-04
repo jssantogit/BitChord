@@ -235,6 +235,24 @@ class PlaylistLibraryVisualReuseTest {
         RecentLocalAdditionsSnapshot.clear()
     }
 
+    @Test fun nativeSearchFieldReusesPlaylistDetailGeometryWithoutLegacyPage() {
+        var query by mutableStateOf("")
+        compose.setContent {
+            NativeDetailSearchField(
+                query = query,
+                onQueryChange = { query = it },
+                onClose = {},
+                autoFocus = false,
+                onFocused = {},
+                palette = com.music.bitchord.ui.theme.themeArtworkPalette(),
+                placeholder = "Buscar faixas",
+            )
+        }
+        compose.onNodeWithTag("native-detail-search-field").assertExists()
+        compose.onNodeWithContentDescription("Buscar faixas").performTextInput("Magnetic")
+        compose.onNodeWithText("Magnetic").assertExists()
+    }
+
     @Test fun playlistLibrarySearchAndSortWorkOnActualLibraryCardIdentity() {
         fun normal(title: String) = LibraryPlaylistCard.Normal(
             com.music.bitchord.data.model.ShelfItem(

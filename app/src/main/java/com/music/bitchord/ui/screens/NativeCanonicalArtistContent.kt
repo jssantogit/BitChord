@@ -118,7 +118,7 @@ internal fun NativeCanonicalArtistContent(
             }
             if (shouldShowNativeArtistSearch(searching, query)) {
                 item(key = "artist-search") {
-                    DetailSearchField(
+                    NativeDetailSearchField(
                         query, onQueryChange, onClose = { onQueryChange("") },
                         autoFocus = searching, onFocused = {}, palette = palette,
                     )

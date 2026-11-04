@@ -579,7 +579,7 @@ internal fun CanonicalPlaylistDetailScreen(
         }
         if (searching || query.isNotBlank()) {
             item(key = "playlist-detail-search") {
-                DetailSearchField(
+                NativeDetailSearchField(
                     query = query,
                     onQueryChange = onQueryChange,
                     onClose = {

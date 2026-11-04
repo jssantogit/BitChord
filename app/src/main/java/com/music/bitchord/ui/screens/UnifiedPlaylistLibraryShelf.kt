@@ -142,7 +142,7 @@ internal fun PlaylistLibrarySearchField(
     onQueryChange: (String) -> Unit,
     onClose: () -> Unit = {},
 ) {
-    DetailSearchField(
+    NativeDetailSearchField(
         query = query,
         onQueryChange = onQueryChange,
         onClose = onClose,

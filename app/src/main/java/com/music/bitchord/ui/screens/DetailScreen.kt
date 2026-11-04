@@ -203,7 +203,6 @@ private const val SLEEVE_MAX_HEIGHT = 0.5f
 /** Shuffle and Add to Library either side of the release page's Play pill. */
 
 /** Past this the Play pill stops growing, so a tablet doesn't get a bar. */
-private val PILL_SHAPE = RoundedCornerShape(12.dp)
 
 /**
  * Where the search field sits once it is open — directly under the header,
@@ -1094,17 +1093,7 @@ private fun ReleaseHeader(
  * the canonical unified Album detail cannot drift into two Library action
  * pills or silently change the reference release visual hierarchy.
  */
-/**
- * The filter box, shown under the header while the top bar's search button is on.
- *
- * Live rather than submit-on-enter, and for the same reason the Local Music
- * one is (see `LocalSearchField`): the list it narrows is already in memory, so
- * there is nothing for a submit action to wait for.
- *
- * Glass rather than a filled field — it is one of the header's controls that
- * happens to be typed into, and it sits close enough to the circles that a
- * Material text field beside them would read as a different app's furniture.
- */
+/** Compatibility alias for pre-canonical detail callers. New pages use NativeDetailSearchField. */
 @Composable
 internal fun DetailSearchField(
     query: String,
@@ -1115,82 +1104,16 @@ internal fun DetailSearchField(
     palette: ArtworkPalette,
     placeholder: String? = null,
     horizontalInset: Dp = HEADER_GUTTER,
-) {
-    // Opened by a tap on a button, which is as clear a statement of intent as
-    // the keyboard is going to get — so it comes up with the field rather than
-    // making the tap land twice. Once only: see [autoFocus]'s owner.
-    val focus = remember { FocusRequester() }
-    val searchHint = placeholder ?: stringResource(R.string.search_this_list)
-    LaunchedEffect(autoFocus) {
-        if (autoFocus) {
-            focus.requestFocus()
-            onFocused()
-        }
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = horizontalInset)
-            .padding(bottom = 10.dp)
-            .height(46.dp)
-            .testTag("native-detail-search-field")
-            .clip(PILL_SHAPE)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
-            .border(0.5.dp, Color.White.copy(alpha = 0.10f), PILL_SHAPE)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = BitChordIcons.Search,
-            contentDescription = null,
-            tint = palette.onBackgroundVariant,
-            modifier = Modifier.size(18.dp),
-        )
-        Spacer(Modifier.width(10.dp))
-        Box(Modifier.weight(1f)) {
-            if (query.isEmpty()) {
-                Text(
-                    text = searchHint,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = palette.onBackgroundVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            BasicTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = palette.onBackground),
-                cursorBrush = SolidColor(palette.accent),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focus)
-                    .semantics { contentDescription = searchHint },
-            )
-        }
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .clip(CircleShape)
-                // Clearing and closing are the same gesture: an empty filter
-                // showing an unfiltered list is a row of furniture with nothing
-                // left to do.
-                .clickable { if (query.isEmpty()) onClose() else onQueryChange("") },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Close,
-                contentDescription = stringResource(
-                    if (query.isEmpty()) R.string.close_search else R.string.clear_search,
-                ),
-                tint = palette.onBackgroundVariant,
-                modifier = Modifier.size(17.dp),
-            )
-        }
-    }
-}
+) = NativeDetailSearchField(
+    query = query,
+    onQueryChange = onQueryChange,
+    onClose = onClose,
+    autoFocus = autoFocus,
+    onFocused = onFocused,
+    palette = palette,
+    placeholder = placeholder,
+    horizontalInset = horizontalInset,
+)
 
 internal fun List<Song>.sortedForDetail(sort: SongSort): List<Song> = when (sort) {
     SongSort.DEFAULT -> this
