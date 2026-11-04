@@ -40,6 +40,36 @@ class CanonicalAutoBrowseTracksTest {
         assertNull(canonicalAutoSong(row(mediaAssetId = "")))
     }
 
+    @Test fun quickPicksKeepRemoteAudioWhenLocalLibraryIsEmptyOrInaccessible() {
+        val remote = canonicalAutoSong(row())!!
+        assertEquals(
+            listOf(remote),
+            canonicalAutoQuickPicks(
+                local = emptyList(),
+                downloads = emptyList(),
+                remote = listOf(remote),
+                excludedIds = emptySet(),
+            ),
+        )
+    }
+
+    @Test fun quickPicksDeduplicateSourcesAndExcludeAlreadyRecentSongs() {
+        val local = Song(
+            videoId = "content://media/1", title = "Local", artist = "Artist",
+            thumbnailUrl = null, localUri = "content://media/1",
+        )
+        val remote = canonicalAutoSong(row())!!
+        assertEquals(
+            listOf(local.videoId),
+            canonicalAutoQuickPicks(
+                local = listOf(local),
+                downloads = listOf(local),
+                remote = listOf(remote),
+                excludedIds = setOf(remote.videoId),
+            ).map { it.videoId },
+        )
+    }
+
     @Test fun autoRecentsContainOnlyAlreadyVisitedVerifiedAudio() {
         val historical = Song(videoId = "yt-legacy", title = "Old", artist = "Artist", thumbnailUrl = null)
         val local = Song(
