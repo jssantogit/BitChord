@@ -88,6 +88,24 @@ Status em 04/11/2026: **migração iniciada**, não concluída. Primeira PR [#20
 - Testes `NativeArtistSharedSectionsTest` verificam 20 faixas/4 por coluna, ordem de origem e grupos incompletos; `NativeArtistSharedSectionsComposeTest` verifica passagem dos callbacks de avaliação/menu/seleção de faixa e menu de álbum.
 - **Gate de refatoração:** o desaparecimento de um componente só conta como progresso quando seus comportamentos passam a existir e são testados na estrutura nativa compartilhada. Usar [`DESIGN.md`](../../DESIGN.md) e `tensions.md` como referências de visual, gestos e espaçamento.
 
+### Contrato de contexto para as seções de artista — aprovado em 04/11/2026
+
+A composição visual é única, porém **seções, ações e nomes exibidos dependem de capacidades reais por contexto**. Local (MediaStore) e servidor de biblioteca pessoal (Navidrome) representam a mesma categoria **Biblioteca**; pesquisa MusicBrainz/serviços públicos representam **catálogo online**. Não confundir provedores de metadados e provedores de arquivos reproduzíveis.
+
+| Contexto / evidência | Prateleira de músicas | Outras seções |
+| --- | --- | --- |
+| Biblioteca local/Navidrome com gravações | **Faixas** | Álbum recente somente com data e tipo comprovados; Álbuns, Singles/EPs, Lançamentos apenas quando presentes |
+| Biblioteca sem gravações elegíveis | Nenhuma | Somente dados reais ainda disponíveis |
+| Online com ranking genuíno fornecido por provedor | **Mais tocadas** | Lançamentos e dados enriquecidos presentes, sem duplicar Faixas |
+| Online sem ranking, mas com gravações identificadas | **Faixas** (sem atribuir popularidade) | Lançamentos/metadata reais; nenhuma estatística fictícia |
+| Online sem gravações e sem ranking | Nenhuma | Só as outras seções comprovadas |
+
+**Invariantes:** nunca renderizar **Faixas** e **Mais tocadas** simultaneamente; fonte local não gera ranking global a partir de quantidade de arquivos, duração ou IDs; MusicBrainz isoladamente **não** fornece popularidade. Não criar seções vazias, nem transformar álbuns em Singles por nome. Os elementos ativam/desativam conforme prova, não conforme uma cópia fixa da tela ou uma simples chave booleana de 'online'. Os controles (avaliações, ⋮, pin, playlist, filtros) somente aparecem quando identidade/capability/ação são válidas.
+
+**Implementação inicial na PR #209:** `NativeArtistContext`, `NativeArtistSectionEvidence`, `NativeArtistSection` e `nativeArtistVisibleSections` em `NativeArtistSharedSections.kt`; aplicados ao `DetailScreen` e `CanonicalNativeArtistDetail`. A compatibilidade de ranking YouTube permanece **restrita** à rota de artista `UC...`, enquanto os resultados `catalog:...` não podem ganhar 'Mais tocadas' sem evidência de ranking futura. Testes protegem exclusividade, estados vazios, contexto Biblioteca mesmo quando um flag incorreto vaza e bloqueio de rankings falsos para MusicBrainz/servidor.
+
+**Próxima evolução:** converter essa disponibilidade em um contrato de detalhe tipado com proveniência por seção (popularidade: fonte e escopo; data: prova; asset: disponibilidade); registrar ações independentes, inclusive offline. Contrato deve abranger também álbum, faixa e playlist, sem reaproveitar indiscriminadamente seções próprias de artistas.
+
 ## Evidências
 
 - [#205 — Biblioteca/Playlists integrada](https://github.com/jssantogit/BitChord/pull/205)
