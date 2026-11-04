@@ -139,4 +139,19 @@ class NativeArtistSharedSectionsComposeTest {
         compose.runOnIdle { assertEquals(1, ratingOpens) }
     }
 
+    @Test fun artistHeaderKeepsReadableNameWhenArtworkProvidersHaveNoLogo() {
+        compose.setContent {
+            MaterialTheme {
+                ArtistHeader(
+                    artistName = "aespa",
+                    palette = themeArtworkPalette(),
+                    artHeight = 210.dp,
+                    appleArt = null,
+                    signature = null,
+                )
+            }
+        }
+        compose.onNodeWithText("aespa").assertExists()
+    }
+
 }
