@@ -42,6 +42,7 @@ internal fun NativeCanonicalArtistContent(
     artistRatingState: CanonicalArtistRatingUiState,
     appleArt: AppleArtistArt?,
     palette: ArtworkPalette,
+    listState: androidx.compose.foundation.lazy.LazyListState,
     artworkLoader: OpenSubsonicArtworkLoader,
     query: String,
     onQueryChange: (String) -> Unit,
@@ -56,7 +57,6 @@ internal fun NativeCanonicalArtistContent(
     onRateArtist: (() -> Unit)?,
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
 ) {
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val shownTracks = tracks.filter {
         query.isBlank() ||
             it.title.contains(query, ignoreCase = true) ||

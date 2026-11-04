@@ -77,6 +77,8 @@ internal fun CanonicalNativeArtistDetail(
     // The rating observer is shared with the native artist detail contract.
     // It keeps DISPLAY_ARTIST separate from a verified canonical ArtistId.
     val artistRatingState by rememberCanonicalArtistRating(artistId)
+    // Keep scrolling position across nested album navigation.
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val nestedNavigation = rememberCanonicalArtistNestedNavigation(
         artistId = artistId,
         artistName = artistName,
@@ -134,6 +136,7 @@ internal fun CanonicalNativeArtistDetail(
         artistRatingState = artistRatingState,
         appleArt = appleArt,
         palette = palette,
+        listState = listState,
         artworkLoader = artworkLoader,
         query = query,
         onQueryChange = onQueryChange,
