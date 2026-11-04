@@ -1,11 +1,8 @@
 package com.music.bitchord.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -34,7 +31,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.music.bitchord.R
-import com.music.bitchord.data.model.PlaylistPrivacy
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.spotify.SpotifyImportTrack
 import com.music.bitchord.data.spotify.SpotifyImporter
@@ -55,15 +51,12 @@ import kotlinx.coroutines.launch
 @Composable
 fun SpotifyImportAlert(
     hazeState: HazeState,
-    signedIn: Boolean,
-    /** Called once the songs are matched; [privacy] is meaningful only when signed in. */
-    onImported: (title: String, privacy: PlaylistPrivacy, songs: List<Song>) -> Unit,
+    onImported: (title: String, songs: List<Song>) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var link by remember { mutableStateOf("") }
-    var privacy by remember { mutableStateOf(PlaylistPrivacy.PRIVATE) }
     var working by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
@@ -89,7 +82,7 @@ fun SpotifyImportAlert(
                 val songs = tracks.mapIndexed { index, track ->
                     spotifyImportMetadataSong(id, index, track)
                 }
-                onImported(name, privacy, songs)
+                onImported(name, songs)
                 unmatched = tracks
             } catch (e: CancellationException) {
                 throw e
@@ -144,10 +137,7 @@ fun SpotifyImportAlert(
                 }
             } else {
                 Text(
-                    text = status ?: stringResource(
-                        if (signedIn) R.string.spotify_import_description
-                        else R.string.spotify_import_description_local,
-                    ),
+                    text = status ?: stringResource(R.string.spotify_import_description_local),
                     modifier = Modifier.padding(top = 4.dp, bottom = 14.dp),
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 17.sp),
                     color = when {
@@ -171,43 +161,6 @@ fun SpotifyImportAlert(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { if (link.isNotBlank() && !working) start() }),
                 )
-                if (signedIn) {
-                    Text(
-                        text = stringResource(R.string.who_can_see_it),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 14.dp, bottom = 6.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        PlaylistPrivacy.entries.forEach { option ->
-                            val selected = option == privacy
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(percent = 50))
-                                    .background(
-                                        if (selected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.surfaceVariant,
-                                    )
-                                    .clickable(enabled = !working) { privacy = option }
-                                    .padding(vertical = 7.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = option.label,
-                                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp),
-                                    color = if (selected) MaterialTheme.colorScheme.onPrimary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                }
             }
         }
         AlertRule()
