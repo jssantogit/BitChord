@@ -1056,6 +1056,11 @@ internal fun CanonicalRemoteLibraryScreen(
                             CanonicalLibraryEntityType.ARTIST, detail.id,
                         ))
                     },
+                    onRateRelease = { release ->
+                        ratingDialogSelection = listOf(CanonicalLibrarySelection(
+                            CanonicalLibraryEntityType.ALBUM, release.id,
+                        ))
+                    },
                     // Selection belongs to the root category, never the
                     // artist detail or its nested releases.
                     selectedItems = emptyList(),
