@@ -434,7 +434,8 @@ fun NativeDetailTrackSwipeContainer(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun QueueSwipeBackground(swipeState: SwipeToDismissBoxState) {
-    val playNext by AppUi.host.swipeToPlayNext.collectAsStateWithLifecycle()
+    val playerSetting = AppUi.hostOrNull?.swipeToPlayNext
+    val playNext = playerSetting?.collectAsStateWithLifecycle()?.value ?: false
     Row(
         modifier = Modifier
             .fillMaxSize()

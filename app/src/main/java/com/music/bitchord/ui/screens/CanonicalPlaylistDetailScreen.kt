@@ -236,8 +236,8 @@ internal fun CanonicalPlaylistTrackRow(
 ) {
     var menuExpanded by remember(track.id) { mutableStateOf(false) }
     val available = track.isAvailablePlaylistMember()
-    val playNext by com.music.bitchord.ui.AppUi.host.swipeToPlayNext
-        .collectAsStateWithLifecycle()
+    val swipeSetting = com.music.bitchord.ui.AppUi.hostOrNull?.swipeToPlayNext
+    val playNext = swipeSetting?.collectAsStateWithLifecycle()?.value ?: false
     val onSwipeToQueue = if (available && onQueue != null) {
         {
             onQueue(
